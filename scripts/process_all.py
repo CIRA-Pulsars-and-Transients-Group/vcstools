@@ -72,13 +72,14 @@ def get_frequencies(obs_id):
 
 
 #executables < locale specific should probably clean this up >
-voltdownload = "voltdownload.py"
-prepare = "prepare.py"
-recombine = "recombine.py"
-make_beam = "make_beam"
+import distutils.spawn
+voltdownload = distutils.spawn.find_executable("voltdownload.py")
+prepare = distutils.spawn.find_executable("prepare.py")
+recombine = distutils.spawn.find_executable("recombine.py")
+make_beam = distutils.spawn.find_executable("make_beam")
 #working dir < ditto >
-working_root = ""
-corrdir = ""
+working_root = "notset"
+corrdir = "notset"
 
 #first second
 start_time = 1380056664
@@ -206,7 +207,7 @@ if __name__ == '__main__':
             the_options['pointing'] = arg
         elif (opt == "-r"):
             the_options['runMWAC'] = True
-            the_options['corrdir'] = corrdir
+            the_options['corrdir'] = arg
         elif (opt == "-s"):
             the_options['single_step'] = int(arg)
         elif (opt == "-G"):
@@ -222,7 +223,12 @@ if __name__ == '__main__':
 
 
     options (the_options)
-
+    if (the_options['root'] == working_root):
+        print "Please set working root with -w\n"
+        sys.exit(1)
+    if (the_options['runMWAC'] and the_options['corrdir'] == corrdir):
+        print "Please set the correlator output dir with -r\n"
+        sys.exit(1)
 
    #    import pdb
 #    pdb.set_trace()
@@ -357,7 +363,7 @@ if __name__ == '__main__':
                     if (jobs_per_node > increment):
                         jobs_per_node = increment
 
-                    recombine_line = "aprun -n %d -N %d %s %s -o %s -s %d -w %s\n" % (increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
+                    recombine_line = "aprun -n %d -N %d python %s %s -o %s -s %d -w %s\n" % (increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
 
                     batch_file.write(recombine_line)
 
@@ -577,6 +583,7 @@ if __name__ == '__main__':
                 if (runMWAC == True):
                     prepare_line += " -e dat "
 
+                print "Will launch prepare by: %s\n" % prepare_line 
                 try:
                     child = os.fork()
 
