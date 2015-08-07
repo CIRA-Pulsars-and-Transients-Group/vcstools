@@ -290,7 +290,8 @@ if __name__ == '__main__':
 
     for time_to_get in range(int(start_time),int(stop_time),int(increment)):
 
-        
+        print "Time to get is : %s\n" % time_to_get
+
         try:
             os.chdir(working_root)
         except:
