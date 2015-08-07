@@ -23,12 +23,12 @@ BASEURL = 'http://ngas01.ivec.org/metadata/'
 
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
-u2d = "/group/mwaops/sord/mwac/trunk/utils/time/u2d"
-get_delays = "/group/mwaops/sord/mwac/trunk/bin/get_delays"
-read_pfb = "/group/mwaops/sord/mwac/trunk/bin/read_pfb"
-mwac_offline = "/group/mwaops/sord/mwac/trunk/bin/mwac_offline"
-outdir = "/scratch2/mwaops/sord/data/correlations/"
-corr_batch_file_root = "/scratch2/mwaops/sord/data/correlator_run";
+u2d = "u2d"
+get_delays = "get_delays"
+read_pfb = "read_pfb"
+mwac_offline = "mwac_offline"
+outdir = ""
+corr_batch_file_root = outdir + "correlator_run";
 timeconvert = "timeconvert.py"
 get_info = "sql_get_observation_info.py"
 
@@ -202,7 +202,7 @@ def usage (opts={}):
     print "-f Metafile\n"
     print "-r <J2000 RA>\n"
     print "-d <J2000 Dec>\n"
-    print "-s [0|1] Submits the correlator job - does not get delays\n"
+    print "-s [outdir] Submits the correlator job - does not get delays\n"
     print "-g [0|1] get delays\n"
     print "-r [0|1] build rts .in file\n"
     print "-m [0|1] mode 0==old 1==new\n"
@@ -224,7 +224,7 @@ if __name__ == '__main__':
     freq_array=[]
     f=[]
 
-    the_options = {'ra': "05:34:34", 'dec': "22:00:10", 'delays': 1, 'submit': 0, 'rts' : 0, 'rts_only' : 0, 'extn' : "pfb", 'mode' : 1,'metafile': "null"}
+    the_options = {'ra': "05:34:34", 'dec': "22:00:10", 'delays': 1, 'submit': outdir, 'rts' : 0, 'rts_only' : 0, 'extn' : "pfb", 'mode' : 1,'metafile': "null"}
 
     try:
         opts, args = getopt.getopt(sys.argv[1:],"hr:d:e:f:g:m:or:s:")
@@ -255,7 +255,7 @@ if __name__ == '__main__':
         elif (opt == "-r"):
             the_options['rts'] = int(arg)
         elif (opt == "-s"):
-            the_options['submit'] = int(arg)
+            the_options['submit'] = arg
         elif (opt == "-m"):
             the_options['mode'] = int(arg)
 
