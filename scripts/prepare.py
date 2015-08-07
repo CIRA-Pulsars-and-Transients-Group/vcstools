@@ -27,8 +27,7 @@ u2d = "u2d"
 get_delays = "get_delays"
 read_pfb = "read_pfb"
 mwac_offline = "mwac_offline"
-outdir = ""
-corr_batch_file_root = outdir + "correlator_run";
+outdir = "notset"
 timeconvert = "timeconvert.py"
 get_info = "sql_get_observation_info.py"
 
@@ -255,7 +254,9 @@ if __name__ == '__main__':
         elif (opt == "-r"):
             the_options['rts'] = int(arg)
         elif (opt == "-s"):
-            the_options['submit'] = arg
+            the_options['submit'] = True
+            outdir = arg
+            corr_batch_file_root = outdir + "/correlator_run";
         elif (opt == "-m"):
             the_options['mode'] = int(arg)
 
