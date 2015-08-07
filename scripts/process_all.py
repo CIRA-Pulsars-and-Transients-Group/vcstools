@@ -285,12 +285,16 @@ if __name__ == '__main__':
 #get data piecemeal and process it
 
     step = 0
+    last_increment = 0
 
     print "start: %d Stop: %d Inc: %d \n" % (int(start_time),int(stop_time),int(increment))
 
     for time_to_get in range(int(start_time),int(stop_time),int(increment)):
 
         print "Time to get is : %s\n" % time_to_get
+
+        if (time_to_get + int(increment) >= int(stop_time)):
+            last_increment = 1
 
         try:
             os.chdir(working_root)
@@ -420,6 +424,24 @@ if __name__ == '__main__':
                         submitted_jobs.pop(entry)
                         ttg = submitted_times.pop(entry)
                         a_job_is_done = True
+             if (last_increment == 1):
+                while (len(submitted_jobs) > 0):
+                    time.sleep(1)
+                    for entry,jobid in enumerate(submitted_jobs):
+                        #now we have to wait until this job is finished before we move on
+                        queue_line = "squeue -j %s\n" % jobid
+                        queue_cmd = subprocess.Popen(queue_line,shell=True,stdout=subprocess.PIPE)
+                        finished = True
+                        for line in queue_cmd.stdout:
+
+                            if jobid in line:
+                            # batch job still in the queue
+                                finished = False;
+
+                        if ((finished == True) and (a_job_is_done == False)):
+                            submitted_jobs.pop(entry)
+                            ttg = submitted_times.pop(entry)
+                            a_job_is_done = True
         else:
             ttg=time_to_get
             a_job_is_done = True
