@@ -72,12 +72,13 @@ def get_frequencies(obs_id):
 
 
 #executables < locale specific should probably clean this up >
-voltdownload = "/group/mwaops/CODE/bin/voltdownload.py"
-prepare = "/group/mwaops/sord/mwac/trunk/scripts/prepare.py"
-recombine = "/group/mwaops/sord/mwac/trunk/scripts/recombine.py"
-make_beam = "/group/mwaops/sord/mwac/trunk/bin/make_beam"
+voltdownload = "voltdownload.py"
+prepare = "prepare.py"
+recombine = "recombine.py"
+make_beam = "make_beam"
 #working dir < ditto >
-working_root = "/scratch2/mwaops/sord/data/observations/auto_process"
+working_root = ""
+corrdir = ""
 
 #first second
 start_time = 1380056664
@@ -148,7 +149,7 @@ def options (opts={}):
     print "-o:\t obsid [%s]\n" % opts['obsid']
     print "-p:\t beam pointind [%s]\n" % opts['pointing']
     print "-s:\t single step (only process one increment and this is it (-1 == do them all) [%d]\n" % opts['single_step']
-    print "-r:\t Run the offline correlator - this will submit a job to process the .dat files into visibility sets. These are needed if you want an RTS calibration solution [%s]\n" % opts['runMWAC']
+    print "-r:\t Run the offline correlator - this will submit a job to process the .dat files into visibility sets into the specified directory. These are needed if you want an RTS calibration solution [%s]\n" % opts['corrdir']
     print "-G:\t Submit the beamformer job [%s]\n" % opts['Go']
     print "-R:\t Run Dave Pallot's recombiner first [%s]\n" % opts['runRECOMBINE']
     print "-w:\t Working root directory [%s]\n" % opts['root']
@@ -166,10 +167,10 @@ def usage (opts={}):
 
 if __name__ == '__main__':
 
-    the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root}
+    the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root}
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hb:c:e:gGi:jm:n:o:p:rRs:w:z")
+        opts, args = getopt.getopt(sys.argv[1:],"hb:c:e:gGi:jm:n:o:p:r:Rs:w:z")
     except getopt.GetoptError:
         usage(the_options)
         sys.exit()
@@ -205,6 +206,7 @@ if __name__ == '__main__':
             the_options['pointing'] = arg
         elif (opt == "-r"):
             the_options['runMWAC'] = True
+            the_options['corrdir'] = corrdir
         elif (opt == "-s"):
             the_options['single_step'] = int(arg)
         elif (opt == "-G"):
@@ -350,7 +352,7 @@ if __name__ == '__main__':
                     if (jobs_per_node > increment):
                         jobs_per_node = increment
 
-                    recombine_line = "aprun -n %d -N %d python %s %s -o %s -s %d -w %s\n" % (increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
+                    recombine_line = "aprun -n %d -N %d %s %s -o %s -s %d -w %s\n" % (increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
 
                     batch_file.write(recombine_line)
 
@@ -400,8 +402,9 @@ if __name__ == '__main__':
             a_job_is_done = True
 
         if (runRECOMBINE == True):
+            print submitted_jobs
             for entry,jobid in enumerate(submitted_jobs):
-
+                      
     #now we have to wait until this job is finished before we move on
                     queue_line = "squeue -j %s\n" % jobid
                     queue_cmd = subprocess.Popen(queue_line,shell=True,stdout=subprocess.PIPE)
@@ -539,7 +542,7 @@ if __name__ == '__main__':
 
                 if (runMWAC == True):
                     
-                    prepare_line = "%s -r %s -d %s -s 1 -f %s" % (prepare,ra,dec,metafits_file)
+                    prepare_line = "%s -r %s -d %s -s %s -f %s" % (prepare,ra,dec,the_options['corrdir'],metafits_file)
                 else:
                     prepare_line = "%s -r %s -d %s -g 1 -f %s" % (prepare,ra,dec,metafits_file)
 
