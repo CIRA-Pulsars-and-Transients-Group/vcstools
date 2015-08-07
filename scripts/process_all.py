@@ -424,7 +424,7 @@ if __name__ == '__main__':
                         submitted_jobs.pop(entry)
                         ttg = submitted_times.pop(entry)
                         a_job_is_done = True
-             if (last_increment == 1):
+            if (last_increment == 1):
                 while (len(submitted_jobs) > 0):
                     time.sleep(1)
                     for entry,jobid in enumerate(submitted_jobs):
