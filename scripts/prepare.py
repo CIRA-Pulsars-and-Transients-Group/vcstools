@@ -202,7 +202,7 @@ def usage (opts={}):
     print "-r <J2000 RA>\n"
     print "-d <J2000 Dec>\n"
     print "-s [outdir] Submits the correlator job - does not get delays\n"
-    print "-g [0|1] get delays\n"
+    print "-g [outdir] get delays (needs the directory of the calibration solutions)\n"
     print "-r [0|1] build rts .in file\n"
     print "-m [0|1] mode 0==old 1==new\n"
     print "-o RTS mode only\n" 
@@ -223,7 +223,7 @@ if __name__ == '__main__':
     freq_array=[]
     f=[]
 
-    the_options = {'ra': "05:34:34", 'dec': "22:00:10", 'delays': 1, 'submit': outdir, 'rts' : 0, 'rts_only' : 0, 'extn' : "pfb", 'mode' : 1,'metafile': "null"}
+    the_options = {'ra': "05:34:34", 'dec': "22:00:10", 'delays': False, 'submit': False, 'rts' : 0, 'rts_only' : 0, 'extn' : "pfb", 'mode' : 1,'metafile': "null"}
 
     try:
         opts, args = getopt.getopt(sys.argv[1:],"hr:d:e:f:g:m:or:s:")
@@ -248,7 +248,8 @@ if __name__ == '__main__':
         elif (opt == "-f"):
             the_options['metafile'] = arg
         elif (opt == "-g"):
-            the_options['delays'] = int(arg)
+            the_options['delays'] = True
+            outdir = arg
         elif (opt == "-o"):
             the_options['rts_only'] = True
         elif (opt == "-r"):
