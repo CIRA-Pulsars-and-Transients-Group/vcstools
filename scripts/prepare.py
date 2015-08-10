@@ -361,7 +361,8 @@ if __name__ == '__main__':
                 break
 
     mkdir_line = "mkdir %s/%s" % (outdir,obsid)
-    subp.Popen(mkdir_line,shell=True,stdout=subp.PIPE)
+    if (the_options['submit'] == True):
+        subp.Popen(mkdir_line,shell=True,stdout=subp.PIPE)
     to_corr = 0;
     for file in f:
         corr_line = ""

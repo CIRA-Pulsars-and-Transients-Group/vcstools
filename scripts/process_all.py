@@ -144,13 +144,13 @@ def options (opts={}):
     print "-e:\t UNIX time of the end [%d]\n" % (opts['end'])
     print "-g:\t Get the data? (True/False) add this to get fresh data from the archive [%s]\n" % (opts['get_data'])
     print "-i:\t Increment in seconds (how much we process at once) [%d]\n" % (opts['inc'])
-    print "-j:\t Use Jones matrices from the RTS [%s]\n" % (opts['useJones'])
+    print "-j:\t [corrdir] Use Jones matrices from the RTS [%s,%s]\n" % (opts['useJones'],opts['corrdir'])
     print "-m:\t Beam forming mode (1==PSRFITS, 2==VDIF) [%d]\n" % (opts['mode'])
     print "-n:\t Number of fine channels per coarse channel [%d]\n" % (opts['nchan'])
     print "-o:\t obsid [%s]\n" % opts['obsid']
     print "-p:\t beam pointind [%s]\n" % opts['pointing']
     print "-s:\t single step (only process one increment and this is it (-1 == do them all) [%d]\n" % opts['single_step']
-    print "-r:\t Run the offline correlator - this will submit a job to process the .dat files into visibility sets into the specified directory. These are needed if you want an RTS calibration solution [%s]\n" % opts['corrdir']
+    print "-r:\t [corrdir] Run the offline correlator - this will submit a job to process the .dat files into visibility sets into the specified directory. These are needed if you want an RTS calibration solution [%s]\n" % opts['corrdir']
     print "-G:\t Submit the beamformer job [%s]\n" % opts['Go']
     print "-R:\t Run Dave Pallot's recombiner first [%s]\n" % opts['runRECOMBINE']
     print "-w:\t Working root directory [%s]\n" % opts['root']
@@ -197,6 +197,7 @@ if __name__ == '__main__':
             the_options['inc'] = int(arg)
         elif (opt == "-j"):
             the_options['useJones'] = True
+            the_options['corrdir'] = arg
         elif (opt == "-m"):
             the_options['mode'] = int(arg)
         elif (opt == "-n"):
@@ -573,7 +574,7 @@ if __name__ == '__main__':
                     
                     prepare_line = "%s -r %s -d %s -s %s -f %s" % (prepare,ra,dec,the_options['corrdir'],metafits_file)
                 else:
-                    prepare_line = "%s -r %s -d %s -g 1 -f %s" % (prepare,ra,dec,metafits_file)
+                    prepare_line = "%s -r %s -d %s -g %s -f %s" % (prepare,ra,dec,the_options['corrdir'],metafits_file)
 
                 if (runRECOMBINE == False):
                     prepare_line += " -m 0 "
