@@ -268,6 +268,8 @@ if __name__ == '__main__':
     beam_mode = the_options['mode']
     nchan = the_options['nchan']
 
+    make_dir = "mkdir %s" % working_root
+    subprocess.call(make_dir,shell=True);
     working_dir = "%s/%s" % (working_root,obsid)
     make_dir = "mkdir %s" % working_dir
     subprocess.call(make_dir,shell=True);
