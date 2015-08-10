@@ -273,6 +273,10 @@ if __name__ == '__main__':
     working_dir = "%s/%s" % (working_root,obsid)
     make_dir = "mkdir %s" % working_dir
     subprocess.call(make_dir,shell=True);
+    attic_dir = "%s/attic" % (working_dir)
+    make_dir = "mkdir %s" % attic_dir
+    subprocess.call(make_dir,shell=True);
+
     metafits_file = "%s/%d.metafits" % (working_dir,obsid)
 
     if (os.path.isfile(metafits_file) == False):
@@ -483,8 +487,8 @@ if __name__ == '__main__':
                                 f.append(to_convert)
 
                         if (the_options['get_data'] == True):
-                            rm_dir = "rm -rf ch%02d" % (index+1)
-                            subprocess.call(rm_dir,shell=True)
+                            mv_dir = "mv ch%02d ./attic/" % (index+1)
+                            subprocess.call(mv_dir,shell=True)
                         
 
                         make_dir = "mkdir %s/ch%02d" % (working_dir,(index+1))
