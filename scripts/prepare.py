@@ -457,7 +457,7 @@ if __name__ == '__main__':
 
     if (the_options['delays'] == True):
         
-        DI_file = "%s/%s/DI_JonesMatrices_node0%02d.dat" % (outdir,obsid,gpubox_label)
+        DI_file = "%s/DI_JonesMatrices_node0%02d.dat" % (outdir,obsid,gpubox_label)
         print DI_file
 
         if (old_mode == 1):
@@ -474,7 +474,7 @@ if __name__ == '__main__':
         print delays_line
         
         subp.call(delays_line,shell=True)
-        rts_flags_file = "%s/%s/flagged_tiles.txt" % (outdir,obsid)
+        rts_flags_file = "%s/flagged_tiles.txt" % (outdir,obsid)
         print rts_flags_file
         if (os.path.isfile(rts_flags_file)) :
             rts_flags = []
