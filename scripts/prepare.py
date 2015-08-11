@@ -457,7 +457,7 @@ if __name__ == '__main__':
 
     if (the_options['delays'] == True):
         
-        DI_file = "%s/DI_JonesMatrices_node0%02d.dat" % (outdir,obsid,gpubox_label)
+        DI_file = "%s/DI_JonesMatrices_node0%02d.dat" % (outdir,gpubox_label)
         print DI_file
 
         if (old_mode == 1):
@@ -469,6 +469,7 @@ if __name__ == '__main__':
             if (os.path.isfile(DI_file)):
                 delays_line = "%s -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'])
             else:
+                print "WARNING NOT CALIBRATION FOUND\n"
                 delays_line = "%s -a ./ -b %d -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s -m %s" % (get_delays,len(f),utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'],the_options['metafile'])
 
         print delays_line
