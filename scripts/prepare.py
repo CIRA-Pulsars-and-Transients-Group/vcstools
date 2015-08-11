@@ -343,12 +343,6 @@ if __name__ == '__main__':
         if (freq_channel == int(chan)):
             gpubox_label = (i+1)
 
-    corr_batch = "%s_%s_ch%d" % (corr_batch_file_root,obsid,freq_channel)
-    with open(corr_batch, 'w') as batch_file:
-        batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n")
-        batch_file.write("module load cudatoolkit\nmodule load cfitsio\n")
-
-
 
     if (freq_channel < 25):
 
@@ -360,56 +354,64 @@ if __name__ == '__main__':
                 freq_channel = relative + 1
                 break
 
-    mkdir_line = "mkdir %s/%s" % (outdir,obsid)
     if (the_options['submit'] == True):
+    
+        corr_batch = "%s_%s_ch%d" % (corr_batch_file_root,obsid,freq_channel)
+        with open(corr_batch, 'w') as batch_file:
+            batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n")
+            batch_file.write("module load cudatoolkit\nmodule load cfitsio\n")
+
+
+        mkdir_line = "mkdir %s/%s" % (outdir,obsid)
         subp.Popen(mkdir_line,shell=True,stdout=subp.PIPE)
-    to_corr = 0;
-    for file in f:
-        corr_line = ""
-        corr_file = "%s/%s/%s" % (outdir,obsid,obsid)
+    
+        to_corr = 0;
+        for file in f:
+            corr_line = ""
+            corr_file = "%s/%s/%s" % (outdir,obsid,obsid)
 		# run the correlator
-        (current_time,ext) = os.path.splitext(os.path.basename(file))
-        if (old_mode == 1):
-            (obsid,c,chan,x_time) = string.split(current_time,'_')
+            (current_time,ext) = os.path.splitext(os.path.basename(file))
+            if (old_mode == 1):
+                (obsid,c,chan,x_time) = string.split(current_time,'_')
         
-            if (int(x_time) < 1000000000):
-                # filename is broken add the offset
-                unix_time = int(x_time) + 1000000000;
+                if (int(x_time) < 1000000000):
+                    # filename is broken add the offset
+                    unix_time = int(x_time) + 1000000000;
+                else:
+                    unix_time = int(x_time)
+
+                corr_line = " aprun -n 1 -N 1 %s -o %s -s %d -r 1 -i 100 -e %d -f 128 -n 4 -c %02d -d %s/%s\n" % (mwac_offline,corr_file,unix_time,edge_num,freq_channel,os.getcwd(),file)
+
             else:
-                unix_time = int(x_time)
 
-            corr_line = " aprun -n 1 -N 1 %s -o %s -s %d -r 1 -i 100 -e %d -f 128 -n 4 -c %02d -d %s/%s\n" % (mwac_offline,corr_file,unix_time,edge_num,freq_channel,os.getcwd(),file)
+                (obsid,gpstime,chan) = string.split(current_time,'_')
 
-        else:
+                import astropy
+                from astropy.time import Time
+                (obsid,gpstime,chan) = string.split(current_time,'_')
+                t = Time(int(gpstime), format='gps', scale='utc')
+                time_str =  t.datetime.strftime('%Y-%m-%d %H:%M:%S')
 
-            (obsid,gpstime,chan) = string.split(current_time,'_')
+                current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
+                unix_time = calendar.timegm(current_time)
 
-            import astropy
-            from astropy.time import Time
-            (obsid,gpstime,chan) = string.split(current_time,'_')
-            t = Time(int(gpstime), format='gps', scale='utc')
-            time_str =  t.datetime.strftime('%Y-%m-%d %H:%M:%S')
-
-            current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
-            unix_time = calendar.timegm(current_time)
-
-            corr_line = " aprun -n 1 -N 1 %s -o %s -s %d -r 1 -i 100 -f 128 -n 4 -c %02d -d %s/%s\n" % (mwac_offline,corr_file,unix_time,gpubox_label,os.getcwd(),file)
+                corr_line = " aprun -n 1 -N 1 %s -o %s -s %d -r 1 -i 100 -f 128 -n 4 -c %02d -d %s/%s\n" % (mwac_offline,corr_file,unix_time,gpubox_label,os.getcwd(),file)
                     
-        #print corr_line
-        with open(corr_batch, 'a') as batch_file:
-            batch_file.write(corr_line)
+            #print corr_line
+            with open(corr_batch, 'a') as batch_file:
+                batch_file.write(corr_line)
+            
             to_corr = to_corr+1
 
-        outfile = "%s.pfb" % (file)
+            outfile = "%s.pfb" % (file)
 
-        if (os.path.isfile(outfile)):
-            print "already created %s" % outfile
-        else:
-            if (old_mode == 1):
-                pfb_line = "%s -i %s -a 128 -n 88  -o %s -4 " % (read_pfb,file,outfile)
-                subp.call(pfb_line,shell=True)
+            if (os.path.isfile(outfile)):
+                print "already created %s" % outfile
+            else:
+                if (old_mode == 1):
+                    pfb_line = "%s -i %s -a 128 -n 88  -o %s -4 " % (read_pfb,file,outfile)
+                    subp.call(pfb_line,shell=True)
 
-    if (the_options['submit'] == True):
         secs_to_run = datetime.timedelta(seconds=10*to_corr)
         batch_submit_line = "sbatch --time=%s --partition=gpuq %s" % (str(secs_to_run),corr_batch)
         print batch_submit_line
