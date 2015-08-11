@@ -412,7 +412,7 @@ if __name__ == '__main__':
                     pfb_line = "%s -i %s -a 128 -n 88  -o %s -4 " % (read_pfb,file,outfile)
                     subp.call(pfb_line,shell=True)
 
-        secs_to_run = datetime.timedelta(seconds=10*to_corr)
+        secs_to_run = datetime.timedelta(seconds=30*to_corr)
         batch_submit_line = "sbatch --time=%s --partition=gpuq %s" % (str(secs_to_run),corr_batch)
         print batch_submit_line
         submit_cmd = subp.Popen(batch_submit_line,shell=True,stdout=subp.PIPE)

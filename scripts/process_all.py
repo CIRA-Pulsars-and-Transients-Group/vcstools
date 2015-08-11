@@ -525,7 +525,7 @@ if __name__ == '__main__':
 
                     # submit the job
 
-                    secs_to_run = datetime.timedelta(seconds=10*to_pfb)
+                    secs_to_run = datetime.timedelta(seconds=30*to_pfb)
                     submit_line = "sbatch --time=%s --nodes=1 --workdir=%s --partition=gpuq %s\n" % (str(secs_to_run),working_dir,pfb_batch_file)
 
                     if (secs_to_run.seconds > 0):
