@@ -475,7 +475,7 @@ if __name__ == '__main__':
         print delays_line
         
         subp.call(delays_line,shell=True)
-        rts_flags_file = "%s/flagged_tiles.txt" % (outdir,obsid)
+        rts_flags_file = "%s/flagged_tiles.txt" % (outdir)
         print rts_flags_file
         if (os.path.isfile(rts_flags_file)) :
             rts_flags = []
