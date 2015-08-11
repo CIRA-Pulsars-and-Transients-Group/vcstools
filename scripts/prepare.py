@@ -475,6 +475,7 @@ if __name__ == '__main__':
         
         subp.call(delays_line,shell=True)
         rts_flags_file = "%s/%s/flagged_tiles.txt" % (outdir,obsid)
+        print rts_flags_file
         if (os.path.isfile(rts_flags_file)) :
             rts_flags = []
             with open (rts_flags_file,"r") as rts:
@@ -492,9 +493,9 @@ if __name__ == '__main__':
                 beamer_flags[2*tile] = 0.0
                 beamer_flags[2*tile+1] = 0.0
 
-        with open("./flags.txt","w") as new_flags:
-            for entry in beamer_flags:
-                s = str(entry) + "\n"
-                new_flags.write(s)
+            with open("./flags.txt","w") as new_flags:
+                for entry in beamer_flags:
+                    s = str(entry) + "\n"
+                    new_flags.write(s)
 
 
