@@ -355,16 +355,16 @@ if __name__ == '__main__':
                 break
 
     if (the_options['submit'] == True):
+ 
+        mkdir_line = "mkdir %s" % (outdir)
+        subp.Popen(mkdir_line,shell=True,stdout=subp.PIPE)
     
+   
         corr_batch = "%s_%s_ch%d" % (corr_batch_file_root,obsid,freq_channel)
         with open(corr_batch, 'w') as batch_file:
             batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n")
             batch_file.write("module load cudatoolkit\nmodule load cfitsio\n")
 
-
-        mkdir_line = "mkdir %s" % (outdir)
-        subp.Popen(mkdir_line,shell=True,stdout=subp.PIPE)
-    
         to_corr = 0;
         for file in f:
             corr_line = ""
