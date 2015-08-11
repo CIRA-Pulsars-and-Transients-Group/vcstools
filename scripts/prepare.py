@@ -362,13 +362,13 @@ if __name__ == '__main__':
             batch_file.write("module load cudatoolkit\nmodule load cfitsio\n")
 
 
-        mkdir_line = "mkdir %s/%s" % (outdir,obsid)
+        mkdir_line = "mkdir %s" % (outdir)
         subp.Popen(mkdir_line,shell=True,stdout=subp.PIPE)
     
         to_corr = 0;
         for file in f:
             corr_line = ""
-            corr_file = "%s/%s/%s" % (outdir,obsid,obsid)
+            corr_file = "%s/%s" % (outdir,obsid)
 		# run the correlator
             (current_time,ext) = os.path.splitext(os.path.basename(file))
             if (old_mode == 1):
@@ -443,7 +443,7 @@ if __name__ == '__main__':
 
 # build the rts file for these obs -
     if (the_options['rts'] == True):
-        corr_dir = "%s/%s" % (outdir,obsid)
+        corr_dir = "%s" % (outdir)
         corr_files_glob = "%s/*.fits" % (corr_dir)
         c_f = sorted(glob.glob(corr_files_glob))
         first_corr_file = c_f[0]
