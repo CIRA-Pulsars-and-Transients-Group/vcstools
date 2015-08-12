@@ -487,7 +487,9 @@ if __name__ == '__main__':
                                 f.append(to_convert)
 
                         if (the_options['get_data'] == True):
-                            mv_dir = "mv ch%02d ./attic/" % (index+1)
+                            mk_dir = "mkdir ./attic/ch%02d" % (index+1)
+                            subprocess.call(mk_dir,shell=True)
+                            mv_dir = "mv ch%02d/* ./attic/ch%02d/" % ((index+1),(index+1))
                             subprocess.call(mv_dir,shell=True)
                         
 
