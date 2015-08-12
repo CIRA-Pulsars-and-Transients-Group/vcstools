@@ -655,7 +655,7 @@ if __name__ == '__main__':
         #build_file_name
                         if (beam_mode == 1):
                             output_name = "results/step_%02d/" % (step)
-                            input_name = "%s_%s_%02d_*.fits" % (obsname,obsid,i+1)
+                            input_name = "*_%s_%02d_*.fits" % (obsid,i+1)
                             move_line = "mv %s %s\n" % (input_name,output_name)
                             batch_file.write(move_line)
 
