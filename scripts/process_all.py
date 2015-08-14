@@ -110,7 +110,7 @@ jobs_per_node = 8
 
 #chan_list_half=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12"]
 chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
-n_coarse = 12
+n_coarse = 24
 chan_list = []
 # pointing
 pointing = " 04:37:15.7 -47:15:08 "
