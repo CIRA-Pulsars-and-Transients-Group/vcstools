@@ -116,7 +116,7 @@ chan_list = []
 pointing = " 04:37:15.7 -47:15:08 "
 #pointing = " 05:14:06.7 -40:02:48.9 "
 # narrow channel count per coarse channel
-nchan = 88
+nchan = 128
 #jones
 useJones = False
 #get fresh  data
@@ -584,7 +584,7 @@ if __name__ == '__main__':
                 else:
                     prepare_line = "%s -r %s -d %s -g %s -f %s" % (prepare,ra,dec,the_options['corrdir'],metafits_file)
 
-                if (runRECOMBINE == False):
+                if (the_options['nchan'] == 88):
                     prepare_line += " -m 0 "
                 else:
                     prepare_line += " -m 1 "

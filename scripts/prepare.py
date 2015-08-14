@@ -23,13 +23,14 @@ BASEURL = 'http://ngas01.ivec.org/metadata/'
 
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
-u2d = "u2d"
-get_delays = "get_delays"
-read_pfb = "read_pfb"
-mwac_offline = "mwac_offline"
+import distutils.spawn
+u2d = distutils.spawn.find_executable("u2d")
+get_delays = distutils.spawn.find_executable("get_delays")
+read_pfb = distutils.spawn.find_executable("read_pfb")
+mwac_offline = distutils.spawn.find_executable("mwac_offline")
 outdir = "notset"
-timeconvert = "timeconvert.py"
-get_info = "sql_get_observation_info.py"
+timeconvert = distutils.spawn.find_executable("timeconvert.py")
+get_info = distutils.spawn.find_executable("sql_get_observation_info.py")
 
 def sfreq(freqs):
 
