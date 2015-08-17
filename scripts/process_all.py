@@ -502,17 +502,15 @@ if __name__ == '__main__':
                             donefile = "%s/ch%02d/%s" % (working_dir,(index+1),os.path.basename(outfile))
 
                             if (os.path.isfile(file) == True):
-                                #subprocess.call(pfb_line,shell=True)
                                 if (os.path.isfile(donefile) == True):
                                     pfb_line = "#read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (file,donefile)
+                                    move_cmd = "#mv %s %s/ch%02d/\n" % (file,working_dir,(index+1))
                                 else:
                                     pfb_line = "read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (file,donefile)
+                                    move_cmd = "mv %s %s/ch%02d/\n" % (file,working_dir,(index+1))
                                     to_pfb = to_pfb + 1
                                 
                                 pfb_build.write(pfb_line)
-
-                                move_cmd = "mv %s %s/ch%02d/\n" % (file,working_dir,(index+1))
-                                #subprocess.call(move_cmd,shell=True)
                                 pfb_build.write(move_cmd)
                                 moved = moved + 1
                                 # turn off the clean up while testing
