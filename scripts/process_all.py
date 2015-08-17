@@ -616,19 +616,18 @@ if __name__ == '__main__':
                 print "Waiting for child %d:%d" % (i,child)
                 os.waitpid(child,0)
             
-            for index,channel in enumerate(chan_list):
-                print "Checking %s\n" % channel
-                channel_dir = "%s/ch%02d" % (working_dir,(index+1))
-                flags_file = "%s/flags.txt" % channel_dir
-                if (os.path.isfile(flags_file) == True):
-                    print "Channel %s passed\n" % channel
-                else:
-                    if (runMWAC == False):
+            if (runMWAC == False):
+                for index,channel in enumerate(chan_list):
+                    print "Checking %s\n" % channel
+                    channel_dir = "%s/ch%02d" % (working_dir,(index+1))
+                    flags_file = "%s/flags.txt" % channel_dir
+                    if (os.path.isfile(flags_file) == True):
+                        print "Channel %s passed\n" % channel
+                    else:
                         print "Channel %s failed exiting to avoid confusion" % channel
                         sys.exit()
     # now actually submit the job (5 seconds per second) only if not running the correlator
 
-            if (runMWAC == False):
                 
                 secs_to_run = datetime.timedelta(seconds=10*increment)
                 number_of_exe = len(chan_list)
