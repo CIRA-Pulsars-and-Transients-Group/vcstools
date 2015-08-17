@@ -22,11 +22,13 @@ if __name__ == '__main__':
     finally:
         if len(sys.argv) < 2:
             usage()
+            sys.exit()
 
     for opt,arg in opts:
         
         if (opt == "-h"):
             usage()
+            sys.exit()
         elif (opt == "-o"):
             options['outfile'] = arg
             options['clobber'] = 0
