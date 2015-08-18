@@ -55,7 +55,7 @@ if __name__ == '__main__':
         current_seconds = int(prihdr['STT_SMJD'])
         current_days = int(prihdr['STT_IMJD'])
 
-        print "before::DAYS = %.d\n" % current_DAYS
+        print "before::DAYS = %.d\n" % current_days
         print "before::SECONDS = %.d\n" % current_seconds
         print "before::OFFSET = %.10f\n" % current_offset
         
@@ -76,7 +76,7 @@ if __name__ == '__main__':
         current_offset = float(prihdr['STT_OFFS'])
         current_seconds = int(prihdr['STT_SMJD'])
         
-        print "after::DAYS = %.d\n" % current_DAYS
+        print "after::DAYS = %.d\n" % current_days
         print "after::SECONDS = %.d\n" % current_seconds
         print "after::OFFSET = %.10f\n" % current_offset
 
