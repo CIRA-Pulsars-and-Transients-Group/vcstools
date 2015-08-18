@@ -51,6 +51,7 @@ if __name__ == '__main__':
     try:    
         prihdr = hdulist[0].header
 
+        print repr(prihdr)
         current_offset = float(prihdr['STT_OFFS'])
         current_seconds = int(prihdr['STT_SMJD'])
         current_days = int(prihdr['STT_IMJD'])
@@ -80,7 +81,6 @@ if __name__ == '__main__':
         print "after::SECONDS = %.d\n" % current_seconds
         print "after::OFFSET = %.10f\n" % current_offset
 
-        print repr(prihdr)
     except:
         print "Error getting/setting FITSKEYS in PRIMARY header\n"
         sys.exit()       
