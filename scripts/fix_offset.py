@@ -3,7 +3,7 @@
 
 
 def usage():
-    print "fix_offset -o <output file> -f <input fits file> -u <update in place> -s [time per subint (s)] <update subints too>\n"
+    print "fix_offset -o <output file> -f <input fits file> -u <update in place> -s <update subints too>\n"
     print "Read the STT_SMJD and the STT_OFFS in the fitsfile - then set STT_OFFS to 0.0 and fixes the SMJD accordingly\n"
 
 if __name__ == '__main__':
