@@ -155,7 +155,7 @@ def options (opts={}):
     print "-s:\t single step (only process one increment and this is it (-1 == do them all) [%d]\n" % opts['single_step']
     print "-r:\t [corrdir] Run the offline correlator - this will submit a job to process the .dat files into visibility sets into the specified directory. These are needed if you want an RTS calibration solution [%s]\n" % opts['corrdir']
     print "-G:\t Submit the beamformer/correlator job [Do it = %s]\n" % opts['Go']
-    print "-R:\t Run Dave Pallot's recombiner first [runRECOMBINE = %s]\n" % opts['runRECOMBINE']
+    print "-R:\t New VCS mode - requires the recombine operation [runRECOMBINE = %s]\n" % opts['runRECOMBINE']
     print "-w:\t Working root directory [%s]\n" % opts['root']
     print "-z:\t Add to switch off PFB formation/testing [runPFB = %s]\n" % opts['runPFB']
 
