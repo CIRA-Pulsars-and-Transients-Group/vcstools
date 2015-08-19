@@ -259,8 +259,6 @@ if __name__ == '__main__':
     if (the_options['get_data'] == False):
         the_options['inc'] = the_options['end'] - the_options['begin']
 
-    if ((the_options['parallel_dl']) == True):
-        parallel = the_options['parallel_dl']
 
     working_root = the_options['root']
     obsid = the_options['obsid']
@@ -268,6 +266,7 @@ if __name__ == '__main__':
     stop_time = the_options['end']
     increment = the_options['inc']
     getdata = the_options['get_data']
+    parallel = the_options['parallel_dl']
     Go = the_options['Go']
     runRECOMBINE = the_options['runRECOMBINE']
     runMWAC = the_options['runMWAC']
