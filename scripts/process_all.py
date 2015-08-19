@@ -348,7 +348,7 @@ if __name__ == '__main__':
                     batch_line = "aprun -N %d -n %d %s\n" % (parallel,parallel,get_data)
                     batch_file.write(batch_line)
             
-                submit_line = "sbatch --time=%s --nodes=1 --workdir=%s --partition=copyq %s\n" % (str(secs_to_run),working_dir,pfb_batch_file)
+                submit_line = "sbatch --time=%s --nodes=1 --workdir=%s --partition=copyq %s\n" % (str(secs_to_run),working_dir,voltdownload_batch)
                 submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
                 continue
             else:
