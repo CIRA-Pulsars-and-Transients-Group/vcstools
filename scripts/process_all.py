@@ -258,6 +258,8 @@ if __name__ == '__main__':
 
     if (the_options['get_data'] == False):
         the_options['inc'] = the_options['end'] - the_options['begin']
+
+    if ((the_options['parallel_dl']) == True):
         parallel = the_options['parallel_dl']
 
     working_root = the_options['root']
