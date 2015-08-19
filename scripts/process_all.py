@@ -170,10 +170,10 @@ def usage (opts={}):
 
 if __name__ == '__main__':
 
-    the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'parallel_dl':parallel, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root}
+    the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'parallel_dl':parallel, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root, 'batch_download' : 0}
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hb:c:e:gd:Gi:j:m:n:o:p:r:Rs:w:z")
+        opts, args = getopt.getopt(sys.argv[1:],"hB:b:c:e:gd:Gi:j:m:n:o:p:r:Rs:w:z")
     except getopt.GetoptError:
         usage(the_options)
         sys.exit()
@@ -187,6 +187,8 @@ if __name__ == '__main__':
 
         if (opt == "-h"):
             usage(the_options)
+        elif (opt == "-B"):
+            the_options['batch_download'] = int(arg)
         elif (opt == "-b"):
             the_options['begin'] = int(arg)
         elif (opt == "-c"):
@@ -335,7 +337,22 @@ if __name__ == '__main__':
             get_data = "%s --obs=%s --type=11 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
 
         if (the_options['get_data'] == True):
-            subprocess.call(get_data,shell=True)
+            if (the_options['batch_download'] == 1):
+                voltdownload_batch = "%s/volt_%d.batch" % (working_dir,time_to_get)
+                secs_to_run = datetime.timedelta(seconds=120*increment)
+                with open(voltdownload_batch,'w') as batch_file:
+
+                    batch_line = "#!/bin/bash -l\n\n"
+                    batch_file.write(batch_line)
+                    batch_line = "aprun -N %d -n %d %s\n" % (parallel,parallel,get_data)
+                    batch_file.write(batch_line)
+            
+                submit_line = "sbatch --time=%s --nodes=1 --workdir=%s --partition=copyq %s\n" % (str(secs_to_run),working_dir,pfb_batch_file)
+                submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+                continue
+            else:
+                submit_cmd = subprocess.Popen(get_data,shell=True,stdout=subprocess.PIPE)
+
 
             try:
                 os.chdir(working_dir)
@@ -412,19 +429,20 @@ if __name__ == '__main__':
             for entry,jobid in enumerate(submitted_jobs):
                       
     #now we have to wait until this job is finished before we move on
-                    queue_line = "squeue -j %s\n" % jobid
-                    queue_cmd = subprocess.Popen(queue_line,shell=True,stdout=subprocess.PIPE)
-                    finished = True
-                    for line in queue_cmd.stdout:
+                queue_line = "squeue -j %s\n" % jobid
+                queue_cmd = subprocess.Popen(queue_line,shell=True,stdout=subprocess.PIPE)
+                finished = True
+                for line in queue_cmd.stdout:
 
-                        if jobid in line:
+                    if jobid in line:
     # batch job still in the queue
-                            finished = False;
+                        finished = False;
 
                     if ((finished == True) and (a_job_is_done == False)):
                         submitted_jobs.pop(entry)
                         ttg = submitted_times.pop(entry)
                         a_job_is_done = True
+            
             if (last_increment == 1):
                 while (len(submitted_jobs) > 0):
                     time.sleep(1)
