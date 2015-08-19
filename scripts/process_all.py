@@ -111,6 +111,7 @@ jobs_per_node = 8
 #chan_list_half=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12"]
 chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
 n_coarse = 24
+parallel = 3
 chan_list = []
 # pointing
 pointing = " 04:37:15.7 -47:15:08 "
@@ -141,6 +142,7 @@ def options (opts={}):
     print "\noptions:\n"
     print "-b:\t UNIX time of the beginning [%d]]\n" % (opts['begin'])
     print "-c:\t Coarse channel count (how many to process) [%d]\n" % (opts['ncoarse_chan'])
+    print "-d:\t Number of parallel downloads to envoke if using '-g' [%d]\n" % (opts['parallel_dl'])
     print "-e:\t UNIX time of the end [%d]\n" % (opts['end'])
     print "-g:\t Get the data? (True/False) add this to get fresh data from the archive [%s]\n" % (opts['get_data'])
     print "-i:\t Increment in seconds (how much we process at once) [%d]\n" % (opts['inc'])
@@ -168,10 +170,10 @@ def usage (opts={}):
 
 if __name__ == '__main__':
 
-    the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root}
+    the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'parallel_dl':parallel, inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root}
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hb:c:e:gGi:j:m:n:o:p:r:Rs:w:z")
+        opts, args = getopt.getopt(sys.argv[1:],"hb:c:e:gdGi:j:m:n:o:p:r:Rs:w:z")
     except getopt.GetoptError:
         usage(the_options)
         sys.exit()
@@ -191,6 +193,8 @@ if __name__ == '__main__':
             the_options['ncoarse_chan'] = int(arg)
         elif (opt == "-e"):
             the_options['end'] = int(arg)
+        elif (opt == "-d"):
+            the_options['parallel_dl'] = int(arg)
         elif (opt == "-g"):
             the_options['get_data'] = True
         elif (opt == "-i"):
@@ -254,6 +258,7 @@ if __name__ == '__main__':
 
     if (the_options['get_data'] == False):
         the_options['inc'] = the_options['end'] - the_options['begin']
+        parallel = the_options['parallel_dl']
 
     working_root = the_options['root']
     obsid = the_options['obsid']
@@ -323,10 +328,10 @@ if __name__ == '__main__':
             if (step != the_options['single_step']):
                 continue
         if (runRECOMBINE == False):
-            get_data = "%s --obs=%s --type=12 --from=%d --duration=%d --parallel=3 " % (voltdownload,obsid,time_to_get,increment-1)
+            get_data = "%s --obs=%s --type=12 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
         else:
 
-            get_data = "%s --obs=%s --type=11 --from=%d --duration=%d --parallel=3 " % (voltdownload,obsid,time_to_get,increment-1)
+            get_data = "%s --obs=%s --type=11 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
 
         if (the_options['get_data'] == True):
             subprocess.call(get_data,shell=True)
