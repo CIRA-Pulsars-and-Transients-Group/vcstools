@@ -334,7 +334,8 @@ if __name__ == '__main__':
         t = Time(int(gpstime.rstrip()), format='gps', scale='utc')
         utctime =  t.datetime.strftime('%Y-%m-%dT%H:%M:%S')
 
-        freq_channel = int(chan[2])*100 + int(chan[3])*10 + int(chan[4])
+     #   freq_channel = int(chan[2])*100 + int(chan[3])*10 + int(chan[4])
+        freq_channel = int(chan[2:])
 
     freq_array = get_frequencies("../%s.metafits" % obsid)
     print freq_array
