@@ -111,6 +111,7 @@ jobs_per_node = 8
 #chan_list_half=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12"]
 chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
 n_coarse = 24
+parallel = 3
 chan_list = []
 # pointing
 pointing = " 04:37:15.7 -47:15:08 "
@@ -139,22 +140,24 @@ runPFB = True
 def options (opts={}):
 
     print "\noptions:\n"
+    print "-B [1/0]\t Submit download jobs to the copyq - at the moment this mode will only download and will perform <NO> subsequent processing [%d] \n" % (opts['batch_download'])
     print "-b:\t UNIX time of the beginning [%d]]\n" % (opts['begin'])
     print "-c:\t Coarse channel count (how many to process) [%d]\n" % (opts['ncoarse_chan'])
+    print "-d:\t Number of parallel downloads to envoke if using '-g' [%d]\n" % (opts['parallel_dl'])
     print "-e:\t UNIX time of the end [%d]\n" % (opts['end'])
     print "-g:\t Get the data? (True/False) add this to get fresh data from the archive [%s]\n" % (opts['get_data'])
     print "-i:\t Increment in seconds (how much we process at once) [%d]\n" % (opts['inc'])
     print "-j:\t [corrdir] Use Jones matrices from the RTS [%s,%s]\n" % (opts['useJones'],opts['corrdir'])
-    print "-m:\t Beam forming mode (1==PSRFITS, 2==VDIF) [%d]\n" % (opts['mode'])
+    print "-m:\t Beam forming mode (0 == NO BEAMFORMING 1==PSRFITS, 2==VDIF) [%d]\n" % (opts['mode'])
     print "-n:\t Number of fine channels per coarse channel [%d]\n" % (opts['nchan'])
     print "-o:\t obsid [%s]\n" % opts['obsid']
     print "-p:\t beam pointind [%s]\n" % opts['pointing']
     print "-s:\t single step (only process one increment and this is it (-1 == do them all) [%d]\n" % opts['single_step']
     print "-r:\t [corrdir] Run the offline correlator - this will submit a job to process the .dat files into visibility sets into the specified directory. These are needed if you want an RTS calibration solution [%s]\n" % opts['corrdir']
-    print "-G:\t Submit the beamformer job [%s]\n" % opts['Go']
-    print "-R:\t Run Dave Pallot's recombiner first [%s]\n" % opts['runRECOMBINE']
+    print "-G:\t Submit the beamformer/correlator job [Do it = %s]\n" % opts['Go']
+    print "-R:\t Run Dave Pallot's recombiner first [runRECOMBINE = %s]\n" % opts['runRECOMBINE']
     print "-w:\t Working root directory [%s]\n" % opts['root']
-    print "-z:\t Add to switch off PFB formation/testing [%s]\n" % opts['runPFB']
+    print "-z:\t Add to switch off PFB formation/testing [runPFB = %s]\n" % opts['runPFB']
 
 
 def usage (opts={}):
@@ -168,10 +171,10 @@ def usage (opts={}):
 
 if __name__ == '__main__':
 
-    the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root}
+    the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'parallel_dl':parallel, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root, 'batch_download' : 0}
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hb:c:e:gGi:j:m:n:o:p:r:Rs:w:z")
+        opts, args = getopt.getopt(sys.argv[1:],"hB:b:c:e:gd:Gi:j:m:n:o:p:r:Rs:w:z")
     except getopt.GetoptError:
         usage(the_options)
         sys.exit()
@@ -185,12 +188,16 @@ if __name__ == '__main__':
 
         if (opt == "-h"):
             usage(the_options)
+        elif (opt == "-B"):
+            the_options['batch_download'] = int(arg)
         elif (opt == "-b"):
             the_options['begin'] = int(arg)
         elif (opt == "-c"):
             the_options['ncoarse_chan'] = int(arg)
         elif (opt == "-e"):
             the_options['end'] = int(arg)
+        elif (opt == "-d"):
+            the_options['parallel_dl'] = int(arg)
         elif (opt == "-g"):
             the_options['get_data'] = True
         elif (opt == "-i"):
@@ -255,12 +262,14 @@ if __name__ == '__main__':
     if (the_options['get_data'] == False):
         the_options['inc'] = the_options['end'] - the_options['begin']
 
+
     working_root = the_options['root']
     obsid = the_options['obsid']
     start_time = the_options['begin']
     stop_time = the_options['end']
     increment = the_options['inc']
     getdata = the_options['get_data']
+    parallel = the_options['parallel_dl']
     Go = the_options['Go']
     runRECOMBINE = the_options['runRECOMBINE']
     runMWAC = the_options['runMWAC']
@@ -323,13 +332,28 @@ if __name__ == '__main__':
             if (step != the_options['single_step']):
                 continue
         if (runRECOMBINE == False):
-            get_data = "%s --obs=%s --type=12 --from=%d --duration=%d --parallel=3 " % (voltdownload,obsid,time_to_get,increment-1)
+            get_data = "%s --obs=%s --type=12 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
         else:
 
-            get_data = "%s --obs=%s --type=11 --from=%d --duration=%d --parallel=3 " % (voltdownload,obsid,time_to_get,increment-1)
+            get_data = "%s --obs=%s --type=11 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
 
         if (the_options['get_data'] == True):
-            subprocess.call(get_data,shell=True)
+            if (the_options['batch_download'] == 1):
+                voltdownload_batch = "%s/volt_%d.batch" % (working_dir,time_to_get)
+                secs_to_run = datetime.timedelta(seconds=120*increment)
+                with open(voltdownload_batch,'w') as batch_file:
+
+                    batch_line = "#!/bin/bash -l\n\n"
+                    batch_file.write(batch_line)
+                    batch_line = "aprun -N %d -n %d %s\n" % (parallel,parallel,get_data)
+                    batch_file.write(batch_line)
+            
+                submit_line = "sbatch --time=%s --nodes=1 --workdir=%s --partition=copyq %s\n" % (str(secs_to_run),working_dir,pfb_batch_file)
+                submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+                continue
+            else:
+                submit_cmd = subprocess.Popen(get_data,shell=True,stdout=subprocess.PIPE)
+
 
             try:
                 os.chdir(working_dir)
@@ -340,7 +364,7 @@ if __name__ == '__main__':
 #move into the directories and sort them
 #sort
 
-            if (runRECOMBINE == True):
+        if (runRECOMBINE == True):
 
 # it only does a second at a time so I will launch 1 for every second
 # this should not bring the machine down if I force increment to be small in this
@@ -350,64 +374,46 @@ if __name__ == '__main__':
 # get the metafits file
 
 
-                recombine_batch = "%s/recombine_%d.batch" % (working_dir,time_to_get)
+            recombine_batch = "%s/recombine_%d.batch" % (working_dir,time_to_get)
 
 
 
 
-                with open(recombine_batch,'w') as batch_file:
+            with open(recombine_batch,'w') as batch_file:
             
-                    nodes = int(int(increment)/jobs_per_node) + 1
+                nodes = int(int(increment)/jobs_per_node) + 1
 
 
-                    batch_line = "#!/bin/bash -l\n#SBATCH --time=00:10:00\n#SBATCH \n#SBATCH --export=NONE\n#SBATCH --nodes=%d\n" % (nodes)
+                batch_line = "#!/bin/bash -l\n#SBATCH --time=00:10:00\n#SBATCH \n#SBATCH --export=NONE\n#SBATCH --nodes=%d\n" % (nodes)
 
 
-                    batch_file.write(batch_line)
-                    batch_line = "module load mpi4py\n"
-                    batch_file.write(batch_line)
+                batch_file.write(batch_line)
+                batch_line = "module load mpi4py\n"
+                batch_file.write(batch_line)
 
-                    if (jobs_per_node > increment):
-                        jobs_per_node = increment
+                if (jobs_per_node > increment):
+                    jobs_per_node = increment
 
-                    recombine_line = "aprun -n %d -N %d python %s %s -o %s -s %d -w %s\n" % (increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
+                recombine_line = "aprun -n %d -N %d python %s %s -o %s -s %d -w %s\n" % (increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
 
-                    batch_file.write(recombine_line)
-
-
-
-                submit_line = "sbatch --partition=gpuq %s\n" % (recombine_batch)
-
-                print submit_line
-                submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-                jobid=""
-                for line in submit_cmd.stdout:
-
-                    if "Submitted" in line:
-                        (word1,word2,word3,jobid) = line.split()
-                        submitted_jobs.append(jobid)
-                        submitted_times.append(time_to_get)
-
-            elif (runRECOMBINE == False):
-                f = []
-                for index,channel in enumerate(chan_list):
-#files to move (if getting data)
-                    if (getdata == True):
-                        files_glob = "*ch%02d_*.dat" % (index+1)
-                        f = sorted(glob.glob(files_glob))
-                        make_dir = "mkdir ch%02d" % (index+1)
-                        subprocess.call(make_dir,shell=True);
-                        for file in f:
-                            move_cmd = "mv %s ch%02d" % (file,index+1)
-                            subprocess.call(move_cmd,shell=True)
+                batch_file.write(recombine_line)
 
 
-        
-            ttg = 0
-            a_job_is_done = False
+
+            submit_line = "sbatch --partition=gpuq %s\n" % (recombine_batch)
+
+            print submit_line
+            submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+            jobid=""
+            for line in submit_cmd.stdout:
+
+                if "Submitted" in line:
+                    (word1,word2,word3,jobid) = line.split()
+                    submitted_jobs.append(jobid)
+                    submitted_times.append(time_to_get)
 
         # end if get_data == true
-        else:
+        if (the_options['get_data'] == False):
 
             try:
                 os.chdir(working_dir)
@@ -424,19 +430,20 @@ if __name__ == '__main__':
             for entry,jobid in enumerate(submitted_jobs):
                       
     #now we have to wait until this job is finished before we move on
-                    queue_line = "squeue -j %s\n" % jobid
-                    queue_cmd = subprocess.Popen(queue_line,shell=True,stdout=subprocess.PIPE)
-                    finished = True
-                    for line in queue_cmd.stdout:
+                queue_line = "squeue -j %s\n" % jobid
+                queue_cmd = subprocess.Popen(queue_line,shell=True,stdout=subprocess.PIPE)
+                finished = True
+                for line in queue_cmd.stdout:
 
-                        if jobid in line:
+                    if jobid in line:
     # batch job still in the queue
-                            finished = False;
+                        finished = False;
 
                     if ((finished == True) and (a_job_is_done == False)):
                         submitted_jobs.pop(entry)
                         ttg = submitted_times.pop(entry)
                         a_job_is_done = True
+            
             if (last_increment == 1):
                 while (len(submitted_jobs) > 0):
                     time.sleep(1)
@@ -465,7 +472,7 @@ if __name__ == '__main__':
         if ((Go == True) and (a_job_is_done == True)):
 
             moved = 0
-            if (runRECOMBINE == True and runPFB == True):
+            if (runPFB == True):
                 pfb_job_list = []
                 for index,channel in enumerate(chan_list):
                     # pfbfile batch file
@@ -480,18 +487,9 @@ if __name__ == '__main__':
                         
                  
                         f=[]
-        #files to move (if getting data) // get data just for this block
-                        for t in range(ttg,ttg+increment):
-                            files_glob = "%s/combined/*%d_ch%s*" % (working_dir,int(t),channel)
-                            for to_convert in sorted(glob.glob(files_glob)):
-                                f.append(to_convert)
-
-                        if (the_options['get_data'] == True):
-                            mk_dir = "mkdir ./attic/ch%02d" % (index+1)
-                            subprocess.call(mk_dir,shell=True)
-                            mv_dir = "mv ch%02d/* ./attic/ch%02d/" % ((index+1),(index+1))
-                            subprocess.call(mv_dir,shell=True)
-                        
+                        files_glob = "%s/combined/*_ch%s*" % (working_dir,channel)
+                        for to_convert in sorted(glob.glob(files_glob)):
+                            f.append(to_convert)
 
                         make_dir = "mkdir %s/ch%02d" % (working_dir,(index+1))
                         to_pfb = 0;
@@ -568,12 +566,25 @@ if __name__ == '__main__':
             for index,channel in enumerate(chan_list):
                 print "processing %s\n" % channel
                 channel_dir = "%s/ch%02d" % (working_dir,(index+1))
+            
+                if (the_options['runMWAC'] == True):
+                    make_dir = "mkdir %s" % (channel_dir)
+                
+                    f=[]
+                    files_glob = "%s/combined/*_ch%s*" % (working_dir,channel)
+                    for to_move in sorted(glob.glob(files_glob)):
+                        f.append(to_tomove)
 
+                    for file in f:
+                        move_cmd = "mv %s %s/\n" % (file,channel_dir)
+                        subprocess.call(move_cmd,shell=True)
+    
                 try:
                     os.chdir(channel_dir)
                 except:
                     print "cannot open channel dir:%s" % channel_dir
                     sys.exit()
+
                 (ra,dec) = pointing.split()
 
                 if (runMWAC == True):
