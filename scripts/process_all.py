@@ -190,6 +190,8 @@ if __name__ == '__main__':
             usage(the_options)
         elif (opt == "-B"):
             the_options['batch_download'] = int(arg)
+            the_options['get_data'] = True
+            the_options['runRECOMBINE'] = True
         elif (opt == "-b"):
             the_options['begin'] = int(arg)
         elif (opt == "-c"):
