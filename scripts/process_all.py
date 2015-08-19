@@ -140,6 +140,7 @@ runPFB = True
 def options (opts={}):
 
     print "\noptions:\n"
+    print "-B [1/0]\t Submit download jobs to the copyq - at the moment this mode will only download and will perform <NO> subsequent processing [%d] \n" % (opts['batch_download'])
     print "-b:\t UNIX time of the beginning [%d]]\n" % (opts['begin'])
     print "-c:\t Coarse channel count (how many to process) [%d]\n" % (opts['ncoarse_chan'])
     print "-d:\t Number of parallel downloads to envoke if using '-g' [%d]\n" % (opts['parallel_dl'])
