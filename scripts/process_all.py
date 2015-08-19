@@ -310,6 +310,7 @@ if __name__ == '__main__':
 
     step = 0
     last_increment = 0
+    a_job_is_done = False;
 
     print "start: %d Stop: %d Inc: %d \n" % (int(start_time),int(stop_time),int(increment))
 
@@ -428,6 +429,7 @@ if __name__ == '__main__':
             a_job_is_done = True
 
         if (runRECOMBINE == True):
+            
             print submitted_jobs
             for entry,jobid in enumerate(submitted_jobs):
                       
