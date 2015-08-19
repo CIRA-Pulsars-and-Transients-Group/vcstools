@@ -147,16 +147,16 @@ def options (opts={}):
     print "-g:\t Get the data? (True/False) add this to get fresh data from the archive [%s]\n" % (opts['get_data'])
     print "-i:\t Increment in seconds (how much we process at once) [%d]\n" % (opts['inc'])
     print "-j:\t [corrdir] Use Jones matrices from the RTS [%s,%s]\n" % (opts['useJones'],opts['corrdir'])
-    print "-m:\t Beam forming mode (1==PSRFITS, 2==VDIF) [%d]\n" % (opts['mode'])
+    print "-m:\t Beam forming mode (0 == NO BEAMFORMING 1==PSRFITS, 2==VDIF) [%d]\n" % (opts['mode'])
     print "-n:\t Number of fine channels per coarse channel [%d]\n" % (opts['nchan'])
     print "-o:\t obsid [%s]\n" % opts['obsid']
     print "-p:\t beam pointind [%s]\n" % opts['pointing']
     print "-s:\t single step (only process one increment and this is it (-1 == do them all) [%d]\n" % opts['single_step']
     print "-r:\t [corrdir] Run the offline correlator - this will submit a job to process the .dat files into visibility sets into the specified directory. These are needed if you want an RTS calibration solution [%s]\n" % opts['corrdir']
-    print "-G:\t Submit the beamformer job [%s]\n" % opts['Go']
-    print "-R:\t Run Dave Pallot's recombiner first [%s]\n" % opts['runRECOMBINE']
+    print "-G:\t Submit the beamformer/correlator job [Do it = %s]\n" % opts['Go']
+    print "-R:\t Run Dave Pallot's recombiner first [runRECOMBINE = %s]\n" % opts['runRECOMBINE']
     print "-w:\t Working root directory [%s]\n" % opts['root']
-    print "-z:\t Add to switch off PFB formation/testing [%s]\n" % opts['runPFB']
+    print "-z:\t Add to switch off PFB formation/testing [runPFB = %s]\n" % opts['runPFB']
 
 
 def usage (opts={}):
@@ -346,7 +346,7 @@ if __name__ == '__main__':
 #move into the directories and sort them
 #sort
 
-            if (runRECOMBINE == True):
+        if (runRECOMBINE == True):
 
 # it only does a second at a time so I will launch 1 for every second
 # this should not bring the machine down if I force increment to be small in this
@@ -356,64 +356,46 @@ if __name__ == '__main__':
 # get the metafits file
 
 
-                recombine_batch = "%s/recombine_%d.batch" % (working_dir,time_to_get)
+            recombine_batch = "%s/recombine_%d.batch" % (working_dir,time_to_get)
 
 
 
 
-                with open(recombine_batch,'w') as batch_file:
+            with open(recombine_batch,'w') as batch_file:
             
-                    nodes = int(int(increment)/jobs_per_node) + 1
+                nodes = int(int(increment)/jobs_per_node) + 1
 
 
-                    batch_line = "#!/bin/bash -l\n#SBATCH --time=00:10:00\n#SBATCH \n#SBATCH --export=NONE\n#SBATCH --nodes=%d\n" % (nodes)
+                batch_line = "#!/bin/bash -l\n#SBATCH --time=00:10:00\n#SBATCH \n#SBATCH --export=NONE\n#SBATCH --nodes=%d\n" % (nodes)
 
 
-                    batch_file.write(batch_line)
-                    batch_line = "module load mpi4py\n"
-                    batch_file.write(batch_line)
+                batch_file.write(batch_line)
+                batch_line = "module load mpi4py\n"
+                batch_file.write(batch_line)
 
-                    if (jobs_per_node > increment):
-                        jobs_per_node = increment
+                if (jobs_per_node > increment):
+                    jobs_per_node = increment
 
-                    recombine_line = "aprun -n %d -N %d python %s %s -o %s -s %d -w %s\n" % (increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
+                recombine_line = "aprun -n %d -N %d python %s %s -o %s -s %d -w %s\n" % (increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
 
-                    batch_file.write(recombine_line)
-
-
-
-                submit_line = "sbatch --partition=gpuq %s\n" % (recombine_batch)
-
-                print submit_line
-                submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-                jobid=""
-                for line in submit_cmd.stdout:
-
-                    if "Submitted" in line:
-                        (word1,word2,word3,jobid) = line.split()
-                        submitted_jobs.append(jobid)
-                        submitted_times.append(time_to_get)
-
-            elif (runRECOMBINE == False):
-                f = []
-                for index,channel in enumerate(chan_list):
-#files to move (if getting data)
-                    if (getdata == True):
-                        files_glob = "*ch%02d_*.dat" % (index+1)
-                        f = sorted(glob.glob(files_glob))
-                        make_dir = "mkdir ch%02d" % (index+1)
-                        subprocess.call(make_dir,shell=True);
-                        for file in f:
-                            move_cmd = "mv %s ch%02d" % (file,index+1)
-                            subprocess.call(move_cmd,shell=True)
+                batch_file.write(recombine_line)
 
 
-        
-            ttg = 0
-            a_job_is_done = False
+
+            submit_line = "sbatch --partition=gpuq %s\n" % (recombine_batch)
+
+            print submit_line
+            submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+            jobid=""
+            for line in submit_cmd.stdout:
+
+                if "Submitted" in line:
+                    (word1,word2,word3,jobid) = line.split()
+                    submitted_jobs.append(jobid)
+                    submitted_times.append(time_to_get)
 
         # end if get_data == true
-        else:
+        if (the_options['get_data'] == False):
 
             try:
                 os.chdir(working_dir)
@@ -471,7 +453,7 @@ if __name__ == '__main__':
         if ((Go == True) and (a_job_is_done == True)):
 
             moved = 0
-            if (runRECOMBINE == True and runPFB == True):
+            if (runPFB == True):
                 pfb_job_list = []
                 for index,channel in enumerate(chan_list):
                     # pfbfile batch file
@@ -486,18 +468,9 @@ if __name__ == '__main__':
                         
                  
                         f=[]
-        #files to move (if getting data) // get data just for this block
-                        for t in range(ttg,ttg+increment):
-                            files_glob = "%s/combined/*%d_ch%s*" % (working_dir,int(t),channel)
-                            for to_convert in sorted(glob.glob(files_glob)):
-                                f.append(to_convert)
-
-                        if (the_options['get_data'] == True):
-                            mk_dir = "mkdir ./attic/ch%02d" % (index+1)
-                            subprocess.call(mk_dir,shell=True)
-                            mv_dir = "mv ch%02d/* ./attic/ch%02d/" % ((index+1),(index+1))
-                            subprocess.call(mv_dir,shell=True)
-                        
+                        files_glob = "%s/combined/*_ch%s*" % (working_dir,channel)
+                        for to_convert in sorted(glob.glob(files_glob)):
+                            f.append(to_convert)
 
                         make_dir = "mkdir %s/ch%02d" % (working_dir,(index+1))
                         to_pfb = 0;
@@ -576,12 +549,25 @@ if __name__ == '__main__':
             for index,channel in enumerate(chan_list):
                 print "processing %s\n" % channel
                 channel_dir = "%s/ch%02d" % (working_dir,(index+1))
+            
+                if (the_options['runMWAC'] == True):
+                    make_dir = "mkdir %s" % (channel_dir)
+                
+                    f=[]
+                    files_glob = "%s/combined/*_ch%s*" % (working_dir,channel)
+                    for to_move in sorted(glob.glob(files_glob)):
+                        f.append(to_tomove)
 
+                    for file in f:
+                        move_cmd = "mv %s %s/\n" % (file,channel_dir)
+                        subprocess.call(move_cmd,shell=True)
+    
                 try:
                     os.chdir(channel_dir)
                 except:
                     print "cannot open channel dir:%s" % channel_dir
                     sys.exit()
+
                 (ra,dec) = pointing.split()
 
                 if (runMWAC == True):
