@@ -173,7 +173,7 @@ if __name__ == '__main__':
     the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'parallel_dl':parallel, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root}
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hb:c:e:gdGi:j:m:n:o:p:r:Rs:w:z")
+        opts, args = getopt.getopt(sys.argv[1:],"hb:c:e:gd:Gi:j:m:n:o:p:r:Rs:w:z")
     except getopt.GetoptError:
         usage(the_options)
         sys.exit()
