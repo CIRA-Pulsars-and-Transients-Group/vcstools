@@ -13,6 +13,13 @@ import json
 
 import datetime
 
+def is_number(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
 # Append the service name to this base URL, eg 'con', 'obs', etc.
 BASEURL = 'http://ngas01.ivec.org/metadata/'
 
@@ -243,18 +250,23 @@ if __name__ == '__main__':
    #    import pdb
 #    pdb.set_trace()
 
+    # this is the beamformer mode
+    # -f is the psrfits mode and -v is the vdif mode
     if (the_options['mode'] == 1):
         beam_mode_str = "-f"
     elif (the_options['mode'] == 2):
         beam_mode_str = "-v"
 
 
+    # this is the direction dependent calibration 
+    # you do not need this - but you should have it
 
     if (the_options['useJones'] == True):
         jones = "-j jones.txt"
     else:
         jones = " -i "
 
+    # number of coarse channels to process
 
     if ((the_options['ncoarse_chan']) == 0):
         skip = "-c"
@@ -310,12 +322,16 @@ if __name__ == '__main__':
 
     step = 0
     last_increment = 0
-    a_job_is_done = False;
 
     print "start: %d Stop: %d Inc: %d \n" % (int(start_time),int(stop_time),int(increment))
 
     for time_to_get in range(int(start_time),int(stop_time),int(increment)):
+        
+        # this refers to recombine tasks - I reset it here
+        # so that only one increment is popped off the stack for beamforming
+        # each time
 
+        a_job_is_done = False;
         print "Time to get is : %s\n" % time_to_get
 
         if (time_to_get + int(increment) >= int(stop_time)):
@@ -330,17 +346,24 @@ if __name__ == '__main__':
         print "processing step %d (time %d)\n" % (step, time_to_get)
         step = step + 1
 
+# this little piece of logic lets you advance through the steps w/o processing 
+# it is not really required as you can just change the start/stop
 
         if (the_options['single_step'] > 0):
             if (step != the_options['single_step']):
                 continue
-        if (runRECOMBINE == False):
-            get_data = "%s --obs=%s --type=12 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
-        else:
-
-            get_data = "%s --obs=%s --type=11 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
+    
+# Are we downloading data
 
         if (the_options['get_data'] == True):
+
+# builds the voltdownload command line
+            if (runRECOMBINE == False):
+                get_data = "%s --obs=%s --type=12 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
+            else:
+                get_data = "%s --obs=%s --type=11 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
+
+# download everything via the copy queue - do not do anything else
             if (the_options['batch_download'] == 1):
                 voltdownload_batch = "%s/volt_%d.batch" % (working_dir,time_to_get)
                 secs_to_run = datetime.timedelta(seconds=120*increment)
@@ -364,17 +387,10 @@ if __name__ == '__main__':
                 print "cannot open working dir:%s" % working_dir
                 sys.exit()
 
-#move into the directories and sort them
-#sort
+# do I need to recombine this batch
 
         if (runRECOMBINE == True):
 
-# it only does a second at a time so I will launch 1 for every second
-# this should not bring the machine down if I force increment to be small in this
-# mode
-# would be much better if I aprun this tho ...
-
-# get the metafits file
 
 
             recombine_batch = "%s/recombine_%d.batch" % (working_dir,time_to_get)
@@ -405,50 +421,56 @@ if __name__ == '__main__':
 
             submit_line = "sbatch --partition=gpuq %s\n" % (recombine_batch)
 
-            print submit_line
             submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
             jobid=""
             for line in submit_cmd.stdout:
 
                 if "Submitted" in line:
                     (word1,word2,word3,jobid) = line.split()
-                    submitted_jobs.append(jobid)
-                    submitted_times.append(time_to_get)
-
+                    if (is_number(jobid)): 
+                        submitted_jobs.append(jobid)
+                        submitted_times.append(time_to_get)
+        # we have submitted the recombine job for this increment
         # end if get_data == true
         if (the_options['get_data'] == False):
-
+        # We are not downloading data
+        # move into the working directory
             try:
                 os.chdir(working_dir)
             except:
                 print "cannot open working dir:%s" % working_dir
                 sys.exit()
 
-
+        # this is our current time
             ttg = time_to_get
+        # this assumes a recombine job is already completed    
             a_job_is_done = True
 
         if (runRECOMBINE == True):
-            
+        # we are in REcombine mode / we may - or may not have downloaded the data
             print submitted_jobs
             for entry,jobid in enumerate(submitted_jobs):
-                      
-    #now we have to wait until this job is finished before we move on
+        # but we have submitted a recombine job              
+        # now we have to wait until a job is finished before we move on
+        # interrogate the queue for the first job
                 queue_line = "squeue -j %s\n" % jobid
                 queue_cmd = subprocess.Popen(queue_line,shell=True,stdout=subprocess.PIPE)
+        # assume the job is finished
                 finished = True
                 for line in queue_cmd.stdout:
 
                     if jobid in line:
-    # batch job still in the queue
+        # batch job still in the queue so we are not finished
                         finished = False;
-
-                    if ((finished == True) and (a_job_is_done == False)):
+        # we test for a_job_is_done because we only one 1 job popped off the stack
+                    if (finished == True && a_job_is_done == False):
                         submitted_jobs.pop(entry)
+                        # ttg now holds the time of the completed recombine job
                         ttg = submitted_times.pop(entry)
                         a_job_is_done = True
             
             if (last_increment == 1):
+                # are we on the last increment - there is no more data to load - so we should just wait till a recombine finishes
                 while (len(submitted_jobs) > 0):
                     time.sleep(1)
                     for entry,jobid in enumerate(submitted_jobs):
@@ -461,9 +483,12 @@ if __name__ == '__main__':
                             if jobid in line:
                             # batch job still in the queue
                                 finished = False;
-
-                        if ((finished == True) and (a_job_is_done == False)):
+                        if (finished == True):
                             submitted_jobs.pop(entry)
+                        # we only want ttg to be the first one - not to get clobbered.
+                        # but we want to wait until all the jobs are finished before we move on becuase we may not
+                        # come back ...
+                        if (finished == True && a_job_is_done == False):
                             ttg = submitted_times.pop(entry)
                             a_job_is_done = True
         else:
@@ -474,15 +499,17 @@ if __name__ == '__main__':
 # now process
 
         if ((Go == True) and (a_job_is_done == True)):
-
             moved = 0
+            pfb_job_list = []
+            # are we going to form pfb files - this is a bit of a misnomer as it is actually un-pfbs
             if (runPFB == True):
-                pfb_job_list = []
+                # list of submitted pfb batch jobs
                 for index,channel in enumerate(chan_list):
-                    # pfbfile batch file
+                    # pfbfile batch file one for each channel
                     pfb_batch_file = "%s/pfb_build_ch%02d.batch" % (working_dir,index+1)
                     # we need to open the file
 
+                    f=[]
                     with open(pfb_batch_file, 'w') as pfb_build:
                         pfb_build.write("#!/bin/bash -l\n")
 
@@ -490,41 +517,61 @@ if __name__ == '__main__':
                         pfb_build.write(nodes_line)
                         
                  
-                        f=[]
+                        
+                        # we (un)pfb <all> available combined files for this channel
+                        # we first move them to the target channel directory
+                        # this means the correlator batch does not depend on the PFB ones
+                        # but the BF does....
+
                         files_glob = "%s/combined/*_ch%s*" % (working_dir,channel)
                         for to_convert in sorted(glob.glob(files_glob)):
                             f.append(to_convert)
 
-                        make_dir = "mkdir %s/ch%02d" % (working_dir,(index+1))
-                        to_pfb = 0;
-                        subprocess.call(make_dir,shell=True)
-                        for file in f:
-                                                 
-                            outfile = "%s.pfb" % (file)
-                            donefile = "%s/ch%02d/%s" % (working_dir,(index+1),os.path.basename(outfile))
+                        # make the output dir for the channel if not already done
 
-                            if (os.path.isfile(file) == True):
-                                if (os.path.isfile(donefile) == True):
-                                    pfb_line = "#read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (file,donefile)
-                                    move_cmd = "#mv %s %s/ch%02d/\n" % (file,working_dir,(index+1))
-                                else:
-                                    pfb_line = "read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (file,donefile)
-                                    move_cmd = "mv %s %s/ch%02d/\n" % (file,working_dir,(index+1))
+                        make_dir = "mkdir %s/ch%02d" % (working_dir,(index+1))
+                        subprocess.call(make_dir,shell=True)
+                       
+                        to_pfb = 0;
+                        for datfile in f:
+                            # this is now the input file
+                            infile = datfile
+                            # the outputfile
+                            localdone = "%s.pfb" % datfile
+                            # the remote copy
+                            donefile = "%s/ch%02d/%s" % (working_dir,(index+1),os.path.basename(localdone))
+                            # does the file still exist
+                            cp_cmd=""
+                            pfb_line=""
+                            if (os.path.isfile(infile) == True and os.path.isfile(donefile) == True):
+                                # there is an imput file and an output file
+                                # is the output file the correct size
+                                file_statinfo = os.stat(infile)
+                                done_file_statinfo = os.stat(localdone)
+                                if (done_file_statinfo.st_size == 2*file_statinfo):
+                                    pfb_line = "#read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
+                                    cp_cmd = "cp %s %s\n" % (localdone,donefile)
+                                else (os.path.isfile(file) == True):
+                                    # the output file is the wrong size/doesn't exit - try again
+                                    pfb_line = "read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
+                                    cp_cmd = "cp %s %s\n" % (localdone,donefile)
                                     to_pfb = to_pfb + 1
-                                
-                                pfb_build.write(pfb_line)
-                                pfb_build.write(move_cmd)
-                                moved = moved + 1
-                                # turn off the clean up while testing
-                                # os.remove(file)
+                            elif (os.path.isfile(infile) == True):
+                                # the output file is the wrong size/doesn't exit - try again
+                                pfb_line = "read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
+                                cp_cmd = "cp %s %s\n" % (infile,donefile)
+                                to_pfb = to_pfb + 1
+
                             else:
-                                print "Cannot find %s" % file
+                                print "Cannot find %s" % infile
                                 missing_files = "%s/missing.list" % (working_dir)
                             
                                 with open(missing_files,'a') as missing:
-                                    missing_line = "%s\n" % (file)
+                                    missing_line = "%s\n" % (infile)
                                     missing.write(missing_line)
 
+                            pfb_build.write(pfb_line)
+                            pfb_build.write(cp_cmd)
                     # submit the job
 
                     secs_to_run = datetime.timedelta(seconds=30*to_pfb)
@@ -537,38 +584,50 @@ if __name__ == '__main__':
                         for line in submit_cmd.stdout:
                             if "Submitted" in line:
                                 (word1,word2,word3,jobid) = line.split()
-                                pfb_job_list.append(jobid)
+                                if (is_number(jobid)):
+                                    pfb_job_list.append(jobid)
 
-        # all channels submitted
+                    #the clean up 
+                    pfb_batch_cleanup = "%s/pfb_cleanup_ch%02d.batch" % (working_dir,index+1)
+                    # this moves the recombined files into the channel directories
+                    # perhaps they should be put somewhere else ...
+                    # this means they only get moved if the pfb builder completed successfully
+                    # if it did not then this will repeat until they are all done.
 
-                for jobid in pfb_job_list: 
-        #now we have to wait until this job is finished before we move on
-                    queue_line = "squeue -j %s\n" % jobid
-                    finished = False
+                    with open(pfb_batch_cleanup, 'w') as pfb_clean:
+                        pfb_clean.write("#!/bin/bash -l\n")
 
-                    while not finished:
-        #assume finished
-                        queue_cmd = subprocess.Popen(queue_line,shell=True,stdout=subprocess.PIPE)
-                        finished = True
-                        for line in queue_cmd.stdout:
-                            print line
-                            if jobid in line:
-        # batch job still in the queue
-                                finished = False;
+                        nodes_line = "#SBATCH --nodes=1\n#SBATCH --export=NONE\n" 
+                        pfb_clean.write(nodes_line)
+ 
+                        # move all the combined files to the target directory
+                        # to get them out of the way
+                        # this now should only be done if the pfb run completed ok
 
-                        time.sleep(1)
+                        for datfile in f:
+                            move_cmd = "mv %s %s/ch%02d/\n" % (datfile,working_dir,(index+1))
+                            pfb_clean.write(move_cmd)
 
-               # wait for the jobs to finish
+                    
+                    submit_line = "sbatch --time=1 --nodes=1 --workdir=%s --dependency=%d --partition=gpuq %s\n" % (str(secs_to_run),working_dir,jobid,pfb_batch_file)
 
-            # End RECOMBINE condition
+                    subprocess.call(submit_line,shell=True)
+            # all the PFB jobs and associated clean ups have been submitted
+            # if this is all we are doing go to the next increment
+            # -- but we only want to do this once the 
             if ((the_options['mode'] == 0) and (runMWAC == False)):
                 continue
 
             channel = 0
             children=[]
             child=0
+            
+            # this will copy any recombined files to the channel directories
+            # if the (un)pfbs are being made this will have happened already
+
             for index,channel in enumerate(chan_list):
                 print "processing %s\n" % channel
+                
                 channel_dir = "%s/ch%02d" % (working_dir,(index+1))
             
                 if (the_options['runMWAC'] == True):
@@ -580,9 +639,9 @@ if __name__ == '__main__':
                         f.append(to_tomove)
 
                     for file in f:
-                        move_cmd = "mv %s %s/\n" % (file,channel_dir)
-                        subprocess.call(move_cmd,shell=True)
-    
+                        cp_cmd = "cp %s %s/\n" % (file,channel_dir)
+                        subprocess.call(cp_cmd,shell=True)
+
                 try:
                     os.chdir(channel_dir)
                 except:
@@ -627,24 +686,33 @@ if __name__ == '__main__':
                     print "cannot return to working dir :%s\n" % (working_dir)
                     sys.exit()
 
+            # waiting for prepare to finish
             for i,child in enumerate(children):
                 print "Waiting for child %d:%d" % (i,child)
                 os.waitpid(child,0)
             
             if (runMWAC == False):
+                to_beam = 0
                 for index,channel in enumerate(chan_list):
                     print "Checking %s\n" % channel
                     channel_dir = "%s/ch%02d" % (working_dir,(index+1))
                     flags_file = "%s/flags.txt" % channel_dir
                     if (os.path.isfile(flags_file) == True):
                         print "Channel %s passed\n" % channel
+
+                        if (index == 0):
+                            files_glob = "%s/*.pfb" % (channel_dir)
+                            for entry in sorted(glob.glob(files_glob)):
+                                to_beam = to_beam+1
+
+
                     else:
                         print "Channel %s failed exiting to avoid confusion" % channel
                         sys.exit()
     # now actually submit the job (5 seconds per second) only if not running the correlator
 
                 
-                secs_to_run = datetime.timedelta(seconds=10*increment)
+                secs_to_run = datetime.timedelta(seconds=10*to_beam)
                 number_of_exe = len(chan_list)
                 exe_per_node = 1
                 queue = "gpuq"
@@ -661,19 +729,6 @@ if __name__ == '__main__':
                     aprun_line = "aprun -n %d -N %d %s -e pfb -o ch01 -a 128 -n %d -t 1 %s -c phases.txt -w flags.txt -D %s/ch %s psrfits_header.txt\n" % (number_of_exe,exe_per_node,make_beam,nchan,jones,working_dir,beam_mode_str)
                     batch_file.write(aprun_line)
 
-                    batch_file.write("mkdir results\n")
-                    mkdir_line = "mkdir results/step_%02d\n" % step
-                    batch_file.write(mkdir_line)
-        # we also have to cleanup after the aprun finishes (beam mode 2 appends to the files so it is not required ... yet
-                    for i,channel in enumerate(chan_list):
-        #build_file_name
-                        if (beam_mode == 1):
-                            output_name = "results/step_%02d/" % (step)
-                            input_name = "*_%s_%02d_*.fits" % (obsid,i+1)
-                            move_line = "mv %s %s\n" % (input_name,output_name)
-                            batch_file.write(move_line)
-
-
                 submit_line = "sbatch --nodes=%d --workdir=%s --time=%s --partition=%s %s\n" % (number_of_exe/exe_per_node,working_dir,str(secs_to_run),queue,batch)
                 print submit_line
 
@@ -684,27 +739,10 @@ if __name__ == '__main__':
                         (word1,word2,word3,jobid) = line.split()
 
 
-        #now we have to wait until this job is finished before we move on
-                queue_line = "squeue -j %s\n" % jobid
-                finished = False
-
-                while not finished:
-        #assume finished
-                    queue_cmd = subprocess.Popen(queue_line,shell=True,stdout=subprocess.PIPE)
-                    finished = True
-                    for line in queue_cmd.stdout:
-                        print line
-                        if jobid in line:
-        # batch job still in the queue
-                            finished = False;
-
-                    time.sleep(1)
-
-    # clean up the data
-
             if (the_options['get_data'] == False):
                 print "finished"
                 sys.exit()
+
             try:
                 os.chdir(working_dir)
             except:
