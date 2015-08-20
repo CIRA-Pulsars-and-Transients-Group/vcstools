@@ -296,9 +296,6 @@ if __name__ == '__main__':
     working_dir = "%s/%s" % (working_root,obsid)
     make_dir = "mkdir %s" % working_dir
     subprocess.call(make_dir,shell=True);
-    attic_dir = "%s/attic" % (working_dir)
-    make_dir = "mkdir %s" % attic_dir
-    subprocess.call(make_dir,shell=True);
 
     metafits_file = "%s/%d.metafits" % (working_dir,obsid)
 
@@ -446,8 +443,15 @@ if __name__ == '__main__':
         # this assumes a recombine job is already completed    
             a_job_is_done = True
 
-        if (runRECOMBINE == True):
+        if (runRECOMBINE == True and (the_options['runMWAC'] == True or the_options['mode'] !=0)):
+        
         # we are in REcombine mode / we may - or may not have downloaded the data
+        # if we have not downloaded the data for recombine to process - some subsequent jobs require
+        # these submissions to be complete.
+        # We cannot simply make them a dependency as they require the data to be already present before 
+        # prepare.py can be run.
+        # One option is to run prepare.py as an sbatch submission - which may (or may not) work at the moment
+
             print submitted_jobs
             for entry,jobid in enumerate(submitted_jobs):
         # but we have submitted a recombine job              
@@ -743,16 +747,6 @@ if __name__ == '__main__':
                 print "finished"
                 sys.exit()
 
-            try:
-                os.chdir(working_dir)
-            except:
-                print "cannot return to working dir :%s\n" % (working_dir)
-                sys.exit()
-
-           
-            try:
-                os.chdir(working_root)
-            except:
-                print "cannot return to working dir :%s\n" % (working_root)
-                sys.exit()
+        # end the beamformer for this iteration   
+        # end the "Go" section for this iteration
 
