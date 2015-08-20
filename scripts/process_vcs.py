@@ -48,6 +48,9 @@ def coherent_beam():
 if __name__ == '__main__':
 
     modes=['download','recombine','correlate','make_pfb','beamform']
+    jobs_per_node = 8
+    chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
+    chan_list = []
 
 
     from optparse import OptionParser, OptionGroup
