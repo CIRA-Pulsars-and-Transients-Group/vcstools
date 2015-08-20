@@ -551,7 +551,7 @@ if __name__ == '__main__':
                                 if (done_file_statinfo.st_size == 2*file_statinfo):
                                     pfb_line = "#read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
                                     cp_cmd = "cp %s %s\n" % (localdone,donefile)
-                                else (os.path.isfile(file) == True):
+                                elif (os.path.isfile(infile) == True):
                                     # the output file is the wrong size/doesn't exit - try again
                                     pfb_line = "read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
                                     cp_cmd = "cp %s %s\n" % (localdone,donefile)
