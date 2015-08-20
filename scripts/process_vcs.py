@@ -1,5 +1,11 @@
 #!/usr/bin/python
+import subprocess
+import os
 import sys
+import glob
+import time
+import datetime
+import distutils.spawn
 
 def getmeta(service='obs', params=None):
     """
@@ -8,6 +14,9 @@ def getmeta(service='obs', params=None):
     a Python dictionary, return a Python dictionary containing the result.
     Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
     """
+    import urllib
+    import urllib2
+    import json
 
     # Append the service name to this base URL, eg 'con', 'obs', etc.
     BASEURL = 'http://ngas01.ivec.org/metadata/'
@@ -86,10 +95,34 @@ def options (options):
 #    print "-z:\t Add to switch off PFB formation/testing [runPFB = %s]\n" % opts['runPFB']
 
 
-def vcs_download(obsid, start_time, stop_time, increment, copyq, format, parrallel):
+def vcs_download(obsid, start_time, stop_time, increment, copyq, format, parallel):
     print "Downloading files from archive"
+    voltdownload = distutils.spawn.find_executable("voltdownload.py")
     for time_to_get in range(int(start_time),int(stop_time),int(increment)):
-        get_data = "%s --obs=%s --type=12 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
+        get_data = "%s --obs=%s --type=%s --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid, format, time_to_get,increment-1,parallel)
+        if copyq:
+            voltdownload_batch = "%s/volt_%d.batch" % (working_dir,time_to_get)
+            secs_to_run = datetime.timedelta(seconds=140*increment)
+            with open(voltdownload_batch,'w') as batch_file:
+
+                batch_line = "#!/bin/bash -l\n\n"
+                batch_file.write(batch_line)
+                batch_line = "%s\n" % (get_data)
+                batch_file.write(batch_line)
+
+            submit_line = "sbatch --time=%s --workdir=%s -M zeus --partition=copyq %s\n" % (str(secs_to_run),working_root,voltdownload_batch)
+            submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+            continue
+        else:
+            submit_cmd = subprocess.Popen(get_data,shell=True,stdout=subprocess.PIPE)
+
+
+        try:
+            os.chdir(working_dir)
+        except:
+            print "cannot open working dir:%s" % working_dir
+            sys.exit()
+
 
 def vcs_recombine():
     print "Running recombine on files"
