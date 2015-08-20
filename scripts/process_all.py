@@ -463,7 +463,7 @@ if __name__ == '__main__':
         # batch job still in the queue so we are not finished
                         finished = False;
         # we test for a_job_is_done because we only one 1 job popped off the stack
-                    if (finished == True && a_job_is_done == False):
+                    if (finished == True and a_job_is_done == False):
                         submitted_jobs.pop(entry)
                         # ttg now holds the time of the completed recombine job
                         ttg = submitted_times.pop(entry)
@@ -488,7 +488,7 @@ if __name__ == '__main__':
                         # we only want ttg to be the first one - not to get clobbered.
                         # but we want to wait until all the jobs are finished before we move on becuase we may not
                         # come back ...
-                        if (finished == True && a_job_is_done == False):
+                        if (finished == True and a_job_is_done == False):
                             ttg = submitted_times.pop(entry)
                             a_job_is_done = True
         else:
