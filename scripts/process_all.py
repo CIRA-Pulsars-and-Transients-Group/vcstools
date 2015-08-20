@@ -273,10 +273,6 @@ if __name__ == '__main__':
     else:
         skip = " "
 
-    if (the_options['get_data'] == False):
-        the_options['inc'] = the_options['end'] - the_options['begin']
-
-
     working_root = the_options['root']
     obsid = the_options['obsid']
     start_time = the_options['begin']
