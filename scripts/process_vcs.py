@@ -1,5 +1,67 @@
 #!/usr/bin/python
 import sys
+
+def getmeta(service='obs', params=None):
+    """
+    Function to call a JSON web service and return a dictionary:
+    Given a JSON web service ('obs', find, or 'con') and a set of parameters as
+    a Python dictionary, return a Python dictionary containing the result.
+    Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
+    """
+
+    # Append the service name to this base URL, eg 'con', 'obs', etc.
+    BASEURL = 'http://ngas01.ivec.org/metadata/'
+
+
+    if params:
+        data = urllib.urlencode(params)  # Turn the dictionary into a string with encoded 'name=value' pairs
+    else:
+        data = ''
+
+    if service.strip().lower() in ['obs', 'find', 'con']:
+        service = service.strip().lower()
+    else:
+        print "invalid service name: %s" % service
+        return
+
+    try:
+        result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
+    except urllib2.HTTPError as error:
+        print "HTTP error from server: code=%d, response:\n %s" % (error.code, error.read())
+        return
+    except urllib2.URLError as error:
+        print "URL or network error: %s" % error.reason
+        return
+
+    return result
+
+def is_number(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+def sfreq(freqs):
+
+    if len(freqs) != 24:
+        print "There are not 24 coarse chans defined for this obs. Got: %s" % freqs
+        return
+
+    freqs.sort()   # It should already be sorted, but just in case...
+    lowchans = [f for f in freqs if f <= 128]
+    highchans = [f for f in freqs if f > 128]
+    highchans.reverse()
+    freqs = lowchans + highchans
+    return freqs
+
+
+def get_frequencies(obs_id):
+    obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
+    freq_array = obsinfo['rfstreams']['0']['frequencies']
+    return sfreq(freq_array)
+
+
 def options (options):
 
     print "\noptions:\n"
@@ -24,9 +86,10 @@ def options (options):
 #    print "-z:\t Add to switch off PFB formation/testing [runPFB = %s]\n" % opts['runPFB']
 
 
-def vcs_download():
+def vcs_download(obsid, start_time, stop_time, increment, copyq, format, parrallel):
     print "Downloading files from archive"
-
+    for time_to_get in range(int(start_time),int(stop_time),int(increment)):
+        get_data = "%s --obs=%s --type=12 --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid,time_to_get,increment-1,parallel)
 
 def vcs_recombine():
     print "Running recombine on files"
@@ -55,8 +118,9 @@ if __name__ == '__main__':
 
     from optparse import OptionParser, OptionGroup
 
-    parser=OptionParser(description="Use this damn thing already!")
+ #   parser=OptionParser(description="process_vcs.py is a script of scripts that downloads prepares and submits jobs to Galaxy. It can be run with just a pointing (-p \"xx:xx:xx xx:xx:xx.x\") and an obsid (\"-o <obsid>\") and it will process all the data in the obs. It will call prepare.py which will attempt to build the phase and calibration information - which will only exist if a calibration obs has already been run. So it will only move past the data prepa stage if the \"-r\" (for run) is used\n"
 
+    parser=OptionParser(description="process_vcs.py is a script for processing the MWA VCS data on Galaxy in steps. It can download data from the archive, call on recombine to form course channels, run the offline correlator, make tile re-ordered and bit promoted PFB files or for a coherent beam for a given pointing.")
     group_download = OptionGroup(parser, 'Download Options')
     group_download.add_option("-B", "--copyq", action="store_true", default=False, help="Submit download jobs to the copyq [default=%default]")
     group_download.add_option("--format", type="choice", choices=['11','12'], default='11', help="Voltage data type (Raw = 11, Recombined Raw = 12) [default=%default]")
@@ -104,7 +168,7 @@ if __name__ == '__main__':
 
     if opts.mode == 'download':
         print opts.mode
-        vcs_download()
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.coypq, opts.format, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
         vcs_recombine()
