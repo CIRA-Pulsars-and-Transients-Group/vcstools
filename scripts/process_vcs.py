@@ -71,7 +71,7 @@ def get_frequencies(obs_id):
     return sfreq(freq_array)
 
 
-def options (options):
+def options (options): # TODO reformat this to print properly
 
     print "\noptions:\n"
     print "--mode {0}".format(options.mode)
@@ -196,6 +196,13 @@ if __name__ == '__main__':
     if not opts.obs:
         print "Observation ID required, please put in with -o or --obs"
         quit()
+
+
+    make_dir = "mkdir %s" % (opts.work_dir)
+    subprocess.call(make_dir,shell=True);
+    working_dir = "%s/%s" % (opts.work_dir,opts.obs)
+    make_dir = "mkdir %s" % working_dir
+    subprocess.call(make_dir,shell=True);
 
  #   options(opts)
 
