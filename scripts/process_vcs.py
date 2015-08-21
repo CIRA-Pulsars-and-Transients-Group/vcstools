@@ -116,7 +116,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
         else:
             log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
             with open(log_name, 'w') as log:
-                submit_cmd = subprocess.Popen(get_data, stdout=log, stderr=log)
+                subprocess.Popen(get_data, shell=True, stdout=log, stderr=log)
 
 
         try:
