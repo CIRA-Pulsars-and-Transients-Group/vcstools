@@ -402,6 +402,9 @@ if __name__ == '__main__':
                 batch_file.write(batch_line)
                 batch_line = "module load mpi4py\n"
                 batch_file.write(batch_line)
+                batch_line = "module load cfitsio\n"
+                batch_file.write(batch_line)
+
 
                 if (jobs_per_node > increment):
                     jobs_per_node = increment
