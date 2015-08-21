@@ -95,7 +95,7 @@ def options (options): # TODO reformat this to print properly
 #    print "-z:\t Add to switch off PFB formation/testing [runPFB = %s]\n" % opts['runPFB']
 
 
-def vcs_download(obsid, start_time, stop_time, increment, copyq, format, parallel):
+def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working_dir, parallel):
     print "Downloading files from archive"
     voltdownload = distutils.spawn.find_executable("voltdownload.py")
     for time_to_get in range(int(start_time),int(stop_time),int(increment)):
@@ -114,7 +114,9 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, paralle
             submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
             continue
         else:
-            submit_cmd = subprocess.Popen(get_data,shell=True,stdout=subprocess.PIPE)
+            log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
+            with open(log_name, 'w') as log:
+                submit_cmd = subprocess.Popen(get_data,shell=True,stdout=log, stderr=log)
 
 
         try:
@@ -208,7 +210,7 @@ if __name__ == '__main__':
 
     if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, opts.parallel_dl)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, working_dir, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
         vcs_recombine()
