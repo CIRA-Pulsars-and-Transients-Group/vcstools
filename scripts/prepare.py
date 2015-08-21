@@ -258,6 +258,8 @@ if __name__ == '__main__':
         elif (opt == "-s"):
             the_options['submit'] = True
             outdir = arg
+            mkdir_line = "mkdir outdir"
+            subp.Popen(mkdir_line,shell=True,stdout=subp.PIPE)
             corr_batch_file_root = outdir + "/correlator_run";
         elif (opt == "-m"):
             the_options['mode'] = int(arg)
