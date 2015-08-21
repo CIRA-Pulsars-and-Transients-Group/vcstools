@@ -642,8 +642,8 @@ if __name__ == '__main__':
                         f.append(to_move)
 
                     for file in f:
-                        cp_cmd = "cp %s %s/\n" % (file,channel_dir)
-                        subprocess.call(cp_cmd,shell=True)
+                        mv_cmd = "mv %s %s/\n" % (file,channel_dir)
+                        subprocess.call(mv_cmd,shell=True)
 
                 try:
                     os.chdir(channel_dir)
