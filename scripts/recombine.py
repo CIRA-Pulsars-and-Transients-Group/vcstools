@@ -77,20 +77,10 @@ if __name__ == '__main__':
 
     if (the_options['testit'] == 0):
 
-
         submit_cmd = subprocess.call(recombine_line,shell=True)
         
         comm.Barrier()
-
-        for f_to_r in f:
-            rm_line = "rm %s/%s" % ( the_options['root'],f_to_r)
-
-            try:
-                subprocess.call(rm_line,shell=True)
-            except Exception as ex:
-                print ex
-                print "likely just missing VCS boes ... continuing"
-        
+       
     else:
         print recombine_line
    
