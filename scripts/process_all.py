@@ -636,7 +636,7 @@ if __name__ == '__main__':
                     f=[]
                     files_glob = "%s/combined/*_ch%s*" % (working_dir,channel)
                     for to_move in sorted(glob.glob(files_glob)):
-                        f.append(to_tomove)
+                        f.append(to_move)
 
                     for file in f:
                         cp_cmd = "cp %s %s/\n" % (file,channel_dir)
