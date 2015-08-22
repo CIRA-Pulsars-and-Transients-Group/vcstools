@@ -10,6 +10,7 @@ from mpi4py import MPI
 def usage(opts={}):
     print "recombine.py -s <start time> -o <obsid> -w <working directory> -e <recombine executable>\n"
 
+testsize = 327680000L
 
 
 if __name__ == '__main__':
@@ -57,32 +58,34 @@ if __name__ == '__main__':
 
     time_to_combine = the_options['start']+rank
 
-    f=[]
+    files_glob = "%s/combined/%d_%d_ch*.dat" % (the_options['root'],the_options['obsid'],time_to_combine)
+    broken = 0;
+    for to_check in sorted(glob.glob(files_glob)):
+        file_statinfo = os.stat(to_check)
+        if (file_statinfo.st_size != testsize):
+            broken = 1
 
-    for vcs in range (1,17):
-        for stream in [0,1]:
-            file_to_combine = "%d_%d_vcs%02d_%1d.dat " % (the_options['obsid'],time_to_combine,vcs,stream)
-            f.append(file_to_combine)
+    if (broken == 1):
+        f=[]
 
-
-    recombine_line = "%s %s -o %s -t %d -m %s/%d.metafits -i %s/combined -f " % (the_options['recombine'],the_options['skip'],the_options['obsid'],time_to_combine,the_options['root'],the_options['obsid'],the_options['root'])
-
-
-
-    for f_to_r in f:
-        recombine_line = "%s %s/%s" % (recombine_line, the_options['root'],f_to_r)
-
-    recombine_line = "%s\n" % recombine_line
+        for vcs in range (1,17):
+            for stream in [0,1]:
+                file_to_combine = "%d_%d_vcs%02d_%1d.dat " % (the_options['obsid'],time_to_combine,vcs,stream)
+                f.append(file_to_combine)
 
 
-    if (the_options['testit'] == 0):
+        recombine_line = "%s %s -o %s -t %d -m %s/%d.metafits -i %s/combined -f " % (the_options['recombine'],the_options['skip'],the_options['obsid'],time_to_combine,the_options['root'],the_options['obsid'],the_options['root'])
 
+
+
+        for f_to_r in f:
+            recombine_line = "%s %s/%s" % (recombine_line, the_options['root'],f_to_r)
+
+        recombine_line = "%s\n" % recombine_line
         submit_cmd = subprocess.call(recombine_line,shell=True)
         
-        comm.Barrier()
+    comm.Barrier()
        
-    else:
-        print recombine_line
    
 
 
