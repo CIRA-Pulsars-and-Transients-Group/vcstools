@@ -114,7 +114,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
                 batch_line = "%s\n" % (get_data)
                 batch_file.write(batch_line)
 
-            submit_line = "sbatch --time=%s --workdir=%s -M zeus --partition=copyq %s\n" % (str(secs_to_run),working_root,voltdownload_batch)
+            submit_line = "sbatch --time=%s --workdir=%s -M zeus --partition=copyq %s\n" % (str(secs_to_run),raw_dir,voltdownload_batch)
             submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
             continue
         else:
