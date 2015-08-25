@@ -562,7 +562,7 @@ if __name__ == '__main__':
                             elif (os.path.isfile(infile) == True):
                                 # the output file is the wrong size/doesn't exit - try again
                                 pfb_line = "read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
-                                cp_cmd = "cp %s %s\n" % (infile,donefile)
+                                cp_cmd = "cp %s %s\n" % (localdone,donefile)
                                 to_pfb = to_pfb + 1
 
                             else:
@@ -589,35 +589,12 @@ if __name__ == '__main__':
                                 (word1,word2,word3,jobid) = line.split()
                                 if (is_number(jobid)):
                                     pfb_job_list.append(jobid)
-
-                    #the clean up 
-                    pfb_batch_cleanup = "%s/pfb_cleanup_ch%02d.batch" % (working_dir,index+1)
-                    # this moves the recombined files into the channel directories
-                    # perhaps they should be put somewhere else ...
-                    # this means they only get moved if the pfb builder completed successfully
-                    # if it did not then this will repeat until they are all done.
-
-                    with open(pfb_batch_cleanup, 'w') as pfb_clean:
-                        pfb_clean.write("#!/bin/bash -l\n")
-
-                        nodes_line = "#SBATCH --nodes=1\n#SBATCH --export=NONE\n" 
-                        pfb_clean.write(nodes_line)
- 
-                        # move all the combined files to the target directory
-                        # to get them out of the way
-                        # this now should only be done if the pfb run completed ok
-
-                        for datfile in f:
-                            move_cmd = "mv %s %s/ch%02d/\n" % (datfile,working_dir,(index+1))
-                            pfb_clean.write(move_cmd)
-
-                    
-                    submit_line = "sbatch --time=1 --nodes=1 --workdir=%s --dependency=%d --partition=gpuq %s\n" % (str(secs_to_run),working_dir,jobid,pfb_batch_file)
-
-                    subprocess.call(submit_line,shell=True)
             # all the PFB jobs and associated clean ups have been submitted
             # if this is all we are doing go to the next increment
             # -- but we only want to do this once the 
+                
+                sys.exit();
+
             if ((the_options['mode'] == 0) and (runMWAC == False)):
                 continue
 
