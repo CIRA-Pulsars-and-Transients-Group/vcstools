@@ -120,7 +120,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
         else:
             log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
             with open(log_name, 'w') as log:
-                subproces.call(get_data, shell=True, stdout=log, stderr=log)
+                subprocess.call(get_data, shell=True, stdout=log, stderr=log)
 
 
         try:
