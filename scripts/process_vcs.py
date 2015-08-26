@@ -133,7 +133,8 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
 def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     print "Running recombine on files"
     jobs_per_node = 8
-    recombine = distutils.spawn.find_executable("recombine.py")
+#    recombine = distutils.spawn.find_executable("recombine.py")
+    recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
     for time_to_get in range(start_time,stop_time,increment):
 
         recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
