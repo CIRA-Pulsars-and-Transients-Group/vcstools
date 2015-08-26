@@ -102,14 +102,17 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
     raw_dir = "{0}/raw".format(working_dir)
     make_dir = "mkdir {0}".format(raw_dir)
     subprocess.call(make_dir,shell=True)
-    for time_to_get in range(int(start_time),int(stop_time),int(increment)):
+    print "1"
+    for time_to_get in range(start_time,stop_time,increment):
+        print "2"
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
         if copyq:
+            print "3"
             voltdownload_batch = "{0}/volt_{1}.batch".format(raw_dir,time_to_get)
             secs_to_run = datetime.timedelta(seconds=140*increment)
             with open(voltdownload_batch,'w') as batch_file:
 
-                batch_line = "#!/bin/bash -l\n#SBATCH --export=NOONE\n#SBATCH --output={0}/volt_{1}.out\n".format(raw_dir,time_to_get)
+                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/volt_{1}.out\n".format(raw_dir,time_to_get)
                 batch_file.write(batch_line)
                 batch_line = "%s\n" % (get_data)
                 batch_file.write(batch_line)
