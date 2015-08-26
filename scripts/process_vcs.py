@@ -265,6 +265,9 @@ if __name__ == '__main__':
             metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
 
+        make_combined = "mkdir {0}/combined".format(working_dir)
+        subprocess.call(make_combined,shell=True)
+
         vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
     elif opts.mode == 'correlate':
         print opts.mode
