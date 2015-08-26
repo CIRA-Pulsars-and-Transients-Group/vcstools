@@ -240,7 +240,7 @@ if __name__ == '__main__':
         print "Starting time is after end time"
         quit()
 
-    batch_dir = "{0}/batch".format(working_dir)
+    batch_dir = "{0}/batch".format(opts.work_dir)
 
     make_dir = "mkdir %s" % (opts.work_dir)
     subprocess.call(make_dir,shell=True);
