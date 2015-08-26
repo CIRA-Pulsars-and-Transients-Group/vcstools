@@ -105,11 +105,11 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
     for time_to_get in range(start_time,stop_time,increment):
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
         if copyq:
-            voltdownload_batch = "{0}/volt_{1}.batch".format(raw_dir,time_to_get)
+            voltdownload_batch = "{0}/batch/volt_{1}.batch".format(working_dir,time_to_get)
             secs_to_run = datetime.timedelta(seconds=140*increment)
             with open(voltdownload_batch,'w') as batch_file:
 
-                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/volt_{1}.out\n".format(raw_dir,time_to_get)
+                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/volt_{1}.out\n".format(working_dir,time_to_get)
                 batch_file.write(batch_line)
                 batch_line = "%s\n" % (get_data)
                 batch_file.write(batch_line)
@@ -130,8 +130,41 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
             sys.exit()
 
 
-def vcs_recombine():
+def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     print "Running recombine on files"
+    for time_to_get in range(start_time,stop_time,increment):
+
+        recombine_batch = "{0}/batch/recombine_%{1}.batch".format(working_dir,time_to_get)
+        with open(recombine_batch,'w') as batch_file:
+
+            nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
+
+            batch_line = "#!/bin/bash -l\n#SBATCH --time=00:30:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
+
+            batch_file.write(batch_line)
+            batch_line = "module load mpi4py\n"
+            batch_file.write(batch_line)
+            batch_line = "module load cfitsio\n"
+            batch_file.write(batch_line)
+
+            if (jobs_per_node > increment):
+                jobs_per_node = increment
+
+            recombine_line = "aprun -n {0} -N {1} python {2} {3} -o {4} -s {5} -w {6}\n".format(increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
+            batch_file.write(recombine_line)
+
+        submit_line = "sbatch --partition=gpuq {0}\n".format(recombine_batch)
+
+        submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+        jobid=""
+        for line in submit_cmd.stdout:
+
+            if "Submitted" in line:
+                (word1,word2,word3,jobid) = line.split()
+                if (is_number(jobid)):
+                    submitted_jobs.append(jobid)
+                    submitted_times.append(time_to_get)
+
 
 
 def vcs_correlate():
@@ -207,12 +240,16 @@ if __name__ == '__main__':
         print "Starting time is after end time"
         quit()
 
+    batch_dir = "{0}/batch".format(working_dir)
 
     make_dir = "mkdir %s" % (opts.work_dir)
     subprocess.call(make_dir,shell=True);
     working_dir = "%s/%s" % (opts.work_dir,opts.obs)
     make_dir = "mkdir %s" % working_dir
     subprocess.call(make_dir,shell=True);
+    make_batch_dir="mkdir {0}".format(batch_dir)
+    subprocess.call(make_batch_dir)
+    metafits_file = "%s/%d.metafits" % (working_dir,obsid)
 
  #   options(opts)
 
@@ -221,7 +258,11 @@ if __name__ == '__main__':
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, working_dir, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
-        vcs_recombine()
+        if (os.path.isfile(metafits_file) == False):
+            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (obsid,metafits_file)
+            subprocess.call(metafile_line,shell=True)
+
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
     elif opts.mode == 'correlate':
         print opts.mode
         vcs_correlate()
