@@ -57,15 +57,16 @@ if __name__ == '__main__':
     rank = comm.Get_rank()
 
     time_to_combine = the_options['start']+rank
-
+    """
     files_glob = "%s/combined/%d_%d_ch*.dat" % (the_options['root'],the_options['obsid'],time_to_combine)
     broken = 0;
     for to_check in sorted(glob.glob(files_glob)):
         file_statinfo = os.stat(to_check)
         if (file_statinfo.st_size != testsize):
             broken = 1
-
-    if (broken == 1):
+    """
+#    if (broken == 1):
+    if True:
         f=[]
 
         for vcs in range(1,17):
