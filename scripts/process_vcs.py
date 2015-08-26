@@ -259,7 +259,7 @@ if __name__ == '__main__':
     elif opts.mode == 'recombine':
         print opts.mode
         if (os.path.isfile(metafits_file) == False):
-            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (obsid,metafits_file)
+            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
 
         vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
