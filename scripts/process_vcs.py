@@ -249,7 +249,7 @@ if __name__ == '__main__':
     batch_dir = "{0}/batch".format(working_dir)
     make_batch_dir="mkdir {0}".format(batch_dir)
     subprocess.call(make_batch_dir,shell=True)
-    metafits_file = "{0}/{1}.metafits".format(working_dir,obsid)
+    metafits_file = "{0}/{1}.metafits".format(working_dir,opts.obs)
 
  #   options(opts)
 
