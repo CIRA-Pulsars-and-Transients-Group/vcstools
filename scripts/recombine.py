@@ -68,7 +68,7 @@ if __name__ == '__main__':
     if (broken == 1):
         f=[]
 
-        for vcs in range (1,17):
+        for vcs in range(1,17):
             for stream in [0,1]:
                 file_to_combine = "%d_%d_vcs%02d_%1d.dat " % (the_options['obsid'],time_to_combine,vcs,stream)
                 f.append(file_to_combine)
@@ -79,7 +79,7 @@ if __name__ == '__main__':
 
 
         for f_to_r in f:
-            recombine_line = "%s %s/%s" % (recombine_line, the_options['root'],f_to_r)
+            recombine_line = "{0} {1}/raw/{2}".format(recombine_line, the_options['root'],f_to_r)
 
         recombine_line = "%s\n" % recombine_line
         submit_cmd = subprocess.call(recombine_line,shell=True)
