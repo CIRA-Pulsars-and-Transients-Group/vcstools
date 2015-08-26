@@ -163,9 +163,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 
             if "Submitted" in line:
                 (word1,word2,word3,jobid) = line.split()
-                if (is_number(jobid)):
-                    submitted_jobs.append(jobid)
-                    submitted_times.append(time_to_get)
+#                if (is_number(jobid)):
+#                    submitted_jobs.append(jobid)
+#                    submitted_times.append(time_to_get)
 
 
 
