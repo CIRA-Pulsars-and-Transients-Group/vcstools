@@ -97,37 +97,76 @@ def options (options): # TODO reformat this to print properly
 
 def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working_dir, parallel):
     print "Downloading files from archive"
-    voltdownload = distutils.spawn.find_executable("voltdownload.py")
-    for time_to_get in range(int(start_time),int(stop_time),int(increment)):
-        get_data = "%s --obs=%s --type=%s --from=%d --duration=%d --parallel=%d " % (voltdownload,obsid, format, time_to_get,increment-1,parallel)
+#    voltdownload = distutils.spawn.find_executable("voltdownload.py")
+    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
+    raw_dir = "{0}/raw".format(working_dir)
+    make_dir = "mkdir {0}".format(raw_dir)
+    subprocess.call(make_dir,shell=True)
+    for time_to_get in range(start_time,stop_time,increment):
+        get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
         if copyq:
-            voltdownload_batch = "%s/volt_%d.batch" % (working_dir,time_to_get)
+            voltdownload_batch = "{0}/batch/volt_{1}.batch".format(working_dir,time_to_get)
             secs_to_run = datetime.timedelta(seconds=140*increment)
             with open(voltdownload_batch,'w') as batch_file:
 
-                batch_line = "#!/bin/bash -l\n\n"
+                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/volt_{1}.out\n".format(working_dir,time_to_get)
                 batch_file.write(batch_line)
                 batch_line = "%s\n" % (get_data)
                 batch_file.write(batch_line)
 
-            submit_line = "sbatch --time=%s --workdir=%s -M zeus --partition=copyq %s\n" % (str(secs_to_run),working_root,voltdownload_batch)
+            submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq {2}\n".format(secs_to_run,raw_dir,voltdownload_batch)
             submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
             continue
         else:
             log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
             with open(log_name, 'w') as log:
-                subprocess.Popen(get_data, shell=True, stdout=log, stderr=log)
+                subprocess.call(get_data, shell=True, stdout=log, stderr=log)
 
 
         try:
             os.chdir(working_dir)
         except:
-            print "cannot open working dir:%s" % working_dir
+            print "cannot open working dir:{0}".format(working_dir)
             sys.exit()
 
 
-def vcs_recombine():
+def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     print "Running recombine on files"
+    jobs_per_node = 8
+    recombine = distutils.spawn.find_executable("recombine.py")
+    for time_to_get in range(start_time,stop_time,increment):
+
+        recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
+        with open(recombine_batch,'w') as batch_file:
+
+            nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
+
+            batch_line = "#!/bin/bash -l\n#SBATCH --time=00:30:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
+
+            batch_file.write(batch_line)
+            batch_line = "module load mpi4py\n"
+            batch_file.write(batch_line)
+            batch_line = "module load cfitsio\n"
+            batch_file.write(batch_line)
+
+            if (jobs_per_node > increment):
+                jobs_per_node = increment
+
+            recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir)
+            batch_file.write(recombine_line)
+
+        submit_line = "sbatch --partition=gpuq {0}\n".format(recombine_batch)
+
+        submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+        jobid=""
+        for line in submit_cmd.stdout:
+
+            if "Submitted" in line:
+                (word1,word2,word3,jobid) = line.split()
+#                if (is_number(jobid)):
+#                    submitted_jobs.append(jobid)
+#                    submitted_times.append(time_to_get)
+
 
 
 def vcs_correlate():
@@ -199,12 +238,20 @@ if __name__ == '__main__':
         print "Observation ID required, please put in with -o or --obs"
         quit()
 
+    if opts.begin > opts.end:
+        print "Starting time is after end time"
+        quit()
 
-    make_dir = "mkdir %s" % (opts.work_dir)
-    subprocess.call(make_dir,shell=True);
-    working_dir = "%s/%s" % (opts.work_dir,opts.obs)
-    make_dir = "mkdir %s" % working_dir
-    subprocess.call(make_dir,shell=True);
+
+    make_dir = "mkdir {0}".format(opts.work_dir)
+    subprocess.call(make_dir,shell=True)
+    working_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
+    make_dir = "mkdir {0}".format(working_dir)
+    subprocess.call(make_dir,shell=True)
+    batch_dir = "{0}/batch".format(working_dir)
+    make_batch_dir="mkdir {0}".format(batch_dir)
+    subprocess.call(make_batch_dir,shell=True)
+    metafits_file = "{0}/{1}.metafits".format(working_dir,opts.obs)
 
  #   options(opts)
 
@@ -213,7 +260,11 @@ if __name__ == '__main__':
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, working_dir, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
-        vcs_recombine()
+        if (os.path.isfile(metafits_file) == False):
+            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
+            subprocess.call(metafile_line,shell=True)
+
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
     elif opts.mode == 'correlate':
         print opts.mode
         vcs_correlate()
