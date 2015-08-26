@@ -150,6 +150,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
             batch_line = "module load cfitsio\n"
             batch_file.write(batch_line)
 
+            if (stop_time - time_to_get) < increment:       # Trying to stop jobs from running over if they aren't perfectly divisible by increment
+                increment = stop_time - time_to_get + 1
+
             if (jobs_per_node > increment):
                 jobs_per_node = increment
 
