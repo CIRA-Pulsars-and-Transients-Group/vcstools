@@ -135,7 +135,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     jobs_per_node = 8
     for time_to_get in range(start_time,stop_time,increment):
 
-        recombine_batch = "{0}/batch/recombine_%{1}.batch".format(working_dir,time_to_get)
+        recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
         with open(recombine_batch,'w') as batch_file:
 
             nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
