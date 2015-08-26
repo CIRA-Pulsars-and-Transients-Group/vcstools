@@ -152,7 +152,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
             if (jobs_per_node > increment):
                 jobs_per_node = increment
 
-            recombine_line = "aprun -n {0} -N {1} python {2} {3} -o {4} -s {5} -w {6}\n".format(increment,jobs_per_node,recombine,skip,obsid,time_to_get,working_dir)
+            recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir)
             batch_file.write(recombine_line)
 
         submit_line = "sbatch --partition=gpuq {0}\n".format(recombine_batch)
