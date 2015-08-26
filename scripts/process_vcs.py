@@ -240,16 +240,16 @@ if __name__ == '__main__':
         print "Starting time is after end time"
         quit()
 
-    batch_dir = "{0}/batch".format(opts.work_dir)
 
-    make_dir = "mkdir %s" % (opts.work_dir)
-    subprocess.call(make_dir,shell=True);
-    working_dir = "%s/%s" % (opts.work_dir,opts.obs)
-    make_dir = "mkdir %s" % working_dir
-    subprocess.call(make_dir,shell=True);
+    make_dir = "mkdir {0}".format(opts.work_dir)
+    subprocess.call(make_dir,shell=True)
+    working_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
+    make_dir = "mkdir {0}".format(working_dir)
+    subprocess.call(make_dir,shell=True)
+    batch_dir = "{0}/batch".format(working_dir)
     make_batch_dir="mkdir {0}".format(batch_dir)
-    subprocess.call(make_batch_dir)
-    metafits_file = "%s/%d.metafits" % (working_dir,obsid)
+    subprocess.call(make_batch_dir,shell=True)
+    metafits_file = "{0}/{1}.metafits".format(working_dir,obsid)
 
  #   options(opts)
 
