@@ -103,18 +103,18 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
     make_dir = raw_dir
     subprocess.call(make_dir,shell=True);
     for time_to_get in range(int(start_time),int(stop_time),int(increment)):
-        get_data = "%s --obs=%s --type=%s --from=%d --duration=%d --parallel=%d --dir=%s" % (voltdownload,obsid, format, time_to_get,increment-1,parallel, raw_dir)
+        get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
         if copyq:
-            voltdownload_batch = "%s/volt_%d.batch" % (working_dir,time_to_get)
+            voltdownload_batch = "{0}/volt_{1}.batch".format(raw_dir,time_to_get)
             secs_to_run = datetime.timedelta(seconds=140*increment)
             with open(voltdownload_batch,'w') as batch_file:
 
-                batch_line = "#!/bin/bash -l\n\n"
+                batch_line = "#!/bin/bash -l\n#SBATCH --export=NOONE\n#SBATCH --output={0}/volt_{1}.out\n".format(raw_dir,time_to_get)
                 batch_file.write(batch_line)
                 batch_line = "%s\n" % (get_data)
                 batch_file.write(batch_line)
 
-            submit_line = "sbatch --time=%s --workdir=%s -M zeus --partition=copyq %s\n" % (str(secs_to_run),raw_dir,voltdownload_batch)
+            submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq {2}\n".format(secs_to_run,raw_dir,voltdownload_batch)
             submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
             continue
         else:
@@ -126,7 +126,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
         try:
             os.chdir(working_dir)
         except:
-            print "cannot open working dir:%s" % working_dir
+            print "cannot open working dir:{0}".format(working_dir)
             sys.exit()
 
 
