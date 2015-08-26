@@ -101,7 +101,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
     voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
     raw_dir = "{0}/raw".format(working_dir)
     make_dir = "mkdir {0}".format(raw_dir)
-    subprocess.call(make_dir,shell=True);
+    subprocess.call(make_dir,shell=True)
     for time_to_get in range(int(start_time),int(stop_time),int(increment)):
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
         if copyq:
