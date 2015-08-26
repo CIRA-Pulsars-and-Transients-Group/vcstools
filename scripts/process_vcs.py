@@ -156,7 +156,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
             recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir)
             batch_file.write(recombine_line)
 
-        submit_line = "sbatch --partition=gpuq {0}\n".format(recombine_batch)
+        submit_line = "sbatch --partition=gpuq --workdir={0} {1}\n".format(working_dir,recombine_batch)
 
         submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
         jobid=""
