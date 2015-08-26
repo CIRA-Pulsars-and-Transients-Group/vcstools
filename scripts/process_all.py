@@ -5,8 +5,9 @@ import os
 import sys
 import glob
 import time
+import calendar
 import getopt
-
+import string
 import urllib
 import urllib2
 import json
@@ -84,6 +85,7 @@ voltdownload = distutils.spawn.find_executable("voltdownload.py")
 prepare = distutils.spawn.find_executable("prepare.py")
 recombine = distutils.spawn.find_executable("recombine.py")
 make_beam = distutils.spawn.find_executable("make_beam")
+mwac_offline = distutils.spawn.find_executable("mwac_offline")
 #working dir < ditto >
 working_root = "notset"
 corrdir = "notset"
@@ -526,15 +528,27 @@ if __name__ == '__main__':
                         # this means the correlator batch does not depend on the PFB ones
                         # but the BF does....
 
-                        files_glob = "%s/combined/*_ch%s*" % (working_dir,channel)
+                        files_glob = "%s/combined/*_ch%s*.dat" % (working_dir,channel)
                         for to_convert in sorted(glob.glob(files_glob)):
                             f.append(to_convert)
 
+                        print "There are %s files to (un) PFB in combined directory" % len(f)
                         # make the output dir for the channel if not already done
+                        move_to_chan = True
+                        if (len(f) == 0):
+                            files_glob = "%s/ch%02d/*_ch%s*.dat" % (working_dir,(index+1),channel)
+                            for to_convert in sorted(glob.glob(files_glob)):
+                                f.append(to_convert)
+                             
+                            print  "There are %s files to (un) PFB in ch%02d directory" % (len(f),(index+1))
+                            if (len(f) !=0):
+                                move_to_chan = False
+                        else:
 
-                        make_dir = "mkdir %s/ch%02d" % (working_dir,(index+1))
-                        subprocess.call(make_dir,shell=True)
-                       
+                            make_dir = "mkdir %s/ch%02d" % (working_dir,(index+1))
+                            subprocess.call(make_dir,shell=True)
+                            move_to_chan = True 
+
                         to_pfb = 0;
                         for datfile in f:
                             # this is now the input file
@@ -551,7 +565,7 @@ if __name__ == '__main__':
                                 # is the output file the correct size
                                 file_statinfo = os.stat(infile)
                                 done_file_statinfo = os.stat(localdone)
-                                if (done_file_statinfo.st_size == 2*file_statinfo):
+                                if (done_file_statinfo.st_size == 2*file_statinfo.st_size):
                                     pfb_line = "#read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
                                     cp_cmd = "cp %s %s\n" % (localdone,donefile)
                                 elif (os.path.isfile(infile) == True):
@@ -574,7 +588,8 @@ if __name__ == '__main__':
                                     missing.write(missing_line)
 
                             pfb_build.write(pfb_line)
-                            pfb_build.write(cp_cmd)
+                            if (move_to_chan == True):
+                                pfb_build.write(cp_cmd)
                     # submit the job
 
                     secs_to_run = datetime.timedelta(seconds=30*to_pfb)
@@ -602,74 +617,138 @@ if __name__ == '__main__':
             children=[]
             child=0
             
-            # this will copy any recombined files to the channel directories
-            # if the (un)pfbs are being made this will have happened already
 
-            for index,channel in enumerate(chan_list):
-                print "processing %s\n" % channel
-                
-                channel_dir = "%s/ch%02d" % (working_dir,(index+1))
-            
-                if (the_options['runMWAC'] == True):
-                    make_dir = "mkdir %s" % (channel_dir)
-                    subprocess.call(make_dir,shell=True)
+            if (the_options['runMWAC'] == True):
+                import astropy
+                from astropy.time import Time
+                for index,channel in enumerate(chan_list):
+
                     f=[]
-                    files_glob = "%s/combined/*_ch%s*" % (working_dir,channel)
-                    for to_move in sorted(glob.glob(files_glob)):
-                        f.append(to_move)
+                    files_glob = "%s/combined/*_ch%s*.dat" % (working_dir,channel)
+                    for to_correlate in sorted(glob.glob(files_glob)):
+                        f.append(to_correlate)
 
-                    for file in f:
-                        mv_cmd = "mv %s %s/\n" % (file,channel_dir)
-                        subprocess.call(mv_cmd,shell=True)
+                    print "There are %s files to correlate in combined directory" % len(f)
+                    if (len(f) == 0):
+                        files_glob = "%s/ch%02d/*_ch%s*.dat" % (working_dir,(index+1),channel)
+                        for to_correlate in sorted(glob.glob(files_glob)):
+                            f.append(to_correlate)
+                             
+                    print  "There are %s files to correlate in ch%02d directory" % (len(f),(index+1))
 
-                try:
-                    os.chdir(channel_dir)
-                except:
-                    print "cannot open channel dir:%s" % channel_dir
-                    sys.exit()
-
-                (ra,dec) = pointing.split()
-
-                if (runMWAC == True):
+ 
+                    print "processing %s\n" % channel
                     
-                    prepare_line = "%s -r %s -d %s -s %s -f %s" % (prepare,ra,dec,the_options['corrdir'],metafits_file)
-                else:
+                    try:
+                        os.mkdir(the_options['corrdir'])
+                    except:
+                        print "Cannot make corrdir: %s\n" % the_options['corrdir']
+                        if (os.path.exists(the_options['corrdir'])):
+                            print "Already exists\n"
+                        else:
+                            sys.exit()
+
+                    (ra,dec) = pointing.split()
+            
+                    file = f[0]
+                    obsid=0
+                    (current_time,ext) = os.path.splitext(os.path.basename(file))
+
+                    (obsid,gpstime,chan) = string.split(current_time,'_')
+                    
+                    t = Time(int(gpstime.rstrip()), format='gps', scale='utc')
+                    utctime =  t.datetime.strftime('%Y-%m-%dT%H:%M:%S')
+
+                    gpubox_label = (index+1)
+                    freq_Hz = channel * 1.28e6 - 0.64e6
+
+   
+                    corr_batch_file_root = the_options['corrdir'] + "/correlator_run";
+                    corr_batch = "%s_%s_ch%d" % (corr_batch_file_root,obsid,gpubox_label)
+                    with open(corr_batch, 'w') as batch_file:
+                        batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n")
+                        batch_file.write("module load cudatoolkit\nmodule load cfitsio\n")
+                    to_corr = 0
+                    for file in f:
+                        corr_line = ""
+                        (current_time,ext) = os.path.splitext(os.path.basename(file))
+                        (obsid,gpstime,chan) = string.split(current_time,'_')
+                        t = Time(int(gpstime), format='gps', scale='utc')
+                        time_str =  t.datetime.strftime('%Y-%m-%d %H:%M:%S')
+
+                        current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
+                        unix_time = calendar.timegm(current_time)
+
+                        corr_line = " aprun -n 1 -N 1 %s -o %s/%s -s %d -r 1 -i 100 -f 128 -n 4 -c %02d -d %s\n" % (mwac_offline,the_options['corrdir'],obsid,unix_time,gpubox_label,file)
+                    
+                        with open(corr_batch, 'a') as batch_file:
+                            batch_file.write(corr_line)
+            
+                            to_corr = to_corr+1
+
+                    secs_to_run = datetime.timedelta(seconds=5*to_corr)
+                    batch_submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (the_options['corrdir'],str(secs_to_run),corr_batch)
+                    print batch_submit_line
+                    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+                    jobid=""
+                    for line in submit_cmd.stdout:
+                        if "Submitted" in line:
+                            (word1,word2,word3,jobid) = line.split()
+
+            try:
+                os.chdir(working_dir)
+            except:
+                print "cannot open channel dir:%s" % channel_dir
+                sys.exit()
+
+ 
+
+
+            if (runMWAC == True):
+                sys.exit()    
+            else:
+                for index,channel in enumerate(chan_list):
+                    try:
+                        channel_dir = "%s/ch%02d/" % (working_dir,(index+1))
+                        os.chdir(channel_dir)
+                    except:
+                        print "cannot open channel dir:%s" % channel_dir
+                        sys.exit()
+
                     prepare_line = "%s -r %s -d %s -g %s -f %s" % (prepare,ra,dec,the_options['corrdir'],metafits_file)
 
-                if (the_options['nchan'] == 88):
-                    prepare_line += " -m 0 "
-                else:
-                    prepare_line += " -m 1 "
+                    if (the_options['nchan'] == 88):
+                        prepare_line += " -m 0 "
+                    else:
+                        prepare_line += " -m 1 "
 
-                if (runMWAC == True):
-                    prepare_line += " -e dat "
 
-                print "Will launch prepare by: %s\n" % prepare_line 
-                try:
-                    child = os.fork()
+                    print "Will launch prepare by: %s\n" % prepare_line 
+                    try:
+                        child = os.fork()
 
-                except:
-                    print "Error on fork"
-                    sys.exit()
+                    except:
+                        print "Error on fork"
+                        sys.exit()
 
-                if (child == 0):
-                    subprocess.call(prepare_line,shell=True)
-                    sys.exit()
+                    if (child == 0):
+                        subprocess.call(prepare_line,shell=True)
+                        sys.exit()
 
-                else:
-                    time.sleep(1)
-                    children.append(child)
+                    else:
+                        time.sleep(1)
+                        children.append(child)
 
-                try:
-                    os.chdir(working_dir)
-                except:
-                    print "cannot return to working dir :%s\n" % (working_dir)
-                    sys.exit()
+                    try:
+                        os.chdir(working_dir)
+                    except:
+                        print "cannot return to working dir :%s\n" % (working_dir)
+                        sys.exit()
 
-            # waiting for prepare to finish
-            for i,child in enumerate(children):
-                print "Waiting for child %d:%d" % (i,child)
-                os.waitpid(child,0)
+                # waiting for prepare to finish
+                for i,child in enumerate(children):
+                    print "Waiting for child %d:%d" % (i,child)
+                    os.waitpid(child,0)
             
             if (runMWAC == False):
                 to_beam = 0
