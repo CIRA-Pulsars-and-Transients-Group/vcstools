@@ -10,7 +10,7 @@ from mpi4py import MPI
 def usage(opts={}):
     print "recombine.py -s <start time> -o <obsid> -w <working directory> -e <recombine executable>\n"
 
-testsize = 327680000L
+testsize = 327680000
 
 
 if __name__ == '__main__':
@@ -59,11 +59,11 @@ if __name__ == '__main__':
     time_to_combine = the_options['start']+rank
 
     files_glob = "%s/combined/%d_%d_ch*.dat" % (the_options['root'],the_options['obsid'],time_to_combine)
-    broken = 0;
+    broken = 1;
     for to_check in sorted(glob.glob(files_glob)):
         file_statinfo = os.stat(to_check)
-        if (file_statinfo.st_size != testsize):
-            broken = 1
+        if (file_statinfo.st_size == testsize):
+            broken = 0
 
     if (broken == 1):
         f=[]
