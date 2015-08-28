@@ -133,7 +133,8 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
 def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     print "Running recombine on files"
     jobs_per_node = 8
-    recombine = distutils.spawn.find_executable("recombine.py")
+#    recombine = distutils.spawn.find_executable("recombine.py")
+    recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
     for time_to_get in range(start_time,stop_time,increment):
 
         recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
@@ -149,13 +150,16 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
             batch_line = "module load cfitsio\n"
             batch_file.write(batch_line)
 
+            if (stop_time - time_to_get) < increment:       # Trying to stop jobs from running over if they aren't perfectly divisible by increment
+                increment = stop_time - time_to_get + 1
+
             if (jobs_per_node > increment):
                 jobs_per_node = increment
 
             recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir)
             batch_file.write(recombine_line)
 
-        submit_line = "sbatch --partition=gpuq {0}\n".format(recombine_batch)
+        submit_line = "sbatch --partition=gpuq --workdir={0} {1}\n".format(working_dir,recombine_batch)
 
         submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
         jobid=""
@@ -263,6 +267,9 @@ if __name__ == '__main__':
         if (os.path.isfile(metafits_file) == False):
             metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
+
+        make_combined = "mkdir {0}/combined".format(working_dir)
+        subprocess.call(make_combined,shell=True)
 
         vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
     elif opts.mode == 'correlate':

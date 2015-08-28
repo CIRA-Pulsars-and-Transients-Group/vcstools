@@ -57,7 +57,6 @@ if __name__ == '__main__':
     rank = comm.Get_rank()
 
     time_to_combine = the_options['start']+rank
-
     files_glob = "%s/combined/%d_%d_ch*.dat" % (the_options['root'],the_options['obsid'],time_to_combine)
     broken = 1;
     for to_check in sorted(glob.glob(files_glob)):
@@ -67,7 +66,6 @@ if __name__ == '__main__':
 
     if (broken == 1):
         f=[]
-
         for vcs in range(1,17):
             for stream in [0,1]:
                 file_to_combine = "%d_%d_vcs%02d_%1d.dat " % (the_options['obsid'],time_to_combine,vcs,stream)
