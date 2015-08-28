@@ -65,10 +65,10 @@ def sfreq(freqs):
     return freqs
 
 
-def get_frequencies(obs_id):
-    obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
-    freq_array = obsinfo['rfstreams']['0']['frequencies']
-    return sfreq(freq_array)
+def get_frequencies(metafits):
+    hdulist = pyfits.open(metafits)
+    freq_array = hdulist[0].header['CHANNELS']
+    return sfreq(freq_array.split(','))
 
 
 def options (options): # TODO reformat this to print properly
@@ -173,8 +173,73 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 
 
 
-def vcs_correlate():
+def vcs_correlate(obsid,start,stop,increment,working_dir):
     print "Correlating files"
+    import os
+    import astropy
+    from astropy.time import Time
+    import datetime
+
+    corrdir = "%s/corr" % working_dir
+
+    try:
+        os.mkdir(corrdir)
+    except:
+        if (os.path.exists(corrdir)):
+            print "Correlator product directory Already exists\n"
+        else:
+            sys.exit()
+
+    chan_list = get_frequencies(metafits_file)
+
+    for time_to_get in range(start_time,stop_time,increment):
+        inc_start = time_to_get
+        inc_stop = time_to_get+increment
+
+        for index,channel in enumerate(chan_list):
+            gpubox_label = (index+1)
+            f=[]
+            for time_to_corr in range(inc_start,inc_stop,1):
+                file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(working_dir,obsid,time_to_corr,channel)
+                #check the file exists
+                if (os.path.isfile(file_to_process) == True):
+                    f.append(file_to_process)
+
+            #now have a full list of files
+            #for this increment 
+            #and this channel
+            if (len(f) > 0):
+                corr_batch = "{0}/batch/correlator_{1}_gpubox{3:0>2}.batch".format(working_dir,inc_start,gpubox_label)
+
+                with open(corr_batch, 'w') as batch_file:
+                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n")
+                    batch_file.write("module load cudatoolkit\nmodule load cfitsio\n")
+                
+                to_corr = 0
+                for file in f:
+                    corr_line = ""
+                    (current_time,ext) = os.path.splitext(os.path.basename(file))
+                    (obsid,gpstime,chan) = string.split(current_time,'_')
+                    t = Time(int(gpstime), format='gps', scale='utc')
+                    time_str =  t.datetime.strftime('%Y-%m-%d %H:%M:%S')
+
+                    current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
+                    unix_time = calendar.timegm(current_time)
+
+                    corr_line = " aprun -n 1 -N 1 %s -o %s/%s -s %d -r 1 -i 100 -f 128 -n 4 -c %02d -d %s\n" % (mwac_offline,corrdir,unix_time,gpubox_label,file)
+                    
+                    with open(corr_batch, 'a') as batch_file:
+                        batch_file.write(corr_line)
+                        to_corr = to_corr+1
+
+                secs_to_run = datetime.timedelta(seconds=5*to_corr)
+                batch_submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (corrdir,str(secs_to_run),corr_batch)
+                submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+                jobid=""
+                for line in submit_cmd.stdout:
+                    if "Submitted" in line:
+                        (word1,word2,word3,jobid) = line.split()
+
 
 
 def make_pfb_files():
@@ -273,7 +338,12 @@ if __name__ == '__main__':
 
         vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
     elif opts.mode == 'correlate':
-        print opts.mode
+        print opts.mode 
+        if (os.path.isfile(metafits_file) == False):
+            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
+            subprocess.call(metafile_line,shell=True)
+
+
         vcs_correlate()
     elif opts.mode == 'make_pfb':
         print opts.mode
