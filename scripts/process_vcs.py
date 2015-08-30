@@ -192,7 +192,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
     chan_list = get_frequencies(metafits_file)
 
-    for time_to_get in range(start_time,stop_time,increment):
+    for time_to_get in range(start,stop,increment):
         inc_start = time_to_get
         inc_stop = time_to_get+increment
 
