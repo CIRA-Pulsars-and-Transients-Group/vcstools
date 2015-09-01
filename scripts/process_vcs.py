@@ -142,7 +142,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 
             nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
 
-            batch_line = "#!/bin/bash -l\n#SBATCH --time=00:30:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
+            batch_line = "#!/bin/bash -l\n#SBATCH --time=06:00:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
 
             batch_file.write(batch_line)
             batch_line = "module load mpi4py\n"
@@ -192,7 +192,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
     chan_list = get_frequencies(metafits_file)
 
-    for time_to_get in range(start_time,stop_time,increment):
+    for time_to_get in range(start,stop,increment):
         inc_start = time_to_get
         inc_stop = time_to_get+increment
 
