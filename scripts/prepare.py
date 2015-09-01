@@ -337,11 +337,14 @@ if __name__ == '__main__':
         utctime =  t.datetime.strftime('%Y-%m-%dT%H:%M:%S')
 
      #   freq_channel = int(chan[2])*100 + int(chan[3])*10 + int(chan[4])
-        freq_channel = int(chan[2:])
-
+        freq_channel = int(chan[2:-4])
+    
     freq_array = get_frequencies("../%s.metafits" % obsid)
+    
+    print "channels list:"
     print freq_array
-    print freq_channel
+    print "My channel %d\n" % freq_channel
+
     gpubox_label = 0;
     for i,chan in enumerate(freq_array):
         if (freq_channel == int(chan)):

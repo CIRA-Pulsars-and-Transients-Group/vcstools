@@ -113,7 +113,7 @@ beam_mode=0
 
 # number of "threads per CPU"
 
-jobs_per_node = 8
+jobs_per_node = 2
 
 #chan_list (half BW)
 
@@ -180,10 +180,10 @@ def usage (opts={}):
 
 if __name__ == '__main__':
 
-    the_options = {'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'parallel_dl':parallel, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root, 'batch_download' : 0}
+    the_options = {'runBEAMER': False, 'runPREPARE' : False, 'begin': start_time, 'ncoarse_chan' : n_coarse, 'end' : stop_time, 'get_data':getdata, 'parallel_dl':parallel, 'inc':increment,'useJones':useJones, 'mode': beam_mode, 'nchan':nchan, 'obsid': obsid, 'pointing' : pointing, 'single_step' : single_step, 'runPFB' : runPFB, 'runMWAC': runMWAC, 'corrdir': corrdir, 'Go':Go, 'runRECOMBINE' : runRECOMBINE, 'root' : working_root, 'batch_download' : 0}
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hB:b:c:e:gd:Gi:j:m:n:o:p:r:Rs:w:z")
+        opts, args = getopt.getopt(sys.argv[1:],"hB:b:c:e:gd:Gi:j:m:n:o:P:p:r:Rs:w:z")
     except getopt.GetoptError:
         usage(the_options)
         sys.exit()
@@ -224,6 +224,9 @@ if __name__ == '__main__':
             the_options['obsid'] = int(arg)
         elif (opt == "-p"):
             the_options['pointing'] = arg
+        elif (opt == "-P"):
+            the_options['runPREPARE'] = True
+            the_options['corrdir'] = arg
         elif (opt == "-r"):
             the_options['runMWAC'] = True
             the_options['corrdir'] = arg
@@ -256,8 +259,10 @@ if __name__ == '__main__':
     # -f is the psrfits mode and -v is the vdif mode
     if (the_options['mode'] == 1):
         beam_mode_str = "-f"
+        the_options['runBEAMER'] = True
     elif (the_options['mode'] == 2):
         beam_mode_str = "-v"
+        the_options['runBEAMER'] = True
 
 
     # this is the direction dependent calibration 
@@ -398,7 +403,7 @@ if __name__ == '__main__':
                 nodes = int(int(increment)/jobs_per_node) + 1
 
 
-                batch_line = "#!/bin/bash -l\n#SBATCH --time=00:10:00\n#SBATCH \n#SBATCH --export=NONE\n#SBATCH --nodes=%d\n" % (nodes)
+                batch_line = "#!/bin/bash -l\n#SBATCH --time=00:30:00\n#SBATCH \n#SBATCH --export=NONE\n#SBATCH --nodes=%d\n" % (nodes)
 
 
                 batch_file.write(batch_line)
@@ -550,6 +555,7 @@ if __name__ == '__main__':
                             move_to_chan = True 
 
                         to_pfb = 0;
+                        already_done = 0
                         for datfile in f:
                             # this is now the input file
                             infile = datfile
@@ -564,19 +570,21 @@ if __name__ == '__main__':
                                 # there is an imput file and an output file
                                 # is the output file the correct size
                                 file_statinfo = os.stat(infile)
-                                done_file_statinfo = os.stat(localdone)
+                                done_file_statinfo = os.stat(donefile)
                                 if (done_file_statinfo.st_size == 2*file_statinfo.st_size):
                                     pfb_line = "#read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
-                                    cp_cmd = "cp %s %s\n" % (localdone,donefile)
+                                    cp_cmd = "#cp %s %s\n" % (localdone,donefile)
+                                    already_done = already_done+1
                                 elif (os.path.isfile(infile) == True):
                                     # the output file is the wrong size/doesn't exit - try again
+                                    os.remove(donefile)
                                     pfb_line = "read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
-                                    cp_cmd = "cp %s %s\n" % (localdone,donefile)
+                                    cp_cmd = "mv %s %s\n" % (localdone,donefile)
                                     to_pfb = to_pfb + 1
                             elif (os.path.isfile(infile) == True):
                                 # the output file is the wrong size/doesn't exit - try again
                                 pfb_line = "read_pfb -i %s -a 128 -n 128  -o %s -4 \n" % (infile,localdone)
-                                cp_cmd = "cp %s %s\n" % (localdone,donefile)
+                                cp_cmd = "mv %s %s\n" % (localdone,donefile)
                                 to_pfb = to_pfb + 1
 
                             else:
@@ -592,7 +600,10 @@ if __name__ == '__main__':
                                 pfb_build.write(cp_cmd)
                     # submit the job
 
-                    secs_to_run = datetime.timedelta(seconds=30*to_pfb)
+                    print  "There are %d PFB files in ch%02d directory" % (already_done,(index+1))
+                    print  "There are %d files remaining" % (to_pfb)
+                    
+                    secs_to_run = datetime.timedelta(seconds=60*to_pfb)
                     submit_line = "sbatch --time=%s --nodes=1 --workdir=%s --partition=gpuq %s\n" % (str(secs_to_run),working_dir,pfb_batch_file)
 
                     if (secs_to_run.seconds > 0):
@@ -609,9 +620,9 @@ if __name__ == '__main__':
             # -- but we only want to do this once the 
                 
                 sys.exit();
-
-            if ((the_options['mode'] == 0) and (runMWAC == False)):
-                continue
+            if (the_options['runPREPARE'] == False):
+                if ((the_options['mode'] == 0) and (runMWAC == False)):
+                    continue
 
             channel = 0
             children=[]
@@ -705,8 +716,11 @@ if __name__ == '__main__':
 
 
             if (runMWAC == True):
-                sys.exit()    
-            else:
+                sys.exit()
+
+            if (the_options['runPREPARE'] == True):
+
+                (ra,dec) = pointing.split()
                 for index,channel in enumerate(chan_list):
                     try:
                         channel_dir = "%s/ch%02d/" % (working_dir,(index+1))
@@ -715,42 +729,36 @@ if __name__ == '__main__':
                         print "cannot open channel dir:%s" % channel_dir
                         sys.exit()
 
-                    prepare_line = "%s -r %s -d %s -g %s -f %s" % (prepare,ra,dec,the_options['corrdir'],metafits_file)
+                    prepare_batch = "%s/prepare_ch%02d.batch" % (working_dir,(index+1))
 
-                    if (the_options['nchan'] == 88):
-                        prepare_line += " -m 0 "
-                    else:
-                        prepare_line += " -m 1 "
+                    with open(prepare_batch, 'w') as batch_file:
+                        batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n")
+                        batch_file.write("\nmodule load cfitsio\n")
+                        batch_file.write("\nmodule load numpy\n")
+                        batch_file.write("\nmodule load astropy\n")
 
+                        prepare_line = "aprun -n 1 -N 1 python %s -r %s -d %s -g %s -f %s" % (prepare,ra,dec,the_options['corrdir'],metafits_file)
 
-                    print "Will launch prepare by: %s\n" % prepare_line 
+                        if (the_options['nchan'] == 88):
+                            prepare_line += " -m 0 "
+                        else:
+                            prepare_line += " -m 1 "
+
+                        batch_file.write(prepare_line)
+
+                    print "Will launch prepare by batch job submission: %s\n" % prepare_line 
                     try:
-                        child = os.fork()
-
+                        batch_submit_line = "sbatch --workdir=%s --time=5 --partition=gpuq %s\n" % (channel_dir,prepare_batch)
+                        submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+                        jobid=""
+                        for line in submit_cmd.stdout:
+                            if "Submitted" in line:
+                                (word1,word2,word3,jobid) = line.split()
                     except:
-                        print "Error on fork"
+                        print "Error on submit"
                         sys.exit()
 
-                    if (child == 0):
-                        subprocess.call(prepare_line,shell=True)
-                        sys.exit()
-
-                    else:
-                        time.sleep(1)
-                        children.append(child)
-
-                    try:
-                        os.chdir(working_dir)
-                    except:
-                        print "cannot return to working dir :%s\n" % (working_dir)
-                        sys.exit()
-
-                # waiting for prepare to finish
-                for i,child in enumerate(children):
-                    print "Waiting for child %d:%d" % (i,child)
-                    os.waitpid(child,0)
-            
-            if (runMWAC == False):
+            if (the_options['runBEAMER'] == True):
                 to_beam = 0
                 for index,channel in enumerate(chan_list):
                     print "Checking %s\n" % channel
@@ -771,12 +779,12 @@ if __name__ == '__main__':
     # now actually submit the job (5 seconds per second) only if not running the correlator
 
                 
-                secs_to_run = datetime.timedelta(seconds=10*to_beam)
+                secs_to_run = datetime.timedelta(seconds=30*to_beam)
                 number_of_exe = len(chan_list)
                 exe_per_node = 1
                 queue = "gpuq"
 
-                batch = "%s_%02d.sh" % (obsid,step)
+                batch = "%s/%s_%02d.sh" % (working_dir,obsid,step)
 
                 with open(batch, 'w') as batch_file:
                     batch_file.write("#!/bin/bash -l\n")

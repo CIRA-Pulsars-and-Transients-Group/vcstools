@@ -1,4 +1,4 @@
-#!/usr/bin/env 
+#!/usr/bin/env python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import subprocess
 import os
@@ -63,6 +63,8 @@ if __name__ == '__main__':
         file_statinfo = os.stat(to_check)
         if (file_statinfo.st_size == testsize):
             broken = broken-1
+        else:    
+            os.remove(to_check)
 
     if (broken > 0):
         f=[]
