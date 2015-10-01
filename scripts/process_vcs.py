@@ -106,7 +106,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
         if copyq:
             voltdownload_batch = "{0}/batch/volt_{1}.batch".format(working_dir,time_to_get)
-            secs_to_run = datetime.timedelta(seconds=140*increment)
+            secs_to_run = datetime.timedelta(seconds=300*increment)
             with open(voltdownload_batch,'w') as batch_file:
 
                 batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/volt_{1}.out\n".format(working_dir,time_to_get)
