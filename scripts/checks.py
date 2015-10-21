@@ -39,11 +39,11 @@ def check_download(obsID, directory=None, required_size=253440000):
 def check_recombine(obsID, directory=None, required_size=327680000, \
                         required_size_ics=30720000):
     '''
-    Checks that the number of files in directory (scratch/mwaops/vcs/[obsID]/combine/) is ....
+    Checks that the number of files in directory (scratch/mwaops/vcs/[obsID]/combined/) is ....
     as that found on the archive and also checks that all files have the same size (327680000 by default).
     '''
     if not directory:
-        directory = "/scratch/mwaops/vcs/{0}/combine/".format(obsID)
+        directory = "/scratch/mwaops/vcs/{0}/combined/".format(obsID)
     print "\n Checking file size and number of files for obsID {0} in {1}".format(obsID, directory)
     required_size = required_size
     output = subprocess.check_output("ls -ltr %s*ch*.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size), shell=True)
