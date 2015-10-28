@@ -5,10 +5,6 @@ import urllib
 import urllib2
 import json
 import argparse
-#from optparse import OptionParser
-# TODO: write option parser that contains required_size of files, with default values 
-# TODO: for both download and recombine.
-#
 
 def check_download(obsID, directory=None, required_size=253440000):
     '''

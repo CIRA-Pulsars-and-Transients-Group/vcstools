@@ -1,3 +1,5 @@
+!#/usr/bin/env python
+
 import sys, os, time, socket, json, struct
 from optparse import OptionParser
 import threading

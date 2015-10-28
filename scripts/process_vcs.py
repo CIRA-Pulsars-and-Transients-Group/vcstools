@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import subprocess
 import os
 import sys
@@ -99,7 +99,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
     print "Downloading files from archive"
 #    voltdownload = distutils.spawn.find_executable("voltdownload.py")
 #    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
-    voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/launch_trace.py python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
+    voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
     raw_dir = "{0}/raw".format(working_dir)
     make_dir = "mkdir {0}".format(raw_dir)
     subprocess.call(make_dir,shell=True)
@@ -129,7 +129,8 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
         except:
             print "cannot open working dir:{0}".format(working_dir)
             sys.exit()
-
+    check = "/home/fkirsten/software/galaxy-scripts/scripts/checks.py -m download -o {0}".format(obsid)
+    
 
 def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     print "Running recombine on files"
