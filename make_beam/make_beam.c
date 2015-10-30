@@ -419,31 +419,18 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
 
 
 
-int read_pfb_call(char *pfb_file,char *in_name) {
+int read_pfb_call(char *in_name) {
     
-    FILE *PFBfile = NULL;
-    char *pfb_command = NULL;
     char new_command[MAX_COMMAND_LENGTH];
     char out_file[MAX_COMMAND_LENGTH];
     
     sprintf(out_file,"%s.working",in_name);
     
-    size_t n = 0;
-    PFBfile = fopen(pfb_file,"rw");
-    if(PFBfile != NULL) {
         
-        getline(&pfb_command,&n,PFBfile);
-        pfb_command[strlen(pfb_command)-1] = '\0'; 
-        sprintf(new_command,"%s -i %s > %s",pfb_command,in_name,out_file);
-        fprintf(stdout,"Will execute: %s\n",new_command);
-        system(new_command);
-    }
-    else {
-        fprintf(stderr,"Cannot open pfb command line file %s\n",pfb_file);
-        return -1;
-    }
+    sprintf(new_command,"%s -i %s > %s","read_pfb ",in_name,out_file);
+    fprintf(stdout,"Will execute: %s\n",new_command);
+    system(new_command);
     
-    fclose(PFBfile);
     
     return 1;
         
@@ -1387,9 +1374,9 @@ int main(int argc, char **argv) {
             }
 
             if (fp == NULL) { // need to open the next file
-                //read_pfb_call(pfb_call_file,globbuf.gl_pathv[file_no]);
+                read_pfb_call(globbuf.gl_pathv[file_no]);
                 
-                sprintf(working_file,"%s",globbuf.gl_pathv[file_no]);
+                sprintf(working_file,"%s.working",globbuf.gl_pathv[file_no]);
                 
                 fp = fopen(working_file, "r");
 
