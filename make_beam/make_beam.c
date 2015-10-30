@@ -427,7 +427,7 @@ int read_pfb_call(char *in_name) {
     sprintf(out_file,"%s.working",in_name);
     
         
-    sprintf(new_command,"%s -i %s > %s","read_pfb ",in_name,out_file);
+    sprintf(new_command,"%s -i %s -o  %s","read_pfb ",in_name,out_file);
     fprintf(stdout,"Will execute: %s\n",new_command);
     system(new_command);
     
