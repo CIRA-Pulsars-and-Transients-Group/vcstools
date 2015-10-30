@@ -1,0 +1,19 @@
+cmake_minimum_required (VERSION 2.6)
+project (make_psrfits)
+add_executable(make_psrfits make_psrfits)
+add_executable(splice_psrfits splice_psrfits)
+find_package(CFITSIO)
+find_package(SLALIB)
+find_package(PSRFITS_UTILS)
+
+
+include_directories(${CMAKE_INSTALL_PREFIX}/include 
+${SLALIB_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR})
+target_link_libraries(make_psrfits ${PSRFITS_UTILS_LIBRARY}
+${SLALIB_LIBRARY} ${CFITSIO_LIBRARY} ${M_LIBRARY})
+target_link_libraries(splice_psrfits ${PSRFITS_UTILS_LIBRARY}
+${SLALIB_LIBRARY} ${CFITSIO_LIBRARY} ${M_LIBRARY})
+
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/make_psrfits DESTINATION bin)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/splice_psrfits DESTINATION bin)
+

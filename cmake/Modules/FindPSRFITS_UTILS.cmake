@@ -1,0 +1,39 @@
+# - Try to find PSRFITS_UTILS code.
+# Variables used by this module:
+#  PSRFITS_UTILS_ROOT_DIR     - PSRFITS_UTILS root directory
+# Variables defined by this module:
+#  PSRFITS_UTILS_FOUND        - system has PSRFITS_UTILS
+#  PSRFITS_UTILS_INCLUDE_DIR  - the PSRFITS_UTILS include directory (cached)
+#  PSRFITS_UTILS_INCLUDE_DIRS - the PSRFITS_UTILS include directories
+#                         (identical to PSRFITS_UTILS_INCLUDE_DIR)
+#  PSRFITS_UTILS_LIBRARY      - the PSRFITS_UTILS library (cached)
+#  PSRFITS_UTILS_LIBRARIES    - the PSRFITS_UTILS libraries
+
+set(PSRFITS_UTILS_ROOT_DIR $ENV{PSRFITS_UTILS})
+
+if(NOT DEFINED PSRFITS_UTILS_ROOT_DIR)
+	message("-- Warning PSRFITS_UTILS_ROOT_DIR not set: will try and find it ")
+else(NOT DEFINED PSRFITS_UTILS_ROOT_DIR)
+	message("-- PSRFITS_UTILS_ROOT_DIR = ${PSRFITS_UTILS_ROOT_DIR}")
+endif(NOT DEFINED PSRFITS_UTILS_ROOT_DIR)
+
+if(NOT PSRFITS_UTILS_FOUND)
+
+  find_path(PSRFITS_UTILS_INCLUDE_DIR psrfits.h
+    HINTS ${PSRFITS_UTILS_ROOT_DIR} PATH_SUFFIXES /include /include/psrfits_utils)
+  find_library(PSRFITS_UTILS_LIBRARY psrfits_utils
+    HINTS ${PSRFITS_UTILS_ROOT_DIR} PATH_SUFFIXES lib )
+
+  include(FindPackageHandleStandardArgs)
+  find_package_handle_standard_args(PSRFITS_UTILS DEFAULT_MSG
+    PSRFITS_UTILS_LIBRARY PSRFITS_UTILS_INCLUDE_DIR CFITSIO_LIBRARY M_LIBRARY)
+
+  set(PSRFITS_UTILS_INCLUDE_DIRS ${PSRFITS_UTILS_INCLUDE_DIR})
+  set(PSRFITS_UTILS_LIBRARIES ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY})
+
+endif(NOT PSRFITS_UTILS_FOUND)
+
+if (PSRFITS_UTILS_FOUND)
+	message ("--Found  PSRFITS_UTILS --")
+endif (PSRFITS_UTILS_FOUND)
+
