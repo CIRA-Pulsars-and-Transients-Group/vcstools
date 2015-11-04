@@ -269,14 +269,22 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
 
 
-def coherent_beam(working_dir, metafile, nfine_chan):
+def coherent_beam(obs_id, working_dir, metafile, nfine_chan, pointing):
     # Need to run get_delays and then the beamformer on each desired coarse channel
     DI_dir = working_dir+"DIJ"
+    RA = pointing[0]
+    Dec = pointing[1]
+
     print "Running get_delays"
     P_dir = working_dir+"pointings"
     mdir(P_dir, "Pointings")
+    pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
+    mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
 
     for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
+        DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
+        pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
+        mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}". format(RA, Dec, gpubox)
 
         DI_file = "{0}/DI_JonesMatrices_node{1}.dat".format(DI_dir, gpubox)
         if (os.path.isfile(DI_file)):
@@ -284,10 +292,9 @@ def coherent_beam(working_dir, metafile, nfine_chan):
             with open(get_delays_batch,'w') as batch_file:
                 batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}.out\n".format(working_dir,gpubox)
                 batch_file.write(batch_line)
-                delays_line = "get_delays -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'])
-            batch_line = "%s\n" % (get_data)
-            batch_file.write(batch_line)
-            submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format(secs_to_run,raw_dir,voltdownload_batch)
+                delays_line = "get_delays -a {0} -b {1} -j {2} -m {3} -i -p -z {4} -o {5} -f {6} -n {7} -w 10000 -r {8} -d {9}\n".format(pointing_chan_dir,?,DI_file,metafile,utctime,obs_id,?,nfine_chan,Dec) # need to finish inputs
+                batch_file.write(delays_line)
+            submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format(time_to_run, pointing_chan_dir, get_delays_batch)
             submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
         else:
             print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
@@ -313,6 +320,23 @@ def coherent_beam(working_dir, metafile, nfine_chan):
 
     print "Forming coherent beam"
 
+    # Run make_beam
+        """
+                        with open(batch, 'w') as batch_file:
+                    batch_file.write("#!/bin/bash -l\n")
+
+                    nodes_line = "#SBATCH --nodes=%d\n#SBATCH --export=NONE\n" % (number_of_exe/exe_per_node)
+                    batch_file.write(nodes_line)
+                    time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
+                    batch_file.write(time_line)
+                    aprun_line = "aprun -n %d -N %d %s -e pfb -o ch01 -a 128 -n %d -t 1 %s -c phases.txt -w flags.txt -D %s/ch %s psrfits_header.txt\n" % (number_of_exe,exe_per_node,make_beam,nchan,jones,working_dir,beam_mode_str)
+                    batch_file.write(aprun_line)
+
+                submit_line = "sbatch --nodes=%d --workdir=%s --time=%s --partition=%s %s\n" % (number_of_exe/exe_per_node,working_dir,str(secs_to_run),queue,batch)
+                print submit_line
+
+                submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+        """
 
 
 
@@ -378,6 +402,12 @@ if __name__ == '__main__':
     if opts.begin > opts.end:
         print "Starting time is after end time"
         quit()
+    if opts.mode = "beamformer"
+        if not opts.pointing:
+            print "Pointing (-p) required in beamformer mode"
+            quit()
+        if opts.pointing[0] or opt.pointing[1]
+
 
     mdir(opts.work_dir, "Working")
     obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
@@ -405,7 +435,7 @@ if __name__ == '__main__':
     elif opts.mode == 'beamformer':
         print opts.mode
         ensure_metafits(metafits_file)
-        coherent_beam(obs_dir, metafits_file, opts.nfine_chan)
+        coherent_beam(opts.obs, obs_dir, metafits_file, opts.nfine_chan, opts.pointing)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
