@@ -273,9 +273,9 @@ def coherent_beam(working_dir, metafile):
 
     DI_dir = working_dir+"DIJ"
     print "Running get_delays"
-
+    """
     for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
-"""
+
         DI_file = "{0}/DI_JonesMatrices_node{1}.dat".format(DI_dir, gpubox)
         if (os.path.isfile(DI_file)):
             get_delays_batch = "{0}/batch/gd_{1}.batch".format(working_dir,gpubox)
@@ -289,7 +289,7 @@ def coherent_beam(working_dir, metafile):
         submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
         else:
             print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
-"""
+    """
 
     # if (the_options['delays'] == True):
     #
