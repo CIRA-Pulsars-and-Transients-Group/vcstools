@@ -115,7 +115,15 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
 #    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
     voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
     raw_dir = "{0}/raw".format(working_dir)
-    make_dir = "mkdir {0}".format(raw_dir)
+
+    try:
+        os.mkdir(raw_dir)
+    except:
+        if (os.path.exists(raw_dir)):
+            print "Raw Directory Already Exists\n"
+        else:
+            sys.exit()
+
     subprocess.call(make_dir,shell=True)
     for time_to_get in range(start_time,stop_time,increment):
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
@@ -366,7 +374,7 @@ if __name__ == '__main__':
         quit()
     elif opts.all:
         opts.begin, opts.end = obs_max_min(opts.obs)
-
+git
     if not opts.mode:
       print "Mode required {0}. Please specify with -m or --mode.".format(modes)
       quit()
@@ -378,6 +386,20 @@ if __name__ == '__main__':
     if opts.begin > opts.end:
         print "Starting time is after end time"
         quit()
+
+
+
+
+    """
+    Replace the following with lines similar to:
+    try:
+        os.mkdir(corrdir)
+    except:
+        if (os.path.exists(corrdir)):
+            print "Correlator Product Directory Already Exists\n"
+        else:
+            sys.exit()
+    """
 
 
     make_dir = "mkdir {0}".format(opts.work_dir)
