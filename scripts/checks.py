@@ -15,11 +15,12 @@ def check_download(obsID, directory=None, required_size=253440000):
         directory = "/scratch/mwaops/vcs/{0}/raw/".format(obsID)
     print "\n Checking file size and number of files for obsID {0} in {1}".format(obsID, directory)
     required_size = required_size
-    output = subprocess.check_output("ls -ltr %s | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size), shell=True)
+    command = "ls -ltr %s | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size)
+    output = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).communicate()[0]
     obsinfo = getmeta(service='obs', params={'obs_id':obsID})
     files_on_archive = len(obsinfo['files'])
-    files_in_dir = int(subprocess.check_output("ls {0} | wc -l".format(directory), \
-                                                   shell=True))
+    files_in_dir = int(subprocess.Popen(["ls {0} | wc -l".format(directory)], \
+                                                   shell=True, stdout=subprocess.PIPE).communicate()[0])
     success = True
     if not files_in_dir == files_on_archive:
         print "We have {0} files but expected {1}".format(files_in_dir, files_on_archive)
@@ -42,14 +43,15 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
         directory = "/scratch/mwaops/vcs/{0}/combined/".format(obsID)
     print "\n Checking file size and number of files for obsID {0} in {1}".format(obsID, directory)
     required_size = required_size
-    output = subprocess.check_output("ls -ltr %s*ch*.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size), shell=True)
+    output = subprocess.Popen(["ls -ltr %s*ch*.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size)],
+                              stdout=subprocess.PIPE, shell=True).communicate()[0]
     # we need to get the number of unique seconds from the file names
     files = getmeta(service='obs', params={'obs_id':obsID})['files'].keys()
     times = [time[11:21] for time in files]
     n_secs = len(set(times))
     expected_files = n_secs * 25
-    files_in_dir = int(subprocess.check_output("ls {0} | wc -l".format(directory), \
-                                                   shell=True))
+    files_in_dir = int(subprocess.Popen(["ls {0} | wc -l".format(directory)], \
+                                                   stdout=subprocess.PIPE, shell=True).communicate()[0])
     success = True
     if not files_in_dir == expected_files:
         print "We have {0} files but expected {1}".format(files_in_dir, expected_files)
@@ -66,7 +68,8 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
 
 def check_recombine_ics(directory=None, required_size=30720000):
     required_size = required_size
-    output = subprocess.check_output("ls -ltr %s/*ics.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size), shell=True)
+    output = subprocess.Popen(["ls -ltr %s/*ics.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size)],
+                              stdout=subprocess.PIPE, shell=True).communicate()[0]
     success = True
     if len(output) > 16:
         print output[16:]
