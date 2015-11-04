@@ -367,15 +367,12 @@ if __name__ == '__main__':
         quit()
     elif opts.all:
         opts.begin, opts.end = obs_max_min(opts.obs)
-git
     if not opts.mode:
       print "Mode required {0}. Please specify with -m or --mode.".format(modes)
       quit()
-
     if not opts.obs:
         print "Observation ID required, please put in with -o or --obs"
         quit()
-
     if opts.begin > opts.end:
         print "Starting time is after end time"
         quit()
