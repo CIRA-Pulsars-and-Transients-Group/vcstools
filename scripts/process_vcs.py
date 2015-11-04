@@ -287,8 +287,8 @@ def coherent_beam(working_dir, metafile, nfine_chan):
                 delays_line = "get_delays -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'])
             batch_line = "%s\n" % (get_data)
             batch_file.write(batch_line)
-        submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format(secs_to_run,raw_dir,voltdownload_batch)
-        submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+            submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format(secs_to_run,raw_dir,voltdownload_batch)
+            submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
         else:
             print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
 
