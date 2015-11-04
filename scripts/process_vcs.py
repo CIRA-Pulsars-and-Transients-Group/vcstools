@@ -60,6 +60,11 @@ def mdir(path,description):
         else:
             sys.exit()
 
+def ensure_metafits(metafits_file):
+        if (os.path.isfile(metafits_file) == False):
+            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
+            subprocess.call(metafile_line,shell=True)
+
 
 def obs_max_min(obs_id):
     """
@@ -264,7 +269,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
 
 
-def coherent_beam(working_dir, metafile):
+def coherent_beam(working_dir, metafile, nfine_chan):
     # Need to run get_delays and then the beamformer on each desired coarse channel
     DI_dir = working_dir+"DIJ"
     print "Running get_delays"
@@ -374,10 +379,6 @@ if __name__ == '__main__':
         print "Starting time is after end time"
         quit()
 
-
-
-
-
     mdir(opts.work_dir, "Working")
     obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
     mdir(obs_dir, "Observation")
@@ -393,24 +394,18 @@ if __name__ == '__main__':
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, working_dir, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
-        if (os.path.isfile(metafits_file) == False):
-            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
-            subprocess.call(metafile_line,shell=True)
+        ensure_metafits(metafits_file)
         combined_dir = "{0}/combined".format(working_dir)
         mdir(combined_dir, "Combined")
         vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
     elif opts.mode == 'correlate':
         print opts.mode 
-        if (os.path.isfile(metafits_file) == False):
-            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
-            subprocess.call(metafile_line,shell=True)
+        ensure_metafits(metafits_file)
         vcs_correlate()
     elif opts.mode == 'beamformer':
         print opts.mode
-        if (os.path.isfile(metafits_file) == False):
-            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
-            subprocess.call(metafile_line,shell=True)
-        coherent_beam(working_dir, metafits_file)
+        ensure_metafits(metafits_file)
+        coherent_beam(working_dir, metafits_file, opts.nfine_chan)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
