@@ -61,8 +61,8 @@ def obs_max_min(obs_id):
 
     obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
 
-    obs_start = min(obsinfo['files'])
-    obs_end = max(obsinfo['files'])
+    obs_start = min(obsinfo['files'])[11:21]
+    obs_end = max(obsinfo['files'])[11:21]
     return obs_start, obs_end
 
 def sfreq(freqs):
