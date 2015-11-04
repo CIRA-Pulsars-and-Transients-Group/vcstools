@@ -382,22 +382,22 @@ if __name__ == '__main__':
     mdir(opts.work_dir, "Working")
     obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
     mdir(obs_dir, "Observation")
-    batch_dir = "{0}/batch".format(working_dir)
+    batch_dir = "{0}/batch".format(opts.work_dir)
     mdir(batch_dir, "Batch")
-    metafits_file = "{0}/{1}.metafits".format(working_dir,opts.obs)
+    metafits_file = "{0}/{1}.metafits".format(opts.work_dir,opts.obs)
 
  #   options(opts)
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
 
     if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, working_dir, opts.parallel_dl)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, opts.work_dir, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
-        combined_dir = "{0}/combined".format(working_dir)
+        combined_dir = "{0}/combined".format(opts.work_dir)
         mdir(combined_dir, "Combined")
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, opts.work_dir)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(metafits_file)
@@ -405,7 +405,7 @@ if __name__ == '__main__':
     elif opts.mode == 'beamformer':
         print opts.mode
         ensure_metafits(metafits_file)
-        coherent_beam(working_dir, metafits_file, opts.nfine_chan)
+        coherent_beam(opts.work_dir, metafits_file, opts.nfine_chan)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
