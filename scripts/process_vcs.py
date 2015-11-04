@@ -412,25 +412,20 @@ if __name__ == '__main__':
         if (os.path.isfile(metafits_file) == False):
             metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
-
         make_combined = "mkdir {0}/combined".format(working_dir)
         subprocess.call(make_combined,shell=True)
-
         vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
     elif opts.mode == 'correlate':
         print opts.mode 
         if (os.path.isfile(metafits_file) == False):
             metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
-
-
         vcs_correlate()
     elif opts.mode == 'beamformer':
         print opts.mode
          if (os.path.isfile(metafits_file) == False):
             metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
-
         coherent_beam(working_dir, metafits_file)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
