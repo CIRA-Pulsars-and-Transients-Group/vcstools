@@ -403,6 +403,7 @@ if __name__ == '__main__':
     metafits_file = "{0}/{1}.metafits".format(working_dir,opts.obs)
 
  #   options(opts)
+    print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
 
     if opts.mode == 'download':
         print opts.mode
