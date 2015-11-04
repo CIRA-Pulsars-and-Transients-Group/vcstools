@@ -158,7 +158,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
         except:
             print "cannot open working dir:{0}".format(working_dir)
             sys.exit()
-    check = "/home/fkirsten/software/galaxy-scripts/scripts/checks.py -m download -o {0}".format(obsid)
+    check = "checks.py -m download -o {0}".format(obsid)
     
 
 def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
