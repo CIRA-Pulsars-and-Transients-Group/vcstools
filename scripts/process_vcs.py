@@ -134,7 +134,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
 
 def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     print "Running recombine on files"
-    jobs_per_node = 8
+    jobs_per_node
 #    recombine = distutils.spawn.find_executable("recombine.py")
     recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
     for time_to_get in range(start_time,stop_time,increment):
@@ -244,18 +244,64 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
 
 
-def make_pfb_files():
-    print "Creating PFB files"
 
 
-def coherent_beam():
+def coherent_beam(working_dir, metafile):
+    # Need to run get_delays and then the beamformer on each desired coarse channel
+
+    DI_dir = working_dir+"DIJ"
+    print "Running get_delays"
+
+    for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
+
+        DI_file = "{0}/DI_JonesMatrices_node{1}.dat".format(DI_dir, gpubox)
+        if (os.path.isfile(DI_file)):
+            get_delays_batch = "{0}/batch/gd_{1}.batch".format(working_dir,gpubox)
+
+            with open(voltdownload_batch,'w') as batch_file:
+
+                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}.out\n".format(working_dir,gpubox)
+                batch_file.write(batch_line)
+
+    #            delays_line = "%s -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'])
+
+
+            batch_line = "%s\n" % (get_data)
+            batch_file.write(batch_line)
+
+        submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format(secs_to_run,raw_dir,voltdownload_batch)
+        submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+
+        else:
+            print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
+
+
+    # if (the_options['delays'] == True):
+    #
+    #     DI_file = "%s/DI_JonesMatrices_node0%02d.dat" % (outdir,gpubox_label)
+    #     print DI_file
+    #
+    #     if (old_mode == 1):
+    #         if (os.path.isfile(DI_file)):
+    #             delays_line = "%s -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -e %d -n 88 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,edge_num,the_options['ra'],the_options['dec'])
+    #         else:
+    #             delays_line = "%s -a ./ -b %d -i -p -z %s -o %s -f %s -e %d -n 88 -w 10000 -r %s -d %s -m %s" % (get_delays,len(f),utctime,obsid,freq_Hz,edge_num,the_options['ra'],the_options['dec'],the_options['metafile'])
+    #     elif (new_mode == 1):
+    #         if (os.path.isfile(DI_file)):
+    #             delays_line = "%s -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'])
+    #         else:
+    #             print "WARNING NOT CALIBRATION FOUND\n"
+    #             delays_line = "%s -a ./ -b %d -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s -m %s" % (get_delays,len(f),utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'],the_options['metafile'])
+
+
     print "Forming coherent beam"
+
 
 
 
 if __name__ == '__main__':
 
-    modes=['download','recombine','correlate','make_pfb','beamform']
+    modes=['download','recombine','correlate','beamform']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
     chan_list = []
@@ -283,16 +329,16 @@ if __name__ == '__main__':
     group_beamform.add_option("--bf_mode", type="choice", choices=['0','1','2'], help="Beam forming mode (0 == NO BEAMFORMING 1==PSRFITS, 2==VDIF)")
     group_beamform.add_option("-j", "--useJones", action="store_true", default=False, help="Use Jones matrices from the RTS [default=%default]")
 
-    parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','make_pfb','beamform'], help="Mode you want to run. {0}".format(modes))
+    parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
     parser.add_option("-b", "--begin", type="int", help="First GPS time to process [no default]")
     parser.add_option("-e", "--end", type="int", help="Last GPS time to process [no default]")
+    parser.add_option("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
     parser.add_option("-i", "--increment", type="int", default=200, help="Increment in seconds (how much we process at once) [default=%default]")
     parser.add_option("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
     parser.add_option("-w", "--work_dir", metavar="DIR", default="/scratch/mwaops/vcs/", help="Base directory you want to run from. This will create a folder for the Obs. ID if it doesn't exist [default=%default]")
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
-    parser.add_option("-G", "--Go", action="store_true", default=False, help="Include this option to run script [default=%default]")
     parser.add_option_group(group_download)
 #    parser.add_option_group(group_recombine)
     parser.add_option_group(group_correlate)
@@ -300,6 +346,13 @@ if __name__ == '__main__':
     parser.add_option_group(group_beamform)
 
     (opts, args) = parser.parse_args()
+
+    if opts.all and (opts.begin or opts.end):
+        print "Please specify EITHER (-b,-e) OR -a"
+        quit()
+    elif opts.all:
+        opts.begin =
+        opts.end =
 
     if not opts.mode:
       print "Mode required {0}. Please specify with -m or --mode.".format(modes)
@@ -347,12 +400,13 @@ if __name__ == '__main__':
 
 
         vcs_correlate()
-    elif opts.mode == 'make_pfb':
-        print opts.mode
-        make_pfb_files()
     elif opts.mode == 'beamformer':
         print opts.mode
-        coherent_beam()
+         if (os.path.isfile(metafits_file) == False):
+            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
+            subprocess.call(metafile_line,shell=True)
+
+        coherent_beam(working_dir, metafits_file)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
