@@ -54,7 +54,7 @@ def is_number(s):
 def mdir(path,description):
     try:
         os.mkdir(path)
-        os.fchmod(path,"g+s")
+        os.chmod(path,0661)
     except:
         if (os.path.exists(path)):
             print "{0} Directory Already Exists\n".format(description)
