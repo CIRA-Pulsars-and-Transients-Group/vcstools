@@ -51,6 +51,16 @@ def is_number(s):
     except ValueError:
         return False
 
+def mdir(path,description):
+    try:
+        os.mkdir(path)
+    except:
+        if (os.path.exists(path)):
+            print "{0} Directory Already Exists\n".format(description)
+        else:
+            sys.exit()
+
+
 def obs_max_min(obs_id):
     """
     Small function to query the database and returns the times of the first and last file
@@ -115,14 +125,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
 #    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
     voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
     raw_dir = "{0}/raw".format(working_dir)
-
-    try:
-        os.mkdir(raw_dir)
-    except:
-        if (os.path.exists(raw_dir)):
-            print "Raw Directory Already Exists\n"
-        else:
-            sys.exit()
+    mdir(raw_dir, "Raw")
 
     subprocess.call(make_dir,shell=True)
     for time_to_get in range(start_time,stop_time,increment):
@@ -205,14 +208,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
     import datetime
 
     corrdir = "%s/corr" % working_dir
-
-    try:
-        os.mkdir(corrdir)
-    except:
-        if (os.path.exists(corrdir)):
-            print "Correlator product directory Already exists\n"
-        else:
-            sys.exit()
+    mdir(corr_dir, "Correlator Product")
 
     chan_list = get_frequencies(metafits_file)
 
@@ -270,26 +266,27 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
 def coherent_beam(working_dir, metafile):
     # Need to run get_delays and then the beamformer on each desired coarse channel
-
     DI_dir = working_dir+"DIJ"
     print "Running get_delays"
-    """
+    P_dir = working_dir+"pointings"
+    mdir(P_dir, "Pointings")
+
     for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
 
         DI_file = "{0}/DI_JonesMatrices_node{1}.dat".format(DI_dir, gpubox)
         if (os.path.isfile(DI_file)):
             get_delays_batch = "{0}/batch/gd_{1}.batch".format(working_dir,gpubox)
-            with open(voltdownload_batch,'w') as batch_file:
+            with open(get_delays_batch,'w') as batch_file:
                 batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}.out\n".format(working_dir,gpubox)
                 batch_file.write(batch_line)
-                #delays_line = "%s -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'])
+                delays_line = "get_delays -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'])
             batch_line = "%s\n" % (get_data)
             batch_file.write(batch_line)
         submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format(secs_to_run,raw_dir,voltdownload_batch)
         submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
         else:
             print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
-    """
+
 
     # if (the_options['delays'] == True):
     #
@@ -380,26 +377,12 @@ if __name__ == '__main__':
 
 
 
-    """
-    Replace the following with lines similar to:
-    try:
-        os.mkdir(corrdir)
-    except:
-        if (os.path.exists(corrdir)):
-            print "Correlator Product Directory Already Exists\n"
-        else:
-            sys.exit()
-    """
 
-
-    make_dir = "mkdir {0}".format(opts.work_dir)
-    subprocess.call(make_dir,shell=True)
-    working_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
-    make_dir = "mkdir {0}".format(working_dir)
-    subprocess.call(make_dir,shell=True)
+    mdir(opts.work_dir, "Working")
+    obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
+    mdir(obs_dir, "Observation")
     batch_dir = "{0}/batch".format(working_dir)
-    make_batch_dir="mkdir {0}".format(batch_dir)
-    subprocess.call(make_batch_dir,shell=True)
+    mdir(batch_dir, "Batch")
     metafits_file = "{0}/{1}.metafits".format(working_dir,opts.obs)
 
  #   options(opts)
@@ -413,8 +396,8 @@ if __name__ == '__main__':
         if (os.path.isfile(metafits_file) == False):
             metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
-        make_combined = "mkdir {0}/combined".format(working_dir)
-        subprocess.call(make_combined,shell=True)
+        combined_dir = "{0}/combined".format(working_dir)
+        mdir(combined_dir, "Combined")
         vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
     elif opts.mode == 'correlate':
         print opts.mode 
