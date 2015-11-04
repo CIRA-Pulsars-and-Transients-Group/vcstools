@@ -45,7 +45,7 @@ def print_minmax(obs_id):
     """
 
     obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
-    #print len(obsinfo['files'])
+    print "{0} file found with Observation ID {1}".format(len(obsinfo['files']), obs_id)
     print "First file: ", min(obsinfo['files'])
     print "Last file: ", max(obsinfo['files'])
 
