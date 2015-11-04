@@ -132,7 +132,6 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
     raw_dir = "{0}/raw".format(working_dir)
     mdir(raw_dir, "Raw")
 
-    subprocess.call(make_dir,shell=True)
     for time_to_get in range(start_time,stop_time,increment):
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
         if copyq:
