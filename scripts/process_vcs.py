@@ -390,7 +390,7 @@ if __name__ == '__main__':
 
     if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, opts.work_dir, opts.parallel_dl)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, obs_dir, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
