@@ -423,7 +423,7 @@ if __name__ == '__main__':
         vcs_correlate()
     elif opts.mode == 'beamformer':
         print opts.mode
-         if (os.path.isfile(metafits_file) == False):
+        if (os.path.isfile(metafits_file) == False):
             metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
         coherent_beam(working_dir, metafits_file)
