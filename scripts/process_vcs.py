@@ -51,6 +51,20 @@ def is_number(s):
     except ValueError:
         return False
 
+def obs_max_min(obs_id):
+    """
+    Small function to query the database and returns the times of the first and last file
+    :param obs_id:
+    :return:
+    """
+    from file_maxmin import getmeta
+
+    obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
+
+    obs_start = min(obsinfo['files'])
+    obs_end = max(obsinfo['files'])
+    return obs_start, obs_end
+
 def sfreq(freqs):
 
     if len(freqs) != 24:
@@ -351,8 +365,7 @@ if __name__ == '__main__':
         print "Please specify EITHER (-b,-e) OR -a"
         quit()
     elif opts.all:
-        opts.begin =
-        opts.end =
+        opts.begin, opts.end = obs_max_min(opts.obs)
 
     if not opts.mode:
       print "Mode required {0}. Please specify with -m or --mode.".format(modes)
