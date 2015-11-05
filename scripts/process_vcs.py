@@ -284,7 +284,7 @@ def coherent_beam(obs_id, working_dir, metafile, nfine_chan, pointing):
     for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
         #DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
         pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
-        mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}". format(RA, Dec, gpubox)
+        mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}".format(RA, Dec, gpubox))
 
         DI_file = "{0}/DI_JonesMatrices_node{1}.dat".format(DI_dir, gpubox)
         if (os.path.isfile(DI_file)):
