@@ -321,7 +321,7 @@ def coherent_beam(obs_id, working_dir, metafile, nfine_chan, pointing):
     print "Forming coherent beam"
 
     # Run make_beam
-        """
+    """
                         with open(batch, 'w') as batch_file:
                     batch_file.write("#!/bin/bash -l\n")
 
@@ -336,7 +336,7 @@ def coherent_beam(obs_id, working_dir, metafile, nfine_chan, pointing):
                 print submit_line
 
                 submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-        """
+    """
 
 
 
