@@ -82,10 +82,13 @@ if __name__ == '__main__':
             recombine_line = "{0} {1}/raw/{2}".format(recombine_line, the_options['root'],f_to_r)
 
         recombine_line = "%s\n" % recombine_line
-        log_name="{0}/recombine_{1}.log".format(the_options['root'],time_to_combine)
-        with open(log_name, 'w') as log:
-            subprocess.call(recombine_line,shell=True,stdout=log,stderr=log)
-        
+        subprocess.call(recombine_line,shell=True)
+
+        #log_name="{0}/recombine_{1}.log".format(the_options['root'],time_to_combine)
+
+        #with open(log_name, 'w') as log:
+        #    subprocess.call(recombine_line,shell=True,stdout=log,stderr=log)
+
     comm.Barrier()
        
    
