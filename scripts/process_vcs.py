@@ -402,11 +402,11 @@ if __name__ == '__main__':
     if opts.begin > opts.end:
         print "Starting time is after end time"
         quit()
-    if opts.mode == "beamformer"
+    if opts.mode == "beamformer":
         if not opts.pointing:
             print "Pointing (-p) required in beamformer mode"
             quit()
-        if opts.pointing[0] or opt.pointing[1]
+        #if opts.pointing[0] or opt.pointing[1]
 
 
     mdir(opts.work_dir, "Working")
