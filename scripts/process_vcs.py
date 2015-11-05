@@ -282,7 +282,7 @@ def coherent_beam(obs_id, working_dir, metafile, nfine_chan, pointing):
     mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
 
     for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
-        DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
+        #DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
         pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
         mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}". format(RA, Dec, gpubox)
 
@@ -292,7 +292,7 @@ def coherent_beam(obs_id, working_dir, metafile, nfine_chan, pointing):
             with open(get_delays_batch,'w') as batch_file:
                 batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}.out\n".format(working_dir,gpubox)
                 batch_file.write(batch_line)
-                delays_line = "get_delays -a {0} -b {1} -j {2} -m {3} -i -p -z {4} -o {5} -f {6} -n {7} -w 10000 -r {8} -d {9}\n".format(pointing_chan_dir,?,DI_file,metafile,utctime,obs_id,?,nfine_chan,Dec) # need to finish inputs
+                #delays_line = "get_delays -a {0} -b {1} -j {2} -m {3} -i -p -z {4} -o {5} -f {6} -n {7} -w 10000 -r {8} -d {9}\n".format(pointing_chan_dir,?,DI_file,metafile,utctime,obs_id,?,nfine_chan,Dec) # need to finish inputs
                 batch_file.write(delays_line)
             submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format(time_to_run, pointing_chan_dir, get_delays_batch)
             submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
