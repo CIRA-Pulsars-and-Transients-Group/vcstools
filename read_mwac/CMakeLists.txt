@@ -5,6 +5,6 @@ set_target_properties(read_mwac PROPERTIES LINK_FLAGS "-Wl,-no_compact_unwind")
 find_package(CFITSIO)
 find_package(PLOTUTILS)
 include_directories(${CFITSIO_INCLUDE_DIR} ${CMAKE_INSTALL_PREFIX}/include/ )
-target_link_libraries(read_mwac -L${CMAKE_INSTALL_PREFIX}/lib MWACUtils ${CFITSIO_LIBRARY}  m)
+target_link_libraries(read_mwac -L${CMAKE_INSTALL_PREFIX}/lib MWAC_Utils ${CFITSIO_LIBRARY}  m)
 
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/read_mwac DESTINATION bin)

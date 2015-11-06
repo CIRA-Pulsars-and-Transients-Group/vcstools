@@ -50,7 +50,6 @@ find_package(Postgres)
 find_package(MPI)
 
 if (CFITSIO_FOUND)
-    add_subdirectory(build_lfiles)
     add_subdirectory(read_mwac)
     add_subdirectory(read_pfb)
     if (PSRFITS_UTILS_FOUND)  
@@ -64,6 +63,9 @@ if (SLALIB_FOUND)
     endif (PSRFITS_UTILS_FOUND)
 endif (SLALIB_FOUND)
 
+
+add_dependencies(make_beam MWAC_Utils MWAC_GPU_Utils)
+
 INCLUDE(InstallRequiredSystemLibraries)
 
 SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MWA Correlator Utilities")
@@ -76,7 +78,7 @@ SET(CPACK_PACKAGE_VERSION_MINOR "1")
 SET(CPACK_PACKAGE_VERSION_PATCH "1")
 SET(CPACK_PACKAGE_INSTALL_DIRECTORY "CMake
 ${CMake_VERSION_MAJOR}.${CMake_VERSION_MINOR}")
-SET(CPACK_PACKAGE_EXECUTABLES "build_lfiles" "check_corr" "read_pfb")
+SET(CPACK_PACKAGE_EXECUTABLES "read_mwac" "make_beam" "read_pfb" "get_delays")
 SET(CPACK_GENERATOR "RPM")
 SET(CPACK_SET_DESTDIR ON)
 

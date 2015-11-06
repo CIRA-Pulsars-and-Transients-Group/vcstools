@@ -270,13 +270,13 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
     float percentage = 0.0;
     float occupancy = 17.0;
     float limit = 0.01;
-    
+    int i = 0; 
     float gain = 1;
     float percentage_clipped = 100;
     while (percentage_clipped > 0 && percentage_clipped > limit) {
         int count = 0;
         int clipped = 0;
-        for (int i=0;i<nsamples;i++) {
+        for (i=0;i<nsamples;i++) {
             if (gain*creal(input[i]) >= 0 && gain*creal(input[i]) < 1) {
                 count++;
             }
@@ -294,7 +294,7 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
         percentage = ((float)count/nsamples)*100.0;
         fprintf(stdout,"Gain set to %f (linear)\n",gain);
         fprintf(stdout,"percentage of samples 0-1 (should be %f) %f percent \n",occupancy,percentage);
-        fprintf(stdout,"Will be clipped (|7+|) %f\%\n",percentage_clipped);
+        fprintf(stdout,"Will be clipped (|7+|) %f percent\n",percentage_clipped);
     }
     *new_gain = gain;
 }
@@ -305,7 +305,6 @@ void get_mean_complex(complex float *input, int nsamples, float *rmean,float *im
     float rtotal = 0;
     float itotal = 0 ;
     complex float ctotal = 0 + I*0.0;
-    fprintf(stdout,"%f %f\n"); 
     for (i=0;i<nsamples;i++){
         rtotal = rtotal+crealf(input[i]);
         itotal = itotal+cimagf(input[i]);
@@ -1253,8 +1252,9 @@ int main(int argc, char **argv) {
     float *spectrum = (float *) calloc(nspec*nchan,sizeof(float));
     float *incoherent_sum = (float *) calloc(nspec*nchan,sizeof(float));
     complex float **beam = calloc(nchan,sizeof(complex float *));
-    
-    for (int stat = 0; stat < nchan*npol;stat++) {
+    int stat = 0;
+    int step = 0; 
+    for (stat = 0; stat < nchan*npol;stat++) {
         beam[stat] = (complex float *) calloc(nstation*npol,sizeof(complex float));
     }
 
@@ -1410,9 +1410,9 @@ int main(int argc, char **argv) {
         }
         
         int8_t *in_ptr=(int8_t *) buffer;
-        
+        int stat = 0;    
         bzero(spectrum,(nchan*sizeof(float)));
-        for (int stat=0;stat<nchan;stat++) {
+        for (stat=0;stat<nchan;stat++) {
             bzero(beam[stat],(nstation*npol*sizeof(complex float)));
         }
         bzero(incoherent_sum,(nchan*sizeof(float)));
@@ -1500,14 +1500,16 @@ int main(int argc, char **argv) {
         // detect the beam or prep from invert_pfb
         // reduce over each channel for the beam
         // do this by twos
+        int polnum = 0;
+        int step = 0;
         if (complex_weights == 1) {        
             for (ch=0;ch<nchan;ch++) {
-                for (int polnum = 0; polnum < npol; polnum++) {
+                for (polnum = 0; polnum < npol; polnum++) {
                     int next_good = 2;
                     int stride = 4;
 
                     while (next_good < nstation*npol) { 
-                        for (int step=polnum;step<nstation*npol;step=step+stride) {
+                        for (step=polnum;step<nstation*npol;step=step+stride) {
                             beam[ch][step] = beam[ch][step] + beam[ch][step+next_good];
                         }
                         stride = stride * 2;
@@ -1680,7 +1682,7 @@ int main(int argc, char **argv) {
                     fcontext.nsamples = ntap_per_call*fcontext.ntaps;
                     int ngood_per_call = fcontext.nsamples - fcontext.ntaps;
                     int ncalls = vf.sizeof_buffer/(4*ngood_per_call);
-                    fprintf(stderr,"Sizeof Complex %d\n",sizeof(Complex)); 
+                    fprintf(stderr,"Sizeof Complex %lu\n",sizeof(Complex)); 
                     fprintf(stderr,"Call invert_pfb expecting %d filtered timesamples per call and %d calls \n",ngood_per_call,ncalls);
                     fprintf(stderr,"last call will have produced %d samples of %lu\n",(ngood_per_call*ncalls),vf.sizeof_buffer/4);
                     fprintf(stderr,"Data is channelised to 128 ch (10kHz sampling) so number of input time samples in call is %d\n",fcontext.nsamples/nchan);
@@ -1693,8 +1695,8 @@ int main(int argc, char **argv) {
                         Complex *out_ptr_X = (Complex *) &filter_out_X[2*sub_samp];
                         Complex *out_ptr_Y = (Complex *) &filter_out_X[2*sub_samp];
                         fprintf(stderr,"cuda_invert\n"); 
-                        cuda_invert_pfb ((Complex *) in_ptr_X,(Complex *) out_ptr_X,fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples/nchan);
-                        cuda_invert_pfb ((Complex *) in_ptr_Y,(Complex *) out_ptr_Y,fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples/nchan);
+                        cuda_invert_pfb ((Complex *) in_ptr_X,(Complex *) out_ptr_X,(Complex *) fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples/nchan);
+                        cuda_invert_pfb ((Complex *) in_ptr_Y,(Complex *) out_ptr_Y,(Complex *) fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples/nchan);
 #else                        
                         fprintf(stderr,"invert\n"); 
                         invert_pfb((complex float *) filter_buffer_X+(2*(sub_samp - fcontext.ntaps)),(complex float *) filter_out_X+(2*sub_samp),nchan,1,1,1,fft_mode,0,(void *) &fcontext);

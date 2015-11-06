@@ -7,10 +7,10 @@ find_package(CFITSIO)
 find_package(SLALIB)
 find_package(PSRFITS_UTILS)
 find_package(FFTW3 COMPONENTS single)
-
+message("SLALIB ${SLALIB_INCLUDE_DIR}")
 include_directories(${CMAKE_INSTALL_PREFIX}/include ${POSTGRES_INCLUDE_DIR}
 ${SLALIB_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR})
-target_link_libraries(get_delays -L${CMAKE_INSTALL_PREFIX}/lib MWACUtils )
+target_link_libraries(get_delays -L${CMAKE_INSTALL_PREFIX}/lib MWAC_Utils )
 target_link_libraries(get_delays ${POSTGRES_LIBRARY} ${PSRFITS_UTILS_LIBRARY} )
 target_link_libraries(get_delays ${SLALIB_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} -lm)
 

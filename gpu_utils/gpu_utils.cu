@@ -136,7 +136,7 @@ void cuda_invert_pfb(Complex  * input, Complex * output, Complex * h_filter, int
     }
 
        // Transform signal and kernel
-    printf("cufftComplex size %d\n",sizeof(cufftComplex));
+    printf("cufftComplex size %lu\n",sizeof(cufftComplex));
     checkCudaErrors(cufftExecC2C(plan, (cufftComplex *)d_signal, (cufftComplex *)d_signal, CUFFT_FORWARD));
 
     // FFT padded filter
@@ -252,6 +252,7 @@ static __global__ void ElementWiseMultiply(Complex *signal, Complex *filter, int
         signal[outputID] = ComplexMul(signal[inputID],filter[entry]);
     }
 }
+
 static __global__ void ShiftandReduce(Complex *signal, int offset, int shift, int nelements) {
 
     const int element = blockDim.x ;
@@ -266,4 +267,5 @@ static __global__ void ShiftandReduce(Complex *signal, int offset, int shift, in
 
     signal[outputID] = ComplexAdd(signal[inputID],signal[outputID]);
 
-}  
+} 
+
