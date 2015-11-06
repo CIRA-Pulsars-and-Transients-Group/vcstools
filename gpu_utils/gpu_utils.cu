@@ -1,7 +1,9 @@
 #include <cuda_runtime.h>
 #include <cufft.h>
-#include <helper_cuda.h>
-#include <helper_functions.h>
+#include "cuda_error.h"
+
+// #include <helper_cuda.h>
+// #include <helper_functions.h>
 
 #include "gpu_utils.h"
 
@@ -18,25 +20,25 @@ void Filter1D( Complex  * input, Complex * output, Complex * filter, int nchan_i
 
     // Allocate device memory for signal
     Complex *d_signal;
-    checkCudaErrors(cudaMalloc((void **)&d_signal, mem_size));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_signal, mem_size));
     // Copy host memory to device
-    checkCudaErrors(cudaMemcpy(d_signal, input, mem_size,cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_signal, input, mem_size,cudaMemcpyHostToDevice));
 
     // Allocate device memory for filter kernel
     Complex *d_filter_kernel;
-    checkCudaErrors(cudaMalloc((void **)&d_filter_kernel, mem_size));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_filter_kernel, mem_size));
 
     // Copy host memory to device
-    checkCudaErrors(cudaMemcpy(d_filter_kernel, filter, mem_size,cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_filter_kernel, filter, mem_size,cudaMemcpyHostToDevice));
 
     // CUFFT plan
     cufftHandle plan;
-    checkCudaErrors(cufftPlan1d(&plan, nsamples, CUFFT_C2C, 1));
+    CHECK_CUDA_ERROR(cufftPlan1d(&plan, nsamples, CUFFT_C2C, 1));
 
     // Transform signal and kernel
     printf("Transforming signal cufftExecC2C\n");
-    checkCudaErrors(cufftExecC2C(plan, (cufftComplex *)d_signal, (cufftComplex *)d_signal, CUFFT_FORWARD));
-    checkCudaErrors(cufftExecC2C(plan, (cufftComplex *)d_filter_kernel, (cufftComplex *)d_filter_kernel, CUFFT_FORWARD));
+    CHECK_CUDA_ERROR(cufftExecC2C(plan, (cufftComplex *)d_signal, (cufftComplex *)d_signal, CUFFT_FORWARD));
+    CHECK_CUDA_ERROR(cufftExecC2C(plan, (cufftComplex *)d_filter_kernel, (cufftComplex *)d_filter_kernel, CUFFT_FORWARD));
 
     // Multiply the coefficients together and normalize the result
     printf("Launching ComplexPointwiseMulAndScale<<< >>>\n");
@@ -47,16 +49,16 @@ void Filter1D( Complex  * input, Complex * output, Complex * filter, int nchan_i
 
     // Transform signal back
     printf("Transforming signal back cufftExecC2C\n");
-    checkCudaErrors(cufftExecC2C(plan, (cufftComplex *)d_signal, (cufftComplex *)d_signal, CUFFT_INVERSE));
+    CHECK_CUDA_ERROR(cufftExecC2C(plan, (cufftComplex *)d_signal, (cufftComplex *)d_signal, CUFFT_INVERSE));
 
     // Copy device memory to host
     Complex *h_convolved_signal = output;
-    checkCudaErrors(cudaMemcpy(h_convolved_signal, d_signal, mem_size,cudaMemcpyDeviceToHost));
+    CHECK_CUDA_ERROR(cudaMemcpy(h_convolved_signal, d_signal, mem_size,cudaMemcpyDeviceToHost));
 
     // Clean up
 
-    checkCudaErrors(cudaFree(d_signal));
-    checkCudaErrors(cudaFree(d_filter_kernel));
+    CHECK_CUDA_ERROR(cudaFree(d_signal));
+    CHECK_CUDA_ERROR(cudaFree(d_filter_kernel));
 
 }
 void cuda_invert_pfb(Complex  * input, Complex * output, Complex * h_filter, int nchan_in, int ntap, int nsamples) {
@@ -87,21 +89,21 @@ void cuda_invert_pfb(Complex  * input, Complex * output, Complex * h_filter, int
         fprintf(stdout,"Allocate memory for buffer\n");
 
     Complex *d_buffer;
-    checkCudaErrors(cudaMalloc((void **)&d_buffer, nelements*sizeof(Complex)));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_buffer, nelements*sizeof(Complex)));
     if (verbose)
         fprintf(stdout,"Moving host memeory to device\n");
 
-    checkCudaErrors(cudaMemcpy(d_buffer, input, nelements*sizeof(Complex),cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_buffer, input, nelements*sizeof(Complex),cudaMemcpyHostToDevice));
     if (verbose)
         fprintf(stdout,"Allocate device memory for signal matrix\n");
     Complex *d_signal;
-    checkCudaErrors(cudaMalloc((void **)&d_signal, mem_size));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_signal, mem_size));
     getLastCudaError("Kernel execution failed [ cudaMalloc ]");
     // default to zero
     if (verbose)
         fprintf(stdout,"Initialising signal memory\n");
 
-    checkCudaErrors(cudaMemset((void *) d_signal,0,mem_size));
+    CHECK_CUDA_ERROR(cudaMemset((void *) d_signal,0,mem_size));
 
     getLastCudaError("Kernel execution failed [ cudaMemset ]");
     // Allocate device memory for filter kernel
@@ -109,10 +111,10 @@ void cuda_invert_pfb(Complex  * input, Complex * output, Complex * h_filter, int
         fprintf(stdout,"Allocating %d complex elements to filter\n",nelements);
 
     Complex *d_filter_kernel;
-    checkCudaErrors(cudaMalloc((void **)&d_filter_kernel, nelements*sizeof(Complex)));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_filter_kernel, nelements*sizeof(Complex)));
   
     //Copy the filter over
-    checkCudaErrors(cudaMemcpy(d_filter_kernel,h_filter,nelements*sizeof(Complex),cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_filter_kernel,h_filter,nelements*sizeof(Complex),cudaMemcpyHostToDevice));
 
     getLastCudaError("Kernel execution failed [ cudaMalloc ]");
     // 
@@ -131,28 +133,28 @@ void cuda_invert_pfb(Complex  * input, Complex * output, Complex * h_filter, int
     // Batch FFT to do all the FFTs of the rows of the upsampled device matrix
     static cufftHandle plan;
     if (!planned) {
-        checkCudaErrors(cufftPlan1d(&plan, nelements, CUFFT_C2C, nchan_in));
+        CHECK_CUDA_ERROR(cufftPlan1d(&plan, nelements, CUFFT_C2C, nchan_in));
         planned = 1;
     }
 
        // Transform signal and kernel
     printf("cufftComplex size %lu\n",sizeof(cufftComplex));
-    checkCudaErrors(cufftExecC2C(plan, (cufftComplex *)d_signal, (cufftComplex *)d_signal, CUFFT_FORWARD));
+    CHECK_CUDA_ERROR(cufftExecC2C(plan, (cufftComplex *)d_signal, (cufftComplex *)d_signal, CUFFT_FORWARD));
 
     // FFT padded filter
     
-    checkCudaErrors(cufftExecC2C(plan, (cufftComplex *)d_filter_kernel, (cufftComplex *)d_filter_kernel, CUFFT_FORWARD));
+    CHECK_CUDA_ERROR(cufftExecC2C(plan, (cufftComplex *)d_filter_kernel, (cufftComplex *)d_filter_kernel, CUFFT_FORWARD));
     // multiply each row of the matrix by the filter vector
     ElementWiseMultiply<<<nchan_in,256>>>((Complex *) d_signal, (Complex *) d_filter_kernel, (int) nelements);
     getLastCudaError("Kernel execution failed [ElementWiseMultiply]");
     // Fourier Transform Back 
    
     // printf("Transforming signal back cufftExecC2C\n");
-    checkCudaErrors(cufftExecC2C(plan, (cufftComplex *)d_signal, (cufftComplex *)d_signal, CUFFT_INVERSE));
+    CHECK_CUDA_ERROR(cufftExecC2C(plan, (cufftComplex *)d_signal, (cufftComplex *)d_signal, CUFFT_INVERSE));
  // 
 //    Complex *h_buffer;
 //    h_buffer = (Complex *) malloc(nelements*sizeof(Complex));
- //   checkCudaErrors(cudaMemcpy(h_buffer, d_signal, nelements*sizeof(Complex),cudaMemcpyDeviceToHost));
+ //   CHECK_CUDA_ERROR(cudaMemcpy(h_buffer, d_signal, nelements*sizeof(Complex),cudaMemcpyDeviceToHost));
 //    for (int i=0;i<nelements;i++){
 //        fprintf(stdout,"After: %f %f\n",h_buffer[i].x, h_buffer[i].y);
 //    }
@@ -175,13 +177,13 @@ void cuda_invert_pfb(Complex  * input, Complex * output, Complex * h_filter, int
     // Copy device memory to host
     Complex *h_convolved_signal = output;
     Complex *d_outptr = &d_signal[offset];
-    checkCudaErrors(cudaMemcpy(h_convolved_signal, d_outptr, nelements*sizeof(Complex),cudaMemcpyDeviceToHost));
+    CHECK_CUDA_ERROR(cudaMemcpy(h_convolved_signal, d_outptr, nelements*sizeof(Complex),cudaMemcpyDeviceToHost));
 
     // Clean up
 
-    checkCudaErrors(cudaFree(d_signal));
-    checkCudaErrors(cudaFree(d_buffer));
-    checkCudaErrors(cudaFree(d_filter_kernel));
+    CHECK_CUDA_ERROR(cudaFree(d_signal));
+    CHECK_CUDA_ERROR(cudaFree(d_buffer));
+    CHECK_CUDA_ERROR(cudaFree(d_filter_kernel));
 
 
 }
