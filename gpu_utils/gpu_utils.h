@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 void Filter1D(Complex * in_data, Complex * result, Complex *filter, int nchan_in, int ntap, int sample );
-void cuda_invert_pfb(Complex * in_data, Complex * result, float *filter, int nchan_in, int ntap, int sample );
+void cuda_invert_pfb(Complex * in_data, Complex * result, Complex *filter, int nchan_in, int ntap, int sample );
 
 #ifdef __cplusplus
 }

@@ -19,6 +19,7 @@
 
 #ifdef HAVE_CUDA
 #include "gpu_utils.h"
+#include <cuda_runtime.h>
 #endif
 
 //
@@ -304,7 +305,7 @@ void get_mean_complex(complex float *input, int nsamples, float *rmean,float *im
     float rtotal = 0;
     float itotal = 0 ;
     complex float ctotal = 0 + I*0.0;
-    
+    fprintf(stdout,"%f %f\n"); 
     for (i=0;i<nsamples;i++){
         rtotal = rtotal+crealf(input[i]);
         itotal = itotal+cimagf(input[i]);
@@ -897,13 +898,18 @@ int main(int argc, char **argv) {
                              ipfb = 1;
                              FILE *filter_file = fopen(optarg,"r");
                              fcontext.ntaps = 0;
+                             bzero(fcontext.filter,MAX_FILTER_SIZE); // this does the work of padding
+                             int index = 0;
                              if (filter_file !=NULL) {
                                  while(!feof(filter_file) && fcontext.ntaps < MAX_FILTER_SIZE) {
-                                     fscanf(filter_file,"%f\n",&fcontext.filter[fcontext.ntaps]);
-                                     fprintf(stdout,"%d %f\n",fcontext.ntaps,fcontext.filter[fcontext.ntaps]);
+                                     fscanf(filter_file,"%f\n",&fcontext.filter[index]);
+                                     index++;
+                                     fcontext.filter[index] = 0.0;
+                                     fprintf(stdout,"%d %f %f\n",fcontext.ntaps,fcontext.filter[index-1],fcontext.filter[index]);
                                      fcontext.ntaps++; 
                                  }
                              }
+
                              fclose(filter_file);
                          } 
                     break;
@@ -1674,22 +1680,23 @@ int main(int argc, char **argv) {
                     fcontext.nsamples = ntap_per_call*fcontext.ntaps;
                     int ngood_per_call = fcontext.nsamples - fcontext.ntaps;
                     int ncalls = vf.sizeof_buffer/(4*ngood_per_call);
-                     
+                    fprintf(stderr,"Sizeof Complex %d\n",sizeof(Complex)); 
                     fprintf(stderr,"Call invert_pfb expecting %d filtered timesamples per call and %d calls \n",ngood_per_call,ncalls);
                     fprintf(stderr,"last call will have produced %d samples of %lu\n",(ngood_per_call*ncalls),vf.sizeof_buffer/4);
-
+                    fprintf(stderr,"Data is channelised to 128 ch (10kHz sampling) so number of input time samples in call is %d\n",fcontext.nsamples/nchan);
                     for (sub_samp = 0; sub_samp < all_samples; sub_samp = sub_samp+ngood_per_call) {
 
-                       // fprintf(stderr,"samples %d of %lu\n",sub_samp,vf.sizeof_buffer/4);
+                        fprintf(stderr,"samples %d of %lu calling ...   ",sub_samp,vf.sizeof_buffer/4);
 #ifdef HAVE_CUDA
                         Complex *in_ptr_X = (Complex *) &filter_buffer_X[2*sub_samp - 2*fcontext.ntaps];
                         Complex *in_ptr_Y = (Complex *) &filter_buffer_Y[2*sub_samp - 2*fcontext.ntaps];
                         Complex *out_ptr_X = (Complex *) &filter_out_X[2*sub_samp];
                         Complex *out_ptr_Y = (Complex *) &filter_out_X[2*sub_samp];
-
-                        cuda_invert_pfb ((Complex *) in_ptr_X,(Complex *) out_ptr_X,fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples);
-                        cuda_invert_pfb ((Complex *) in_ptr_Y,(Complex *) out_ptr_Y,fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples);
+                        fprintf(stderr,"cuda_invert\n"); 
+                        cuda_invert_pfb ((Complex *) in_ptr_X,(Complex *) out_ptr_X,fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples/nchan);
+                        cuda_invert_pfb ((Complex *) in_ptr_Y,(Complex *) out_ptr_Y,fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples/nchan);
 #else                        
+                        fprintf(stderr,"invert\n"); 
                         invert_pfb((complex float *) filter_buffer_X+(2*(sub_samp - fcontext.ntaps)),(complex float *) filter_out_X+(2*sub_samp),nchan,1,1,1,fft_mode,0,(void *) &fcontext);
                         invert_pfb((complex float *) filter_buffer_Y+(2*(sub_samp - fcontext.ntaps)),(complex float *) filter_out_Y+(2*sub_samp),nchan,1,1,1,fft_mode,0, (void *) &fcontext);
 #endif                    

@@ -28,187 +28,41 @@ else ()
 endif ()
 
 
-include(ExternalProject)
 find_package(CUDA)
 if (CUDA_FOUND)
-    ExternalProject_Add(gpu_utils    
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/gpu_utils
-    DOWNLOAD_COMMAND ""
-    UPDATE_COMMAND ""
-    CMAKE_ARGS
-    ${USE_PROJECT_INSTALL_PREFIX}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
+    add_subdirectory(gpu_utils)    
 endif (CUDA_FOUND)
 
 find_package(CFITSIO)
 
 if (CFITSIO_FOUND)    
-    ExternalProject_Add(mwac_utils    
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/mwac_utils
-    DOWNLOAD_COMMAND ""
-    UPDATE_COMMAND ""
-    CMAKE_ARGS
-    ${USE_PROJECT_INSTALL_PREFIX}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
+    add_subdirectory(mwac_utils)
 endif()
 
 find_package(PSRFITS_UTILS)
 if (PSRFITS_UTILS_FOUND)
-    ExternalProject_Add(make_beam
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/make_beam
-    DEPENDS
-        mwac_utils
-        gpu_utils
-    DOWNLOAD_COMMAND ""
-    UPDATE_COMMAND ""
-    CMAKE_ARGS
-    ${USE_PROJECT_INSTALL_PREFIX}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
+    add_subdirectory(make_beam)
 endif (PSRFITS_UTILS_FOUND)
 
 
 find_package(SLALIB)
 find_package(Postgres)
 find_package(MPI)
-ExternalProject_Add(ascii_to_bin
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/ascii_to_bin
-    DEPENDS
-        mwac_utils
-    DOWNLOAD_COMMAND ""
-    UPDATE_COMMAND ""
-    CMAKE_ARGS
-    ${USE_PROJECT_INSTALL_PREFIX}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
-ExternalProject_Add(get_weights
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/get_weights
-    DEPENDS
-        mwac_utils
-    DOWNLOAD_COMMAND ""
-    UPDATE_COMMAND ""
-    CMAKE_ARGS
-    ${USE_PROJECT_INSTALL_PREFIX}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
-
-ExternalProject_Add(invert_antenna
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/invert_antenna
-    DEPENDS
-        mwac_utils
-    DOWNLOAD_COMMAND ""
-    UPDATE_COMMAND ""
-    CMAKE_ARGS
-    ${USE_PROJECT_INSTALL_PREFIX}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
-
-
 
 if (CFITSIO_FOUND)
-    ExternalProject_Add(build_lfiles
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/build_lfiles
-    DEPENDS
-        mwac_utils
-    DOWNLOAD_COMMAND ""
-    UPDATE_COMMAND ""
-    CMAKE_ARGS
-    ${USE_PROJECT_INSTALL_PREFIX}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
-
-    ExternalProject_Add(read_mwac
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/read_mwac
-    DEPENDS
-        mwac_utils
-    DOWNLOAD_COMMAND ""
-    UPDATE_COMMAND ""
-    CMAKE_ARGS
-    ${USE_PROJECT_INSTALL_PREFIX}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
-    
-    ExternalProject_Add(read_pfb
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/read_pfb
-    DEPENDS
-        mwac_utils
-    DOWNLOAD_COMMAND ""
-    UPDATE_COMMAND ""
-    CMAKE_ARGS
-    ${USE_PROJECT_INSTALL_PREFIX}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
-
+    add_subdirectory(build_lfiles)
+    add_subdirectory(read_mwac)
+    add_subdirectory(read_pfb)
     if (PSRFITS_UTILS_FOUND)  
-        ExternalProject_Add(make_psrfits
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/make_psrfits
-        DEPENDS
-            mwac_utils
-        DOWNLOAD_COMMAND ""
-        UPDATE_COMMAND ""
-        CMAKE_ARGS
-        ${USE_PROJECT_INSTALL_PREFIX}
-        -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-        -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-        ${USE_PROJECT_CMAKE_MODULE_PATH}
-    )
+        add_subdirectory(make_psrfits)
     endif (PSRFITS_UTILS_FOUND)
 endif (CFITSIO_FOUND)
 
-#find_package(TWOPIP)
-#if (TWOPIP_FOUND)
-#	add_subdirectory(check_corr)
-#endif (TWOPIP_FOUND)
-
-if (POSTGRES_FOUND)
-    if (SLALIB_FOUND)
-        if (PSRFITS_UTILS_FOUND) 
- 	    ExternalProject_Add(get_delays
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/get_delays
-        DEPENDS
-            mwac_utils
-        DOWNLOAD_COMMAND ""
-        UPDATE_COMMAND ""
-        CMAKE_ARGS
-        ${USE_PROJECT_INSTALL_PREFIX}
-        -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} 
-        -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} 
-        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-        ${USE_PROJECT_CMAKE_MODULE_PATH}
-        )
- 	endif (PSRFITS_UTILS_FOUND)
-    endif (SLALIB_FOUND)
-endif (POSTGRES_FOUND)
+if (SLALIB_FOUND)
+    if (PSRFITS_UTILS_FOUND) 
+        add_subdirectory(get_delays)
+    endif (PSRFITS_UTILS_FOUND)
+endif (SLALIB_FOUND)
 
 INCLUDE(InstallRequiredSystemLibraries)
 

@@ -21,7 +21,7 @@
 #define R2C_SIGN -1.0             // sign of the lm->uv Fourier transform
 #define C2R_SIGN +1.0             // sign of the uv->lm Fourier transform
 #define N_COPOL  2                // the number of polarised receptors on an antenna
-#define MAX_FILTER_SIZE 10240     // For the beamformer
+#define MAX_FILTER_SIZE 32768     // For the beamformer
 
 struct filter_context {
    int ntaps;

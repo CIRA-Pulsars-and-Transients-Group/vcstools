@@ -184,7 +184,7 @@ void invert_pfb(complex float *input, complex float *output, int nchan_in, int n
             }
             if (ch == nchan_in/2) {
                 // Nyquist bin - give it a zero mean
-     //           in[0][0] = 0.0;
+                in[0][0] = 0.0;
             }
 
 
