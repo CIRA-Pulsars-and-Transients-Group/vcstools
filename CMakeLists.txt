@@ -2,12 +2,8 @@
 cmake_minimum_required (VERSION 2.6)
 project (MWA_Utilities)
 
-set(CMAKE_C_FLAGS "-O3 ")
-set(CMAKE_C_FLAGS_DEBUG "-O0 -g")
-set(CMAKE_C_FLAGS_RELEASE "-O3 ")
-set(CMAKE_CXX_FLAGS "-O3 ")
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 ")
+set(CMAKE_C_FLAGS "-O3 -fPIC ")
+set(CMAKE_C_FLAGS_DEBUG "-O0 -g -fPIC")
 
 set (MWA_Utilities_MAJOR_VERSION 1)
 set (MWA_Utilities_MINOR_VERSION 1)
@@ -26,12 +22,6 @@ else ()
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${BEAM_C_FLAGS} ${MPI_C_COMPILE_FLAGS} -fopenmp")
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${BEAM_CXX_FLAGS} -fopenmp")
 endif ()
-
-
-find_package(CUDA)
-if (CUDA_FOUND)
-    add_subdirectory(gpu_utils)    
-endif (CUDA_FOUND)
 
 find_package(CFITSIO)
 
@@ -63,6 +53,11 @@ if (SLALIB_FOUND)
     endif (PSRFITS_UTILS_FOUND)
 endif (SLALIB_FOUND)
 
+
+find_package(CUDA)
+if (CUDA_FOUND)
+    add_subdirectory(gpu_utils)    
+endif (CUDA_FOUND)
 
 add_dependencies(make_beam MWAC_Utils MWAC_GPU_Utils)
 

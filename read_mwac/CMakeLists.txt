@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 project (read_mwac)
 add_executable(read_mwac read_mwac.c)
-set_target_properties(read_mwac PROPERTIES LINK_FLAGS "-Wl,-no_compact_unwind")
+#set_target_properties(read_mwac PROPERTIES LINK_FLAGS "-Wl,-no_compact_unwind")
 find_package(CFITSIO)
 find_package(PLOTUTILS)
 include_directories(${CFITSIO_INCLUDE_DIR} ${CMAKE_INSTALL_PREFIX}/include/ )
