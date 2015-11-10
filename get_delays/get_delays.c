@@ -518,7 +518,7 @@ int     main(int argc, char **argv) {
         
         if (get_jones) {
             complex double invJref[4];
-            complex double Fnorm;
+            double Fnorm;
             /* we need to load in all the DI_Jones matrices */
             read_DIJones_file(M, Jref, nstation, &amp, DI_Jones_file);
             inv2x2(Jref, invJref);
@@ -529,14 +529,7 @@ int     main(int argc, char **argv) {
                        (DPIBY2-(tile_pointing_el*DD2R)), // zenith angle to sample
                        az, // azimuth & zenith angle to sample
                        (DPIBY2-el));
-            Fnorm = 0;
-            for (i=0; i < 4;i++) {
-                Fnorm += E[i] * conj(E[i]);
-            }
-            //for (i=0; i < 4;i++) {
-            //    E[i] = E[i]/sqrt(Fnorm);
-            //}
-            for (i=0; i < 4;i++) {
+                       for (i=0; i < 4;i++) {
                 fprintf(stdout,"calib:RTS Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
                 fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
             }
@@ -548,6 +541,18 @@ int     main(int argc, char **argv) {
                     fprintf(stdout,"calib:RTS Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
                     fprintf(stdout,"calib:ratio Mi/Ji [%d]  %f %f \n",i,creal(M[i][j])/creal(Ji[i][j]),cimag(M[i][j])/cimag(Ji[i][j]));
                 }
+                Fnorm = 0;
+                for (j=0; j < 4;j++) {
+                    Fnorm += (double) Ji[j][i] * conj(Ji[j][i]);
+                }
+                if (fabs(cimag(Ji[i][0])) < 0.0000001) {
+                    Ji[i][0] = 0.0 + I*0;
+                    Ji[i][1] = 0.0 + I*0;
+                    Ji[i][2] = 0.0 + I*0;
+                    Ji[i][3] = 0.0 + I*0;
+
+                }
+
             }
         }
         
@@ -642,16 +647,18 @@ int     main(int argc, char **argv) {
             double delay_samples = delay_time / samples_per_sec;
             double delay_per_chan = -2.0*M_PI*delay_samples;
             fprintf(stdout,"Antenna %d, E %f, N %f, H %f\n",row,E,N,H);
-            fprintf(stdout,"geom: %f w: %f cable: %f time:%g samples:%f per_chan%f\n",geometry, w, cable, delay_time,delay_samples,delay_per_chan);
+            fprintf(stdout,"geom: %f w: %f cable: %f time:%g samples:%g per_chan %g\n",geometry, w, cable, delay_time,delay_samples,delay_per_chan);
             // we have to get this amount of delay into the data
             for (ch=0;ch<nchan;ch++) {
-                double freq_ch = frequency + (edge+ch)*chan_width;
+                double freq_ch = (edge+ch)*chan_width;
                 if (row == 1) {
                     fprintf(stdout,"ch %d Freq %f\n",ch,freq_ch);
                 }
+                // freq should be in cycles per sample and delay in samples
+                // which essentially means that the
                 phase[ch] = -2.0*conjugate*M_PI*freq_ch*delay_time;
                 if (phase_file != NULL) {
-                    fprintf(phase_file,"%f\n",phase[ch]);
+                    fprintf(phase_file,"%lf\n",phase[ch]);
                 }
                 
             }

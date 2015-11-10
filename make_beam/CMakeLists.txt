@@ -10,14 +10,6 @@ find_package(MPI REQUIRED)
 find_package(FFTW3 COMPONENTS single)
 find_package(CUDA)
 
-#set(CMAKE_C_COMPILER "mpicc")
-set(CMAKE_C_FLAGS "-O3 ")
-set(CMAKE_C_FLAGS_DEBUG "-O0 -g")
-set(CMAKE_C_FLAGS_RELEASE "-O3 ")
-set(CMAKE_CXX_FLAGS "-O3 ")
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 ")
-
 
 SET(BEAM_CXX_FLAGS "" )
 SET(BEAM_C_FLAGS "" )

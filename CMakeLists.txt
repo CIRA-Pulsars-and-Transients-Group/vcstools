@@ -2,7 +2,7 @@
 cmake_minimum_required (VERSION 2.6)
 project (MWA_Utilities)
 
-set(CMAKE_C_FLAGS "-O3 -fPIC ")
+set(CMAKE_C_FLAGS "-O3 -g -fPIC ")
 set(CMAKE_C_FLAGS_DEBUG "-O0 -g -fPIC")
 
 set (MWA_Utilities_MAJOR_VERSION 1)

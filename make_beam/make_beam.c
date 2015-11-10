@@ -129,7 +129,6 @@ void usage() {
 }
 void int8_to_uint8(int n, int shift, char * to_convert) {
     int j;
-    uint8_t no_sign;
     int scratch;
     int8_t with_sign;
     
@@ -388,11 +387,14 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
         }
         for (i=0;i<npol;i++) {
             free(band[i]);
+            free(chan_min[i]);
+            free(chan_max[i]);
         }
         
         
         free(band);
-        
+        free(chan_min);
+        free(chan_max);
     }
     
     if (normalise) {
@@ -544,6 +546,7 @@ int make_get_delay_call(char *delay_file, time_t increment) { // No longer calle
         
             }
         }
+        free(new_command);
         fclose(Dfile);
         return(-1);
         
@@ -559,7 +562,7 @@ int make_get_delay_call(char *delay_file, time_t increment) { // No longer calle
     
 }
 
-float get_weights(int nstation, int nchan, int npol, int weights, char *weights_file, float **array){
+float get_weights(int nstation, int nchan, int npol, int weights, char *weights_file, double **array){
     
     
     float wgt_sum=0;
@@ -567,10 +570,10 @@ float get_weights(int nstation, int nchan, int npol, int weights, char *weights_
     FILE *wgts = NULL;
 
     if (*array == NULL) {
-        *array = (float *) calloc(nstation*npol,sizeof(float));
+        *array = (double *) calloc(nstation*npol,sizeof(double));
     }
     
-    float *weights_array = *array;
+    double *weights_array = *array;
    
     
     if (weights == 1) {
@@ -585,7 +588,7 @@ float get_weights(int nstation, int nchan, int npol, int weights, char *weights_
             while (!feof(wgts)) {
                 // fprintf(stderr,"count: %d: nstation %d npol %d\n",count,nstation,npol);
                 if (count < nstation*npol) {
-                    fscanf(wgts,"%f\n",&weights_array[count]);
+                    fscanf(wgts,"%lf\n",&weights_array[count]);
                     wgt_sum = wgt_sum + pow(weights_array[count],2);
                     // fprintf(stderr,"wgt_sum: %f\n",wgt_sum);
                 }
@@ -616,7 +619,7 @@ float get_weights(int nstation, int nchan, int npol, int weights, char *weights_
     return wgt_sum;
 }
 
-int get_phases(int nstation,int nchan,int npol,char *phases_file, float **weights, float ***phases_array, complex double ***complex_weights_array,long checkpoint) {
+int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weights, double ***phases_array, complex double ***complex_weights_array,long checkpoint) {
     
     int count = 0;
     FILE *phases = NULL;
@@ -625,10 +628,10 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, float **weight
     int rval = 0;
     
     if (*phases_array == NULL) {
-        *phases_array = (float **) calloc(nstation*npol,sizeof(float *));
+        *phases_array = (double **) calloc(nstation*npol,sizeof(double *));
         
         for (count = 0;count < nstation*npol;count++) {
-            (*phases_array)[count] = (float *) calloc(nchan,sizeof(float));
+            (*phases_array)[count] = (double *) calloc(nchan,sizeof(double));
             
         }
 
@@ -662,7 +665,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, float **weight
         
             while ((count < nstation*npol) && !feof(phases)) {
                 for (ch=0;ch<nchan;ch++) {
-                    rval = fscanf(phases,"%f\n",&(*phases_array)[count][ch]);
+                    rval = fscanf(phases,"%lf\n",&(*phases_array)[count][ch]);
                 }
                 if (rval != 1)
                     break;
@@ -695,7 +698,8 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, float **weight
                 (*complex_weights_array)[count][ch] = (*weights)[count]*1.0;
             }
             else {
-                (*complex_weights_array)[count][ch] = (*weights)[count] * cexp( I * (*phases_array)[count][ch]);
+                (*complex_weights_array)[count][ch] = (*weights)[count] * cexp(I*(*phases_array)[count][ch]);
+                fprintf(stderr,"Complex weight for station[%d] channel[%d] is %lf %lf\n",count,ch,creal((*complex_weights_array)[count][ch]),cimag((*complex_weights_array)[count][ch]));
             }
         }
     }
@@ -745,9 +749,39 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
             }
             if (rval != 2)
                 break;
-            
-            inv2x2(Ji,(*invJi)[count]);
-            
+
+            double Fnorm = 0;
+            int j=0;
+            for (j=0; j < 4;j++) {
+                Fnorm += (double) Ji[j] * conj(Ji[j]);
+            }
+            Fnorm = sqrt(Fnorm);
+            fprintf(stderr,"Fnorm (Ji) = (%d) %f\n",count,Fnorm);
+
+            if (Fnorm != 0) {
+
+                inv2x2(Ji,(*invJi)[count]);
+            }
+            else {
+
+                (*invJi)[count][0] = 0.0 + I*0;
+                (*invJi)[count][1] = 0.0 + I*0;
+                (*invJi)[count][2] = 0.0 + I*0;
+                (*invJi)[count][3] = 0.0 + I*0;
+
+            }
+            Fnorm = 0;
+            for (j=0; j < 4;j++) {
+                Fnorm += (double) (*invJi)[count][j] * conj((*invJi)[count][j]);
+            }
+            Fnorm = sqrt(Fnorm);
+
+            fprintf(stderr,"Fnorm = (%d) %f\n",count,sqrt(Fnorm));
+//            for (j=0; j < 4;j++) {
+//                fprintf(stderr,"(%d,%d) %f %f",count,j,creal((*invJi)[count][j]),cimag((*invJi)[count][j]) );
+ //           }
+//            fprintf(stderr,"\n");
+
             count++;
         }
         
@@ -799,6 +833,7 @@ int main(int argc, char **argv) {
     char *tag="ch_00";
     char *procdirroot=NULL;
     char *extn=NULL;
+    int execute=1;
     char procdir[256];
     glob_t globbuf;
     int read_stdin = 0;
@@ -837,7 +872,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:f:g:hij:m:n:o:p:r:v:w:s:t:")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:E:f:g:hij:m:n:o:p:r:v:w:s:t:")) != -1) {
             switch(c) {
                     
                 case '1':
@@ -876,6 +911,7 @@ int main(int argc, char **argv) {
                     complex_weights = 1;
                     phases_file = NULL;
                     break;
+                    
                 case 'd':
                     pfb_call_file = strdup(optarg);
                     break;
@@ -884,7 +920,13 @@ int main(int argc, char **argv) {
                     break;
                 case 'e':
                     extn = strdup(optarg);
+                    execute = 1;
                     break;
+                case 'E':
+                    extn = strdup(optarg);
+                    execute = 0;
+                    break;
+
                 case 'f':
                     make_psrfits = 1;
                     psrfits_file = strdup(optarg);
@@ -997,8 +1039,13 @@ int main(int argc, char **argv) {
             fprintf(stderr,"nfiles = 0\n");
             goto BARRIER;
         }
-        fprintf(stdout,"Found %d\n",nfiles);
-        
+        else {
+            int fi = 0;
+
+            for (fi = 0;fi < nfiles;fi++) { 
+                fprintf(stdout,"Found %s\n",globbuf.gl_pathv[fi]);
+            }
+        }
         /* update the phases and weights file names */
         if (weights_file) {
             sprintf(pattern,"%s/%s",procdir,weights_file);
@@ -1037,8 +1084,8 @@ int main(int argc, char **argv) {
     int i=0;
     size_t bytes_per_spec=0;
     
-    float *weights_array = NULL;
-    float **phases_array = NULL;
+    double *weights_array = NULL;
+    double **phases_array = NULL;
     
     complex double **complex_weights_array = NULL;
     complex double **invJi = NULL;
@@ -1205,7 +1252,7 @@ int main(int argc, char **argv) {
       
         pf.hdr.npol = 1;
         pf.hdr.summed_polns = 1;
-            
+        pf.hdr.nchan = nchan;
     
         
         if (type == 1) {
@@ -1254,13 +1301,13 @@ int main(int argc, char **argv) {
     complex float **beam = calloc(nchan,sizeof(complex float *));
     int stat = 0;
     int step = 0; 
-    for (stat = 0; stat < nchan*npol;stat++) {
+    for (stat = 0; stat < nchan;stat++) {
         beam[stat] = (complex float *) calloc(nstation*npol,sizeof(complex float));
     }
 
     float *noise_floor = calloc(nchan*npol*npol,sizeof(float));
-    complex float *pol_X = calloc(nchan+2*edge,sizeof(complex float));
-    complex float *pol_Y = calloc(nchan+2*edge,sizeof(complex float));
+    complex float *pol_X = (complex float *) calloc(nchan+2*edge,sizeof(complex float));
+    complex float *pol_Y = (complex float *) calloc(nchan+2*edge,sizeof(complex float));
     
     char *buffer = (char *) malloc(nspec*items_to_read*sizeof(int8_t));
     
@@ -1380,10 +1427,13 @@ int main(int argc, char **argv) {
             }
 
             if (fp == NULL) { // need to open the next file
-                read_pfb_call(globbuf.gl_pathv[file_no]);
-                
-                sprintf(working_file,"%s.working",globbuf.gl_pathv[file_no]);
-                
+                if (execute == 1) {
+                    read_pfb_call(globbuf.gl_pathv[file_no]);
+                    sprintf(working_file,"%s.working",globbuf.gl_pathv[file_no]);
+                }
+                else {
+                    sprintf(working_file,"%s",globbuf.gl_pathv[file_no]);
+                } 
                 fp = fopen(working_file, "r");
 
                 if (fp == NULL) {
@@ -1401,7 +1451,9 @@ int main(int argc, char **argv) {
                 if (feof(fp) || rtn != nspec) {
                     fclose(fp);
                     fp = NULL;
-                    //unlink(working_file);
+                    if (execute == 1) {
+                        unlink(working_file);
+                    }
                     fprintf(stderr,"finished file %s\n", globbuf.gl_pathv[file_no]);
                     file_no++;
                     continue;
@@ -1478,6 +1530,9 @@ int main(int argc, char **argv) {
                 
                     beam[ch][index] = e_true[0];
                     beam[ch][index+1] = e_true[1];
+
+                    incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index]*weights_array[index]*(e_true[0] * conj(e_true[0])))/wgt_sum;
+                    incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index+1]*weights_array[index+1]*(e_true[1] * conj(e_true[1])))/wgt_sum;
                   
                 }
                 else {
@@ -1533,8 +1588,8 @@ int main(int argc, char **argv) {
             if (make_vdif==1) { // single time step
                 pol_X[ch] = beam[ch][0];
                 pol_Y[ch] = beam[ch][1];
-                // fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_X[ch]),cimag(pol_X[ch]));
-                // fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_Y[ch]),cimag(pol_Y[ch]));
+                //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_X[ch]),cimag(pol_X[ch]));
+                //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_Y[ch]),cimag(pol_Y[ch]));
             }
           
         }
@@ -1819,12 +1874,6 @@ int main(int argc, char **argv) {
         }
         specnum++;
     }
-
-    // Free glob buffer
-    if (!read_stdin) {
-        globfree(&globbuf);
-    }
-
     if (make_psrfits == 1) {
         /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/
         int itmp = 0;
