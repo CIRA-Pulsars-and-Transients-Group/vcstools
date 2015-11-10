@@ -72,7 +72,7 @@ void calcUVW(double ha,double dec,double x,double y,double z,double *u,double *v
 
 
 int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
-               const float freq, // observing freq (Hz)
+               const long freq, // observing freq (Hz)
                const float lat, // observing latitude (radians)
                const float az0, // azimuth & zenith angle of tile pointing
                const float za0, // zenith angle to sample
@@ -207,11 +207,11 @@ int     main(int argc, char **argv) {
     int tile_request = -1;
     int conjugate = 1;
     int invert = 1;
-    float frequency = 100e6;
+    long int frequency = 0;
     float samples_per_sec = 10000;
     int write_files = 1;
     int nchan = 1;
-    float chan_width = 10E3;
+    long int chan_width = 10000;
     int edge = 0;
     
     int get_jones = 0;
@@ -323,7 +323,7 @@ int     main(int argc, char **argv) {
                     samples_per_sec = atof(optarg);
                     break;
                 case 'f':
-                    frequency = atof(optarg);
+                    frequency = atol(optarg);
                     break;
                 case 'z':
                     time_utc = strdup(optarg);
@@ -335,7 +335,7 @@ int     main(int argc, char **argv) {
                     verbose = 1;
                     break;
                 case 'w':
-                    chan_width = atof(optarg);
+                    chan_width = atol(optarg);
                     break;
                 default:
                     usage();
@@ -529,7 +529,7 @@ int     main(int argc, char **argv) {
                        (DPIBY2-(tile_pointing_el*DD2R)), // zenith angle to sample
                        az, // azimuth & zenith angle to sample
                        (DPIBY2-el));
-                       for (i=0; i < 4;i++) {
+            for (i=0; i < 4;i++) {
                 fprintf(stdout,"calib:RTS Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
                 fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
             }
@@ -541,6 +541,7 @@ int     main(int argc, char **argv) {
                     fprintf(stdout,"calib:RTS Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
                     fprintf(stdout,"calib:ratio Mi/Ji [%d]  %f %f \n",i,creal(M[i][j])/creal(Ji[i][j]),cimag(M[i][j])/cimag(Ji[i][j]));
                 }
+                // this automatically spots an RTS flagged tile
                 Fnorm = 0;
                 for (j=0; j < 4;j++) {
                     Fnorm += (double) Ji[j][i] * conj(Ji[j][i]);
@@ -550,6 +551,11 @@ int     main(int argc, char **argv) {
                     Ji[i][1] = 0.0 + I*0;
                     Ji[i][2] = 0.0 + I*0;
                     Ji[i][3] = 0.0 + I*0;
+
+                    G[i][0] = 0.0 + I*0;
+                    G[i][1] = 0.0 + I*0;
+                    G[i][2] = 0.0 + I*0;
+                    G[i][3] = 0.0 + I*0;
 
                 }
 
@@ -644,19 +650,29 @@ int     main(int argc, char **argv) {
 
             double geometry = E*unit_E + N*unit_N + H*unit_H ;
             double delay_time = (geometry + (invert*cable))/(VLIGHT);
-            double delay_samples = delay_time / samples_per_sec;
+            double delay_samples = delay_time * samples_per_sec;
             double delay_per_chan = -2.0*M_PI*delay_samples;
+            double integer_phase = 0;
             fprintf(stdout,"Antenna %d, E %f, N %f, H %f\n",row,E,N,H);
-            fprintf(stdout,"geom: %f w: %f cable: %f time:%g samples:%g per_chan %g\n",geometry, w, cable, delay_time,delay_samples,delay_per_chan);
+            fprintf(stdout,"Look direction, E %f, N %f, H %f\n",unit_E,unit_N,unit_H);
+            fprintf(stdout,"geom: %f w: %f cable: %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
             // we have to get this amount of delay into the data
             for (ch=0;ch<nchan;ch++) {
-                double freq_ch = (edge+ch)*chan_width;
+                long int freq_ch = frequency + (edge+ch)*chan_width;
                 if (row == 1) {
-                    fprintf(stdout,"ch %d Freq %f\n",ch,freq_ch);
+                    fprintf(stdout,"ch %d Freq (Cycles/s) %ld\n",ch,freq_ch);
+                    fprintf(stdout,"ch %d Freq (Cycles/sample) %lf\n",ch,(double)freq_ch/samples_per_sec);
+
                 }
                 // freq should be in cycles per sample and delay in samples
-                // which essentially means that the
-                phase[ch] = -2.0*conjugate*M_PI*freq_ch*delay_time;
+                // which essentially means that the samples_per_sec cancels
+
+                // and we only need the fractional part of the turn
+                double cycles_per_sample = (double)freq_ch/samples_per_sec;
+                phase[ch] = modf(cycles_per_sample*delay_samples, &integer_phase);
+
+                phase[ch] = phase[ch]*2*M_PI*conjugate;
+
                 if (phase_file != NULL) {
                     fprintf(phase_file,"%lf\n",phase[ch]);
                 }
@@ -906,7 +922,7 @@ int     main(int argc, char **argv) {
 }
 
 int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
-               const float freq, // observing freq (Hz)
+               const long freq, // observing freq (Hz)
                const float lat, // observing latitude (radians)
                const float az0, // azimuth & zenith angle of tile pointing
                const float za0, // zenith angle to sample
