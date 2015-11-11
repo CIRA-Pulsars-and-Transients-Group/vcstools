@@ -221,7 +221,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
     for time_to_get in range(start,stop,increment):
         inc_start = time_to_get
         inc_stop = time_to_get+increment
-
+        print enumerate(chan_list)
         for index,channel in enumerate(chan_list):
             gpubox_label = (index+1)
             f=[]
