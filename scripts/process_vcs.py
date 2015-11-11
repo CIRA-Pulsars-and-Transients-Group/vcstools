@@ -6,6 +6,7 @@ import glob
 import time
 import datetime
 import distutils.spawn
+from astropy.io import fits as pyfits
 
 def getmeta(service='obs', params=None):
     """
