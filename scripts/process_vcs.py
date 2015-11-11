@@ -222,9 +222,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
         inc_start = time_to_get
         inc_stop = time_to_get+increment
         for index,channel in enumerate(chan_list):
-            print index, channel
             gpubox_label = (index+1)
-            print "{0}".format(gpubox_label)
             f=[]
             for time_to_corr in range(inc_start,inc_stop,1):
                 file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(working_dir,obsid,time_to_corr,channel)
@@ -236,7 +234,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
             #for this increment 
             #and this channel
             if (len(f) > 0):
-                corr_batch = "{0}/batch/correlator_{1}_gpubox{3:0>2}.batch".format(working_dir,inc_start,gpubox_label)
+                corr_batch = "{0}/batch/correlator_{1}_gpubox{2:0>2}.batch".format(working_dir,inc_start,gpubox_label)
 
                 with open(corr_batch, 'w') as batch_file:
                     batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n")
