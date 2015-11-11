@@ -214,7 +214,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
     import datetime
     import calendar
 
-    corr_dir = "%s/visibilities" % working_dir
+    corr_dir = "{0}/visibilities".format(working_dir)
     mdir(corr_dir, "Correlator Product")
 
     chan_list = get_frequencies(metafits_file)
@@ -229,6 +229,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                 file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(working_dir,obsid,time_to_corr,channel)
                 #check the file exists
                 if (os.path.isfile(file_to_process) == True):
+                    print file_to_process
                     f.append(file_to_process)
 
             #now have a full list of files
