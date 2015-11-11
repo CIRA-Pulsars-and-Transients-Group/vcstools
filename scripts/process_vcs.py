@@ -244,7 +244,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                 for file in f:
                     corr_line = ""
                     (current_time,ext) = os.path.splitext(os.path.basename(file))
-                    (obsid,gpstime,chan) = string.split(current_time,'_')
+                    (obsid,gpstime,chan) = current_time.split('_')
                     t = Time(int(gpstime), format='gps', scale='utc')
                     time_str =  t.datetime.strftime('%Y-%m-%d %H:%M:%S')
 
