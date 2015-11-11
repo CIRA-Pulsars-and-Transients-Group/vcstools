@@ -260,7 +260,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                         to_corr = to_corr+1
 
                 secs_to_run = datetime.timedelta(seconds=5*to_corr)
-                batch_submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (corrdir,str(secs_to_run),corr_batch)
+                batch_submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (corr_dir,str(secs_to_run),corr_batch)
                 submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
                 jobid=""
                 for line in submit_cmd.stdout:
