@@ -252,7 +252,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                     current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
                     unix_time = calendar.timegm(current_time)
 
-                    corr_line = " aprun -n 1 -N 1 %s -o %s/%s -s %d -r 1 -i 100 -f 128 -n 4 -c %02d -d %s\n" % (mwac_offline,corrdir,unix_time,gpubox_label,file)
+                    corr_line = " aprun -n 1 -N 1 {0} -o {1} -s {2} -r 1 -i 100 -f 128 -n 4 -c {3:0>2} -d {4}\n".format("mwac_offline",corr_dir,unix_time,gpubox_label,file)
                     
                     with open(corr_batch, 'a') as batch_file:
                         batch_file.write(corr_line)
