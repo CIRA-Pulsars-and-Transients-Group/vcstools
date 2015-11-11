@@ -431,7 +431,7 @@ if __name__ == '__main__':
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(metafits_file)
-        vcs_correlate()
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, obs_dir)
     elif opts.mode == 'beamformer':
         print opts.mode
         ensure_metafits(metafits_file)
