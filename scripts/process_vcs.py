@@ -224,6 +224,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
         for index,channel in enumerate(chan_list):
             print index, channel
             gpubox_label = (index+1)
+            print "{0}".format(gpubox_label)
             f=[]
             for time_to_corr in range(inc_start,inc_stop,1):
                 file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(working_dir,obsid,time_to_corr,channel)
