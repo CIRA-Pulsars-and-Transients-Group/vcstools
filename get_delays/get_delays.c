@@ -104,8 +104,8 @@ void mjd2lst(double mjd, double *lst) {
     else if (last < 0.0) {
         last = 24.0 + last;
     }
-    if (verbose)
-        fprintf(stderr,"MJD = %f GAST-HOURS (%f) GMST-HOURS (%f) LON deg E (%f) LON-HOURS %e LST-HOURS = %f\n",mjd,gast*DR2H,gmst*DR2H,MWA_LON,lon_hours,last);
+
+    fprintf(stderr,"MJD = %f GAST-HOURS (%f) GMST-HOURS (%f) LON deg E (%f) LON-HOURS %e LST-HOURS = %f\n",mjd,gast*DR2H,gmst*DR2H,MWA_LON,lon_hours,last);
     
     *lst = last;
 }
@@ -189,9 +189,8 @@ int     main(int argc, char **argv) {
     
     extern int verbose;
 
-    int             rec_count;
+
     int             row;
-    int             col;
     int             i,j;
     
     // some defaults for testing
@@ -202,7 +201,7 @@ int     main(int argc, char **argv) {
     double dec_degs=  0.0;
     double ra_hours = 0.0;
     
-    char dbrequest[MAXREQUEST];
+
     int c;
     int tile_request = -1;
     int conjugate = 1;
@@ -373,7 +372,7 @@ int     main(int argc, char **argv) {
     
     double *delay = calloc(nchan,sizeof(double));
     double *phase = calloc(nchan,sizeof(double));
-    double *samples = calloc(nchan,sizeof(double));
+
     
     /* Calibration related defines */
     /* set these here for the library */
@@ -396,7 +395,7 @@ int     main(int argc, char **argv) {
     complex double **M = (complex double **) calloc(nstation, sizeof(complex double *)); // Gain in direction of Calibration
     complex double **Ji = (complex double **) calloc(nstation, sizeof(complex double *)); // Gain in Desired Direction ..... da da da dum.....
     
-    complex double *antenna_gains = NULL;
+
     
     for (i = 0; i < nstation; i++) { //
         G[i] = (complex double *) malloc(npol * npol * sizeof(complex double)); //
@@ -448,11 +447,11 @@ int     main(int argc, char **argv) {
     double unit_E;
     double unit_H;
     
-    double tile_dec_ap;
-    double tile_ra_ap;
 
 
-    double tile_ha;
+
+
+   
     for (secs = 0; secs < nsecs; secs++) {
         
         
@@ -640,20 +639,30 @@ int     main(int argc, char **argv) {
             double E = E_array[row];
             double N = N_array[row];
             double H = H_array[row];
+
+            double E_ref = E_array[0];
+            double N_ref = N_array[0];
+            double H_ref = H_array[0];
+            double integer_phase;
+
             int flag = flag_array[row];
 
             double X,Y,Z,u,v,w;
             
             ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
             calcUVW (app_ha_rad,app_dec_rad,X,Y,Z,&u,&v,&w);
-            
 
-            double geometry = E*unit_E + N*unit_N + H*unit_H ;
+            // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
+
+
+
+            double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
             double delay_time = (geometry + (invert*cable))/(VLIGHT);
             double delay_samples = delay_time * samples_per_sec;
-            double delay_per_chan = -2.0*M_PI*delay_samples;
-            double integer_phase = 0;
+
             fprintf(stdout,"Antenna %d, E %f, N %f, H %f\n",row,E,N,H);
+            fprintf(stdout,"Distance from reference, E-E_ref %f, N-N_ref %f, H-N_ref %f\n",E-E_ref,N-N_ref,H-H_ref);
+
             fprintf(stdout,"Look direction, E %f, N %f, H %f\n",unit_E,unit_N,unit_H);
             fprintf(stdout,"geom: %f w: %f cable: %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
             // we have to get this amount of delay into the data
@@ -669,7 +678,8 @@ int     main(int argc, char **argv) {
 
                 // and we only need the fractional part of the turn
                 double cycles_per_sample = (double)freq_ch/samples_per_sec;
-                phase[ch] = modf(cycles_per_sample*delay_samples, &integer_phase);
+                phase[ch] = cycles_per_sample*delay_samples;
+                phase[ch] = modf(phase[ch], &integer_phase);
 
                 phase[ch] = phase[ch]*2*M_PI*conjugate;
 

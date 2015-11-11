@@ -194,9 +194,9 @@ void float2int2(float *f_in, int8_t *i_out, int nsamples,float scale) {
     /* fill four samples from LSB to MSB per int for all nsamples*/
   
     const float pos_loval = 0.498;
-    const float pos_hival = 1.494;
+    //const float pos_hival = 1.494;
     const float neg_loval = -0.498;
-    const float neg_hival = -1.494;
+    //const float neg_hival = -1.494;
     
     float sampval=0;
     size_t offset_out = 0;
@@ -811,14 +811,12 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &me);
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
     
-    int ii,j;
+    int ii;
     double dtmp;
     int c = 0;
     int ch=0;
 
-    int fringe = 0;
-    int ant1 = 0;
-    int ant2 =0;
+
     int weights = 0;
     int complex_weights = 0;
     int apply_jones = 0;
@@ -846,7 +844,7 @@ int main(int argc, char **argv) {
     int incoherent_out = 0;
     
     int sample_rate = 10000;
-    int channel_width= 0;
+
     int out1 = -1;
     int out2 = -1;
     
@@ -863,7 +861,7 @@ int main(int argc, char **argv) {
     int ipfb = 0;
 
     struct filter_context fcontext;
-    int nsamples = 0;
+
     int nchan = 128;
     
     nfrequency = nchan;
@@ -1080,8 +1078,8 @@ int main(int argc, char **argv) {
         coherent_out = 0;
     }
    
-    int count = 0;
-    int i=0;
+
+  
     size_t bytes_per_spec=0;
     
     double *weights_array = NULL;
@@ -1091,9 +1089,9 @@ int main(int argc, char **argv) {
     complex double **invJi = NULL;
     complex double *antenna_gains = NULL;
     
-    FILE *wgts = NULL;
-    FILE *phases = NULL;
-    FILE *jones = NULL;
+   // FILE *wgts = NULL;
+   // FILE *phases = NULL;
+   // FILE *jones = NULL;
     
     // these are only used if we are prepending the fitsheader
     FILE *fitsheader = NULL;
@@ -1300,7 +1298,7 @@ int main(int argc, char **argv) {
     float *incoherent_sum = (float *) calloc(nspec*nchan,sizeof(float));
     complex float **beam = calloc(nchan,sizeof(complex float *));
     int stat = 0;
-    int step = 0; 
+
     for (stat = 0; stat < nchan;stat++) {
         beam[stat] = (complex float *) calloc(nstation*npol,sizeof(complex float));
     }
@@ -1398,7 +1396,7 @@ int main(int argc, char **argv) {
     }
     int set_levels = 1;
     int specnum=0;
-    int index=0,pol=0;
+    int index=0;
     int finished = 0;
     size_t offset_out = 0;
     size_t offset_in = 0;
