@@ -229,7 +229,6 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                 file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(working_dir,obsid,time_to_corr,channel)
                 #check the file exists
                 if (os.path.isfile(file_to_process) == True):
-                    print file_to_process
                     f.append(file_to_process)
 
             #now have a full list of files
@@ -239,7 +238,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                 corr_batch = "{0}/batch/correlator_{1}_gpubox{2:0>2}.batch".format(working_dir,inc_start,gpubox_label)
 
                 with open(corr_batch, 'w') as batch_file:
-                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n")
+                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n #SBATCH --output={0}.out\n".format(corr_batch))
                     batch_file.write("module load cudatoolkit\nmodule load cfitsio\n")
                 
                 to_corr = 0
@@ -259,8 +258,8 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                         batch_file.write(corr_line)
                         to_corr = to_corr+1
 
-                secs_to_run = datetime.timedelta(seconds=5*to_corr)
-                batch_submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (corr_dir,str(secs_to_run),corr_batch)
+                secs_to_run = datetime.timedelta(seconds=10*to_corr)
+                batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq {2}\n".format(corr_dir,secs_to_run,corr_batch)
                 submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
                 jobid=""
                 for line in submit_cmd.stdout:
