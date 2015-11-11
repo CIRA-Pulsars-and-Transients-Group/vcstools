@@ -212,6 +212,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
     import astropy
     from astropy.time import Time
     import datetime
+    import calendar
 
     corr_dir = "%s/visibilities" % working_dir
     mdir(corr_dir, "Correlator Product")
