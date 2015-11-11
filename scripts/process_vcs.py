@@ -212,7 +212,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
     from astropy.time import Time
     import datetime
 
-    corrdir = "%s/corr" % working_dir
+    corr_dir = "%s/visibilities" % working_dir
     mdir(corr_dir, "Correlator Product")
 
     chan_list = get_frequencies(metafits_file)
