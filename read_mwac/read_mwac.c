@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
 	int nchan=0;
 	int raw=0;
 	char *pattern = NULL;
-	char *result = NULL;
+	
 	int always_on = 0;
 
 	while ((c = getopt(argc, argv, "r:s:e:+:a:")) != -1) {

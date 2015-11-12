@@ -139,10 +139,10 @@ void invert_pfb(complex float *input, complex float *output, int nchan_in, int n
     int direction = FFTW_BACKWARD;
     int ch;
     int down_sample; // which sample we are on be
-    int up_sample; // which sample we are on be
+
 
     int upsample_factor = (int) nchan_in/nchan_out;
-    int number_zeros = upsample_factor-1;
+
     static fftwf_complex **in = NULL;
     static fftwf_complex **out = NULL;
     static fftwf_plan *p_forward = NULL;
@@ -150,7 +150,7 @@ void invert_pfb(complex float *input, complex float *output, int nchan_in, int n
     static fftwf_complex *filter_dft_out = NULL;
     static fftwf_plan p,p_backward;
     static fftwf_complex *upsample_working = NULL;
-    register complex float value = 0.0 + I*0.0;
+
     if (fftmode == 1) {
     // this simply does a backward FFT 
         if (in == NULL || out == NULL) {
@@ -226,7 +226,7 @@ void invert_pfb(complex float *input, complex float *output, int nchan_in, int n
          * *
          */
 
-        int tap;
+
         int out_sample;
 
         if (filter == NULL) {
@@ -348,7 +348,106 @@ void dec2hms(char *out, double in, int sflag) {
     else if (sign==-1) { *ptr='-'; ptr++; }
     sprintf(ptr, "%2.2d:%2.2d:%07.4f", h, m, s);
 }
+int read_casa_gains_file(char *gains_file,complex double **antenna_gain, int nant, int chan_to_get) {
+    FILE *fp = NULL;
+    fp = fopen(gains_file,"r");
+    if (fp == NULL) {
+        fprintf(stderr,"Failed to open %s: quitting\n",gains_file);
+        exit(0);
+    }
+    int linenum=0;
+    char line[BUFSIZE];
+    char time_str[BUFSIZE];
+    char target[BUFSIZE];
+    int channel;
+    char entry[24][BUFSIZE];
+    int nscan;
+    int input = 0;
 
+    *antenna_gain = (complex double *) calloc(nant*2,sizeof(complex double)); // X,Y
+    if (*antenna_gain == NULL) {
+        fprintf(stderr,"Failed to allocate memory for complex gains \n");
+        exit(-1);
+    }
+    input = 0;
+    while ((fgets(line, BUFSIZE - 1, fp)) != NULL) {
+
+        if (line[0] == '\n' || line[0] == '#' || line[0] == '\0' || line[0] == '-' || line[0] == 'S' || line[0] =='T' || line[0]==' ' || line[0] == 'L')
+            continue; // skip blank/comment lines
+        if (line[0] == '/' && line[1] == '/')
+            continue; // also a comment (to match other input files using this style)
+
+        nscan = sscanf(line,"%s %s %d|%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s",time_str,target,&channel,
+                       entry[0],entry[1],entry[2],
+                       entry[3],entry[4],entry[5],
+                       entry[6],entry[7],entry[8],
+                       entry[9],entry[10],entry[11],
+                       entry[12],entry[13],entry[14],
+                       entry[15],entry[16],entry[17],
+                       entry[18],entry[19],entry[20],
+                       entry[21],entry[22],entry[23]);
+
+
+        if (channel == chan_to_get) {
+            int ii = 0;
+            while (ii < nscan-3 && input < 256) {
+                if (strcmp(entry[ii+2],"F") != 0) {
+                    (*antenna_gain)[input] = atof(entry[ii])*cexp(I*M_PI*atof(entry[ii+1])/180.0);
+                    ii=ii+2;
+                }
+                else {
+                    (*antenna_gain)[input] = 0.0 + I*0.0;
+                    ii = ii+3;
+                }
+                input++;
+            }
+
+
+
+
+        }
+        linenum++;
+
+    }
+    fclose(fp);
+    fprintf(stdout,"Read %d inputs from %s\n",input,gains_file);
+    int ii;
+    for (ii=0;ii<nant*2;ii++){
+        fprintf(stdout,"Complex Gain Correction for input[%d] channel[%d] is %lf %lf\n",ii,chan_to_get,creal((*antenna_gain)[ii]),cimag((*antenna_gain)[ii]));
+
+    }
+    return input/2;
+}
+
+int gain_file_id(char *gains_file) {
+    FILE *fp = NULL;
+    int rvalue=0;
+    fp = fopen(gains_file,"r");
+    if (fp == NULL) {
+        fprintf(stderr,"Failed to open %s: quitting\n",gains_file);
+        exit(0);
+    }
+    char line[BUFSIZE];
+    char key[BUFSIZE];
+
+    while ((fgets(line, BUFSIZE - 1, fp)) != NULL) {
+
+        sscanf(line,"%s",key);
+        fprintf(stdout,"GET FILE ID: %s\n",key);
+        if (strncmp("Spw",key,3) == 0) {
+            rvalue = 1;
+            break;
+        }
+        else {
+            rvalue = 2;
+            break;
+
+        }
+    }
+    fclose(fp);
+    return rvalue;
+    
+}
 int read_miriad_gains_file(char *gains_file, complex double **antenna_gain){
     FILE *fp = NULL;
     fp = fopen(gains_file,"r");
@@ -558,7 +657,7 @@ void fill_mapping_matrix() {
 	int inp1 = 0, inp2 = 0;
 	int pol1 = 0, pol2 = 0;
 	int index1 = 0, index2 = 0;
-	int num_entries = 0;
+
 	int p=0,npfb = 4;
 	
 
@@ -705,7 +804,7 @@ void full_reorder(complex float *full_matrix_h, complex float *reordered)
 	int t2=0;
 	int p1=0;
 	int p2=0;
-	int  f=0;
+
 
 	long long baseline_count = 0;
 

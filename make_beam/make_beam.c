@@ -699,7 +699,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
             }
             else {
                 (*complex_weights_array)[count][ch] = (*weights)[count] * cexp(I*(*phases_array)[count][ch]);
-                fprintf(stderr,"Complex weight for station[%d] channel[%d] is %lf %lf\n",count,ch,creal((*complex_weights_array)[count][ch]),cimag((*complex_weights_array)[count][ch]));
+                fprintf(stdout,"Complex weight for station[%d] channel[%d] is %lf %lf\n",count,ch,creal((*complex_weights_array)[count][ch]),cimag((*complex_weights_array)[count][ch]));
             }
         }
     }
@@ -820,14 +820,18 @@ int main(int argc, char **argv) {
     int weights = 0;
     int complex_weights = 0;
     int apply_jones = 0;
-    int miriad_gains = 0;
+    int non_rts_gains = 0;
+
     char *weights_file = NULL;
     char *phases_file = NULL;
     char *jones_file = NULL;
     char *psrfits_file = NULL;
     char *vdif_file = NULL;
     char *pfb_call_file = NULL;
-    char *mir_file = NULL;
+
+    
+    char *gains_file = NULL;
+
     char *tag="ch_00";
     char *procdirroot=NULL;
     char *extn=NULL;
@@ -860,6 +864,8 @@ int main(int argc, char **argv) {
     int fft_mode = 1;
     int ipfb = 0;
 
+    int reverse=0;
+
     struct filter_context fcontext;
 
     int nchan = 128;
@@ -870,7 +876,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:E:f:g:hij:m:n:o:p:r:v:w:s:t:")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:E:f:g:hij:m:n:o:p:Rr:v:w:s:t:")) != -1) {
             switch(c) {
                     
                 case '1':
@@ -924,14 +930,13 @@ int main(int argc, char **argv) {
                     extn = strdup(optarg);
                     execute = 0;
                     break;
-
                 case 'f':
                     make_psrfits = 1;
                     psrfits_file = strdup(optarg);
                     break;
                 case 'g':
-                    miriad_gains=1;
-                    mir_file = strdup(optarg);
+                    non_rts_gains=1;
+                    gains_file = strdup(optarg);
                     break;
                 case 'm':{
                              ipfb = 1;
@@ -980,6 +985,9 @@ int main(int argc, char **argv) {
                     break;
                 case 'p':
                     npol = atoi(optarg);
+                    break;
+                case 'R':
+                    reverse = 1;
                     break;
                 case 's':
                     source_name = strdup(optarg);
@@ -1063,12 +1071,13 @@ int main(int argc, char **argv) {
             jones_file=strdup(pattern);
             fprintf(stdout,"jones_file: %s",jones_file);
         }
-        if (mir_file) {
-            sprintf(pattern,"%s/%s",procdir,mir_file);
-            free(mir_file);
-            mir_file=strdup(pattern);
-            fprintf(stdout,"miriad_file: %s",mir_file);
+        if (gains_file) {
+            sprintf(pattern,"%s/%s",procdir,gains_file);
+            free(gains_file);
+            gains_file=strdup(pattern);
+            fprintf(stdout,"gains_file: %s",gains_file);
         }
+
         
         
     }
@@ -1123,15 +1132,37 @@ int main(int argc, char **argv) {
 	 fprintf(stderr,"Failed to parse the correct number of Jones matrices or phases\n");
 	 goto BARRIER;
     }
-    if (miriad_gains) {
-        int gains_read = read_miriad_gains_file(mir_file,&antenna_gains);
-        if (gains_read != nstation) {
-            fprintf(stderr,"Failed to parse the correct number of antenna gains: expected: %d -- got %d\n",nstation,gains_read);
-            goto BARRIER;
-        }
-        
-    }
+    if (non_rts_gains) {
 
+        int miriad_gains = 2;
+        int casa_gains = 1;
+
+        int id = gain_file_id(gains_file);
+
+        if (id == miriad_gains) {
+            int gains_read = read_miriad_gains_file(gains_file,&antenna_gains);
+            if (gains_read != nstation) {
+                fprintf(stderr,"Failed to parse the correct number of antenna gains: expected: %d -- got %d\n",nstation,gains_read);
+                goto BARRIER;
+            }
+        
+        }
+        if (id == casa_gains) {
+            int chan_to_get;
+
+            if (reverse) {
+                chan_to_get = 23 - me;
+            }
+            else {
+                chan_to_get = me;
+            }
+            int gains_read = read_casa_gains_file(gains_file,&antenna_gains,nstation,chan_to_get);
+            if (gains_read != nstation) {
+                fprintf(stderr,"Failed to parse the correct number of antenna gains for channel %d : expected: %d -- got %d\n",chan_to_get,nstation,gains_read);
+                goto BARRIER;
+            }
+        }
+    }
     if (make_vdif == 1) {
         // this part is in common with the psrfits file
         // we need this becuase there is info in here that is
@@ -1489,10 +1520,10 @@ int main(int argc, char **argv) {
                         e_true[0] = e_true[0] * complex_weights_array[index][ch];
                         e_true[1] = e_true[1] * complex_weights_array[index+1][ch];
                         
-                        if (miriad_gains == 1) {
+                        if (non_rts_gains == 1) {
                             if (antenna_gains[miriad_to_mwac[index]] != 0.0 + I*0.0) {
                                 e_true[0] = e_true[0] / antenna_gains[miriad_to_mwac[index]];
-                                //fprintf(stdout,"mwac %d miriad %d\n",index,miriad_to_mwac[index]);
+                                //:fprintf(stdout,"mwac %d miriad %d\n",index,miriad_to_mwac[index]);
                             }
                             else {
                                 e_true[0] = 0.0 + I*0.0;
@@ -1534,7 +1565,7 @@ int main(int argc, char **argv) {
                   
                 }
                 else {
-                    if (miriad_gains == 1) {
+                    if (non_rts_gains == 1) {
                         if (miriad_to_mwac[index] == out1) {
                             fprintf(out1_file,"%d %f %f %f %f\n",ch,crealf(e_true[0]),cimagf(e_true[0]),crealf(e_true[1]),cimagf(e_true[1]));
 
@@ -1574,7 +1605,7 @@ int main(int argc, char **argv) {
 
         for (ch=0;ch<nchan;ch++) {
             
-            if (coherent_out) {
+            if (coherent_out) { // only used in the case of PSRFITS output and coherent beam
                spectrum[ch] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
                spectrum[ch] = spectrum[ch] + ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
               

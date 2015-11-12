@@ -49,8 +49,7 @@ int main(int argc, char **argv) {
     int8_t *input_buffer = NULL;
     int8_t *output_buffer = NULL;
     int8_t *binary_buffer = NULL;
-    int binary_index=0;
-    int out_sig = -1;
+
     int ascii = 0;
     int binary = 1;
     size_t input_nbit = 4;
@@ -159,7 +158,6 @@ int main(int argc, char **argv) {
     
     extern int pfb_output_to_input[NINPUT];
     size_t rtn = 0;
-    size_t items_read = 0;
     size_t items_to_read = 0;
     size_t count = 0;
     

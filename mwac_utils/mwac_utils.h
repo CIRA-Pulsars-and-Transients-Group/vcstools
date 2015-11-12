@@ -49,10 +49,10 @@ extern "C" {
     void mult2x2tlum(complex double *M1, complex double *M2, complex double *M3, complex double *Mout);
     
     int read_cal_file(complex double **G, int ninp, double *amp);
-    int read_DIJones_file(complex double **G, complex double *M, int nant, double *amp,
-                          char *fname);
+    int read_DIJones_file(complex double **G, complex double *M, int nant, double *amp, char *fname);
     int read_miriad_gains_file(char *fname, complex double **gains);
-
+    int read_casa_gains_file(char *fname, complex double **gains,int nant, int chan_to_get);
+    int gain_file_id(char *fname);
 //    int calcEjones(complex response[MAX_POLS], const float freq, const float lat, const float az0, const float za0, const float az, const float za);
     
     

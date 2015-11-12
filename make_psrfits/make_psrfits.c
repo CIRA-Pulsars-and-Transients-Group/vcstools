@@ -65,8 +65,6 @@ int main(int argc, char *argv[]) {
     double dtmp;
     struct psrfits pf;
     char user_input[256];
-    char meta_input[256];
-    int nval = 0;
     char *rval = 0;
     char input_pipe[256];
     int nbit_input=1;
