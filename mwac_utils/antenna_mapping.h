@@ -74,5 +74,6 @@ extern map_t corr_mapping[NINPUT][NINPUT];
 extern int pfb_output_to_input[NINPUT];
 extern int single_pfb_mapping[64];
 extern int miriad_to_mwac[256];
+extern int natural_to_mwac[256];
 
 #endif /* ANTENNA_MAPPING_H_ */

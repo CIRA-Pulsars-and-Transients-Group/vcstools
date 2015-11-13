@@ -1521,15 +1521,15 @@ int main(int argc, char **argv) {
                         e_true[1] = e_true[1] * complex_weights_array[index+1][ch];
                         
                         if (non_rts_gains == 1) {
-                            if (antenna_gains[miriad_to_mwac[index]] != 0.0 + I*0.0) {
-                                e_true[0] = e_true[0] / antenna_gains[miriad_to_mwac[index]];
+                            if (antenna_gains[natural_to_mwac[index]] != 0.0 + I*0.0) {
+                                e_true[0] = e_true[0] / antenna_gains[natural_to_mwac[index]];
                                 //:fprintf(stdout,"mwac %d miriad %d\n",index,miriad_to_mwac[index]);
                             }
                             else {
                                 e_true[0] = 0.0 + I*0.0;
                             }
-                            if (antenna_gains[miriad_to_mwac[index]+1] != 0.0 + I*0.0) {
-                                e_true[1] = e_true[1] / antenna_gains[miriad_to_mwac[index]+1];
+                            if (antenna_gains[natural_to_mwac[index]+1] != 0.0 + I*0.0) {
+                                e_true[1] = e_true[1] / antenna_gains[natural_to_mwac[index]+1];
                             }
                             else {
                                 e_true[1] = 0.0 + I*0.0;
@@ -1630,9 +1630,9 @@ int main(int argc, char **argv) {
                 
                 memcpy((void *)((char *)data_buffer + offset_in),spectrum,sizeof(float)*nchan);
                 offset_in += sizeof(float)*nchan;
-                // for (ch=0;ch<nchan;ch++) {
-                //      fprintf(stdout,"ch: %d spec: %f\n",ch,spectrum[ch]);
-                // }
+                //for (ch=0;ch<nchan;ch++) {
+                //    fprintf(stdout,"XX+YY:ch: %d spec: %f\n",ch,spectrum[ch]);
+                //}
               
                 offset_out = offset_out + bytes_per_spec;
                 // fprintf(stderr,"specnum %d: %lu of %d bytes forthis subint (buffer is %lu bytes) \n",specnum,offset_out,pf.sub.bytes_per_subint,pf.hdr.nsblk*nchan*outpol*sizeof(float));
@@ -1668,11 +1668,12 @@ int main(int argc, char **argv) {
                 
                 
                 
-                if (complex_weights)
+                if (complex_weights) {
                     phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
-                if (apply_jones)
+                }
+                if (apply_jones) {
                     jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
-                
+                }
                 
                 
                 offset_out = 0;
