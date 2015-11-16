@@ -666,6 +666,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
             while ((count < nstation*npol) && !feof(phases)) {
                 for (ch=0;ch<nchan;ch++) {
                     rval = fscanf(phases,"%lf\n",&(*phases_array)[count][ch]);
+                    fprintf(stdout,"Phases: %d %d %lf\n",count,ch,(*phases_array)[count][ch]);
                 }
                 if (rval != 1)
                     break;
@@ -1511,6 +1512,8 @@ int main(int argc, char **argv) {
                 complex float e_true[2],e_dash[2];
                 e_dash[0] = (float) *in_ptr + I*(float)(*(in_ptr+1));
                 e_dash[1] = (float) *(in_ptr+(nchan*2)) + I*(float)(*(in_ptr+(nchan*2)+1)); // next pol is nchan*2 away
+                // e_dash[0] = (float) *in_ptr+1 + I*(float)(*(in_ptr));
+                // e_dash[1] = (float) *(in_ptr+(nchan*2) + 1) + I*(float)(*(in_ptr+(nchan*2))); // next pol is nchan*2 away
                 e_true[0] = e_dash[0];
                 e_true[1] = e_dash[1];
                 if (complex_weights==1) {
@@ -1566,11 +1569,14 @@ int main(int argc, char **argv) {
                 }
                 else {
                     if (non_rts_gains == 1) {
-                        if (miriad_to_mwac[index] == out1) {
+
+                        // next thing to do is to output the fringe for two antennas -
+                        
+                        if (natural_to_mwac[index] == out1) {
                             fprintf(out1_file,"%d %f %f %f %f\n",ch,crealf(e_true[0]),cimagf(e_true[0]),crealf(e_true[1]),cimagf(e_true[1]));
 
                         }   
-                        if (miriad_to_mwac[index] == out2) {
+                        if (natural_to_mwac[index] == out2) {
                             fprintf(out2_file,"%d %f %f %f %f\n",ch,crealf(e_true[0]),cimagf(e_true[0]),crealf(e_true[1]),cimagf(e_true[1]));
                         }
                     }

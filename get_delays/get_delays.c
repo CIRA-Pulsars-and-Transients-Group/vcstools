@@ -82,17 +82,17 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
 
 void mjd2lst(double mjd, double *lst) {
     
-    extern int verbose;
+
     double gmst = slaGmst(mjd); // GMST in radians
     
     // Greenwich Mean Sidereal Time to LMST
-    // east longitude in hours
+    // east longitude in hours at the epoch of the MJD
     double lon_hours = (MWA_LON/360.0) * 24;
     // we need the eq of the equinoxes - as this might shift our LST by +/- a second
     
     double gast = slaEqeqx(mjd) + gmst; // GAST in radians
     
-    // lst is therefore
+    // lst (at epoch of date) is therefore
     
     double last = gast + (lon_hours*DH2R); // last in radians
     
@@ -105,7 +105,7 @@ void mjd2lst(double mjd, double *lst) {
         last = 24.0 + last;
     }
 
-    fprintf(stderr,"MJD = %f GAST-HOURS (%f) GMST-HOURS (%f) LON deg E (%f) LON-HOURS %e LST-HOURS = %f\n",mjd,gast*DR2H,gmst*DR2H,MWA_LON,lon_hours,last);
+    fprintf(stderr,"MJD = %f GAST-HOURS (%f) GMST-HOURS (%f) LON deg E (%f) LON-HOURS %e LAST-HOURS (Epoch of MJD) = %f\n",mjd,gast*DR2H,gmst*DR2H,MWA_LON,lon_hours,last);
     
     *lst = last;
 }
@@ -474,6 +474,8 @@ int     main(int argc, char **argv) {
             fprintf(stdout,"calib:increment %d seconds to: %f",secs,mjd);
         
         mjd2lst(mjd,&last);
+
+        // last is in epoch of MJD
         
         /* for the look direction <not the tile> */
         
@@ -631,6 +633,10 @@ int     main(int argc, char **argv) {
 
         fits_close_file(fptr,&status);
 
+        double E_ref = E_array[0];
+        double N_ref = N_array[0];
+        double H_ref = H_array[0];
+        double cable_ref = cable_array[0];
 
         for (row=0; row<ninput; row++) {
 
@@ -640,9 +646,7 @@ int     main(int argc, char **argv) {
             double N = N_array[row];
             double H = H_array[row];
 
-            double E_ref = E_array[0];
-            double N_ref = N_array[0];
-            double H_ref = H_array[0];
+
             double integer_phase;
 
             int flag = flag_array[row];
@@ -656,8 +660,12 @@ int     main(int argc, char **argv) {
 
 
 
-            double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
-            double delay_time = (geometry + (invert*cable))/(VLIGHT);
+            // double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
+            double geometry = E*unit_E + N*unit_N + H*unit_H ;
+            // Above is just w as you should see from the check.
+
+
+            double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
             double delay_samples = delay_time * samples_per_sec;
 
             fprintf(stdout,"Antenna %d, E %f, N %f, H %f\n",row,E,N,H);
@@ -666,22 +674,34 @@ int     main(int argc, char **argv) {
             fprintf(stdout,"Look direction, E %f, N %f, H %f\n",unit_E,unit_N,unit_H);
             fprintf(stdout,"geom: %f w: %f cable: %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
             // we have to get this amount of delay into the data
+
+
+
+           // if (fabsf(geometry)>100.0) {
+           //     flag = 1;
+           // }
+
+
+
             for (ch=0;ch<nchan;ch++) {
                 long int freq_ch = frequency + (edge+ch)*chan_width;
-                if (row == 1) {
-                    fprintf(stdout,"ch %d Freq (Cycles/s) %ld\n",ch,freq_ch);
-                    fprintf(stdout,"ch %d Freq (Cycles/sample) %lf\n",ch,(double)freq_ch/samples_per_sec);
 
-                }
                 // freq should be in cycles per sample and delay in samples
                 // which essentially means that the samples_per_sec cancels
 
                 // and we only need the fractional part of the turn
                 double cycles_per_sample = (double)freq_ch/samples_per_sec;
+
                 phase[ch] = cycles_per_sample*delay_samples;
-                phase[ch] = modf(phase[ch], &integer_phase);
+                //phase[ch] = modf(phase[ch], &integer_phase);
 
                 phase[ch] = phase[ch]*2*M_PI*conjugate;
+
+                if (ch == 0) {
+                    fprintf(stdout,"Comp:ch %d Freq (Cycles/s) %ld\n",ch,freq_ch);
+                    fprintf(stdout,"Comp:ch %d Freq (Cycles/sample) %lf\n",ch,(double)freq_ch/samples_per_sec);
+                    fprintf(stdout,"Comp:Geo: %f Cable %f (total (s)) %g:Phase (raw) %f Phase (sample) %f\n",geometry,cable,(geometry+cable)/VLIGHT,phase[ch],phase[ch]/samples_per_sec);
+                }
 
                 if (phase_file != NULL) {
                     fprintf(phase_file,"%lf\n",phase[ch]);

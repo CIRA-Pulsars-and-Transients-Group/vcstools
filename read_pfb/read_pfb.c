@@ -156,22 +156,22 @@ int main(int argc, char **argv) {
     int out_index = 0;
     int step = 0;
     
-    extern int pfb_output_to_input[NINPUT];
+
     size_t rtn = 0;
     size_t items_to_read = 0;
     size_t count = 0;
     
     uint8_t original;
-    int value;
+    int8_t value;
     
     fill_mapping_matrix();
 
     size_t gulp = (nstation*npol*nchan*2*input_nbit)/8;
      
- //   for (int i = 0; i < NINPUT; i++) {
- //       fprintf(stdout,"Index %d is antenna %d\n",i,pfb_output_to_input[i]);
- //       fflush(stdout);
- //   }
+    for (int i = 0; i < NINPUT; i++) {
+        fprintf(stdout,"(READ_PFB::)Index %d is antenna %d\n",i,pfb_output_to_input[i]);
+        fflush(stdout);
+    }
 
 
     while (!feof(fin) && (nstep < 0 || step < nstep)) {

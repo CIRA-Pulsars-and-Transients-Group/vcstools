@@ -389,14 +389,26 @@ int read_casa_gains_file(char *gains_file,complex double **antenna_gain, int nan
 
 
         if (channel == chan_to_get) {
+            channel = -99;
+
+            fprintf(stdout,"CASA: %s\n",line);
+            int ent_ind = 0;
+            while (ent_ind < 24) {
+                fprintf(stdout,"CASA:Entry[%d] = %s\n",ent_ind,entry[ent_ind]);
+                ent_ind++;
+            }
             int ii = 0;
             while (ii < nscan-3 && input < 256) {
                 if (strcmp(entry[ii+2],"F") != 0) {
                     (*antenna_gain)[input] = atof(entry[ii])*cexp(I*M_PI*atof(entry[ii+1])/180.0);
+
+                    fprintf(stdout,"CASA: Input %d -- Amp: %f Phase %f \n",input,atof(entry[ii]),M_PI*atof(entry[ii+1])/180.0);
                     ii=ii+2;
                 }
                 else {
                     (*antenna_gain)[input] = 0.0 + I*0.0;
+
+                    fprintf(stdout,"CASA: Input %d - FLAGGED\n",input);
                     ii = ii+3;
                 }
                 input++;
