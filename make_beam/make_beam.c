@@ -882,7 +882,7 @@ int main(int argc, char **argv) {
                     
                 case '1':
                     out1 = atoi(optarg);
-                    sprintf(out1_name,"input_%.3d%.2d.txt",me,out1);
+                    sprintf(out1_name,"input_%.3d%.2d.txt",out1,me);
                     fprintf(stdout,"%s",out1_name);
                     out1_file = fopen(out1_name,"w");
                     if (out1_file == NULL) {
@@ -1559,20 +1559,20 @@ int main(int argc, char **argv) {
                         
                     }
                     
-                    if (non_rts_gains == 1) {
+
 
                         // next thing to do is to output the fringe for two antennas -
 
-                        if (natural_to_mwac[index] == out1) {
-                            fringe[ch][0] = e_true[0];
-                            fringe[ch][1] = e_true[1];
+                    if (natural_to_mwac[index] == out1) {
+                        fringe[ch][0] = e_true[0];
+                        fringe[ch][1] = e_true[1];
 
-                        }
-                        if (natural_to_mwac[index] == out2) {
-                            fringe[ch][2] = e_true[0];
-                            fringe[ch][3] = e_true[1];
-                        }
                     }
+                    if (natural_to_mwac[index] == out2) {
+                        fringe[ch][2] = e_true[0];
+                        fringe[ch][3] = e_true[1];
+                    }
+
                    
                     noise_floor[ch*npol*npol] += e_true[0] * conj(e_true[0]);
                     noise_floor[ch*npol*npol+1] += e_true[0] * conj(e_true[1]);
