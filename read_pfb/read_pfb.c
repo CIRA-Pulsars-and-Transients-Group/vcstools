@@ -167,8 +167,8 @@ int main(int argc, char **argv) {
     fill_mapping_matrix();
 
     size_t gulp = (nstation*npol*nchan*2*input_nbit)/8;
-     
-    for (int i = 0; i < NINPUT; i++) {
+    int i = 0;
+    for (i = 0; i < NINPUT; i++) {
         fprintf(stdout,"(READ_PFB::)Index %d is antenna %d\n",i,pfb_output_to_input[i]);
         fflush(stdout);
     }
