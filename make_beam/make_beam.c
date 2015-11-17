@@ -849,7 +849,7 @@ int main(int argc, char **argv) {
     int incoherent_out = 0;
     
     int sample_rate = 10000;
-
+    int fringe_int = 0;
     int out1 = -1;
     int out2 = -1;
     
@@ -882,7 +882,7 @@ int main(int argc, char **argv) {
                     
                 case '1':
                     out1 = atoi(optarg);
-                    sprintf(out1_name,"input_%.3d.txt",out1);
+                    sprintf(out1_name,"input_%.3d%.2d.txt",me,out1);
                     fprintf(stdout,"%s",out1_name);
                     out1_file = fopen(out1_name,"w");
                     if (out1_file == NULL) {
@@ -894,7 +894,7 @@ int main(int argc, char **argv) {
                     break;
                 case '2':
                     out2 = atoi(optarg);
-                    sprintf(out2_name,"input_%.3d.txt",out2);
+                    sprintf(out2_name,"input_%.3d_%.2d.txt",out2,me);
                     out2_file = fopen(out2_name,"w");
                     fprintf(stdout,"%s",out2_name);
                     if (out2_file == NULL) {
@@ -1328,11 +1328,17 @@ int main(int argc, char **argv) {
     size_t items_to_read = nstation*npol*nchan*2;
     float *spectrum = (float *) calloc(nspec*nchan,sizeof(float));
     float *incoherent_sum = (float *) calloc(nspec*nchan,sizeof(float));
+
+    complex float **fringe = calloc(nchan,sizeof(complex float));
+
+    complex float **stopped_fringe = calloc(nchan,sizeof(complex float));
     complex float **beam = calloc(nchan,sizeof(complex float *));
     int stat = 0;
 
     for (stat = 0; stat < nchan;stat++) {
         beam[stat] = (complex float *) calloc(nstation*npol,sizeof(complex float));
+        fringe[stat] = (complex float *) calloc(2*npol,sizeof(complex float));
+        stopped_fringe[stat] = (complex float *) calloc(2*npol,sizeof(complex float));
     }
 
     float *noise_floor = calloc(nchan*npol*npol,sizeof(float));
@@ -1428,6 +1434,7 @@ int main(int argc, char **argv) {
     }
     int set_levels = 1;
     int specnum=0;
+    int integ=0;
     int index=0;
     int finished = 0;
     size_t offset_out = 0;
@@ -1552,7 +1559,20 @@ int main(int argc, char **argv) {
                         
                     }
                     
-               
+                    if (non_rts_gains == 1) {
+
+                        // next thing to do is to output the fringe for two antennas -
+
+                        if (natural_to_mwac[index] == out1) {
+                            fringe[ch][0] = e_true[0];
+                            fringe[ch][1] = e_true[1];
+
+                        }
+                        if (natural_to_mwac[index] == out2) {
+                            fringe[ch][2] = e_true[0];
+                            fringe[ch][3] = e_true[1];
+                        }
+                    }
                    
                     noise_floor[ch*npol*npol] += e_true[0] * conj(e_true[0]);
                     noise_floor[ch*npol*npol+1] += e_true[0] * conj(e_true[1]);
@@ -1568,18 +1588,7 @@ int main(int argc, char **argv) {
                   
                 }
                 else {
-                    if (non_rts_gains == 1) {
 
-                        // next thing to do is to output the fringe for two antennas -
-                        
-                        if (natural_to_mwac[index] == out1) {
-                            fprintf(out1_file,"%d %f %f %f %f\n",ch,crealf(e_true[0]),cimagf(e_true[0]),crealf(e_true[1]),cimagf(e_true[1]));
-
-                        }   
-                        if (natural_to_mwac[index] == out2) {
-                            fprintf(out2_file,"%d %f %f %f %f\n",ch,crealf(e_true[0]),cimagf(e_true[0]),crealf(e_true[1]),cimagf(e_true[1]));
-                        }
-                    }
                     incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index]*weights_array[index]*(e_true[0] * conj(e_true[0])))/wgt_sum;
                     incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index+1]*weights_array[index+1]*(e_true[1] * conj(e_true[1])))/wgt_sum;
                 }
@@ -1607,8 +1616,34 @@ int main(int argc, char **argv) {
                     }
                 }
             }
-        }
 
+            // integrate the fringe
+            if (out1 >= 0) {
+                for (ch=0;ch<nchan;ch++) {
+                    stopped_fringe[ch][0] = stopped_fringe[ch][0] + fringe[ch][0]*conjf(fringe[ch][2]);
+                    stopped_fringe[ch][1] = stopped_fringe[ch][1] + fringe[ch][0]*conjf(fringe[ch][3]);
+                    stopped_fringe[ch][2] = stopped_fringe[ch][2] + fringe[ch][1]*conjf(fringe[ch][2]);
+                    stopped_fringe[ch][3] = stopped_fringe[ch][3] + fringe[ch][1]*conjf(fringe[ch][3]);
+
+                }
+                fringe_int++;
+                if (fringe_int == sample_rate) {
+                    for (ch=0;ch<nchan;ch++) {
+                        fprintf(out1_file,"%d %d %f %f %f %f %f %f %f %f\n",integ,ch,
+                                crealf(stopped_fringe[ch][0]),
+                                cimagf(stopped_fringe[ch][0]),
+                                crealf(stopped_fringe[ch][1]),
+                                cimagf(stopped_fringe[ch][1]),
+                                crealf(stopped_fringe[ch][2]),
+                                cimagf(stopped_fringe[ch][2]),
+                                crealf(stopped_fringe[ch][3]),
+                                cimagf(stopped_fringe[ch][3]));
+                    }
+                    fringe_int = 0;
+                    integ++;
+                }
+            }
+        }
         for (ch=0;ch<nchan;ch++) {
             
             if (coherent_out) { // only used in the case of PSRFITS output and coherent beam
