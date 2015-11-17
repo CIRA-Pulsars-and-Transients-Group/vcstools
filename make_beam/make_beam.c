@@ -1639,6 +1639,7 @@ int main(int argc, char **argv) {
                                 crealf(stopped_fringe[ch][3]),
                                 cimagf(stopped_fringe[ch][3]));
                     }
+                    fflush(out1_file);
                     fringe_int = 0;
                     integ++;
                 }
