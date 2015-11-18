@@ -82,32 +82,30 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
 
 void mjd2lst(double mjd, double *lst) {
     
-
-    double gmst = slaGmst(mjd); // GMST in radians
-    
     // Greenwich Mean Sidereal Time to LMST
     // east longitude in hours at the epoch of the MJD
-    double lon_hours = (MWA_LON/360.0) * 24;
+    double arr_lon_rad = MWA_LON * M_PI/180.0;
+    double lmst = slaRanorm(slaGmst(mjd) + arr_lon_rad);
+
     // we need the eq of the equinoxes - as this might shift our LST by +/- a second
-    
-    double gast = slaEqeqx(mjd) + gmst; // GAST in radians
+
+    // double gast = slaEqeqx(mjd) + gmst; // GAST in radians
     
     // lst (at epoch of date) is therefore
     
-    double last = gast + (lon_hours*DH2R); // last in radians
+    /// double last = gast + (lon_hours*DH2R); // last in radians
     
-    last = last * DR2H;
+    // last = last * DR2H;
     
-    if (last > 24.0) {
-        last = last - 24.0;
-    }
-    else if (last < 0.0) {
-        last = 24.0 + last;
-    }
+    // if (last > 24.0) {
+       // last = last - 24.0;
+    //}
+    //else if (last < 0.0) {
+      //  last = 24.0 + last;
+    //}
 
-    fprintf(stderr,"MJD = %f GAST-HOURS (%f) GMST-HOURS (%f) LON deg E (%f) LON-HOURS %e LAST-HOURS (Epoch of MJD) = %f\n",mjd,gast*DR2H,gmst*DR2H,MWA_LON,lon_hours,last);
-    
-    *lst = last;
+
+    *lst = lmst;
 }
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd) {
@@ -440,7 +438,7 @@ int     main(int argc, char **argv) {
     
     double intmjd;
     double fracmjd;
-    double last;
+    double lmst;
     double mjd;
     double pr=0,pd=0,px=0,rv=0,eq=2000,ra_ap=0,dec_ap=0;
     double mean_ra,mean_dec,ha;
@@ -464,8 +462,8 @@ int     main(int argc, char **argv) {
         
         utc2mjd(time_utc,&intmjd,&fracmjd);
         
-        if (verbose)
-            fprintf(stdout,"calib:start intmjd=%.1f fracmjd=%f\n",intmjd,fracmjd);
+
+        fprintf(stdout,"calib:start intmjd=%.1f fracmjd=%f\n",intmjd,fracmjd);
         
         /**/
         
@@ -473,29 +471,32 @@ int     main(int argc, char **argv) {
       
         mjd=intmjd+fracmjd;
         
-        mjd = mjd + secs/86400.0;
-        if (verbose)
-            fprintf(stdout,"calib:increment %d seconds to: %f",secs,mjd);
-        
-        mjd2lst(mjd,&last);
+        mjd = mjd + (secs+0.5)/86400.0;
 
-        // last is in epoch of MJD
+        fprintf(stdout,"calib:increment %d seconds to: %f\n",secs,mjd);
+        
+        mjd2lst(mjd,&lmst);
+
+        fprintf(stdout,"calib: current lmst (radian) = %f\n",lmst);
+        // last is in epoch of MJD (
         
         /* for the look direction <not the tile> */
         
         mean_ra = ra_hours * DH2R;
         mean_dec = dec_degs * DD2R;
-        
+
+        fprintf(stdout,"calib:Mean (HA RA /Dec) HA %lf RA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,mean_ra,mean_dec);
         slaMap(mean_ra,mean_dec,pr,pd,px,rv,eq,mjd,&ra_ap,&dec_ap);
         
         // Lets go mean to apparent precess from J2000.0 to EPOCH of date.
         //
         
-        ha = last - ra_ap*DR2H;
+        ha = slaRanorm(lmst-ra_ap)*DR2H;
+
         
-        fprintf(stdout,"calib:Apparent (look direction/precessed RA/Dec) HA %lf hrs  Apparent Dec %f degrees \n",ha,dec_ap*DR2D);
-        fprintf(stdout,"calib:Apparent (look direction/precessed RA/Dec) HA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,dec_ap);
-        fprintf(stdout,"calib:LAST %lf (radian) \n",last);
+        fprintf(stdout,"calib:Apparent (look direction/precessed HA RA /Dec) HA %lf RA %lf hrs  Apparent Dec %f degrees \n",ha,ra_ap*DR2H,dec_ap*DR2D);
+        fprintf(stdout,"calib:Apparent (look direction/precessed HA RA /Dec) HA %lf RA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,ra_ap,dec_ap);
+        fprintf(stdout,"calib:LMST %lf (radian) \n",lmst);
 
         /* now HA/Dec to Az/El */
         
@@ -644,7 +645,7 @@ int     main(int argc, char **argv) {
         double E_ref = E_array[0];
         double N_ref = N_array[0];
         double H_ref = H_array[0];
-        double cable_ref = cable_array[0];
+
 
         for (row=0; row<ninput; row++) {
 
@@ -662,6 +663,8 @@ int     main(int argc, char **argv) {
             double X,Y,Z,u,v,w;
             
             ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
+
+            fprintf(stdout,"calib: Antenna %d: HA %f Dec %f --  X: %f Y: %f Z: %f\n",row,app_ha_rad, app_dec_rad,X,Y,Z);
             calcUVW (app_ha_rad,app_dec_rad,X,Y,Z,&u,&v,&w);
 
             // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
@@ -846,9 +849,9 @@ int     main(int argc, char **argv) {
         
         fprintf(stdout,"Beam FWHM (deg) [%lf]:\n",pf.hdr.beam_FWHM);
         
-        pf.hdr.start_lst = last * 60.0 * 60.0; // Local Apparent Sidereal Time in seconds
+        pf.hdr.start_lst = lmst * 60.0 * 60.0; // Local Apparent Sidereal Time in seconds
 
-        fprintf(stdout,"Seconds past 00h LST (%lf hours) [%lf]:\n",last,pf.hdr.start_lst);
+        fprintf(stdout,"Seconds past 00h LST (%lf hours) [%lf]:\n",lmst,pf.hdr.start_lst);
         
         pf.hdr.start_sec = roundf(fracmjd*86400.0);
         
