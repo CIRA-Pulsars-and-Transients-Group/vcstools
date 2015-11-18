@@ -1712,9 +1712,15 @@ int main(int argc, char **argv) {
                 
                 if (complex_weights) {
                     phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
+                    if (phase_pos < 0) {
+                        goto BARRIER;
+                    }
                 }
                 if (apply_jones) {
                     jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
+                    if (jones_pos < 0) {
+                        goto BARRIER;
+                    }
                 }
                 
                 
