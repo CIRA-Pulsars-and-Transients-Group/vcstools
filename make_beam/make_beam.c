@@ -1932,6 +1932,8 @@ int main(int argc, char **argv) {
                     if (apply_jones) {
                        
                         jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
+                        if (jones_pos == -1)
+                            goto BARRIER;
                     
                     }
                     
