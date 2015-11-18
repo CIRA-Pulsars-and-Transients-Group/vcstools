@@ -1926,6 +1926,8 @@ int main(int argc, char **argv) {
                     if (complex_weights) {
                        
                         phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
+                        if (phase_pos == -1)
+                            goto BARRIER;
                     }
                     if (apply_jones) {
                        
@@ -1946,6 +1948,7 @@ int main(int argc, char **argv) {
         }
         specnum++;
     }
+BARRIER:
     if (make_psrfits == 1) {
         /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/
         int itmp = 0;
@@ -1987,7 +1990,7 @@ int main(int argc, char **argv) {
         fclose(out2_file);
     }
     
-BARRIER:
+
     MPI_Barrier(MPI_COMM_WORLD);
 
     MPI_Finalize();
