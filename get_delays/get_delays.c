@@ -140,6 +140,7 @@ void usage() {
             \t -v <1 == verbose> \n\
             \t -t <input number in correlator product order>\n \
             \t -f <base frequency Hz> \n \
+            \t -G Switch off Geometry [Expert] \n \
             \t -i invert the cable delays \n \
             \t -c conjugate the phase angle \n \
             \t -s samples per second \n \
@@ -200,7 +201,7 @@ int     main(int argc, char **argv) {
     
     double dec_degs=  0.0;
     double ra_hours = 0.0;
-    
+    int no_geometry = 0;
 
     int c;
     int tile_request = -1;
@@ -271,6 +272,9 @@ int     main(int argc, char **argv) {
                 }
                 case 'e':
                     edge = atoi(optarg);
+                    break;
+                case 'G':
+                    no_geometry = 1;
                     break;
                 case 'i':
                     invert = -1;
@@ -664,6 +668,9 @@ int     main(int argc, char **argv) {
             double geometry = E*unit_E + N*unit_N + H*unit_H ;
             // Above is just w as you should see from the check.
 
+            if (no_geometry) {
+                geometry = 0;
+            }
 
             double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
             double delay_samples = delay_time * samples_per_sec;
