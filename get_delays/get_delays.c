@@ -493,8 +493,10 @@ int     main(int argc, char **argv) {
         
         ha = last - ra_ap*DR2H;
         
-        fprintf(stdout,"calib:Apparent (look direction) HA %lf hrs  Apparent Dec %f degrees \n",ha,dec_ap*DR2D);
-        
+        fprintf(stdout,"calib:Apparent (look direction/precessed RA/Dec) HA %lf hrs  Apparent Dec %f degrees \n",ha,dec_ap*DR2D);
+        fprintf(stdout,"calib:Apparent (look direction/precessed RA/Dec) HA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,dec_ap);
+        fprintf(stdout,"calib:LAST %lf (radian) \n",last);
+
         /* now HA/Dec to Az/El */
         
         app_ha_rad = ha * DH2R;
@@ -503,8 +505,8 @@ int     main(int argc, char **argv) {
         
         slaDe2h(app_ha_rad,dec_ap,MWA_LAT*DD2R,&az,&el);
         
-        if (verbose)
-            fprintf(stderr,"calib:Look direction Azimuth %lf (deg)  Elevation %lf (deg) \n",az*DR2D,el*DR2D);
+
+        fprintf(stderr,"calib:Look direction Azimuth %lf (deg)  Elevation %lf (deg) \n",az*DR2D,el*DR2D);
         
         /* now we need the direction cosines */
         
@@ -517,8 +519,10 @@ int     main(int argc, char **argv) {
         
 
         fprintf(stdout,"calib: Tile position (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az,tile_pointing_el,tile_pointing_ra,tile_pointing_dec );
+         fprintf(stdout,"calib: Tile position (radian) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az*DD2R,tile_pointing_el*DD2R,tile_pointing_ra*DD2R,tile_pointing_dec*DD2R);
         fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az*DR2D,el*DR2D,ra_ap*DR2D,dec_ap*DR2D);
-        
+        fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az,el,ra_ap,dec_ap);
+
         
         
         if (get_jones) {
@@ -679,8 +683,8 @@ int     main(int argc, char **argv) {
             fprintf(stdout,"Distance from reference, E-E_ref %f, N-N_ref %f, H-N_ref %f\n",E-E_ref,N-N_ref,H-H_ref);
 
             fprintf(stdout,"Look direction, E %f, N %f, H %f\n",unit_E,unit_N,unit_H);
-            fprintf(stdout,"geom: %f w: %f cable: %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
-            // we have to get this amount of delay into the data
+            fprintf(stdout,"calib:geom: %f w: %f cable: %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
+            fprintf(stdout,"calib:geom: u %f v %f w %f\n",u,v,w);// we have to get this amount of delay into the data
 
 
 
