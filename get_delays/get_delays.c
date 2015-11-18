@@ -693,7 +693,7 @@ int     main(int argc, char **argv) {
                 double cycles_per_sample = (double)freq_ch/samples_per_sec;
 
                 phase[ch] = cycles_per_sample*delay_samples;
-                //phase[ch] = modf(phase[ch], &integer_phase);
+                phase[ch] = modf(phase[ch], &integer_phase);
 
                 phase[ch] = phase[ch]*2*M_PI*conjugate;
 
