@@ -822,6 +822,8 @@ int main(int argc, char **argv) {
     int complex_weights = 0;
     int apply_jones = 0;
     int non_rts_gains = 0;
+    int chan_to_get = -1;
+    
 
     char *weights_file = NULL;
     char *phases_file = NULL;
@@ -934,6 +936,9 @@ int main(int argc, char **argv) {
                 case 'f':
                     make_psrfits = 1;
                     psrfits_file = strdup(optarg);
+                    break;
+                case 'G':
+                    chan_to_get = atoi(optarg);
                     break;
                 case 'g':
                     non_rts_gains=1;
@@ -1149,13 +1154,14 @@ int main(int argc, char **argv) {
         
         }
         if (id == casa_gains) {
-            int chan_to_get;
+            if (chan_to_get == -1) {
 
-            if (reverse) {
-                chan_to_get = 23 - me;
-            }
-            else {
-                chan_to_get = me;
+                if (reverse) {
+                    chan_to_get = 23 - me;
+                }
+                else {
+                    chan_to_get = me;
+                }
             }
             int gains_read = read_casa_gains_file(gains_file,&antenna_gains,nstation,chan_to_get);
             if (gains_read != nstation) {
