@@ -855,6 +855,7 @@ int main(int argc, char **argv) {
     int sample_rate = 10000;
     int fringe_int = 0;
 
+    int to_swap = 0;
     int swap_pol = 0;
     int conjugate_sky = 0;
     int swap_complex = 0;
@@ -1005,12 +1006,12 @@ int main(int argc, char **argv) {
                 case 's':
                     source_name = strdup(optarg);
                     break;
-                case 'S':
-                    int8_t to_swap = atoi(optarg);
+                case 'S': 
+                    to_swap = atoi(optarg);
                     swap_pol = to_swap & 0x1;
                     swap_complex = (to_swap >> 1) & 0x1;
                     conjugate_sky = (to_swap >> 2) & 0x1;
-                    fprintf(stdout,"Swap: pol %d -- complexity -- %d --sky %d\n"swap_pol,swap_complex,conjugate_sky);
+                    fprintf(stdout,"Swap: pol %d -- complexity -- %d --sky %d\n",swap_pol,swap_complex,conjugate_sky);
                     break;
                 case 't':
                     type = atoi(optarg);
