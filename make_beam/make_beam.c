@@ -887,7 +887,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:E:f:g:hij:m:n:o:p:Rr:v:w:s:S:t:")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:")) != -1) {
             switch(c) {
                     
                 case '1':
@@ -1006,7 +1006,7 @@ int main(int argc, char **argv) {
                 case 's':
                     source_name = strdup(optarg);
                     break;
-                case 'S': 
+                case 'S':
                     to_swap = atoi(optarg);
                     swap_pol = to_swap & 0x1;
                     swap_complex = (to_swap >> 1) & 0x1;
