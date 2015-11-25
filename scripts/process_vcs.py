@@ -214,7 +214,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
     import datetime
     import calendar
 
-    corr_dir = "{0}/visibilities".format(working_dir)
+    corr_dir = "{0}/vis".format(working_dir)
     mdir(corr_dir, "Correlator Product")
 
     chan_list = get_frequencies(metafits_file)
