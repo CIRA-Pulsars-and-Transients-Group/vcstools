@@ -1680,6 +1680,16 @@ int main(int argc, char **argv) {
                     }
                     fflush(out1_file);
                     fringe_int = 0;
+
+                    for (ch=0;ch<nchan;ch++) {
+
+                        stopped_fringe[ch][0] = 0;
+                        stopped_fringe[ch][1] = 0;
+                        stopped_fringe[ch][2] = 0;
+                        stopped_fringe[ch][3] = 0;
+                        
+                    }
+
                     integ++;
                 }
             }
