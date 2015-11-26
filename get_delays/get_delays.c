@@ -137,7 +137,7 @@ void usage() {
             \nOther options include:\n \
             \t -v <1 == verbose> \n\
             \t -t <input number in correlator product order>\n \
-            \t -f <base frequency Hz> \n \
+            \t -f <middle of the first frequency channel in Hz> \n \
             \t -G Switch off Geometry [Expert] \n \
             \t -i invert the cable delays \n \
             \t -c conjugate the phase angle \n \
@@ -199,7 +199,8 @@ int     main(int argc, char **argv) {
     
     double dec_degs=  0.0;
     double ra_hours = 0.0;
-    int no_geometry = 0;
+    int geometry_limit = 0;
+    float limit = 0.0;
 
     int c;
     int tile_request = -1;
@@ -228,7 +229,7 @@ int     main(int argc, char **argv) {
     
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "a:b:chGij:e:t:m:n:o:pr:d:vz:if:s:w:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:chG:ij:e:t:m:n:o:pr:d:vz:if:s:w:")) != -1) {
             switch(c) {
                 case 'a':
                     add_str = strdup(optarg);
@@ -272,7 +273,8 @@ int     main(int argc, char **argv) {
                     edge = atoi(optarg);
                     break;
                 case 'G':
-                    no_geometry = 1;
+                    geometry_limit = 1;
+                    limit = atof(optarg);
                     break;
                 case 'i':
                     invert = -1;
@@ -674,9 +676,12 @@ int     main(int argc, char **argv) {
             // double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
             double geometry = E*unit_E + N*unit_N + H*unit_H ;
             // Above is just w as you should see from the check.
+            if (geometry_limit) {
 
-            if (no_geometry) {
-                geometry = 0;
+                if (fabsf(geometry)>limit) {
+                    flag = 1;
+                }
+
             }
 
             double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
@@ -690,10 +695,6 @@ int     main(int argc, char **argv) {
             fprintf(stdout,"calib:geom: u %f v %f w %f\n",u,v,w);// we have to get this amount of delay into the data
 
 
-
-           // if (fabsf(geometry)>100.0) {
-           //     flag = 1;
-           // }
 
 
 
