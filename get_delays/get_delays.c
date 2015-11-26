@@ -643,16 +643,16 @@ int     main(int argc, char **argv) {
         }
 
         fits_close_file(fptr,&status);
-
-        double E_ref = E_array[0];
-        double N_ref = N_array[0];
-        double H_ref = H_array[0];
+        int refinp = 84; // Tile012
+        double E_ref = E_array[refinp];
+        double N_ref = N_array[refinp];
+        double H_ref = H_array[refinp];
 
 
         for (row=0; row<ninput; row++) {
 
 
-            double cable = cable_array[row];
+            double cable = cable_array[row]-cable_array[refinp];
             double E = E_array[row];
             double N = N_array[row];
             double H = H_array[row];
@@ -673,13 +673,12 @@ int     main(int argc, char **argv) {
 
 
 
-            // double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
-            double geometry = E*unit_E + N*unit_N + H*unit_H ;
+            double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
+            // double geometry = E*unit_E + N*unit_N + H*unit_H ;
             // Above is just w as you should see from the check.
             if (geometry_limit) {
-                float dist = sqrt(E*E+N*N);
 
-                if (fabsf(dist)>limit) {
+                if (fabsf(geometry)>limit) {
                     flag = 1;
                 }
 
@@ -692,7 +691,7 @@ int     main(int argc, char **argv) {
             fprintf(stdout,"Distance from reference, E-E_ref %f, N-N_ref %f, H-N_ref %f\n",E-E_ref,N-N_ref,H-H_ref);
 
             fprintf(stdout,"Look direction, E %f, N %f, H %f\n",unit_E,unit_N,unit_H);
-            fprintf(stdout,"calib:geom: %f w: %f cable: %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
+            fprintf(stdout,"calib:geom: %f w: %f cable(-cable_ref): %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
             fprintf(stdout,"calib:geom: u %f v %f w %f\n",u,v,w);// we have to get this amount of delay into the data
 
 
