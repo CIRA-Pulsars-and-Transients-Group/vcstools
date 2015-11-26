@@ -677,8 +677,9 @@ int     main(int argc, char **argv) {
             double geometry = E*unit_E + N*unit_N + H*unit_H ;
             // Above is just w as you should see from the check.
             if (geometry_limit) {
+                float dist = sqrt(E*E+N*N);
 
-                if (fabsf(geometry)>limit) {
+                if (fabsf(dist)>limit) {
                     flag = 1;
                 }
 
