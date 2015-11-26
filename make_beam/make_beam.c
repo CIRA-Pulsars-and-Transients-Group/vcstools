@@ -747,7 +747,7 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
                 float re,im;
                 rval = fscanf(jones,"%f %f ",&re,&im);
                 
-                Ji[i] = re - I*im; // the RTS conjugates the sky so beware ....
+                Ji[i] = re + I*im; // the RTS conjugates the sky so beware ....
                 
             }
             if (rval != 2)
