@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
 	int nchan=0;
 	int raw=0;
 	char *pattern = NULL;
-    int conjugate = 1;
+    int conjugate = 0;
 	int always_on = 0;
 
 	while ((c = getopt(argc, argv, "Cr:s:e:+:a:")) != -1) {
@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
 
 				break;
             case 'c':
-                conjugate = 0;
+                conjugate = 1;
                 break;
 			case 'r':
 				if ((sscanf(optarg,"%d %d",&nbaselines,&nchan)) != 2) {
