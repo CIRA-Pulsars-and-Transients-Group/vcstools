@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
 
 						}
                         else if (conjugate){
-                            for (index=0;index<naxes[0];index=index+2) {
+                            for (index=0;index<nbuffer;index=index+2) {
                                 buffer[index] = -1*buffer[index];
                             }
                             fwrite(buffer,sizeof(float),nbuffer,stdout);
