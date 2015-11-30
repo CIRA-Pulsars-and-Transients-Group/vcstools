@@ -40,6 +40,7 @@ void usage() {
 	fprintf(stdout,"read_mwac -s -e -+ <list of files> \n");
 	fprintf(stdout,"Simple utility to read the dump files from the correlator (or NGAS) " \
 			" and dump the contents to stdout, you can choose to average and only read a subset of channels or both:\n");
+    fprintf(stdout,"\t-c\t\t -- conjugate <all> visibilities");
 	fprintf(stdout,"\t-s\t\t -- start channel\n");
 	fprintf(stdout,"\t-e\t\t -- end channel\n");
 	fprintf(stdout,"\t-+\t\t -- fscrunch factor\n");
@@ -94,16 +95,19 @@ int main(int argc, char **argv) {
 	int nchan=0;
 	int raw=0;
 	char *pattern = NULL;
-	
+    int conjugate = 1;
 	int always_on = 0;
 
-	while ((c = getopt(argc, argv, "r:s:e:+:a:")) != -1) {
+	while ((c = getopt(argc, argv, "Cr:s:e:+:a:")) != -1) {
 		switch(c) {
 			case 'a':
 				pattern = strdup(optarg);
 				always_on = 1;
 
-				break;				
+				break;
+            case 'c':
+                conjugate = 0;
+                break;
 			case 'r':
 				if ((sscanf(optarg,"%d %d",&nbaselines,&nchan)) != 2) {
 					fprintf(stderr,"Using expert RAW mode must specify nbaselines and nchan in the output cube\n");
@@ -267,6 +271,13 @@ int main(int argc, char **argv) {
 							free(average);
 
 						}
+                        else if (conjugate){
+                            for (index=0;index<naxes[0];index=index+2) {
+                                buffer[index] = -1*buffer[index];
+                            }
+                            fwrite(buffer,sizeof(float),nbuffer,stdout);
+
+                        }
 						else {
 							// write them all
 							fwrite(buffer,sizeof(float),nbuffer,stdout);

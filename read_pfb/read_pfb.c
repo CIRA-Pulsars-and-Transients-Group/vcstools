@@ -242,8 +242,8 @@ int main(int argc, char **argv) {
                             
                             output_buffer[out_index] = (int8_t) (value & 0xff);
                             
-                            // fprintf(stdout,"chan %d in %d map %d out %d: %d \n",chan,index*npol+pol,map_index,out_index,output_buffer[out_index]);
-                            // fflush(stdout);
+                            //fprintf(stdout,"unpack:chan %d in %d map %d out %d original %u:%d \n",chan,index*npol+pol,map_index,out_index,original,output_buffer[out_index]);
+                            //fflush(stdout);
                             
                             out_index++;
                             
@@ -256,11 +256,12 @@ int main(int argc, char **argv) {
                             else {
                                 value = original;
                             }
-                            
-                            // fprintf(stdout,"chan %d in %d map %d out %d: %d \n",chan,index*npol+pol,map_index,out_index,output_buffer[out_index]);
-                            // fflush(stdout);
                             output_buffer[out_index] = (int8_t) (value & 0xff);
-                            
+
+                            //fprintf(stdout,"unpack:chan %d in %d map %d out %d original %u:%d \n",chan,index*npol+pol,map_index,out_index,original,output_buffer[out_index]);
+
+                            //fflush(stdout);
+
                             
                             inp_ptr++;
                         }		    
