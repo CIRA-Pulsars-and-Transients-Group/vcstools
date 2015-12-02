@@ -131,8 +131,8 @@ def options (options): # TODO reformat this to print properly
 
 def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working_dir, parallel):
     print "Downloading files from archive"
-#    voltdownload = distutils.spawn.find_executable("voltdownload.py")
-    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
+    voltdownload = distutils.spawn.find_executable("voltdownload.py")
+#    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
 #   voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
     raw_dir = "{0}/raw".format(working_dir)
     mdir(raw_dir, "Raw")
@@ -257,7 +257,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                     current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
                     unix_time = calendar.timegm(current_time)
 
-                    corr_line = " aprun -n 1 -N 1 {0} -o {1} -s {2}/{3} -r 1 -i 100 -f 128 -n 4 -c {4:0>2} -d {4}\n".format("mwac_offline",corr_dir,obsid,unix_time,gpubox_label,file)
+                    corr_line = " aprun -n 1 -N 1 {0} -o {1}/{2} -s {3} -r 1 -i 100 -f 128 -n 4 -c {4:0>2} -d {5}\n".format("mwac_offline",corr_dir,obsid,unix_time,gpubox_label,file)
                     
                     with open(corr_batch, 'a') as batch_file:
                         batch_file.write(corr_line)
@@ -275,11 +275,6 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
 
 
-<<<<<<< HEAD
-def coherent_beam(obsid,start,stop,increment):
-    print "Forming coherent beam"
-    print "Calculating Phase Model (running get_delays)"
-=======
 def coherent_beam(obs_id, working_dir, metafile, nfine_chan, pointing):
     # Need to run get_delays and then the beamformer on each desired coarse channel
     DI_dir = working_dir+"DIJ"
@@ -349,7 +344,6 @@ def coherent_beam(obs_id, working_dir, metafile, nfine_chan, pointing):
                 submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
     """
 
->>>>>>> 353de5c56b2a0b3e127926d7abaee782d2ceeb0c
 
 
 if __name__ == '__main__':
