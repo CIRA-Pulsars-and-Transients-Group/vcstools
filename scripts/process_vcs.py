@@ -218,6 +218,8 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
     mdir(corr_dir, "Correlator Product")
 
     chan_list = get_frequencies(metafits_file)
+    
+    print "Input chan list is" , chan_list
 
     for time_to_get in range(start,stop,increment):
         inc_start = time_to_get
