@@ -6,6 +6,7 @@ import glob
 import time
 import datetime
 import distutils.spawn
+from astropy.io import fits as pyfits
 
 def getmeta(service='obs', params=None):
     """
@@ -50,6 +51,36 @@ def is_number(s):
         return True
     except ValueError:
         return False
+
+def mdir(path,description):
+    try:
+        os.mkdir(path)
+        os.chmod(path,0761)
+    except:
+        if (os.path.exists(path)):
+            print "{0} Directory Already Exists\n".format(description)
+        else:
+            sys.exit()
+
+def ensure_metafits(metafits_file):
+        if (os.path.isfile(metafits_file) == False):
+            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
+            subprocess.call(metafile_line,shell=True)
+
+
+def obs_max_min(obs_id):
+    """
+    Small function to query the database and returns the times of the first and last file
+    :param obs_id:
+    :return:
+    """
+    from file_maxmin import getmeta
+
+    obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
+
+    obs_start = int(min(obsinfo['files'])[11:21])
+    obs_end = int(max(obsinfo['files'])[11:21])
+    return obs_start, obs_end
 
 def sfreq(freqs):
 
@@ -98,11 +129,11 @@ def options (options): # TODO reformat this to print properly
 def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working_dir, parallel):
     print "Downloading files from archive"
 #    voltdownload = distutils.spawn.find_executable("voltdownload.py")
-#    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
-    voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
+    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
+#   voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
     raw_dir = "{0}/raw".format(working_dir)
-    make_dir = "mkdir {0}".format(raw_dir)
-    subprocess.call(make_dir,shell=True)
+    mdir(raw_dir, "Raw")
+
     for time_to_get in range(start_time,stop_time,increment):
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
         if copyq:
@@ -129,7 +160,7 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
         except:
             print "cannot open working dir:{0}".format(working_dir)
             sys.exit()
-    check = "/home/fkirsten/software/galaxy-scripts/scripts/checks.py -m download -o {0}".format(obsid)
+    check = "checks.py -m download -o {0}".format(obsid)
     
 
 def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
@@ -181,23 +212,16 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
     import astropy
     from astropy.time import Time
     import datetime
+    import calendar
 
-    corrdir = "%s/corr" % working_dir
-
-    try:
-        os.mkdir(corrdir)
-    except:
-        if (os.path.exists(corrdir)):
-            print "Correlator product directory Already exists\n"
-        else:
-            sys.exit()
+    corr_dir = "{0}/vis".format(working_dir)
+    mdir(corr_dir, "Correlator Product")
 
     chan_list = get_frequencies(metafits_file)
 
     for time_to_get in range(start,stop,increment):
         inc_start = time_to_get
         inc_stop = time_to_get+increment
-
         for index,channel in enumerate(chan_list):
             gpubox_label = (index+1)
             f=[]
@@ -211,31 +235,31 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
             #for this increment 
             #and this channel
             if (len(f) > 0):
-                corr_batch = "{0}/batch/correlator_{1}_gpubox{3:0>2}.batch".format(working_dir,inc_start,gpubox_label)
+                corr_batch = "{0}/batch/correlator_{1}_gpubox{2:0>2}.batch".format(working_dir,inc_start,gpubox_label)
 
                 with open(corr_batch, 'w') as batch_file:
-                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n")
+                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n #SBATCH --output={0}.out\n".format(corr_batch))
                     batch_file.write("module load cudatoolkit\nmodule load cfitsio\n")
                 
                 to_corr = 0
                 for file in f:
                     corr_line = ""
                     (current_time,ext) = os.path.splitext(os.path.basename(file))
-                    (obsid,gpstime,chan) = string.split(current_time,'_')
+                    (obsid,gpstime,chan) = current_time.split('_')
                     t = Time(int(gpstime), format='gps', scale='utc')
                     time_str =  t.datetime.strftime('%Y-%m-%d %H:%M:%S')
 
                     current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
                     unix_time = calendar.timegm(current_time)
 
-                    corr_line = " aprun -n 1 -N 1 %s -o %s/%s -s %d -r 1 -i 100 -f 128 -n 4 -c %02d -d %s\n" % (mwac_offline,corrdir,obsid,unix_time,gpubox_label,file)
+                    corr_line = " aprun -n 1 -N 1 {0} -o {1} -s {2}/{3} -r 1 -i 100 -f 128 -n 4 -c {4:0>2} -d {4}\n".format("mwac_offline",corr_dir,obsid,unix_time,gpubox_label,file)
                     
                     with open(corr_batch, 'a') as batch_file:
                         batch_file.write(corr_line)
                         to_corr = to_corr+1
 
-                secs_to_run = datetime.timedelta(seconds=5*to_corr)
-                batch_submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (corrdir,str(secs_to_run),corr_batch)
+                secs_to_run = datetime.timedelta(seconds=10*to_corr)
+                batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq {2}\n".format(corr_dir,secs_to_run,corr_batch)
                 submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
                 jobid=""
                 for line in submit_cmd.stdout:
@@ -244,18 +268,88 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
 
 
-def make_pfb_files():
-    print "Creating PFB files"
 
 
+<<<<<<< HEAD
 def coherent_beam(obsid,start,stop,increment):
     print "Forming coherent beam"
     print "Calculating Phase Model (running get_delays)"
+=======
+def coherent_beam(obs_id, working_dir, metafile, nfine_chan, pointing):
+    # Need to run get_delays and then the beamformer on each desired coarse channel
+    DI_dir = working_dir+"DIJ"
+    RA = pointing[0]
+    Dec = pointing[1]
+
+    print "Running get_delays"
+    P_dir = working_dir+"pointings"
+    mdir(P_dir, "Pointings")
+    pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
+    mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
+
+    for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
+        #DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
+        pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
+        mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}".format(RA, Dec, gpubox))
+
+        DI_file = "{0}/DI_JonesMatrices_node{1}.dat".format(DI_dir, gpubox)
+        if (os.path.isfile(DI_file)):
+            get_delays_batch = "{0}/batch/gd_{1}.batch".format(working_dir,gpubox)
+            with open(get_delays_batch,'w') as batch_file:
+                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}.out\n".format(working_dir,gpubox)
+                batch_file.write(batch_line)
+                #delays_line = "get_delays -a {0} -b {1} -j {2} -m {3} -i -p -z {4} -o {5} -f {6} -n {7} -w 10000 -r {8} -d {9}\n".format(pointing_chan_dir,?,DI_file,metafile,utctime,obs_id,?,nfine_chan,Dec) # need to finish inputs
+                batch_file.write(delays_line)
+            submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format(time_to_run, pointing_chan_dir, get_delays_batch)
+            submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+        else:
+            print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
+
+
+    # if (the_options['delays'] == True):
+    #
+    #     DI_file = "%s/DI_JonesMatrices_node0%02d.dat" % (outdir,gpubox_label)
+    #     print DI_file
+    #
+    #     if (old_mode == 1):
+    #         if (os.path.isfile(DI_file)):
+    #             delays_line = "%s -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -e %d -n 88 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,edge_num,the_options['ra'],the_options['dec'])
+    #         else:
+    #             delays_line = "%s -a ./ -b %d -i -p -z %s -o %s -f %s -e %d -n 88 -w 10000 -r %s -d %s -m %s" % (get_delays,len(f),utctime,obsid,freq_Hz,edge_num,the_options['ra'],the_options['dec'],the_options['metafile'])
+    #     elif (new_mode == 1):
+    #         if (os.path.isfile(DI_file)):
+    #             delays_line = "%s -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'])
+    #         else:
+    #             print "WARNING NOT CALIBRATION FOUND\n"
+    #             delays_line = "%s -a ./ -b %d -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s -m %s" % (get_delays,len(f),utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'],the_options['metafile'])
+
+
+    print "Forming coherent beam"
+
+    # Run make_beam
+    """
+                        with open(batch, 'w') as batch_file:
+                    batch_file.write("#!/bin/bash -l\n")
+
+                    nodes_line = "#SBATCH --nodes=%d\n#SBATCH --export=NONE\n" % (number_of_exe/exe_per_node)
+                    batch_file.write(nodes_line)
+                    time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
+                    batch_file.write(time_line)
+                    aprun_line = "aprun -n %d -N %d %s -e pfb -o ch01 -a 128 -n %d -t 1 %s -c phases.txt -w flags.txt -D %s/ch %s psrfits_header.txt\n" % (number_of_exe,exe_per_node,make_beam,nchan,jones,working_dir,beam_mode_str)
+                    batch_file.write(aprun_line)
+
+                submit_line = "sbatch --nodes=%d --workdir=%s --time=%s --partition=%s %s\n" % (number_of_exe/exe_per_node,working_dir,str(secs_to_run),queue,batch)
+                print submit_line
+
+                submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+    """
+
+>>>>>>> 353de5c56b2a0b3e127926d7abaee782d2ceeb0c
 
 
 if __name__ == '__main__':
 
-    modes=['download','recombine','correlate','make_pfb','beamform']
+    modes=['download','recombine','correlate','beamform']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
     chan_list = []
@@ -283,16 +377,16 @@ if __name__ == '__main__':
     group_beamform.add_option("--bf_mode", type="choice", choices=['0','1','2'], help="Beam forming mode (0 == NO BEAMFORMING 1==PSRFITS, 2==VDIF)")
     group_beamform.add_option("-j", "--useJones", action="store_true", default=False, help="Use Jones matrices from the RTS [default=%default]")
 
-    parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','make_pfb','beamform'], help="Mode you want to run. {0}".format(modes))
+    parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
     parser.add_option("-b", "--begin", type="int", help="First GPS time to process [no default]")
     parser.add_option("-e", "--end", type="int", help="Last GPS time to process [no default]")
-    parser.add_option("-i", "--increment", type="int", default=200, help="Increment in seconds (how much we process at once) [default=%default]")
+    parser.add_option("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
+    parser.add_option("-i", "--increment", type="int", default=64, help="Increment in seconds (how much we process at once) [default=%default]")
     parser.add_option("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
     parser.add_option("-w", "--work_dir", metavar="DIR", default="/scratch/mwaops/vcs/", help="Base directory you want to run from. This will create a folder for the Obs. ID if it doesn't exist [default=%default]")
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
-    parser.add_option("-G", "--Go", action="store_true", default=False, help="Include this option to run script [default=%default]")
     parser.add_option_group(group_download)
 #    parser.add_option_group(group_recombine)
     parser.add_option_group(group_correlate)
@@ -301,58 +395,54 @@ if __name__ == '__main__':
 
     (opts, args) = parser.parse_args()
 
+    if opts.all and (opts.begin or opts.end):
+        print "Please specify EITHER (-b,-e) OR -a"
+        quit()
+    elif opts.all:
+        opts.begin, opts.end = obs_max_min(opts.obs)
     if not opts.mode:
       print "Mode required {0}. Please specify with -m or --mode.".format(modes)
       quit()
-
     if not opts.obs:
         print "Observation ID required, please put in with -o or --obs"
         quit()
-
     if opts.begin > opts.end:
         print "Starting time is after end time"
         quit()
+    if opts.mode == "beamformer":
+        if not opts.pointing:
+            print "Pointing (-p) required in beamformer mode"
+            quit()
+        #if opts.pointing[0] or opt.pointing[1]
 
 
-    make_dir = "mkdir {0}".format(opts.work_dir)
-    subprocess.call(make_dir,shell=True)
-    working_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
-    make_dir = "mkdir {0}".format(working_dir)
-    subprocess.call(make_dir,shell=True)
-    batch_dir = "{0}/batch".format(working_dir)
-    make_batch_dir="mkdir {0}".format(batch_dir)
-    subprocess.call(make_batch_dir,shell=True)
-    metafits_file = "{0}/{1}.metafits".format(working_dir,opts.obs)
+    mdir(opts.work_dir, "Working")
+    obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
+    mdir(obs_dir, "Observation")
+    batch_dir = "{0}/batch".format(obs_dir)
+    mdir(batch_dir, "Batch")
+    metafits_file = "{0}/{1}.metafits".format(obs_dir,opts.obs)
 
  #   options(opts)
+    print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
 
     if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, working_dir, opts.parallel_dl)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, obs_dir, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
-        if (os.path.isfile(metafits_file) == False):
-            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
-            subprocess.call(metafile_line,shell=True)
-
-        make_combined = "mkdir {0}/combined".format(working_dir)
-        subprocess.call(make_combined,shell=True)
-
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, working_dir)
+        ensure_metafits(metafits_file)
+        combined_dir = "{0}/combined".format(obs_dir)
+        mdir(combined_dir, "Combined")
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, obs_dir)
     elif opts.mode == 'correlate':
         print opts.mode 
-        if (os.path.isfile(metafits_file) == False):
-            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
-            subprocess.call(metafile_line,shell=True)
-
-
-        vcs_correlate()
-    elif opts.mode == 'make_pfb':
-        print opts.mode
-        make_pfb_files()
+        ensure_metafits(metafits_file)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, obs_dir)
     elif opts.mode == 'beamformer':
         print opts.mode
-        coherent_beam()
+        ensure_metafits(metafits_file)
+        coherent_beam(opts.obs, obs_dir, metafits_file, opts.nfine_chan, opts.pointing)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
