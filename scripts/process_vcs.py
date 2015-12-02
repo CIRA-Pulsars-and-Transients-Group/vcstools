@@ -128,8 +128,8 @@ def options (options): # TODO reformat this to print properly
 
 def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working_dir, parallel):
     print "Downloading files from archive"
-#    voltdownload = distutils.spawn.find_executable("voltdownload.py")
-    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
+    voltdownload = distutils.spawn.find_executable("voltdownload.py")
+#    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
 #   voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
     raw_dir = "{0}/raw".format(working_dir)
     mdir(raw_dir, "Raw")
