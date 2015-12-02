@@ -90,9 +90,12 @@ def sfreq(freqs):
 
     freqs.sort()   # It should already be sorted, but just in case...
     lowchans = [f for f in freqs if f <= 128]
+    print "lowchans", lowchans
     highchans = [f for f in freqs if f > 128]
+    print "highchans", highchans
     highchans.reverse()
     freqs = lowchans + highchans
+    print "freqs", freqs
     return freqs
 
 
