@@ -11,11 +11,12 @@ then
     rm /scratch/mwaops/vcs/$1/fits/mk_psrfits_in
 fi
 
-export PATH=${PATH}:/home/fkirsten/software/galaxy-scripts/scripts/
-export PYTHONPATH=${PYTHONPATH}:/home/fkirsten/software/galaxy-scripts/scripts/
-export PYTHONPATH=${PYTHONPATH}:/group/mwaops/stremblay/MandC_Core/
+#export PATH=${PATH}:/home/fkirsten/software/galaxy-scripts/scripts/
+#export PYTHONPATH=${PYTHONPATH}:/home/fkirsten/software/galaxy-scripts/scripts/
+#export PYTHONPATH=${PYTHONPATH}:/group/mwaops/stremblay/MandC_Core/
 source ~/.modules-gnu
-module load python/2.6.8 psycopg2 pyephem matplotlib
+source ~/.prep-python
+#module load python/2.6.8 psycopg2 pyephem matplotlib
 
 length=`ls /scratch/mwaops/vcs/$1/combined/*ics.dat | wc -l`
 #echo "Length of Obs: $len"
