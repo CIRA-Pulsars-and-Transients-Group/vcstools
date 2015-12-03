@@ -602,8 +602,11 @@ if __name__ == '__main__':
 
                     print  "There are %d PFB files in ch%02d directory" % (already_done,(index+1))
                     print  "There are %d files remaining" % (to_pfb)
-                    
-                    secs_to_run = datetime.timedelta(seconds=60*to_pfb)
+                    if (60*to_pfb < 86000):
+                        secs_to_run = datetime.timedelta(seconds=60*to_pfb)
+                    else:
+                        secs_to_run = datetime.timedelta(seconds=86000)
+
                     submit_line = "sbatch --time=%s --nodes=1 --workdir=%s --partition=gpuq %s\n" % (str(secs_to_run),working_dir,pfb_batch_file)
 
                     if (secs_to_run.seconds > 0):
