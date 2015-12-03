@@ -6,10 +6,11 @@ if [ $# -lt 1 ] ; then
     exit 1
 fi
 
-if [ -f $FILE /scratch/mwaops/vcs/$1/fits/mk_psrfits_in ];
+if [ -p $FILE /scratch/mwaops/vcs/$1/fits/mk_psrfits_in ];
 then
     rm /scratch/mwaops/vcs/$1/fits/mk_psrfits_in
 fi
+
 
 length=`ls /scratch/mwaops/vcs/$1/combined/*ics.dat | wc -l`
 #echo "Length of Obs: $len"
