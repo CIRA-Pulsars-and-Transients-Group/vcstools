@@ -670,7 +670,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
             while ((count < nstation*npol) && !feof(phases)) {
                 for (ch=0;ch<nchan;ch++) {
                     rval = fscanf(phases,"%lf\n",&(*phases_array)[count][ch]);
-                    fprintf(stdout,"Phases: %d %d %lf\n",count,ch,(*phases_array)[count][ch]);
+                   // fprintf(stdout,"Phases: %d %d %lf\n",count,ch,(*phases_array)[count][ch]);
                 }
                 if (rval != 1)
                     break;
@@ -704,7 +704,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
             }
             else {
                 (*complex_weights_array)[count][ch] = (*weights)[count] * cexp(I*(*phases_array)[count][ch]);
-                fprintf(stdout,"Complex weight for station[%d] channel[%d] is %lf %lf\n",count,ch,creal((*complex_weights_array)[count][ch]),cimag((*complex_weights_array)[count][ch]));
+               // fprintf(stdout,"Complex weight for station[%d] channel[%d] is %lf %lf\n",count,ch,creal((*complex_weights_array)[count][ch]),cimag((*complex_weights_array)[count][ch]));
             }
         }
     }
