@@ -40,7 +40,7 @@ void usage() {
 	fprintf(stdout,"read_mwac -s -e -+ <list of files> \n");
 	fprintf(stdout,"Simple utility to read the dump files from the correlator (or NGAS) " \
 			" and dump the contents to stdout, you can choose to average and only read a subset of channels or both:\n");
-    fprintf(stdout,"\t-c\t\t -- conjugate <all> visibilities");
+    fprintf(stdout,"\t-c\t\t -- conjugate <all> visibilities\n");
 	fprintf(stdout,"\t-s\t\t -- start channel\n");
 	fprintf(stdout,"\t-e\t\t -- end channel\n");
 	fprintf(stdout,"\t-+\t\t -- fscrunch factor\n");
