@@ -227,7 +227,7 @@ if __name__ == '__main__':
     the_options = {'ra': "05:34:34", 'dec': "22:00:10", 'delays': False, 'submit': False, 'rts' : 0, 'rts_only' : 0, 'extn' : "pfb", 'mode' : 1,'metafile': "null"}
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hr:d:e:f:g:m:or:s:")
+        opts, args = getopt.getopt(sys.argv[1:],"hr:d:e:f:g:m:o:r:s:")
     except getopt.GetoptError:
         usage(the_options)
         sys.exit()
@@ -253,6 +253,7 @@ if __name__ == '__main__':
             outdir = arg
         elif (opt == "-o"):
             the_options['rts_only'] = True
+            obsid = int(arg)
         elif (opt == "-r"):
             the_options['rts'] = int(arg)
         elif (opt == "-s"):
@@ -287,8 +288,8 @@ if __name__ == '__main__':
         c_f = sorted(glob.glob(corr_files_glob))
         first_corr_file = c_f[0]
         (current_time,ext) = os.path.splitext(os.path.basename(first_corr_file))
-        (obsid,utctime,gpubox,num) = string.split(current_time,'_')
-        rts_file = "./%s_%s_rts.in" % (obsid,utctime)
+        (junk,utctime,gpubox,num) = string.split(current_time,'_')
+        rts_file = "./%s_%s_rts.in" % (junk,utctime)
         build_rts_in_file(obsid,utctime,".",rts_file)
         sys.exit(0)
 

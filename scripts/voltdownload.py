@@ -1,5 +1,4 @@
-!#/usr/bin/env python
-
+#!/usr/bin/env python
 import sys, os, time, socket, json, struct
 from optparse import OptionParser
 import threading
@@ -219,11 +218,7 @@ def main():
         parser.add_option("--dir", default= './', action="store", dest="out", help="Output directory (default: ./<Observation ID>")
         parser.add_option("--parallel", default='6', action="store", dest="td", help="Number of simultaneous downloads (default: 6)")
         
-        # get system TCP buffer size
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        bufsize = s.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
-        print "Buffer size is {0}".format(bufsize)
-        s.close()
+        bufsize = 4096
         
         (options, args) = parser.parse_args()
         
@@ -256,7 +251,7 @@ def main():
         
         print '%s [INFO] Finding observation %s' % (time.strftime("%c"), options.obs)
 
-        fileresult = queryObs(options.obs, 'ngas01.ivec.org', options.filetype, options.timefrom, options.duration)
+        fileresult = queryObs(options.obs, 'mwa-metadata01.pawsey.org.au', options.filetype, options.timefrom, options.duration)
         if len(fileresult) <= 0:
             print '%s [INFO] No files found for observation %s and file type %s' % (time.strftime("%c"), options.obs, int(options.filetype))
             sys.exit(1)
