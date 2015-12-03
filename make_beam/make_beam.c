@@ -761,7 +761,7 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
                 Fnorm += (double) Ji[j] * conj(Ji[j]);
             }
             Fnorm = sqrt(Fnorm);
-            fprintf(stderr,"Fnorm (Ji) = (%d) %f\n",count,Fnorm);
+           // fprintf(stderr,"Fnorm (Ji) = (%d) %f\n",count,Fnorm);
 
             if (Fnorm != 0) {
 
@@ -781,7 +781,7 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
             }
             Fnorm = sqrt(Fnorm);
 
-            fprintf(stderr,"Fnorm = (%d) %f\n",count,sqrt(Fnorm));
+//            fprintf(stderr,"Fnorm = (%d) %f\n",count,sqrt(Fnorm));
 //            for (j=0; j < 4;j++) {
 //                fprintf(stderr,"(%d,%d) %f %f",count,j,creal((*invJi)[count][j]),cimag((*invJi)[count][j]) );
  //           }
