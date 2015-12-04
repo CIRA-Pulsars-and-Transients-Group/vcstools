@@ -6,17 +6,11 @@ if [ $# -lt 1 ] ; then
     exit 1
 fi
 
-if [ -f $FILE /scratch/mwaops/vcs/$1/fits/mk_psrfits_in ];
+if [ -p $FILE /scratch/mwaops/vcs/$1/fits/mk_psrfits_in ];
 then
     rm /scratch/mwaops/vcs/$1/fits/mk_psrfits_in
 fi
 
-#export PATH=${PATH}:/home/fkirsten/software/galaxy-scripts/scripts/
-#export PYTHONPATH=${PYTHONPATH}:/home/fkirsten/software/galaxy-scripts/scripts/
-#export PYTHONPATH=${PYTHONPATH}:/group/mwaops/stremblay/MandC_Core/
-source ~/.modules-gnu
-source ~/.prep-python
-#module load python/2.6.8 psycopg2 pyephem matplotlib
 
 length=`ls /scratch/mwaops/vcs/$1/combined/*ics.dat | wc -l`
 #echo "Length of Obs: $len"
@@ -60,8 +54,8 @@ mjd_whole=${mjd:0:5}
 
 mkdir /scratch/mwaops/vcs/$1/fits
 cd /scratch/mwaops/vcs/$1/fits
-echo -e "/scratch/mwaops/vcs/$1/fits/mk_psrfits_in\n\n$1\n\n${length}\n${USER}\n\n$1\n\n\nMWA-G0024\n${start}\n\n${freq}\n30.72\n${RA}\n${Dec}\n${Azimuth}\n${Zenith}\n\n${lst_s}\n${utc_s}\n${mjd_whole}\n\n\n\n\n\n\n\n\n" | ~/software/galaxy-scripts/bin/make_psrfits &
-cat /scratch/mwaops/vcs/$1/combined/*ics.dat > /scratch/mwaops/vcs/$1/fits/mk_psrfits_in &
+echo -e "/scratch/mwaops/vcs/$1/fits/mk_psrfits_in\n\n$1\n\n${length}\n${USER}\n\n$1\n\n\nMWA-G0024\n${start}\n\n${freq}\n30.72\n${RA}\n${Dec}\n${Azimuth}\n${Zenith}\n\n${lst_s}\n${utc_s}\n${mjd_whole}\n\n\n\n\n\n\n\n\n" | make_psrfits & sleep 1.0
+cat /scratch/mwaops/vcs/$1/combined/*ics.dat > /scratch/mwaops/vcs/$1/fits/mk_psrfits_in
 wait
 
 #IFS=$OLDIFS
