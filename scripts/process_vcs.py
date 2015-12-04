@@ -295,6 +295,11 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}".format(RA, Dec, gpubox))
 
         DI_file = "{0}/DI_JonesMatrices_node0{1}.dat".format(DI_dir, gpubox)
+        channel_file = "{0}/channel".format(pointing_chan_dir)
+        with open(channel_file,"w") as ch_file:
+            ch_line = "{0}".format(chan_list[chan_index]);
+            ch_file.write(ch_line)
+
         #ASSUMES 10kHz channels <beware>
 
         basefreq = int(chan_list[chan_index]) * 1.28e6 - 5e3 - 640e3  + 5e3
@@ -313,45 +318,30 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         else:
             print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
 
-
-    # if (the_options['delays'] == True):
-    #
-    #     DI_file = "%s/DI_JonesMatrices_node0%02d.dat" % (outdir,gpubox_label)
-    #     print DI_file
-    #
-    #     if (old_mode == 1):
-    #         if (os.path.isfile(DI_file)):
-    #             delays_line = "%s -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -e %d -n 88 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,edge_num,the_options['ra'],the_options['dec'])
-    #         else:
-    #             delays_line = "%s -a ./ -b %d -i -p -z %s -o %s -f %s -e %d -n 88 -w 10000 -r %s -d %s -m %s" % (get_delays,len(f),utctime,obsid,freq_Hz,edge_num,the_options['ra'],the_options['dec'],the_options['metafile'])
-    #     elif (new_mode == 1):
-    #         if (os.path.isfile(DI_file)):
-    #             delays_line = "%s -a ./ -b %d -j %s -m %s -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s" % (get_delays,len(f),DI_file,the_options['metafile'],utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'])
-    #         else:
-    #             print "WARNING NOT CALIBRATION FOUND\n"
-    #             delays_line = "%s -a ./ -b %d -i -p -z %s -o %s -f %s -n 128 -w 10000 -r %s -d %s -m %s" % (get_delays,len(f),utctime,obsid,freq_Hz,the_options['ra'],the_options['dec'],the_options['metafile'])
-
+        chan_index = chan_index+1
 
     print "Forming coherent beam"
 
     # Run make_beam
-    """
-                        with open(batch, 'w') as batch_file:
-                    batch_file.write("#!/bin/bash -l\n")
 
-                    nodes_line = "#SBATCH --nodes=%d\n#SBATCH --export=NONE\n" % (number_of_exe/exe_per_node)
-                    batch_file.write(nodes_line)
-                    time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
-                    batch_file.write(time_line)
-                    aprun_line = "aprun -n %d -N %d %s -e pfb -o ch01 -a 128 -n %d -t 1 %s -c phases.txt -w flags.txt -D %s/ch %s psrfits_header.txt\n" % (number_of_exe,exe_per_node,make_beam,nchan,jones,working_dir,beam_mode_str)
-                    batch_file.write(aprun_line)
+    secs_to_run = datetime.timedelta(seconds=10*(stop-start))
 
-                submit_line = "sbatch --nodes=%d --workdir=%s --time=%s --partition=%s %s\n" % (number_of_exe/exe_per_node,working_dir,str(secs_to_run),queue,batch)
-                print submit_line
+    make_beam_batch = "{0}/batch/mb.batch".format(working_dir)
+    with open(make_beam_batch, 'w') as batch_file:
+        batch_file.write("#!/bin/bash -l\n")
 
-                submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-    """
+        nodes_line = "#SBATCH --nodes=24\n#SBATCH --export=NONE\n" 
+        batch_file.write(nodes_line)
+        time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
+        batch_file.write(time_line)
+        aprun_line = "aprun -n 24 make_beam -e dat -a 128 -n 128 -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (jones,working_dir,pointing_dir,bf_mode_str)
+        batch_file.write(aprun_line)
 
+        submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (working_dir,str(secs_to_run),make_beam_batch)
+        print submit_line
+
+        #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+            
 
 
 if __name__ == '__main__':
@@ -361,6 +351,8 @@ if __name__ == '__main__':
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
     chan_list = []
     utctime = "Never"
+    bf_mode_str = " -f "
+    jones = "-j jones.txt"
 
     from optparse import OptionParser, OptionGroup
 
@@ -423,7 +415,13 @@ if __name__ == '__main__':
             quit()
         #if opts.pointing[0] or opt.pointing[1]
         utctime = opts.utctime
-    
+        
+        if (opts.bf_mode == 1):
+            bf_mode_str = " -f "
+        if  (opts.bf_mode == 2):
+            bf_mode_str = " -v "
+
+
     mdir(opts.work_dir, "Working")
     obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
     mdir(obs_dir, "Observation")
