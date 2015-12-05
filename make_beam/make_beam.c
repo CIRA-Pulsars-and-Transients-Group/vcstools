@@ -440,7 +440,7 @@ int read_pfb_call(char *in_name) {
         fprintf(stderr,"Failed to open %s:%s\n",in_name,strerror(errno));
         return -1;
     }
-    int fd_out = open(out_file,O_CREAT | O_TRUNC);
+    int fd_out = open(out_file,0666);
 
     if (fd_out < 0) {
         fprintf(stderr,"Failed to open %s:%s\n",out_file,strerror(errno));
