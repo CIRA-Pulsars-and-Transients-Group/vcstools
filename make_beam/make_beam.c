@@ -2053,7 +2053,7 @@ int main(int argc, char **argv) {
         specnum++;
     }
 BARRIER:
-    if (make_psrfits == 1) {
+    if (make_psrfits == 1 && pf.status == 0) {
         /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/
         int itmp = 0;
         int itmp2 = 0;
