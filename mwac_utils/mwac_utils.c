@@ -752,6 +752,7 @@ int default_read_pfb_call(int in_fd, int out_fd, char *heap) {
             if (heap != NULL) {
                 memcpy(heap_ptr,out_ptr,items_to_write);
                 heap_ptr = heap_ptr+items_to_write;
+                items_to_write = 0;
             }
         }
 
