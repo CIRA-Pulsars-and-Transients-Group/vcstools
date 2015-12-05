@@ -455,6 +455,8 @@ int read_pfb_call(char *in_name) {
         return -1;
     }
     else {
+        close(fd_in);
+        close(fd_out);
         return 1;
     }
 
