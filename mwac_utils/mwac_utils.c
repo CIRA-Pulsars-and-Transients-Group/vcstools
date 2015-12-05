@@ -5,6 +5,7 @@
 #include <plot.h>
 #include <math.h>
 #include <complex.h>
+#include <inttypes.h>
 #include <slamac.h>
 #include <fftw3.h>
 #include <assert.h>
