@@ -434,7 +434,7 @@ int read_pfb_call(char *in_name) {
     
     sprintf(out_file,"%s.working",in_name);
 
-    fprintf(stdout,"Converting %s to %s\n",in_name,out_file);
+    fprintf(stdout,"\nConverting %s to %s\n",in_name,out_file);
 
     int fd_in = open(in_name,O_RDONLY);
 
@@ -451,6 +451,7 @@ int read_pfb_call(char *in_name) {
 
 
     if ((default_read_pfb_call(fd_in,fd_out)) < 0){
+        fprintf(stderr,"Error in default_read_pfb\n");
         return -1;
     }
     else {
