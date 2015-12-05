@@ -446,7 +446,7 @@ int read_pfb_call(char *in_name, int expunge) {
         fprintf(stderr,"Failed to open %s:%s\n",in_name,strerror(errno));
         return -1;
     }
-    int fd_out = creat(out_file,0666);
+    int fd_out = open(out_file,O_CREAT | O_TRUNC | O_WRONLY | O_SYNC, 0666);
 
     if (fd_out < 0) {
         fprintf(stderr,"Failed to open %s:%s\n",out_file,strerror(errno));
@@ -456,6 +456,8 @@ int read_pfb_call(char *in_name, int expunge) {
 
     if ((default_read_pfb_call(fd_in,fd_out)) < 0){
         fprintf(stderr,"Error in default_read_pfb\n");
+        close(fd_in);
+        close(fd_out);
         return -1;
     }
     else {
