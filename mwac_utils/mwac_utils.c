@@ -10,6 +10,8 @@
 #include <fftw3.h>
 #include <assert.h>
 #include <fcntl.h>
+#include <unistd.h>
+
 
 #ifndef __APPLE__
 #include <omp.h>
@@ -616,23 +618,6 @@ int default_read_pfb_call(int in_fd, int out_fd) {
     int8_t *output_buffer = NULL;
     int8_t *binary_buffer = NULL;
 
-    FILE *fin = NULL;
-    FILE *fout = NULL;
-
-    fin = fdopen(in_fd,"r");
-
-    if (fin == NULL) {
-        perror ("Failed to fdopen the input");
-        return -1;
-    }
-
-    fout = fdopen(out_fd,"w+");
-
-    if (fout == NULL) {
-        perror ("Failed to fdopen the output");
-        return -1;
-    }
-
     nfrequency=128;
     npol=2;
     nstation=128;
@@ -662,16 +647,34 @@ int default_read_pfb_call(int in_fd, int out_fd) {
     }
 
     size_t gulp = (nstation*npol*nfrequency*2*4)/8;
+    int end_of_file = 0;
 
-
-    while (!feof(fin)) {
+    while (!end_of_file) {
 
         items_to_read = gulp;
         rtn = 0;
 
         while(items_to_read > 0) {
-            rtn = fread(input_buffer+(gulp-items_to_read),1,items_to_read,fin);
-            items_to_read -= rtn;
+            rtn = read(in_fd,input_buffer+(gulp-items_to_read),items_to_read);
+            if (rtn == 0) {
+                end_of_file = 1;
+                break;
+            }
+            else if (rtn > 0) {
+                items_to_read -= rtn;
+            }
+            else {
+                fprintf(stderr,"File conversion error on read\n");
+                return -1;
+            }
+        }
+
+        if (end_of_file && (items_to_read == gulp)){
+            break;
+        }
+        else if (end_of_file && (items_to_read != gulp)){
+            fprintf(stderr,"EOF on input file with incomplete read <FATAL>\n");
+            return -1;
         }
 
         // time then frequency runs slowest in this data block
@@ -740,15 +743,12 @@ int default_read_pfb_call(int in_fd, int out_fd) {
         size_t items_to_write = out_size;
         rtn = 0;
         while( items_to_write > 0) {
-            rtn = fwrite(out_ptr+(out_size-items_to_write),1,out_size,fout);
+            rtn = write(out_fd,out_ptr+(out_size-items_to_write),items_to_write);
             items_to_write -= rtn;
         }
 
     } // next time step
-    if (feof(fin)){
-        fclose(fin);
-        fclose(fout);
-    }
+
 
     free(input_buffer);
     free(output_buffer);
