@@ -434,9 +434,7 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
     
     sprintf(out_file,"%s.working",in_name);
 
-    if ((access(out_file,F_OK) != -1) && (!expunge)){
-        return 1;
-    }
+
 
     fprintf(stdout,"\nConverting %s to %s\n",in_name,out_file);
 
@@ -449,6 +447,11 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
 
     int fd_out = 0;
     if (heap == NULL) {
+
+        if ((access(out_file,F_OK) != -1) && (!expunge)){
+            return 1;
+        }
+
         open(out_file,O_CREAT | O_TRUNC | O_WRONLY | O_SYNC, 0666);
 
         if (fd_out < 0) {
