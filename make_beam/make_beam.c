@@ -434,6 +434,8 @@ int read_pfb_call(char *in_name) {
     
     sprintf(out_file,"%s.working",in_name);
 
+    fprintf(stdout,"Converting %s to %s\n",in_name,out_file);
+
     int fd_in = open(in_name,O_RDONLY);
 
     if (fd_in < 0) {
@@ -1130,13 +1132,6 @@ int main(int argc, char **argv) {
             if (nfiles == 0) {
                 fprintf(stderr,"nfiles = 0\n");
                 goto BARRIER;
-            }
-            else {
-                int fi = 0;
-
-                for (fi = 0;fi < nfiles;fi++) {
-                    fprintf(stdout,"Found %s\n",globbuf.gl_pathv[fi]);
-                }
             }
 
         }
