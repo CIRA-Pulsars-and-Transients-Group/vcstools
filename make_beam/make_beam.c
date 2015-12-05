@@ -448,11 +448,13 @@ int read_pfb_call(char *in_name) {
     }
 
 
-    default_read_pfb_call(fd_in,fd_out);
+    if ((default_read_pfb_call(fd_in,fd_out)) < 0){
+        return -1;
+    }
+    else {
+        return 1;
+    }
 
-    
-    return 1;
-        
 }
 int make_get_delay_call(char *delay_file, time_t increment) { // No longer called by this executeable
     
@@ -1433,7 +1435,7 @@ int main(int argc, char **argv) {
 
 
     }
-    fprintf(stdout,"blah\n");
+
     if (make_vdif == 1) {
         
         // data_buffer needs to hold a seconds worth of complex float samples //

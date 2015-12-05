@@ -608,7 +608,7 @@ int read_DIJones_file(complex double **G, complex double *Jref, int nant, double
     
 } /* read_cal_file */
 
-void default_read_pfb_call(int in_fd, int out_fd) {
+int default_read_pfb_call(int in_fd, int out_fd) {
 
 // Initialise
 //
@@ -623,14 +623,14 @@ void default_read_pfb_call(int in_fd, int out_fd) {
 
     if (fin == NULL) {
         perror ("Failed to fdopen the input");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     fout = fdopen(out_fd,"w+");
 
     if (fout == NULL) {
         perror ("Failed to fdopen the output");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     nfrequency=128;
@@ -753,6 +753,8 @@ void default_read_pfb_call(int in_fd, int out_fd) {
     free(input_buffer);
     free(output_buffer);
     free(binary_buffer);
+
+    return 0;
 
 }
 int read_cal_file(complex double **G, int nant, double *amp) {
