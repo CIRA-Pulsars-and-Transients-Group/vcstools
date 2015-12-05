@@ -1792,7 +1792,12 @@ int main(int argc, char **argv) {
                 } else if (type == 2) {
                     memcpy(pf.sub.data,data_buffer,pf.sub.bytes_per_subint);
                 }
-                psrfits_write_subint(&pf);
+
+                if (psrfits_write_subint(&pf) != 0) {
+                    fprintf(stderr,"Write subint failed file exists?\n");
+                    goto BARRIER;
+                }
+
                 pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
                 pf.sub.lst += pf.sub.tsubint;;
                 fprintf(stderr,"Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
