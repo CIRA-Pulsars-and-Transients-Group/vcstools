@@ -626,7 +626,7 @@ void default_read_pfb_call(int in_fd, int out_fd) {
         exit(EXIT_FAILURE);
     }
 
-    fout = fdopen(out_fd,"w");
+    fout = fdopen(out_fd,"w+");
 
     if (fout == NULL) {
         perror ("Failed to fdopen the output");
