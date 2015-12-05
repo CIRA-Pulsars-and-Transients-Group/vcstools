@@ -326,7 +326,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
 
     secs_to_run = datetime.timedelta(seconds=30*(stop-start))
 
-    make_beam_batch = "{0}/batch/mb.batch".format(working_dir)
+    make_beam_batch = "{0}/batch/mb_{1}_{2}.batch".format(working_dir,RA,Dec)
     with open(make_beam_batch, 'w') as batch_file:
         batch_file.write("#!/bin/bash -l\n")
 
@@ -334,10 +334,10 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         batch_file.write(nodes_line)
         time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
         batch_file.write(time_line)
-        aprun_line = "aprun -n 24 make_beam -e dat -a 128 -n 128 -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (jones,working_dir,pointing_dir,bf_mode_str)
+        aprun_line = "aprun -n 24 -N 1 make_beam -e dat -a 128 -n 128 -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (jones,working_dir,pointing_dir,bf_mode_str)
         batch_file.write(aprun_line)
 
-        submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (working_dir,str(secs_to_run),make_beam_batch)
+        submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (pointing_dir,str(secs_to_run),make_beam_batch)
         print submit_line
 
         #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
