@@ -7,6 +7,8 @@
 #include <complex.h>
 #include <slamac.h>
 #include <fftw3.h>
+#include <assert.h>
+#include <fcntl.h>
 
 #ifndef __APPLE__
 #include <omp.h>
@@ -605,22 +607,169 @@ int read_DIJones_file(complex double **G, complex double *Jref, int nant, double
     
 } /* read_cal_file */
 
+void default_read_pfb_call(int in_fd, int out_fd) {
+
+// Initialise
+//
+    int8_t *input_buffer = NULL;
+    int8_t *output_buffer = NULL;
+    int8_t *binary_buffer = NULL;
+
+    FILE *fin = NULL;
+    FILE *fout = NULL;
+
+    fin = fdopen(in_fd,"r");
+
+    if (fin == NULL) {
+        perror ("Failed to fdopen the input");
+        exit(EXIT_FAILURE);
+    }
+
+    fout = fdopen(out_fd,"w");
+
+    if (fout == NULL) {
+        perror ("Failed to fdopen the output");
+        exit(EXIT_FAILURE);
+    }
+
+    nfrequency=128;
+    npol=2;
+    nstation=128;
+
+    input_buffer = malloc((nstation*npol*nfrequency*2*4)/8);
+    assert(input_buffer);
+    output_buffer = malloc(nstation*npol*nfrequency*2);
+    assert(output_buffer);
+    binary_buffer = malloc(nstation*npol*nfrequency*2);
+    assert(binary_buffer);
+
+    int index = 0;
+
+    int out_index = 0;
+
+    size_t rtn = 0;
+    size_t items_to_read = 0;
+
+
+    uint8_t original;
+    int8_t value;
+    static int filled = 0;
+
+    if (filled == 0) {
+        fill_mapping_matrix();
+        filled = 1;
+    }
+
+    size_t gulp = (nstation*npol*nfrequency*2*4)/8;
+
+
+    while (!feof(fin)) {
+
+        items_to_read = gulp;
+        rtn = 0;
+
+        while(items_to_read > 0) {
+            rtn = fread(input_buffer+(gulp-items_to_read),1,items_to_read,fin);
+            items_to_read -= rtn;
+        }
+
+        // time then frequency runs slowest in this data block
+
+        int8_t *inp_ptr = NULL;
+        int map_index = 0;
+        int chan = 0;
+        int pol = 0;
+
+        for (chan = 0 ; chan < nfrequency ; chan++) {
+
+            inp_ptr = (int8_t *) input_buffer + ((chan*nstation*npol*2*4)/8);
+            for (index = 0; index < nstation; index++) {
+
+                for (pol =0 ;pol < npol; pol++) {
+                    // this returns the desired output index (0 to 64)
+                    map_index = pfb_output_to_input[index*npol + pol];
+                    // output matrix index - this index reorders the
+                    // stations AND transposes
+                    // the order will now be [time][input][chan][complexity]
+                    //
+                    out_index = map_index*nfrequency*2 + chan*2;
+
+                    // .. assigns the value to be the current de-ref input_ptr
+
+
+                    original = (uint8_t) *inp_ptr;
+                    original = original & 0xf; // first sample
+                    if (original >= 0x8) {
+                        value = original - 0x10;
+                    }
+                    else {
+                        value = original;
+                    }
+
+                    output_buffer[out_index] = (int8_t) (value & 0xff);
+
+
+                    out_index++;
+
+                    original = (uint8_t) *inp_ptr ;
+                    original = original >> 4;
+                    original = original & 0xf; // second sample
+                    if (original >= 0x8) {
+                        value = original - 0x10;
+                    }
+                    else {
+                        value = original;
+                    }
+                    output_buffer[out_index] = (int8_t) (value & 0xff);
+
+                    inp_ptr++;
+
+
+                } // for all pol
+            } // for all stations
+        } // for all channels
+        //}
+
+
+        int8_t *out_ptr;
+        size_t out_size;
+        out_ptr = output_buffer;
+        out_size = 2*nstation*npol*nfrequency;
+
+        size_t items_to_write = out_size;
+        rtn = 0;
+        while( items_to_write > 0) {
+            rtn = fwrite(out_ptr+(out_size-items_to_write),1,out_size,fout);
+            items_to_write -= rtn;
+        }
+
+    } // next time step
+    if (feof(fin)){
+        fclose(fin);
+        fclose(fout);
+    }
+
+    free(input_buffer);
+    free(output_buffer);
+    free(binary_buffer);
+
+}
 int read_cal_file(complex double **G, int nant, double *amp) {
-    
+
     FILE *fp = NULL;
     char line[BUFSIZE];
     int index = 0, nscan;
     double re0, im0, re1, im1, re2, im2, re3, im3;
     complex double A[4], invA[4], tmp[4];
-    
+
     if ((fp = fopen("Gjones.dat", "r")) == NULL) {
         fprintf(stderr,
                 "Error: cannot open gain Jones matrix file: Gjones.dat\n");
         exit(0);
     }
-    
+
     while ((fgets(line, BUFSIZE - 1, fp)) != NULL) {
-        
+
         if (line[0] == '\n' || line[0] == '#' || line[0] == '\0')
             continue; // skip blank/comment lines
         if (line[0] == '/' && line[1] == '/')

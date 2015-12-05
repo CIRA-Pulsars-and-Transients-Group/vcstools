@@ -14,6 +14,8 @@
 #include "vdifio.h"
 #include <mpi.h>
 #include <glob.h>
+#include <fcntl.h>
+
 
 // Are GPU available
 
@@ -427,16 +429,17 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
 
 int read_pfb_call(char *in_name) {
     
-    char new_command[MAX_COMMAND_LENGTH];
+   
     char out_file[MAX_COMMAND_LENGTH];
     
     sprintf(out_file,"%s.working",in_name);
-    
-        
-    sprintf(new_command,"%s -i %s -o  %s","read_pfb ",in_name,out_file);
-    fprintf(stdout,"Will execute: %s\n",new_command);
-    system(new_command);
-    
+
+    int fd_in = open(in_name,O_RDONLY);
+    int fd_out = open(out_file,O_CREAT | O_TRUNC);
+
+
+    default_read_pfb_call(fd_in,fd_out);
+
     
     return 1;
         

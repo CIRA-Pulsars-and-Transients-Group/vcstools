@@ -76,6 +76,8 @@ extern "C" {
     
     // for the beamformer
     void invert_pfb(complex float * input, complex float *output, int nchan_in, int nchan_out, int npol_in, int npol_out,int mode,int last,void *context);
+    void default_read_pfb_call(int in_fd, int out_fd);
+
 #ifdef __cplusplus
 }
 #endif
