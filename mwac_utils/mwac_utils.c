@@ -841,7 +841,7 @@ void fill_mapping_matrix() {
 	for (p=0;p<npfb;p++) {
 		for (inp1=0;inp1<64;inp1++) {
 			pfb_output_to_input[(p*64) + inp1] = single_pfb_mapping[inp1] + (p*64);
-        			fprintf(stdout,"input %d - maps to antenna %d\n",((p*64) + inp1),pfb_output_to_input[(p*64) + inp1]);
+            //fprintf(stdout,"input %d - maps to antenna %d\n",((p*64) + inp1),pfb_output_to_input[(p*64) + inp1]);
 		}
 	}
 
