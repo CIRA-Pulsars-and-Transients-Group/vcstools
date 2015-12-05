@@ -427,7 +427,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
 
 
 
-int read_pfb_call(char *in_name, int expunge) {
+int read_pfb_call(char *in_name, int expunge, char *heap) {
     
    
     char out_file[MAX_COMMAND_LENGTH];
@@ -446,23 +446,28 @@ int read_pfb_call(char *in_name, int expunge) {
         fprintf(stderr,"Failed to open %s:%s\n",in_name,strerror(errno));
         return -1;
     }
-    int fd_out = open(out_file,O_CREAT | O_TRUNC | O_WRONLY | O_SYNC, 0666);
 
-    if (fd_out < 0) {
-        fprintf(stderr,"Failed to open %s:%s\n",out_file,strerror(errno));
-        return -1;
+    int fd_out = 0;
+    if (heap == NULL) {
+        open(out_file,O_CREAT | O_TRUNC | O_WRONLY | O_SYNC, 0666);
+
+        if (fd_out < 0) {
+            fprintf(stderr,"Failed to open %s:%s\n",out_file,strerror(errno));
+            return -1;
+        }
     }
 
-
-    if ((default_read_pfb_call(fd_in,fd_out)) < 0){
+    if ((default_read_pfb_call(fd_in,fd_out,heap)) < 0){
         fprintf(stderr,"Error in default_read_pfb\n");
         close(fd_in);
-        close(fd_out);
+        if (fd_out > 0)
+            close(fd_out);
         return -1;
     }
     else {
         close(fd_in);
-        close(fd_out);
+        if (fd_out > 0)
+            close(fd_out);
         return 1;
     }
 
@@ -877,6 +882,9 @@ int main(int argc, char **argv) {
     int nfiles = 0;
     int type=1;
     int expunge = 0;
+    int read_files = 0;
+    int read_heap = 1;
+
     
     int make_psrfits = 0;
     int make_vdif = 0;
@@ -1415,7 +1423,9 @@ int main(int argc, char **argv) {
     complex float *pol_Y = (complex float *) calloc(nchan+2*edge,sizeof(complex float));
     
     char *buffer = (char *) malloc(nspec*items_to_read*sizeof(int8_t));
-    
+    char *heap = (char *) malloc(nspec*items_to_read*sample_rate);
+    size_t heap_step = 0;
+
     int outpol = 1;
     
     float *data_buffer = NULL;
@@ -1525,7 +1535,7 @@ int main(int argc, char **argv) {
                 continue;
             }
         }
-        else {
+        else if (read_files) {
             if (file_no >= nfiles) { // finished file list
                 fprintf(stderr,"make_beam finished:\n");
                 finished = 1;
@@ -1535,7 +1545,7 @@ int main(int argc, char **argv) {
             if (fp == NULL) { // need to open the next file
                 if (execute == 1) {
 
-                    if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge)) < 0) {
+                    if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
                         goto BARRIER;
                     }
 
@@ -1568,6 +1578,28 @@ int main(int argc, char **argv) {
                     file_no++;
                     continue;
                 }
+            }
+        }
+        if (read_heap) {
+            if (heap_step == 0) {
+
+                if (file_no >= nfiles) { // finished file list
+                    fprintf(stderr,"make_beam finished:\n");
+                    finished = 1;
+                    continue;
+                }
+
+                if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
+                    goto BARRIER;
+                }
+            }
+            if (heap_step < sample_rate) {
+                memcpy(buffer,heap+(items_to_read*heap_step),items_to_read);
+                heap_step++;
+            }
+            else {
+                heap_step = 0;
+                file_no++;
             }
         }
         

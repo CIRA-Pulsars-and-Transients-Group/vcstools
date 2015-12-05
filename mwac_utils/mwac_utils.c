@@ -610,7 +610,7 @@ int read_DIJones_file(complex double **G, complex double *Jref, int nant, double
     
 } /* read_cal_file */
 
-int default_read_pfb_call(int in_fd, int out_fd) {
+int default_read_pfb_call(int in_fd, int out_fd, char *heap) {
 
 // Initialise
 //
@@ -629,6 +629,8 @@ int default_read_pfb_call(int in_fd, int out_fd) {
     binary_buffer = malloc(nstation*npol*nfrequency*2);
     assert(binary_buffer);
 
+    char *heap_ptr = heap;
+    
     int index = 0;
 
     int out_index = 0;
@@ -743,8 +745,14 @@ int default_read_pfb_call(int in_fd, int out_fd) {
         size_t items_to_write = out_size;
         rtn = 0;
         while( items_to_write > 0) {
-            rtn = write(out_fd,out_ptr+(out_size-items_to_write),items_to_write);
-            items_to_write -= rtn;
+            if (out_fd > 0) {
+                rtn = write(out_fd,out_ptr+(out_size-items_to_write),items_to_write);
+                items_to_write -= rtn;
+            }
+            if (heap != NULL) {
+                memcpy(heap_ptr,out_ptr,items_to_write);
+                heap_ptr = heap_ptr+items_to_write;
+            }
         }
 
     } // next time step
