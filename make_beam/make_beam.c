@@ -427,12 +427,16 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
 
 
 
-int read_pfb_call(char *in_name) {
+int read_pfb_call(char *in_name, int expunge) {
     
    
     char out_file[MAX_COMMAND_LENGTH];
     
     sprintf(out_file,"%s.working",in_name);
+
+    if ((access(out_file,F_OK) != -1) && (!expunge)){
+        return 1;
+    }
 
     fprintf(stdout,"\nConverting %s to %s\n",in_name,out_file);
 
@@ -870,6 +874,7 @@ int main(int argc, char **argv) {
     int read_stdin = 0;
     int nfiles = 0;
     int type=1;
+    int expunge = 0;
     
     int make_psrfits = 0;
     int make_vdif = 0;
@@ -911,7 +916,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:X")) != -1) {
             switch(c) {
                     
                 case '1':
@@ -1043,6 +1048,9 @@ int main(int argc, char **argv) {
                 case 'w':
                     weights=1;
                     weights_file = strdup(optarg);
+                    break;
+                case 'X':
+                    expunge = 1;
                     break;
                 default:
                     usage();
@@ -1525,7 +1533,7 @@ int main(int argc, char **argv) {
             if (fp == NULL) { // need to open the next file
                 if (execute == 1) {
 
-                    if ((read_pfb_call(globbuf.gl_pathv[file_no])) < 0) {
+                    if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge)) < 0) {
                         goto BARRIER;
                     }
 
@@ -1551,7 +1559,7 @@ int main(int argc, char **argv) {
                 if (feof(fp) || rtn != nspec) {
                     fclose(fp);
                     fp = NULL;
-                    if (execute == 1) {
+                    if (execute == 1 && expunge == 1) {
                         unlink(working_file);
                     }
                     fprintf(stderr,"finished file %s\n", globbuf.gl_pathv[file_no]);
@@ -2053,6 +2061,13 @@ int main(int argc, char **argv) {
         specnum++;
     }
 BARRIER:
+    if (execute == 1 && (fp != NULL)) {
+        //cleanup
+        fclose(fp);
+        if (expunge)
+            unlink(working_file);
+    }
+
     if (make_psrfits == 1 && pf.status == 0) {
         /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/
         int itmp = 0;
