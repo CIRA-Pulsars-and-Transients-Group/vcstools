@@ -435,7 +435,17 @@ int read_pfb_call(char *in_name) {
     sprintf(out_file,"%s.working",in_name);
 
     int fd_in = open(in_name,O_RDONLY);
+
+    if (fd_in < 0) {
+        fprintf(stderr,"Failed to open %s:%s\n",in_name,strerror(errno));
+        return -1;
+    }
     int fd_out = open(out_file,O_CREAT | O_TRUNC);
+
+    if (fd_out < 0) {
+        fprintf(stderr,"Failed to open %s:%s\n",out_file,strerror(errno));
+        return -1;
+    }
 
 
     default_read_pfb_call(fd_in,fd_out);
@@ -1514,7 +1524,11 @@ int main(int argc, char **argv) {
 
             if (fp == NULL) { // need to open the next file
                 if (execute == 1) {
-                    read_pfb_call(globbuf.gl_pathv[file_no]);
+
+                    if ((read_pfb_call(globbuf.gl_pathv[file_no])) < 0) {
+                        goto BARRIER;
+                    }
+
                     sprintf(working_file,"%s.working",globbuf.gl_pathv[file_no]);
                 }
                 else {
