@@ -15,7 +15,7 @@
 #include <mpi.h>
 #include <glob.h>
 #include <fcntl.h>
-
+#include <assert.h>
 
 // Are GPU available
 
@@ -1426,8 +1426,14 @@ int main(int argc, char **argv) {
     complex float *pol_Y = (complex float *) calloc(nchan+2*edge,sizeof(complex float));
     
     char *buffer = (char *) malloc(nspec*items_to_read*sizeof(int8_t));
-    char *heap = (char *) malloc(nspec*items_to_read*sample_rate);
+    char *heap = NULL;
     size_t heap_step = 0;
+
+    if (read_heap)
+        heap = (char *) malloc(nspec*items_to_read*sample_rate);
+
+    assert(heap);
+
 
     int outpol = 1;
     
