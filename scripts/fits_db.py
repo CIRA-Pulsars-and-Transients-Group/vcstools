@@ -7,8 +7,8 @@ time =sys.argv[1]
 #time = str(1086725208)
 
 
-conn = psycopg2.connect("dbname=mwa host=mwa-metadata01.pawsey.org.au user=MWA-guest password=guest port=5432")
-
+#conn = psycopg2.connect("dbname=mwa host=mwa-metadata01.pawsey.org.au user=MWA-guest password=guest port=5432")
+conn = psycopg2.connect("dbname=mwa host=mwa-metadata01.pawsey.org.au port=5432")
 cur = conn.cursor()
 
 cur.execute("SELECT rf_stream.frequencies, rf_stream.ra, rf_stream.dec, rf_stream.azimuth, rf_stream.elevation FROM public.mwa_setting, public.rf_stream WHERE"
