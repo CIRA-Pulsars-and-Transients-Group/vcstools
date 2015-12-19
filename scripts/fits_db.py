@@ -7,7 +7,7 @@ time =sys.argv[1]
 #time = str(1086725208)
 
 
-conn = psycopg2.connect("dbname=mwa host=mwa-metadata01.pawsey.org.au user=mwa password=BowTie port=5432")
+conn = psycopg2.connect("dbname=mwa host=mwa-metadata01.pawsey.org.au user=MWA-guest password=guest port=5432")
 
 cur = conn.cursor()
 
