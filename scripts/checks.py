@@ -77,7 +77,7 @@ def check_recombine_ics(directory=None, required_size=30720000):
     return success
 
 # Append the service name to this base URL, eg 'con', 'obs', etc.
-BASEURL = 'http://ngas01.ivec.org/metadata/'
+BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
 
 
 def getmeta(service='obs', params=None):

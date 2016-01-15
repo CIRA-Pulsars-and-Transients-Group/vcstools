@@ -20,7 +20,7 @@ def getmeta(service='obs', params=None):
     import json
 
     # Append the service name to this base URL, eg 'con', 'obs', etc.
-    BASEURL = 'http://ngas01.ivec.org/metadata/'
+    BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
 
 
     if params:
@@ -64,7 +64,7 @@ def mdir(path,description):
 
 def ensure_metafits(metafits_file):
         if (os.path.isfile(metafits_file) == False):
-            metafile_line = "wget  http://ngas01.ivec.org/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
+            metafile_line = "wget  http://mwa-metadata01.pawsey.org.au/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
 
 
