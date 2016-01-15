@@ -82,6 +82,8 @@ if __name__ == '__main__':
             recombine_line = "{0} {1}/raw/{2}".format(recombine_line, the_options['root'],f_to_r)
 
         recombine_line = "%s\n" % recombine_line
+        print "this is what is called: " + recombine_line
+        subprocess.call("which recombine",shell=True)
         subprocess.call(recombine_line,shell=True)
 
         #log_name="{0}/recombine_{1}.log".format(the_options['root'],time_to_combine)
