@@ -171,6 +171,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     jobs_per_node = 8
 #    recombine = distutils.spawn.find_executable("recombine.py")
     recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
+    recombine_binary = "/group/mwaops/PULSAR/bin/recombine" # Hard coding this temporarily to ensure correct version of code is envoked
     for time_to_get in range(start_time,stop_time,increment):
 
         recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
@@ -192,7 +193,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
             if (jobs_per_node > increment):
                 jobs_per_node = increment
 
-            recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir)
+            recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e{6}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary)
             batch_file.write(recombine_line)
 
         submit_line = "sbatch --partition=gpuq --workdir={0} {1}\n".format(working_dir,recombine_batch)
