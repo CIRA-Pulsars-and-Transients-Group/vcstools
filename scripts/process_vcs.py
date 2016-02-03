@@ -77,9 +77,9 @@ def obs_max_min(obs_id):
     from file_maxmin import getmeta
 
     obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
-
-    obs_start = int(min(obsinfo['files'])[11:21])
-    obs_end = int(max(obsinfo['files'])[11:21])
+    times=[file[11:21] for file in obsinfo['files'] if is_number(file[11:21])] #Make a list of gps times excluding non-numbers from list
+    obs_start = int(min(times))
+    obs_end = int(max(times))
     return obs_start, obs_end
 
 def sfreq(freqs):
@@ -170,8 +170,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     print "Running recombine on files"
     jobs_per_node = 8
 #    recombine = distutils.spawn.find_executable("recombine.py")
-    #recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
-    recombine = "/home/fkirsten/software/galaxy-scripts/scripts/recombine.py"
+    recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
     for time_to_get in range(start_time,stop_time,increment):
 
         recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
@@ -181,8 +180,6 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 
             batch_line = "#!/bin/bash -l\n#SBATCH --time=06:00:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
 
-            batch_file.write(batch_line)
-            batch_line = "module switch PrgEnv-cray PrgEnv-gnu\n"
             batch_file.write(batch_line)
             batch_line = "module load mpi4py\n"
             batch_file.write(batch_line)
@@ -247,7 +244,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
                 with open(corr_batch, 'w') as batch_file:
                     batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n #SBATCH --output={0}.out\n".format(corr_batch))
-                    batch_file.write("module switch PrgEnv-cray PrgEnv-gnu\nmodule load cudatoolkit\nmodule load cfitsio\n")
+                    batch_file.write("module load cudatoolkit\nmodule load cfitsio\n")
                 
                 to_corr = 0
                 for file in f:
@@ -290,86 +287,61 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
     pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
     mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
 
-    startjobs = True
     chan_list = get_frequencies(metafits_file)
     chan_index = 0
-    get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(working_dir,start, stop)
-    with open(get_delays_batch,'w') as batch_file:
-        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n".format(working_dir,start,stop)
-        batch_file.write(batch_line)
-        for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
-            #DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
-            pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
-            mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}".format(RA, Dec, gpubox))
+    for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
+        #DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
+        pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
+        mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}".format(RA, Dec, gpubox))
 
-            DI_file = "{0}/DI_JonesMatrices_node0{1}.dat".format(DI_dir, gpubox)
-            channel_file = "{0}/channel".format(pointing_chan_dir)
-            with open(channel_file,"w") as ch_file:
-                ch_line = "{0}".format(chan_list[chan_index]);
-                ch_file.write(ch_line)
+        DI_file = "{0}/DI_JonesMatrices_node0{1}.dat".format(DI_dir, gpubox)
+        channel_file = "{0}/channel".format(pointing_chan_dir)
+        with open(channel_file,"w") as ch_file:
+            ch_line = "{0}".format(chan_list[chan_index]);
+            ch_file.write(ch_line)
 
-            #ASSUMES 10kHz channels <beware>
+        #ASSUMES 10kHz channels <beware>
 
-            basefreq = int(chan_list[chan_index]) * 1.28e6 - 5e3 - 640e3  + 5e3
+        basefreq = int(chan_list[chan_index]) * 1.28e6 - 5e3 - 640e3  + 5e3
         
-            print "Looking for ", DI_file
-            if (os.path.isfile(DI_file)):
-                ch_dir_line = "cd {0}\n".format(pointing_chan_dir)
-                batch_file.write(ch_dir_line)
+        print "Looking for ", DI_file
+        if (os.path.isfile(DI_file)):
+            get_delays_batch = "{0}/batch/gd_{1}.batch".format(working_dir,gpubox)
+            with open(get_delays_batch,'w') as batch_file:
+                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}.out\n".format(working_dir,gpubox)
+                batch_file.write(batch_line)
                 delays_line = "get_delays -a {0} -b {1} -j {2} -m {3} -c -i -p -z {4} -o {5} -f {6} -n {7} -w 10000 -r {8} -d {9}\n".format(pointing_chan_dir,stop-start,DI_file,metafile,utctime,obs_id,basefreq,nfine_chan,RA,Dec) 
                 batch_file.write(delays_line)
-            else:
-                print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
-                startjobs = False
+            submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format("00:05:00", pointing_chan_dir, get_delays_batch)
+            print submit_line;
+            submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+        else:
+            print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
 
-            chan_index = chan_index+1
-    submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format("00:45:00", pointing_dir, get_delays_batch)
-    print submit_line;
-    if startjobs:
-        output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
-        # output is something like this: Submitted batch job 245521 on cluster zeus
-        # as the beamformer can only run once delays are computed need to put in dependency on get_delay jobs.
-        dependsOn = output.split(" ")[3].strip()
-        #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-        print "Forming coherent beam. \n"
-        print "starts once Job {0} is done.\n".format(dependsOn)
-    else:
-        print "Not submitted. \n"
+        chan_index = chan_index+1
 
+    print "Forming coherent beam"
 
     # Run make_beam
 
     secs_to_run = datetime.timedelta(seconds=60*(stop-start))
 
     make_beam_batch = "{0}/batch/mb_{1}_{2}.batch".format(working_dir,RA,Dec)
-    make_beam_batch_out = "mb_{1}_{2}.out".format(working_dir,RA,Dec)
     with open(make_beam_batch, 'w') as batch_file:
         batch_file.write("#!/bin/bash -l\n")
 
         nodes_line = "#SBATCH --nodes=24\n#SBATCH --export=NONE\n" 
         batch_file.write(nodes_line)
-        output_line = "#SBATCH --output={0}/batch/{1}\n".format(working_dir,make_beam_batch_out)
-        batch_file.write(output_line)
         time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
         batch_file.write(time_line)
-        # the beamformer runs on all files in /combined with a specific ending
-        # thus we rename all relevant ones to .bf and rename back later.
-        rename_files_line = "cd {0}/combined;for sec in `seq {1} {2}`;do for chan in {3}_$sec*ch*.dat; do mv $chan $chan.bf;done;done;cd {4}\n".format(working_dir, start, stop, opts.obs,pointing_dir)
-        batch_file.write(rename_files_line)
-        aprun_line = "aprun -n 24 -N 1 make_beam -e dat.bf -a 128 -n 128 -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (jones,working_dir,pointing_dir,bf_mode_str)
+        aprun_line = "aprun -n 24 -N 1 make_beam -e dat -a 128 -n 128 -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (jones,working_dir,pointing_dir,bf_mode_str)
         batch_file.write(aprun_line)
-        rename_files_line = "cd {0}/combined;for i in *.bf;do mv $i `basename $i .bf`;done\n".format(working_dir)
-        batch_file.write(rename_files_line)
 
-    submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq -d afterok:{2} {3}\n".format(pointing_dir,secs_to_run,dependsOn,make_beam_batch)
-    print submit_line
-    if startjobs:
-        output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
-        jobID = output.split(" ")[3].strip()
+        submit_line = "sbatch --workdir=%s --time=%s --partition=gpuq %s\n" % (pointing_dir,str(secs_to_run),make_beam_batch)
+        print submit_line
+
         #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-        print "Submitted as job {0}".format(jobID)
-    else:
-        print "Not submitted. \n"
+            
 
 
 if __name__ == '__main__':
