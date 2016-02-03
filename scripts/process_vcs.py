@@ -129,7 +129,7 @@ def options (options): # TODO reformat this to print properly
 #    print "-z:\t Add to switch off PFB formation/testing [runPFB = %s]\n" % opts['runPFB']
 
 
-def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working_dir, parallel):
+def vcs_download(obsid, start_time, stop_time, increment, head, format, working_dir, parallel):
     print "Downloading files from archive"
     voltdownload = distutils.spawn.find_executable("voltdownload.py")
 #    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
@@ -139,7 +139,11 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
 
     for time_to_get in range(start_time,stop_time,increment):
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
-        if copyq:
+        if head:
+            log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
+            with open(log_name, 'w') as log:
+                subprocess.call(get_data, shell=True, stdout=log, stderr=log)
+        else:
             voltdownload_batch = "{0}/batch/volt_{1}.batch".format(working_dir,time_to_get)
             secs_to_run = datetime.timedelta(seconds=300*increment)
             with open(voltdownload_batch,'w') as batch_file:
@@ -152,10 +156,6 @@ def vcs_download(obsid, start_time, stop_time, increment, copyq, format, working
             submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq {2}\n".format(secs_to_run,raw_dir,voltdownload_batch)
             submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
             continue
-        else:
-            log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
-            with open(log_name, 'w') as log:
-                subprocess.call(get_data, shell=True, stdout=log, stderr=log)
 
 
         try:
@@ -361,7 +361,7 @@ if __name__ == '__main__':
 
     parser=OptionParser(description="process_vcs.py is a script for processing the MWA VCS data on Galaxy in steps. It can download data from the archive, call on recombine to form course channels, run the offline correlator, make tile re-ordered and bit promoted PFB files or for a coherent beam for a given pointing.")
     group_download = OptionGroup(parser, 'Download Options')
-    group_download.add_option("-B", "--copyq", action="store_true", default=False, help="Submit download jobs to the copyq [default=%default]")
+    group_download.add_option("--head", action="store_true", default=False, help="Submit download jobs to the headnode instead of the copyqueue [default=%default]")
     group_download.add_option("--format", type="choice", choices=['11','12'], default='11', help="Voltage data type (Raw = 11, Recombined Raw = 12) [default=%default]")
     group_download.add_option("-d", "--parallel_dl", type="int", default=3, help="Number of parallel downloads to envoke [default=%default]")
 
@@ -435,7 +435,7 @@ if __name__ == '__main__':
 
     if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.copyq, opts.format, obs_dir, opts.parallel_dl)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, opts.format, obs_dir, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
