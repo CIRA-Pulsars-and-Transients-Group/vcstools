@@ -5,6 +5,7 @@ import urllib
 import urllib2
 import json
 import argparse
+import numpy as np
 
 def check_download(obsID, directory=None, required_size=253440000):
     '''
@@ -18,7 +19,10 @@ def check_download(obsID, directory=None, required_size=253440000):
     command = "ls -ltr %s | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size)
     output = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).communicate()[0]
     obsinfo = getmeta(service='obs', params={'obs_id':obsID})
-    files_on_archive = len(obsinfo['files'])
+    files = obsinfo['files']
+    # assuming all files we want have .dat ending, we count how many there are,
+    # recently .fits files were added messing up the number count somewhat
+    files_on_archive = ['.dat' in file for file in files.keys()].count(True)
     files_in_dir = int(subprocess.Popen(["ls {0} | wc -l".format(directory)], \
                                                    shell=True, stdout=subprocess.PIPE).communicate()[0])
     success = True
@@ -46,8 +50,9 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
     output = subprocess.Popen(["ls -ltr %s*ch*.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size)],
                               stdout=subprocess.PIPE, shell=True).communicate()[0]
     # we need to get the number of unique seconds from the file names
-    files = getmeta(service='obs', params={'obs_id':obsID})['files'].keys()
-    times = [time[11:21] for time in files]
+    files = np.array(getmeta(service='obs', params={'obs_id':obsID})['files'].keys())
+    mask = np.array(['.dat' in file for file in files])
+    times = [time[11:21] for time in files[mask]]
     n_secs = len(set(times))
     expected_files = n_secs * 25
     files_in_dir = int(subprocess.Popen(["ls {0} | wc -l".format(directory)], \
@@ -127,13 +132,13 @@ def opt_parser():
                             dest='size_ics', default=30720000)
     parser.add_argument('-w', '--work_dir', type=str, dest='work_dir',\
                             help="Directory " + \
-                            "to check the files in. Default is /scratch/mwaops/vcs/" + \
+                            "to check the files in. Default is /scratch2/mwaops/vcs/" + \
                             "[obsID]/[raw,combined]")
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = opt_parser()
-    work_dir_base = '/scratch/mwaops/vcs/' + str(args.obsID)
+    work_dir_base = '/scratch2/mwaops/vcs/' + str(args.obsID)
 
     if args.mode == 'download':
         required_size = 253440000
