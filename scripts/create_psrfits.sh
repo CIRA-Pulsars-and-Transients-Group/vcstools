@@ -3,18 +3,29 @@
 if [ $# -lt 1 ] ; then
     echo "Usage: $0 obsID [base_directory]"  1>&2
     echo "    script will produce psrfits files in folder fits under obsID"  1>&2
-    echo "    base_directory is optional, default is /scratch/mwaops/vcs/obsID"  1>&2
+    echo "    base_directory is optional, default is /scratch2/mwaops/vcs/obsID"  1>&2
     echo "    if base_directory is provided script expects the combined folder to exist, will create fits folder."  1>&2
     exit 1
 fi
 
-if [ -p $FILE /scratch/mwaops/vcs/$1/fits/mk_psrfits_in ];
-then
-    rm /scratch/mwaops/vcs/$1/fits/mk_psrfits_in
+obsID=$1
+basedir=${2:-/scratch2/mwaops/vcs/${obsID}}
+
+# check for old pipe in target directory, delete if exists
+if [ -p $FILE ${basedir}/fits/mk_psrfits_in ];then
+    rm -rf ${basedir}/fits/mk_psrfits_in
+    if [[ ! $? -eq 0 ]];then
+	echo "Cannot remove old data pipe. Aborting..."
+	exit $?
+    fi
 fi
-
-basedir=${2:-/scratch/mwaops/vcs/$1}
-
+# check for fits files in target directory that have the same obsID
+# abort if found, will not delete anything.
+if [ -f $FILE ${basedir}/fits/${obsID}*.fits ];then
+    echo "There already exist fits files with obsID ${obsID} in ${basedir}/fits."
+    echo "Please delete those before running this script. Aborting here..."
+    exit 1
+fi
 length=`ls ${basedir}/combined/*ics.dat | wc -l`
 #echo "Length of Obs: $length"
 
@@ -57,7 +68,9 @@ mjd_whole=${mjd:0:5}
 
 mkdir ${basedir}/fits
 cd ${basedir}/fits
-echo -e "${basedir}/fits/mk_psrfits_in\n\n$1\n\n${length}\n${USER}\n\n$1\n\n\nMWA-G0024\n${start}\n\n${freq}\n30.72\n${RA}\n${Dec}\n${Azimuth}\n${Zenith}\n\n${lst_s}\n${utc_s}\n${mjd_whole}\n\n\n\n\n\n\n\n\n" | make_psrfits & sleep 1.0
+# Have to use S.Ord's install of make_psrfits for now as our version 
+# throws an error...
+echo -e "${basedir}/fits/mk_psrfits_in\n\n$1\n\n${length}\n${USER}\n\n$1\n\n\nMWA-G0024\n${start}\n\n${freq}\n30.72\n${RA}\n${Dec}\n${Azimuth}\n${Zenith}\n\n${lst_s}\n${utc_s}\n${mjd_whole}\n\n\n\n\n\n\n\n\n" | /group/mwaops/sord/CODE/bin/make_psrfits & sleep 1.0
 cat ${basedir}/combined/*ics.dat > ${basedir}/fits/mk_psrfits_in
 wait
 
