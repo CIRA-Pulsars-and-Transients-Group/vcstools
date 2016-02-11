@@ -68,10 +68,6 @@ mjd_whole=${mjd:0:5}
 
 mkdir ${basedir}/fits
 cd ${basedir}/fits
-# Have to use S.Ord's install of make_psrfits for now as our version 
-# throws an error...
-echo -e "${basedir}/fits/mk_psrfits_in\n\n$1\n\n${length}\n${USER}\n\n$1\n\n\nMWA-G0024\n${start}\n\n${freq}\n30.72\n${RA}\n${Dec}\n${Azimuth}\n${Zenith}\n\n${lst_s}\n${utc_s}\n${mjd_whole}\n\n\n\n\n\n\n\n\n" | /group/mwaops/sord/CODE/bin/make_psrfits & sleep 1.0
+echo -e "${basedir}/fits/mk_psrfits_in\n\n$1\n\n${length}\n${USER}\n\n$1\n\n\nMWA-G0024\n${start}\n\n${freq}\n30.72\n${RA}\n${Dec}\n${Azimuth}\n${Zenith}\n\n${lst_s}\n${utc_s}\n${mjd_whole}\n\n\n\n\n\n\n\n\n" | make_psrfits & sleep 1.0
 cat ${basedir}/combined/*ics.dat > ${basedir}/fits/mk_psrfits_in
 wait
-
-#IFS=$OLDIFS
