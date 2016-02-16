@@ -9,11 +9,11 @@ import numpy as np
 
 def check_download(obsID, directory=None, required_size=253440000):
     '''
-    Checks that the number of files in directory (default is /scratch/mwaops/vcs/[obsID]/raw/) is the same
+    Checks that the number of files in directory (default is /scratch2/mwaops/vcs/[obsID]/raw/) is the same
     as that found on the archive and also checks that all files have the same size (253440000 by default).
     '''
     if not directory:
-        directory = "/scratch/mwaops/vcs/{0}/raw/".format(obsID)
+        directory = "/scratch2/mwaops/vcs/{0}/raw/".format(obsID)
     print "\n Checking file size and number of files for obsID {0} in {1}".format(obsID, directory)
     required_size = required_size
     command = "ls -ltr %s | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size)
@@ -32,19 +32,16 @@ def check_download(obsID, directory=None, required_size=253440000):
     if len(output) > 16:
         print output[16:]
         success = False
-    if success:
-        return 0
-    else:
-        return 1
+    return success
 
 def check_recombine(obsID, directory=None, required_size=327680000, \
                         required_size_ics=30720000):
     '''
-    Checks that the number of files in directory (scratch/mwaops/vcs/[obsID]/combined/) is ....
+    Checks that the number of files in directory (/scratch2/mwaops/vcs/[obsID]/combined/) is ....
     as that found on the archive and also checks that all files have the same size (327680000 by default).
     '''
     if not directory:
-        directory = "/scratch/mwaops/vcs/{0}/combined/".format(obsID)
+        directory = "/scratch2/mwaops/vcs/{0}/combined/".format(obsID)
     print "\n Checking file size and number of files for obsID {0} in {1}".format(obsID, directory)
     required_size = required_size
     output = subprocess.Popen(["ls -ltr %s*ch*.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5}'" %(directory, required_size)],
@@ -66,10 +63,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
         success = False
     success = check_recombine_ics(directory=directory, \
                                       required_size=required_size_ics)
-    if success:
-        return 0
-    else:
-        return 1
+    return success
 
 def check_recombine_ics(directory=None, required_size=30720000):
     required_size = required_size
