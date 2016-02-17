@@ -100,6 +100,7 @@ def sfreq(freqs):
 
 
 def get_frequencies(metafits):
+	# TODO: for robustness, this should force the entries to be 3-digit numbers
     hdulist = pyfits.open(metafits)
     freq_array = hdulist[0].header['CHANNELS']
     return sfreq(freq_array.split(','))
