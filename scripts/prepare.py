@@ -19,7 +19,7 @@ import json
 import datetime
 
 # Append the service name to this base URL, eg 'con', 'obs', etc.
-BASEURL = 'http://ngas01.ivec.org/metadata/'
+BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
 
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 

@@ -149,7 +149,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
             volt_secs_to_run = datetime.timedelta(seconds=300*increment)
             check_secs_to_run = '15:00'
             volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
-            check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq -d afterok:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
+            check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
             with open(check_batch,'w') as batch_file:
                 batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_volt_{1}.out.0\n".format(working_dir,time_to_get)
                 batch_file.write(batch_line)
@@ -211,7 +211,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
         recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
         check_batch = "{0}/batch/check_recombine_{1}.batch".format(working_dir,time_to_get)
         recombine_submit_line = "sbatch --partition=gpuq --workdir={0} {1}\n".format(working_dir,recombine_batch)
-        check_submit_line = "sbatch --time=15:00 --workdir={0} --partition=gpuq -d afterok:${{SLURM_JOB_ID}} {1}\n".format(working_dir, check_batch)
+        check_submit_line = "sbatch --time=15:00 --workdir={0} --partition=gpuq -d afterany:${{SLURM_JOB_ID}} {1}\n".format(working_dir, check_batch)
         with open(check_batch,'w') as batch_file:
             batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_recombine_{1}.out.0\n".format(working_dir,time_to_get)
             batch_file.write(batch_line)
