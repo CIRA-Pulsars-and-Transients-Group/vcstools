@@ -88,7 +88,7 @@ def sfreq(freqs):
         print "There are not 24 coarse chans defined for this obs. Got: %s" % freqs
         return
 
-    freqs.sort()   # It should already be sorted, but just in case...
+ #   freqs.sort()   # It should already be sorted, but just in case...[SET] Commenting this out because sort() is ironically putting 2-digit channels out of order
     lowchans = [f for f in freqs if int(f) <= int(128)]
     print "lowchans", lowchans
     highchans = [f for f in freqs if int(f) > int(128)]
@@ -100,6 +100,7 @@ def sfreq(freqs):
 
 
 def get_frequencies(metafits):
+	# TODO: for robustness, this should force the entries to be 3-digit numbers
     hdulist = pyfits.open(metafits)
     freq_array = hdulist[0].header['CHANNELS']
     return sfreq(freq_array.split(','))
@@ -404,7 +405,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
  
     # Run make_beam
  
-    secs_to_run = datetime            
+    secs_to_run = datetime.timedelta(seconds=60*(stop-start))
 
     make_beam_batch = "{0}/batch/mb_{1}_{2}.batch".format(working_dir,RA,Dec)
     make_beam_batch_out = "mb_{1}_{2}.out".format(working_dir,RA,Dec)
