@@ -312,9 +312,9 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                 corr_batch = "{0}/batch/correlator_{1}_gpubox{2:0>2}.batch".format(working_dir,inc_start,gpubox_label)
 
                 with open(corr_batch, 'w') as batch_file:
-                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n #SBATCH --output={0}.out\n".format(corr_batch))
-                    batch_file.write("module switch PrgEnv-cray PrgEnv-gnu\nmodule load cudatoolkit\nmodule load cfitsio\n")
-                
+                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch))
+                    batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
+                    batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
                 to_corr = 0
                 for file in f:
                     corr_line = ""
@@ -363,6 +363,8 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
     with open(get_delays_batch,'w') as batch_file:
         batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n".format(working_dir,start,stop)
         batch_file.write(batch_line)
+        batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
+        batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
         for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
             #DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
             pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
@@ -417,6 +419,8 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         batch_file.write(output_line)
         time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
         batch_file.write(time_line)
+        batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
+        batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
         # the beamformer runs on all files in /combined with a specific ending
         # thus we rename all relevant ones to .bf and rename back later.
         rename_files_line = "cd {0}/combined;for sec in `seq {1} {2}`;do for chan in {3}_$sec*ch*.dat; do mv $chan $chan.bf;done;done;cd {4}\n".format(working_dir, start, stop, opts.obs,pointing_dir)
