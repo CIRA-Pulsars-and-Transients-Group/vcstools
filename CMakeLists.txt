@@ -24,16 +24,13 @@ else ()
 endif ()
 
 find_package(CFITSIO)
+find_package(PLOTUTILS)
 
-if (CFITSIO_FOUND)    
+if (CFITSIO_FOUND AND PLOTUTILS_FOUND)    
     add_subdirectory(mwac_utils)
 endif()
 
 find_package(PSRFITS_UTILS)
-if (PSRFITS_UTILS_FOUND)
-    add_subdirectory(make_beam)
-endif (PSRFITS_UTILS_FOUND)
-
 
 find_package(SLALIB)
 find_package(Postgres)
@@ -59,7 +56,11 @@ if (CUDA_FOUND)
     add_subdirectory(gpu_utils)    
 endif (CUDA_FOUND)
 
-add_dependencies(make_beam MWAC_Utils MWAC_GPU_Utils)
+if (PSRFITS_UTILS_FOUND AND CUDA_FOUND)
+    add_subdirectory(make_beam)
+    add_dependencies(make_beam MWAC_Utils MWAC_GPU_Utils)
+endif (PSRFITS_UTILS_FOUND AND CUDA_FOUND)
+
 
 INCLUDE(InstallRequiredSystemLibraries)
 
