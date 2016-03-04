@@ -169,12 +169,12 @@ def opt_parser():
                             help="Observation ID you want to process [no default]",\
                             required=True)
     parser.add_argument("-b", "--begin", metavar="start", type=int, dest='begin',\
-                            help="gps time of first file to ckeck on [default=%default]",\
+                            help="gps time of first file to ckeck on [default=%(default)s]",\
                             required=False, default=None)
     parser.add_argument("-i", "--increment", metavar="time increment", type=int, \
                             dest='increment',\
                             help="Effectively the number of seconds to ckeck for " +\
-                            "starting at start time [default=%default]",\
+                            "starting at start time [default=%(default)s]",\
                             required=False, default=None)
     parser.add_argument("-s", "--size", type=int, dest='size',\
                           help="The files size in bytes that you expect all files" +\
