@@ -163,7 +163,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
                 # change the name of the batch-output file according to the counter each time
                 batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(voltdownload_batch)
                 batch_file.write(batch_line)
-                batch_line = "/home/fkirsten/software/galaxy-scripts/scripts/checks.py -m download -o {0} -w {1} -b {2} -i {3}\n".format(obsid, raw_dir, time_to_get, increment)
+                batch_line = "checks.py -m download -o {0} -w {1} -b {2} -i {3}\n".format(obsid, raw_dir, time_to_get, increment)
                 batch_file.write(batch_line)
                 #in case something went wrong resubmit the voltdownload script
                 batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(volt_submit_line)
@@ -204,8 +204,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     jobs_per_node = 8
     recombine = distutils.spawn.find_executable("recombine.py")
     #recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
-    #checks = distutils.spawn.find_executable("checks.py")
-    checks = "/home/fkirsten/software/galaxy-scripts/scripts/checks.py"
+    checks = distutils.spawn.find_executable("checks.py")
     recombine_binary = "/group/mwaops/PULSAR/bin/recombine" # Hard coding this temporarily to ensure correct version of code is envoked
     for time_to_get in range(start_time,stop_time,increment):
 
