@@ -151,6 +151,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
             check_secs_to_run = '15:00'
             volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
             check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
+            checks = distutils.spawn.find_executable("checks.py")
             with open(check_batch,'w') as batch_file:
                 batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_volt_{1}.out.0\n".format(working_dir,time_to_get)
                 batch_file.write(batch_line)
@@ -163,7 +164,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
                 # change the name of the batch-output file according to the counter each time
                 batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(voltdownload_batch)
                 batch_file.write(batch_line)
-                batch_line = "checks.py -m download -o {0} -w {1} -b {2} -i {3}\n".format(obsid, raw_dir, time_to_get, increment)
+                batch_line = "{0} -m download -o {1} -w {2} -b {3} -i {4}\n".format(checks, obsid, raw_dir, time_to_get, increment)
                 batch_file.write(batch_line)
                 #in case something went wrong resubmit the voltdownload script
                 batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(volt_submit_line)
