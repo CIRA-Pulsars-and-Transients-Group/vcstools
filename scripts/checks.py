@@ -70,14 +70,14 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
         times = [time[11:21] for time in files[mask]]
         n_secs = len(set(times))
         command = "ls -l %s/*ch*.dat | ((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | " %(directory) + \
-            "awk '($5!=%s){print \"file \" $9 \" has size \" $5 \" (expected %s)\"}' >> %s/%s_all.txt) 4>&1;" %(required_size, required_size,directory, obsID) + \
+            "awk '($5!=%s){print $9}' | tee >> %s/%s_all.txt | xargs rm -rf) 4>&1;" %(required_size, directory, obsID) + \
             "cat %s/%s_all.txt; rm -rf %s/%s_all.txt" %(directory, obsID, directory, obsID)
         output = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).stdout
     else:
         n_secs = n_secs if n_secs else 1
         output = subprocess.Popen(["count=0;for sec in `seq -w %s %s `;do let count=${count}+`ls -l %s/*${sec}*ch*.dat | " %(startsec, startsec+n_secs-1, directory) + \
                                        "((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | awk '($5!=%s) " %(required_size) + \
-                                       "{print \"file \" $9 \" has size \" $5 \" (expected %s)\"}' >> %s/errors_%s.txt) 4>&1`;done;" %(required_size,directory,startsec) +\
+                                       "{print $9}' | tee >> %s/errors_%s.txt | xargs rm -rf) 4>&1`;done;" %(directory,startsec) +\
                                        "echo ${count}; cat %s/errors_%s.txt;rm -rf %s/errors_%s.txt" %(directory,startsec,directory,startsec)],
                                   stdout=subprocess.PIPE, shell=True).stdout
 
@@ -93,9 +93,9 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
         print "We have {0} files but expected {1}".format(files_in_dir, expected_files)
         error = True
     for line in output[1:]:
-        if 'file' in line:
+        if 'dat' in line:
+            print "Deleted {0} due to wrong size.".format(line.strip())
             error = True
-            print line
     if not error:
         print "We have all {0} files as expected.".format(files_in_dir)
     return error
@@ -106,14 +106,14 @@ def check_recombine_ics(directory=None, required_size=30720000, startsec=None, n
         output = subprocess.Popen(["ls -ltr %s/*ics.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5 \" (expected %s)\"}'" %(directory, required_size, required_size)],
                                   stdout=subprocess.PIPE, shell=True).communicate()[0]
         command = "ls -l %s/*ics.dat | ((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | " %(directory) + \
-            "awk '($5!=%s){print \"file \" $9 \" has size \" $5 \" (expected %s)\"}' >> %s/ics_all.txt) 4>&1;" %(required_size, required_size,directory) + \
+            "awk '($5!=%s){print $9}' | tee >> %s/ics_all.txt | xargs rm -rf) 4>&1;" %(required_size, directory) + \
             "cat %s/ics_all.txt; rm -rf %s/ics_all.txt" %(directory, directory)
         output = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).stdout
     else:
         n_secs = n_secs if n_secs else 1
         output = subprocess.Popen(["count=0;for sec in `seq -w %s %s `;do let count=${count}+`ls -l %s/*${sec}*ics.dat | " %(startsec, startsec+n_secs-1, directory) + \
                                        "((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | awk '($5!=%s) " %(required_size) + \
-                                       "{print \"file \" $9 \" has size \" $5 \" (expected %s)\"}' >> %s/errors_%s.txt) 4>&1`;done;" %(required_size,directory,startsec) +\
+                                       "{print $9}' | tee >> %s/errors_%s.txt | xargs rm -rf) 4>&1`;done;" %(directory,startsec) +\
                                        "echo ${count}; cat %s/errors_%s.txt;rm -rf %s/errors_%s.txt" %(directory,startsec,directory,startsec)],
                                   stdout=subprocess.PIPE, shell=True).stdout
 
@@ -121,9 +121,14 @@ def check_recombine_ics(directory=None, required_size=30720000, startsec=None, n
     files_in_dir = int(output[0].strip())
     error = False
     for line in output[1:]:
-        if 'file' in line:
+        if 'dat' in line:
             error = True
-            print line
+            line = line.strip()
+            print "Deleted {0} due to wrong size.".format(line)
+            dat_files = line.replace('_ics.dat','*.dat')
+            rm_cmd = "rm -rf {0}".format(dat_files)
+            print "Also running {0} to make sure ics files are rebuilt.".format(rm_cmd)
+            rm = subprocess.Popen(rm_cmd, stdout=subprocess.PIPE, shell=True)
     return error, files_in_dir
 
 # Append the service name to this base URL, eg 'con', 'obs', etc.
@@ -171,6 +176,9 @@ def opt_parser():
     parser.add_argument("-b", "--begin", metavar="start", type=int, dest='begin',\
                             help="gps time of first file to ckeck on [default=%(default)s]",\
                             required=False, default=None)
+    parser.add_argument("-e", "--end", metavar="stop", type=int, dest='end',\
+                            help="gps time of last file to ckeck on [default=%(default)s]",\
+                            required=False, default=None)
     parser.add_argument("-i", "--increment", metavar="time increment", type=int, \
                             dest='increment',\
                             help="Effectively the number of seconds to ckeck for " +\
@@ -193,6 +201,13 @@ if __name__ == '__main__':
     args = opt_parser()
     work_dir_base = '/scratch2/mwaops/vcs/' + str(args.obsID)
 
+    if args.end:
+        if not args.begin:
+            print "If you supply and end time you also *have* to supply a begin time."
+            sys.exit(1)
+        args.increment = args.end - args.begin + 1
+        print "Checking {0} seconds.".format(args.increment)
+
     if args.mode == 'download':
         required_size = 253440000
         if args.size:
@@ -200,7 +215,6 @@ if __name__ == '__main__':
         work_dir = work_dir_base + '/raw/'
         if args.work_dir:
             work_dir = args.work_dir
-        
         sys.exit(check_download(args.obsID, directory=work_dir, required_size=required_size, 
                            startsec=args.begin, n_secs=args.increment))
 
