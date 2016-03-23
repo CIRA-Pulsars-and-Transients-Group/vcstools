@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # script that reads in a TLE file, estimates the power output by the beamformer, and plots the result.
 #
