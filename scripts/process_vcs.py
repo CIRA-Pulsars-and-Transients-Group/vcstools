@@ -360,6 +360,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
     chan_list = get_frequencies(metafits_file)
     chan_index = 0
     get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(working_dir,start, stop)
+    bf_adjust_flags = distutils.spawn.find_executable("bf_adjust_flags.py")
     with open(get_delays_batch,'w') as batch_file:
         batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n".format(working_dir,start,stop)
         batch_file.write(batch_line)
@@ -388,7 +389,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
                 batch_file.write(delays_line)
                 if rts_flag_file:
                     flags_file = "{0}/flags.txt".format(pointing_chan_dir)
-                    flag_line="/home/fkirsten/software/galaxy-scripts/scripts/bf_adjust_flags.py {0} {1}\n".format(rts_flag_file, flags_file)
+                    flag_line="{0} {1} {2}\n".format(bf_adjust_flags, rts_flag_file, flags_file)
                     batch_file.write(flag_line)
             else:
                 print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
