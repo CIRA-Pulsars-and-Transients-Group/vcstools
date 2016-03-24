@@ -344,7 +344,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
 
 
-def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing):
+def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing, rts_flag_file=None):
     # Need to run get_delays and then the beamformer on each desired coarse channel
     DI_dir = working_dir+"/DIJ"
     RA = pointing[0]
@@ -386,6 +386,10 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
                 batch_file.write(ch_dir_line)
                 delays_line = "get_delays -a {0} -b {1} -j {2} -m {3} -c -i -p -z {4} -o {5} -f {6} -n {7} -w 10000 -r {8} -d {9}\n".format(pointing_chan_dir,stop-start,DI_file,metafile,utctime,obs_id,basefreq,nfine_chan,RA,Dec) 
                 batch_file.write(delays_line)
+                if rts_flag_file:
+                    flags_file = "{0}/flags.txt".format(pointing_chan_dir)
+                    flag_line="/home/fkirsten/software/galaxy-scripts/scripts/bf_adjust_flags.py {0} {1}\n".format(rts_flag_file, flags_file)
+                    batch_file.write(flag_line)
             else:
                 print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
                 startjobs = False
@@ -472,6 +476,7 @@ if __name__ == '__main__':
     group_beamform.add_option("--bf_mode", type="choice", choices=['0','1','2'], help="Beam forming mode (0 == NO BEAMFORMING 1==PSRFITS, 2==VDIF)")
     group_beamform.add_option("-j", "--useJones", action="store_true", default=False, help="Use Jones matrices from the RTS [default=%default]")
     group_beamform.add_option("-z", "--utctime", metavar="UTCTIME", default="None", help="UTC time for calculation - good to at least the second in ISO 8601 e.g. 2014-03-18T19:51:54")
+    group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -544,7 +549,7 @@ if __name__ == '__main__':
     elif opts.mode == 'beamform':
         print opts.mode
         ensure_metafits(metafits_file)
-        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing)
+        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, opts.flagged_tiles)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
