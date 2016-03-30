@@ -7,6 +7,7 @@ import time
 import datetime
 import distutils.spawn
 from astropy.io import fits as pyfits
+from mwapy import ephem_utils
 
 def getmeta(service='obs', params=None):
     """
@@ -476,7 +477,6 @@ if __name__ == '__main__':
     group_beamform.add_option("-p", "--pointing", nargs=2, help="R.A. and Dec. of pointing")
     group_beamform.add_option("--bf_mode", type="choice", choices=['0','1','2'], help="Beam forming mode (0 == NO BEAMFORMING 1==PSRFITS, 2==VDIF)")
     group_beamform.add_option("-j", "--useJones", action="store_true", default=False, help="Use Jones matrices from the RTS [default=%default]")
-    group_beamform.add_option("-z", "--utctime", metavar="UTCTIME", default="None", help="UTC time for calculation - good to at least the second in ISO 8601 e.g. 2014-03-18T19:51:54")
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','beamform'], help="Mode you want to run. {0}".format(modes))
@@ -515,9 +515,10 @@ if __name__ == '__main__':
         if not opts.pointing:
             print "Pointing (-p) required in beamformer mode"
             quit()
-        #if opts.pointing[0] or opt.pointing[1]
-        utctime = opts.utctime
-        
+        # get_delays requires the start time in UTC, get it from the start GPS time
+        # as is done in timeconvert.py
+        t=ephem_utils.MWATime(gpstime=float(opts.begin))
+        utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
         if (opts.bf_mode == 1):
             bf_mode_str = " -f "
         if  (opts.bf_mode == 2):
