@@ -412,8 +412,11 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
  
  
     # Run make_beam
- 
-    secs_to_run = datetime.timedelta(seconds=60*(stop-start))
+    seconds_to_run = 60*(stop-start)
+    if seconds_to_run > 86399.:
+        secs_to_run = datetime.timedelta(seconds=86399)
+    else:
+        secs_to_run = datetime.timedelta(seconds=60*(stop-start))
 
     make_beam_batch = "{0}/batch/mb_{1}_{2}.batch".format(working_dir,RA,Dec)
     make_beam_batch_out = "mb_{1}_{2}.out".format(working_dir,RA,Dec)
