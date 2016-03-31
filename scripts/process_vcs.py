@@ -214,18 +214,19 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 
 
 
-def vcs_correlate(obsid,start,stop,increment,working_dir):
+def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
     print "Correlating files"
-    import os
     import astropy
     from astropy.time import Time
-    import datetime
     import calendar
 
     corr_dir = "{0}/vis".format(working_dir)
     mdir(corr_dir, "Correlator Product")
 
     chan_list = get_frequencies(metafits_file)
+    gpu_int = 0.01
+    integrations=int(ft_res[1]/gpu_int)
+    num_frames=int(1.0/ft_res[1])
     
     print "Input chan list is" , chan_list
 
@@ -248,7 +249,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                 corr_batch = "{0}/batch/correlator_{1}_gpubox{2:0>2}.batch".format(working_dir,inc_start,gpubox_label)
 
                 with open(corr_batch, 'w') as batch_file:
-                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n #SBATCH --output={0}.out\n".format(corr_batch))
+                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n #SBATCH --output={0}.out\n".format(corr_batch[:-6]))
                     batch_file.write("module switch PrgEnv-cray PrgEnv-gnu\nmodule load cudatoolkit\nmodule load cfitsio\n")
                 
                 to_corr = 0
@@ -262,13 +263,13 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
                     current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
                     unix_time = calendar.timegm(current_time)
 
-                    corr_line = " aprun -n 1 -N 1 {0} -o {1}/{2} -s {3} -r 1 -i 100 -f 128 -n 4 -c {4:0>2} -d {5}\n".format("mwac_offline",corr_dir,obsid,unix_time,gpubox_label,file)
+                    corr_line = " aprun -n 1 -N 1 {0} -o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}\n".format("mwac_offline",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file)
                     
                     with open(corr_batch, 'a') as batch_file:
                         batch_file.write(corr_line)
                         to_corr = to_corr+1
 
-                secs_to_run = datetime.timedelta(seconds=10*to_corr)
+                secs_to_run = datetime.timedelta(seconds=10*num_frames*to_corr)
                 batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq {2}\n".format(corr_dir,secs_to_run,corr_batch)
                 submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
                 jobid=""
@@ -395,7 +396,7 @@ if __name__ == '__main__':
     group_recombine = OptionGroup(parser, 'Recombine Options')
 
     group_correlate = OptionGroup(parser, 'Correlator Options')
-    group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(40,1), help="Frequency (kHz) and Time (s) resolution to run correlator at. [default=%default]")
+    group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(40,1), help="Frequency (kHz) and Time (s) resolution for running the correlator. Please make divisible by 10 kHz and 0.01 s respectively. [default=%default]")
 
     group_pfb = OptionGroup(parser, 'PFB Creation Options')
 
@@ -468,7 +469,7 @@ if __name__ == '__main__':
         ensure_metafits(metafits_file)
         combined_dir = "{0}/combined".format(obs_dir)
         mdir(combined_dir, "Combined")
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, obs_dir)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, obs_dir, opts.ft_res)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(metafits_file)
