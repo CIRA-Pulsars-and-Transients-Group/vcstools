@@ -7,6 +7,7 @@ import time
 import datetime
 import distutils.spawn
 from astropy.io import fits as pyfits
+from mwapy import ephem_utils
 
 def getmeta(service='obs', params=None):
     """
@@ -138,8 +139,6 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
     raw_dir = "{0}/raw".format(working_dir)
     mdir(raw_dir, "Raw")
 
-    #done = False
-    #while not done:
     for time_to_get in range(start_time,stop_time,increment):
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
         if head:
@@ -148,16 +147,50 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
                 subprocess.call(get_data, shell=True, stdout=log, stderr=log)
         else:
             voltdownload_batch = "{0}/batch/volt_{1}.batch".format(working_dir,time_to_get)
-            secs_to_run = datetime.timedelta(seconds=300*increment)
-            with open(voltdownload_batch,'w') as batch_file:
-
-                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/volt_{1}.out\n".format(working_dir,time_to_get)
+            check_batch = "{0}/batch/check_volt_{1}.batch".format(working_dir,time_to_get)
+            volt_secs_to_run = datetime.timedelta(seconds=300*increment)
+            check_secs_to_run = '15:00'
+            volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
+            check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
+            checks = distutils.spawn.find_executable("checks.py")
+            with open(check_batch,'w') as batch_file:
+                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_volt_{1}.out.0\n".format(working_dir,time_to_get)
                 batch_file.write(batch_line)
+                batch_file.write('newcount=0\n')
+                batch_file.write('let oldcount=$newcount-1\n')
+                # increase the counter in voltdownload_batch by one each time
+                batch_line = "sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}\n".format(voltdownload_batch)
+                batch_file.write(batch_line)
+                batch_file.write('oldcount=$newcount; let newcount=$newcount+1\n')
+                # change the name of the batch-output file according to the counter each time
+                batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(voltdownload_batch)
+                batch_file.write(batch_line)
+                batch_line = "{0} -m download -o {1} -w {2} -b {3} -i {4}\n".format(checks, obsid, raw_dir, time_to_get, increment)
+                batch_file.write(batch_line)
+                #in case something went wrong resubmit the voltdownload script
+                batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(volt_submit_line)
+                batch_file.write(batch_line)
+                
+            with open(voltdownload_batch,'w') as batch_file:
+                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/volt_{1}.out.1\n".format(working_dir,time_to_get)
+                batch_file.write(batch_line)
+                batch_file.write('oldcount=0\n')
+                batch_file.write('let newcount=$oldcount+1\n')
+                batch_file.write('if [ ${newcount} -gt 10 ]; then\n')
+                batch_file.write('echo \"Tried ten times, this is silly. Aborting here.\";exit\n')
+                batch_file.write('fi\n')
+                # increase the counter in check_batch by one each time
+                batch_line = "sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch)
+                batch_file.write(batch_line)
+                # change the name of the batch-output file according to the counter each time
+                batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch)
+                batch_file.write(batch_line)
+                # submit check script before we start the download in case it is timed out
+                batch_file.write(check_submit_line)
                 batch_line = "%s\n" % (get_data)
                 batch_file.write(batch_line)
-
-            submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq {2}\n".format(secs_to_run,raw_dir,voltdownload_batch)
-            submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+                
+            submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
             continue
 
 
@@ -166,23 +199,43 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
         except:
             print "cannot open working dir:{0}".format(working_dir)
             sys.exit()
-        #done = "checks.py -m download -o {0} -w {1}".format(obsid, raw_dir)
     
 
 def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     print "Running recombine on files"
     jobs_per_node = 8
-#    recombine = distutils.spawn.find_executable("recombine.py")
-    recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
+    recombine = distutils.spawn.find_executable("recombine.py")
+    #recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
+    checks = distutils.spawn.find_executable("checks.py")
     recombine_binary = "/group/mwaops/PULSAR/bin/recombine" # Hard coding this temporarily to ensure correct version of code is envoked
     for time_to_get in range(start_time,stop_time,increment):
 
         recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
+        check_batch = "{0}/batch/check_recombine_{1}.batch".format(working_dir,time_to_get)
+        recombine_submit_line = "sbatch --partition=gpuq --workdir={0} {1}\n".format(working_dir,recombine_batch)
+        check_submit_line = "sbatch --time=15:00 --workdir={0} --partition=gpuq -d afterany:${{SLURM_JOB_ID}} {1}\n".format(working_dir, check_batch)
+        with open(check_batch,'w') as batch_file:
+            batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_recombine_{1}.out.0\n".format(working_dir,time_to_get)
+            batch_file.write(batch_line)
+            batch_file.write('newcount=0\n')
+            batch_file.write('let oldcount=$newcount-1\n')
+            # increase the counter in recombine_batch by one each time
+            batch_line = "sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}\n".format(recombine_batch)
+            batch_file.write(batch_line)
+            batch_file.write('oldcount=$newcount; let newcount=$newcount+1\n')
+            # change the name of the batch-output file according to the counter each time
+            batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(recombine_batch)
+            batch_file.write(batch_line)
+            batch_line = "{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}\n".format(checks, obsid, working_dir, time_to_get, increment)
+            batch_file.write(batch_line)
+            #in case something went wrong resubmit the voltdownload script
+            batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(recombine_submit_line)
+            batch_file.write(batch_line)
         with open(recombine_batch,'w') as batch_file:
 
             nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
 
-            batch_line = "#!/bin/bash -l\n#SBATCH --time=06:00:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
+            batch_line = "#!/bin/bash -l\n#SBATCH --time=06:00:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out.1\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
             batch_file.write(batch_line)
             batch_line = "module switch PrgEnv-cray PrgEnv-gnu\n"
             batch_file.write(batch_line)
@@ -190,6 +243,19 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
             batch_file.write(batch_line)
             batch_line = "module load cfitsio\n"
             batch_file.write(batch_line)
+            batch_file.write('oldcount=0\n')
+            batch_file.write('let newcount=$oldcount+1\n')
+            batch_file.write('if [ ${newcount} -gt 10 ]; then\n')
+            batch_file.write('echo \"Tried ten times, this is silly. Aborting here.\";exit\n')
+            batch_file.write('fi\n')
+            # increase the counter in check_batch by one each time
+            batch_line = "sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch)
+            batch_file.write(batch_line)
+            # change the name of the batch-output file according to the counter each time
+            batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch)
+            batch_file.write(batch_line)
+            # submit check script before we start the download in case it is timed out
+            batch_file.write(check_submit_line)
 
             if (stop_time - time_to_get) < increment:       # Trying to stop jobs from running over if they aren't perfectly divisible by increment
                 increment = stop_time - time_to_get + 1
@@ -200,9 +266,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
             recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e{6}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary)
             batch_file.write(recombine_line)
 
-        submit_line = "sbatch --partition=gpuq --workdir={0} {1}\n".format(working_dir,recombine_batch)
 
-        submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+        submit_cmd = subprocess.Popen(recombine_submit_line,shell=True,stdout=subprocess.PIPE)
         jobid=""
         for line in submit_cmd.stdout:
 
@@ -249,9 +314,9 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
                 corr_batch = "{0}/batch/correlator_{1}_gpubox{2:0>2}.batch".format(working_dir,inc_start,gpubox_label)
 
                 with open(corr_batch, 'w') as batch_file:
-                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n #SBATCH --output={0}.out\n".format(corr_batch[:-6]))
-                    batch_file.write("module switch PrgEnv-cray PrgEnv-gnu\nmodule load cudatoolkit\nmodule load cfitsio\n")
-                
+                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
+                    batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
+                    batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
                 to_corr = 0
                 for file in f:
                     corr_line = ""
@@ -281,7 +346,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 
 
 
-def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing):
+def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing, rts_flag_file=None):
     # Need to run get_delays and then the beamformer on each desired coarse channel
     DI_dir = working_dir+"/DIJ"
     RA = pointing[0]
@@ -297,9 +362,12 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
     chan_list = get_frequencies(metafits_file)
     chan_index = 0
     get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(working_dir,start, stop)
+    bf_adjust_flags = distutils.spawn.find_executable("bf_adjust_flags.py")
     with open(get_delays_batch,'w') as batch_file:
         batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n".format(working_dir,start,stop)
         batch_file.write(batch_line)
+        batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
+        batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
         for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
             #DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
             pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
@@ -321,6 +389,10 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
                 batch_file.write(ch_dir_line)
                 delays_line = "get_delays -a {0} -b {1} -j {2} -m {3} -c -i -p -z {4} -o {5} -f {6} -n {7} -w 10000 -r {8} -d {9}\n".format(pointing_chan_dir,stop-start,DI_file,metafile,utctime,obs_id,basefreq,nfine_chan,RA,Dec) 
                 batch_file.write(delays_line)
+                if rts_flag_file:
+                    flags_file = "{0}/flags.txt".format(pointing_chan_dir)
+                    flag_line="{0} {1} {2}\n".format(bf_adjust_flags, rts_flag_file, flags_file)
+                    batch_file.write(flag_line)
             else:
                 print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
                 startjobs = False
@@ -341,8 +413,11 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
  
  
     # Run make_beam
- 
-    secs_to_run = datetime            
+    seconds_to_run = 60*(stop-start)
+    if seconds_to_run > 86399.:
+        secs_to_run = datetime.timedelta(seconds=86399)
+    else:
+        secs_to_run = datetime.timedelta(seconds=60*(stop-start))
 
     make_beam_batch = "{0}/batch/mb_{1}_{2}.batch".format(working_dir,RA,Dec)
     make_beam_batch_out = "mb_{1}_{2}.out".format(working_dir,RA,Dec)
@@ -354,6 +429,8 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         batch_file.write(output_line)
         time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
         batch_file.write(time_line)
+        batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
+        batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
         # the beamformer runs on all files in /combined with a specific ending
         # thus we rename all relevant ones to .bf and rename back later.
         rename_files_line = "cd {0}/combined;for sec in `seq {1} {2}`;do for chan in {3}_$sec*ch*.dat; do mv $chan $chan.bf;done;done;cd {4}\n".format(working_dir, start, stop, opts.obs,pointing_dir)
@@ -404,7 +481,7 @@ if __name__ == '__main__':
     group_beamform.add_option("-p", "--pointing", nargs=2, help="R.A. and Dec. of pointing")
     group_beamform.add_option("--bf_mode", type="choice", choices=['0','1','2'], help="Beam forming mode (0 == NO BEAMFORMING 1==PSRFITS, 2==VDIF)")
     group_beamform.add_option("-j", "--useJones", action="store_true", default=False, help="Use Jones matrices from the RTS [default=%default]")
-    group_beamform.add_option("-z", "--utctime", metavar="UTCTIME", default="None", help="UTC time for calculation - good to at least the second in ISO 8601 e.g. 2014-03-18T19:51:54")
+    group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -442,9 +519,10 @@ if __name__ == '__main__':
         if not opts.pointing:
             print "Pointing (-p) required in beamformer mode"
             quit()
-        #if opts.pointing[0] or opt.pointing[1]
-        utctime = opts.utctime
-        
+        # get_delays requires the start time in UTC, get it from the start GPS time
+        # as is done in timeconvert.py
+        t=ephem_utils.MWATime(gpstime=float(opts.begin))
+        utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
         if (opts.bf_mode == 1):
             bf_mode_str = " -f "
         if  (opts.bf_mode == 2):
@@ -477,7 +555,7 @@ if __name__ == '__main__':
     elif opts.mode == 'beamform':
         print opts.mode
         ensure_metafits(metafits_file)
-        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing)
+        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, opts.flagged_tiles)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
