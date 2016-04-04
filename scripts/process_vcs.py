@@ -7,7 +7,6 @@ import time
 import datetime
 import distutils.spawn
 from astropy.io import fits as pyfits
-from mwapy import ephem_utils
 
 def getmeta(service='obs', params=None):
     """
@@ -345,11 +344,16 @@ def vcs_correlate(obsid,start,stop,increment,working_dir):
 
 
 
-def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing, rts_flag_file=None):
+def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f'):
     # Need to run get_delays and then the beamformer on each desired coarse channel
     DI_dir = working_dir+"/DIJ"
     RA = pointing[0]
     Dec = pointing[1]
+
+    # get_delays requires the start time in UTC, get it from the start GPS time
+    # as is done in timeconvert.py
+    t=ephem_utils.MWATime(gpstime=float(start))
+    utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
 
     print "Running get_delays"
     P_dir = working_dir+"/pointings"
@@ -434,12 +438,12 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         # thus we rename all relevant ones to .bf and rename back later.
         rename_files_line = "cd {0}/combined;for sec in `seq {1} {2}`;do for chan in {3}_$sec*ch*.dat; do mv $chan $chan.bf;done;done;cd {4}\n".format(working_dir, start, stop, opts.obs,pointing_dir)
         batch_file.write(rename_files_line)
-        aprun_line = "aprun -n 24 -N 1 make_beam -e dat.bf -a 128 -n 128 -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (jones,working_dir,pointing_dir,bf_mode_str)
+        aprun_line = "aprun -n 24 -N 1 make_beam -e dat.bf -a 128 -n 128 -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (jones,working_dir,pointing_dir,bf_format)
         batch_file.write(aprun_line)
         rename_files_line = "cd {0}/combined;for i in *.bf;do mv $i `basename $i .bf`;done\n".format(working_dir)
         batch_file.write(rename_files_line)
 
-    submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq -d afterok:{2} {3}\n".format(pointing_dir,secs_to_run,dependsOn,make_beam_batch)
+    submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{2} {3}\n".format(pointing_dir,dependsOn,make_beam_batch)
     print submit_line
     if startjobs:
         output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -455,8 +459,6 @@ if __name__ == '__main__':
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
     chan_list = []
-    utctime = "Never"
-    bf_mode_str = " -f "
     jones = "-j jones.txt"
 
     from optparse import OptionParser, OptionGroup
@@ -478,7 +480,7 @@ if __name__ == '__main__':
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="R.A. and Dec. of pointing")
-    group_beamform.add_option("--bf_mode", type="choice", choices=['0','1','2'], help="Beam forming mode (0 == NO BEAMFORMING 1==PSRFITS, 2==VDIF)")
+    group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. 'both' is not implemented yet. [default=%default]", default='psrfits')
     group_beamform.add_option("-j", "--useJones", action="store_true", default=False, help="Use Jones matrices from the RTS [default=%default]")
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
 
@@ -518,15 +520,13 @@ if __name__ == '__main__':
         if not opts.pointing:
             print "Pointing (-p) required in beamformer mode"
             quit()
-        # get_delays requires the start time in UTC, get it from the start GPS time
-        # as is done in timeconvert.py
-        t=ephem_utils.MWATime(gpstime=float(opts.begin))
-        utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
-        if (opts.bf_mode == 1):
-            bf_mode_str = " -f "
-        if  (opts.bf_mode == 2):
-            bf_mode_str = " -v "
-
+        if (opts.bf_out_format == 'psrfits'):
+            bf_format = " -f "
+        elif  (opts.bf_out_format == 'vdif'):
+            bf_format = " -v "
+        elif (opts.bf_out_format == 'both'):
+            print "We cannot write out both vdif and psrfits simultaneously yet, sorry! Aborting here..."
+            sys.exit(1)
 
     mdir(opts.work_dir, "Working")
     obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
@@ -554,7 +554,8 @@ if __name__ == '__main__':
     elif opts.mode == 'beamform':
         print opts.mode
         ensure_metafits(metafits_file)
-        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, opts.flagged_tiles)
+        from mwapy import ephem_utils
+        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, opts.flagged_tiles, bf_format)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
