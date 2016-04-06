@@ -62,6 +62,7 @@ def mdir(path,description, gid=30832):
         # we leave the uid unchanged but change gid to mwaops
         os.chown(path,-1,gid)
         os.chmod(path,0771)
+        os.system("chmod -R g+s {0}".format(path))
     except:
         if (os.path.exists(path)):
             print "{0} Directory Already Exists\n".format(description)
@@ -155,8 +156,8 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
             check_batch = "{0}/batch/check_volt_{1}.batch".format(working_dir,time_to_get)
             volt_secs_to_run = datetime.timedelta(seconds=300*increment)
             check_secs_to_run = '15:00'
-            volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
-            check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
+            volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
+            check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
             checks = distutils.spawn.find_executable("checks.py")
             with open(check_batch,'w') as batch_file:
                 batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_volt_{1}.out.0\n".format(working_dir,time_to_get)
@@ -217,8 +218,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 
         recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
         check_batch = "{0}/batch/check_recombine_{1}.batch".format(working_dir,time_to_get)
-        recombine_submit_line = "sbatch --partition=gpuq --workdir={0} {1}\n".format(working_dir,recombine_batch)
-        check_submit_line = "sbatch --time=15:00 --workdir={0} --partition=gpuq -d afterany:${{SLURM_JOB_ID}} {1}\n".format(working_dir, check_batch)
+        recombine_submit_line = "sbatch --partition=gpuq --workdir={0} {1} --gid=mwaops \n".format(working_dir,recombine_batch)
+        check_submit_line = "sbatch --time=15:00 --workdir={0} --partition=gpuq -d afterany:${{SLURM_JOB_ID}} {1} --gid=mwaops \n".format(working_dir, check_batch)
         with open(check_batch,'w') as batch_file:
             batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_recombine_{1}.out.0\n".format(working_dir,time_to_get)
             batch_file.write(batch_line)
@@ -340,7 +341,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
                         to_corr = to_corr+1
 
                 secs_to_run = datetime.timedelta(seconds=10*num_frames*to_corr)
-                batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq {2}\n".format(corr_dir,secs_to_run,corr_batch)
+                batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq {2} --gid=mwaops \n".format(corr_dir,secs_to_run,corr_batch)
                 submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
                 jobid=""
                 for line in submit_cmd.stdout:
@@ -408,7 +409,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
                 startjobs = False
 
             chan_index = chan_index+1
-    submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2}\n".format("00:45:00", pointing_dir, get_delays_batch)
+    submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2} --gid=mwaops \n".format("00:45:00", pointing_dir, get_delays_batch)
     print submit_line;
     if startjobs:
         output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -450,7 +451,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         rename_files_line = "cd {0}/combined;for i in *.bf;do mv $i `basename $i .bf`;done\n".format(working_dir)
         batch_file.write(rename_files_line)
 
-    submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} {2}\n".format(pointing_dir,dependsOn,make_beam_batch)
+    submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} {2} --gid=mwaops \n".format(pointing_dir,dependsOn,make_beam_batch)
     print submit_line
     if startjobs:
         output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
