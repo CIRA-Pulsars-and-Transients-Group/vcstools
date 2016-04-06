@@ -52,10 +52,16 @@ def is_number(s):
     except ValueError:
         return False
 
-def mdir(path,description):
+def mdir(path,description, gid=30832):
+    # the default groupID is mwaops which is 30832 in numerical
+    # we try and make sure all directories created by process_vcs
+    # end up belonging to the user and the group mwaops
+    # with rwx permissions and the sticky bit set for both user and group
     try:
         os.mkdir(path)
-        os.chmod(path,0761)
+        # we leave the uid unchanged but change gid to mwaops
+        os.chown(path,-1,gid)
+        os.chmod(path,0771)
     except:
         if (os.path.exists(path)):
             print "{0} Directory Already Exists\n".format(description)
@@ -548,11 +554,11 @@ if __name__ == '__main__':
         ensure_metafits(metafits_file)
         combined_dir = "{0}/combined".format(obs_dir)
         mdir(combined_dir, "Combined")
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, obs_dir, opts.ft_res)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, obs_dir)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, obs_dir)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, obs_dir, opts.ft_res)
     elif opts.mode == 'beamform':
         print opts.mode
         ensure_metafits(metafits_file)
