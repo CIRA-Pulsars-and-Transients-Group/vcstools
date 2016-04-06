@@ -444,7 +444,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         rename_files_line = "cd {0}/combined;for i in *.bf;do mv $i `basename $i .bf`;done\n".format(working_dir)
         batch_file.write(rename_files_line)
 
-    submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{2} {3}\n".format(pointing_dir,dependsOn,make_beam_batch)
+    submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} {2}\n".format(pointing_dir,dependsOn,make_beam_batch)
     print submit_line
     if startjobs:
         output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
