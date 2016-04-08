@@ -171,7 +171,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
                 # change the name of the batch-output file according to the counter each time
                 batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(voltdownload_batch)
                 batch_file.write(batch_line)
-                batch_line = "{0} -m download -o {1} -w {2} -b {3} -i {4}\n".format(checks, obsid, raw_dir, time_to_get, increment)
+                # to make sure checks.py does not look for files beyond the stop_time:
+                check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+                batch_line = "{0} -m download -o {1} -w {2} -b {3} -i {4}\n".format(checks, obsid, raw_dir, time_to_get, check_nsecs)
                 batch_file.write(batch_line)
                 #in case something went wrong resubmit the voltdownload script
                 batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(volt_submit_line)
