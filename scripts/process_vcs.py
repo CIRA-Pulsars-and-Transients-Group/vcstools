@@ -491,7 +491,7 @@ if __name__ == '__main__':
     group_beamform.add_option("-p", "--pointing", nargs=2, help="R.A. and Dec. of pointing")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("-j", "--useJones", action="store_true", default=False, help="Use Jones matrices from the RTS [default=%default]")
-    group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
+    group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -562,6 +562,10 @@ if __name__ == '__main__':
         vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, obs_dir, opts.ft_res)
     elif opts.mode == 'beamform':
         print opts.mode
+        if opts.flagged_tiles:
+            if not os.path.isfile(opts.flagged_tiles):
+                print "Your are not pointing at a file with your input to --flagged_tiles. Aboring here as the beamformer will not run..."
+                sys.exit(1)
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
         coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, opts.flagged_tiles, bf_format)
