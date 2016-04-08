@@ -15,6 +15,7 @@ def check_download(obsID, directory=None, required_size=253440000, startsec=None
     if not directory:
         directory = "/scratch2/mwaops/vcs/{0}/raw/".format(obsID)
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
+    n_secs = n_secs if n_secs else 1
     print base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range."
     required_size = required_size
     files = np.array(getmeta(service='obs', params={'obs_id':obsID})['files'].keys())
@@ -27,7 +28,6 @@ def check_download(obsID, directory=None, required_size=253440000, startsec=None
             "cat %s/%s_all.txt; rm -rf %s/%s_all.txt" %(directory, obsID, directory, obsID)
         output = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).stdout
     else:
-        n_secs = n_secs if n_secs else 1
         n_files_expected = 0
         times = [int(time[11:21]) for time in files]
         for sec in range(startsec,startsec+n_secs):
@@ -61,6 +61,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
     if not directory:
         directory = "/scratch2/mwaops/vcs/{0}/combined/".format(obsID)
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
+    n_secs = n_secs if n_secs else 1
     print base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range."
     required_size = required_size
     # we need to get the number of unique seconds from the file names
@@ -74,7 +75,6 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
             "cat %s/%s_all.txt; rm -rf %s/%s_all.txt" %(directory, obsID, directory, obsID)
         output = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).stdout
     else:
-        n_secs = n_secs if n_secs else 1
         output = subprocess.Popen(["count=0;for sec in `seq -w %s %s `;do let count=${count}+`ls -l %s/*${sec}*ch*.dat | " %(startsec, startsec+n_secs-1, directory) + \
                                        "((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | awk '($5!=%s) " %(required_size) + \
                                        "{print $9}' | tee >> %s/errors_%s.txt | xargs rm -rf) 4>&1`;done;" %(directory,startsec) +\
