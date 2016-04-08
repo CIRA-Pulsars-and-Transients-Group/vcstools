@@ -492,9 +492,8 @@ if __name__ == '__main__':
     group_pfb = OptionGroup(parser, 'PFB Creation Options')
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
-    group_beamform.add_option("-p", "--pointing", nargs=2, help="R.A. and Dec. of pointing")
+    group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
-    group_beamform.add_option("-j", "--useJones", action="store_true", default=False, help="Use Jones matrices from the RTS [default=%default]")
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','beamform'], help="Mode you want to run. {0}".format(modes))
