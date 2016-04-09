@@ -152,18 +152,18 @@ def build_rts_in_file(obs_id,utctime,data_dir,rts_filename):
     fid.write( "\n" )
 
     fid.write( "ObservationFrequencyBase=%f\n" % freqbase )
-    fid.write( "ChannelBandwidth=0.04\n")
-    fid.write( "NumberOfChannels=32\n")
+    fid.write( "ChannelBandwidth=0.01\n")
+    fid.write( "NumberOfChannels=128\n")
 
     fid.write( "ObservationTimeBase=%s\n" % jd )
     fid.write( "\n" )
     fid.write( "ObservationPointCentreHA=%f\n" % PB_HA )
     fid.write( "ObservationPointCentreDec=%f\n" % PB_Dec )
-    fid.write( "CorrDumpsPerCadence=8\n")
+    fid.write( "CorrDumpsPerCadence=6\n")
 
-    fid.write( "CorrDumpTime=1\n")
+    fid.write( "CorrDumpTime=2.0\n")
     fid.write( "NumberOfIntegrationBins=3\n")
-    fid.write( "NumberOfIterations=25\n")
+    fid.write( "NumberOfIterations=10\n")
     fid.write( "\n" )
     fid.write( "StartProcessingAt=0\n")
     fid.write( "\n" )
