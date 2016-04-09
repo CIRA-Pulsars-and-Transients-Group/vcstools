@@ -354,8 +354,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 
 
 def run_rts(working_dir, rts_in_file):
-    #rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/rts_sun.sh'
-    rts_run_file = '/home/fkirsten/software/galaxy-scripts/scripts/run_rts.sh'
+    rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/rts_sun.sh'
     batch_submit_line = "sbatch -p gpuq {0} {1} {2}".format(rts_run_file, working_dir, rts_in_file)
     submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
 
