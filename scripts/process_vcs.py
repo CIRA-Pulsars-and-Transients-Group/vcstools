@@ -354,7 +354,8 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 
 
 def run_rts(working_dir, rts_in_file):
-    rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/rts_sun.sh'
+    #rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/rts_sun.sh'
+    rts_run_file = '/home/fkirsten/software/galaxy-scripts/scripts/run_rts.sh'
     batch_submit_line = "sbatch -p gpuq {0} {1} {2}".format(rts_run_file, working_dir, rts_in_file)
     submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
 
@@ -491,7 +492,7 @@ if __name__ == '__main__':
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,2), help="Frequency (kHz) and Time (s) resolution for running the correlator. Please make divisible by 10 kHz and 0.01 s respectively. [default=%default]")
 
     group_calibrate = OptionGroup(parser, 'Calibration Options (run the RTS)')
-    group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.")
+    group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.", default=None)
     group_calibrate.add_option('--rts_output_dir', type='string', help="Working directory for RTS -- all RTS output files will end up here. Default is where the rts_in_file lives.", default=None)
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
@@ -511,6 +512,7 @@ if __name__ == '__main__':
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
     parser.add_option_group(group_download)
     parser.add_option_group(group_correlate)
+    parser.add_option_group(group_calibrate)
     parser.add_option_group(group_beamform)
 
     (opts, args) = parser.parse_args()
@@ -523,7 +525,7 @@ if __name__ == '__main__':
     if not opts.mode:
       print "Mode required {0}. Please specify with -m or --mode.".format(modes)
       quit()
-    if not opts.obs:
+    if not opts.obs and not opts.mode == 'calibrate':
         print "Observation ID required, please put in with -o or --obs"
         quit()
     if opts.begin > opts.end:
@@ -566,6 +568,9 @@ if __name__ == '__main__':
         vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, obs_dir, opts.ft_res)
     elif opts.mode == 'calibrate':
         print opts.mode
+        if not opts.rts_in_file:
+            print "You have to provide the full path to the setup file for the RTS. Aborting here."
+            quit()
         if not os.path.isfile(opts.rts_in_file):
             print "Your are not pointing at a file with your input to --rts_in_file. Aboring here a\
 s the RTS will not run..."
@@ -576,6 +581,7 @@ s the RTS will not run..."
         if not opts.rts_output_dir:
             rts_file = os.path.abspath(opts.rts_in_file).split('/')[-1]
             rts_working_dir = os.path.abspath(opts.rts_in_file).replace(rts_file, '')
+        mdir(rts_working_dir, "RTS")
         run_rts(rts_working_dir, rts_in_file)
     elif opts.mode == 'beamform':
         print opts.mode
