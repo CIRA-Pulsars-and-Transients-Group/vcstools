@@ -294,7 +294,7 @@ if __name__ == '__main__':
         (current_time,ext) = os.path.splitext(os.path.basename(first_corr_file))
         (junk,utctime,gpubox,num) = string.split(current_time,'_')
         rts_file = "./%s_%s_rts.in" % (junk,utctime)
-        build_rts_in_file(obsid,utctime,".",rts_file)
+        build_rts_in_file(obsid,utctime,os.getcwd,rts_file)
         sys.exit(0)
 
 

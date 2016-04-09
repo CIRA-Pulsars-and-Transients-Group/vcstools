@@ -353,7 +353,10 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
                         (word1,word2,word3,jobid) = line.split()
 
 
-
+def run_rts(working_dir, rts_in_file):
+    rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/rts_sun.sh'
+    batch_submit_line = "sbatch -p gpuq {0} {1} {2}".format(rts_run_file, working_dir, rts_in_file)
+    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
 
 
 def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f'):
@@ -467,7 +470,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
 
 if __name__ == '__main__':
 
-    modes=['download','recombine','correlate','beamform']
+    modes=['download','recombine','correlate','calibrate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
@@ -484,19 +487,19 @@ if __name__ == '__main__':
     group_download.add_option("--format", type="choice", choices=['11','12'], default='11', help="Voltage data type (Raw = 11, Recombined Raw = 12) [default=%default]")
     group_download.add_option("-d", "--parallel_dl", type="int", default=3, help="Number of parallel downloads to envoke [default=%default]")
 
-    group_recombine = OptionGroup(parser, 'Recombine Options')
-
     group_correlate = OptionGroup(parser, 'Correlator Options')
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,2), help="Frequency (kHz) and Time (s) resolution for running the correlator. Please make divisible by 10 kHz and 0.01 s respectively. [default=%default]")
 
-    group_pfb = OptionGroup(parser, 'PFB Creation Options')
+    group_calibrate = OptionGroup(parser, 'Calibration Options (run the RTS)')
+    group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.")
+    group_calibrate.add_option('--rts_output_dir', type='string', help="Working directory for RTS -- all RTS output files will end up here. Default is where the rts_in_file lives.", default=None)
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
 
-    parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate','beamform'], help="Mode you want to run. {0}".format(modes))
+    parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
     parser.add_option("-b", "--begin", type="int", help="First GPS time to process [no default]")
     parser.add_option("-e", "--end", type="int", help="Last GPS time to process [no default]")
@@ -507,9 +510,7 @@ if __name__ == '__main__':
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
     parser.add_option_group(group_download)
-#    parser.add_option_group(group_recombine)
     parser.add_option_group(group_correlate)
-#   parser.add_option_group(group_pfb)
     parser.add_option_group(group_beamform)
 
     (opts, args) = parser.parse_args()
@@ -563,6 +564,19 @@ if __name__ == '__main__':
         print opts.mode 
         ensure_metafits(metafits_file)
         vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, obs_dir, opts.ft_res)
+    elif opts.mode == 'calibrate':
+        print opts.mode
+        if not os.path.isfile(opts.rts_in_file):
+            print "Your are not pointing at a file with your input to --rts_in_file. Aboring here a\
+s the RTS will not run..."
+            sys.exit(1)
+        # turn whatever path we got into an absolute path 
+        rts_in_file = os.path.abspath(opts.rts_in_file)
+        rts_working_dir = opts.rts_output_dir
+        if not opts.rts_output_dir:
+            rts_file = os.path.abspath(opts.rts_in_file).split('/')[-1]
+            rts_working_dir = os.path.abspath(opts.rts_in_file).replace(rts_file, '')
+        run_rts(rts_working_dir, rts_in_file)
     elif opts.mode == 'beamform':
         print opts.mode
         if opts.flagged_tiles:
