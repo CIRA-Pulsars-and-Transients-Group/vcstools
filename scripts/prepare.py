@@ -265,7 +265,8 @@ if __name__ == '__main__':
         elif (opt == "-m"):
             the_options['mode'] = int(arg)
 
-    print "Pointing %s %s\n" % (the_options['ra'],the_options['dec'])
+    if not the_options['rts_only']:
+        print "Pointing %s %s\n" % (the_options['ra'],the_options['dec'])
 
     if (the_options['mode'] == 1):
         old_mode = 0
