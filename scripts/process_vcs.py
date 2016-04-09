@@ -487,7 +487,7 @@ if __name__ == '__main__':
     group_recombine = OptionGroup(parser, 'Recombine Options')
 
     group_correlate = OptionGroup(parser, 'Correlator Options')
-    group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(40,1), help="Frequency (kHz) and Time (s) resolution for running the correlator. Please make divisible by 10 kHz and 0.01 s respectively. [default=%default]")
+    group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,2), help="Frequency (kHz) and Time (s) resolution for running the correlator. Please make divisible by 10 kHz and 0.01 s respectively. [default=%default]")
 
     group_pfb = OptionGroup(parser, 'PFB Creation Options')
 
