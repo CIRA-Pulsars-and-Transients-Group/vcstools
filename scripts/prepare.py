@@ -185,7 +185,7 @@ def build_rts_in_file(obs_id,utctime,data_dir,rts_filename):
     fid.write( "\n" )
     fid.write( "ArrayFile=%s/array_file.txt\n" % data_dir)
     fid.write(  "ArrayNumberOfStations=128\n")
-    fid.write( "SourceCatalogueFile=%s/%s\n" % (data_dir, the_options['CalSrcFile']))
+    fid.write( "SourceCatalogueFile=%s\n" % (the_options['CalSrcFile']))
 
     fid.write( "NumberOfCalibrators=1\n")
     fid.write( "NumberOfSourcesToPeel=0\n")
@@ -251,7 +251,7 @@ if __name__ == '__main__':
         elif (opt == "-f"):
             the_options['metafile'] = arg
         elif (opt == "-s"):
-            the_options['CalSrcFile'] = arg
+            the_options['CalSrcFile'] = os.path.abspath(arg)
         elif (opt == "-i"):
             the_options['data_dir'] = arg
         elif (opt == "-g"):
@@ -291,6 +291,8 @@ if __name__ == '__main__':
 
     if (the_options['rts_only'] == True):
 
+        if the_options['CalSrcFile'] == 'null':
+            print "\n NOTE: You did not supply a source list file (with -s). Remember to edit the rts-in file! (SourceCatalogueFile=/path/to/file)\n"
         corr_files_glob = "*.fits"
         c_f = sorted(glob.glob(corr_files_glob))
         first_corr_file = c_f[0]
