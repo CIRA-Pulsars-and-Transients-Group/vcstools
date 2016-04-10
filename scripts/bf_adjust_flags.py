@@ -31,7 +31,7 @@ def modify_flags(rts_flag_file, flags_file):
                 flags_f.write(flag)
         return 0
     except:
-        print "Couldn't modify flags.txt"
+        print "Couldn't modify {0}".format(flags_file)
         return 1
 
 

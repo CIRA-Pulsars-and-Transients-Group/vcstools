@@ -363,6 +363,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
     # Need to run get_delays and then the beamformer on each desired coarse channel
     if not DI_dir:
         DI_dir = working_dir+"/DIJ"
+    DI_dir = os.path.abspath(DI_dir)
     RA = pointing[0]
     Dec = pointing[1]
 
@@ -382,6 +383,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
     chan_index = 0
     get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(working_dir,start, stop)
     bf_adjust_flags = distutils.spawn.find_executable("bf_adjust_flags.py")
+    #bf_adjust_flags = '/home/fkirsten/software/galaxy-scripts/scripts/bf_adjust_flags.py'
     with open(get_delays_batch,'w') as batch_file:
         batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n".format(working_dir,start,stop)
         batch_file.write(batch_line)
@@ -499,7 +501,7 @@ if __name__ == '__main__':
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
     group_beamform.add_option("--DI_dir", default=None, help="Directory containing Direction Independent Jones Matrices (as created by the RTS). Default is work_dir/obsID/DIJ.")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
-    group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
+    group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -595,7 +597,7 @@ s the RTS will not run..."
             quit()
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
-        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, opts.flagged_tiles, bf_format, opts.DI_dir)
+        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, os.path.abspath(opts.flagged_tiles), bf_format, opts.DI_dir)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
