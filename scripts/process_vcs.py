@@ -359,9 +359,10 @@ def run_rts(working_dir, rts_in_file):
     submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
 
 
-def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f'):
+def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f', DI_dir=None):
     # Need to run get_delays and then the beamformer on each desired coarse channel
-    DI_dir = working_dir+"/DIJ"
+    if not DI_dir:
+        DI_dir = working_dir+"/DIJ"
     RA = pointing[0]
     Dec = pointing[1]
 
@@ -496,6 +497,7 @@ if __name__ == '__main__':
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
+    group_beamform.add_option("--DI_dir", default=None, help="Directory containing Direction Independent Jones Matrices (as created by the RTS). Default is work_dir/obsID/DIJ.")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="absolute path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
 
@@ -587,10 +589,13 @@ s the RTS will not run..."
         if opts.flagged_tiles:
             if not os.path.isfile(opts.flagged_tiles):
                 print "Your are not pointing at a file with your input to --flagged_tiles. Aboring here as the beamformer will not run..."
-                sys.exit(1)
+                quit()
+        if not opts.DI_dir and not os.path.exists(obs_dir + '/DIJ'):
+            print "You did not specify the path to the DI_Jones matrices (--DI_dir) and there is no directory DIJ under {0} (which is the default look up directory, you need to create that and put the DI_Jones matrices there if this is what you want to do.). Aborting here.".format(obs_dir)
+            quit()
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
-        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, opts.flagged_tiles, bf_format)
+        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, opts.flagged_tiles, bf_format, opts.DI_dir)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
