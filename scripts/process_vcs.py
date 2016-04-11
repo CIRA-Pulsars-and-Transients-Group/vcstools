@@ -355,7 +355,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 
 def run_rts(working_dir, rts_in_file):
     rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/run_rts.sh'
-    batch_submit_line = "sbatch -p gpuq {0} {1} {2}".format(rts_run_file, working_dir, rts_in_file)
+    batch_submit_line = "sbatch -p gpuq --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file, working_dir, rts_in_file)
     submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
 
 
@@ -548,10 +548,11 @@ if __name__ == '__main__':
 
     mdir(opts.work_dir, "Working")
     obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
-    mdir(obs_dir, "Observation")
-    batch_dir = "{0}/batch".format(obs_dir)
-    mdir(batch_dir, "Batch")
-    metafits_file = "{0}/{1}.metafits".format(obs_dir,opts.obs)
+    if not opts.mode == 'calibrate':
+        mdir(obs_dir, "Observation")
+        batch_dir = "{0}/batch".format(obs_dir)
+        mdir(batch_dir, "Batch")
+        metafits_file = "{0}/{1}.metafits".format(obs_dir,opts.obs)
 
  #   options(opts)
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
@@ -577,7 +578,7 @@ if __name__ == '__main__':
         if not os.path.isfile(opts.rts_in_file):
             print "Your are not pointing at a file with your input to --rts_in_file. Aboring here a\
 s the RTS will not run..."
-            sys.exit(1)
+            quit()
         # turn whatever path we got into an absolute path 
         rts_in_file = os.path.abspath(opts.rts_in_file)
         rts_working_dir = opts.rts_output_dir
