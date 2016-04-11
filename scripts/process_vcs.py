@@ -589,15 +589,18 @@ s the RTS will not run..."
     elif opts.mode == 'beamform':
         print opts.mode
         if opts.flagged_tiles:
+            flagged_tiles_file = os.path.abspath(opts.flagged_tiles)
             if not os.path.isfile(opts.flagged_tiles):
                 print "Your are not pointing at a file with your input to --flagged_tiles. Aboring here as the beamformer will not run..."
                 quit()
+        else:
+            flagged_tiles_file = None
         if not opts.DI_dir and not os.path.exists(obs_dir + '/DIJ'):
             print "You did not specify the path to the DI_Jones matrices (--DI_dir) and there is no directory DIJ under {0} (which is the default look up directory, you need to create that and put the DI_Jones matrices there if this is what you want to do.). Aborting here.".format(obs_dir)
             quit()
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
-        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, os.path.abspath(opts.flagged_tiles), bf_format, opts.DI_dir)
+        coherent_beam(opts.obs, opts.begin, opts.end,obs_dir, metafits_file, opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
