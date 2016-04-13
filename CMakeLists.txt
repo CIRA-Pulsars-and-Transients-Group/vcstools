@@ -56,10 +56,9 @@ if (CUDA_FOUND)
     add_subdirectory(gpu_utils)    
 endif (CUDA_FOUND)
 
-if (PSRFITS_UTILS_FOUND AND CUDA_FOUND)
+if (PSRFITS_UTILS_FOUND)
     add_subdirectory(make_beam)
-    add_dependencies(make_beam MWAC_Utils MWAC_GPU_Utils)
-endif (PSRFITS_UTILS_FOUND AND CUDA_FOUND)
+endif (PSRFITS_UTILS_FOUND)
 
 
 INCLUDE(InstallRequiredSystemLibraries)
