@@ -434,7 +434,7 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
    
     char out_file[MAX_COMMAND_LENGTH];
     
-    sprintf(out_file,"/dev/shm/%s.working",in_name);
+    sprintf(out_file,"%s.working",in_name);
 
 
 
@@ -1561,7 +1561,7 @@ int main(int argc, char **argv) {
                         goto BARRIER;
                     }
 
-                    sprintf(working_file,"/dev/shm/%s.working",globbuf.gl_pathv[file_no]);
+                    sprintf(working_file,"%s.working",globbuf.gl_pathv[file_no]);
                 }
                 else {
                     sprintf(working_file,"%s",globbuf.gl_pathv[file_no]);
