@@ -434,7 +434,7 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
    
     char out_file[MAX_COMMAND_LENGTH];
     
-    sprintf(out_file,"%s.working",in_name);
+    sprintf(out_file,"/dev/shm/%s.working",in_name);
 
 
 
@@ -716,7 +716,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
 
             if (count != nstation*npol) {
                 if (feof(phases))
-                    fprintf(stderr,"Unexpected end of file!\n");
+                    fprintf(stderr,"Unexpected end of file in phases - expected %d and found %d!\n",count,nstation*npol);
                 else
                     fprintf(stderr,"Mismatch between phases and antennas - check phases file\n");
                 fclose(phases);
@@ -1069,7 +1069,7 @@ int main(int argc, char **argv) {
                     break;
                 default:
                     usage();
-                    break;
+                    goto BARRIER;
             }
         }
     }
@@ -1106,6 +1106,7 @@ int main(int argc, char **argv) {
         dir_index = me+1;
         sprintf(procdir,"%s%02d",procdirroot,dir_index);
 
+        fprintf(stdout,"Will look for processing files in %s\n",procdir);
         char pattern[256];
 
 
@@ -1114,25 +1115,25 @@ int main(int argc, char **argv) {
             sprintf(pattern,"%s/%s",procdir,weights_file);
             free(weights_file);
             weights_file=strdup(pattern);
-            fprintf(stdout,"weights_file: %s",weights_file);
+            fprintf(stdout,"weights_file: %s\n",weights_file);
         }
         if (phases_file) {
             sprintf(pattern,"%s/%s",procdir,phases_file);
             free(phases_file);
             phases_file=strdup(pattern);
-            fprintf(stdout,"phases_file: %s",phases_file);
+            fprintf(stdout,"phases_file: %s\n",phases_file);
         }
         if (jones_file) {
             sprintf(pattern,"%s/%s",procdir,jones_file);
             free(jones_file);
             jones_file=strdup(pattern);
-            fprintf(stdout,"jones_file: %s",jones_file);
+            fprintf(stdout,"jones_file: %s\n",jones_file);
         }
         if (gains_file) {
             sprintf(pattern,"%s/%s",procdir,gains_file);
             free(gains_file);
             gains_file=strdup(pattern);
-            fprintf(stdout,"gains_file: %s",gains_file);
+            fprintf(stdout,"gains_file: %s\n",gains_file);
         }
         sprintf(pattern,"%s/%s",procdir,"channel");
 
@@ -1560,7 +1561,7 @@ int main(int argc, char **argv) {
                         goto BARRIER;
                     }
 
-                    sprintf(working_file,"%s.working",globbuf.gl_pathv[file_no]);
+                    sprintf(working_file,"/dev/shm/%s.working",globbuf.gl_pathv[file_no]);
                 }
                 else {
                     sprintf(working_file,"%s",globbuf.gl_pathv[file_no]);
@@ -1862,12 +1863,14 @@ int main(int argc, char **argv) {
                 if (complex_weights) {
                     phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
                     if (phase_pos < 0) {
+                        fprintf(stderr,"get_phases has returned an error - closing down\n");
                         goto BARRIER;
                     }
                 }
                 if (apply_jones) {
                     jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
                     if (jones_pos < 0) {
+                        fprintf(stderr,"get_jones has returned an error - closing down\n");
                         goto BARRIER;
                     }
                 }
