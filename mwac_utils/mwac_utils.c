@@ -618,6 +618,8 @@ int default_read_pfb_call(int in_fd, int out_fd, char *heap) {
     int8_t *output_buffer = NULL;
     int8_t *binary_buffer = NULL;
 
+    size_t nsteps_read=0;
+    
     nfrequency=128;
     npol=2;
     nstation=128;
@@ -663,22 +665,30 @@ int default_read_pfb_call(int in_fd, int out_fd, char *heap) {
                 break;
             }
             else if (rtn > 0) {
+                
+                // fprintf(stderr,"read: got %lu expected %lu\n",rtn,items_to_read);
                 items_to_read -= rtn;
+                
             }
             else {
                 fprintf(stderr,"File conversion error on read\n");
                 return -1;
             }
         }
-
+        
+        
+        
         if (end_of_file && (items_to_read == gulp)){
+            fprintf(stderr,"heap reader has read %d steps\n",nsteps_read);
             break;
         }
         else if (end_of_file && (items_to_read != gulp)){
             fprintf(stderr,"EOF on input file with incomplete read <FATAL>\n");
             return -1;
         }
-
+        else {
+            nsteps_read++;
+        }
         // time then frequency runs slowest in this data block
 
         int8_t *inp_ptr = NULL;

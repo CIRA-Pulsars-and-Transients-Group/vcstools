@@ -434,12 +434,7 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
    
     char out_file[MAX_COMMAND_LENGTH];
     
-    sprintf(out_file,"%s.working",in_name);
-
-
-
-    fprintf(stdout,"\nConverting %s to %s\n",in_name,out_file);
-
+   
     int fd_in = open(in_name,O_RDONLY);
 
     if (fd_in < 0) {
@@ -449,6 +444,10 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
 
     int fd_out = 0;
     if (heap == NULL) {
+        
+        sprintf(out_file,"/dev/shm/%s.working",in_name);
+        
+        fprintf(stdout,"\nConverting %s to %s\n",in_name,out_file);
 
         if ((access(out_file,F_OK) != -1) && (!expunge)){
             return 1;
@@ -1561,7 +1560,7 @@ int main(int argc, char **argv) {
                         goto BARRIER;
                     }
 
-                    sprintf(working_file,"%s.working",globbuf.gl_pathv[file_no]);
+                    sprintf(working_file,"/dev/shm/%s.working",globbuf.gl_pathv[file_no]);
                 }
                 else {
                     sprintf(working_file,"%s",globbuf.gl_pathv[file_no]);
@@ -1607,11 +1606,25 @@ int main(int argc, char **argv) {
             }
             if (heap_step < sample_rate) {
                 memcpy(buffer,heap+(items_to_read*heap_step),items_to_read);
+                
                 heap_step++;
+               // fprintf(stderr,"make_beam copied %d steps out if the heap\n",heap_step);
             }
             else {
                 heap_step = 0;
                 file_no++;
+             
+                if (file_no >= nfiles) { // finished file list
+                    fprintf(stderr,"make_beam finished:\n");
+                    finished = 1;
+                    continue;
+                }
+                
+                if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
+                    goto BARRIER;
+                }
+                heap_step++;
+
             }
         }
         
@@ -1817,12 +1830,13 @@ int main(int argc, char **argv) {
                 
                 memcpy((void *)((char *)data_buffer + offset_in),spectrum,sizeof(float)*nchan);
                 offset_in += sizeof(float)*nchan;
+                
                 //for (ch=0;ch<nchan;ch++) {
                 //    fprintf(stdout,"XX+YY:ch: %d spec: %f\n",ch,spectrum[ch]);
                 //}
               
                 offset_out = offset_out + bytes_per_spec;
-                // fprintf(stderr,"specnum %d: %lu of %d bytes forthis subint (buffer is %lu bytes) \n",specnum,offset_out,pf.sub.bytes_per_subint,pf.hdr.nsblk*nchan*outpol*sizeof(float));
+                // fprintf(stderr,"specnum %d: %lu of %d bytes for this subint (buffer is %lu bytes) \n",specnum,offset_out,pf.sub.bytes_per_subint,pf.hdr.nsblk*nchan*outpol*sizeof(float));
                 
             }
             
