@@ -62,9 +62,9 @@ message ("MPI LIBS ${MPI_LIBRARIES}")
 message ("MPI COMPILER ${MPI_COMPILER}")
 message ("CUDA ${CUDA_CUFFT_LIBRARIES}")
 
-if (MPI_EXTRA_LIBRARY)
-    target_link_libraries(make_beam ${MPI_EXTRA_LIBRARY})
-endif()
+#if (MPI_EXTRA_LIBRARY)
+#    target_link_libraries(make_beam ${MPI_EXTRA_LIBRARY})
+#endif()
 
 add_definitions(${MPI_C_COMPILE_FLAGS})
 
