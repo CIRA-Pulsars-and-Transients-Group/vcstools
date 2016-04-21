@@ -178,7 +178,12 @@ void float2int8_trunc(float *f, int n, float min, float max, int8_t *i) /*includ
         
     }
 }
-
+void to_offset_binary(int8_t *i, int n){
+    int j;
+    for (j = 0; j < n; j++) {
+        i[j] = i[j] ^ 0x80;
+    }
+}
 void float2char(float *f, int n, float min, float max, int8_t *c) /*includefile*/
 {
     int *i, j;
@@ -1623,6 +1628,7 @@ int main(int argc, char **argv) {
                 if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
                     goto BARRIER;
                 }
+                memcpy(buffer,heap+(items_to_read*heap_step),items_to_read);
                 heap_step++;
 
             }
@@ -1851,7 +1857,7 @@ int main(int argc, char **argv) {
                     else {
                         flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,0);
                     }
-                    float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8);
+                    float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, 0.0, 127.0, out_buffer_8);
                     int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8);
                    // for (i=0;i<pf.hdr.nsblk*nchan*outpol;i++) {
                    //    fprintf(stdout,"%d:%"PRIu8":%f\n",i,out_buffer_8[i],data_buffer[i]);
