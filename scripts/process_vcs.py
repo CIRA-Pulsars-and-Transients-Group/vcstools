@@ -351,6 +351,8 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
                 for line in submit_cmd.stdout:
                     if "Submitted" in line:
                         (word1,word2,word3,jobid) = line.split()
+            else:
+                print "Couldn't find any recombine files. Aborting here."
 
 
 def run_rts(working_dir, rts_in_file):
