@@ -30,6 +30,7 @@
 // write out psrfits directly
 #include "psrfits.h"
 #include "antenna_mapping.h"
+#include "version.h"
 
 #define MAX_COMMAND_LENGTH 1024
 
@@ -2087,6 +2088,7 @@ int main(int argc, char **argv) {
                     //float2int2((float *) data_buffer_ptr,(out_buffer_8+offset_out),(vf.sizeof_beam), 2.5*vf.b_scales[0]);
                     
                     float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out));
+                    to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
                     // int8_to_uint8(vf.sizeof_beam,128,(char *) (out_buffer_8+offset_out));
                     //float2char_trunc(data_buffer_ptr, vf.sizeof_beam, -128.0, 127, (out_buffer_8+offset_out)); // convert to 8 bit INT
                     offset_out = vf.frame_length + offset_out - 32; // increment output offset
