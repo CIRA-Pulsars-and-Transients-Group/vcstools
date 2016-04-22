@@ -357,9 +357,15 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
         }
         if (iscomplex == 0) {
             data_ptr = (float *) data;
+            
             for (i=0;i<nstep;i++) {
                 for (j=0;j<nchan;j++){
+                    
                     for (p = 0;p<npol;p++) {
+                        if (i==0) {
+                            chan_min[p][j] = *data_ptr;
+                            chan_max[p][j] = *data_ptr;
+                        }
                         band[p][j] += fabsf(*data_ptr);
                         if (*data_ptr < chan_min[p][j]) {
                             chan_min[p][j] = *data_ptr;
