@@ -395,7 +395,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
                 fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f\n",j,p,(band[p][j]/nstep),*out);
                 out++;
                 *off = chan_min[p][j];
-                *off = 0.0;
+                //*off = 0.0;
                 off++;
                 
             }
