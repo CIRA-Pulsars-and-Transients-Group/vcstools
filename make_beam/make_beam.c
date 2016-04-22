@@ -338,23 +338,24 @@ void normalise_complex(complex float *input, int nsamples, float scale) {
     
 }
 
-void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_mean, int iscomplex,int normalise,int update,int clear) {
+void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_var, int iscomplex,int normalise,int update,int clear) {
     // putpose is to generate a mean value for each channel/polaridation
     
     int i=0,j=0;;
     int p=0;
     float *data_ptr = NULL;
     
+    float **band = calloc (npol,sizeof(float *));
+    float **chan_min = calloc (npol,sizeof(float *));
+    float **chan_max = calloc (npol,sizeof(float *));
+    for (i=0;i<npol;i++) {
+        band[i] = (float *) calloc(nchan,sizeof(float));
+        chan_min[i] = (float *) calloc(nchan,sizeof(float));
+        chan_max[i] = (float *) calloc(nchan,sizeof(float));
+    }
     
     if (update) {
-        float **band = calloc (npol,sizeof(float *));
-        float **chan_min = calloc (npol,sizeof(float *));
-        float **chan_max = calloc (npol,sizeof(float *));
-        for (i=0;i<npol;i++) {
-            band[i] = (float *) calloc(nchan,sizeof(float));
-            chan_min[i] = (float *) calloc(nchan,sizeof(float));
-            chan_max[i] = (float *) calloc(nchan,sizeof(float));
-        }
+      
         if (iscomplex == 0) {
             data_ptr = (float *) data;
             
@@ -398,7 +399,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
         for (j=0;j<nchan;j++){
             for (p = 0;p<npol;p++) {
                 // current mean
-                *out = (band[p][j]/nstep)/new_mean; // removed a divide by 32 here ....
+                *out = (chan_max[p][j] - chan_min[p][j])/new_var; // removed a divide by 32 here ....
               
                 
                 fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f\n",j,p,(band[p][j]/nstep),*out);
@@ -409,17 +410,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
                 
             }
         }
-        for (i=0;i<npol;i++) {
-            free(band[i]);
-            free(chan_min[i]);
-            free(chan_max[i]);
-        }
-        
-        
-        free(band);
-        free(chan_min);
-        free(chan_max);
-    }
+          }
     
     if (normalise) {
         
@@ -461,6 +452,18 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             }
         }
     }
+    
+    for (i=0;i<npol;i++) {
+        free(band[i]);
+        free(chan_min[i]);
+        free(chan_max[i]);
+    }
+    
+    
+    free(band);
+    free(chan_min);
+    free(chan_max);
+
     
 }
 
