@@ -398,10 +398,12 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
         for (j=0;j<nchan;j++){
             for (p = 0;p<npol;p++) {
                 *out = (chan_max[p][j] - chan_min[p][j])/127.0; // removed a divide by 32 here ....
+              
+                
                 fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f\n",j,p,(band[p][j]/nstep),*out);
                 out++;
                 *off = chan_min[p][j];
-                //*off = 0.0;
+                
                 off++;
                 
             }
@@ -427,7 +429,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             float *off  = offsets;
             for (j=0;j<nchan;j++){
                 for (p = 0;p<npol;p++) {
-                    *data_ptr = ((*data_ptr) - (*off))/(*normaliser); // 0 mean normalised to 1
+                    *data_ptr = (*data_ptr - *off)/(*normaliser); // 0 mean normalised to 1
                     
                     off++;
                     data_ptr++;
