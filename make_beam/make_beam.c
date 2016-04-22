@@ -1889,7 +1889,7 @@ int main(int argc, char **argv) {
                     else {
                         flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1);
                     }
-                    float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, 0.0, 127.0, out_buffer_8);
+                    float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8);
                     int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8);
                    // for (i=0;i<pf.hdr.nsblk*nchan*outpol;i++) {
                    //    fprintf(stdout,"%d:%"PRIu8":%f\n",i,out_buffer_8[i],data_buffer[i]);
