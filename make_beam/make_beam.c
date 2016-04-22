@@ -1857,7 +1857,7 @@ int main(int argc, char **argv) {
                         set_levels = 0;
                     }
                     else {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,0);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1);
                     }
                     float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, 0.0, 127.0, out_buffer_8);
                     int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8);
