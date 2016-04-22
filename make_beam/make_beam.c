@@ -338,7 +338,7 @@ void normalise_complex(complex float *input, int nsamples, float scale) {
     
 }
 
-void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_mean, int iscomplex,int normalise,int update) {
+void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_mean, int iscomplex,int normalise,int update,int clear) {
     // putpose is to generate a mean value for each channel/polaridation
     
     int i=0,j=0;;
@@ -438,6 +438,27 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
                 }
             }
             
+        }
+    }
+    
+    if (clear) {
+
+        float *out=scales;
+        float *off = offsets;
+
+        for (j=0;j<nchan;j++){
+            for (p = 0;p<npol;p++) {
+                // reset
+                *out = 1.0;
+                
+                
+                
+                out++;
+                *off = 0.0;
+                
+                off++;
+                
+            }
         }
     }
     
@@ -1862,11 +1883,11 @@ int main(int argc, char **argv) {
                 if (type == 1) {
                     
                     if (set_levels) {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1);
                         set_levels = 0;
                     }
                     else {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1);
                     }
                     float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, 0.0, 127.0, out_buffer_8);
                     int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8);
