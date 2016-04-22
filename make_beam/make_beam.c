@@ -392,6 +392,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
         for (j=0;j<nchan;j++){
             for (p = 0;p<npol;p++) {
                 *out = (band[p][j]/nstep)/new_mean; // removed a divide by 32 here ....
+                fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f\n",j,p,(band[p][j]/nstep),*out);
                 out++;
                 //   *off = (band[p][j]/nstep);
                 *off = 0.0;
