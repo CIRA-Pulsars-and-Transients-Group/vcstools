@@ -338,24 +338,42 @@ void normalise_complex(complex float *input, int nsamples, float scale) {
     
 }
 
-void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_var, int iscomplex,int normalise,int update,int clear) {
+void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_var, int iscomplex,int normalise,int update,int clear,int shutdown) {
     // putpose is to generate a mean value for each channel/polaridation
     
     int i=0,j=0;;
     int p=0;
     float *data_ptr = NULL;
     
-    float **band = calloc (npol,sizeof(float *));
-    float **chan_min = calloc (npol,sizeof(float *));
-    float **chan_max = calloc (npol,sizeof(float *));
-    for (i=0;i<npol;i++) {
-        band[i] = (float *) calloc(nchan,sizeof(float));
-        chan_min[i] = (float *) calloc(nchan,sizeof(float));
-        chan_max[i] = (float *) calloc(nchan,sizeof(float));
+    static float **band;
+    
+    static float **chan_min;
+
+    static float **chan_max;
+   
+
+    static int setup = 0;
+    
+    if (setup == 0) {
+        band = calloc (npol,sizeof(float *));
+        chan_min = calloc (npol,sizeof(float *));
+        chan_max = calloc (npol,sizeof(float *));
+        for (i=0;i<npol;i++) {
+            band[i] = (float *) calloc(nchan,sizeof(float));
+            chan_min[i] = (float *) calloc(nchan,sizeof(float));
+            chan_max[i] = (float *) calloc(nchan,sizeof(float));
+        }
+        setup = 1;
     }
     
     if (update) {
-      
+        
+        for (j=0;j<nchan;j++){
+            for (p = 0;p<npol;p++) {
+                band[p][j] = 0.0;
+            }
+        }
+        
         if (iscomplex == 0) {
             data_ptr = (float *) data;
             
@@ -393,24 +411,24 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             }
             
         }
-        float *out=scales;
-        float *off = offsets;
         
-        for (j=0;j<nchan;j++){
-            for (p = 0;p<npol;p++) {
-                // current mean
-                *out = (chan_max[p][j] - chan_min[p][j])/new_var; // removed a divide by 32 here ....
-              
-                
-                fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f\n",j,p,(band[p][j]/nstep),*out);
-                out++;
-                *off = (band[p][j]/nstep);
-                
-                off++;
-                
-            }
+    }
+    // set the offsets and scales
+    float *out=scales;
+    float *off = offsets;
+    for (j=0;j<nchan;j++){
+        for (p = 0;p<npol;p++) {
+            // current mean
+            *out = (chan_max[p][j] - chan_min[p][j])/new_var; // removed a divide by 32 here ....
+            fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f (max-min) %f\n",j,p,(band[p][j]/nstep),*out,(chan_max[p][j] - chan_min[p][j]));
+            out++;
+            *off = (band[p][j]/nstep);
+            
+            off++;
+            
         }
-          }
+    }
+    // apply them to the data
     
     if (normalise) {
         
@@ -431,6 +449,8 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             
         }
     }
+    
+    // clear the weights if required
     
     if (clear) {
 
@@ -453,18 +473,20 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
         }
     }
     
-    for (i=0;i<npol;i++) {
-        free(band[i]);
-        free(chan_min[i]);
-        free(chan_max[i]);
-    }
-    
-    
-    free(band);
-    free(chan_min);
-    free(chan_max);
+    // free the memory
+    if (shutdown) {
+        for (i=0;i<npol;i++) {
+            free(band[i]);
+            free(chan_min[i]);
+            free(chan_max[i]);
+        }
+        
 
-    
+        free(band);
+        free(chan_min);
+        free(chan_max);
+        setup = 0;
+    }
 }
 
 
@@ -755,7 +777,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
 
             if (count != nstation*npol) {
                 if (feof(phases))
-                    fprintf(stderr,"Unexpected end of file in phases - expected %d and found %d!\n",count,nstation*npol);
+                    fprintf(stderr,"Unexpected end of file in phases - found %d and expected %d!\n",count,nstation*npol);
                 else
                     fprintf(stderr,"Mismatch between phases and antennas - check phases file\n");
                 fclose(phases);
@@ -763,6 +785,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
             }
             else {
                 checkpoint = ftell(phases);
+                fprintf(stderr,"Checkpoint set to %ld\n",checkpoint);
             }
         
             fclose(phases);
@@ -1886,11 +1909,11 @@ int main(int argc, char **argv) {
                 if (type == 1) {
                     
                     if (set_levels) {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
                         set_levels = 0;
                     }
                     else {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,0,1,1,0);
                     }
                     float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8);
                     int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8);
@@ -1921,6 +1944,7 @@ int main(int argc, char **argv) {
                         fprintf(stderr,"get_phases has returned an error - closing down\n");
                         goto BARRIER;
                     }
+                    fprintf(stderr,"new phase checkpoint=%ld",phase_pos);
                 }
                 if (apply_jones) {
                     jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
@@ -1928,6 +1952,7 @@ int main(int argc, char **argv) {
                         fprintf(stderr,"get_jones has returned an error - closing down\n");
                         goto BARRIER;
                     }
+                    fprintf(stderr,"new jones checkpoint=%ld",jones_pos);
                 }
                 
                 
@@ -2142,12 +2167,16 @@ int main(int argc, char **argv) {
                         phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
                         if (phase_pos == -1)
                             goto BARRIER;
+                        
+                         fprintf(stderr,"new phase checkpoint=%ld",phase_pos);
                     }
                     if (apply_jones) {
                        
                         jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
                         if (jones_pos == -1)
                             goto BARRIER;
+                        
+                         fprintf(stderr,"new jonescheckpoint=%ld",jones_pos);
                     
                     }
                     
@@ -2202,7 +2231,8 @@ BARRIER:
         fprintf(stderr,"Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
                pf.tot_rows, pf.T, pf.filenum, pf.status);
 
-
+        // free some memory
+        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,0,0,0,1);
 
     }
     
