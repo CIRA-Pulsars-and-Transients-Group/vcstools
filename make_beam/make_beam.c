@@ -116,6 +116,7 @@ void usage() {
     fprintf(stderr,"make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|vdif|psrfits\n");
     fprintf(stderr,"-1 <num> telescope input to correct and output\n");
     fprintf(stderr,"-2 <num> telescope input to correct and output\n");
+    fprintf(stderr,"-A <sec> adjust levels every <sec>\n");
     fprintf(stderr,"-w <weights file> -- this is now a flag file 1/0 for each input\n");
     fprintf(stderr,"-c <phases file> -- use complex weights\n");
     fprintf(stderr,"-j <Jones file> -- antenna Jones matrices\n");
@@ -284,13 +285,14 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
     float occupancy = 17.0;
     float limit = 0.01;
     int i = 0; 
-    float gain = 1;
+    float gain = *new_gain;
+    
     float percentage_clipped = 100;
     while (percentage_clipped > 0 && percentage_clipped > limit) {
         int count = 0;
         int clipped = 0;
         for (i=0;i<nsamples;i++) {
-            if (gain*creal(input[i]) >= 0 && gain*creal(input[i]) < 1) {
+            if (gain*creal(input[i]) >= 0 && gain*creal(input[i]) < 64) {
                 count++;
             }
             if (fabsf(gain*creal(input[i])) > 127) {
@@ -306,8 +308,8 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
         }
         percentage = ((float)count/nsamples)*100.0;
         fprintf(stdout,"Gain set to %f (linear)\n",gain);
-        fprintf(stdout,"percentage of samples 0-1 (should be %f) %f percent \n",occupancy,percentage);
-        fprintf(stdout,"Will be clipped (|7+|) %f percent\n",percentage_clipped);
+        fprintf(stdout,"percentage of samples in the first 64 (+ve) levels - %f percent \n",percentage);
+        fprintf(stdout,"percentage clipped %f percent\n",percentage_clipped);
     }
     *new_gain = gain;
 }
@@ -333,7 +335,7 @@ void normalise_complex(complex float *input, int nsamples, float scale) {
     int i=0;
     
     for (i=0;i<nsamples;i++){
-        input[i]=input[i]/scale;
+        input[i]=input[i]*scale;
     }
     
 }
@@ -920,7 +922,8 @@ int main(int argc, char **argv) {
     int c = 0;
     int ch=0;
 
-
+    int agc = -1;
+    
     int weights = 0;
     int complex_weights = 0;
     int apply_jones = 0;
@@ -994,9 +997,13 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:X")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:A:a:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:X")) != -1) {
             switch(c) {
-                    
+                
+                case 'A': {
+                    agc = atoi(optarg);
+                    break;
+                }
                 case '1':
                     out1 = atoi(optarg);
                     sprintf(out1_name,"input_%.3d%.2d.txt",out1,me);
@@ -1588,6 +1595,7 @@ int main(int argc, char **argv) {
     }
     int set_levels = 1;
     int specnum=0;
+    int agccount = 0;
     int integ=0;
     int index=0;
     int finished = 0;
@@ -1601,7 +1609,16 @@ int main(int argc, char **argv) {
     char working_file[MAX_COMMAND_LENGTH];
 
     while(finished == 0) { // keep going indefinitely
-
+        
+        if (agc == agccount) {
+            if (make_psrfits) {
+                set_levels = 1;
+            }
+            else {
+                vf.got_scales = 0;
+            }
+            agccount = 0;
+        }
         if (read_stdin) {
             unsigned int rtn = fread(buffer,items_to_read*sizeof(int8_t),nspec,stdin);
             if (feof(stdin) || rtn != nspec) {
@@ -2134,8 +2151,9 @@ int main(int argc, char **argv) {
                      set_level_occupancy((complex float *) data_buffer,vf.sizeof_buffer/2.0,&gain);
                     
                 } 
-                    
-                normalise_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,1.0/gain);
+                agccount++;
+ 
+                normalise_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,gain);
 
                 data_buffer_ptr = data_buffer;
                 offset_out = 0;
@@ -2149,7 +2167,7 @@ int main(int argc, char **argv) {
                     
                     float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out));
                     //to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
-                    int8_to_uint8(vf.sizeof_beam,128,(char *) (out_buffer_8+offset_out));
+                    //int8_to_uint8(vf.sizeof_beam,128,(char *) (out_buffer_8+offset_out));
                     //float2char_trunc(data_buffer_ptr, vf.sizeof_beam, -128.0, 127, (out_buffer_8+offset_out)); // convert to 8 bit INT
                     offset_out = vf.frame_length + offset_out - 32; // increment output offset
                     data_buffer_ptr = data_buffer_ptr + vf.sizeof_beam;
