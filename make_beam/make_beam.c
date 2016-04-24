@@ -432,7 +432,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
     
     if (normalise) {
         
-        data_ptr = data;
+        data_ptr = (float *) data;
         
         for (i=0;i<nstep;i++) {
             float *normaliser = scales;
@@ -1494,11 +1494,11 @@ int main(int argc, char **argv) {
     char *heap = NULL;
     size_t heap_step = 0;
 
-    if (read_heap)
+    if (read_heap) {
         heap = (char *) malloc(nspec*items_to_read*sample_rate);
 
-    assert(heap);
-
+        assert(heap);
+    }
 
     int outpol = 1;
     
