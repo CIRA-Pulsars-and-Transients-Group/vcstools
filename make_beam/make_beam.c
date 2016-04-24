@@ -413,7 +413,8 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
         }
         
     }
-    // set the offsets and scales
+    // set the offsets and scales - even if we are not updating ....
+    
     float *out=scales;
     float *off = offsets;
     for (j=0;j<nchan;j++){
@@ -1913,7 +1914,7 @@ int main(int argc, char **argv) {
                         set_levels = 0;
                     }
                     else {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,0,1,0);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
                     }
                     float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8);
                     int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8);
@@ -2147,9 +2148,9 @@ int main(int argc, char **argv) {
                     //float2int2((float *) data_buffer_ptr,(out_buffer_8+offset_out),(vf.sizeof_beam), 2.5*vf.b_scales[0]);
                     
                     float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out));
-                    to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
+                    //to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
                     // int8_to_uint8(vf.sizeof_beam,128,(char *) (out_buffer_8+offset_out));
-                    //float2char_trunc(data_buffer_ptr, vf.sizeof_beam, -128.0, 127, (out_buffer_8+offset_out)); // convert to 8 bit INT
+                    float2char_trunc(data_buffer_ptr, vf.sizeof_beam, -128.0, 127, (out_buffer_8+offset_out)); // convert to 8 bit INT
                     offset_out = vf.frame_length + offset_out - 32; // increment output offset
                     data_buffer_ptr = data_buffer_ptr + vf.sizeof_beam;
                     nextVDIFHeader(&vhdr,vf.frame_rate);
