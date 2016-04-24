@@ -355,9 +355,9 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
     static int setup = 0;
     
     if (setup == 0) {
-        band = calloc (npol,sizeof(float *));
-        chan_min = calloc (npol,sizeof(float *));
-        chan_max = calloc (npol,sizeof(float *));
+        band = (float **) calloc (npol,sizeof(float *));
+        chan_min = (float **) calloc (npol,sizeof(float *));
+        chan_max = (float **) calloc (npol,sizeof(float *));
         for (i=0;i<npol;i++) {
             band[i] = (float *) calloc(nchan,sizeof(float));
             chan_min[i] = (float *) calloc(nchan,sizeof(float));
