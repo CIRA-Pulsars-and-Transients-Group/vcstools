@@ -284,6 +284,7 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
     float percentage = 0.0;
     float occupancy = 17.0;
     float limit = 0.01;
+    float step = 0.001;
     int i = 0; 
     float gain = *new_gain;
     
@@ -301,10 +302,10 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
         }
         percentage_clipped = ((float) clipped/nsamples) * 100;
         if (percentage_clipped < limit) {
-            gain = gain + 0.01;
+            gain = gain + step;
         }
         else {
-            gain = gain - 0.01;
+            gain = gain - step;
         }
         percentage = ((float)count/nsamples)*100.0;
         fprintf(stdout,"Gain set to %f (linear)\n",gain);
@@ -1897,8 +1898,8 @@ int main(int argc, char **argv) {
             }
             
             if (make_vdif==1) { // single time step
-                pol_X[ch] = beam[ch][0];
-                pol_Y[ch] = beam[ch][1];
+                pol_X[ch] = beam[ch][0]/wgt_sum;
+                pol_Y[ch] = beam[ch][1]/wgt_sum;
                 //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_X[ch]),cimag(pol_X[ch]));
                 //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_Y[ch]),cimag(pol_Y[ch]));
             }
