@@ -2150,9 +2150,9 @@ int main(int argc, char **argv) {
                          fprintf(stderr,"ch: %d (stddev): %f\n",ch,vf.b_scales[ch]);
                     }
                     set_level_occupancy((complex float *) data_buffer,vf.sizeof_buffer/2.0,&gain);
-                    float gain_var = 64.0/vf.b_scales[0];
-                    fprintf(stderr,"Gain by variance at: %f by levels %f\n",gain_var,gain);
-                    gain=gain_var;
+                    
+                    fprintf(stderr,"Gain by level occupancy %f\n",gain);
+                 
                 }
                 agccount++;
                 
