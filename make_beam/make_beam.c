@@ -2146,14 +2146,18 @@ int main(int argc, char **argv) {
                     
                   
                     vf.got_scales = 1;
-                     for (ch=0;ch<vf.nchan;ch=ch+1) {
+                    for (ch=0;ch<vf.nchan;ch=ch+1) {
                          fprintf(stderr,"ch: %d (stddev): %f\n",ch,vf.b_scales[ch]);
-                     }
-                     set_level_occupancy((complex float *) data_buffer,vf.sizeof_buffer/2.0,&gain);
-                    
-                } 
+                    }
+                    set_level_occupancy((complex float *) data_buffer,vf.sizeof_buffer/2.0,&gain);
+                    float gain_var = 64.0/vf.b_scales[0];
+                    fprintf(stderr,"Gain by variance at: %f by levels %f\n",gain_var,gain);
+                    gain=gain_var;
+                }
                 agccount++;
- 
+                
+              
+                
                 normalise_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,gain);
 
                 data_buffer_ptr = data_buffer;
