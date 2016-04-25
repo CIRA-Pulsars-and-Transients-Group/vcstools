@@ -507,7 +507,9 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
         fprintf(stderr,"Failed to open %s:%s\n",in_name,strerror(errno));
         return -1;
     }
-
+    else {
+        fprintf(stderr,"Opening %s for input\n",in_name);
+    }
     int fd_out = 0;
     if (heap == NULL) {
         
