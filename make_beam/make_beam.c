@@ -283,7 +283,7 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
     
     float percentage = 0.0;
     float occupancy = 17.0;
-    float limit = 0.01;
+    float limit = 0.00001;
     float step = 0.001;
     int i = 0; 
     float gain = *new_gain;
@@ -423,10 +423,10 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
     for (j=0;j<nchan;j++){
         for (p = 0;p<npol;p++) {
             // current mean
-            *out = (chan_max[p][j] - chan_min[p][j])/new_var; // removed a divide by 32 here ....
+            *out = ((band[p][j]/nstep))/new_var; // removed a divide by 32 here ....
             fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f (max-min) %f\n",j,p,(band[p][j]/nstep),*out,(chan_max[p][j] - chan_min[p][j]));
             out++;
-            *off = (band[p][j]/nstep);
+            *off = 0.0;
             
             off++;
             
@@ -1730,11 +1730,12 @@ int main(int argc, char **argv) {
         }
                   
         for (index = 0; index < nstation*npol;index = index + 2) {
+            
             for (ch=0;ch<nchan;ch++) {
                 complex float e_true[2],e_dash[2];
 
                 if (swap_complex) {
-                    e_dash[0] = (float) *in_ptr+1 + I*(float)(*(in_ptr));
+                    e_dash[0] = (float) *(in_ptr+1) + I*(float)(*(in_ptr));
                     e_dash[1] = (float) *(in_ptr+(nchan*2) + 1) + I*(float)(*(in_ptr+(nchan*2))); // next pol is nchan*2 away
                 }
                 else {
@@ -1827,8 +1828,9 @@ int main(int argc, char **argv) {
                 }
                 in_ptr = in_ptr+2;
             }
-            in_ptr = in_ptr + (nchan*2);
+            in_ptr = in_ptr + (nchan*2); // next pol0
         }
+        
         // detect the beam or prep from invert_pfb
         // reduce over each channel for the beam
         // do this by twos
@@ -1900,8 +1902,8 @@ int main(int argc, char **argv) {
             }
             
             if (make_vdif==1) { // single time step
-                pol_X[ch] = beam[ch][0]/wgt_sum;
-                pol_Y[ch] = beam[ch][1]/wgt_sum;
+                pol_X[ch] = beam[ch][0]/sqrt(wgt_sum);
+                pol_Y[ch] = beam[ch][1]/sqrt(wgt_sum);
                 //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_X[ch]),cimag(pol_X[ch]));
                 //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_Y[ch]),cimag(pol_Y[ch]));
             }
@@ -2160,7 +2162,7 @@ int main(int argc, char **argv) {
                 
               
                 
-                normalise_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,gain);
+                normalise_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,1.0/gain);
 
                 data_buffer_ptr = data_buffer;
                 offset_out = 0;
