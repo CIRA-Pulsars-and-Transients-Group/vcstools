@@ -69,6 +69,11 @@ def mdir(path,description, gid=30832):
         else:
             sys.exit()
 
+def get_user_email():
+    command="echo `ldapsearch -x \"uid=$USER\" mail |grep \"^mail\"|cut -f2 -d' '`"
+    email = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).communicate()[0]
+    return email.strip()
+
 def ensure_metafits(metafits_file):
         if (os.path.isfile(metafits_file) == False):
             metafile_line = "wget  http://mwa-metadata01.pawsey.org.au/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
@@ -111,7 +116,6 @@ def get_frequencies(metafits):
     hdulist = pyfits.open(metafits)
     freq_array = hdulist[0].header['CHANNELS']
     return sfreq(freq_array.split(','))
-
 
 def options (options): # TODO reformat this to print properly
 
@@ -387,7 +391,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
     bf_adjust_flags = distutils.spawn.find_executable("bf_adjust_flags.py")
     #bf_adjust_flags = '/home/fkirsten/software/galaxy-scripts/scripts/bf_adjust_flags.py'
     with open(get_delays_batch,'w') as batch_file:
-        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n".format(working_dir,start,stop)
+        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n#SBATCH --mail-type=ALL\n".format(working_dir,start,stop)
         batch_file.write(batch_line)
         batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
         batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
@@ -421,7 +425,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
                 startjobs = False
 
             chan_index = chan_index+1
-    submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq {2} --gid=mwaops \n".format("00:45:00", pointing_dir, get_delays_batch)
+    submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq --gid=mwaops --mail-user={2} {3}\n".format("00:45:00", pointing_dir, e_mail, get_delays_batch)
     print submit_line;
     if startjobs:
         output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -448,7 +452,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         batch_file.write("#!/bin/bash -l\n")
         nodes_line = "#SBATCH --nodes=24\n#SBATCH --export=NONE\n" 
         batch_file.write(nodes_line)
-        output_line = "#SBATCH --output={0}/batch/{1}\n".format(working_dir,make_beam_batch_out)
+        output_line = "#SBATCH --output={0}/batch/{1}\n#SBATCH --mail-type=ALL\n".format(working_dir,make_beam_batch_out)
         batch_file.write(output_line)
         time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
         batch_file.write(time_line)
@@ -463,7 +467,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
         rename_files_line = "cd {0}/combined;for i in *.bf;do mv $i `basename $i .bf`;done\n".format(working_dir)
         batch_file.write(rename_files_line)
 
-    submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} {2} --gid=mwaops \n".format(pointing_dir,dependsOn,make_beam_batch)
+    submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
     print submit_line
     if startjobs:
         output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -515,6 +519,7 @@ if __name__ == '__main__':
     parser.add_option("-w", "--work_dir", metavar="DIR", default="/scratch2/mwaops/vcs/", help="Base directory you want to run from. This will create a folder for the Obs. ID if it doesn't exist [default=%default]")
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
+    parser.add_option("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.[default=%default]")
     parser.add_option_group(group_download)
     parser.add_option_group(group_correlate)
     parser.add_option_group(group_calibrate)
@@ -527,6 +532,10 @@ if __name__ == '__main__':
         quit()
     elif opts.all:
         opts.begin, opts.end = obs_max_min(opts.obs)
+    e_mail = ""
+    if opts.mail:
+        e_mail = get_user_email()
+        print e_mail
     if not opts.mode:
       print "Mode required {0}. Please specify with -m or --mode.".format(modes)
       quit()
