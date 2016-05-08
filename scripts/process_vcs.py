@@ -440,36 +440,36 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
     else:
         secs_to_run = datetime.timedelta(seconds=60*(stop-start))
 
-    make_beam_batch = "{0}/batch/mb_{1}_{2}.batch".format(working_dir,RA,Dec)
-    make_beam_batch_out = "mb_{1}_{2}.out".format(working_dir,RA,Dec)
-    with open(make_beam_batch, 'w') as batch_file:
-        batch_file.write("#!/bin/bash -l\n")
-        nodes_line = "#SBATCH --nodes=24\n#SBATCH --export=NONE\n" 
-        batch_file.write(nodes_line)
-        output_line = "#SBATCH --output={0}/batch/{1}\n".format(working_dir,make_beam_batch_out)
-        batch_file.write(output_line)
-        time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
-        batch_file.write(time_line)
-        batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
-        batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
-        # the beamformer runs on all files in /combined with a specific ending
-        # thus we rename all relevant ones to .bf and rename back later.
-        rename_files_line = "cd {0}/combined;for sec in `seq {1} {2}`;do for chan in {3}_$sec*ch*.dat; do mv $chan $chan.bf;done;done;cd {4}\n".format(working_dir, start, stop, opts.obs,pointing_dir)
-        batch_file.write(rename_files_line)
-        aprun_line = "aprun -n 24 -N 1 make_beam -e dat.bf -a 128 -n 128 -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (jones,working_dir,pointing_dir,bf_format)
-        batch_file.write(aprun_line)
-        rename_files_line = "cd {0}/combined;for i in *.bf;do mv $i `basename $i .bf`;done\n".format(working_dir)
-        batch_file.write(rename_files_line)
+    # Run one coarse channel per node
+    for coarse_chan in range(24):
+        make_beam_batch = "{0}/batch/mb_{1}_{2}_ch{3}.batch".format(working_dir, RA, Dec, coarse_chan)
+        make_beam_batch_out = "mb_{1}_{2}_ch{3}.out".format(working_dir, RA, Dec, coarse_chan)
+        with open(make_beam_batch, 'w') as batch_file:
+            batch_file.write("#!/bin/bash -l\n")
+            nodes_line = "#SBATCH --nodes=1\n#SBATCH --export=NONE\n" 
+            batch_file.write(nodes_line)
+            output_line = "#SBATCH --output={0}/batch/{1}\n".format(working_dir,make_beam_batch_out)
+            batch_file.write(output_line)
+            time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
+            batch_file.write(time_line)
+            batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
+            batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
+            # The beamformer runs on all files within time range specified with
+            # the -b and -e flags
+            # SAM--EDIT: For now, this is explicitly calling my locally installed version
+            # of make_beam, NOT the version in the path
+            aprun_line = "aprun -n 1 -N 1 /group/mwaops/smcsweeney/bin/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
+            batch_file.write(aprun_line)
 
-    submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} {2} --gid=mwaops \n".format(pointing_dir,dependsOn,make_beam_batch)
-    print submit_line
-    if startjobs:
-        output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
-        jobID = output.split(" ")[3].strip()
-        #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-        print "Submitted as job {0}".format(jobID)
-    else:
-      print "Not submitted. \n"
+        submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} {2} --gid=mwaops \n".format(pointing_dir,dependsOn,make_beam_batch)
+        print submit_line
+        if startjobs:
+            output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
+            jobID = output.split(" ")[3].strip()
+            #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+            print "Submitted as job {0}".format(jobID)
+        else:
+          print "Not submitted. \n"
 
 if __name__ == '__main__':
 
