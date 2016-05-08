@@ -456,9 +456,7 @@ def coherent_beam(obs_id, start,stop,working_dir, metafile, nfine_chan, pointing
             batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
-            # SAM--EDIT: For now, this is explicitly calling my locally installed version
-            # of make_beam, NOT the version in the path
-            aprun_line = "aprun -n 1 -N 1 /group/mwaops/smcsweeney/bin/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
+            aprun_line = "aprun -n 1 -N 1 make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
 
         submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} {2} --gid=mwaops \n".format(pointing_dir,dependsOn,make_beam_batch)
