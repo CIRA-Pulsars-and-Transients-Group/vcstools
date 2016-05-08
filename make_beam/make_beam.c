@@ -865,10 +865,13 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
                 Fnorm += (double) Ji[j] * conj(Ji[j]);
             }
             Fnorm = sqrt(Fnorm);
-           // fprintf(stderr,"Fnorm (Ji) = (%d) %f\n",count,Fnorm);
-
+            // fprintf(stderr,"Fnorm (Ji) = (%d) %f\n",count,Fnorm);
             if (Fnorm != 0) {
-
+                for (j=0; j < 4;j++) {
+                    Ji[j] = Ji[j]/Fnorm;
+                }
+                
+                
                 inv2x2(Ji,(*invJi)[count]);
             }
             else {
@@ -884,8 +887,7 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
                 Fnorm += (double) (*invJi)[count][j] * conj((*invJi)[count][j]);
             }
             Fnorm = sqrt(Fnorm);
-
-//            fprintf(stderr,"Fnorm = (%d) %f\n",count,sqrt(Fnorm));
+           //            fprintf(stderr,"Fnorm = (%d) %f\n",count,sqrt(Fnorm));
 //            for (j=0; j < 4;j++) {
 //                fprintf(stderr,"(%d,%d) %f %f",count,j,creal((*invJi)[count][j]),cimag((*invJi)[count][j]) );
  //           }
@@ -1169,6 +1171,8 @@ int main(int argc, char **argv) {
         if (me != 0)
             goto BARRIER;
         read_stdin = 1;
+        read_files = 0;
+        read_heap = 0;
         sprintf(procdir,"./");
     }
 
@@ -1503,6 +1507,7 @@ int main(int argc, char **argv) {
     
     char *buffer = (char *) malloc(nspec*items_to_read*sizeof(int8_t));
     char *heap = NULL;
+    
     size_t heap_step = 0;
 
     if (read_heap) {
@@ -2196,7 +2201,7 @@ int main(int argc, char **argv) {
                         if (phase_pos == -1)
                             goto BARRIER;
                         
-                         fprintf(stderr,"new phase checkpoint=%ld",phase_pos);
+                         fprintf(stderr,"new phase checkpoint=%ld\n",phase_pos);
                     }
                     if (apply_jones) {
                        
@@ -2204,7 +2209,7 @@ int main(int argc, char **argv) {
                         if (jones_pos == -1)
                             goto BARRIER;
                         
-                         fprintf(stderr,"new jonescheckpoint=%ld",jones_pos);
+                         fprintf(stderr,"new jones checkpoint=%ld\n",jones_pos);
                     
                     }
                     
