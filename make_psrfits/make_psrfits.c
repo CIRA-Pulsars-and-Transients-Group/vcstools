@@ -8,7 +8,7 @@
 #include <math.h>
 #include <errno.h>
 #include <unistd.h>
-#include "psrfits_utils/psrfits.h"
+#include "psrfits.h"
 #include "slalib.h"
 
 #ifndef DEGTORAD
