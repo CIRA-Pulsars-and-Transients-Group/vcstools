@@ -601,30 +601,29 @@ def beam_enter_exit(min_power, powers, imax, dt, duration):
             after_list.append(a)
             after_check = True
     
+    
     #assumes min power is at start of before_list and end of after_list. Then extract the time and
-    #covert it into a file number and adding a file either side incase of ccode error or bright sources
+    #covert it into a fraction of obs and adding a file either side incase of ccode error or bright sources
     if before_check:
         before = before_list[0]
-        before_time = before[1]
-        before_file = int(before_time / 200)
-        if before_file > 0:
-            enter = before_file - 1
+        before_time = float(before[1])
+        if before_time > 199.:
+            enter = float((before_time - 200.)/float(duration))
         else:
-            enter = before_file
+            enter = 0.0
     else:
-        enter = 0
+        enter = 0.0
         
     if after_check:
         after = after_list[-1]
-        after_time = after[1]
-        after_file = int(after_time / 200)
+        after_time = float(after[1])
         
-        if after_file < file_num:
-            exit = after_file + 1
+        if after_time < (float(duration) - 199.):
+            exit = float((after_time + 200.)/float(duration))
         else:
-            exit = after_file
+            exit = 1.0
     else:
-        exit = file_num
+        exit = 1.0
     
     return [enter,exit]
     
