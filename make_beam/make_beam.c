@@ -30,6 +30,7 @@
 // write out psrfits directly
 #include "psrfits.h"
 #include "antenna_mapping.h"
+#include "version.h"
 
 #define MAX_COMMAND_LENGTH 1024
 
@@ -115,6 +116,7 @@ void usage() {
     fprintf(stderr,"make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|vdif|psrfits\n");
     fprintf(stderr,"-1 <num> telescope input to correct and output\n");
     fprintf(stderr,"-2 <num> telescope input to correct and output\n");
+    fprintf(stderr,"-A <sec> adjust levels every <sec>\n");
     fprintf(stderr,"-w <weights file> -- this is now a flag file 1/0 for each input\n");
     fprintf(stderr,"-c <phases file> -- use complex weights\n");
     fprintf(stderr,"-j <Jones file> -- antenna Jones matrices\n");
@@ -178,7 +180,12 @@ void float2int8_trunc(float *f, int n, float min, float max, int8_t *i) /*includ
         
     }
 }
-
+void to_offset_binary(int8_t *i, int n){
+    int j;
+    for (j = 0; j < n; j++) {
+        i[j] = i[j] ^ 0x80;
+    }
+}
 void float2char(float *f, int n, float min, float max, int8_t *c) /*includefile*/
 {
     int *i, j;
@@ -276,15 +283,17 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
     
     float percentage = 0.0;
     float occupancy = 17.0;
-    float limit = 0.01;
+    float limit = 0.00001;
+    float step = 0.001;
     int i = 0; 
-    float gain = 1;
+    float gain = *new_gain;
+    
     float percentage_clipped = 100;
     while (percentage_clipped > 0 && percentage_clipped > limit) {
         int count = 0;
         int clipped = 0;
         for (i=0;i<nsamples;i++) {
-            if (gain*creal(input[i]) >= 0 && gain*creal(input[i]) < 1) {
+            if (gain*creal(input[i]) >= 0 && gain*creal(input[i]) < 64) {
                 count++;
             }
             if (fabsf(gain*creal(input[i])) > 127) {
@@ -293,15 +302,15 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
         }
         percentage_clipped = ((float) clipped/nsamples) * 100;
         if (percentage_clipped < limit) {
-            gain = gain + 0.01;
+            gain = gain + step;
         }
         else {
-            gain = gain - 0.01;
+            gain = gain - step;
         }
         percentage = ((float)count/nsamples)*100.0;
         fprintf(stdout,"Gain set to %f (linear)\n",gain);
-        fprintf(stdout,"percentage of samples 0-1 (should be %f) %f percent \n",occupancy,percentage);
-        fprintf(stdout,"Will be clipped (|7+|) %f percent\n",percentage_clipped);
+        fprintf(stdout,"percentage of samples in the first 64 (+ve) levels - %f percent \n",percentage);
+        fprintf(stdout,"percentage clipped %f percent\n",percentage_clipped);
     }
     *new_gain = gain;
 }
@@ -327,33 +336,58 @@ void normalise_complex(complex float *input, int nsamples, float scale) {
     int i=0;
     
     for (i=0;i<nsamples;i++){
-        input[i]=input[i]/scale;
+        input[i]=input[i]*scale;
     }
     
 }
 
-void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_mean, int iscomplex,int normalise,int update) {
+void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_var, int iscomplex,int normalise,int update,int clear,int shutdown) {
     // putpose is to generate a mean value for each channel/polaridation
     
     int i=0,j=0;;
     int p=0;
     float *data_ptr = NULL;
     
+    static float **band;
     
-    if (update) {
-        float **band = calloc (npol,sizeof(float *));
-        float **chan_min = calloc (npol,sizeof(float *));
-        float **chan_max = calloc (npol,sizeof(float *));
+    static float **chan_min;
+
+    static float **chan_max;
+   
+
+    static int setup = 0;
+    
+    if (setup == 0) {
+        band = (float **) calloc (npol,sizeof(float *));
+        chan_min = (float **) calloc (npol,sizeof(float *));
+        chan_max = (float **) calloc (npol,sizeof(float *));
         for (i=0;i<npol;i++) {
             band[i] = (float *) calloc(nchan,sizeof(float));
             chan_min[i] = (float *) calloc(nchan,sizeof(float));
             chan_max[i] = (float *) calloc(nchan,sizeof(float));
         }
+        setup = 1;
+    }
+    
+    if (update) {
+        
+        for (j=0;j<nchan;j++){
+            for (p = 0;p<npol;p++) {
+                band[p][j] = 0.0;
+            }
+        }
+        
         if (iscomplex == 0) {
             data_ptr = (float *) data;
+            
             for (i=0;i<nstep;i++) {
                 for (j=0;j<nchan;j++){
+                    
                     for (p = 0;p<npol;p++) {
+                        if (i==0) {
+                            chan_min[p][j] = *data_ptr;
+                            chan_max[p][j] = *data_ptr;
+                        }
                         band[p][j] += fabsf(*data_ptr);
                         if (*data_ptr < chan_min[p][j]) {
                             chan_min[p][j] = *data_ptr;
@@ -380,34 +414,29 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             }
             
         }
-        float *out=scales;
-        float *off = offsets;
         
-        for (j=0;j<nchan;j++){
-            for (p = 0;p<npol;p++) {
-                *out = (band[p][j]/nstep)/new_mean; // removed a divide by 32 here ....
-                out++;
-                //   *off = (band[p][j]/nstep);
-                *off = 0.0;
-                off++;
-                
-            }
-        }
-        for (i=0;i<npol;i++) {
-            free(band[i]);
-            free(chan_min[i]);
-            free(chan_max[i]);
-        }
-        
-        
-        free(band);
-        free(chan_min);
-        free(chan_max);
     }
+    // set the offsets and scales - even if we are not updating ....
+    
+    float *out=scales;
+    float *off = offsets;
+    for (j=0;j<nchan;j++){
+        for (p = 0;p<npol;p++) {
+            // current mean
+            *out = ((band[p][j]/nstep))/new_var; // removed a divide by 32 here ....
+            fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f (max-min) %f\n",j,p,(band[p][j]/nstep),*out,(chan_max[p][j] - chan_min[p][j]));
+            out++;
+            *off = 0.0;
+            
+            off++;
+            
+        }
+    }
+    // apply them to the data
     
     if (normalise) {
         
-        data_ptr = data;
+        data_ptr = (float *) data;
         
         for (i=0;i<nstep;i++) {
             float *normaliser = scales;
@@ -415,7 +444,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             for (j=0;j<nchan;j++){
                 for (p = 0;p<npol;p++) {
                     *data_ptr = ((*data_ptr) - (*off))/(*normaliser); // 0 mean normalised to 1
-                    
+                    //fprintf(stderr,"%f %f %f\n",*data_ptr,*off,*normaliser);
                     off++;
                     data_ptr++;
                     normaliser++;
@@ -425,6 +454,43 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
         }
     }
     
+    // clear the weights if required
+    
+    if (clear) {
+
+        float *out=scales;
+        float *off = offsets;
+
+        for (j=0;j<nchan;j++){
+            for (p = 0;p<npol;p++) {
+                // reset
+                *out = 1.0;
+                
+                
+                
+                out++;
+                *off = 0.0;
+                
+                off++;
+                
+            }
+        }
+    }
+    
+    // free the memory
+    if (shutdown) {
+        for (i=0;i<npol;i++) {
+            free(band[i]);
+            free(chan_min[i]);
+            free(chan_max[i]);
+        }
+        
+
+        free(band);
+        free(chan_min);
+        free(chan_max);
+        setup = 0;
+    }
 }
 
 
@@ -441,7 +507,9 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
         fprintf(stderr,"Failed to open %s:%s\n",in_name,strerror(errno));
         return -1;
     }
-
+    else {
+        fprintf(stderr,"Opening %s for input\n",in_name);
+    }
     int fd_out = 0;
     if (heap == NULL) {
         
@@ -715,7 +783,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
 
             if (count != nstation*npol) {
                 if (feof(phases))
-                    fprintf(stderr,"Unexpected end of file in phases - expected %d and found %d!\n",count,nstation*npol);
+                    fprintf(stderr,"Unexpected end of file in phases - found %d and expected %d!\n",count,nstation*npol);
                 else
                     fprintf(stderr,"Mismatch between phases and antennas - check phases file\n");
                 fclose(phases);
@@ -723,6 +791,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
             }
             else {
                 checkpoint = ftell(phases);
+                fprintf(stderr,"Checkpoint set to %ld\n",checkpoint);
             }
         
             fclose(phases);
@@ -796,10 +865,13 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
                 Fnorm += (double) Ji[j] * conj(Ji[j]);
             }
             Fnorm = sqrt(Fnorm);
-           // fprintf(stderr,"Fnorm (Ji) = (%d) %f\n",count,Fnorm);
-
+            // fprintf(stderr,"Fnorm (Ji) = (%d) %f\n",count,Fnorm);
             if (Fnorm != 0) {
-
+                for (j=0; j < 4;j++) {
+                    Ji[j] = Ji[j]/Fnorm;
+                }
+                
+                
                 inv2x2(Ji,(*invJi)[count]);
             }
             else {
@@ -815,8 +887,7 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
                 Fnorm += (double) (*invJi)[count][j] * conj((*invJi)[count][j]);
             }
             Fnorm = sqrt(Fnorm);
-
-//            fprintf(stderr,"Fnorm = (%d) %f\n",count,sqrt(Fnorm));
+           //            fprintf(stderr,"Fnorm = (%d) %f\n",count,sqrt(Fnorm));
 //            for (j=0; j < 4;j++) {
 //                fprintf(stderr,"(%d,%d) %f %f",count,j,creal((*invJi)[count][j]),cimag((*invJi)[count][j]) );
  //           }
@@ -856,7 +927,8 @@ int main(int argc, char **argv) {
     int c = 0;
     int ch=0;
 
-
+    int agc = -1;
+    
     int weights = 0;
     int complex_weights = 0;
     int apply_jones = 0;
@@ -930,9 +1002,13 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:a:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:X")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:A:a:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:X")) != -1) {
             switch(c) {
-                    
+                
+                case 'A': {
+                    agc = atoi(optarg);
+                    break;
+                }
                 case '1':
                     out1 = atoi(optarg);
                     sprintf(out1_name,"input_%.3d%.2d.txt",out1,me);
@@ -1095,6 +1171,8 @@ int main(int argc, char **argv) {
         if (me != 0)
             goto BARRIER;
         read_stdin = 1;
+        read_files = 0;
+        read_heap = 0;
         sprintf(procdir,"./");
     }
 
@@ -1429,13 +1507,14 @@ int main(int argc, char **argv) {
     
     char *buffer = (char *) malloc(nspec*items_to_read*sizeof(int8_t));
     char *heap = NULL;
+    
     size_t heap_step = 0;
 
-    if (read_heap)
+    if (read_heap) {
         heap = (char *) malloc(nspec*items_to_read*sample_rate);
 
-    assert(heap);
-
+        assert(heap);
+    }
 
     int outpol = 1;
     
@@ -1524,6 +1603,7 @@ int main(int argc, char **argv) {
     }
     int set_levels = 1;
     int specnum=0;
+    int agccount = 0;
     int integ=0;
     int index=0;
     int finished = 0;
@@ -1537,7 +1617,16 @@ int main(int argc, char **argv) {
     char working_file[MAX_COMMAND_LENGTH];
 
     while(finished == 0) { // keep going indefinitely
-
+        
+        if (agc == agccount) {
+            if (make_psrfits) {
+                set_levels = 1;
+            }
+            else {
+                vf.got_scales = 0;
+            }
+            agccount = 0;
+        }
         if (read_stdin) {
             unsigned int rtn = fread(buffer,items_to_read*sizeof(int8_t),nspec,stdin);
             if (feof(stdin) || rtn != nspec) {
@@ -1623,6 +1712,7 @@ int main(int argc, char **argv) {
                 if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
                     goto BARRIER;
                 }
+                memcpy(buffer,heap+(items_to_read*heap_step),items_to_read);
                 heap_step++;
 
             }
@@ -1645,11 +1735,12 @@ int main(int argc, char **argv) {
         }
                   
         for (index = 0; index < nstation*npol;index = index + 2) {
+            
             for (ch=0;ch<nchan;ch++) {
                 complex float e_true[2],e_dash[2];
 
                 if (swap_complex) {
-                    e_dash[0] = (float) *in_ptr+1 + I*(float)(*(in_ptr));
+                    e_dash[0] = (float) *(in_ptr+1) + I*(float)(*(in_ptr));
                     e_dash[1] = (float) *(in_ptr+(nchan*2) + 1) + I*(float)(*(in_ptr+(nchan*2))); // next pol is nchan*2 away
                 }
                 else {
@@ -1742,8 +1833,9 @@ int main(int argc, char **argv) {
                 }
                 in_ptr = in_ptr+2;
             }
-            in_ptr = in_ptr + (nchan*2);
+            in_ptr = in_ptr + (nchan*2); // next pol0
         }
+        
         // detect the beam or prep from invert_pfb
         // reduce over each channel for the beam
         // do this by twos
@@ -1815,8 +1907,8 @@ int main(int argc, char **argv) {
             }
             
             if (make_vdif==1) { // single time step
-                pol_X[ch] = beam[ch][0];
-                pol_Y[ch] = beam[ch][1];
+                pol_X[ch] = beam[ch][0]/sqrt(wgt_sum);
+                pol_Y[ch] = beam[ch][1]/sqrt(wgt_sum);
                 //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_X[ch]),cimag(pol_X[ch]));
                 //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_Y[ch]),cimag(pol_Y[ch]));
             }
@@ -1845,11 +1937,11 @@ int main(int argc, char **argv) {
                 if (type == 1) {
                     
                     if (set_levels) {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
                         set_levels = 0;
                     }
                     else {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,0);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
                     }
                     float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8);
                     int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8);
@@ -1880,6 +1972,7 @@ int main(int argc, char **argv) {
                         fprintf(stderr,"get_phases has returned an error - closing down\n");
                         goto BARRIER;
                     }
+                    fprintf(stderr,"new phase checkpoint=%ld",phase_pos);
                 }
                 if (apply_jones) {
                     jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
@@ -1887,6 +1980,7 @@ int main(int argc, char **argv) {
                         fprintf(stderr,"get_jones has returned an error - closing down\n");
                         goto BARRIER;
                     }
+                    fprintf(stderr,"new jones checkpoint=%ld",jones_pos);
                 }
                 
                 
@@ -2061,13 +2155,18 @@ int main(int argc, char **argv) {
                     
                   
                     vf.got_scales = 1;
-                     for (ch=0;ch<vf.nchan;ch=ch+1) {
+                    for (ch=0;ch<vf.nchan;ch=ch+1) {
                          fprintf(stderr,"ch: %d (stddev): %f\n",ch,vf.b_scales[ch]);
-                     }
-                     set_level_occupancy((complex float *) data_buffer,vf.sizeof_buffer/2.0,&gain);
+                    }
+                    set_level_occupancy((complex float *) data_buffer,vf.sizeof_buffer/2.0,&gain);
                     
-                } 
-                    
+                    fprintf(stderr,"Gain by level occupancy %f\n",gain);
+                 
+                }
+                agccount++;
+                
+              
+                
                 normalise_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,1.0/gain);
 
                 data_buffer_ptr = data_buffer;
@@ -2081,7 +2180,8 @@ int main(int argc, char **argv) {
                     //float2int2((float *) data_buffer_ptr,(out_buffer_8+offset_out),(vf.sizeof_beam), 2.5*vf.b_scales[0]);
                     
                     float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out));
-                    // int8_to_uint8(vf.sizeof_beam,128,(char *) (out_buffer_8+offset_out));
+                    //to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
+                    //int8_to_uint8(vf.sizeof_beam,128,(char *) (out_buffer_8+offset_out));
                     //float2char_trunc(data_buffer_ptr, vf.sizeof_beam, -128.0, 127, (out_buffer_8+offset_out)); // convert to 8 bit INT
                     offset_out = vf.frame_length + offset_out - 32; // increment output offset
                     data_buffer_ptr = data_buffer_ptr + vf.sizeof_beam;
@@ -2100,12 +2200,16 @@ int main(int argc, char **argv) {
                         phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
                         if (phase_pos == -1)
                             goto BARRIER;
+                        
+                         fprintf(stderr,"new phase checkpoint=%ld\n",phase_pos);
                     }
                     if (apply_jones) {
                        
                         jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
                         if (jones_pos == -1)
                             goto BARRIER;
+                        
+                         fprintf(stderr,"new jones checkpoint=%ld\n",jones_pos);
                     
                     }
                     
@@ -2160,7 +2264,8 @@ BARRIER:
         fprintf(stderr,"Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
                pf.tot_rows, pf.T, pf.filenum, pf.status);
 
-
+        // free some memory
+        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,0,0,0,1);
 
     }
     

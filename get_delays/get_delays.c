@@ -11,6 +11,7 @@
 #include "psrfits.h"
 #include "fitsio.h"
 #include <string.h>
+#include "version.h"
 
 /* make a connection to the MWA database and get the antenna positions.
  * Then: calculate the geometric delay to a source for each antenna
@@ -797,8 +798,9 @@ int     main(int argc, char **argv) {
         
         strcpy(pf.hdr.frontend, "MWA-RECVR");
         fprintf(stdout,"Front End [%s]:\n",pf.hdr.frontend);
-        
-        strcpy(pf.hdr.backend, "MWA-VCS");
+        char backend[64];
+        sprintf(backend,"GD-%s-MB-%s-U-%s",GET_DELAYS_VERSION,MAKE_BEAM_VERSION,UTILS_VERSION);
+        strcpy(pf.hdr.backend, backend);
         fprintf(stdout,"Back End [%s]:\n",pf.hdr.backend);
 
         
