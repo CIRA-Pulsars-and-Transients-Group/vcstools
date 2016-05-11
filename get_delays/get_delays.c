@@ -11,7 +11,7 @@
 #include "psrfits.h"
 #include "fitsio.h"
 #include <string.h>
-#include "version.h"
+#include "beamer_version.h"
 
 /* make a connection to the MWA database and get the antenna positions.
  * Then: calculate the geometric delay to a source for each antenna
