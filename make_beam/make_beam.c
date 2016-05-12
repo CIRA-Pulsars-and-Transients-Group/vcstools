@@ -296,7 +296,7 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
             if (gain*creal(input[i]) >= 0 && gain*creal(input[i]) < 64) {
                 count++;
             }
-            if (fabsf(gain*creal(input[i])) > 127) {
+            if (fabs(gain*creal(input[i])) > 127) {
                 clipped++;
             }
         }
@@ -2176,13 +2176,10 @@ int main(int argc, char **argv) {
                    
                     memcpy((out_buffer_8+offset_out),&vhdr,32); // add the current header
                     offset_out = offset_out + 32; // offset into the output array
-                    //fprintf(stderr,"Processed %ld of %ld\n",offset_out,vf.block_size);
-                    //float2int2((float *) data_buffer_ptr,(out_buffer_8+offset_out),(vf.sizeof_beam), 2.5*vf.b_scales[0]);
                     
                     float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out));
-                    //to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
-                    //int8_to_uint8(vf.sizeof_beam,128,(char *) (out_buffer_8+offset_out));
-                    //float2char_trunc(data_buffer_ptr, vf.sizeof_beam, -128.0, 127, (out_buffer_8+offset_out)); // convert to 8 bit INT
+                    to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
+                    
                     offset_out = vf.frame_length + offset_out - 32; // increment output offset
                     data_buffer_ptr = data_buffer_ptr + vf.sizeof_beam;
                     nextVDIFHeader(&vhdr,vf.frame_rate);
