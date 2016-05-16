@@ -465,15 +465,15 @@ def coherent_beam(obs_id, start, stop, makebeampath, working_dir, metafile, nfin
             aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (makebeampath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
 
-    submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
-    print submit_line
-    if startjobs:
-        output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
-        jobID = output.split(" ")[3].strip()
-        #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-        print "Submitted as job {0}".format(jobID)
-    else:
-      print "Not submitted. \n"
+    	submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
+    	print submit_line
+	if startjobs:
+        	output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
+        	jobID = output.split(" ")[3].strip()
+        	#submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+        	print "Submitted as job {0}".format(jobID)
+    	else:
+      		print "Not submitted. \n"
 
 if __name__ == '__main__':
 
