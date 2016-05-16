@@ -129,8 +129,10 @@ void usage() {
     fprintf(stderr,"-n <number of channels>\n");
     fprintf(stderr,"-a <number of antennas>\n");
     fprintf(stderr,"-m <filter file> loads in the single channel PFB filter coefficients from file\n");
-    fprintf(stderr,"-e <extension of the data files> used for a glob\n");
-    fprintf(stderr,"-o <tag> -- string to add to output file name\n");
+    fprintf(stderr,"-b Begin time [must be supplied]\n");
+    fprintf(stderr,"-e End time [must be supplied]\n");
+    fprintf(stderr,"-E Dry run\n");
+    fprintf(stderr,"-o obs id\n");
     fprintf(stderr,"-r <sample rate in Hz>\n");
     fprintf(stderr,"-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
     fprintf(stderr,"-v <psrfits header> -- write a vdif (difX format) file - but fill data from the the PSRFITS header\n");
