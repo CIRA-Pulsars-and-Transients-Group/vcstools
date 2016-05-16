@@ -918,12 +918,15 @@ int main(int argc, char **argv) {
 
     fprintf(stderr,"Starting ...\n");
 
+/* Parallel processing will be shifted to the wrapper script
     MPI_Init(&argc, &argv);
-    int nproc, me,dir_index;
+    int nproc, me;
 
     MPI_Comm_rank(MPI_COMM_WORLD, &me);
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+*/
     
+    int dir_index;
     int ii;
     double dtmp;
     int c = 0;
@@ -2278,10 +2281,11 @@ BARRIER:
         fclose(out2_file);
     }
     
-
+/* Parallel processing will be shifted to the wrapper script
     MPI_Barrier(MPI_COMM_WORLD);
 
     MPI_Finalize();
+*/
     
 }
 
