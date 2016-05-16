@@ -931,7 +931,7 @@ int main(int argc, char **argv) {
     double dtmp;
     int c = 0;
     int ch=0;
-    int chan = 0;
+    int chan = 0; // 0-offset coarse channel number to process
 
     int agc = -1;
     
@@ -1020,7 +1020,7 @@ int main(int argc, char **argv) {
                 }
                 case '1':
                     out1 = atoi(optarg);
-                    sprintf(out1_name,"input_%.3d%.2d.txt",out1,me);
+                    sprintf(out1_name,"input_%.3d.txt",out1);
                     fprintf(stdout,"%s",out1_name);
                     out1_file = fopen(out1_name,"w");
                     if (out1_file == NULL) {
@@ -1032,7 +1032,7 @@ int main(int argc, char **argv) {
                     break;
                 case '2':
                     out2 = atoi(optarg);
-                    sprintf(out2_name,"input_%.3d_%.2d.txt",out2,me);
+                    sprintf(out2_name,"input_%.3d.txt",out2);
                     out2_file = fopen(out2_name,"w");
                     fprintf(stdout,"%s",out2_name);
                     if (out2_file == NULL) {
@@ -1339,10 +1339,10 @@ int main(int argc, char **argv) {
             if (chan_to_get == -1) {
 
                 if (reverse) {
-                    chan_to_get = 23 - me;
+                    chan_to_get = 23 - chan;
                 }
                 else {
-                    chan_to_get = me;
+                    chan_to_get = chan;
                 }
             }
             int gains_read = read_casa_gains_file(gains_file,&antenna_gains,nstation,chan_to_get);
