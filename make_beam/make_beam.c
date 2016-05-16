@@ -1011,7 +1011,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:A:a:b:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:X")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:A:a:b:Cc:d:D:e:E:f:g:G:hij:m:n:N:o:p:Rr:v:w:s:S:t:X")) != -1) {
             switch(c) {
                 
                 case 'A': {
