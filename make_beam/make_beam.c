@@ -934,6 +934,9 @@ int main(int argc, char **argv) {
 
     int agc = -1;
     
+    unsigned long int begin = 0;
+    unsigned long int end   = 0;
+
     int weights = 0;
     int complex_weights = 0;
     int apply_jones = 0;
@@ -952,7 +955,7 @@ int main(int argc, char **argv) {
     
     char *gains_file = NULL;
 
-    char *tag="ch_00";
+    char *obsid;
     char *procdirroot=NULL;
     char *datadirroot=NULL;
     char *extn=NULL;
@@ -1007,7 +1010,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:A:a:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:X")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:A:a:b:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:X")) != -1) {
             switch(c) {
                 
                 case 'A': {
@@ -1042,6 +1045,9 @@ int main(int argc, char **argv) {
                 case 'a':
                     nstation = atoi(optarg);
                     break;
+                case 'b':
+                    begin = atol(optarg);
+                    break;
                 case 'c':
                     complex_weights = 1;
                     phases_file = strdup(optarg);
@@ -1058,11 +1064,9 @@ int main(int argc, char **argv) {
                     procdirroot = strdup(optarg);
                     break;
                 case 'e':
-                    extn = strdup(optarg);
-                    execute = 1;
+                    end = atol(optarg);
                     break;
-                case 'E':
-                    extn = strdup(optarg);
+                case 'E': // <-- Turn this into a "dry run" option
                     execute = 0;
                     break;
                 case 'f':
@@ -1119,7 +1123,7 @@ int main(int argc, char **argv) {
                     sample_rate = atoi(optarg);
                     break;
                 case 'o':
-                    tag = strdup(optarg);
+                    obsid = strdup(optarg);
                     break;
                 case 'p':
                     npol = atoi(optarg);
