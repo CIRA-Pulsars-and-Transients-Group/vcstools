@@ -931,6 +931,7 @@ int main(int argc, char **argv) {
     double dtmp;
     int c = 0;
     int ch=0;
+    int chan = 0;
 
     int agc = -1;
     
@@ -1099,6 +1100,9 @@ int main(int argc, char **argv) {
                              fclose(filter_file);
                          } 
                     break;
+                case 'N':
+                    chan = atoi(optarg);
+                    break;
                 case 'v':
                     make_vdif=1;
                     vdif_file = strdup(optarg);
@@ -1175,6 +1179,7 @@ int main(int argc, char **argv) {
 
     }
 
+/* Parallel processing will be shifted to the wrapper script
     // If input method is stdin, use only a single process
     if (datadirroot == NULL) {
         if (me != 0)
@@ -1184,6 +1189,7 @@ int main(int argc, char **argv) {
         read_heap = 0;
         sprintf(procdir,"./");
     }
+*/
 
     if (procdirroot) {
 
