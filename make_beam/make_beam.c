@@ -1195,7 +1195,7 @@ int main(int argc, char **argv) {
 
         // Pick up the correct phases files
 
-        dir_index = me+1;
+        dir_index = chan + 1;
         sprintf(procdir,"%s%02d",procdirroot,dir_index);
 
         fprintf(stdout,"Will look for processing files in %s\n",procdir);
@@ -1243,15 +1243,28 @@ int main(int argc, char **argv) {
 
         if (datadirroot) {
 
+            // Generate list of files to work on
 
-            sprintf(pattern, "%s/*%s.%s", datadirroot,rec_channel,extn);
-            glob(pattern, 0, NULL, &globbuf);
-            nfiles = globbuf.gl_pathc;
-            fprintf(stderr,"%s %s\n", procdir, pattern);
-            if (nfiles == 0) {
-                fprintf(stderr,"nfiles = 0\n");
+            // Calculate the number of files
+            nfiles = end - begin + 1;
+            if (nfiles <= 0) {
+                fprintf(stderr,"Cannot beamform on %d files (between %d and %d)\n", nfiles, begin, end);
                 goto BARRIER;
             }
+
+            // Allocate memory for the file name list
+            filenames = (char **)malloc( nfiles*sizeof(char *) );
+
+            // Allocate memory and write filenames 
+            int second;
+            unsigned long int timestamp;
+            for (second = 0; second < nfiles; second++) {
+                timestamp = second + begin;
+                filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
+                sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadirroot, obsid, timestamp, rec_channel );
+                //sprintf( filenames[second], "%s_%ld_ch%s.dat", obsid, timestamp, rec_channel );
+            }
+            fprintf( stderr, "Opening files from %s to %s\n", filenames[0], filenames[nfiles-1] );
 
         }
         
