@@ -962,7 +962,7 @@ int main(int argc, char **argv) {
     char *extn=NULL;
     int execute=1;
     char procdir[256];
-    glob_t globbuf;
+    char **filenames;
     int read_stdin = 0;
     int nfiles = 0;
     int type=1;
@@ -1673,14 +1673,14 @@ int main(int argc, char **argv) {
             if (fp == NULL) { // need to open the next file
                 if (execute == 1) {
 
-                    if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
+                    if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0) {
                         goto BARRIER;
                     }
 
-                    sprintf(working_file,"/dev/shm/%s.working",globbuf.gl_pathv[file_no]);
+                    sprintf(working_file,"/dev/shm/%s.working",filenames[file_no]);
                 }
                 else {
-                    sprintf(working_file,"%s",globbuf.gl_pathv[file_no]);
+                    sprintf(working_file,"%s",filenames[file_no]);
                 } 
                 fp = fopen(working_file, "r");
 
@@ -1702,7 +1702,7 @@ int main(int argc, char **argv) {
                     if (execute == 1 && expunge == 1) {
                         unlink(working_file);
                     }
-                    fprintf(stderr,"finished file %s\n", globbuf.gl_pathv[file_no]);
+                    fprintf(stderr,"finished file %s\n", filenames[file_no]);
                     file_no++;
                     continue;
                 }
@@ -1717,7 +1717,7 @@ int main(int argc, char **argv) {
                     continue;
                 }
 
-                if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
+                if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0) {
                     goto BARRIER;
                 }
             }
@@ -1737,7 +1737,7 @@ int main(int argc, char **argv) {
                     continue;
                 }
                 
-                if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
+                if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0) {
                     goto BARRIER;
                 }
                 memcpy(buffer,heap+(items_to_read*heap_step),items_to_read);
@@ -2297,6 +2297,14 @@ BARRIER:
 
     }
     
+    // Free up memory for filenames
+    if (procdirroot && datadirroot) {
+        int second;
+        for (second = 0; second < nfiles; second++)
+            free( filenames[second] );
+        free( filenames );
+    }
+
     if (out1 >= 0) {
         fclose(out1_file);
     }
