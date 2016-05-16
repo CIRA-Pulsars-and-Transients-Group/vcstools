@@ -483,9 +483,8 @@ if __name__ == '__main__':
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
     chan_list = []
     jones = "-j jones.txt"
-    makebeampath = "/group/mwaops/PULSAR/bin"
 
-    from optparse import OptionParser, OptionGroup
+    from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 
  #   parser=OptionParser(description="process_vcs.py is a script of scripts that downloads prepares and submits jobs to Galaxy. It can be run with just a pointing (-p \"xx:xx:xx xx:xx:xx.x\") and an obsid (\"-o <obsid>\") and it will process all the data in the obs. It will call prepare.py which will attempt to build the phase and calibration information - which will only exist if a calibration obs has already been run. So it will only move past the data prepa stage if the \"-r\" (for run) is used\n"
 
@@ -507,7 +506,7 @@ if __name__ == '__main__':
     group_beamform.add_option("--DI_dir", default=None, help="Directory containing Direction Independent Jones Matrices (as created by the RTS). Default is work_dir/obsID/DIJ.")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
-    group_beamform.add_option("-M", "--makebeampath", type="string", default=None, help="Path of make_beam binary")
+    group_beamform.add_option("-M", "--makebeampath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -615,7 +614,7 @@ s the RTS will not run..."
             quit()
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
-        coherent_beam(opts.obs, opts.begin, opts.end, makebeampath, obs_dir, metafits_file, opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir)
+        coherent_beam(opts.obs, opts.begin, opts.end, opts.makebeampath, obs_dir, metafits_file, opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
