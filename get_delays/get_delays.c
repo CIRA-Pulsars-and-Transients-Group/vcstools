@@ -455,6 +455,52 @@ int     main(int argc, char **argv) {
 
 
 
+    if (get_jones) {
+        complex double invJref[4];
+        double Fnorm;
+        /* we need to load in all the DI_Jones matrices */
+        read_DIJones_file(M, Jref, nstation, &amp, DI_Jones_file);
+        inv2x2(Jref, invJref);
+        calcEjones(E, // pointer to 4-element (2x2) voltage gain Jones matrix
+                   frequency, // observing freq (Hz)
+                   (MWA_LAT*DD2R), // observing latitude (radians)
+                   tile_pointing_az*DD2R, // azimuth & zenith angle of tile pointing
+                   (DPIBY2-(tile_pointing_el*DD2R)), // zenith angle to sample
+                   az, // azimuth & zenith angle to sample
+                   (DPIBY2-el));
+        for (i=0; i < 4;i++) {
+            fprintf(stdout,"calib:RTS Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
+            fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
+        }
+        for (i=0;i<nstation;i++){
+            mult2x2d(M[i],invJref,G[i]); // forms the DI gain
+            mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
+            
+            for (j=0; j < 4;j++) {
+                fprintf(stdout,"calib:RTS Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
+                fprintf(stdout,"calib:ratio Mi/Ji [%d]  %f %f \n",i,creal(M[i][j])/creal(Ji[i][j]),cimag(M[i][j])/cimag(Ji[i][j]));
+            }
+            // this automatically spots an RTS flagged tile
+            Fnorm = 0;
+            for (j=0; j < 4;j++) {
+                Fnorm += (double) Ji[j][i] * conj(Ji[j][i]);
+            }
+            if (fabs(cimag(Ji[i][0])) < 0.0000001) {
+                Ji[i][0] = 0.0 + I*0;
+                Ji[i][1] = 0.0 + I*0;
+                Ji[i][2] = 0.0 + I*0;
+                Ji[i][3] = 0.0 + I*0;
+
+                G[i][0] = 0.0 + I*0;
+                G[i][1] = 0.0 + I*0;
+                G[i][2] = 0.0 + I*0;
+                G[i][3] = 0.0 + I*0;
+
+            }
+
+        }
+    }
+        
 
    
     for (secs = 0; secs < nsecs; secs++) {
@@ -528,52 +574,6 @@ int     main(int argc, char **argv) {
         fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az,el,ra_ap,dec_ap);
 
         
-        
-        if (get_jones) {
-            complex double invJref[4];
-            double Fnorm;
-            /* we need to load in all the DI_Jones matrices */
-            read_DIJones_file(M, Jref, nstation, &amp, DI_Jones_file);
-            inv2x2(Jref, invJref);
-            calcEjones(E, // pointer to 4-element (2x2) voltage gain Jones matrix
-                       frequency, // observing freq (Hz)
-                       (MWA_LAT*DD2R), // observing latitude (radians)
-                       tile_pointing_az*DD2R, // azimuth & zenith angle of tile pointing
-                       (DPIBY2-(tile_pointing_el*DD2R)), // zenith angle to sample
-                       az, // azimuth & zenith angle to sample
-                       (DPIBY2-el));
-            for (i=0; i < 4;i++) {
-                fprintf(stdout,"calib:RTS Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
-                fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
-            }
-            for (i=0;i<nstation;i++){
-                mult2x2d(M[i],invJref,G[i]); // forms the DI gain
-                mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
-                
-                for (j=0; j < 4;j++) {
-                    fprintf(stdout,"calib:RTS Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
-                    fprintf(stdout,"calib:ratio Mi/Ji [%d]  %f %f \n",i,creal(M[i][j])/creal(Ji[i][j]),cimag(M[i][j])/cimag(Ji[i][j]));
-                }
-                // this automatically spots an RTS flagged tile
-                Fnorm = 0;
-                for (j=0; j < 4;j++) {
-                    Fnorm += (double) Ji[j][i] * conj(Ji[j][i]);
-                }
-                if (fabs(cimag(Ji[i][0])) < 0.0000001) {
-                    Ji[i][0] = 0.0 + I*0;
-                    Ji[i][1] = 0.0 + I*0;
-                    Ji[i][2] = 0.0 + I*0;
-                    Ji[i][3] = 0.0 + I*0;
-
-                    G[i][0] = 0.0 + I*0;
-                    G[i][1] = 0.0 + I*0;
-                    G[i][2] = 0.0 + I*0;
-                    G[i][3] = 0.0 + I*0;
-
-                }
-
-            }
-        }
         
         int ch=0;
 
