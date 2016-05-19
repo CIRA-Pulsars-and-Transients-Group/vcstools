@@ -410,7 +410,6 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
 
             basefreq = int(chan_list[chan_index]) * 1.28e6 - 5e3 - 640e3  + 5e3
         
-            print "Looking for ", DI_file
             if (os.path.isfile(DI_file)):
                 ch_dir_line = "cd {0}\n".format(pointing_chan_dir)
                 batch_file.write(ch_dir_line)
@@ -421,7 +420,7 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
                     flag_line="{0} {1} {2}\n".format(bf_adjust_flags, rts_flag_file, flags_file)
                     batch_file.write(flag_line)
             else:
-                print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
+                print "WARNING: No Calibration Found for Channel {0}! Could not find file {1}".format(gpubox, DI_file)
                 startjobs = False
 
             chan_index = chan_index+1
@@ -466,12 +465,12 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
             batch_file.write(aprun_line)
 
     	submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
-    	print submit_line
+    	#print submit_line
 	if startjobs:
         	output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
         	jobID = output.split(" ")[3].strip()
         	#submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-        	print "Submitted as job {0}".format(jobID)
+        	#print "Submitted as job {0}".format(jobID)
     	else:
       		print "Not submitted. \n"
 
