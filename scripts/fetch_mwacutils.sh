@@ -8,6 +8,8 @@ then
   exit 1
 fi
 
+cd "${src_dir}"
+
 # Make sure argument $2 is a valid remote branch
 branch="$2"
 if [ ! `git branch -r | grep "^ *${branch}/master$"` ]

@@ -21,12 +21,12 @@ fi
 
 src_dir=`readlink -f "$1"`
 branch=$2
-install_dir=${src_dir}/test/${branch}
+install_dir=${src_dir}/install/${branch}
 
 # Setup log file
-logdir="${src_dir}/install/log"
+logdir=`readlink -f "../build_logs"`
 mkdir -p "$logdir"
-logfile="${logdir}/import.${branch}.log"
+logfile="${logdir}/import_mwacutils.${branch}.log"
 
 {
   echo "---------------------------------------------"

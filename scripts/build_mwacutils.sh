@@ -53,5 +53,3 @@ CC=cc CXX=CC cmake -DCMAKE_INSTALL_PREFIX=${cmake_install_prefix} \
 
 make
 make install
-
-cd ..
