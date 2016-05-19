@@ -137,6 +137,7 @@ void usage() {
             get_delays -z <utc time string> -o obsid -r <ra in hh:mm:ss> -d <dec in dd:mm:ss>\n \
             \nOther options include:\n \
             \t -v <1 == verbose> \n\
+            \t -V print the version number and exit \n\
             \t -t <input number in correlator product order>\n \
             \t -f <middle of the first frequency channel in Hz> \n \
             \t -G Switch off Geometry [Expert] \n \
@@ -230,7 +231,7 @@ int     main(int argc, char **argv) {
     
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "a:b:chG:ij:e:t:m:n:o:pr:d:vz:if:s:w:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:chG:ij:e:t:m:n:o:pr:d:vVz:if:s:w:")) != -1) {
             switch(c) {
                 case 'a':
                     add_str = strdup(optarg);
@@ -337,6 +338,10 @@ int     main(int argc, char **argv) {
                     break;
                 case 'v':
                     verbose = 1;
+                    break;
+                case 'V':
+                    printf("%s\n", GET_DELAYS_VERSION);
+                    exit(0);
                     break;
                 case 'w':
                     chan_width = atol(optarg);

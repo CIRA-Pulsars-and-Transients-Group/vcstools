@@ -136,6 +136,7 @@ void usage() {
     fprintf(stderr,"-r <sample rate in Hz>\n");
     fprintf(stderr,"-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
     fprintf(stderr,"-v <psrfits header> -- write a vdif (difX format) file - but fill data from the the PSRFITS header\n");
+    fprintf(stderr,"-V print version number and exit\n");
     fprintf(stderr,"options: -t [1 or 2] sample size : 1 == 8 bit (INT); 2 == 32 bit (FLOAT)\n");
     
 }
@@ -916,8 +917,6 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
 }
 int main(int argc, char **argv) {
 
-    fprintf(stderr,"Starting ...\n");
-
 /* Parallel processing will be shifted to the wrapper script
     MPI_Init(&argc, &argv);
     int nproc, me;
@@ -1011,7 +1010,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:A:a:b:Cc:d:D:e:E:f:g:G:hij:m:n:N:o:p:Rr:v:w:s:S:t:X")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:A:a:b:Cc:d:D:e:E:f:g:G:hij:m:n:N:o:p:Rr:v:Vw:s:S:t:X")) != -1) {
             switch(c) {
                 
                 case 'A': {
@@ -1107,6 +1106,9 @@ int main(int argc, char **argv) {
                     make_vdif=1;
                     vdif_file = strdup(optarg);
                     break;
+                case 'V':
+                    printf("%s\n", MAKE_BEAM_VERSION);
+                    exit(0);
                 case 'h':
                     usage();
                     goto BARRIER;
@@ -1161,6 +1163,9 @@ int main(int argc, char **argv) {
             }
         }
     }
+
+    fprintf(stderr,"Starting ...\n");
+
     switch (nchan) {
         case 88:
             edge = 20;
