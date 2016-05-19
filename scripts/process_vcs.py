@@ -366,6 +366,13 @@ def run_rts(working_dir, rts_in_file):
 
 
 def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f', DI_dir=None):
+    # Print relevant version numbers to screen
+    mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
+    mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
+    tested_version  = "0.9.0"
+    print "Current version of MWACUtils = {0}".format(mwacutils_version.strip())
+    print "Tested  version of MWACUtils = {0}".format(tested_version.strip())
+
     # Need to run get_delays and then the beamformer on each desired coarse channel
     if not DI_dir:
         DI_dir = working_dir+"/DIJ"
