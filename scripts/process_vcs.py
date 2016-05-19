@@ -365,7 +365,7 @@ def run_rts(working_dir, rts_in_file):
     submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
 
 
-def coherent_beam(obs_id, start, stop, makebeampath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f', DI_dir=None):
+def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f', DI_dir=None):
     # Need to run get_delays and then the beamformer on each desired coarse channel
     if not DI_dir:
         DI_dir = working_dir+"/DIJ"
@@ -462,7 +462,7 @@ def coherent_beam(obs_id, start, stop, makebeampath, working_dir, metafile, nfin
             batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
-            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (makebeampath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
+            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (execpath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
 
     	submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
@@ -506,7 +506,7 @@ if __name__ == '__main__':
     group_beamform.add_option("--DI_dir", default=None, help="Directory containing Direction Independent Jones Matrices (as created by the RTS). Default is work_dir/obsID/DIJ.")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
-    group_beamform.add_option("-M", "--makebeampath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
+    group_beamform.add_option("-E", "--execpath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -556,8 +556,8 @@ if __name__ == '__main__':
             print "We cannot write out both vdif and psrfits simultaneously yet, sorry! Aborting here..."
             sys.exit(1)
 
-        if opts.makebeampath:
-            makebeampath = opts.makebeampath
+        if opts.execpath:
+            execpath = opts.execpath
 
     mdir(opts.work_dir, "Working")
     obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
@@ -614,7 +614,7 @@ s the RTS will not run..."
             quit()
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
-        coherent_beam(opts.obs, opts.begin, opts.end, opts.makebeampath, obs_dir, metafits_file, opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir)
+        coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, obs_dir, metafits_file, opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
