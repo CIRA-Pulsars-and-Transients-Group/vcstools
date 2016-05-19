@@ -803,8 +803,8 @@ int     main(int argc, char **argv) {
         
         strcpy(pf.hdr.frontend, "MWA-RECVR");
         fprintf(stdout,"Front End [%s]:\n",pf.hdr.frontend);
-        char backend[64];
-        sprintf(backend,"GD-%s-MB-%s-U-%s",GET_DELAYS_VERSION,MAKE_BEAM_VERSION,UTILS_VERSION);
+        char backend[24];
+        snprintf(backend, 24*sizeof(char), "GD-%s-MB-%s-U-%s", GET_DELAYS_VERSION, MAKE_BEAM_VERSION, UTILS_VERSION);
         strcpy(pf.hdr.backend, backend);
         fprintf(stdout,"Back End [%s]:\n",pf.hdr.backend);
 
