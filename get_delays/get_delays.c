@@ -146,7 +146,9 @@ void usage() {
             \t -s samples per second \n \
             \t -n number of channels \n \
             \t -w channel width \n \
-            \t -j <DI Jones file from the RTS> Jones matrix input \n \
+            \t -R <DI Jones file from the RTS> Jones matrix input \n \
+            \t -O <DI Jones file from Offringa's tools> Jones matrix input \n \
+            \t -C <coarse channel number> used in conjunction with -O. Default = '0' \n \
             \t -m <metafits file> for this obsID \n \
             \t -p create a psrfits header for this obs\n \
             \t -e number of low channels to skip\n \
@@ -212,10 +214,12 @@ int     main(int argc, char **argv) {
     float samples_per_sec = 10000;
     int write_files = 1;
     int nchan = 1;
+    int coarse_chan = 0; // Default value: first (lowest) coarse channel
     long int chan_width = 10000;
     int edge = 0;
     
-    int get_jones = 0;
+    int get_rts = 0;
+    int get_offringa = 0;
     int get_psrfits = 0;
     char *DI_Jones_file = NULL;
     char *metafits = NULL;
@@ -231,7 +235,7 @@ int     main(int argc, char **argv) {
     
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "a:b:chG:ij:e:t:m:n:o:pr:d:vVz:if:s:w:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:chG:ie:t:m:n:o:O:pr:R:d:vVz:if:s:w:")) != -1) {
             switch(c) {
                 case 'a':
                     add_str = strdup(optarg);
@@ -241,6 +245,9 @@ int     main(int argc, char **argv) {
                     break;
                 case 'c':
                     conjugate = -1;
+                    break;
+                case 'C':
+                    coarse_chan = atoi(optarg);
                     break;
                 case 'd':
                 {
@@ -284,12 +291,19 @@ int     main(int argc, char **argv) {
                 case 'm':
                     metafits = strdup(optarg);
                     break;
+                case 'O':
+                    get_offringa = 1;
+                    get_rts = 0;
+                    DI_Jones_file = strdup(optarg);
+                    write_calib = 1;
+                    break;
                 case 'p':
                     get_psrfits=1;
                     write_psrfits=1;
                     break;
-                case 'j':
-                    get_jones = 1;
+                case 'R':
+                    get_rts = 1;
+                    get_offringa = 0;
                     DI_Jones_file = strdup(optarg);
                     write_calib = 1;
                     break;
@@ -458,7 +472,22 @@ int     main(int argc, char **argv) {
     double unit_H;
     
 
-
+    // Read in the Jones matrices for this (coarse) channel, if requested
+    complex double invJref[4];
+    if (get_rts) {
+        read_rts_file(M, Jref, nstation, &amp, DI_Jones_file);
+        inv2x2(Jref, invJref);
+    }
+    else if (get_offringa) {
+        read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file);
+        // Just make Jref (and invJref) the identity matrix since they don't apply to
+        // Offringa's calibration solution.
+        Jref[0] = 1 + I*0;
+        Jref[1] = 0 + I*0;
+        Jref[2] = 0 + I*0;
+        Jref[3] = 1 + I*0;
+        inv2x2(Jref, invJref);
+    }
 
 
    
@@ -523,12 +552,8 @@ int     main(int argc, char **argv) {
         unit_E = cos(el) * sin(az);
         unit_H = sin(el);
         
-        if (get_jones) {
-            complex double invJref[4];
+        if (get_rts | get_offringa) {
             double Fnorm;
-            /* we need to load in all the DI_Jones matrices */
-            read_DIJones_file(M, Jref, nstation, &amp, DI_Jones_file);
-            inv2x2(Jref, invJref);
             calcEjones(E, // pointer to 4-element (2x2) voltage gain Jones matrix
                        frequency, // observing freq (Hz)
                        (MWA_LAT*DD2R), // observing latitude (radians)

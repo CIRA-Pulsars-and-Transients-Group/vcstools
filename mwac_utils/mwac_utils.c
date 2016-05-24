@@ -437,6 +437,94 @@ int read_casa_gains_file(char *gains_file,complex double **antenna_gain, int nan
     return input/2;
 }
 
+int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse_chan, char *gains_file) {
+    // Assumes that memory for antenna has already been allocated
+
+    // Open the calibration file for reading
+    FILE *fp = NULL;
+    fp = fopen(gains_file,"r");
+    if (fp == NULL) {
+        fprintf(stderr,"Failed to open %s: quitting\n",gains_file);
+        exit(1);
+    }
+
+    // Read in the necessary information from the header
+
+    uint32_t intervalCount, antennaCount, channelCount, polarizationCount;
+
+    fseek(fp, 16, SEEK_SET);
+    fread(&intervalCount,     sizeof(uint32_t), 1, fp);
+    fread(&antennaCount,      sizeof(uint32_t), 1, fp);
+    fread(&channelCount,      sizeof(uint32_t), 1, fp);
+    fread(&polarizationCount, sizeof(uint32_t), 1, fp);
+
+    // Error-checking the info extracted from the header
+    if (intervalCount > 1) {
+        fprintf(stderr, "Warning: Only the first interval in the calibration ");
+        sprintf(stderr, "solution (%s) will be used\n", gains_file);
+    }
+    if (antennaCount != nant) {
+        fprintf(stderr, "Error: Calibration solution (%s) ", gains_file);
+        fprintf(stderr, "contains a different number of antennas (%d) ", antennaCount);
+        fprintf(stderr, "than specified (%d)\n", nant);
+        exit(1);
+    }
+    if (channelCount != 24) {
+        fprintf(stderr, "Warning: Calibration solution (%s) ", gains_file);
+        fprintf(stderr, "contains a different number (%d) ", channelCount);
+        fprintf(stderr, "than the expected (%d) channels. ", 24);
+    }
+    if (channelCount <= coarse_chan) {
+        fprintf(stderr, "Error: Requested channel number (%d) ", coarse_chan);
+        fprintf(stderr, "is more than the number of channels (0-%d) ", channelCount-1);
+        fprintf(stderr, "available in the calibration solution (%s)\n", gains_file);
+        exit(1);
+    }
+    int npols = polarizationCount; // This will always = 4
+
+    // Prepare to jump to the first solution to be read in
+    int bytes_left_in_header = 16;
+    int bytes_to_first_jones = bytes_left_in_header + (npols * coarse_chan * sizeof(complex double));
+         //     (See Offringa's specs for details)
+         //     Assumes coarse_chan is zero-offset
+         //     sizeof(complex double) *must* be 64-bit x 2 = 16-byte
+    int bytes_to_next_jones = npols * (channelCount-1) * sizeof(complex double);
+
+    int ant, pol;  // Iterate through antennas and polarisations
+    int count = 0; // Keep track of how many solutions have actually been read in
+    int re, im;    // Temporary placeholders for the real and imaginary doubles read in
+
+    int first = 1;
+    for (ant = 0; ant < nant; ant++) {
+
+        // Jump to next Jones matrix position for this channel
+        if (first) {
+            fseek(fp, bytes_to_first_jones, SEEK_CUR);
+            first = 0;
+        }
+        else {
+            fseek(fp, bytes_to_next_jones, SEEK_CUR);
+        }
+
+        // Read in the data
+        for (pol = 0; pol < npols; pol++) {
+
+            fread(&re, sizeof(double), 1, fp);
+            fread(&im, sizeof(double), 1, fp);
+
+            antenna_gain[ant][pol] = re + I*im;
+            count++;
+
+        }
+    }
+
+    // Close the file, print a summary, and return
+    fclose(fp);
+    fprintf(stdout, "Read %d inputs from %s\n", count, gains_file);
+
+    return count/npols; // should equal the number of antennas
+}
+
 int gain_file_id(char *gains_file) {
     FILE *fp = NULL;
     int rvalue=0;
@@ -453,11 +541,11 @@ int gain_file_id(char *gains_file) {
         sscanf(line,"%s",key);
         fprintf(stdout,"GET FILE ID: %s\n",key);
         if (strncmp("Spw",key,3) == 0) {
-            rvalue = 1;
+            rvalue = CASA_GAINS_FILE;
             break;
         }
         else {
-            rvalue = 2;
+            rvalue = MIRIAD_GAINS_FILE;
             break;
 
         }
@@ -555,7 +643,7 @@ int read_miriad_gains_file(char *gains_file, complex double **antenna_gain){
     fclose(fp);
     return nant;
 }
-int read_DIJones_file(complex double **G, complex double *Jref, int nant, double *amp,
+int read_rts_file(complex double **G, complex double *Jref, int nant, double *amp,
                       char *fname) {
     
     FILE *fp = NULL;
