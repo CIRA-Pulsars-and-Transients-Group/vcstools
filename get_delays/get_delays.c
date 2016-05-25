@@ -235,7 +235,7 @@ int     main(int argc, char **argv) {
     
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "a:b:chG:ie:t:m:n:o:O:pr:R:d:vVz:if:s:w:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:cC:hG:ie:t:m:n:o:O:pr:R:d:vVz:if:s:w:")) != -1) {
             switch(c) {
                 case 'a':
                     add_str = strdup(optarg);
