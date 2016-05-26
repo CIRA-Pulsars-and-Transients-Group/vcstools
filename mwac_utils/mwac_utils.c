@@ -461,7 +461,7 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
     // Error-checking the info extracted from the header
     if (intervalCount > 1) {
         fprintf(stderr, "Warning: Only the first interval in the calibration ");
-        sprintf(stderr, "solution (%s) will be used\n", gains_file);
+        fprintf(stderr, "solution (%s) will be used\n", gains_file);
     }
     if (antennaCount != nant) {
         fprintf(stderr, "Error: Calibration solution (%s) ", gains_file);
@@ -492,7 +492,7 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
 
     int ant, pol;  // Iterate through antennas and polarisations
     int count = 0; // Keep track of how many solutions have actually been read in
-    int re, im;    // Temporary placeholders for the real and imaginary doubles read in
+    double re, im;    // Temporary placeholders for the real and imaginary doubles read in
 
     int first = 1;
     for (ant = 0; ant < nant; ant++) {
