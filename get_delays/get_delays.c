@@ -544,7 +544,7 @@ int     main(int argc, char **argv) {
         slaDe2h(app_ha_rad,dec_ap,MWA_LAT*DD2R,&az,&el);
         
 
-        fprintf(stderr,"calib:Look direction Azimuth %lf (deg)  Elevation %lf (deg) \n",az*DR2D,el*DR2D);
+        fprintf(stdout,"calib:Look direction Azimuth %lf (deg)  Elevation %lf (deg) \n",az*DR2D,el*DR2D);
         
         /* now we need the direction cosines */
         
@@ -562,7 +562,7 @@ int     main(int argc, char **argv) {
                        az, // azimuth & zenith angle to sample
                        (DPIBY2-el));
             for (i=0; i < 4;i++) {
-                fprintf(stdout,"calib:RTS Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
+                fprintf(stdout,"calib:Jones Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
                 fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
             }
             for (i=0;i<nstation;i++){
@@ -570,7 +570,7 @@ int     main(int argc, char **argv) {
                 mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
                 
                 for (j=0; j < 4;j++) {
-                    fprintf(stdout,"calib:RTS Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
+                    fprintf(stdout,"calib:Jones Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
                     fprintf(stdout,"calib:ratio Mi/Ji [%d]  %f %f \n",i,creal(M[i][j])/creal(Ji[i][j]),cimag(M[i][j])/cimag(Ji[i][j]));
                 }
                 // this automatically spots an RTS flagged tile
