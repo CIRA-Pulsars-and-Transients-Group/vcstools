@@ -7,6 +7,13 @@ Creation Date: /03/2016
 Some of the orignal code was created by Bradley Meyers
 
 This code is used to list the sources within the beam of observations IDs or using --obs_for_source list all the observations for each source. The sources can be input serval ways: using a list of pulsar names (--pulsar), using a complete catalogue file of pulsars (--dl_PSRCAT) or RRATs (--RRAT and --dl_RRAT), using a compatable catalogue (--in_cat with the help of --names and --coordstype) or using a RA and DEC coordinate (--coords). The observation IDs can be input (--obsid) or gathered from a directory (--FITS_dir). The default is to search all observation IDs from http://mwa-metadata01.pawsey.org.au/metadata/ that have voltages and list every known pulsar from PSRCAT in each observation ID.
+
+Two most comon uses for this code is to search a single observation ID for pulsars like so:
+> find_pulsar_in_obs.py -o 1099414416
+which will output a text file called 1099414416_analytic_beam.txt
+or to search all observation IDs for a single pulsar like so:
+> find_pulsar_in_obs.py -p J0534+2200 --obs_for_source
+which will output a text file called J0534+2200_analytic_beam.txt
 """
 
 __author__ = 'Nicholas Swainston'
@@ -839,7 +846,7 @@ parser = argparse.ArgumentParser(description="""
 This code is used to list the sources within the beam of observations IDs or using --obs_for_source list all the observations for each source. The sources can be input serval ways: using a list of pulsar names (--pulsar), using a complete catalogue file of pulsars (--dl_PSRCAT) or RRATs (--RRAT and --dl_RRAT), using a compatable catalogue (--in_cat with the help of --names and --coordstype) or using a RA and DEC coordinate (--coords). The observation IDs can be input (--obsid) or gathered from a directory (--FITS_dir). The default is to search all observation IDs from http://mwa-metadata01.pawsey.org.au/metadata/ that have voltages and list every known pulsar from PSRCAT in each observation ID.
 """)
 parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source.')
-parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. To use the current file use "./". The default is /scratch2/mwaops/pulsar/incoh_census/analytic_beam_output/', default = '/scratch2/mwaops/pulsar/incoh_census/analytic_beam_output/')
+parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
 parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation that will be used. Options: "c" a simple circular beam approximation of radius 10 degrees and "a" an analytic beam model. Default: "a"')
 #impliment an option for the accurate beam later on and maybe the old elipse approximation if I can make it accurate
 
@@ -1014,7 +1021,7 @@ except:#incase of file finding or permission errors use webservice
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
         minfreq = float(min(channels))
         maxfreq = float(max(channels))
-        centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in MHz
+        centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in Hz
         
         #check for raw volatge files
         filedata = beam_meta_data[u'files']
@@ -1025,9 +1032,8 @@ except:#incase of file finding or permission errors use webservice
                 check = True
         if check or args.all_volt:
             if args.obs_for_source:
-                if args.obsid:
-                    if len(args.obsid) == 1:
-                        cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
+                if args.obsid and (len(args.obsid) == 1):
+                    cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
                 else:
                     cord.append([ob, ra, dec, time, delays,centrefreq, channels])
             else:
@@ -1050,8 +1056,12 @@ else:
                 cur.execute(sql_meta, (ob,))
                 meta_result = cur.fetchall()
                 if not meta_result:
-                    print('No raw voltage files for %s' % ob) 
-                    continue
+                    if args.all_volt:
+                        print('Error reading metadata for %s' % ob) 
+                        continue
+                    else:
+                        print('No raw voltage files for %s' % ob) 
+                        continue
                
                 cur.execute(sql_delay, (ob,))
                 delay_result = cur.fetchall()
@@ -1061,7 +1071,10 @@ else:
                 dec = meta_result[0][3]
                 time = meta_result[0][1] #duration
                 channels = meta_result[0][4]
-                delays = delay_result[0][0][0]
+                try:
+                    delays = delay_result[0][0][0]
+                except TypeError:
+                    print "Delay error for OBS ID: " + str(ob)
                 minfreq = float(min(channels))
                 maxfreq = float(max(channels))
                 centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq) / 2) #in Hz
@@ -1069,9 +1082,8 @@ else:
                 #instead of downloading all of the obs id first, if not in obs_for_source mode, 
                 #downlads one obs at a time
                 if args.obs_for_source:
-                    if args.obsid:
-                        if len(args.obsid) == 1:
-                            cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
+                    if args.obsid and (len(args.obsid) == 1):
+                        cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
                     else:
                         cord.append([ob, ra, dec, time, delays,centrefreq, channels])
                 else:
