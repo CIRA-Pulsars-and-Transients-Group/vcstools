@@ -32,6 +32,13 @@ int pfb_output_to_input[NINPUT];
 int miriad_to_mwac[256];
 int single_pfb_mapping[64];
 
+void cp2x2(complex double *Min, complex double *Mout) {
+    Mout[0] = Min[0];
+    Mout[1] = Min[1];
+    Mout[2] = Min[2];
+    Mout[3] = Min[3];
+}
+
 void inv2x2(complex double *Min, complex double *Mout) {
     complex double inv_det = 1.0 / (Min[0] * Min[3] - Min[1] * Min[2]);
     Mout[0] = inv_det * Min[3];
@@ -491,6 +498,7 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
     int bytes_to_next_jones = npols * (channelCount-1) * sizeof(complex double);
 
     int ant, pol;  // Iterate through antennas and polarisations
+    int ant_idx;   // Used for "re-ordering" the antennas. If not needed (after testing), DELETE ME
     int count = 0; // Keep track of how many solutions have actually been read in
     double re, im;    // Temporary placeholders for the real and imaginary doubles read in
 
@@ -506,13 +514,25 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
             fseek(fp, bytes_to_next_jones, SEEK_CUR);
         }
 
+        // Reorder the antennas. Not necessarily needed. If not, DELETE ME
+        ant_idx = natural_to_mwac[ant*2]/2;
+
         // Read in the data
         for (pol = 0; pol < npols; pol++) {
 
             fread(&re, sizeof(double), 1, fp);
             fread(&im, sizeof(double), 1, fp);
 
-            antenna_gain[ant][pol] = re + I*im;
+            // Check for NaNs
+            if (isnan(re) | isnan(im)) {
+                //antenna_gain[ant][pol] = 0.0 + I*0.0;
+                antenna_gain[ant_idx][pol] = 0.0 + I*0.0; // DELETE ME unless antenna ordering DOES need to be changed
+            }
+            else {
+                // antenna_gain[ant][pol] = re  + I*im;
+                antenna_gain[ant_idx][pol] = re  + I*im; // DELETE ME unless antenna ordering DOES need to be changed
+            }
+
             count++;
 
         }

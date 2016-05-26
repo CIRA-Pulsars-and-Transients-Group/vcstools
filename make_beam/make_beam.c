@@ -874,7 +874,6 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
                     Ji[j] = Ji[j]/Fnorm;
                 }
                 
-                
                 inv2x2(Ji,(*invJi)[count]);
             }
             else {
@@ -1821,13 +1820,11 @@ int main(int argc, char **argv) {
                     else {
                         
                         /* apply the inv(jones) to the e_dash */
-                        
                         e_dash[0] = e_dash[0] * complex_weights_array[index][ch];
                         e_dash[1] = e_dash[1] * complex_weights_array[index+1][ch];
                         
                         e_true[0] = invJi[index/npol][0]*e_dash[0] + invJi[index/npol][1]*e_dash[1];
                         e_true[1] = invJi[index/npol][2]*e_dash[0] + invJi[index/npol][3]*e_dash[1];
-                        
                         
                     }
                     
