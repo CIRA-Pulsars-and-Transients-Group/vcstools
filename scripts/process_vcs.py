@@ -4,9 +4,120 @@ import os
 import sys
 import glob
 import time
+import tempfile
+import atexit
+import hashlib
 import datetime
 import distutils.spawn
 from astropy.io import fits as pyfits
+
+
+TMPL = """\
+#!/bin/bash
+
+#SBATCH --export=NONE
+#SBATCH --outfile logs/{name}.%J.out
+
+{header}
+
+
+{script}"""
+
+
+def tmp(suffix=".sh"):
+    t = tempfile.mktemp(suffix=suffix)
+    atexit.register(os.unlink, t)
+    return t
+
+
+class Slurm(object):
+    def __init__(self, name, slurm_kwargs=None, tmpl=None, date_in_name=True, scripts_dir="scripts/"):
+        if slurm_kwargs is None:
+            slurm_kwargs = {}
+        if tmpl is None:
+            tmpl = TMPL
+
+        header = []
+        for k, v in slurm_kwargs.items():
+            if len(k) > 1:
+                k = "--" + k + "="
+            else:
+                k = "-" + k + " "
+            header.append("#SBATCH %s%s" % (k, v))
+        self.header = "\n".join(header)
+        self.name = "".join(x for x in name.replace(" ", "-") if x.isalnum() or x == "-")
+        self.tmpl = tmpl
+        self.slurm_kwargs = slurm_kwargs
+        if scripts_dir is not None:
+            self.scripts_dir = os.path.abspath(scripts_dir)
+        else:
+            self.scripts_dir = None
+        self.date_in_name = bool(date_in_name)
+
+
+    def __str__(self):
+        return self.tmpl.format(name=self.name, header=self.header,
+                                script="{script}")
+
+    def _tmpfile(self):
+        if self.scripts_dir is None:
+            return tmp()
+        else:
+            if not os.path.exists(self.scripts_dir):
+                os.makedirs(self.scripts_dir)
+            return "%s/%s.sh" % (self.scripts_dir, self.name)
+
+    def run(self, command, name_addition=None, cmd_kwargs=None, _cmd="sbatch", tries=1):
+        """
+        command: a bash command that you want to run
+        name_addition: if not specified, the sha1 of the command to run
+                       appended to job name. if it is "date", the yyyy-mm-dd
+                       date will be added to the job name.
+        cmd_kwargs: dict of extra arguments to fill in command
+                   (so command itself can be a template).
+        _cmd: submit command (change to "bash" for testing).
+        tries: try to run a job either this many times or until the first
+               success.
+        """
+        if name_addition is None:
+            name_addition = hashlib.sha1(command.encode("utf-8")).hexdigest()
+
+        if self.date_in_name:
+            name_addition += "-" + str(datetime.date.today())
+        name_addition = name_addition.strip(" -")
+
+        if cmd_kwargs is None:
+            cmd_kwargs = {}
+
+        n = self.name
+        self.name = self.name.strip(" -")
+        self.name += ("-" + name_addition.strip(" -"))
+
+        tmpl = str(self).format(script=command)
+
+        if "logs/" in tmpl and not os.path.exists("logs/"):
+            os.makedirs("logs")
+
+        with open(self._tmpfile(), "w") as sh:
+            cmd_kwargs["script"] = command
+            sh.write(tmpl.format(**cmd_kwargs))
+
+        job_id = None
+        for itry in range(1, tries + 1):
+            if itry > 1:
+                mid = "--dependency=afternotok:%d" % job_id
+                res = subprocess.check_output([_cmd, mid, sh.name]).strip()
+            else:
+                res = subprocess.check_output([_cmd, sh.name]).strip()
+#            print(res, file = sys.stderr)
+            sys.stderr.write(res)
+            self.name = n
+            if not res.startswith(b"Submitted batch"):
+                return None
+            j_id = int(res.split()[-1])
+            if itry == 1:
+                job_id = j_id
+        return job_id
 
 def getmeta(service='obs', params=None):
     """
@@ -117,30 +228,6 @@ def get_frequencies(metafits):
     freq_array = hdulist[0].header['CHANNELS']
     return sfreq(freq_array.split(','))
 
-def options (options): # TODO reformat this to print properly
-
-    print "\noptions:\n"
-    print "--mode {0}".format(options.mode)
-    print "-B [1/0]\t Submit download jobs to the copyq - at the moment this mode will only download and will perform <NO> subsequent processing [%d] \n" % (opts['batch_download'])
-    print "-b:\t GPS/UNIX time of the beginning [%d]]\n" % (opts['begin'])
-    print "-c:\t Coarse channel count (how many to process) [%d]\n" % (opts['ncoarse_chan'])
-    print "-d:\t Number of parallel downloads to envoke if using '-g' [%d]\n" % (opts['parallel_dl'])
-    print "-e:\t GPS/UNIX time of the end [%d]\n" % (opts['end'])
- #   print "-g:\t Get the data? (True/False) add this to get fresh data from the archive [%s]\n" % (opts['get_data'])
-    print "-i:\t Increment in seconds (how much we process at once) [%d]\n" % (opts['inc'])
-    print "-j:\t [corrdir] Use Jones matrices from the RTS [%s,%s]\n" % (opts['useJones'],opts['corrdir'])
-    print "-m:\t Beam forming mode (0 == NO BEAMFORMING 1==PSRFITS, 2==VDIF) [%d]\n" % (opts['mode'])
-    print "-n:\t Number of fine channels per coarse channel [%d]\n" % (opts['nchan'])
-    print "-o:\t obsid [%s]\n" % opts['obsid']
-    print "-p:\t beam pointing [%s]\n" % opts['pointing']
-    print "-s:\t single step (only process one increment and this is it (-1 == do them all) [%d]\n" % opts['single_step']
-#    print "-r:\t [corrdir] Run the offline correlator - this will submit a job to process the .dat files into visibility sets into the specified directory. These are needed if you want an RTS calibration solution [%s]\n" % opts['corrdir']
-    print "-G:\t Submit the beamformer/correlator job [Do it = %s]\n" % opts['Go']
-#   print "-R:\t New VCS mode - requires the recombine operation [runRECOMBINE = %s]\n" % opts['runRECOMBINE']
-    print "-w:\t Working root directory [%s]\n" % opts['root']
-#    print "-z:\t Add to switch off PFB formation/testing [runPFB = %s]\n" % opts['runPFB']
-
-
 def vcs_download(obsid, start_time, stop_time, increment, head, format, working_dir, parallel):
     print "Downloading files from archive"
     voltdownload = distutils.spawn.find_executable("voltdownload.py")
@@ -245,52 +332,58 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
             #in case something went wrong resubmit the voltdownload script
             batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(recombine_submit_line)
             batch_file.write(batch_line)
-        with open(recombine_batch,'w') as batch_file:
-
-            nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
-
-            batch_line = "#!/bin/bash -l\n#SBATCH --time=06:00:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out.1\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
-            batch_file.write(batch_line)
-            batch_line = "module switch PrgEnv-cray PrgEnv-gnu\n"
-            batch_file.write(batch_line)
-            batch_line = "module load mpi4py\n"
-            batch_file.write(batch_line)
-            batch_line = "module load cfitsio\n"
-            batch_file.write(batch_line)
-            batch_file.write('oldcount=0\n')
-            batch_file.write('let newcount=$oldcount+1\n')
-            batch_file.write('if [ ${newcount} -gt 10 ]; then\n')
-            batch_file.write('echo \"Tried ten times, this is silly. Aborting here.\";exit\n')
-            batch_file.write('fi\n')
-            # increase the counter in check_batch by one each time
-            batch_line = "sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch)
-            batch_file.write(batch_line)
-            # change the name of the batch-output file according to the counter each time
-            batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch)
-            batch_file.write(batch_line)
-            # submit check script before we start the download in case it is timed out
-            batch_file.write(check_submit_line)
-
-            if (stop_time - time_to_get) < increment:       # Trying to stop jobs from running over if they aren't perfectly divisible by increment
-                increment = stop_time - time_to_get + 1
-
-            if (jobs_per_node > increment):
-                jobs_per_node = increment
-
-            recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e{6}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary)
-            batch_file.write(recombine_line)
-
-
-        submit_cmd = subprocess.Popen(recombine_submit_line,shell=True,stdout=subprocess.PIPE)
-        jobid=""
-        for line in submit_cmd.stdout:
-
-            if "Submitted" in line:
-                (word1,word2,word3,jobid) = line.split()
-#                if (is_number(jobid)):
-#                    submitted_jobs.append(jobid)
-#                    submitted_times.append(time_to_get)
-
+            
+        recombine = Slurm("recombine_batch", {"time" : "06:00:00", "nodes" : "2"})
+        recombine.run("""
+                      module switch PrgEnv-cray PrgEnv-gnu
+                      module load mpi4py
+                      module load cfitsio
+                      aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e{6}""".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
+#         with open(recombine_batch,'w') as batch_file:
+# 
+#             nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
+# 
+#             batch_line = "#!/bin/bash -l\n#SBATCH --time=06:00:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out.1\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
+#             batch_file.write(batch_line)
+#             batch_line = "module switch PrgEnv-cray PrgEnv-gnu\n"
+#             batch_file.write(batch_line)
+#             batch_line = "module load mpi4py\n"
+#             batch_file.write(batch_line)
+#             batch_line = "module load cfitsio\n"
+#             batch_file.write(batch_line)
+#             batch_file.write('oldcount=0\n')
+#             batch_file.write('let newcount=$oldcount+1\n')
+#             batch_file.write('if [ ${newcount} -gt 10 ]; then\n')
+#             batch_file.write('echo \"Tried ten times, this is silly. Aborting here.\";exit\n')
+#             batch_file.write('fi\n')
+#             # increase the counter in check_batch by one each time
+#             batch_line = "sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch)
+#             batch_file.write(batch_line)
+#             # change the name of the batch-output file according to the counter each time
+#             batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch)
+#             batch_file.write(batch_line)
+#             # submit check script before we start the download in case it is timed out
+#             batch_file.write(check_submit_line)
+# 
+#             if (stop_time - time_to_get) < increment:       # Trying to stop jobs from running over if they aren't perfectly divisible by increment
+#                 increment = stop_time - time_to_get + 1
+# 
+#             if (jobs_per_node > increment):
+#                 jobs_per_node = increment
+# 
+#             recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e{6}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary)
+#             batch_file.write(recombine_line)
+# 
+# 
+#         submit_cmd = subprocess.Popen(recombine_submit_line,shell=True,stdout=subprocess.PIPE)
+#         jobid=""
+#         for line in submit_cmd.stdout:
+# 
+#             if "Submitted" in line:
+#                 (word1,word2,word3,jobid) = line.split()
+# #                if (is_number(jobid)):
+# #                    submitted_jobs.append(jobid)
+# #                    submitted_times.append(time_to_get)
 
 
 def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
