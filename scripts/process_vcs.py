@@ -16,7 +16,7 @@ TMPL = """\
 #!/bin/bash
 
 #SBATCH --export=NONE
-#SBATCH --outfile logs/{name}.%J.out
+#SBATCH --output logs/{name}.%J.out
 
 {header}
 
@@ -101,22 +101,32 @@ class Slurm(object):
         with open(self._tmpfile(), "w") as sh:
             cmd_kwargs["script"] = command
             sh.write(tmpl.format(**cmd_kwargs))
+        
+        submit_cmd = subprocess.Popen(_cmd,shell=True,stdout=subprocess.PIPE)
+        job_id=""
+        for line in submit_cmd.stdout:
+            
+            if "Submitted" in line:
+                (word1,word2,word3,job_id) = line.split()
+                if (is_number(job_id)):
+                    submitted_jobs.append(job_id)
 
-        job_id = None
-        for itry in range(1, tries + 1):
-            if itry > 1:
-                mid = "--dependency=afternotok:%d" % job_id
-                res = subprocess.check_output([_cmd, mid, sh.name]).strip()
-            else:
-                res = subprocess.check_output([_cmd, sh.name]).strip()
+
+#        job_id = None
+#       for itry in range(1, tries + 1):
+#           if itry > 1:
+#               mid = "--dependency=afternotok:%d" % job_id
+#               res = subprocess.check_call([_cmd, mid, sh.name])
+#           else:
+#               res = subprocess.check_call([_cmd, sh.name])
 #            print(res, file = sys.stderr)
-            sys.stderr.write(res)
-            self.name = n
-            if not res.startswith(b"Submitted batch"):
-                return None
-            j_id = int(res.split()[-1])
-            if itry == 1:
-                job_id = j_id
+#            sys.stderr.write(res)
+#            self.name = n
+#            if not res.startswith(b"Submitted batch"):
+#                return None
+#            j_id = int(res.split()[-1])
+#            if itry == 1:
+#                job_id = j_id
         return job_id
 
 def getmeta(service='obs', params=None):
@@ -310,6 +320,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
     for time_to_get in range(start_time,stop_time,increment):
 
         recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
+        print recombine_batch
         check_batch = "{0}/batch/check_recombine_{1}.batch".format(working_dir,time_to_get)
         recombine_submit_line = "sbatch --partition=gpuq --workdir={0} {1} --gid=mwaops \n".format(working_dir,recombine_batch)
         check_submit_line = "sbatch --time=15:00 --workdir={0} --partition=gpuq -d afterany:${{SLURM_JOB_ID}} {1} --gid=mwaops \n".format(working_dir, check_batch)
