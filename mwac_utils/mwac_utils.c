@@ -497,11 +497,20 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
          //     sizeof(complex double) *must* be 64-bit x 2 = 16-byte
     int bytes_to_next_jones = npols * (channelCount-1) * sizeof(complex double);
 
-    int ant, pol;  // Iterate through antennas and polarisations
-    //int ant_idx;   // Used for "re-ordering" the antennas. If not needed (after testing), DELETE ME
-    int count = 0; // Keep track of how many solutions have actually been read in
-    double re, im;    // Temporary placeholders for the real and imaginary doubles read in
+    int ant, pol;           // Iterate through antennas and polarisations
+    int ant_idx, pol_idx;   // Used for "re-ordering" the antennas and pols
+    int count = 0;          // Keep track of how many solutions have actually been read in
+    double re, im;          // Temporary placeholders for the real and imaginary doubles read in
 
+    // Create mapping from antenna number in offringa (ant) to
+    // Antenna number similar to RTS (ant_idx)
+    int nant_mwa = 128;
+    int mwac_to_natural[nant_mwa];
+    int n;
+    for (n = 0; n < nant_mwa; n++)
+        mwac_to_natural[natural_to_mwac[n*2]/2] = n;
+
+    // Loop through antennas and read in calibration solution
     int first = 1;
     for (ant = 0; ant < nant; ant++) {
 
@@ -514,23 +523,29 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
             fseek(fp, bytes_to_next_jones, SEEK_CUR);
         }
 
-        // Reorder the antennas. Not necessarily needed. If not, DELETE ME
-        //ant_idx = natural_to_mwac[ant*2]/2;
+        // Reorder the antennas
+        ant_idx = mwac_to_natural[ant];
 
         // Read in the data
         for (pol = 0; pol < npols; pol++) {
+
+            pol_idx = 3 - pol; // Read them in "backwards", because RTS's "x" = Offringa's "y"
 
             fread(&re, sizeof(double), 1, fp);
             fread(&im, sizeof(double), 1, fp);
 
             // Check for NaNs
             if (isnan(re) | isnan(im)) {
-                antenna_gain[ant][pol] = 0.0 + I*0.0;
-                //antenna_gain[ant_idx][pol] = 0.0 + I*0.0; // DELETE ME unless antenna ordering DOES need to be changed
+
+                // If NaN, set to identity matrix
+                if (pol_idx == 0 || pol_idx == 3)
+                    antenna_gain[ant_idx][pol_idx] = 1.0 + I*0.0;
+                else
+                    antenna_gain[ant_idx][pol_idx] = 0.0 + I*0.0;
+
             }
             else {
-                antenna_gain[ant][pol] = re  + I*im;
-                //antenna_gain[ant_idx][pol] = re  + I*im; // DELETE ME unless antenna ordering DOES need to be changed
+                antenna_gain[ant_idx][pol_idx] = re  + I*im;
             }
 
             count++;
