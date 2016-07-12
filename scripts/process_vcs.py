@@ -160,8 +160,8 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
             check_batch = "{0}/batch/check_volt_{1}.batch".format(working_dir,time_to_get)
             volt_secs_to_run = datetime.timedelta(seconds=300*increment)
             check_secs_to_run = '15:00'
-            volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
-            check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
+            volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
+            check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
             checks = distutils.spawn.find_executable("checks.py")
             with open(check_batch,'w') as batch_file:
                 batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_volt_{1}.out.0\n".format(working_dir,time_to_get)
@@ -224,8 +224,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 
         recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
         check_batch = "{0}/batch/check_recombine_{1}.batch".format(working_dir,time_to_get)
-        recombine_submit_line = "sbatch --partition=gpuq --workdir={0} {1} --gid=mwaops \n".format(working_dir,recombine_batch)
-        check_submit_line = "sbatch --time=15:00 --workdir={0} --partition=gpuq -d afterany:${{SLURM_JOB_ID}} {1} --gid=mwaops \n".format(working_dir, check_batch)
+        recombine_submit_line = "sbatch --workdir={0} {1} \n".format(working_dir,recombine_batch)
+        check_submit_line = "sbatch --time=15:00 --workdir={0} --partition=gpuq --account=mwaops -d afterany:${{SLURM_JOB_ID}} --gid=mwaops {1} \n".format(working_dir, check_batch)
         with open(check_batch,'w') as batch_file:
             batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_recombine_{1}.out.0\n".format(working_dir,time_to_get)
             batch_file.write(batch_line)
@@ -249,7 +249,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 
             nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
 
-            batch_line = "#!/bin/bash -l\n#SBATCH --time=06:00:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out.1\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
+            batch_line = "#!/bin/bash -l\n#SBATCH --time=06:00:00\n#SBATCH --gid=mwaops\n#SBATCH --output={0}/batch/recombine_{1}.out.1\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n#SBATCH --account=mwaops\n#SBATCH --partition=gpuq\n".format(working_dir, time_to_get, nodes)
             batch_file.write(batch_line)
             batch_line = "module switch PrgEnv-cray PrgEnv-gnu\n"
             batch_file.write(batch_line)
@@ -328,7 +328,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
                 corr_batch = "{0}/batch/correlator_{1}_gpubox{2:0>2}.batch".format(working_dir,inc_start,gpubox_label)
 
                 with open(corr_batch, 'w') as batch_file:
-                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
+                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --account=mwaops\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
                     batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
                     batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
                 to_corr = 0
@@ -349,7 +349,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
                         to_corr = to_corr+1
 
                 secs_to_run = datetime.timedelta(seconds=10*num_frames*to_corr)
-                batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq {2} --gid=mwaops \n".format(corr_dir,secs_to_run,corr_batch)
+                batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
                 submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
                 jobid=""
                 for line in submit_cmd.stdout:
@@ -361,11 +361,18 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 
 def run_rts(working_dir, rts_in_file):
     rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/run_rts.sh'
-    batch_submit_line = "sbatch -p gpuq --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file, working_dir, rts_in_file)
+    batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file, working_dir, rts_in_file)
     submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
 
 
-def coherent_beam(obs_id, start, stop, makebeampath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f', DI_dir=None):
+def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f', DI_dir=None, calibration_type='rts'):
+    # Print relevant version numbers to screen
+    mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
+    mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
+    tested_version  = "0.9.0"
+    print "Current version of MWACUtils = {0}".format(mwacutils_version.strip())
+    print "Tested  version of MWACUtils = {0}".format(tested_version.strip())
+
     # Need to run get_delays and then the beamformer on each desired coarse channel
     if not DI_dir:
         DI_dir = working_dir+"/DIJ"
@@ -391,7 +398,7 @@ def coherent_beam(obs_id, start, stop, makebeampath, working_dir, metafile, nfin
     bf_adjust_flags = distutils.spawn.find_executable("bf_adjust_flags.py")
     #bf_adjust_flags = '/home/fkirsten/software/galaxy-scripts/scripts/bf_adjust_flags.py'
     with open(get_delays_batch,'w') as batch_file:
-        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n#SBATCH --mail-type=ALL\n".format(working_dir,start,stop)
+        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n#SBATCH --mail-type=ALL\n".format(working_dir,start,stop)
         batch_file.write(batch_line)
         batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
         batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
@@ -400,7 +407,12 @@ def coherent_beam(obs_id, start, stop, makebeampath, working_dir, metafile, nfin
             pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
             mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}".format(RA, Dec, gpubox))
 
-            DI_file = "{0}/DI_JonesMatrices_node0{1}.dat".format(DI_dir, gpubox)
+            if calibration_type == 'rts':
+                DI_file = "{0}/DI_JonesMatrices_node0{1}.dat".format(DI_dir, gpubox)
+                jones_option = "-R {0}".format(DI_file)
+            elif calibration_type == 'offringa':
+                DI_file = "{0}/calibration_solution.bin".format(DI_dir)
+                jones_option = "-O {0} -C {1}".format(DI_file, int(gpubox)-1)
             channel_file = "{0}/channel".format(pointing_chan_dir)
             with open(channel_file,"w") as ch_file:
                 ch_line = "{0}".format(chan_list[chan_index]);
@@ -410,22 +422,21 @@ def coherent_beam(obs_id, start, stop, makebeampath, working_dir, metafile, nfin
 
             basefreq = int(chan_list[chan_index]) * 1.28e6 - 5e3 - 640e3  + 5e3
         
-            print "Looking for ", DI_file
             if (os.path.isfile(DI_file)):
                 ch_dir_line = "cd {0}\n".format(pointing_chan_dir)
                 batch_file.write(ch_dir_line)
-                delays_line = "get_delays -a {0} -b {1} -j {2} -m {3} -c -i -p -z {4} -o {5} -f {6} -n {7} -w 10000 -r {8} -d {9}\n".format(pointing_chan_dir,stop-start,DI_file,metafile,utctime,obs_id,basefreq,nfine_chan,RA,Dec) 
+                delays_line = "{0}/get_delays -a {1} -b {2} {3} -m {4} -c -i -p -z {5} -o {6} -f {7} -n {8} -w 10000 -r {9} -d {10}\n".format(execpath, pointing_chan_dir,stop-start,jones_option,metafile,utctime,obs_id,basefreq,nfine_chan,RA,Dec) 
                 batch_file.write(delays_line)
                 if rts_flag_file:
                     flags_file = "{0}/flags.txt".format(pointing_chan_dir)
                     flag_line="{0} {1} {2}\n".format(bf_adjust_flags, rts_flag_file, flags_file)
                     batch_file.write(flag_line)
             else:
-                print "WARNING: No Calibration Found for Channel {0}!".format(gpubox)
+                print "WARNING: No Calibration Found for Channel {0}! Could not find file {1}".format(gpubox, DI_file)
                 startjobs = False
 
             chan_index = chan_index+1
-    submit_line = "sbatch --time={0} --workdir={1} --partition=gpuq --gid=mwaops --mail-user={2} {3}\n".format("00:45:00", pointing_dir, e_mail, get_delays_batch)
+    submit_line = "sbatch --account=mwaops --time={0} --workdir={1} --partition=gpuq --gid=mwaops --mail-user={2} {3}\n".format("00:45:00", pointing_dir, e_mail, get_delays_batch)
     print submit_line;
     if startjobs:
         output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -452,7 +463,7 @@ def coherent_beam(obs_id, start, stop, makebeampath, working_dir, metafile, nfin
         make_beam_batch_out = "mb_{1}_{2}_ch{3}.out".format(working_dir, RA, Dec, coarse_chan)
         with open(make_beam_batch, 'w') as batch_file:
             batch_file.write("#!/bin/bash -l\n")
-            nodes_line = "#SBATCH --nodes=1\n#SBATCH --export=NONE\n" 
+            nodes_line = "#SBATCH --nodes=1\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n" 
             batch_file.write(nodes_line)
             output_line = "#SBATCH --output={0}/batch/{1}\n".format(working_dir,make_beam_batch_out)
             batch_file.write(output_line)
@@ -462,16 +473,16 @@ def coherent_beam(obs_id, start, stop, makebeampath, working_dir, metafile, nfin
             batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
-            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (makebeampath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
+            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (execpath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
 
     	submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
-    	print submit_line
+    	#print submit_line
 	if startjobs:
         	output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
         	jobID = output.split(" ")[3].strip()
         	#submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-        	print "Submitted as job {0}".format(jobID)
+        	#print "Submitted as job {0}".format(jobID)
     	else:
       		print "Not submitted. \n"
 
@@ -497,16 +508,17 @@ if __name__ == '__main__':
     group_correlate = OptionGroup(parser, 'Correlator Options')
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1), help="Frequency (kHz) and Time (s) resolution for running the correlator. Please make divisible by 10 kHz and 0.01 s respectively. [default=%default]")
 
-    group_calibrate = OptionGroup(parser, 'Calibration Options (run the RTS)')
+    group_calibrate = OptionGroup(parser, 'Calibration Options')
     group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.", default=None)
     group_calibrate.add_option('--rts_output_dir', type='string', help="Working directory for RTS -- all RTS output files will end up here. Default is where the rts_in_file lives.", default=None)
+    group_calibrate.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
-    group_beamform.add_option("--DI_dir", default=None, help="Directory containing Direction Independent Jones Matrices (as created by the RTS). Default is work_dir/obsID/DIJ.")
+    group_beamform.add_option("--DI_dir", default=None, help="Directory containing Direction Independent Jones Matrices (as created by either the RTS or Andre Offringa's tools). Default is work_dir/obsID/DIJ.")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
-    group_beamform.add_option("-M", "--makebeampath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
+    group_beamform.add_option("-E", "--execpath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -556,8 +568,8 @@ if __name__ == '__main__':
             print "We cannot write out both vdif and psrfits simultaneously yet, sorry! Aborting here..."
             sys.exit(1)
 
-        if opts.makebeampath:
-            makebeampath = opts.makebeampath
+        if opts.execpath:
+            execpath = opts.execpath
 
     mdir(opts.work_dir, "Working")
     obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
@@ -614,7 +626,7 @@ s the RTS will not run..."
             quit()
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
-        coherent_beam(opts.obs, opts.begin, opts.end, opts.makebeampath, obs_dir, metafits_file, opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir)
+        coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, obs_dir, metafits_file, opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
