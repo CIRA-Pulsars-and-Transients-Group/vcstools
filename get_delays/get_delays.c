@@ -566,30 +566,8 @@ int     main(int argc, char **argv) {
                 fprintf(stdout,"calib:Jones Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
                 fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
             }
-// DEBUG START
-/*
-            char dumpname[256] = "/group/mwaops/smcsweeney/src/offringa_test/tileDI.txt";
-            FILE *dumpf = fopen(dumpname, "w");
-            if (!dumpf) {
-                fprintf(stdout, "Couldn't open file %s for writing\n", dumpname);
-                exit(1);
-            }
-            else
-                fprintf(stdout, "Opened file %s for writing!!\n", dumpname);
-*/
-// DEBUG END
             for (i=0;i<nstation;i++){
                 mult2x2d(M[i],invJref,G[i]); // forms the DI gain
-// DEBUG START
-/*
-                //if (i==0 || i==1) {
-                    int n;
-                    for (n = 0; n < 4; n++)
-                        fprintf(dumpf, "%f %f ", creal(G[i][n]), cimag(G[i][n]));
-                    fprintf(dumpf, "\n");
-                //}
-*/
-// DEBUG END
                 mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
                 
                 for (j=0; j < 4;j++) {
@@ -615,9 +593,6 @@ int     main(int argc, char **argv) {
                 }
     
             }
-// DEBUG START
-            fclose(dumpf);
-// DEBUG END
         }
             
         
