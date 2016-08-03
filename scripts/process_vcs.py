@@ -12,16 +12,17 @@ import distutils.spawn
 from astropy.io import fits as pyfits
 
 
-TMPL = """\
-#!/bin/bash
+TMPL = """#!/bin/bash
 
 #SBATCH --export=NONE
-#SBATCH --output logs/{name}.%J.out
-
+#SBATCH --output {outfile}
+#SBATCH --account=mwaops
+#SBATCH --clusters={cluster}
+#
 {header}
 
-
-{script}"""
+{script}
+"""
 
 
 def tmp(suffix=".sh"):
@@ -29,6 +30,52 @@ def tmp(suffix=".sh"):
     atexit.register(os.unlink, t)
     return t
 
+def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", depend=0, submit=True, outfile=None, cluster="galaxy"):
+	"""
+	Making this function to cleanly submit slurm jobs using a simple template.
+	This will use the <name> to setup both the .batch and .out files into <batch_dir>
+	<slurm_kwargs> should be a dictionary of keyword, value pairs of anything the template header is missing
+	<commands> is the actual batch script you want to run, and is expecting a list with one entry per line
+	"""
+	
+	header = []
+	if not outfile:
+		outfile=batch_dir+name+".out"
+	for k, v in slurm_kwargs.iteritems():
+		if len(k) > 1:
+			k = "--" + k + "="
+		else:
+			k = "-" + k + " "
+		header.append("#SBATCH {0}{1}".format(k, v))
+	header = "\n".join(header)
+	
+	commands = "\n".join(commands)
+	if batch_dir[-1] is not "/":
+		batch_dir.append("/")
+	
+	tmpl = tmpl.format(script=commands,outfile=outfile, header=header, cluster=cluster)
+	
+
+	fh = open(batch_dir+name+".batch","w")
+	fh.write(tmpl)
+	fh.close()
+	
+	if depend:
+		batch_submit_line = "sbatch --dependency=afterok:{0} {1}".format(depend,batch_dir+name+".batch") # should this just be in the header?
+	else:
+		batch_submit_line = "sbatch {0}".format(batch_dir+name+".batch")
+	
+	if submit:
+		submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+	# submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+	# 
+	# jobid=""
+	# for line in submit_cmd.stdout:
+	# 	if "Submitted" in line:
+	# 		(word1,word2,word3,jobid) = line.split()
+	# return jobid
+
+	
 
 class Slurm(object):
     def __init__(self, name, slurm_kwargs=None, tmpl=None, date_in_name=True, scripts_dir="scripts/"):
@@ -239,228 +286,214 @@ def get_frequencies(metafits):
     return sfreq(freq_array.split(','))
 
 def vcs_download(obsid, start_time, stop_time, increment, head, format, working_dir, parallel):
-    print "Downloading files from archive"
-    voltdownload = distutils.spawn.find_executable("voltdownload.py")
-#    voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
-#   voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
-    raw_dir = "{0}/raw".format(working_dir)
-    mdir(raw_dir, "Raw")
-
-    for time_to_get in range(start_time,stop_time,increment):
-        get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
-        if head:
-            log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
-            with open(log_name, 'w') as log:
-                subprocess.call(get_data, shell=True, stdout=log, stderr=log)
-        else:
-            voltdownload_batch = "{0}/batch/volt_{1}.batch".format(working_dir,time_to_get)
-            check_batch = "{0}/batch/check_volt_{1}.batch".format(working_dir,time_to_get)
-            volt_secs_to_run = datetime.timedelta(seconds=300*increment)
-            check_secs_to_run = '15:00'
-            volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
-            check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
-            checks = distutils.spawn.find_executable("checks.py")
-            with open(check_batch,'w') as batch_file:
-                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_volt_{1}.out.0\n".format(working_dir,time_to_get)
-                batch_file.write(batch_line)
-                batch_file.write('newcount=0\n')
-                batch_file.write('let oldcount=$newcount-1\n')
-                # increase the counter in voltdownload_batch by one each time
-                batch_line = "sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}\n".format(voltdownload_batch)
-                batch_file.write(batch_line)
-                batch_file.write('oldcount=$newcount; let newcount=$newcount+1\n')
-                # change the name of the batch-output file according to the counter each time
-                batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(voltdownload_batch)
-                batch_file.write(batch_line)
-                # to make sure checks.py does not look for files beyond the stop_time:
-                check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
-                batch_line = "{0} -m download -o {1} -w {2} -b {3} -i {4}\n".format(checks, obsid, raw_dir, time_to_get, check_nsecs)
-                batch_file.write(batch_line)
-                #in case something went wrong resubmit the voltdownload script
-                batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(volt_submit_line)
-                batch_file.write(batch_line)
-                
-            with open(voltdownload_batch,'w') as batch_file:
-                batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/volt_{1}.out.1\n".format(working_dir,time_to_get)
-                batch_file.write(batch_line)
-                batch_file.write('oldcount=0\n')
-                batch_file.write('let newcount=$oldcount+1\n')
-                batch_file.write('if [ ${newcount} -gt 10 ]; then\n')
-                batch_file.write('echo \"Tried ten times, this is silly. Aborting here.\";exit\n')
-                batch_file.write('fi\n')
-                # increase the counter in check_batch by one each time
-                batch_line = "sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch)
-                batch_file.write(batch_line)
-                # change the name of the batch-output file according to the counter each time
-                batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch)
-                batch_file.write(batch_line)
-                # submit check script before we start the download in case it is timed out
-                batch_file.write(check_submit_line)
-                batch_line = "%s\n" % (get_data)
-                batch_file.write(batch_line)
-                
-            submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
-            continue
-
-
-        try:
-            os.chdir(working_dir)
-        except:
-            print "cannot open working dir:{0}".format(working_dir)
-            sys.exit()
-    
+	print "Downloading files from archive"
+	voltdownload = distutils.spawn.find_executable("voltdownload.py")
+	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
+	# voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
+	raw_dir = "{0}/raw".format(working_dir)
+	mdir(raw_dir, "Raw")
+	batch_dir = working_dir+"/batch/"
+	
+	for time_to_get in range(start_time,stop_time,increment):
+		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
+		if head:
+			log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
+			with open(log_name, 'w') as log:
+				subprocess.call(get_data, shell=True, stdout=log, stderr=log)
+		else:
+			voltdownload_batch = "volt_{0}".format(time_to_get)
+			check_batch = "check_volt_{0}".format(time_to_get)
+			volt_secs_to_run = datetime.timedelta(seconds=300*increment)
+			check_secs_to_run = "15:00"
+			volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
+			check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
+			checks = distutils.spawn.find_executable("checks.py")
+			
+			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+			commands = []
+			commands.append("newcount=0")
+			commands.append("let oldcount=$newcount-1")
+			commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
+			commands.append("oldcount=$newcount; let newcount=$newcount+1")
+			commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
+			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4}".format(checks, obsid, raw_dir, time_to_get, check_nsecs))
+			commands.append("if [ $? -eq 1 ];then")
+			commands.append("sbatch {0}".format(batch_dir+voltdownload_batch+".batch"))
+			commands.append("fi")
+			submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
+			
+			# with open(check_batch,'w') as batch_file:
+			# 	batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_volt_{1}.out.0\n".format(working_dir,time_to_get)
+			# 	batch_file.write(batch_line)
+			# 	batch_file.write('newcount=0\n')
+			# 	batch_file.write('let oldcount=$newcount-1\n')
+			# 	# increase the counter in voltdownload_batch by one each time
+			# 	batch_line = "sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}\n".format(voltdownload_batch)
+			# 	batch_file.write(batch_line)
+			# 	batch_file.write('oldcount=$newcount; let newcount=$newcount+1\n')
+			# 	# change the name of the batch-output file according to the counter each time
+			# 	batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(voltdownload_batch)
+			# 	batch_file.write(batch_line)
+			# 	# to make sure checks.py does not look for files beyond the stop_time:
+			# 	check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+			# 	batch_line = "{0} -m download -o {1} -w {2} -b {3} -i {4}\n".format(checks, obsid, raw_dir, time_to_get, check_nsecs)
+			# 	batch_file.write(batch_line)
+			# 	#in case something went wrong resubmit the voltdownload script
+			# 	batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(volt_submit_line)
+			# 	batch_file.write(batch_line)
+			
+			body = []
+			body.append("oldcount=0")
+			body.append("let newcount=$oldcount+1")
+			body.append("if [ ${newcount} -gt 10 ]; then")
+			body.append("echo \"Tried ten times, this is silly. Aborting here.\";exit")
+			body.append("fi")
+			body.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch))
+			body.append("sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch))
+			body.append("sbatch {0}".format(batch_dir+check_batch+".batch"))
+			body.append(get_data)
+			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
+			
+			# with open(voltdownload_batch,'w') as batch_file:
+				# batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/volt_{1}.out.1\n".format(working_dir,time_to_get)
+				# batch_file.write(batch_line)
+				# batch_file.write('oldcount=0\n')
+				# batch_file.write('let newcount=$oldcount+1\n')
+				# batch_file.write('if [ ${newcount} -gt 10 ]; then\n')
+				# batch_file.write('echo \"Tried ten times, this is silly. Aborting here.\";exit\n')
+				# batch_file.write('fi\n')
+				# increase the counter in check_batch by one each time
+				# batch_line = "sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch)
+				# batch_file.write(batch_line)
+				# change the name of the batch-output file according to the counter each time
+				# batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch)
+				# batch_file.write(batch_line)
+				# submit check script before we start the download in case it is timed out
+				# batch_file.write(check_submit_line)
+				# batch_line = "%s\n" % (get_data)
+				# batch_file.write(batch_line)
+				
+			# submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
+			continue
+		
+		try:
+			os.chdir(working_dir)
+		except:
+			print "cannot open working dir:{0}".format(working_dir)
+			sys.exit()
 
 def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
-    print "Running recombine on files"
-    jobs_per_node = 8
-    recombine = distutils.spawn.find_executable("recombine.py")
-    #recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
-    checks = distutils.spawn.find_executable("checks.py")
-    recombine_binary = "/group/mwaops/PULSAR/bin/recombine" # Hard coding this temporarily to ensure correct version of code is envoked
-    for time_to_get in range(start_time,stop_time,increment):
-
-        recombine_batch = "{0}/batch/recombine_{1}.batch".format(working_dir,time_to_get)
-        print recombine_batch
-        check_batch = "{0}/batch/check_recombine_{1}.batch".format(working_dir,time_to_get)
-        recombine_submit_line = "sbatch --workdir={0} {1} \n".format(working_dir,recombine_batch)
-        check_submit_line = "sbatch --time=15:00 --workdir={0} --partition=gpuq --account=mwaops -d afterany:${{SLURM_JOB_ID}} --gid=mwaops {1} \n".format(working_dir, check_batch)
-        with open(check_batch,'w') as batch_file:
-            batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_recombine_{1}.out.0\n".format(working_dir,time_to_get)
-            batch_file.write(batch_line)
-            batch_file.write('newcount=0\n')
-            batch_file.write('let oldcount=$newcount-1\n')
-            # increase the counter in recombine_batch by one each time
-            batch_line = "sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}\n".format(recombine_batch)
-            batch_file.write(batch_line)
-            batch_file.write('oldcount=$newcount; let newcount=$newcount+1\n')
-            # change the name of the batch-output file according to the counter each time
-            batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(recombine_batch)
-            batch_file.write(batch_line)
-            # to make sure checks.py does not look for files beyond the stop_time:
-            check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
-            batch_line = "{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}\n".format(checks, obsid, working_dir, time_to_get, check_nsecs)
-            batch_file.write(batch_line)
-            #in case something went wrong resubmit the voltdownload script
-            batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(recombine_submit_line)
-            batch_file.write(batch_line)
-            
-        recombine = Slurm("recombine_batch", {"time" : "06:00:00", "nodes" : "2"})
-        recombine.run("""
-                      module switch PrgEnv-cray PrgEnv-gnu
-                      module load mpi4py
-                      module load cfitsio
-                      aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e{6}""".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
-#         with open(recombine_batch,'w') as batch_file:
-# 
-#             nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
-# 
-#             batch_line = "#!/bin/bash -l\n#SBATCH --time=06:00:00\n#SBATCH \n#SBATCH --output={0}/batch/recombine_{1}.out.1\n#SBATCH --export=NONE\n#SBATCH --nodes={2}\n".format(working_dir, time_to_get, nodes)
-#             batch_file.write(batch_line)
-#             batch_line = "module switch PrgEnv-cray PrgEnv-gnu\n"
-#             batch_file.write(batch_line)
-#             batch_line = "module load mpi4py\n"
-#             batch_file.write(batch_line)
-#             batch_line = "module load cfitsio\n"
-#             batch_file.write(batch_line)
-#             batch_file.write('oldcount=0\n')
-#             batch_file.write('let newcount=$oldcount+1\n')
-#             batch_file.write('if [ ${newcount} -gt 10 ]; then\n')
-#             batch_file.write('echo \"Tried ten times, this is silly. Aborting here.\";exit\n')
-#             batch_file.write('fi\n')
-#             # increase the counter in check_batch by one each time
-#             batch_line = "sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch)
-#             batch_file.write(batch_line)
-#             # change the name of the batch-output file according to the counter each time
-#             batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch)
-#             batch_file.write(batch_line)
-#             # submit check script before we start the download in case it is timed out
-#             batch_file.write(check_submit_line)
-# 
-#             if (stop_time - time_to_get) < increment:       # Trying to stop jobs from running over if they aren't perfectly divisible by increment
-#                 increment = stop_time - time_to_get + 1
-# 
-#             if (jobs_per_node > increment):
-#                 jobs_per_node = increment
-# 
-#             recombine_line = "aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e{6}\n".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary)
-#             batch_file.write(recombine_line)
-# 
-# 
-#         submit_cmd = subprocess.Popen(recombine_submit_line,shell=True,stdout=subprocess.PIPE)
-#         jobid=""
-#         for line in submit_cmd.stdout:
-# 
-#             if "Submitted" in line:
-#                 (word1,word2,word3,jobid) = line.split()
-# #                if (is_number(jobid)):
-# #                    submitted_jobs.append(jobid)
-# #                    submitted_times.append(time_to_get)
+	print "Running recombine on files"
+	jobs_per_node = 8
+	batch_dir = working_dir+"/batch/"
+	recombine = distutils.spawn.find_executable("recombine.py")
+	#recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
+	checks = distutils.spawn.find_executable("checks.py")
+	recombine_binary = "/group/mwaops/PULSAR/bin/recombine" # Hard coding this temporarily to ensure correct version of code is envoked
+	for time_to_get in range(start_time,stop_time,increment):
+	
+		check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+		nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
+		recombine_batch = "recombine_{0}".format(time_to_get)
+		check_batch = "check_recombine_{0}".format(time_to_get)
+		commands = []
+		commands.append("newcount=0")
+		commands.append("let oldcount=$newcount-1")
+		commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+recombine_batch+".batch"))
+		commands.append("oldcount=$newcount; let newcount=$newcount+1")
+		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+recombine_batch+".batch"))
+		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, working_dir, time_to_get, check_nsecs))
+		commands.append("if [ $? -eq 1 ];then")
+		commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))  
+		commands.append("fi")
+		submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : "15:00", "partition" : "gpuq"}, submit=False, outfile=batch_dir+check_batch+"_0.out")
+		
+		commands = []
+		commands.append("module switch PrgEnv-cray PrgEnv-gnu")
+		commands.append("module load mpi4py")
+		commands.append("module load cfitsio")
+		commands.append("oldcount=0")
+		commands.append("let newcount=$oldcount+1")
+		commands.append("if [ ${newcount} -gt 10 ]; then")
+		commands.append("echo \"Tried ten times, this is silly. Aborting here.\";exit")
+		commands.append("fi")
+		commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
+		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
+		commands.append("sbatch {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
+		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
+		
+		submit_slurm(recombine_batch,commands,batch_dir="{0}/batch/".format(working_dir), slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
 def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
-    print "Correlating files"
-    import astropy
-    from astropy.time import Time
-    import calendar
-
-    corr_dir = "{0}/vis".format(working_dir)
-    mdir(corr_dir, "Correlator Product")
-
-    chan_list = get_frequencies(metafits_file)
-    gpu_int = 0.01
-    integrations=int(ft_res[1]/gpu_int)
-    num_frames=int(1.0/ft_res[1])
-    
-    print "Input chan list is" , chan_list
-
-    for time_to_get in range(start,stop,increment):
-        inc_start = time_to_get
-        inc_stop = time_to_get+increment
-        for index,channel in enumerate(chan_list):
-            gpubox_label = (index+1)
-            f=[]
-            for time_to_corr in range(inc_start,inc_stop,1):
-                file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(working_dir,obsid,time_to_corr,channel)
-                #check the file exists
-                if (os.path.isfile(file_to_process) == True):
-                    f.append(file_to_process)
-
-            #now have a full list of files
-            #for this increment 
-            #and this channel
-            if (len(f) > 0):
-                corr_batch = "{0}/batch/correlator_{1}_gpubox{2:0>2}.batch".format(working_dir,inc_start,gpubox_label)
-
-                with open(corr_batch, 'w') as batch_file:
-                    batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --account=mwaops\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
-                    batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
-                    batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
-                to_corr = 0
-                for file in f:
-                    corr_line = ""
-                    (current_time,ext) = os.path.splitext(os.path.basename(file))
-                    (obsid,gpstime,chan) = current_time.split('_')
-                    t = Time(int(gpstime), format='gps', scale='utc')
-                    time_str =  t.datetime.strftime('%Y-%m-%d %H:%M:%S')
-
-                    current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
-                    unix_time = calendar.timegm(current_time)
-
-                    corr_line = " aprun -n 1 -N 1 {0} -o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}\n".format("mwac_offline",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file)
-                    
-                    with open(corr_batch, 'a') as batch_file:
-                        batch_file.write(corr_line)
-                        to_corr = to_corr+1
-
-                secs_to_run = datetime.timedelta(seconds=10*num_frames*to_corr)
-                batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
-                submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
-                jobid=""
-                for line in submit_cmd.stdout:
-                    if "Submitted" in line:
-                        (word1,word2,word3,jobid) = line.split()
-            else:
-                print "Couldn't find any recombine files. Aborting here."
+	print "Correlating files"
+	import astropy
+	from astropy.time import Time
+	import calendar
+	
+	corr_dir = "{0}/vis".format(working_dir)
+	mdir(corr_dir, "Correlator Product")
+	batch_dir = working_dir+"/batch/"
+	
+	chan_list = get_frequencies(metafits_file)
+	gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
+	integrations=int(ft_res[1]/gpu_int)
+	num_frames=int(1.0/ft_res[1])
+	
+	print "Input chan list is" , chan_list
+	
+	for time_to_get in range(start,stop,increment):
+		inc_start = time_to_get
+		inc_stop = time_to_get+increment
+		for index,channel in enumerate(chan_list):
+			gpubox_label = (index+1)
+			f=[]
+			for time_to_corr in range(inc_start,inc_stop,1):
+				file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(working_dir,obsid,time_to_corr,channel)
+				#check the file exists
+				if (os.path.isfile(file_to_process) == True):
+					f.append(file_to_process)
+	
+			#now have a full list of files
+			#for this increment 
+			#and this channel
+			if (len(f) > 0):
+				corr_batch = "correlator_{0}_gpubox{1:0>2}".format(inc_start,gpubox_label)
+				body = []
+				body.append("source /group/mwaops/PULSAR/psrBash.profile")
+				body.append("module swap craype-ivybridge craype-sandybridge")
+	
+				# with open(corr_batch, 'w') as batch_file:
+				#     batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --account=mwaops\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
+				#     batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
+				#     batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
+				to_corr = 0
+				for file in f:
+					corr_line = ""
+					(current_time,ext) = os.path.splitext(os.path.basename(file))
+					(obsid,gpstime,chan) = current_time.split('_')
+					t = Time(int(gpstime), format='gps', scale='utc')
+					time_str =  t.datetime.strftime('%Y-%m-%d %H:%M:%S')
+	
+					current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
+					unix_time = calendar.timegm(current_time)
+	
+					body.append(" aprun -n 1 -N 1 {0} -o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}".format("mwac_offline",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file))
+					to_corr += 1
+					# with open(corr_batch, 'a') as batch_file:
+					#     batch_file.write(corr_line)
+					#     to_corr = to_corr+1
+	
+				secs_to_run = str(datetime.timedelta(seconds=10*num_frames*to_corr))
+				submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq"}, batch_dir=batch_dir)
+				# batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
+				# submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+				# jobid=""
+				# for line in submit_cmd.stdout:
+				#     if "Submitted" in line:
+				#         (word1,word2,word3,jobid) = line.split()
+			else:
+				print "Couldn't find any recombine files. Aborting here."
 
 
 def run_rts(working_dir, rts_in_file):
