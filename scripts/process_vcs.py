@@ -180,7 +180,7 @@ def getmeta(service='obs', params=None):
     """
     Function to call a JSON web service and return a dictionary:
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
-    a Python dictionary, return a Python dictionary containing the result.
+    a Python dictionary, return a Python dictionary xcontaining the result.
     Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
     """
     import urllib
@@ -392,7 +392,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 	recombine_binary = "/group/mwaops/PULSAR/bin/recombine" # Hard coding this temporarily to ensure correct version of code is envoked
 	for time_to_get in range(start_time,stop_time,increment):
 	
-		check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+		process_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
 		nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
 		recombine_batch = "recombine_{0}".format(time_to_get)
 		check_batch = "check_recombine_{0}".format(time_to_get)
@@ -402,7 +402,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 		commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+recombine_batch+".batch"))
 		commands.append("oldcount=$newcount; let newcount=$newcount+1")
 		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+recombine_batch+".batch"))
-		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, working_dir, time_to_get, check_nsecs))
+		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, working_dir, time_to_get, process_nsecs))
 		commands.append("if [ $? -eq 1 ];then")
 		commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))  
 		commands.append("fi")
@@ -420,7 +420,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 		commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
 		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
 		commands.append("sbatch {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
-		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
+		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
 		
 		submit_slurm(recombine_batch,commands,batch_dir="{0}/batch/".format(working_dir), slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
