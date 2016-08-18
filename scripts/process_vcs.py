@@ -77,104 +77,6 @@ def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", dep
 
 	
 
-class Slurm(object):
-    def __init__(self, name, slurm_kwargs=None, tmpl=None, date_in_name=True, scripts_dir="scripts/"):
-        if slurm_kwargs is None:
-            slurm_kwargs = {}
-        if tmpl is None:
-            tmpl = TMPL
-
-        header = []
-        for k, v in slurm_kwargs.items():
-            if len(k) > 1:
-                k = "--" + k + "="
-            else:
-                k = "-" + k + " "
-            header.append("#SBATCH %s%s" % (k, v))
-        self.header = "\n".join(header)
-        self.name = "".join(x for x in name.replace(" ", "-") if x.isalnum() or x == "-")
-        self.tmpl = tmpl
-        self.slurm_kwargs = slurm_kwargs
-        if scripts_dir is not None:
-            self.scripts_dir = os.path.abspath(scripts_dir)
-        else:
-            self.scripts_dir = None
-        self.date_in_name = bool(date_in_name)
-
-
-    def __str__(self):
-        return self.tmpl.format(name=self.name, header=self.header,
-                                script="{script}")
-
-    def _tmpfile(self):
-        if self.scripts_dir is None:
-            return tmp()
-        else:
-            if not os.path.exists(self.scripts_dir):
-                os.makedirs(self.scripts_dir)
-            return "%s/%s.sh" % (self.scripts_dir, self.name)
-
-    def run(self, command, name_addition=None, cmd_kwargs=None, _cmd="sbatch", tries=1):
-        """
-        command: a bash command that you want to run
-        name_addition: if not specified, the sha1 of the command to run
-                       appended to job name. if it is "date", the yyyy-mm-dd
-                       date will be added to the job name.
-        cmd_kwargs: dict of extra arguments to fill in command
-                   (so command itself can be a template).
-        _cmd: submit command (change to "bash" for testing).
-        tries: try to run a job either this many times or until the first
-               success.
-        """
-        if name_addition is None:
-            name_addition = hashlib.sha1(command.encode("utf-8")).hexdigest()
-
-        if self.date_in_name:
-            name_addition += "-" + str(datetime.date.today())
-        name_addition = name_addition.strip(" -")
-
-        if cmd_kwargs is None:
-            cmd_kwargs = {}
-
-        n = self.name
-        self.name = self.name.strip(" -")
-        self.name += ("-" + name_addition.strip(" -"))
-
-        tmpl = str(self).format(script=command)
-
-        if "logs/" in tmpl and not os.path.exists("logs/"):
-            os.makedirs("logs")
-
-        with open(self._tmpfile(), "w") as sh:
-            cmd_kwargs["script"] = command
-            sh.write(tmpl.format(**cmd_kwargs))
-        
-        submit_cmd = subprocess.Popen(_cmd,shell=True,stdout=subprocess.PIPE)
-        job_id=""
-        for line in submit_cmd.stdout:
-            
-            if "Submitted" in line:
-                (word1,word2,word3,job_id) = line.split()
-                if (is_number(job_id)):
-                    submitted_jobs.append(job_id)
-
-
-#        job_id = None
-#       for itry in range(1, tries + 1):
-#           if itry > 1:
-#               mid = "--dependency=afternotok:%d" % job_id
-#               res = subprocess.check_call([_cmd, mid, sh.name])
-#           else:
-#               res = subprocess.check_call([_cmd, sh.name])
-#            print(res, file = sys.stderr)
-#            sys.stderr.write(res)
-#            self.name = n
-#            if not res.startswith(b"Submitted batch"):
-#                return None
-#            j_id = int(res.split()[-1])
-#            if itry == 1:
-#                job_id = j_id
-        return job_id
 
 def getmeta(service='obs', params=None):
     """
@@ -290,12 +192,15 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 	voltdownload = distutils.spawn.find_executable("voltdownload.py")
 	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
 	# voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
-	raw_dir = "{0}/raw".format(working_dir)
-	mdir(raw_dir, "Raw")
+	if format == 11:
+		dl_dir = "{0}/raw".format(working_dir)
+	else:
+		dl_dir = "{0}/combined".format(working_dir)
+	mdir(dl_dir, "Raw")
 	batch_dir = working_dir+"/batch/"
 	
 	for time_to_get in range(start_time,stop_time,increment):
-		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
+		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
 		if head:
 			log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
 			with open(log_name, 'w') as log:
@@ -305,10 +210,11 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 			check_batch = "check_volt_{0}".format(time_to_get)
 			volt_secs_to_run = datetime.timedelta(seconds=300*increment)
 			check_secs_to_run = "15:00"
-			volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
-			check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
+			volt_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
+			check_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
 			checks = distutils.spawn.find_executable("checks.py")
 			
+			# Write out the checks batch file but don't submit it
 			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
 			commands = []
 			commands.append("newcount=0")
@@ -316,31 +222,20 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 			commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
 			commands.append("oldcount=$newcount; let newcount=$newcount+1")
 			commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
-			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4}".format(checks, obsid, raw_dir, time_to_get, check_nsecs))
+			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4}".format(checks, obsid, dl_dir, time_to_get, check_nsecs))
 			commands.append("if [ $? -eq 1 ];then")
 			commands.append("sbatch {0}".format(batch_dir+voltdownload_batch+".batch"))
 			commands.append("fi")
-			submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
+			submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
 			
-			# with open(check_batch,'w') as batch_file:
-			# 	batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_volt_{1}.out.0\n".format(working_dir,time_to_get)
-			# 	batch_file.write(batch_line)
-			# 	batch_file.write('newcount=0\n')
-			# 	batch_file.write('let oldcount=$newcount-1\n')
-			# 	# increase the counter in voltdownload_batch by one each time
-			# 	batch_line = "sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}\n".format(voltdownload_batch)
-			# 	batch_file.write(batch_line)
-			# 	batch_file.write('oldcount=$newcount; let newcount=$newcount+1\n')
-			# 	# change the name of the batch-output file according to the counter each time
-			# 	batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(voltdownload_batch)
-			# 	batch_file.write(batch_line)
-			# 	# to make sure checks.py does not look for files beyond the stop_time:
-			# 	check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
-			# 	batch_line = "{0} -m download -o {1} -w {2} -b {3} -i {4}\n".format(checks, obsid, raw_dir, time_to_get, check_nsecs)
-			# 	batch_file.write(batch_line)
-			# 	#in case something went wrong resubmit the voltdownload script
-			# 	batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(volt_submit_line)
-			# 	batch_file.write(batch_line)
+			# Write out the tar batch file if in mode 15
+			if format == 16:
+				body = []
+				for t in range(time_to_get, time_to_get+increment):
+					body.append("aprun tar -xf {0}/1149620392_{1}_combined.tar".format(dl_dir,t))
+				submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" )
+				
+			
 			
 			body = []
 			body.append("oldcount=0")
@@ -352,27 +247,8 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 			body.append("sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch))
 			body.append("sbatch {0}".format(batch_dir+check_batch+".batch"))
 			body.append(get_data)
-			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
+			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
 			
-			# with open(voltdownload_batch,'w') as batch_file:
-				# batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/volt_{1}.out.1\n".format(working_dir,time_to_get)
-				# batch_file.write(batch_line)
-				# batch_file.write('oldcount=0\n')
-				# batch_file.write('let newcount=$oldcount+1\n')
-				# batch_file.write('if [ ${newcount} -gt 10 ]; then\n')
-				# batch_file.write('echo \"Tried ten times, this is silly. Aborting here.\";exit\n')
-				# batch_file.write('fi\n')
-				# increase the counter in check_batch by one each time
-				# batch_line = "sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch)
-				# batch_file.write(batch_line)
-				# change the name of the batch-output file according to the counter each time
-				# batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch)
-				# batch_file.write(batch_line)
-				# submit check script before we start the download in case it is timed out
-				# batch_file.write(check_submit_line)
-				# batch_line = "%s\n" % (get_data)
-				# batch_file.write(batch_line)
-				
 			# submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
 			continue
 		
@@ -484,7 +360,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 					#     batch_file.write(corr_line)
 					#     to_corr = to_corr+1
 	
-				secs_to_run = str(datetime.timedelta(seconds=10*num_frames*to_corr))
+				secs_to_run = str(datetime.timedelta(seconds=12*num_frames*to_corr))
 				submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq"}, batch_dir=batch_dir)
 				# batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
 				# submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
@@ -639,7 +515,7 @@ if __name__ == '__main__':
     parser=OptionParser(description="process_vcs.py is a script for processing the MWA VCS data on Galaxy in steps. It can download data from the archive, call on recombine to form course channels, run the offline correlator, make tile re-ordered and bit promoted PFB files or for a coherent beam for a given pointing.")
     group_download = OptionGroup(parser, 'Download Options')
     group_download.add_option("--head", action="store_true", default=False, help="Submit download jobs to the headnode instead of the copyqueue [default=%default]")
-    group_download.add_option("--format", type="choice", choices=['11','12'], default='11', help="Voltage data type (Raw = 11, Recombined Raw = 12) [default=%default]")
+    group_download.add_option("--format", type="choice", choices=['11','15','16'], default='11', help="Voltage data type (Raw = 11, ICS Only = 15, Recombined and ICS = 16) [default=%default]")
     group_download.add_option("-d", "--parallel_dl", type="int", default=3, help="Number of parallel downloads to envoke [default=%default]")
 
     group_correlate = OptionGroup(parser, 'Correlator Options')
