@@ -82,7 +82,7 @@ def getmeta(service='obs', params=None):
     """
     Function to call a JSON web service and return a dictionary:
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
-    a Python dictionary, return a Python dictionary containing the result.
+    a Python dictionary, return a Python dictionary xcontaining the result.
     Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
     """
     import urllib
@@ -243,9 +243,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 			body.append("if [ ${newcount} -gt 10 ]; then")
 			body.append("echo \"Tried ten times, this is silly. Aborting here.\";exit")
 			body.append("fi")
-			body.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch))
-			body.append("sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch))
-			body.append("sbatch {0}".format(batch_dir+check_batch+".batch"))
+			body.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch+".batch"))
+			body.append("sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch+".batch"))
+			body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch"))
 			body.append(get_data)
 			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
 			
@@ -268,7 +268,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 	recombine_binary = "/group/mwaops/PULSAR/bin/recombine" # Hard coding this temporarily to ensure correct version of code is envoked
 	for time_to_get in range(start_time,stop_time,increment):
 	
-		check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+		process_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+		if (jobs_per_node > process_nsecs):
+			jobs_per_node = process_nsecs
 		nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
 		recombine_batch = "recombine_{0}".format(time_to_get)
 		check_batch = "check_recombine_{0}".format(time_to_get)
@@ -278,7 +280,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 		commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+recombine_batch+".batch"))
 		commands.append("oldcount=$newcount; let newcount=$newcount+1")
 		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+recombine_batch+".batch"))
-		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, working_dir, time_to_get, check_nsecs))
+		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, working_dir, time_to_get, process_nsecs))
 		commands.append("if [ $? -eq 1 ];then")
 		commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))  
 		commands.append("fi")
@@ -295,14 +297,14 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 		commands.append("fi")
 		commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
 		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
-		commands.append("sbatch {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
-		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(increment,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
+		commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
+		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
 		
 		submit_slurm(recombine_batch,commands,batch_dir="{0}/batch/".format(working_dir), slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
 def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
-	print "Correlating files"
+	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
 	import astropy
 	from astropy.time import Time
 	import calendar
@@ -312,9 +314,11 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 	batch_dir = working_dir+"/batch/"
 	
 	chan_list = get_frequencies(metafits_file)
-	gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
+	#gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
+	gpu_int = 10 # Code was compiled with a hard-coded 100 sample minimum integration. For 'normal' data this means 10 milliseconds.
 	integrations=int(ft_res[1]/gpu_int)
-	num_frames=int(1.0/ft_res[1])
+	#num_frames=int(1.0/ft_res[1])
+	num_frames=int(1000/ft_res[1])
 	
 	print "Input chan list is" , chan_list
 	
@@ -519,7 +523,7 @@ if __name__ == '__main__':
     group_download.add_option("-d", "--parallel_dl", type="int", default=3, help="Number of parallel downloads to envoke [default=%default]")
 
     group_correlate = OptionGroup(parser, 'Correlator Options')
-    group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1), help="Frequency (kHz) and Time (s) resolution for running the correlator. Please make divisible by 10 kHz and 0.01 s respectively. [default=%default]")
+    group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
     group_calibrate = OptionGroup(parser, 'Calibration Options')
     group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.", default=None)
