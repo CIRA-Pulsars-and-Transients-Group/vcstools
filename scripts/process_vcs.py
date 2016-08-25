@@ -77,104 +77,6 @@ def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", dep
 
 	
 
-class Slurm(object):
-    def __init__(self, name, slurm_kwargs=None, tmpl=None, date_in_name=True, scripts_dir="scripts/"):
-        if slurm_kwargs is None:
-            slurm_kwargs = {}
-        if tmpl is None:
-            tmpl = TMPL
-
-        header = []
-        for k, v in slurm_kwargs.items():
-            if len(k) > 1:
-                k = "--" + k + "="
-            else:
-                k = "-" + k + " "
-            header.append("#SBATCH %s%s" % (k, v))
-        self.header = "\n".join(header)
-        self.name = "".join(x for x in name.replace(" ", "-") if x.isalnum() or x == "-")
-        self.tmpl = tmpl
-        self.slurm_kwargs = slurm_kwargs
-        if scripts_dir is not None:
-            self.scripts_dir = os.path.abspath(scripts_dir)
-        else:
-            self.scripts_dir = None
-        self.date_in_name = bool(date_in_name)
-
-
-    def __str__(self):
-        return self.tmpl.format(name=self.name, header=self.header,
-                                script="{script}")
-
-    def _tmpfile(self):
-        if self.scripts_dir is None:
-            return tmp()
-        else:
-            if not os.path.exists(self.scripts_dir):
-                os.makedirs(self.scripts_dir)
-            return "%s/%s.sh" % (self.scripts_dir, self.name)
-
-    def run(self, command, name_addition=None, cmd_kwargs=None, _cmd="sbatch", tries=1):
-        """
-        command: a bash command that you want to run
-        name_addition: if not specified, the sha1 of the command to run
-                       appended to job name. if it is "date", the yyyy-mm-dd
-                       date will be added to the job name.
-        cmd_kwargs: dict of extra arguments to fill in command
-                   (so command itself can be a template).
-        _cmd: submit command (change to "bash" for testing).
-        tries: try to run a job either this many times or until the first
-               success.
-        """
-        if name_addition is None:
-            name_addition = hashlib.sha1(command.encode("utf-8")).hexdigest()
-
-        if self.date_in_name:
-            name_addition += "-" + str(datetime.date.today())
-        name_addition = name_addition.strip(" -")
-
-        if cmd_kwargs is None:
-            cmd_kwargs = {}
-
-        n = self.name
-        self.name = self.name.strip(" -")
-        self.name += ("-" + name_addition.strip(" -"))
-
-        tmpl = str(self).format(script=command)
-
-        if "logs/" in tmpl and not os.path.exists("logs/"):
-            os.makedirs("logs")
-
-        with open(self._tmpfile(), "w") as sh:
-            cmd_kwargs["script"] = command
-            sh.write(tmpl.format(**cmd_kwargs))
-        
-        submit_cmd = subprocess.Popen(_cmd,shell=True,stdout=subprocess.PIPE)
-        job_id=""
-        for line in submit_cmd.stdout:
-            
-            if "Submitted" in line:
-                (word1,word2,word3,job_id) = line.split()
-                if (is_number(job_id)):
-                    submitted_jobs.append(job_id)
-
-
-#        job_id = None
-#       for itry in range(1, tries + 1):
-#           if itry > 1:
-#               mid = "--dependency=afternotok:%d" % job_id
-#               res = subprocess.check_call([_cmd, mid, sh.name])
-#           else:
-#               res = subprocess.check_call([_cmd, sh.name])
-#            print(res, file = sys.stderr)
-#            sys.stderr.write(res)
-#            self.name = n
-#            if not res.startswith(b"Submitted batch"):
-#                return None
-#            j_id = int(res.split()[-1])
-#            if itry == 1:
-#                job_id = j_id
-        return job_id
 
 def getmeta(service='obs', params=None):
     """
@@ -348,9 +250,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 			body.append("if [ ${newcount} -gt 10 ]; then")
 			body.append("echo \"Tried ten times, this is silly. Aborting here.\";exit")
 			body.append("fi")
-			body.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch))
-			body.append("sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch))
-			body.append("sbatch {0}".format(batch_dir+check_batch+".batch"))
+			body.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch+".batch"))
+			body.append("sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch+".batch"))
+			body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch"))
 			body.append(get_data)
 			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
 			
@@ -393,6 +295,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 	for time_to_get in range(start_time,stop_time,increment):
 	
 		process_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+		if (jobs_per_node > process_nsecs):
+			jobs_per_node = process_nsecs
 		nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
 		recombine_batch = "recombine_{0}".format(time_to_get)
 		check_batch = "check_recombine_{0}".format(time_to_get)
@@ -419,14 +323,14 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 		commands.append("fi")
 		commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
 		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
-		commands.append("sbatch {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
+		commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
 		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
 		
 		submit_slurm(recombine_batch,commands,batch_dir="{0}/batch/".format(working_dir), slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
 def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
-	print "Correlating files"
+	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
 	import astropy
 	from astropy.time import Time
 	import calendar
@@ -436,9 +340,11 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 	batch_dir = working_dir+"/batch/"
 	
 	chan_list = get_frequencies(metafits_file)
-	gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
+	#gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
+	gpu_int = 10 # Code was compiled with a hard-coded 100 sample minimum integration. For 'normal' data this means 10 milliseconds.
 	integrations=int(ft_res[1]/gpu_int)
-	num_frames=int(1.0/ft_res[1])
+	#num_frames=int(1.0/ft_res[1])
+	num_frames=int(1000/ft_res[1])
 	
 	print "Input chan list is" , chan_list
 	
@@ -643,7 +549,7 @@ if __name__ == '__main__':
     group_download.add_option("-d", "--parallel_dl", type="int", default=3, help="Number of parallel downloads to envoke [default=%default]")
 
     group_correlate = OptionGroup(parser, 'Correlator Options')
-    group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1), help="Frequency (kHz) and Time (s) resolution for running the correlator. Please make divisible by 10 kHz and 0.01 s respectively. [default=%default]")
+    group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
     group_calibrate = OptionGroup(parser, 'Calibration Options')
     group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.", default=None)
