@@ -194,9 +194,11 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 	# voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
 	if format == 11:
 		dl_dir = "{0}/raw".format(working_dir)
+		dir_description = "Raw"
 	else:
 		dl_dir = "{0}/combined".format(working_dir)
-	mdir(dl_dir, "Raw")
+		dir_description = "Combined"
+	mdir(dl_dir, dir_description)
 	batch_dir = working_dir+"/batch/"
 	
 	for time_to_get in range(start_time,stop_time,increment):
@@ -210,8 +212,8 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 			check_batch = "check_volt_{0}".format(time_to_get)
 			volt_secs_to_run = datetime.timedelta(seconds=300*increment)
 			check_secs_to_run = "15:00"
-			volt_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
-			check_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
+			volt_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops {2}\n".format(volt_secs_to_run,dl_dir,voltdownload_batch)
+			check_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, dl_dir, check_batch)
 			checks = distutils.spawn.find_executable("checks.py")
 			
 			# Write out the checks batch file but don't submit it
@@ -233,7 +235,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 				body = []
 				for t in range(time_to_get, time_to_get+increment):
 					body.append("aprun tar -xf {0}/1149620392_{1}_combined.tar".format(dl_dir,t))
-				submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" )
+				submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" })
 				
 			
 			
