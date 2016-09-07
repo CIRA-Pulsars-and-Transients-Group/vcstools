@@ -1,5 +1,5 @@
 #! /usr/bin/env python 
-
+ 
 """
 Author: Nicholas Swainston
 Creation Date: /03/2016
@@ -46,11 +46,12 @@ from ConfigParser import SafeConfigParser
 
 def sex2deg( ra, dec):
     """
-    sex2deg( ra, dec)
-    ra - the right ascension in HH:MM:SS
-    dec - the declination in DD:MM:SS
-    
     Convert sexagesimal coordinates to degrees.
+    
+    sex2deg( ra, dec)
+    Args:
+        ra: the right ascension in HH:MM:SS
+        dec: the declination in DD:MM:SS
     """ 
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.hourangle,u.deg))
     
@@ -60,11 +61,12 @@ def sex2deg( ra, dec):
 
 def deg2sex( ra, dec):
     """
-    deg2sex( ra, dec)
-    ra - the right ascension in degrees
-    dec - the declination in degrees
-    
     Convert decimal coordingates into sexagesimal strings, i.e. hh:mm:ss.ss and dd:mm:ss.ss
+    
+    deg2sex( ra, dec)
+    Args:
+        ra: the right ascension in degrees
+        dec: the declination in degrees
     """
     
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.deg,u.deg))
@@ -77,9 +79,9 @@ def deg2sex( ra, dec):
     
 def grab_RRATalog():
     """
-    grab_RRATalog()
-    
     Creates a catalogue csv file using data from http://astro.phys.wvu.edu/rratalog/rratalog.txt
+    
+    grab_RRATalog()
     """
     rratalog_website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
 
@@ -153,14 +155,18 @@ def grab_RRATalog():
     
 def grab_pulsaralog(jlist=None):
     """
-    grab_pulsaralog(jlist=None)
-    jlist - A space seperated string of pulsar names eg: J0534+2200 J0538+2817. (default: uses all pulsars)
+    Uses PSRCAT and returns every pulsar in the catalouge in a csv file with the requested 
+    paramaters. Removes pulsars without any RA or DEC recorded
     
-    Uses PSRCAT and returns every pulsar in the catalouge in a csv file with the requested paramaters. Removes pulsars without any RA or DEC recorded
+    grab_pulsaralog(jlist=None)
+    Args:
+        jlist: A space seperated string of pulsar names eg: J0534+2200 J0538+2817. 
+               (default: uses all pulsars)
     """
     params = ['Jname', 'Raj', 'Decj', 'P0', 'P1', 'DM']
     #If more paramaters are needed add them above
-    #The proper motion is not accounted for as it is assumed that the beam is not accurate enought to be necessary
+    #The proper motion is not accounted for as it is assumed that the beam is not accurate 
+    #enought to be necessary
     pulsars = [[]]
     if jlist != None:
         for p in params:
@@ -257,10 +263,11 @@ def grab_pulsaralog(jlist=None):
 
 def calcFWHM(freq):
     """
-    calcFWHM(freq)
-    freq - observation frequency in MHz
-    
     Calculate the FWHM for the beam assuming ideal response/gaussian-like profile. Will eventually be depricated.
+    
+    calcFWHM(freq)
+    Args:
+        freq: observation frequency in MHz
     """
     c = 299792458.0                 # speed of light (m/s)
     Dtile = 4.0                     # tile size (m) - incoherent beam
@@ -272,10 +279,10 @@ def calcFWHM(freq):
 
 def getmeta(service='obs', params=None):
     """
-    getmeta(service='obs', params=None)
-    
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
     a Python dictionary, return the RA and Dec in degrees from the Python dictionary.
+    
+    getmeta(service='obs', params=None)
     """
     BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
     if params:
@@ -303,11 +310,12 @@ def getmeta(service='obs', params=None):
     
 def singles_source_search(ra, dec):
     """
-    singles_source_search(ra, dec)
-    ra = ra of source in degrees
-    dec = dec of source in degrees
+    Used to creates a 30 degree box around the source to make searching for obs_ids more efficient
     
-    Used to creat a a 30 degree box around the source to make searching for obs_ids more efficient
+    singles_source_search(ra, dec)
+    Args:
+        ra: ra of source in degrees
+        dec: dec of source in degrees
     """
     ra = float(ra)
     dec = float(dec)
@@ -362,218 +370,17 @@ def singles_source_search(ra, dec):
             for row in temp:
                 OBSID.append(row[0])
     return OBSID
-
-
-def calcbox( ras, dec, time):
-    """
-    calcbox( ras, dec, time)
-    ras - right acension at the start of the observation in degrees
-    dec - declination at the start of the observation in degrees
-    time - duration of the observation in seconds
-    
-    Calculate the end ra after the duration of the observation and makes a box from 
-    the intial to final ra with a height of 20 degrees, 10 up and 10 down.
-    """
-    adjustRA = False
-    RAloop = False 
-    
-    # check that the initial RA is sensible (i.e. 360=0, not negative and not > 360)    
-    if ras.is_integer() and int(ras) == 360:
-        ras = 0.0
-    elif int(1e15 * (ras - 360.0)) >= 1:
-        ras = ras - 360.0
-    elif int(1e15 * ras) < 0:
-        ras = ras + 360.0  
-
-
-    # define the central DEC and the top and bottom corners of the LHS of the box
-    # as data is drift scan, DEC does not change from start to finish
-    dec_top = dec + 10.
-    dec_bot = dec - 10.
-    
-    
-    # if the botDEC is suddenly more negative than -90 (i.e. abs(botDEC)>90) then we've gone past the pole.
-    # the DEC then needs to become -180+abs(botDEC) and the RA is changed by 180 degrees    
-    if dec_bot < -90.0:
-        dec_bot = -180.0 + math.fabs(dec_bot)
-        adjustRA = True
-    
-    #calc end RA
-    raf = ras + (time / 60.0**2) * 15.0  
-    
-    
-    # check to see if the RA needs to be adjusted due to passing over the pole   
-    # if RA>180 then new RA = old RA -180, otherwise it's oldRA +180 
-    if adjustRA is True:
-        if int(1e15 * (raf - 180.0)) >= 1:
-            raf = raf - 180.0
-        else:
-            raf = raf + 180.0
-
-
-    # check that final RA is sensible (i.e. 360=0, not negative and not > 360)
-    if raf.is_integer() and int(raf) == 360:
-        raf = 0.0
-    elif int(1e15 * (raf - 360.0)) >= 1:
-        raf = raf - 360.0
-    elif int(1e15 * (raf)) < 0:
-        eraf = raf + 360.0
-      
-        
-    # list of start and end coordinates describing "observed rectangle"
-    box = [ras, raf, dec_top, dec_bot] 
-    return box
-    
-def beamcheck(beam_input, ras, decs):
-    """
-    beamcheck(beam_input, ras, decs)
-    beam_input - a list of [obs ID, RA at the centre of the beam, DEC at the centre of the beam,
-                 duration of the observation]
-    ras - right ascension of the source in degrees
-    dec - declination of the source in degrees
-    
-    Creates a box and a cicle at the start and end of the obs then checks if the source is inside it
-    """
-    found = False
-    
-    #extract some inital data
-    source = SkyCoord(ra=ras*u.degree, dec=decs*u.degree, frame='icrs')
-    obs, ra_beam, dec_beam, time_beam, delays, centrefreq, channels = beam_input #in degrees from metadata
-    ra_intial, ra_final, dec_top, dec_bot = calcbox( ra_beam, dec_beam, time_beam)
-    
-    #create astropy coordinates for the start and end of the file
-    centrebeam_start = SkyCoord(ra=ra_intial*u.degree, dec=dec_beam*u.degree, frame='icrs')
-    centrebeam_end = SkyCoord(ra=ra_final*u.degree, dec=dec_beam*u.degree, frame='icrs')
-    
-    #checks if the source is within 10 degrees of the start and end of the file
-    angdif_start = centrebeam_start.separation(source).degree
-    angdiff_start = float(angdif_start)
-    angdif_end = centrebeam_end.separation(source).degree
-    angdiff_end = float(angdif_end)
-    
-    #loop is inaccurate for beams near the south pole
-    #check the circle beam at the start and end of the observation and the rectangle connecting them
-    if ra_intial > ra_final:
-        if (angdiff_start < 10.) or (angdiff_end < 10.) or \
-           ( ( ((ras > ra_intial) and (ras < 360.)) or ((ras > 0.) and (ras < ra_final)) ) and \
-           ((dec_top > decs) and (dec_bot < decs)) ):
-            found = True
-        #TODO: just fyi, if you are comparing a value to two limits, i.e. want to know if x>1 and x<10
-        # the equivalent in  python is actually just: if 1<x<10: *do stuff*, rather than having to use a million "and"
-    else:
-        if (angdiff_start < 10.) or (angdiff_end < 10.) or \
-           ( ((ras > ra_intial) and (ras < ra_final)) and ((dec_top > decs) and (dec_bot < decs)) ):
-            found = True
-    return found
   
-    
-def circlebeam(beam, coord1, coord2, sourcelist, names):
-    """
-    circlebeam(beam, coord1, coord2, sourcelist, names)
-    beam - a list of [obs ID, RA at the centre of the beam, DEC at the centre of the beam,
-           duration of the observation]
-    coord1 - name of the first coordinate catalogue column (normaly Raj)
-    coord2 - name of the second coordiante catalogue column (normaly Decj)
-    sourcelist - a table of sources readable by astropy.table.Table
-    names - the name of the catalogue column of the source names (normaly Jname)
-    
-    Lists all of the pulsars in the beam using a simple circle of radius of 10 
-    degrees and the entire PSRCAT catalouge. 
-    """
-    sourceinbeam = {}
-    obs = beam[0]
-    print "Finding pulsars within 10 degrees of the beam centre of " + str(obs)
-    #will loop for time later
-    temp = []
-    for s in sourcelist:
-        #chooses the colomn name of the sources 
-        if names=='-1':
-            x,y = sex2deg(s[coord1],s[coord2])
-            name = str(round(x,3))+'_'+str(round(y,3))
-        else:
-            name=s[str(names)]
-    
-        ras, decs = sex2deg(s[coord1],s[coord2])  # source coordinates
-        ras = float(ras)
-        decs = float(decs)
-        found = beamcheck(beam, ras, decs)
-        if found:
-            temp.append(name)
-            print str(name)
-    #write a simple file with the list of pulsar names that can be expanded 
-    #later to include their paramaters
-    if temp: #check the file isn't going to be empty
-        outputfile = str(args.output)
-        os.system( 'rm -f ' + outputfile + str(obs) + '_circle_beam.txt')
-        with open(outputfile + str(obs) + '_circle_beam.txt',"wb") as out_list:
-            out_list.write('All of the sources found within a simple 10 degree radius '\
-            + 'circle from the centre of the beam for observation ID: ' + str(obs) + '\n' +\
-            'RA(deg): ' + str(beam[1]) + '   DEC(deg): ' + str(beam[2]) + '   Duration(s): ' + str(beam[3]) + '\n')
-            for row in temp:
-                 out_list.write(row + "\n")
-        print "A list of sources for the observation ID: " + str(obs) + \
-                  " has been output to the text file: " + str(obs) + '_circle_beam.txt'
-    return
-
-
-def circlebeam_obsforsource(beam, coord1, coord2, sourcelist, names):
-    """
-    circlebeam(beam, coord1, coord2, sourcelist, names)
-    beam - a list of [obs ID, RA at the centre of the beam, DEC at the centre of the beam,
-           duration of the observation]
-    coord1 - name of the first coordinate catalogue column (normaly Raj)
-    coord2 - name of the second coordiante catalogue column (normaly Decj)
-    sourcelist - a table of sources readable by astropy.table.Table
-    names - the name of the catalogue column of the source names (normaly Jname)
-    
-    Lists all of the observation IDs that have a the list of sources within a simple 
-    circle of radius of 10 degrees. 
-    """
-    sourceinbeam = {}
-    for s in sourcelist:
-        #chooses the colomn name of the sources 
-        if names=='-1':
-            x,y = sex2deg(s[coord1],s[coord2])
-            name = str(round(x,3))+'_'+str(round(y,3))
-        else:
-            name=s[str(names)]
-    
-        print "Finding observation IDs that contain " + str(name) + "  within 10 degrees of the beam centre"
-        ras, decs = sex2deg(s[coord1],s[coord2])  # source coordinates
-        ras = float(ras)
-        decs = float(decs)
-        temp = []
-        for b in beam:
-            obs = b[0]
-            found = beamcheck(b, ras, decs)
-            if found:
-                temp.append(obs)
-                print str(obs)
-            
-        #write a simple file with the list of obs for each source that 
-        #can be expanded later to include their paramaters
-        outputfile = str(args.output)
-        os.system( 'rm -f ' + outputfile + str(name) + '_circle_beam.txt')
-        with open(outputfile + str(name) + '_circle_beam.txt',"wb") as out_list:
-            out_list.write('All of the observation IDs that found ' + str(name) +\
-            ' within a simple 10 degree radius circle from the centre of the beam.\n' +\
-            'RA(deg): ' + str(ras) + '   DEC(deg): ' + str(decs) + '\n')
-            for row in temp:
-                 out_list.write(str(row) + "\n")
-        print "A list of observation ID for the source: " + str(name) + \
-              " has been output to the text file: " + str(name) + '_circle_beam.txt'                   
-    return
-   
    
 def beam_enter_exit(min_power, powers, imax, dt, duration):
     """
-    beam_enter_exit(min_power, powers, imax, dt):
-    min_power - power cut off from get_bem_power(_obsforsource)
-    powers - list of powers fo the duration every dt
-    imax - an int that will give the max power of the file (max = powers[imax])
-    dt - the time interval of how often powers are calculated
-    
     Calculates when the source enters and exits the beam 
+    
+    beam_enter_exit(min_power, powers, imax, dt):
+        min_power: power cut off from get_bem_power(_obsforsource)
+        powers: list of powers fo the duration every dt
+        imax: an int that will give the max power of the file (max = powers[imax])
+        dt: the time interval of how often powers are calculated
     """
     #calc num of files inn obs
     file_num = duration / 200
@@ -640,18 +447,31 @@ def get_beam_power(obsid_data,
                    dt=296,
                    centeronly=True,
                    verbose=False,
-                   min_power=0.3):
+                   min_power=0.3,
+                   option = 'a'):
     """
-    obsid_data = [obsid,ra, dec, time, delays,centrefreq, channels]
-    sources=[names,coord1,coord2] #astropy table coloumn names
-
     Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
     the min_power then it outputs it to the text file.
 
+    get_beam_power(obsid_data,
+                   sources, coord1, coord2, names,
+                   dt=296,
+                   centeronly=True,
+                   verbose=False,
+                   min_power=0.3)
+    Args:
+        obsid_data: [obsid,ra, dec, time, delays,centrefreq, channels] obsid data
+        sources: astropy table catalogue of sources
+        coord1: the coordinate type for sources (usualy RA)
+        coord2: the coordinate type for sources (usualy Dec)
+        names: the name given to the sources (usualy JName)
+        dt: time step in seconds for power calculations (default 296)
+        centeronly: only calculates for the centre frequency (default True)
+        verbose: prints extra data to (default False)
+        min_power: minimum power that the code will print a text file for (default (0.3)
     """
     print "Calculating beam power"
     obsid,ra, dec, time, delays,centrefreq, channels = obsid_data
-    
     starttimes=np.arange(0,time,dt)
     stoptimes=starttimes+dt
     stoptimes[stoptimes>time]=time
@@ -698,25 +518,53 @@ def get_beam_power(obsid_data,
         HAs = -RAs + LST_hours * 15
         Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
         # go from altitude to zenith angle
-        theta=np.radians(90-Alts)
-        phi=np.radians(Azs)
         
-        for ifreq in xrange(len(frequencies)):
-            rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
-                                                 freq=frequencies[ifreq], delays=delays,
-                                                 zenithnorm=True,
-                                                 power=True)
-            PowersX[:,itime,ifreq]=rX
-            PowersY[:,itime,ifreq]=rY
-
+        #Decide on beam model
+        if option == 'a':
+            beam_string = "analytic"
+            theta=np.radians(90-Alts)
+            phi=np.radians(Azs)
+            
+            for ifreq in xrange(len(frequencies)):
+                rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
+                                                     freq=frequencies[ifreq], delays=delays,
+                                                     zenithnorm=True,
+                                                     power=True)
+                PowersX[:,itime,ifreq]=rX
+                PowersY[:,itime,ifreq]=rY
+        elif option == 'd':
+            beam_string = "advanced"
+            theta=np.array([np.radians(90-Alts)])
+            phi=np.array([np.radians(Azs)])
+            
+            for ifreq in xrange(len(frequencies)):
+                rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
+                                                     freq=frequencies[ifreq], delays=delays,
+                                                     zenithnorm=True,
+                                                     power=True)
+                PowersX[:,itime,ifreq]=rX
+                PowersY[:,itime,ifreq]=rY        
+        elif option == 'e':
+            beam_string = "full_EE"
+            theta=np.array([np.radians(90-Alts)])
+            phi=np.array([np.radians(Azs)])
+            
+            for ifreq in xrange(len(frequencies)):
+                rX,rY=primary_beam.MWA_Tile_full_EE(theta, phi,
+                                                     freq=frequencies[ifreq], delays=delays,
+                                                     zenithnorm=True,
+                                                     power=True)
+                PowersX[:,itime,ifreq]=rX
+                PowersY[:,itime,ifreq]=rY
+            print '{0:.2f}'.format(float(itime)/float(Ntimes)) + "% complete"    
     #Power [#sources, #times, #frequencies]
     Powers=0.5*(PowersX+PowersY)
     
     outputfile = str(args.output)
-    os.system( 'rm -f ' + outputfile + str(obsid) + '_analytic_beam.txt')
-    with open(outputfile + str(obsid) + '_analytic_beam.txt',"wb") as out_list:
-        out_list.write('All of the sources that the analytic beam model calculated a power of ' +\
-                        str(min_power) + ' or greater for observation ID: ' + str(obsid) + '\n' +\
+    os.system( 'rm -f ' + outputfile + str(obsid) + '_' + beam_string + '_beam.txt')
+    with open(outputfile + str(obsid) + '_' + beam_string + '_beam.txt',"wb") as out_list:
+        out_list.write('All of the sources that the ' + beam_string + ' beam model calculated a power of '\
+                       + str(min_power) + ' or greater for observation ID: ' + str(obsid) + '\n' +\
                        'Observation data :RA(deg): ' + str(ra) + ' DEC(deg): ' + str(dec)+' Duration(s): ' \
                        + str(time) + '\n' + \
                        'Source      Time of max power in observation    File number source entered the '\
@@ -732,7 +580,7 @@ def get_beam_power(obsid_data,
                         out_list.write(str(sources[names][counter - 1]) + ' ' + \
                                 str(int(max_time) - int(obsid)) + ' ' + str(enter) + ' ' + str(exit) + "\n") 
         print "A list of sources for the observation ID: " + str(obsid) + \
-              " has been output to the text file: " + str(obsid) + '_analytic_beam.txt'             
+              " has been output to the text file: " + str(obsid) + '_' + beam_string + '_beam.txt'             
     return 
 
 
@@ -741,13 +589,28 @@ def get_beam_power_obsforsource(obsid_data,
                    dt=296,
                    centeronly=True,
                    verbose=False,
-                   min_power=0.3):
+                   min_power=0.3,
+                   option = 'a'):
     """
-    obsid_data = [obsid,ra, dec, time, delays,centrefreq, channels]
-    sources=[names,coord1,coord2] #astropy table coloumn names
-
     Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
     the min_power then it outputs it to the text file.
+    
+    get_beam_power(obsid_data,
+                   sources, coord1, coord2, names,
+                   dt=296,
+                   centeronly=True,
+                   verbose=False,
+                   min_power=0.3)
+    Args:
+        obsid_data: [obsid,ra, dec, time, delays,centrefreq, channels] obsid data
+        sources: astropy table catalogue of sources
+        coord1: the coordinate type for sources (usualy RA)
+        coord2: the coordinate type for sources (usualy Dec)
+        names: the name given to the sources (usualy JName)
+        dt: time step in seconds for power calculations (default 296)
+        centeronly: only calculates for the centre frequency (default True)
+        verbose: prints extra data to (default False)
+        min_power: minimum power that the code will print a text file for (default (0.3)
     """
     print "Calculating beam power"
     Powers= []
@@ -800,17 +663,46 @@ def get_beam_power_obsforsource(obsid_data,
             HAs = -RAs + LST_hours * 15
             Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
             # go from altitude to zenith angle
-            theta=np.radians(90-Alts)
-            phi=np.radians(Azs)
             
-            for ifreq in xrange(len(frequencies)):
-                rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
-                                                     freq=frequencies[ifreq], delays=delays,
-                                                     zenithnorm=True,
-                                                     power=True)
-                PowersX[:,itime,ifreq]=rX
-                PowersY[:,itime,ifreq]=rY
-        #temp_power [#sources, #times, #frequencies]
+            #Decide on beam model
+            if option == 'a':
+                beam_string = "_analytic"
+                theta=np.radians(90-Alts)
+                phi=np.radians(Azs)
+                
+                for ifreq in xrange(len(frequencies)):
+                    rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
+                                                         freq=frequencies[ifreq], delays=delays,
+                                                         zenithnorm=True,
+                                                         power=True)
+                    PowersX[:,itime,ifreq]=rX
+                    PowersY[:,itime,ifreq]=rY
+            elif option == 'd':
+                beam_string = "_advanced"
+                theta=np.array([np.radians(90-Alts)])
+                phi=np.array([np.radians(Azs)])
+                
+                for ifreq in xrange(len(frequencies)):
+                    rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
+                                                         freq=frequencies[ifreq], delays=delays,
+                                                         zenithnorm=True,
+                                                         power=True)
+                    PowersX[:,itime,ifreq]=rX
+                    PowersY[:,itime,ifreq]=rY        
+            elif option == 'e':
+                beam_string = "_full_EE"
+                theta=np.array([np.radians(90-Alts)])
+                phi=np.array([np.radians(Azs)])
+                
+                for ifreq in xrange(len(frequencies)):
+                    rX,rY=primary_beam.MWA_Tile_full_EE(theta, phi,
+                                                         freq=frequencies[ifreq], delays=delays,
+                                                         zenithnorm=True,
+                                                         power=True)
+                    PowersX[:,itime,ifreq]=rX
+                    PowersY[:,itime,ifreq]=rY
+                print '{0:.2f}'.format(float(itime)/float(Ntimes)) + "% complete" 
+            #temp_power [#sources, #times, #frequencies]
         temp_power=0.5*(PowersX+PowersY)
         counter = 0
         for sourc in temp_power:
@@ -820,14 +712,14 @@ def get_beam_power_obsforsource(obsid_data,
                 
                 for imax in range(len(sourc)):
                     if sourc[imax] == max(sourc):
-                        max_time = midtimes[imax] - obsid
+                        max_time = float(midtimes[imax]) - float(obsid)
                         Powers.append([sources[names][counter-1], obsid, time, max_time, sourc, imax])
     
     for sourc in sources:    
         outputfile = str(args.output)
-        os.system( 'rm -f ' + outputfile + str(sourc[names]) + '_analytic_beam.txt')
-        with open(outputfile + str(sourc[names]) + '_analytic_beam.txt',"wb") as out_list:
-            out_list.write('All of the observation IDs that the analytic beam model calculated a power of '\
+        os.system( 'rm -f ' + outputfile + str(sourc[names]) + beam_string + '_beam.txt')
+        with open(outputfile + str(sourc[names]) + beam_string + '_beam.txt',"wb") as out_list:
+            out_list.write('All of the observation IDs that the ' + beam_string + ' beam model calculated a power of '\
                            + str(min_power) + ' or greater for the source: ' + str(sourc[names]) + '\n' +\
                            'Obs ID     Duration  Time during observation that the power was at a'+\
                            ' maximum    File number source entered    File number source exited\n')
@@ -838,16 +730,16 @@ def get_beam_power_obsforsource(obsid_data,
                                    ' ' + str(exit) + "\n")
            
     print "A list of observation IDs that containt: " + str(sourc[names]) + \
-              " has been output to the text file: " + str(sourc[names]) + '_analytic_beam.txt'             
+              " has been output to the text file: " + str(sourc[names]) + beam_string + '_beam.txt'             
     return 
 
 
 parser = argparse.ArgumentParser(description="""
 This code is used to list the sources within the beam of observations IDs or using --obs_for_source list all the observations for each source. The sources can be input serval ways: using a list of pulsar names (--pulsar), using a complete catalogue file of pulsars (--dl_PSRCAT) or RRATs (--RRAT and --dl_RRAT), using a compatable catalogue (--in_cat with the help of --names and --coordstype) or using a RA and DEC coordinate (--coords). The observation IDs can be input (--obsid) or gathered from a directory (--FITS_dir). The default is to search all observation IDs from http://mwa-metadata01.pawsey.org.au/metadata/ that have voltages and list every known pulsar from PSRCAT in each observation ID.
 """)
-parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source.')
+parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source. For increased efficiency it will only search OBSIDs within the primary beam.')
 parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
-parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation that will be used. Options: "c" a simple circular beam approximation of radius 10 degrees and "a" an analytic beam model. Default: "a"')
+parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation that will be used. Options: "a" the analytic beam model (2012 model, fast and reasonably accurate), "d" the advanced beam model (2014 model, fast and slighty more accurate) or "e" the full EE model (2016 model, slow but accurate). " Default: "a"')
 #impliment an option for the accurate beam later on and maybe the old elipse approximation if I can make it accurate
 
 #source options
@@ -869,7 +761,9 @@ obargs.add_argument('--FITS_dir',type=str,help='Location of FITS files on system
 obargs.add_argument('-o','--obsid',type=str,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
 obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
 args=parser.parse_args()
-  
+
+
+#Parser default control
 if args.dl_RRAT:
     grab_RRATalog()
 
@@ -932,6 +826,8 @@ else:
         name_col = '-1'
     else:
         name_col = 'Jname'
+
+
     
 #main code
 #get cataloge
@@ -1038,11 +934,15 @@ except:#incase of file finding or permission errors use webservice
                     cord.append([ob, ra, dec, time, delays,centrefreq, channels])
             else:
                 cord = [ob, ra, dec, time, delays,centrefreq, channels]
-                if args.beam == 'c':
-                    circlebeam(cord, c1, c2, catalog, name_col)
+                if args.beam == 'e':
+                    get_beam_power(cord, catalog, c1, c2, name_col, dt=300, 
+                                    centeronly=True, verbose=False, option = 'e')
+                elif args.beam == 'd':
+                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100, 
+                                    centeronly=True, verbose=False, option = 'd')
                 elif args.beam == 'a':    #center only means it isn't in picket fence mode
                     get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
-                else: #TODO impliment a picket fence mode
+                elif not args.beam: #TODO impliment a picket fence mode
                     get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
         else:
             print('No raw voltage files for %s' % ob) 
@@ -1088,21 +988,32 @@ else:
                         cord.append([ob, ra, dec, time, delays,centrefreq, channels])
                 else:
                     cord = [ob, ra, dec, time, delays,centrefreq, channels]
-                    if args.beam == 'c':
-                        circlebeam(cord, c1, c2, catalog, name_col)
+                    #print catalog
+                    if args.beam == 'e':
+                        get_beam_power(cord, catalog, c1, c2, name_col, dt=300,
+                                        centeronly=True, verbose=False, option ='e')
+                    elif args.beam == 'd':
+                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100, 
+                                    centeronly=True, verbose=False, option = 'd')
                     elif args.beam == 'a':    #center only means it isn't in picket fence mode
-                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
-                    else: #TODO impliment a picket fence mode
-                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
+                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
+                                        centeronly=True, verbose=False)
+                    elif not args.beam: #TODO impliment a picket fence mode
+                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
+                                        centeronly=True, verbose=False)
 
 #chooses the beam type and whether to list the source in each obs or the obs for each source
 #more options will be included later
 if args.obs_for_source:
-    if args.beam == 'c':
-        circlebeam_obsforsource(cord, c1, c2, catalog, name_col)
+    if args.beam == 'e':
+        get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=300,
+                                        centeronly=True, verbose=False, option='e')
+    elif args.beam == 'd':
+        get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,
+                                        centeronly=True, verbose=False, option='d')
     elif args.beam == 'a':    
         get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
-    else:
+    elif not args.beam:
         get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
 
 
