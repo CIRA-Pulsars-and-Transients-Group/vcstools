@@ -636,16 +636,19 @@ int     main(int argc, char **argv) {
         float *cable_array = (float *) malloc(ninput*sizeof(float));
         char *testval = (char *) malloc(1024);
         int *flag_array = (int *)malloc(ninput*sizeof(int));
+        int colnum;
         
         /* read the columns */
-        fits_read_col_int(fptr,7,1,1,ninput,0.0,flag_array,&anynull,&status);
+        fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
+        fits_read_col_int(fptr,colnum,1,1,ninput,0.0,flag_array,&anynull,&status);
         if (status != 0){
             fprintf(stderr,"Error:Failed to read flags column in metafile\n");
             exit(-1);
         }
         for (i=0;i<ninput;i++) {
 
-            if(fits_read_col_str(fptr,8,i+1,1,1,"0.0",&testval,&anynull,&status)) {
+            fits_get_colnum(fptr, 1, "Length", &colnum, &status);
+            if(fits_read_col_str(fptr,colnum,i+1,1,1,"0.0",&testval,&anynull,&status)) {
 
                 fprintf(stderr,"Error:Failed to cable column  in metafile\n");
                 exit(-1);
@@ -655,19 +658,22 @@ int     main(int argc, char **argv) {
             fprintf(stdout,"Input %d Cable %f\n",i,cable_array[i]);
         }
 
-        fits_read_col_flt(fptr,9,1,1,ninput,0.0,N_array,&anynull,&status);
+        fits_get_colnum(fptr, 1, "North", &colnum, &status);
+        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,N_array,&anynull,&status);
         if (status != 0){
             fprintf(stderr,"Error:Failed to read  N coord in metafile\n");
             exit(-1);
         }
 
-        fits_read_col_flt(fptr,10,1,1,ninput,0.0,E_array,&anynull,&status);
+        fits_get_colnum(fptr, 1, "East", &colnum, &status);
+        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,E_array,&anynull,&status);
         if (status != 0){
             fprintf(stderr,"Error:Failed to read E coord in metafile\n");
             exit(-1);
         }
 
-        fits_read_col_flt(fptr,11,1,1,ninput,0.0,H_array,&anynull,&status);
+        fits_get_colnum(fptr, 1, "Height", &colnum, &status);
+        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,H_array,&anynull,&status);
 
         if (status != 0){
             fprintf(stderr,"Error:Failed to read H coord in metafile\n");
