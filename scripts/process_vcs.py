@@ -187,22 +187,35 @@ def get_frequencies(metafits):
     freq_array = hdulist[0].header['CHANNELS']
     return sfreq(freq_array.split(','))
 
-def vcs_download(obsid, start_time, stop_time, increment, head, format, working_dir, parallel):
+def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, parallel, ics=False):
 	print "Downloading files from archive"
 	voltdownload = distutils.spawn.find_executable("voltdownload.py")
 	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
 	# voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
-	if format == 11:
+	obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
+	data_format = obsinfo['dataquality']
+	if data_format == 1:
+		if ics:
+			print "Data have not been recombined in the archive yet. Exiting"
+			quit()
+		data_type = 11
 		dl_dir = "{0}/raw".format(working_dir)
 		dir_description = "Raw"
-	else:
+	elif data_format == 6:
+		if ics:
+			data_type = 15
+		else:
+			data_type = 16
 		dl_dir = "{0}/combined".format(working_dir)
 		dir_description = "Combined"
+	else:
+		print "Unable to determine data format from archive. Exiting"
+		quit()
 	mdir(dl_dir, dir_description)
 	batch_dir = working_dir+"/batch/"
 	
 	for time_to_get in range(start_time,stop_time,increment):
-		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
+		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
 		if head:
 			log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
 			with open(log_name, 'w') as log:
@@ -231,11 +244,11 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 			submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
 			
 			# Write out the tar batch file if in mode 15
-			if format == 16:
-				body = []
-				for t in range(time_to_get, time_to_get+increment):
-					body.append("aprun tar -xf {0}/1149620392_{1}_combined.tar".format(dl_dir,t))
-				submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" })
+			#if format == 16:
+			#	body = []
+			#	for t in range(time_to_get, time_to_get+increment):
+			#		body.append("aprun tar -xf {0}/1149620392_{1}_combined.tar".format(dl_dir,t))
+			#	submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" })
 				
 			
 			
@@ -507,7 +520,7 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
 
 if __name__ == '__main__':
 
-    modes=['download','recombine','correlate','calibrate', 'beamform']
+    modes=['download', 'download_ics', 'recombine','correlate','calibrate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
@@ -521,7 +534,7 @@ if __name__ == '__main__':
     parser=OptionParser(description="process_vcs.py is a script for processing the MWA VCS data on Galaxy in steps. It can download data from the archive, call on recombine to form course channels, run the offline correlator, make tile re-ordered and bit promoted PFB files or for a coherent beam for a given pointing.")
     group_download = OptionGroup(parser, 'Download Options')
     group_download.add_option("--head", action="store_true", default=False, help="Submit download jobs to the headnode instead of the copyqueue [default=%default]")
-    group_download.add_option("--format", type="choice", choices=['11','15','16'], default='11', help="Voltage data type (Raw = 11, ICS Only = 15, Recombined and ICS = 16) [default=%default]")
+    #group_download.add_option("--format", type="choice", choices=['11','15','16'], default='11', help="Voltage data type (Raw = 11, ICS Only = 15, Recombined and ICS = 16) [default=%default]")
     group_download.add_option("-d", "--parallel_dl", type="int", default=3, help="Number of parallel downloads to envoke [default=%default]")
 
     group_correlate = OptionGroup(parser, 'Correlator Options')
@@ -539,7 +552,7 @@ if __name__ == '__main__':
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
     group_beamform.add_option("-E", "--execpath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
 
-    parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
+    parser.add_option("-m", "--mode", type="choice", choices=['download','download_ics', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
     parser.add_option("-b", "--begin", type="int", help="First GPS time to process [no default]")
     parser.add_option("-e", "--end", type="int", help="Last GPS time to process [no default]")
@@ -601,9 +614,11 @@ if __name__ == '__main__':
  #   options(opts)
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
 
+    if opts.mode == 'download_ics':
+		vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl, ics=True)
     if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, opts.format, obs_dir, opts.parallel_dl)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl)
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
