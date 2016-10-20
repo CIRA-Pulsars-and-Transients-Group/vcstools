@@ -206,6 +206,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 			data_type = 15
 		else:
 			data_type = 16
+                        required_size = 7864340480 # size of tar balls containing one second worth of recombined files
 		dl_dir = "{0}/combined".format(working_dir)
 		dir_description = "Combined"
 	else:
@@ -213,7 +214,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 		quit()
 	mdir(dl_dir, dir_description)
 	batch_dir = working_dir+"/batch/"
-	
+
 	for time_to_get in range(start_time,stop_time,increment):
 		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
 		if head:
@@ -227,19 +228,31 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 			check_secs_to_run = "15:00"
 			volt_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops {2}\n".format(volt_secs_to_run,dl_dir,voltdownload_batch)
 			check_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, dl_dir, check_batch)
+			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+                        if data_type = 16:
+                            tar_batch = "check_volt_{0}".format(time_to_get)
+                            tar_secs_to_run = "05:00:00"
+                            #tar_submit_line = "sbatch --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(tar_secs_to_run, dl_dir, tar_batch)
+                            body = []
+                            body.append("aprun mpirun_untar.sh {0} {1} {2}".format(dl_dir, obsid, check_nsecs))
+                            submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":tar_secs_to_run, "partition":"workq" }, \
+                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy"))
 			checks = distutils.spawn.find_executable("checks.py")
 			
 			# Write out the checks batch file but don't submit it
-			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
 			commands = []
 			commands.append("newcount=0")
 			commands.append("let oldcount=$newcount-1")
 			commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
 			commands.append("oldcount=$newcount; let newcount=$newcount+1")
 			commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
-			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4}".format(checks, obsid, dl_dir, time_to_get, check_nsecs))
+			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4} --data_type {5}".format(checks, obsid, dl_dir, time_to_get, check_nsecs, data_type))
 			commands.append("if [ $? -eq 1 ];then")
 			commands.append("sbatch {0}".format(batch_dir+voltdownload_batch+".batch"))
+                        # if we have tarballs we send the untar jobs to the workq
+                        if data_type == 16:
+                            commands.append("else")
+                            commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
 			commands.append("fi")
 			submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
 			

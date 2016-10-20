@@ -7,23 +7,30 @@ import json
 import argparse
 import numpy as np
 
-def check_download(obsID, directory=None, required_size=253440000, startsec=None, n_secs=None):
+def check_download(obsID, directory=None, required_size=None, required_size_ics=30720000, startsec=None, n_secs=None, data_type='raw'):
     '''
     Checks that the number of files in directory (default is /scratch2/mwaops/vcs/[obsID]/raw/) is the same
-    as that found on the archive and also checks that all files have the same size (253440000 by default).
+    as that found on the archive and also checks that all files have the same size (253440000 for raw, 7864340480 for recombined tarballs by default).
     '''
+    if not data_type == 'raw' and not data_type == 'tar_ics':
+        print "Wrong data type given to download check."
+        return True
     if not directory:
         directory = "/scratch2/mwaops/vcs/{0}/raw/".format(obsID)
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
     print base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range."
-    required_size = required_size
     files = np.array(getmeta(service='obs', params={'obs_id':obsID})['files'].keys())
-    mask = np.array(['.dat' in file for file in files])
+    if not required_size:
+        required_size = 253440000 if data_type == 11 else 7864340480
+    else:
+        required_size = required_size
+    suffix = '.dat' if data_type == 11 else '.tar'
+    mask = np.array([suffix in file for file in files])
     files = list(files[mask])
     if not startsec:
         n_files_expected = len(files)
-        command = "ls -l %s/*.dat | ((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | " %(directory) + \
+        command = "ls -l %s/*%s | ((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | " %(directory, suffix) + \
             "awk '($5!=%s){print \"file \" $9 \" has size \" $5 \" (expected %s)\"}' >> %s/%s_all.txt) 4>&1;" %(required_size, required_size,directory, obsID) + \
             "cat %s/%s_all.txt; rm -rf %s/%s_all.txt" %(directory, obsID, directory, obsID)
         output = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).stdout
@@ -32,7 +39,7 @@ def check_download(obsID, directory=None, required_size=253440000, startsec=None
         times = [int(time[11:21]) for time in files]
         for sec in range(startsec,startsec+n_secs):
             n_files_expected += times.count(sec)
-        output = subprocess.Popen(["count=0;for sec in `seq -w %s %s `;do let count=${count}+`ls -l %s/*${sec}*.dat | " %(startsec, startsec+n_secs-1, directory) + \
+        output = subprocess.Popen(["count=0;for sec in `seq -w %s %s `;do let count=${count}+`ls -l %s/*${sec}*%s | " %(startsec, startsec+n_secs-1, directory, suffix) + \
                                        "((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | awk '($5!=%s) " %(required_size) + \
                                        "{print \"file \" $9 \" has size \" $5 \" (expected %s)\"}' >> %s/errors_%s.txt) 4>&1`;done;" %(required_size,directory,startsec) +\
                                        "echo ${count}; cat %s/errors_%s.txt;rm -rf %s/errors_%s.txt" %(directory,startsec,directory,startsec)],
@@ -41,6 +48,15 @@ def check_download(obsID, directory=None, required_size=253440000, startsec=None
     files_in_dir = int(output[0].strip())
 
     error = False
+
+    # in case we're checking for downloaded tarballs also need to check ics-files.
+    if data_type == 'tar_ics':
+        error, n_ics = check_recombine_ics(directory=directory, \
+                                               required_size=required_size_ics, startsec=startsec, n_secs=n_files_expected)
+        n_files_expected *= 2
+        files_in_dir += n_ics
+        
+
     if not files_in_dir == n_files_expected:
         print "We have {0} files but expected {1}".format(files_in_dir, n_files_expected)
         error = True
@@ -120,6 +136,9 @@ def check_recombine_ics(directory=None, required_size=30720000, startsec=None, n
     output = output.readlines()
     files_in_dir = int(output[0].strip())
     error = False
+    if not files_in_dir == n_secs:
+        print "We have {0} ics-files but expected {1}".format(files_in_dir, n_secs)
+        error = True
     for line in output[1:]:
         if 'dat' in line:
             error = True
@@ -129,6 +148,8 @@ def check_recombine_ics(directory=None, required_size=30720000, startsec=None, n
             rm_cmd = "rm -rf {0}".format(dat_files)
             print "Also running {0} to make sure ics files are rebuilt.".format(rm_cmd)
             rm = subprocess.Popen(rm_cmd, stdout=subprocess.PIPE, shell=True)
+    if error == False:
+        print "We have all {0} files as expected.".format(files_in_dir)
     return error, files_in_dir
 
 # Append the service name to this base URL, eg 'con', 'obs', etc.
@@ -170,6 +191,10 @@ def opt_parser():
     parser.add_argument("-m", "--mode", type=str, choices=['download','recombine'],\
                           help="Mode you want to run: download, recombine", required=True,
                         dest='mode')
+    parser.add_argument("-d", "--data_type", type=str, choices=[11,15,16, 'raw','ics','tar_ics'],\
+                          help="Only necessary when checking downloads. Types refer to those as definded " + \
+                            "in voltdownload.py: 11 = Raw, 15 = ICS only, 16 = ICS and tarballs of recombined data.", \
+                            required=False,dest='data_type', default=None)
     parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, dest='obsID',\
                             help="Observation ID you want to process [no default]",\
                             required=True)
@@ -179,6 +204,7 @@ def opt_parser():
     parser.add_argument("-e", "--end", metavar="stop", type=int, dest='end',\
                             help="gps time of last file to ckeck on [default=%(default)s]",\
                             required=False, default=None)
+    parser.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
     parser.add_argument("-i", "--increment", metavar="time increment", type=int, \
                             dest='increment',\
                             help="Effectively the number of seconds to ckeck for " +\
@@ -187,7 +213,7 @@ def opt_parser():
     parser.add_argument("-s", "--size", type=int, dest='size',\
                           help="The files size in bytes that you expect all files" +\
                           " to have. Defaults are 253440000 (download), 327680000" +\
-                          " (recombined, not ics)")
+                          " (recombined, not ics), 7864340480 (tarballs)", default=None)
     parser.add_argument("-S", "--size_ics", type=int, help='Size in bytes that' +\
                             "you expect the ics files to have. Default = %(default)s",\
                             dest='size_ics', default=30720000)
@@ -201,22 +227,45 @@ if __name__ == '__main__':
     args = opt_parser()
     work_dir_base = '/scratch2/mwaops/vcs/' + str(args.obsID)
 
+    if args.all:
+        from process_vcs import obs_max_min
+        args.begin, args.end = obs_max_min(args.obsID)
     if args.end:
         if not args.begin:
             print "If you supply and end time you also *have* to supply a begin time."
             sys.exit(1)
         args.increment = args.end - args.begin + 1
         print "Checking {0} seconds.".format(args.increment)
-
+    if not args.all and not args.begin:
+        print "You have to either set the -a flag to process the whole obs or povide a start and stop time with -b and -e"
+        sys.exit(1)
+    if args.begin:
+        if not args.end and not args.increment:
+            print "If you specify a begin time you also have to provide either an end time (-e end) or the number of seconds to check via the increment flag (-i increment)"
+            sys.exit(1)
     if args.mode == 'download':
-        required_size = 253440000
-        if args.size:
-            required_size = args.size
-        work_dir = work_dir_base + '/raw/'
+        if not args.data_type:
+            print "In download mode you need to specify the data type you downloaded."
+            sys.exit(1)
+        if args.data_type == 11:
+            data_type = 'raw'
+        elif args.data_type == 15:
+            data_type = 'ics'
+        elif args.data_type == 16:
+            data_type = 'tar_ics'
+        else:
+            data_type = args.data_type
+        if data_type == 'raw':
+            work_dir = work_dir_base + '/raw/'
+        else:
+            work_dir = work_dir_base + '/combined/'
         if args.work_dir:
             work_dir = args.work_dir
-        sys.exit(check_download(args.obsID, directory=work_dir, required_size=required_size, 
-                           startsec=args.begin, n_secs=args.increment))
+        if data_type == 'raw' or data_type == 'tar_ics':
+            sys.exit(check_download(args.obsID, directory=work_dir, required_size=args.size, required_size_ics=args.size_ics,
+                                    startsec=args.begin, n_secs=args.increment, data_type=data_type))
+        else: # hence 'ics'
+            sys.exit(check_recombine_ics(directory=work_dir, required_size=args.size_ics, startsec=args.begin, n_secs=args.increment)[0])
 
     elif args.mode == 'recombine':
         required_size = 327680000
