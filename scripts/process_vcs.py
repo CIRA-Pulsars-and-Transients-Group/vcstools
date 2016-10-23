@@ -194,6 +194,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 	# voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
 	obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
 	data_format = obsinfo['dataquality']
+        data_format = 6 #hardcoded for now as the dataquality flag has not been set although all is green on the database?
 	if data_format == 1:
 		if ics:
 			print "Data have not been recombined in the archive yet. Exiting"
@@ -206,7 +207,6 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 			data_type = 15
 		else:
 			data_type = 16
-                        required_size = 7864340480 # size of tar balls containing one second worth of recombined files
 		dl_dir = "{0}/combined".format(working_dir)
 		dir_description = "Combined"
 	else:
@@ -229,16 +229,17 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 			volt_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops {2}\n".format(volt_secs_to_run,dl_dir,voltdownload_batch)
 			check_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, dl_dir, check_batch)
 			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
-                        if data_type = 16:
-                            tar_batch = "check_volt_{0}".format(time_to_get)
-                            tar_secs_to_run = "05:00:00"
+                        if data_type == 16:
+                            tar_batch = "untar_{0}".format(time_to_get)
+                            tar_secs_to_run = "01:00:00"
                             #tar_submit_line = "sbatch --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(tar_secs_to_run, dl_dir, tar_batch)
                             body = []
-                            body.append("aprun mpirun_untar.sh {0} {1} {2}".format(dl_dir, obsid, check_nsecs))
-                            submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":tar_secs_to_run, "partition":"workq" }, \
-                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy"))
-			checks = distutils.spawn.find_executable("checks.py")
-			
+                            #body.append("aprun mpirun_untar.sh {0} {1} {2}".format(dl_dir, obsid, check_nsecs))
+                            body.append("cd {0};for i in `seq {1} 1 {2}`; do aprun tar xf {3}_${{i}}_combined.tar;done".format(dl_dir, time_to_get, time_to_get+check_nsecs-1, obsid))
+                            submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
+                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
+                        #checks = distutils.spawn.find_executable("checks.py")
+			checks = '/group/mwaops/fkirsten/software/src/galaxy-scripts/scripts/checks.py'
 			# Write out the checks batch file but don't submit it
 			commands = []
 			commands.append("newcount=0")
@@ -246,7 +247,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 			commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
 			commands.append("oldcount=$newcount; let newcount=$newcount+1")
 			commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
-			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4} --data_type {5}".format(checks, obsid, dl_dir, time_to_get, check_nsecs, data_type))
+			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4} --data_type {5}".format(checks, obsid, dl_dir, time_to_get, check_nsecs, str(data_type)))
 			commands.append("if [ $? -eq 1 ];then")
 			commands.append("sbatch {0}".format(batch_dir+voltdownload_batch+".batch"))
                         # if we have tarballs we send the untar jobs to the workq

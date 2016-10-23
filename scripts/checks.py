@@ -191,7 +191,7 @@ def opt_parser():
     parser.add_argument("-m", "--mode", type=str, choices=['download','recombine'],\
                           help="Mode you want to run: download, recombine", required=True,
                         dest='mode')
-    parser.add_argument("-d", "--data_type", type=str, choices=[11,15,16, 'raw','ics','tar_ics'],\
+    parser.add_argument("-d", "--data_type", type=str, choices=['11','15','16', 'raw','ics','tar_ics'],\
                           help="Only necessary when checking downloads. Types refer to those as definded " + \
                             "in voltdownload.py: 11 = Raw, 15 = ICS only, 16 = ICS and tarballs of recombined data.", \
                             required=False,dest='data_type', default=None)
@@ -204,7 +204,7 @@ def opt_parser():
     parser.add_argument("-e", "--end", metavar="stop", type=int, dest='end',\
                             help="gps time of last file to ckeck on [default=%(default)s]",\
                             required=False, default=None)
-    parser.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
+    parser.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%(default)s]")
     parser.add_argument("-i", "--increment", metavar="time increment", type=int, \
                             dest='increment',\
                             help="Effectively the number of seconds to ckeck for " +\
@@ -247,11 +247,11 @@ if __name__ == '__main__':
         if not args.data_type:
             print "In download mode you need to specify the data type you downloaded."
             sys.exit(1)
-        if args.data_type == 11:
+        if args.data_type == '11':
             data_type = 'raw'
-        elif args.data_type == 15:
+        elif args.data_type == '15':
             data_type = 'ics'
-        elif args.data_type == 16:
+        elif args.data_type == '16':
             data_type = 'tar_ics'
         else:
             data_type = args.data_type
