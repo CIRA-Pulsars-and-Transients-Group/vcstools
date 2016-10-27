@@ -187,14 +187,13 @@ def get_frequencies(metafits):
     freq_array = hdulist[0].header['CHANNELS']
     return sfreq(freq_array.split(','))
 
-def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, parallel, ics=False):
+def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, parallel, ics=False, n_untar=2, keep=""):
 	print "Downloading files from archive"
 	voltdownload = distutils.spawn.find_executable("voltdownload.py")
 	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
 	# voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
 	obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
 	data_format = obsinfo['dataquality']
-        data_format = 6 #hardcoded for now as the dataquality flag has not been set although all is green on the database?
 	if data_format == 1:
 		if ics:
 			print "Data have not been recombined in the archive yet. Exiting"
@@ -234,8 +233,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
                             tar_secs_to_run = "01:00:00"
                             #tar_submit_line = "sbatch --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(tar_secs_to_run, dl_dir, tar_batch)
                             body = []
-                            #body.append("aprun mpirun_untar.sh {0} {1} {2}".format(dl_dir, obsid, check_nsecs))
-                            body.append("cd {0};for i in `seq {1} 1 {2}`; do aprun tar xf {3}_${{i}}_combined.tar;done".format(dl_dir, time_to_get, time_to_get+check_nsecs-1, obsid))
+                            untar = '/group/mwaops/fkirsten/software/src/galaxy-scripts/scripts/untar.sh'
+                            body.append("aprun -n 1 {0} -w {1} -o {2} -b {3} -e {4} -j {5} {6}".format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep))
+                            #body.append("cd {0};for i in `seq {1} 1 {2}`; do aprun tar xf {3}_${{i}}_combined.tar;done".format(dl_dir, time_to_get, time_to_get+check_nsecs-1, obsid))
                             submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
                                              submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
                         #checks = distutils.spawn.find_executable("checks.py")
@@ -550,7 +550,8 @@ if __name__ == '__main__':
     group_download.add_option("--head", action="store_true", default=False, help="Submit download jobs to the headnode instead of the copyqueue [default=%default]")
     #group_download.add_option("--format", type="choice", choices=['11','15','16'], default='11', help="Voltage data type (Raw = 11, ICS Only = 15, Recombined and ICS = 16) [default=%default]")
     group_download.add_option("-d", "--parallel_dl", type="int", default=3, help="Number of parallel downloads to envoke [default=%default]")
-
+    group_download.add_option("-j", "--untar_jobs", type='int', default=2, help="Number of parallel jobs when untaring downloaded tarballs. [default=%default]")
+    group_download.add_option("-k", "--keep_tarball", action="store_true", default=False, help="Keep the tarballs after unpacking. [default=%default]")
     group_correlate = OptionGroup(parser, 'Correlator Options')
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
@@ -632,7 +633,7 @@ if __name__ == '__main__':
 		vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl, ics=True)
     if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
