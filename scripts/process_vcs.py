@@ -603,6 +603,8 @@ if __name__ == '__main__':
     if opts.begin > opts.end:
         print "Starting time is after end time"
         quit()
+    if opts.end - opts.begin > opts.increment:
+        opts.increment = opts.end - opts.begin + 1
     if opts.mode == "beamform":
         if not opts.pointing:
             print "Pointing (-p) required in beamformer mode"
