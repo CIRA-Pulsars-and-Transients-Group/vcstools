@@ -187,17 +187,35 @@ def get_frequencies(metafits):
     freq_array = hdulist[0].header['CHANNELS']
     return sfreq(freq_array.split(','))
 
-def vcs_download(obsid, start_time, stop_time, increment, head, format, working_dir, parallel):
+def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, parallel, ics=False, n_untar=2, keep=""):
 	print "Downloading files from archive"
 	voltdownload = distutils.spawn.find_executable("voltdownload.py")
 	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
 	# voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
-	raw_dir = "{0}/raw".format(working_dir)
-	mdir(raw_dir, "Raw")
+	obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
+	data_format = obsinfo['dataquality']
+	if data_format == 1:
+		if ics:
+			print "Data have not been recombined in the archive yet. Exiting"
+			quit()
+		data_type = 11
+		dl_dir = "{0}/raw".format(working_dir)
+		dir_description = "Raw"
+	elif data_format == 6:
+		if ics:
+			data_type = 15
+		else:
+			data_type = 16
+		dl_dir = "{0}/combined".format(working_dir)
+		dir_description = "Combined"
+	else:
+		print "Unable to determine data format from archive. Exiting"
+		quit()
+	mdir(dl_dir, dir_description)
 	batch_dir = working_dir+"/batch/"
-	
+
 	for time_to_get in range(start_time,stop_time,increment):
-		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, format, time_to_get,(increment-1),parallel, raw_dir)
+		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
 		if head:
 			log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
 			with open(log_name, 'w') as log:
@@ -207,42 +225,46 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 			check_batch = "check_volt_{0}".format(time_to_get)
 			volt_secs_to_run = datetime.timedelta(seconds=300*increment)
 			check_secs_to_run = "15:00"
-			volt_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops {2}\n".format(volt_secs_to_run,raw_dir,voltdownload_batch)
-			check_submit_line = "sbatch --time={0} --workdir={1} -M zeus --partition=copyq --gid=mwaops --account=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, raw_dir, check_batch)
-			checks = distutils.spawn.find_executable("checks.py")
-			
+			volt_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops {2}\n".format(volt_secs_to_run,dl_dir,voltdownload_batch)
+			check_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, dl_dir, check_batch)
 			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+                        if data_type == 16:
+                            tar_batch = "untar_{0}".format(time_to_get)
+                            tar_secs_to_run = "01:00:00"
+                            #tar_submit_line = "sbatch --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(tar_secs_to_run, dl_dir, tar_batch)
+                            body = []
+                            untar = '/group/mwaops/fkirsten/software/src/galaxy-scripts/scripts/untar.sh'
+                            body.append("aprun -n 1 {0} -w {1} -o {2} -b {3} -e {4} -j {5} {6}".format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep))
+                            #body.append("cd {0};for i in `seq {1} 1 {2}`; do aprun tar xf {3}_${{i}}_combined.tar;done".format(dl_dir, time_to_get, time_to_get+check_nsecs-1, obsid))
+                            submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
+                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
+                        #checks = distutils.spawn.find_executable("checks.py")
+			checks = '/group/mwaops/fkirsten/software/src/galaxy-scripts/scripts/checks.py'
+			# Write out the checks batch file but don't submit it
 			commands = []
 			commands.append("newcount=0")
 			commands.append("let oldcount=$newcount-1")
 			commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
 			commands.append("oldcount=$newcount; let newcount=$newcount+1")
 			commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
-			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4}".format(checks, obsid, raw_dir, time_to_get, check_nsecs))
+			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4} --data_type {5}".format(checks, obsid, dl_dir, time_to_get, check_nsecs, str(data_type)))
 			commands.append("if [ $? -eq 1 ];then")
 			commands.append("sbatch {0}".format(batch_dir+voltdownload_batch+".batch"))
+                        # if we have tarballs we send the untar jobs to the workq
+                        if data_type == 16:
+                            commands.append("else")
+                            commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
 			commands.append("fi")
-			submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
+			submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
 			
-			# with open(check_batch,'w') as batch_file:
-			# 	batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/check_volt_{1}.out.0\n".format(working_dir,time_to_get)
-			# 	batch_file.write(batch_line)
-			# 	batch_file.write('newcount=0\n')
-			# 	batch_file.write('let oldcount=$newcount-1\n')
-			# 	# increase the counter in voltdownload_batch by one each time
-			# 	batch_line = "sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}\n".format(voltdownload_batch)
-			# 	batch_file.write(batch_line)
-			# 	batch_file.write('oldcount=$newcount; let newcount=$newcount+1\n')
-			# 	# change the name of the batch-output file according to the counter each time
-			# 	batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(voltdownload_batch)
-			# 	batch_file.write(batch_line)
-			# 	# to make sure checks.py does not look for files beyond the stop_time:
-			# 	check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
-			# 	batch_line = "{0} -m download -o {1} -w {2} -b {3} -i {4}\n".format(checks, obsid, raw_dir, time_to_get, check_nsecs)
-			# 	batch_file.write(batch_line)
-			# 	#in case something went wrong resubmit the voltdownload script
-			# 	batch_line = "if [ $? -eq 1 ];then \n{0}\nfi\n".format(volt_submit_line)
-			# 	batch_file.write(batch_line)
+			# Write out the tar batch file if in mode 15
+			#if format == 16:
+			#	body = []
+			#	for t in range(time_to_get, time_to_get+increment):
+			#		body.append("aprun tar -xf {0}/1149620392_{1}_combined.tar".format(dl_dir,t))
+			#	submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" })
+				
+			
 			
 			body = []
 			body.append("oldcount=0")
@@ -254,27 +276,8 @@ def vcs_download(obsid, start_time, stop_time, increment, head, format, working_
 			body.append("sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch+".batch"))
 			body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch"))
 			body.append(get_data)
-			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
+			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
 			
-			# with open(voltdownload_batch,'w') as batch_file:
-				# batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --output={0}/batch/volt_{1}.out.1\n".format(working_dir,time_to_get)
-				# batch_file.write(batch_line)
-				# batch_file.write('oldcount=0\n')
-				# batch_file.write('let newcount=$oldcount+1\n')
-				# batch_file.write('if [ ${newcount} -gt 10 ]; then\n')
-				# batch_file.write('echo \"Tried ten times, this is silly. Aborting here.\";exit\n')
-				# batch_file.write('fi\n')
-				# increase the counter in check_batch by one each time
-				# batch_line = "sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch)
-				# batch_file.write(batch_line)
-				# change the name of the batch-output file according to the counter each time
-				# batch_line = "sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch)
-				# batch_file.write(batch_line)
-				# submit check script before we start the download in case it is timed out
-				# batch_file.write(check_submit_line)
-				# batch_line = "%s\n" % (get_data)
-				# batch_file.write(batch_line)
-				
 			# submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
 			continue
 		
@@ -390,7 +393,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 					#     batch_file.write(corr_line)
 					#     to_corr = to_corr+1
 	
-				secs_to_run = str(datetime.timedelta(seconds=10*num_frames*to_corr))
+				secs_to_run = str(datetime.timedelta(seconds=12*num_frames*to_corr))
 				submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq"}, batch_dir=batch_dir)
 				# batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
 				# submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
@@ -531,7 +534,7 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
 
 if __name__ == '__main__':
 
-    modes=['download','recombine','correlate','calibrate', 'beamform']
+    modes=['download', 'download_ics', 'recombine','correlate','calibrate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
@@ -545,9 +548,10 @@ if __name__ == '__main__':
     parser=OptionParser(description="process_vcs.py is a script for processing the MWA VCS data on Galaxy in steps. It can download data from the archive, call on recombine to form course channels, run the offline correlator, make tile re-ordered and bit promoted PFB files or for a coherent beam for a given pointing.")
     group_download = OptionGroup(parser, 'Download Options')
     group_download.add_option("--head", action="store_true", default=False, help="Submit download jobs to the headnode instead of the copyqueue [default=%default]")
-    group_download.add_option("--format", type="choice", choices=['11','12'], default='11', help="Voltage data type (Raw = 11, Recombined Raw = 12) [default=%default]")
+    #group_download.add_option("--format", type="choice", choices=['11','15','16'], default='11', help="Voltage data type (Raw = 11, ICS Only = 15, Recombined and ICS = 16) [default=%default]")
     group_download.add_option("-d", "--parallel_dl", type="int", default=3, help="Number of parallel downloads to envoke [default=%default]")
-
+    group_download.add_option("-j", "--untar_jobs", type='int', default=2, help="Number of parallel jobs when untaring downloaded tarballs. [default=%default]")
+    group_download.add_option("-k", "--keep_tarball", action="store_true", default=False, help="Keep the tarballs after unpacking. [default=%default]")
     group_correlate = OptionGroup(parser, 'Correlator Options')
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
@@ -563,7 +567,7 @@ if __name__ == '__main__':
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
     group_beamform.add_option("-E", "--execpath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
 
-    parser.add_option("-m", "--mode", type="choice", choices=['download','recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
+    parser.add_option("-m", "--mode", type="choice", choices=['download','download_ics', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
     parser.add_option("-b", "--begin", type="int", help="First GPS time to process [no default]")
     parser.add_option("-e", "--end", type="int", help="Last GPS time to process [no default]")
@@ -599,6 +603,8 @@ if __name__ == '__main__':
     if opts.begin > opts.end:
         print "Starting time is after end time"
         quit()
+    if opts.end - opts.begin > opts.increment:
+        opts.increment = opts.end - opts.begin + 1
     if opts.mode == "beamform":
         if not opts.pointing:
             print "Pointing (-p) required in beamformer mode"
@@ -625,9 +631,11 @@ if __name__ == '__main__':
  #   options(opts)
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
 
+    if opts.mode == 'download_ics':
+		vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl, ics=True)
     if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, opts.format, obs_dir, opts.parallel_dl)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
