@@ -233,13 +233,13 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
                             tar_secs_to_run = "01:00:00"
                             #tar_submit_line = "sbatch --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(tar_secs_to_run, dl_dir, tar_batch)
                             body = []
-                            untar = '/group/mwaops/fkirsten/software/src/galaxy-scripts/scripts/untar.sh'
+                            untar = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/untar.sh'
                             body.append("aprun -n 1 {0} -w {1} -o {2} -b {3} -e {4} -j {5} {6}".format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep))
                             #body.append("cd {0};for i in `seq {1} 1 {2}`; do aprun tar xf {3}_${{i}}_combined.tar;done".format(dl_dir, time_to_get, time_to_get+check_nsecs-1, obsid))
                             submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
                                              submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
-                        #checks = distutils.spawn.find_executable("checks.py")
-			checks = '/group/mwaops/fkirsten/software/src/galaxy-scripts/scripts/checks.py'
+                        checks = distutils.spawn.find_executable("checks.py")
+			#checks = '/group/mwaops/fkirsten/software/src/galaxy-scripts/scripts/checks.py'
 			# Write out the checks batch file but don't submit it
 			commands = []
 			commands.append("newcount=0")
