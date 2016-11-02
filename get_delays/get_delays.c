@@ -137,6 +137,7 @@ void usage() {
             get_delays -z <utc time string> -o obsid -r <ra in hh:mm:ss> -d <dec in dd:mm:ss>\n \
             \nOther options include:\n \
             \t -v <1 == verbose> \n\
+            \t -V print the version number and exit \n\
             \t -t <input number in correlator product order>\n \
             \t -f <middle of the first frequency channel in Hz> \n \
             \t -G Switch off Geometry [Expert] \n \
@@ -145,7 +146,9 @@ void usage() {
             \t -s samples per second \n \
             \t -n number of channels \n \
             \t -w channel width \n \
-            \t -j <DI Jones file from the RTS> Jones matrix input \n \
+            \t -R <DI Jones file from the RTS> Jones matrix input \n \
+            \t -O <DI Jones file from Offringa's tools> Jones matrix input \n \
+            \t -C <coarse channel number> used in conjunction with -O. Default = '0' \n \
             \t -m <metafits file> for this obsID \n \
             \t -p create a psrfits header for this obs\n \
             \t -e number of low channels to skip\n \
@@ -211,10 +214,12 @@ int     main(int argc, char **argv) {
     float samples_per_sec = 10000;
     int write_files = 1;
     int nchan = 1;
+    int coarse_chan = 0; // Default value: first (lowest) coarse channel
     long int chan_width = 10000;
     int edge = 0;
     
-    int get_jones = 0;
+    int get_rts = 0;
+    int get_offringa = 0;
     int get_psrfits = 0;
     char *DI_Jones_file = NULL;
     char *metafits = NULL;
@@ -230,7 +235,7 @@ int     main(int argc, char **argv) {
     
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "a:b:chG:ij:e:t:m:n:o:pr:d:vz:if:s:w:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:cC:hG:ie:t:m:n:o:O:pr:R:d:vVz:if:s:w:")) != -1) {
             switch(c) {
                 case 'a':
                     add_str = strdup(optarg);
@@ -240,6 +245,9 @@ int     main(int argc, char **argv) {
                     break;
                 case 'c':
                     conjugate = -1;
+                    break;
+                case 'C':
+                    coarse_chan = atoi(optarg);
                     break;
                 case 'd':
                 {
@@ -283,12 +291,19 @@ int     main(int argc, char **argv) {
                 case 'm':
                     metafits = strdup(optarg);
                     break;
+                case 'O':
+                    get_offringa = 1;
+                    get_rts = 0;
+                    DI_Jones_file = strdup(optarg);
+                    write_calib = 1;
+                    break;
                 case 'p':
                     get_psrfits=1;
                     write_psrfits=1;
                     break;
-                case 'j':
-                    get_jones = 1;
+                case 'R':
+                    get_rts = 1;
+                    get_offringa = 0;
                     DI_Jones_file = strdup(optarg);
                     write_calib = 1;
                     break;
@@ -337,6 +352,10 @@ int     main(int argc, char **argv) {
                     break;
                 case 'v':
                     verbose = 1;
+                    break;
+                case 'V':
+                    printf("%s\n", GET_DELAYS_VERSION);
+                    exit(0);
                     break;
                 case 'w':
                     chan_width = atol(optarg);
@@ -453,7 +472,22 @@ int     main(int argc, char **argv) {
     double unit_H;
     
 
-
+    // Read in the Jones matrices for this (coarse) channel, if requested
+    complex double invJref[4];
+    if (get_rts) {
+        read_rts_file(M, Jref, nstation, &amp, DI_Jones_file);
+        inv2x2(Jref, invJref);
+    }
+    else if (get_offringa) {
+        read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file);
+        // Just make Jref (and invJref) the identity matrix since they don't apply to
+        // Offringa's calibration solution.
+        Jref[0] = 1 + I*0;
+        Jref[1] = 0 + I*0;
+        Jref[2] = 0 + I*0;
+        Jref[3] = 1 + I*0;
+        inv2x2(Jref, invJref);
+    }
 
 
    
@@ -510,7 +544,7 @@ int     main(int argc, char **argv) {
         slaDe2h(app_ha_rad,dec_ap,MWA_LAT*DD2R,&az,&el);
         
 
-        fprintf(stderr,"calib:Look direction Azimuth %lf (deg)  Elevation %lf (deg) \n",az*DR2D,el*DR2D);
+        fprintf(stdout,"calib:Look direction Azimuth %lf (deg)  Elevation %lf (deg) \n",az*DR2D,el*DR2D);
         
         /* now we need the direction cosines */
         
@@ -518,23 +552,9 @@ int     main(int argc, char **argv) {
         unit_E = cos(el) * sin(az);
         unit_H = sin(el);
         
-        
-        /* for the tile <not the look direction> */
-        
-
-        fprintf(stdout,"calib: Tile position (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az,tile_pointing_el,tile_pointing_ra,tile_pointing_dec );
-         fprintf(stdout,"calib: Tile position (radian) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az*DD2R,tile_pointing_el*DD2R,tile_pointing_ra*DD2R,tile_pointing_dec*DD2R);
-        fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az*DR2D,el*DR2D,ra_ap*DR2D,dec_ap*DR2D);
-        fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az,el,ra_ap,dec_ap);
-
-        
-        
-        if (get_jones) {
-            complex double invJref[4];
+        if (get_rts || get_offringa) {
+            fprintf(stdout, "Calculating direction-dependent matrices\n");
             double Fnorm;
-            /* we need to load in all the DI_Jones matrices */
-            read_DIJones_file(M, Jref, nstation, &amp, DI_Jones_file);
-            inv2x2(Jref, invJref);
             calcEjones(E, // pointer to 4-element (2x2) voltage gain Jones matrix
                        frequency, // observing freq (Hz)
                        (MWA_LAT*DD2R), // observing latitude (radians)
@@ -543,7 +563,7 @@ int     main(int argc, char **argv) {
                        az, // azimuth & zenith angle to sample
                        (DPIBY2-el));
             for (i=0; i < 4;i++) {
-                fprintf(stdout,"calib:RTS Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
+                fprintf(stdout,"calib:Jones Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
                 fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
             }
             for (i=0;i<nstation;i++){
@@ -551,7 +571,7 @@ int     main(int argc, char **argv) {
                 mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
                 
                 for (j=0; j < 4;j++) {
-                    fprintf(stdout,"calib:RTS Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
+                    fprintf(stdout,"calib:Jones Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
                     fprintf(stdout,"calib:ratio Mi/Ji [%d]  %f %f \n",i,creal(M[i][j])/creal(Ji[i][j]),cimag(M[i][j])/cimag(Ji[i][j]));
                 }
                 // this automatically spots an RTS flagged tile
@@ -564,16 +584,27 @@ int     main(int argc, char **argv) {
                     Ji[i][1] = 0.0 + I*0;
                     Ji[i][2] = 0.0 + I*0;
                     Ji[i][3] = 0.0 + I*0;
-
+    
                     G[i][0] = 0.0 + I*0;
                     G[i][1] = 0.0 + I*0;
                     G[i][2] = 0.0 + I*0;
                     G[i][3] = 0.0 + I*0;
-
+    
                 }
-
+    
             }
         }
+            
+        
+        /* for the tile <not the look direction> */
+        
+
+        fprintf(stdout,"calib: Tile position (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az,tile_pointing_el,tile_pointing_ra,tile_pointing_dec );
+         fprintf(stdout,"calib: Tile position (radian) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az*DD2R,tile_pointing_el*DD2R,tile_pointing_ra*DD2R,tile_pointing_dec*DD2R);
+        fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az*DR2D,el*DR2D,ra_ap*DR2D,dec_ap*DR2D);
+        fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az,el,ra_ap,dec_ap);
+
+        
         
         int ch=0;
 
@@ -605,16 +636,19 @@ int     main(int argc, char **argv) {
         float *cable_array = (float *) malloc(ninput*sizeof(float));
         char *testval = (char *) malloc(1024);
         int *flag_array = (int *)malloc(ninput*sizeof(int));
+        int colnum;
         
         /* read the columns */
-        fits_read_col_int(fptr,7,1,1,ninput,0.0,flag_array,&anynull,&status);
+        fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
+        fits_read_col_int(fptr,colnum,1,1,ninput,0.0,flag_array,&anynull,&status);
         if (status != 0){
             fprintf(stderr,"Error:Failed to read flags column in metafile\n");
             exit(-1);
         }
         for (i=0;i<ninput;i++) {
 
-            if(fits_read_col_str(fptr,8,i+1,1,1,"0.0",&testval,&anynull,&status)) {
+            fits_get_colnum(fptr, 1, "Length", &colnum, &status);
+            if(fits_read_col_str(fptr,colnum,i+1,1,1,"0.0",&testval,&anynull,&status)) {
 
                 fprintf(stderr,"Error:Failed to cable column  in metafile\n");
                 exit(-1);
@@ -624,19 +658,22 @@ int     main(int argc, char **argv) {
             fprintf(stdout,"Input %d Cable %f\n",i,cable_array[i]);
         }
 
-        fits_read_col_flt(fptr,9,1,1,ninput,0.0,N_array,&anynull,&status);
+        fits_get_colnum(fptr, 1, "North", &colnum, &status);
+        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,N_array,&anynull,&status);
         if (status != 0){
             fprintf(stderr,"Error:Failed to read  N coord in metafile\n");
             exit(-1);
         }
 
-        fits_read_col_flt(fptr,10,1,1,ninput,0.0,E_array,&anynull,&status);
+        fits_get_colnum(fptr, 1, "East", &colnum, &status);
+        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,E_array,&anynull,&status);
         if (status != 0){
             fprintf(stderr,"Error:Failed to read E coord in metafile\n");
             exit(-1);
         }
 
-        fits_read_col_flt(fptr,11,1,1,ninput,0.0,H_array,&anynull,&status);
+        fits_get_colnum(fptr, 1, "Height", &colnum, &status);
+        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,H_array,&anynull,&status);
 
         if (status != 0){
             fprintf(stderr,"Error:Failed to read H coord in metafile\n");
@@ -798,8 +835,8 @@ int     main(int argc, char **argv) {
         
         strcpy(pf.hdr.frontend, "MWA-RECVR");
         fprintf(stdout,"Front End [%s]:\n",pf.hdr.frontend);
-        char backend[64];
-        sprintf(backend,"GD-%s-MB-%s-U-%s",GET_DELAYS_VERSION,MAKE_BEAM_VERSION,UTILS_VERSION);
+        char backend[24];
+        snprintf(backend, 24*sizeof(char), "GD-%s-MB-%s-U-%s", GET_DELAYS_VERSION, MAKE_BEAM_VERSION, UTILS_VERSION);
         strcpy(pf.hdr.backend, backend);
         fprintf(stdout,"Back End [%s]:\n",pf.hdr.backend);
 

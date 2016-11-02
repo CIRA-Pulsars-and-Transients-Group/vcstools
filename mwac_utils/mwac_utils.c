@@ -32,6 +32,13 @@ int pfb_output_to_input[NINPUT];
 int miriad_to_mwac[256];
 int single_pfb_mapping[64];
 
+void cp2x2(complex double *Min, complex double *Mout) {
+    Mout[0] = Min[0];
+    Mout[1] = Min[1];
+    Mout[2] = Min[2];
+    Mout[3] = Min[3];
+}
+
 void inv2x2(complex double *Min, complex double *Mout) {
     complex double inv_det = 1.0 / (Min[0] * Min[3] - Min[1] * Min[2]);
     Mout[0] = inv_det * Min[3];
@@ -437,6 +444,122 @@ int read_casa_gains_file(char *gains_file,complex double **antenna_gain, int nan
     return input/2;
 }
 
+int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse_chan, char *gains_file) {
+    // Assumes that memory for antenna has already been allocated
+
+    // Open the calibration file for reading
+    FILE *fp = NULL;
+    fp = fopen(gains_file,"r");
+    if (fp == NULL) {
+        fprintf(stderr,"Failed to open %s: quitting\n",gains_file);
+        exit(1);
+    }
+
+    // Read in the necessary information from the header
+
+    uint32_t intervalCount, antennaCount, channelCount, polarizationCount;
+
+    fseek(fp, 16, SEEK_SET);
+    fread(&intervalCount,     sizeof(uint32_t), 1, fp);
+    fread(&antennaCount,      sizeof(uint32_t), 1, fp);
+    fread(&channelCount,      sizeof(uint32_t), 1, fp);
+    fread(&polarizationCount, sizeof(uint32_t), 1, fp);
+
+    // Error-checking the info extracted from the header
+    if (intervalCount > 1) {
+        fprintf(stderr, "Warning: Only the first interval in the calibration ");
+        fprintf(stderr, "solution (%s) will be used\n", gains_file);
+    }
+    if (antennaCount != nant) {
+        fprintf(stderr, "Error: Calibration solution (%s) ", gains_file);
+        fprintf(stderr, "contains a different number of antennas (%d) ", antennaCount);
+        fprintf(stderr, "than specified (%d)\n", nant);
+        exit(1);
+    }
+    if (channelCount != 24) {
+        fprintf(stderr, "Warning: Calibration solution (%s) ", gains_file);
+        fprintf(stderr, "contains a different number (%d) ", channelCount);
+        fprintf(stderr, "than the expected (%d) channels. ", 24);
+    }
+    if (channelCount <= coarse_chan) {
+        fprintf(stderr, "Error: Requested channel number (%d) ", coarse_chan);
+        fprintf(stderr, "is more than the number of channels (0-%d) ", channelCount-1);
+        fprintf(stderr, "available in the calibration solution (%s)\n", gains_file);
+        exit(1);
+    }
+    int npols = polarizationCount; // This will always = 4
+
+    // Prepare to jump to the first solution to be read in
+    int bytes_left_in_header = 16;
+    int bytes_to_first_jones = bytes_left_in_header + (npols * coarse_chan * sizeof(complex double));
+         //     (See Offringa's specs for details)
+         //     Assumes coarse_chan is zero-offset
+         //     sizeof(complex double) *must* be 64-bit x 2 = 16-byte
+    int bytes_to_next_jones = npols * (channelCount-1) * sizeof(complex double);
+
+    int ant, pol;           // Iterate through antennas and polarisations
+    int ant_idx, pol_idx;   // Used for "re-ordering" the antennas and pols
+    int count = 0;          // Keep track of how many solutions have actually been read in
+    double re, im;          // Temporary placeholders for the real and imaginary doubles read in
+
+    // Create mapping from antenna number in offringa (ant) to
+    // Antenna number similar to RTS (ant_idx)
+    int nant_mwa = 128;
+    int mwac_to_natural[nant_mwa];
+    int n;
+    for (n = 0; n < nant_mwa; n++)
+        mwac_to_natural[natural_to_mwac[n*2]/2] = n;
+
+    // Loop through antennas and read in calibration solution
+    int first = 1;
+    for (ant = 0; ant < nant; ant++) {
+
+        // Jump to next Jones matrix position for this channel
+        if (first) {
+            fseek(fp, bytes_to_first_jones, SEEK_CUR);
+            first = 0;
+        }
+        else {
+            fseek(fp, bytes_to_next_jones, SEEK_CUR);
+        }
+
+        // Reorder the antennas
+        ant_idx = mwac_to_natural[ant];
+
+        // Read in the data
+        for (pol = 0; pol < npols; pol++) {
+
+            pol_idx = 3 - pol; // Read them in "backwards", because RTS's "x" = Offringa's "y"
+
+            fread(&re, sizeof(double), 1, fp);
+            fread(&im, sizeof(double), 1, fp);
+
+            // Check for NaNs
+            if (isnan(re) | isnan(im)) {
+
+                // If NaN, set to identity matrix
+                if (pol_idx == 0 || pol_idx == 3)
+                    antenna_gain[ant_idx][pol_idx] = 1.0 + I*0.0;
+                else
+                    antenna_gain[ant_idx][pol_idx] = 0.0 + I*0.0;
+
+            }
+            else {
+                antenna_gain[ant_idx][pol_idx] = re  + I*im;
+            }
+
+            count++;
+
+        }
+    }
+
+    // Close the file, print a summary, and return
+    fclose(fp);
+    fprintf(stdout, "Read %d inputs from %s\n", count, gains_file);
+
+    return count/npols; // should equal the number of antennas
+}
+
 int gain_file_id(char *gains_file) {
     FILE *fp = NULL;
     int rvalue=0;
@@ -453,11 +576,11 @@ int gain_file_id(char *gains_file) {
         sscanf(line,"%s",key);
         fprintf(stdout,"GET FILE ID: %s\n",key);
         if (strncmp("Spw",key,3) == 0) {
-            rvalue = 1;
+            rvalue = CASA_GAINS_FILE;
             break;
         }
         else {
-            rvalue = 2;
+            rvalue = MIRIAD_GAINS_FILE;
             break;
 
         }
@@ -555,7 +678,7 @@ int read_miriad_gains_file(char *gains_file, complex double **antenna_gain){
     fclose(fp);
     return nant;
 }
-int read_DIJones_file(complex double **G, complex double *Jref, int nant, double *amp,
+int read_rts_file(complex double **G, complex double *Jref, int nant, double *amp,
                       char *fname) {
     
     FILE *fp = NULL;

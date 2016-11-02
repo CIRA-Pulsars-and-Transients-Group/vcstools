@@ -23,6 +23,9 @@
 #define N_COPOL  2                // the number of polarised receptors on an antenna
 #define MAX_FILTER_SIZE 32768     // For the beamformer
 
+#define CASA_GAINS_FILE      1
+#define MIRIAD_GAINS_FILE    2
+
 struct filter_context {
    int ntaps;
    int nsamples;
@@ -45,11 +48,13 @@ extern "C" {
     void multaccum2x2dt(complex double *M1, complex double *M2, complex double *Mout);
     void multaccum2x2dh(complex double *M1, complex double *M2, complex double *Mout);
     void multaccum2x2hd(complex double *M1, complex double *M2, complex double *Mout);
+    void cp2x2(complex double *Min, complex double *Mout);
     void inv2x2(complex double *Min, complex double *Mout);
     void mult2x2tlum(complex double *M1, complex double *M2, complex double *M3, complex double *Mout);
     
     int read_cal_file(complex double **G, int ninp, double *amp);
-    int read_DIJones_file(complex double **G, complex double *M, int nant, double *amp, char *fname);
+    int read_rts_file(complex double **G, complex double *M, int nant, double *amp, char *fname);
+    int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse_chan, char *gains_file);
     int read_miriad_gains_file(char *fname, complex double **gains);
     int read_casa_gains_file(char *fname, complex double **gains,int nant, int chan_to_get);
     int gain_file_id(char *fname);
