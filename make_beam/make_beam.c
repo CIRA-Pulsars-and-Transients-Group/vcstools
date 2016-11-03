@@ -129,11 +129,14 @@ void usage() {
     fprintf(stderr,"-n <number of channels>\n");
     fprintf(stderr,"-a <number of antennas>\n");
     fprintf(stderr,"-m <filter file> loads in the single channel PFB filter coefficients from file\n");
-    fprintf(stderr,"-e <extension of the data files> used for a glob\n");
-    fprintf(stderr,"-o <tag> -- string to add to output file name\n");
+    fprintf(stderr,"-b Begin time [must be supplied]\n");
+    fprintf(stderr,"-e End time [must be supplied]\n");
+    fprintf(stderr,"-E Dry run\n");
+    fprintf(stderr,"-o obs id\n");
     fprintf(stderr,"-r <sample rate in Hz>\n");
     fprintf(stderr,"-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
     fprintf(stderr,"-v <psrfits header> -- write a vdif (difX format) file - but fill data from the the PSRFITS header\n");
+    fprintf(stderr,"-V print version number and exit\n");
     fprintf(stderr,"options: -t [1 or 2] sample size : 1 == 8 bit (INT); 2 == 32 bit (FLOAT)\n");
     
 }
@@ -871,7 +874,6 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
                     Ji[j] = Ji[j]/Fnorm;
                 }
                 
-                
                 inv2x2(Ji,(*invJi)[count]);
             }
             else {
@@ -914,21 +916,26 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
 }
 int main(int argc, char **argv) {
 
-    fprintf(stderr,"Starting ...\n");
-
+/* Parallel processing will be shifted to the wrapper script
     MPI_Init(&argc, &argv);
-    int nproc, me,dir_index;
+    int nproc, me;
 
     MPI_Comm_rank(MPI_COMM_WORLD, &me);
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+*/
     
+    int dir_index;
     int ii;
     double dtmp;
     int c = 0;
     int ch=0;
+    int chan = 0; // 0-offset coarse channel number to process
 
     int agc = -1;
     
+    unsigned long int begin = 0;
+    unsigned long int end   = 0;
+
     int weights = 0;
     int complex_weights = 0;
     int apply_jones = 0;
@@ -947,13 +954,13 @@ int main(int argc, char **argv) {
     
     char *gains_file = NULL;
 
-    char *tag="ch_00";
+    char *obsid;
     char *procdirroot=NULL;
     char *datadirroot=NULL;
     char *extn=NULL;
     int execute=1;
     char procdir[256];
-    glob_t globbuf;
+    char **filenames;
     int read_stdin = 0;
     int nfiles = 0;
     int type=1;
@@ -1002,7 +1009,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
         
-        while ((c = getopt(argc, argv, "1:2:A:a:Cc:d:D:e:E:f:g:G:hij:m:n:o:p:Rr:v:w:s:S:t:X")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:A:a:b:Cc:d:D:e:E:f:g:G:hij:m:n:N:o:p:Rr:v:Vw:s:S:t:X")) != -1) {
             switch(c) {
                 
                 case 'A': {
@@ -1011,7 +1018,7 @@ int main(int argc, char **argv) {
                 }
                 case '1':
                     out1 = atoi(optarg);
-                    sprintf(out1_name,"input_%.3d%.2d.txt",out1,me);
+                    sprintf(out1_name,"input_%.3d.txt",out1);
                     fprintf(stdout,"%s",out1_name);
                     out1_file = fopen(out1_name,"w");
                     if (out1_file == NULL) {
@@ -1023,7 +1030,7 @@ int main(int argc, char **argv) {
                     break;
                 case '2':
                     out2 = atoi(optarg);
-                    sprintf(out2_name,"input_%.3d_%.2d.txt",out2,me);
+                    sprintf(out2_name,"input_%.3d.txt",out2);
                     out2_file = fopen(out2_name,"w");
                     fprintf(stdout,"%s",out2_name);
                     if (out2_file == NULL) {
@@ -1036,6 +1043,9 @@ int main(int argc, char **argv) {
 
                 case 'a':
                     nstation = atoi(optarg);
+                    break;
+                case 'b':
+                    begin = atol(optarg);
                     break;
                 case 'c':
                     complex_weights = 1;
@@ -1053,11 +1063,9 @@ int main(int argc, char **argv) {
                     procdirroot = strdup(optarg);
                     break;
                 case 'e':
-                    extn = strdup(optarg);
-                    execute = 1;
+                    end = atol(optarg);
                     break;
-                case 'E':
-                    extn = strdup(optarg);
+                case 'E': // <-- Turn this into a "dry run" option
                     execute = 0;
                     break;
                 case 'f':
@@ -1090,10 +1098,16 @@ int main(int argc, char **argv) {
                              fclose(filter_file);
                          } 
                     break;
+                case 'N':
+                    chan = atoi(optarg);
+                    break;
                 case 'v':
                     make_vdif=1;
                     vdif_file = strdup(optarg);
                     break;
+                case 'V':
+                    printf("%s\n", MAKE_BEAM_VERSION);
+                    exit(0);
                 case 'h':
                     usage();
                     goto BARRIER;
@@ -1114,7 +1128,7 @@ int main(int argc, char **argv) {
                     sample_rate = atoi(optarg);
                     break;
                 case 'o':
-                    tag = strdup(optarg);
+                    obsid = strdup(optarg);
                     break;
                 case 'p':
                     npol = atoi(optarg);
@@ -1148,6 +1162,9 @@ int main(int argc, char **argv) {
             }
         }
     }
+
+    fprintf(stderr,"Starting ...\n");
+
     switch (nchan) {
         case 88:
             edge = 20;
@@ -1166,6 +1183,7 @@ int main(int argc, char **argv) {
 
     }
 
+/* Parallel processing will be shifted to the wrapper script
     // If input method is stdin, use only a single process
     if (datadirroot == NULL) {
         if (me != 0)
@@ -1175,12 +1193,13 @@ int main(int argc, char **argv) {
         read_heap = 0;
         sprintf(procdir,"./");
     }
+*/
 
     if (procdirroot) {
 
         // Pick up the correct phases files
 
-        dir_index = me+1;
+        dir_index = chan + 1;
         sprintf(procdir,"%s%02d",procdirroot,dir_index);
 
         fprintf(stdout,"Will look for processing files in %s\n",procdir);
@@ -1228,15 +1247,28 @@ int main(int argc, char **argv) {
 
         if (datadirroot) {
 
+            // Generate list of files to work on
 
-            sprintf(pattern, "%s/*%s.%s", datadirroot,rec_channel,extn);
-            glob(pattern, 0, NULL, &globbuf);
-            nfiles = globbuf.gl_pathc;
-            fprintf(stderr,"%s %s\n", procdir, pattern);
-            if (nfiles == 0) {
-                fprintf(stderr,"nfiles = 0\n");
+            // Calculate the number of files
+            nfiles = end - begin + 1;
+            if (nfiles <= 0) {
+                fprintf(stderr,"Cannot beamform on %d files (between %d and %d)\n", nfiles, begin, end);
                 goto BARRIER;
             }
+
+            // Allocate memory for the file name list
+            filenames = (char **)malloc( nfiles*sizeof(char *) );
+
+            // Allocate memory and write filenames 
+            int second;
+            unsigned long int timestamp;
+            for (second = 0; second < nfiles; second++) {
+                timestamp = second + begin;
+                filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
+                sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadirroot, obsid, timestamp, rec_channel );
+                //sprintf( filenames[second], "%s_%ld_ch%s.dat", obsid, timestamp, rec_channel );
+            }
+            fprintf( stderr, "Opening files from %s to %s\n", filenames[0], filenames[nfiles-1] );
 
         }
         
@@ -1311,10 +1343,10 @@ int main(int argc, char **argv) {
             if (chan_to_get == -1) {
 
                 if (reverse) {
-                    chan_to_get = 23 - me;
+                    chan_to_get = 23 - chan;
                 }
                 else {
-                    chan_to_get = me;
+                    chan_to_get = chan;
                 }
             }
             int gains_read = read_casa_gains_file(gains_file,&antenna_gains,nstation,chan_to_get);
@@ -1645,14 +1677,14 @@ int main(int argc, char **argv) {
             if (fp == NULL) { // need to open the next file
                 if (execute == 1) {
 
-                    if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
+                    if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0) {
                         goto BARRIER;
                     }
 
-                    sprintf(working_file,"/dev/shm/%s.working",globbuf.gl_pathv[file_no]);
+                    sprintf(working_file,"/dev/shm/%s.working",filenames[file_no]);
                 }
                 else {
-                    sprintf(working_file,"%s",globbuf.gl_pathv[file_no]);
+                    sprintf(working_file,"%s",filenames[file_no]);
                 } 
                 fp = fopen(working_file, "r");
 
@@ -1674,7 +1706,7 @@ int main(int argc, char **argv) {
                     if (execute == 1 && expunge == 1) {
                         unlink(working_file);
                     }
-                    fprintf(stderr,"finished file %s\n", globbuf.gl_pathv[file_no]);
+                    fprintf(stderr,"finished file %s\n", filenames[file_no]);
                     file_no++;
                     continue;
                 }
@@ -1689,7 +1721,7 @@ int main(int argc, char **argv) {
                     continue;
                 }
 
-                if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
+                if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0) {
                     goto BARRIER;
                 }
             }
@@ -1709,7 +1741,7 @@ int main(int argc, char **argv) {
                     continue;
                 }
                 
-                if ((read_pfb_call(globbuf.gl_pathv[file_no],expunge,heap)) < 0) {
+                if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0) {
                     goto BARRIER;
                 }
                 memcpy(buffer,heap+(items_to_read*heap_step),items_to_read);
@@ -1788,13 +1820,11 @@ int main(int argc, char **argv) {
                     else {
                         
                         /* apply the inv(jones) to the e_dash */
-                        
                         e_dash[0] = e_dash[0] * complex_weights_array[index][ch];
                         e_dash[1] = e_dash[1] * complex_weights_array[index+1][ch];
                         
                         e_true[0] = invJi[index/npol][0]*e_dash[0] + invJi[index/npol][1]*e_dash[1];
                         e_true[1] = invJi[index/npol][2]*e_dash[0] + invJi[index/npol][3]*e_dash[1];
-                        
                         
                     }
                     
@@ -2266,6 +2296,14 @@ BARRIER:
 
     }
     
+    // Free up memory for filenames
+    if (procdirroot && datadirroot) {
+        int second;
+        for (second = 0; second < nfiles; second++)
+            free( filenames[second] );
+        free( filenames );
+    }
+
     if (out1 >= 0) {
         fclose(out1_file);
     }
@@ -2273,10 +2311,11 @@ BARRIER:
         fclose(out2_file);
     }
     
-
+/* Parallel processing will be shifted to the wrapper script
     MPI_Barrier(MPI_COMM_WORLD);
 
     MPI_Finalize();
+*/
     
 }
 

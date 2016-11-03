@@ -5,8 +5,9 @@
 #include "psrfits.h"
 
 void usage() {
-    fprintf(stderr,"psrfits_splice <file 1> <file 2> .....\n");
+    fprintf(stderr,"psrfits_splice <file 1> <file 2> ..... <basefilename>\n");
     fprintf(stderr,"Utility to splice psrfits files together providing they have the same start time\n");
+    fprintf(stderr,"The output will get written to \"[basefilename]_0001.fits\". This file must not already exist.\n");
 }
 
 int match(void *in1, void *in2) {
@@ -197,8 +198,6 @@ int append(char **to_append, void *total, int n){
     pf_total->filenames = (char **)malloc(sizeof(char *));
     pf_total->filenames[0] = "total.fits";
     
-    sprintf(pf_total->basefilename,"total");
-    
     for (f=0;f<n;f++) { // for each file in the list
         
         pf = &list[f]; // get the struct
@@ -317,25 +316,40 @@ int main(int argc, char *argv[]) {
     
     int i=0;
     
-    if (argc < 2) {
+    if (argc < 3) {
         usage();
         exit(-1);
     }
     else {
-        fprintf(stdout,"There are %d files to append\n",argc-1);
+        fprintf(stdout,"There are %d files to append\n",argc-2);
     }
     
     // output file psrfits structure
     struct psrfits pf_total;
     
-    // space for the input filenames
-    char ** filenames = (char **) malloc ((argc-1) * sizeof(char *));
+    // space for the input filenames and output filename
+    char ** filenames = (char **) malloc ((argc-2) * sizeof(char *));
     
     // copy the file name strings
     
-    for (i=1;i < argc;i++) {
+    for (i=1;i < argc-1;i++) {
         filenames[i-1] = strdup(argv[i]);
     }
+
+    // Copy the output filename. If exists, abort.
+    char * basefilename = strdup(argv[argc-1]);
+    char outfile[200];
+    sprintf(outfile, "%s_0001.fits", basefilename);
+    FILE * foutfile;
+
+    if (foutfile = fopen(outfile, "r")) {
+
+        fclose(foutfile);
+        fprintf(stdout, "File %s already exists. Aborting. No output written.\n", basefilename);
+        exit(1);
+
+    }
+
     // this sets up the filename of the output - note initially this sets the total to be
     // the first file in the list
     pf_total.filenames = (char **) malloc (sizeof(char *));
@@ -354,12 +368,12 @@ int main(int argc, char *argv[]) {
     if (rv) { fits_report_error(stderr, rv); exit(-1);}
     rv = psrfits_close(&pf_total);
     if (rv) { fits_report_error(stderr, rv); exit(-1);}
-  
 
-    fprintf(stdout,"Will append %d files \n",argc-1);
+    sprintf(pf_total.basefilename, "%s", basefilename);
+    fprintf(stdout,"Will append %d files to %s\n",argc-2, outfile);
     
    
-    rv = append(filenames,(void *)&pf_total,argc-1);
+    rv = append(filenames,(void *)&pf_total,argc-2);
     // append reopens the file so we must close it again 
     if (rv) {psrfits_close(&pf_total);}
     
