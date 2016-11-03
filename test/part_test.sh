@@ -1,3 +1,43 @@
+#!/bin/bash
+
+if [ -f ch_100.dat ]; then
+    echo 'ch_100.dat present - can run tests'
+else
+    echo 'ch_100.dat not present ... need to pull from repo - this may take a couple of minutes - its a ~3GB file'
+    if ! [ -x "$(command -v git)" ]; then
+        echo 'git is not installed! buildit' >&2
+        exit
+    fi
+    rm -rf remote-data
+    mkdir remote-data
+    
+    cd remote-data
+    git init
+    git remote add origin -t feature/vcs https://ord006@bitbucket.csiro.au/scm/~ord006/data.git
+    git pull
+    cd -
+    ln -s remote-data/vcs/ch_100.dat 
+    
+    if [ -f ch_100.dat ]; then
+        echo 'ch_100.dat present - can run tests'
+    else
+        echo 'failed retrieval ....'
+        exit
+    fi
+fi
+
+if ! [ -x "$(command -v make_beam)" ]; then
+  echo 'make_beam is not installed! buildit' >&2
+  exit
+fi
+if ! [ -x "$(command -v dspsr)" ]; then
+  echo 'dspsr is not installed! buildit' >&2
+  exit
+fi
+
+
+rm -rf 01
+mkdir ./01
 cd ./01
 size=32768
 runner=mpirun
@@ -32,5 +72,6 @@ $runner make_beam -e dat -v psrfits_header.txt -d $dir -n 128 -a 128 -r 10000 -o
 dspsr -c 0.0064 -L 0.1 -A -D 0.0 G0024_1118168248_01.hdr
 pam -e Fp -Fp coherent.ar
 pam --site 7 -m coherent.Fp
-pat -s coherent.std coherent.Fp -f tempo2 > coherent.tim
-tempo2 -f coherent.par -gr plk coherent.tim
+pat -s ../coherent.std coherent.Fp -f tempo2 > coherent.tim
+tempo2 -f ../coherent.par -gr plk coherent.tim
+cd ../
