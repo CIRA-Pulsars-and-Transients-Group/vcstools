@@ -70,8 +70,8 @@ mv G0024_1118168248_01_0001.fits coherent.fits
 mv 2015-06-12-18\:17\:11.ar coherent.ar
 $runner make_beam -e dat -v psrfits_header.txt -d $dir -n 128 -a 128 -r 10000 -o xx  -w flags.txt -c phases.txt -t 1 -D $dir/../
 dspsr -c 0.0064 -L 0.1 -A -D 0.0 G0024_1118168248_01.hdr
-pam -e Fp -Fp coherent.ar
-pam --site 7 -m coherent.Fp
-pat -s ../coherent.std coherent.Fp -f tempo2 > coherent.tim
+pam -e F -F coherent.ar
+pam --site 7 -m coherent.F
+pat -s ../coherent.std coherent.F -f tempo2 > coherent.tim
 tempo2 -f ../coherent.par -gr plk coherent.tim
 cd ../

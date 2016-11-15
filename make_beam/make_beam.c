@@ -38,7 +38,7 @@
 /* convenience type - this just collects all the vdif info together */
 
 typedef struct vdifinfo {
-  
+
     int frame_length; //length of the vdif frame
     int frame_rate; // frames per second
     size_t samples_per_frame; // number of time samples per vdif frame
@@ -56,28 +56,28 @@ typedef struct vdifinfo {
     size_t sizeof_beam; // size of 1 sample of 32bit complex beam data (no headers)
     float *b_scales; // bandpass mean
     float *b_offsets; // bandpass offset
-    
+
     // observation info
     char telescope[24];
     char source[24];
     char obs_mode[8];
     double fctr;
-  
+
     char ra_str[16];
     char dec_str[16];
-    
+
     double BW;
-    
+
     long double MJD_epoch;
-    
+
     char date_obs[24];
     char basefilename[1024];
-    
+
     int got_scales;
 
 } vdifinfo;
 void vdif_write_second (vdifinfo *vf,int8_t *output) {
-    
+
     // form the filename
     // there is a standard naming convention
     char  filename[1024];
@@ -87,7 +87,7 @@ void vdif_write_second (vdifinfo *vf,int8_t *output) {
     fwrite(output,vf->block_size,1,fs);
     fclose(fs);
     // write a CPSR2 test header for DSPSR
-    
+
     char ascii_header[MWA_HEADER_SIZE] = MWA_HEADER_INIT;
     // ascii_header_set(ascii_header,"UTC_START","%s",vf->date_obs);
     ascii_header_set(ascii_header,"DATAFILE","%s",filename);
@@ -95,22 +95,22 @@ void vdif_write_second (vdifinfo *vf,int8_t *output) {
     ascii_header_set(ascii_header,"TELESCOPE","%s",vf->telescope);
     ascii_header_set(ascii_header,"MODE","%s",vf->obs_mode);
     ascii_header_set(ascii_header,"FREQ","%f",vf->fctr);
-    
+
     ascii_header_set(ascii_header,"BW","%f",vf->BW);
     ascii_header_set(ascii_header,"RA","%s",vf->ra_str);
     ascii_header_set(ascii_header,"DEC","%s",vf->dec_str);
     ascii_header_set(ascii_header,"SOURCE","%s",vf->source);
-   
-    
-    
-    
-    
+
+
+
+
+
     sprintf(filename,"%s.hdr",vf->basefilename);
     fs = fopen(filename,"w");
     fwrite(ascii_header,MWA_HEADER_SIZE ,1,fs);
     fclose(fs);
-    
-    
+
+
 }
 void usage() {
     fprintf(stderr,"make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|vdif|psrfits\n");
@@ -138,13 +138,13 @@ void usage() {
     fprintf(stderr,"-v <psrfits header> -- write a vdif (difX format) file - but fill data from the the PSRFITS header\n");
     fprintf(stderr,"-V print version number and exit\n");
     fprintf(stderr,"options: -t [1 or 2] sample size : 1 == 8 bit (INT); 2 == 32 bit (FLOAT)\n");
-    
+
 }
 void int8_to_uint8(int n, int shift, char * to_convert) {
     int j;
     int scratch;
     int8_t with_sign;
-    
+
     for (j = 0; j < n; j++) {
         with_sign = (int8_t) *to_convert;
         scratch = with_sign + shift;
@@ -170,7 +170,7 @@ void float2int_trunc(float *f, int n, float min, float max, int *i) /*includefil
         f[j] = (f[j] > max) ? (max) : f[j];
         f[j] = (f[j] < min) ? (min) : f[j];
         i[j] = (int) rint(f[j]);
-        
+
     }
 }
 void float2int8_trunc(float *f, int n, float min, float max, int8_t *i) /*includefile*/
@@ -180,7 +180,7 @@ void float2int8_trunc(float *f, int n, float min, float max, int8_t *i) /*includ
         f[j] = (f[j] > max) ? (max) : f[j];
         f[j] = (f[j] < min) ? (min) : f[j];
         i[j] = (int8_t) rint(f[j]);
-        
+
     }
 }
 void to_offset_binary(int8_t *i, int n){
@@ -208,14 +208,14 @@ void float2char_trunc(float *f, int n, float min, float max, int8_t *c) /*includ
     free(i);
 }
 void float2int2(float *f_in, int8_t *i_out, int nsamples,float scale) {
-    
+
     /* fill four samples from LSB to MSB per int for all nsamples*/
-  
+
     const float pos_loval = 0.498;
     //const float pos_hival = 1.494;
     const float neg_loval = -0.498;
     //const float neg_hival = -1.494;
-    
+
     float sampval=0;
     size_t offset_out = 0;
     int offset_in = 0;
@@ -225,7 +225,7 @@ void float2int2(float *f_in, int8_t *i_out, int nsamples,float scale) {
     uint8_t *out_sample = (unsigned char *) &i_out[offset_out];
     uint8_t mask = 0x0;
     *out_sample = 0x0; // just incase
-    
+
     for (offset_in = 0; offset_in < nsamples; offset_in++){
         sampval = f_in[offset_in] * mult_scale;
         if (sampval < 0) {
@@ -256,13 +256,13 @@ void float2int2(float *f_in, int8_t *i_out, int nsamples,float scale) {
             out_sample = (unsigned char *) &i_out[offset_out];
             *out_sample = 0x0;
             shift = 0;
-           
-        }
-        
-    }
-   
 
-    
+        }
+
+    }
+
+
+
 }
 complex float get_std_dev_complex(complex float *input, int nsamples) {
     // assume zero mean
@@ -271,26 +271,26 @@ complex float get_std_dev_complex(complex float *input, int nsamples) {
     float isigma = 0;
     float rsigma = 0;
     int i;
-    
+
     for (i=0;i<nsamples;i++){
          rtotal = rtotal+(crealf(input[i])*crealf(input[i]));
          itotal = itotal+(cimagf(input[i])*cimagf(input[i]));
-        
+
      }
     rsigma = sqrtf((1.0/(nsamples-1))*rtotal);
     isigma = sqrtf((1.0/(nsamples-1))*itotal);
-   
+
     return rsigma+I*isigma;
 }
 void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
-    
+
     float percentage = 0.0;
     float occupancy = 17.0;
     float limit = 0.00001;
     float step = 0.001;
-    int i = 0; 
+    int i = 0;
     float gain = *new_gain;
-    
+
     float percentage_clipped = 100;
     while (percentage_clipped > 0 && percentage_clipped > limit) {
         int count = 0;
@@ -319,7 +319,7 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
 }
 
 void get_mean_complex(complex float *input, int nsamples, float *rmean,float *imean, complex float *cmean) {
-    
+
     int i=0;
     float rtotal = 0;
     float itotal = 0 ;
@@ -332,34 +332,34 @@ void get_mean_complex(complex float *input, int nsamples, float *rmean,float *im
     *rmean=rtotal/nsamples;
     *imean=itotal/nsamples;
     *cmean=ctotal/nsamples;
-    
+
 }
 void normalise_complex(complex float *input, int nsamples, float scale) {
-    
+
     int i=0;
-    
+
     for (i=0;i<nsamples;i++){
         input[i]=input[i]*scale;
     }
-    
+
 }
 
 void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_var, int iscomplex,int normalise,int update,int clear,int shutdown) {
     // putpose is to generate a mean value for each channel/polaridation
-    
+
     int i=0,j=0;;
     int p=0;
     float *data_ptr = NULL;
-    
+
     static float **band;
-    
+
     static float **chan_min;
 
     static float **chan_max;
-   
+
 
     static int setup = 0;
-    
+
     if (setup == 0) {
         band = (float **) calloc (npol,sizeof(float *));
         chan_min = (float **) calloc (npol,sizeof(float *));
@@ -371,22 +371,23 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
         }
         setup = 1;
     }
-    
+
     if (update) {
-        
-        for (j=0;j<nchan;j++){
-            for (p = 0;p<npol;p++) {
+        for (p = 0;p<npol;p++) {
+            for (j=0;j<nchan;j++){
+
                 band[p][j] = 0.0;
             }
         }
-        
+
         if (iscomplex == 0) {
             data_ptr = (float *) data;
-            
+
             for (i=0;i<nstep;i++) {
-                for (j=0;j<nchan;j++){
-                    
-                    for (p = 0;p<npol;p++) {
+                for (p = 0;p<npol;p++) {
+                    for (j=0;j<nchan;j++){
+
+
                         if (i==0) {
                             chan_min[p][j] = *data_ptr;
                             chan_max[p][j] = *data_ptr;
@@ -401,51 +402,54 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
                         data_ptr++;
                     }
                 }
-                
+
             }
         }
         else {
             complex float  *data_ptr = (complex float *) data;
             for (i=0;i<nstep;i++) {
-                for (j=0;j<nchan;j++){
-                    for (p = 0;p<npol;p++) {
+                for (p = 0;p<npol;p++) {
+                    for (j=0;j<nchan;j++){
+
                         band[p][j] += cabsf(*data_ptr);
                         data_ptr++;
                     }
                 }
-                
+
             }
-            
+
         }
-        
+
     }
     // set the offsets and scales - even if we are not updating ....
-    
+
     float *out=scales;
     float *off = offsets;
-    for (j=0;j<nchan;j++){
-        for (p = 0;p<npol;p++) {
+    for (p = 0;p<npol;p++) {
+        for (j=0;j<nchan;j++){
+
             // current mean
             *out = ((band[p][j]/nstep))/new_var; // removed a divide by 32 here ....
             fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f (max-min) %f\n",j,p,(band[p][j]/nstep),*out,(chan_max[p][j] - chan_min[p][j]));
             out++;
             *off = 0.0;
-            
+
             off++;
-            
+
         }
     }
     // apply them to the data
-    
+
     if (normalise) {
-        
+
         data_ptr = (float *) data;
-        
+
         for (i=0;i<nstep;i++) {
             float *normaliser = scales;
             float *off  = offsets;
-            for (j=0;j<nchan;j++){
-                for (p = 0;p<npol;p++) {
+            for (p = 0;p<npol;p++) {
+                for (j=0;j<nchan;j++){
+
                     *data_ptr = ((*data_ptr) - (*off))/(*normaliser); // 0 mean normalised to 1
                     //fprintf(stderr,"%f %f %f\n",*data_ptr,*off,*normaliser);
                     off++;
@@ -453,33 +457,33 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
                     normaliser++;
                 }
             }
-            
+
         }
     }
-    
+
     // clear the weights if required
-    
+
     if (clear) {
 
         float *out=scales;
         float *off = offsets;
+        for (p = 0;p<npol;p++) {
+            for (j=0;j<nchan;j++){
 
-        for (j=0;j<nchan;j++){
-            for (p = 0;p<npol;p++) {
                 // reset
                 *out = 1.0;
-                
-                
-                
+
+
+
                 out++;
                 *off = 0.0;
-                
+
                 off++;
-                
+
             }
         }
     }
-    
+
     // free the memory
     if (shutdown) {
         for (i=0;i<npol;i++) {
@@ -487,7 +491,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             free(chan_min[i]);
             free(chan_max[i]);
         }
-        
+
 
         free(band);
         free(chan_min);
@@ -499,11 +503,11 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
 
 
 int read_pfb_call(char *in_name, int expunge, char *heap) {
-    
-   
+
+
     char out_file[MAX_COMMAND_LENGTH];
-    
-   
+
+
     int fd_in = open(in_name,O_RDONLY);
 
     if (fd_in < 0) {
@@ -515,9 +519,9 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
     }
     int fd_out = 0;
     if (heap == NULL) {
-        
+
         sprintf(out_file,"/dev/shm/%s.working",in_name);
-        
+
         fprintf(stdout,"\nConverting %s to %s\n",in_name,out_file);
 
         if ((access(out_file,F_OK) != -1) && (!expunge)){
@@ -548,98 +552,98 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
 
 }
 int make_get_delay_call(char *delay_file, time_t increment) { // No longer called by this executeable
-    
+
     // open the file with the delay call
     FILE *Dfile = NULL;
     char *delay_command = NULL;
     char *new_command = NULL;
     struct tm delaytime;
     int test=1;
-    
+
     size_t n = 0;
-    
+
     Dfile = fopen(delay_file,"rw");
     // fprintf(stdout,"opening %s\n",delay_file);
-    
+
     // parse the line for the time
     if(Dfile != NULL) {
-        
+
         getline(&delay_command,&n,Dfile);
         fprintf(stdout,"(%ld characters) %s",n,delay_command);
-        
+
         new_command = malloc(n+3); // new command will only be 2 chars longer at most
-      
-        
+
+
         while (delay_command != NULL){
-        
+
             char *token  = strsep(&delay_command,"-");
             if (token == NULL) {
                 // fprintf(stdout,"empty token\n");
             }
             if (strncmp(delay_command,"z",1) == 0) {
                     // found the time token
-               
-               
+
+
                 char full_time_string[80],junk_chars[64];
                 sscanf(delay_command,"%c %s",junk_chars,full_time_string);
                 // fprintf(stdout,"%s",full_time_string);
-             
+
                 strptime(full_time_string,"%Y-%m-%dT%H:%M:%S",&delaytime);
-                
+
                 // increment the time
                 time_t old_time = timegm(&delaytime);
                 time_t new_time = old_time+increment;
                 struct tm *incremented_time = gmtime(&new_time);
                 // we now have to deal with the time formats
-                
+
                 strcat(new_command,"-");
                 if (test) {
                     fprintf(stdout,"token:%s\n",token);
                     fprintf(stdout,"remain:%s\n",delay_command);
                 }
                 strcat(new_command,token);
-                
+
                 token = strsep(&delay_command,"-"); // year
                 token = strsep(&delay_command,"-"); // month
                 token = strsep(&delay_command,"-"); // day-time
-                
+
                 // now add our own date
-                
+
                 strcat(new_command,"-z ");
                 char temp_timestr[80];
                 strftime(temp_timestr,79,"%Y-%m-%dT%H:%M:%S",incremented_time);
-                
+
                 strcat(new_command,temp_timestr);
                 strcat(new_command," -");
                 strcat (new_command,delay_command); // add on the rest of the command_line
-                
+
                 // form the new command line
                 if (test)
                 fprintf(stdout,"new:%s\n",new_command);
-                
-                
+
+
                 //free(incremented_time);
-             
+
                 // run it
-                
+
                 system(new_command);
-                
+
                 // write the new line to the file
                 fclose(Dfile);
                 unlink(delay_file);
                 Dfile = fopen(delay_file,"w");
                 fprintf(Dfile,"%s\n",new_command);
                 fclose(Dfile);
-                
+
                 return (1);
-                
+
             }
             else if (strncmp(delay_command,"d",1) == 0) {
                  // found the declination which <may> have a negative sign -
                  // quit just in case;
                 fprintf(stderr,"get_delay_call: the declination is before the time in the command line. There could be an ambiguous parsing of the declination. Please ensure the time (-z) is before the declination (-d)\n");
                 return -1;
-                
+
             }
             else {
                 if (strlen(new_command) > 6) {
@@ -652,29 +656,29 @@ int make_get_delay_call(char *delay_file, time_t increment) { // No longer calle
                 strcat(new_command,token);
                 if (test)
                     fprintf(stdout,"new:%s\n",new_command);
-                
-        
+
+
             }
         }
         free(new_command);
         fclose(Dfile);
         return(-1);
-        
-        
+
+
     }
     else {
         fprintf(stderr,"Cannot open delay command file %s\n",delay_file);
         return -1;
     }
-    
-    
-    
-    
+
+
+
+
 }
 
 float get_weights(int nstation, int nchan, int npol, int weights, char *weights_file, double **array){
-    
-    
+
+
     float wgt_sum=0;
 
     FILE *wgts = NULL;
@@ -682,10 +686,10 @@ float get_weights(int nstation, int nchan, int npol, int weights, char *weights_
     if (*array == NULL) {
         *array = (double *) calloc(nstation*npol,sizeof(double));
     }
-    
+
     double *weights_array = *array;
-   
-    
+
+
     if (weights == 1) {
         fprintf(stderr,"Open weights file %s\n",weights_file);
         wgts = fopen(weights_file,"r");
@@ -713,7 +717,7 @@ float get_weights(int nstation, int nchan, int npol, int weights, char *weights_
                 return -1;
             }
             fclose(wgts);
-            
+
         }
          fprintf(stderr,"Closed weights file %s\n",weights_file);
     }
@@ -724,43 +728,43 @@ float get_weights(int nstation, int nchan, int npol, int weights, char *weights_
         }
         wgt_sum = nstation*npol;
     }
-    
-    
+
+
     return wgt_sum;
 }
 
 int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weights, double ***phases_array, complex double ***complex_weights_array,long checkpoint) {
-    
+
     int count = 0;
     FILE *phases = NULL;
     int ch=0;
-   
+
     int rval = 0;
-    
+
     if (*phases_array == NULL) {
         *phases_array = (double **) calloc(nstation*npol,sizeof(double *));
-        
+
         for (count = 0;count < nstation*npol;count++) {
             (*phases_array)[count] = (double *) calloc(nchan,sizeof(double));
-            
+
         }
 
     }
-   
+
     if (*complex_weights_array == NULL) {
-        
+
         *complex_weights_array = (complex double **) calloc(nstation*npol,sizeof(complex double *));
-        
+
         for (count = 0;count < nstation*npol;count++) {
-           
+
             (*complex_weights_array)[count] = (complex double *) calloc(nchan,sizeof(complex double));
         }
-        
+
     }
     if (phases_file != NULL) {
         fprintf(stderr,"Open phases file %s\n",phases_file);
         phases = fopen(phases_file,"r");
-   
+
         if (phases==NULL) {
             fprintf(stderr,"Cannot open phases file %s:%s\n",phases_file,strerror(errno));
             return -1;
@@ -770,9 +774,9 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
             if (checkpoint != 0) {
                 fseek(phases,checkpoint,SEEK_SET);
             }
-        
+
             count = 0;
-        
+
             while ((count < nstation*npol) && !feof(phases)) {
                 for (ch=0;ch<nchan;ch++) {
                     rval = fscanf(phases,"%lf\n",&(*phases_array)[count][ch]);
@@ -796,10 +800,10 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
                 checkpoint = ftell(phases);
                 fprintf(stderr,"Checkpoint set to %ld\n",checkpoint);
             }
-        
+
             fclose(phases);
         }
-    
+
         fprintf(stderr,"Closed phases file %s\n",phases_file);
     }
 
@@ -819,12 +823,12 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
 
 }
 int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double ***invJi, long checkpoint) {
-    
+
     int i=0;
     FILE *jones = NULL;
     int rval=0;
-    
-    
+
+
     if (*invJi == NULL) {
         *invJi = (complex double **) calloc(nstation, sizeof(complex double *)); // Gain in Desired Direction ..... da da da dum.....
         for (i = 0; i < nstation; i++) { //
@@ -835,8 +839,8 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
             } //
         }
     }
-    
-    
+
+
     complex double Ji[4];
     jones = fopen(jones_file,"r");
     if (jones==NULL) {
@@ -849,15 +853,15 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
         }
 
         int count = 0;
-        
-       
+
+
         while (count < nstation) {
             for (i=0 ; i < 4; i++) {
                 float re,im;
                 rval = fscanf(jones,"%f %f ",&re,&im);
-                
+
                 Ji[i] = re - I*im; // the RTS conjugates the sky so beware ....
-                
+
             }
             if (rval != 2)
                 break;
@@ -873,7 +877,7 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
                 for (j=0; j < 4;j++) {
                     Ji[j] = Ji[j]/Fnorm;
                 }
-                
+
                 inv2x2(Ji,(*invJi)[count]);
             }
             else {
@@ -897,7 +901,7 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
 
             count++;
         }
-        
+
         if (count != nstation) {
             fprintf(stderr,"Mismatch between Jones matrices and antennas - check Jones file\n");
             fclose(jones);
@@ -909,7 +913,7 @@ int get_jones(int nstation,int nchan,int npol,char *jones_file,complex double **
 
         fclose(jones);
     }
-    
+
     return checkpoint;
 
 
@@ -923,7 +927,7 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &me);
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
 */
-    
+
     int dir_index;
     int ii;
     double dtmp;
@@ -932,7 +936,7 @@ int main(int argc, char **argv) {
     int chan = 0; // 0-offset coarse channel number to process
 
     int agc = -1;
-    
+
     unsigned long int begin = 0;
     unsigned long int end   = 0;
 
@@ -942,7 +946,7 @@ int main(int argc, char **argv) {
     int non_rts_gains = 0;
     int chan_to_get = -1; // coarse channel ID for CASA soln
     char rec_channel[4]; // 0 - 255 receiver 1.28MHz channel
-    
+
 
     char *weights_file = NULL;
     char *phases_file = NULL;
@@ -951,7 +955,7 @@ int main(int argc, char **argv) {
     char *vdif_file = NULL;
 
 
-    
+
     char *gains_file = NULL;
 
     char *obsid;
@@ -968,12 +972,11 @@ int main(int argc, char **argv) {
     int read_files = 0;
     int read_heap = 1;
 
-    
+
     int make_psrfits = 0;
     int make_vdif = 0;
     int coherent_out = 1;
     int incoherent_out = 0;
-    
     int sample_rate = 10000;
     int fringe_int = 0;
 
@@ -984,15 +987,15 @@ int main(int argc, char **argv) {
 
     int out1 = -1;
     int out2 = -1;
-    
+
     FILE *out1_file = NULL;
     FILE *out2_file = NULL;
-    
+
     char out1_name[128];
     char out2_name[128];
-    
+
     char *source_name = NULL;
-     
+
     int edge = 0;
     int fft_mode = 1;
     int ipfb = 0;
@@ -1002,16 +1005,17 @@ int main(int argc, char **argv) {
     struct filter_context fcontext;
 
     int nchan = 128;
-    
+
     nfrequency = nchan;
     nstation = 128;
     npol=2;
+    int outpol = 4;
 
     if (argc > 1) {
-        
+
         while ((c = getopt(argc, argv, "1:2:A:a:b:Cc:d:D:e:E:f:g:G:hij:m:n:N:o:p:Rr:v:Vw:s:S:t:X")) != -1) {
             switch(c) {
-                
+
                 case 'A': {
                     agc = atoi(optarg);
                     break;
@@ -1055,7 +1059,7 @@ int main(int argc, char **argv) {
                     complex_weights = 1;
                     phases_file = NULL;
                     break;
-                    
+
                 case 'd':
                     datadirroot = strdup(optarg);
                     break;
@@ -1091,12 +1095,12 @@ int main(int argc, char **argv) {
                                      index++;
                                      fcontext.filter[index] = 0.0;
                                      fprintf(stdout,"%d %f %f\n",fcontext.ntaps,fcontext.filter[index-1],fcontext.filter[index]);
-                                     fcontext.ntaps++; 
+                                     fcontext.ntaps++;
                                  }
                              }
 
                              fclose(filter_file);
-                         } 
+                         }
                     break;
                 case 'N':
                     chan = atoi(optarg);
@@ -1111,7 +1115,7 @@ int main(int argc, char **argv) {
                 case 'h':
                     usage();
                     goto BARRIER;
-                    
+
                 case 'i':
                     coherent_out=0;
                     incoherent_out=1;
@@ -1177,7 +1181,7 @@ int main(int argc, char **argv) {
             fft_mode = 1;
             edge = 0;
     }
-   
+
     if (ipfb > 0) { // overide fft_mode
        fft_mode = 3;
 
@@ -1252,14 +1256,14 @@ int main(int argc, char **argv) {
             // Calculate the number of files
             nfiles = end - begin + 1;
             if (nfiles <= 0) {
-                fprintf(stderr,"Cannot beamform on %d files (between %d and %d)\n", nfiles, begin, end);
+                fprintf(stderr,"Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
                 goto BARRIER;
             }
 
             // Allocate memory for the file name list
             filenames = (char **)malloc( nfiles*sizeof(char *) );
 
-            // Allocate memory and write filenames 
+            // Allocate memory and write filenames
             int second;
             unsigned long int timestamp;
             for (second = 0; second < nfiles; second++) {
@@ -1271,44 +1275,44 @@ int main(int argc, char **argv) {
             fprintf( stderr, "Opening files from %s to %s\n", filenames[0], filenames[nfiles-1] );
 
         }
-        
+
     }
 
     if (complex_weights ==0) {
         incoherent_out = 1;
         coherent_out = 0;
     }
-   
 
-  
+
+
     size_t bytes_per_spec=0;
-    
+
     double *weights_array = NULL;
     double **phases_array = NULL;
-    
+
     complex double **complex_weights_array = NULL;
     complex double **invJi = NULL;
     complex double *antenna_gains = NULL;
-    
+
    // FILE *wgts = NULL;
    // FILE *phases = NULL;
    // FILE *jones = NULL;
-    
+
     // these are only used if we are prepending the fitsheader
     FILE *fitsheader = NULL;
     struct psrfits pf;
     // this is only used if we are writing vdif
     vdif_header vhdr;
     vdifinfo vf;
-    
+
     // these are the filepositions of the Jones and Phases files
-    
+
     long jones_pos=0;
     long phase_pos=0;
-    
-   
+
+
     float wgt_sum = get_weights(nstation,nchan,npol,weights,weights_file, &weights_array); // this is now a flag file
-    
+
     if (wgt_sum == 0 || wgt_sum == -1) {
         fprintf(stderr,"Zero weight sum or error on read -- check %s\n",weights_file);
         goto BARRIER;
@@ -1337,7 +1341,7 @@ int main(int argc, char **argv) {
                 fprintf(stderr,"Failed to parse the correct number of antenna gains: expected: %d -- got %d\n",nstation,gains_read);
                 goto BARRIER;
             }
-        
+
         }
         if (id == casa_gains) {
             if (chan_to_get == -1) {
@@ -1363,7 +1367,7 @@ int main(int argc, char **argv) {
 #ifdef HAVE_CUDA
         int dev=0;
         cudaSetDevice(dev);
-#endif        
+#endif
         char proc_vdif_file[1024];
         sprintf(proc_vdif_file,"%s/%s",procdir,vdif_file);
 
@@ -1374,15 +1378,15 @@ int main(int argc, char **argv) {
         else {
             fprintf(stderr,"Cannot load fitsheader - check %s\n",proc_vdif_file);
             goto BARRIER;
-            
+
         }
         fclose(fitsheader);
-        
+
         // Now going to fill the header with appropriate data from the psrfits header
         // First how big is a DataFrame.
         // single station
         // dual pol as a "channel"
-        
+
         vf.bits=8; // this is because it is all the downstream apps support (dspsr/diFX)
                    // it is
         // complex data
@@ -1401,12 +1405,12 @@ int main(int argc, char **argv) {
         // this should be 10,000 per second
         vf.frame_rate = vf.sample_rate/vf.samples_per_frame;
         vf.block_size = vf.frame_length * vf.frame_rate;
-        
+
         fprintf(stderr,"Frame length: %d\n",vf.frame_length);
-        
+
         createVDIFHeader(&vhdr, vf.frame_length, vf.threadid,  vf.bits, vf.nchan,
                              vf.iscomplex, vf.stationid);
-        
+
         // Now we have to add the time
         // fprintf(stdout,"start day %d start sec %f",pf.hdr.start_day,pf.hdr.start_sec);
         //
@@ -1415,23 +1419,23 @@ int main(int argc, char **argv) {
         uint64_t mjdsec = (pf.hdr.start_day*86400) + pf.hdr.start_sec;
         setVDIFMJDSec(&vhdr,mjdsec);
         setVDIFFrameNumber(&vhdr,0);
-        
+
         strncpy(vf.exp_name,pf.hdr.project_id,17);
         strncpy(vf.scan_name,pf.hdr.source,17);
-        
+
         vf.b_scales = (float *)malloc(sizeof(float) * vf.nchan);
         vf.b_offsets = (float *)malloc(sizeof(float) * vf.nchan);
         vf.got_scales = 0;
-        
-      
+
+
         strncpy(vf.telescope,pf.hdr.telescope,24);
         strncpy(vf.obs_mode,"PSR",8);
         strncpy(vf.ra_str,pf.hdr.ra_str,16);
         strncpy(vf.dec_str,pf.hdr.dec_str,16);
         strncpy(vf.date_obs,pf.hdr.date_obs,24);
-        
+
         vf.MJD_epoch = pf.hdr.MJD_epoch;
-        
+
         vf.fctr = pf.hdr.fctr;
         if (source_name == NULL) {
             strncpy(vf.source,"unset",24);
@@ -1439,15 +1443,16 @@ int main(int argc, char **argv) {
         else {
             strncpy(vf.source,source_name,24);
         }
-       
-        
+
+
         sprintf(vf.basefilename,"%s_%s_%02d",pf.hdr.project_id,pf.hdr.source,dir_index);
-        
+
 
 
     }
-    
+
     if (make_psrfits==1) {
+
         char proc_psrfits_file[1024];
         sprintf(proc_psrfits_file,"%s/%s",procdir,psrfits_file);
         fitsheader=fopen(proc_psrfits_file,"r");
@@ -1457,26 +1462,26 @@ int main(int argc, char **argv) {
         else {
             fprintf(stderr,"Cannot load fitsheader - check %s\n",proc_psrfits_file);
             goto BARRIER;
-            
+
         }
         fclose(fitsheader);
         // now we need to create a fits file with this header
-        
-        
+
+
         // We need to change a few things to pick up the type of beam we are:
-        
+
         // npols + nbits and whether pols are added
         pf.filenum = 0;             // This is the crucial one to set to initialize things
         pf.rows_per_file = 200;     // I assume this is a max subint issue
         //
-        
-        
-      
-        pf.hdr.npol = 1;
-        pf.hdr.summed_polns = 1;
+
+
+
+        pf.hdr.npol = outpol;
+        pf.hdr.summed_polns = 0;
         pf.hdr.nchan = nchan;
-    
-        
+
+
         if (type == 1) {
             pf.hdr.nbits = 8;
             pf.sub.FITS_typecode = TBYTE;
@@ -1489,7 +1494,7 @@ int main(int argc, char **argv) {
         //    pf.hdr.nbits = 64;
         //    pf.sub.FITS_typecode = TCOMPLEX;
         //}
-        
+
         bytes_per_spec = pf.hdr.nbits * pf.hdr.nchan * pf.hdr.npol/8;
         pf.sub.bytes_per_subint = (pf.hdr.nbits * pf.hdr.nchan *
                                    pf.hdr.npol * pf.hdr.nsblk) / 8;
@@ -1507,18 +1512,18 @@ int main(int argc, char **argv) {
             pf.sub.dat_offsets[ii] = 0.0;
             pf.sub.dat_scales[ii] = 1.0;
         }
-        
+
         pf.sub.data = (unsigned char *)malloc(pf.sub.bytes_per_subint);
         pf.sub.rawdata = pf.sub.data;
-        
+
         sprintf(pf.basefilename,"%s_%s_%02d",pf.hdr.project_id,pf.hdr.source,dir_index);
-        
-        
+
+
     }
-    
+
     int nspec = 1;
     size_t items_to_read = nstation*npol*nchan*2;
-    float *spectrum = (float *) calloc(nspec*nchan,sizeof(float));
+    float *spectrum = (float *) calloc(nspec*nchan*outpol,sizeof(float));
     float *incoherent_sum = (float *) calloc(nspec*nchan,sizeof(float));
 
     complex float **fringe = calloc(nchan,sizeof(complex float));
@@ -1536,10 +1541,10 @@ int main(int argc, char **argv) {
     float *noise_floor = calloc(nchan*npol*npol,sizeof(float));
     complex float *pol_X = (complex float *) calloc(nchan+2*edge,sizeof(complex float));
     complex float *pol_Y = (complex float *) calloc(nchan+2*edge,sizeof(complex float));
-    
+
     char *buffer = (char *) malloc(nspec*items_to_read*sizeof(int8_t));
     char *heap = NULL;
-    
+
     size_t heap_step = 0;
 
     if (read_heap) {
@@ -1548,23 +1553,23 @@ int main(int argc, char **argv) {
         assert(heap);
     }
 
-    int outpol = 1;
-    
+
+
     float *data_buffer = NULL;
     float *filter_buffer_X = NULL; // only needed for full PFB inversion (fft_mode == 3)
     float *filter_buffer_Y = NULL; // only needed for full PFB inversion (fft_mode == 3)
 
     float *filter_buffer_X_ptr = NULL; // only needed for full PFB inversion (fft_mode == 3)
     float *filter_buffer_Y_ptr = NULL; // only needed for full PFB inversion (fft_mode == 3)
-    
+
     float *filter_out_X = NULL; // only needed for full PFB inversion (fft_mode == 3)
     float *filter_out_Y = NULL; // only needed for full PFB inversion (fft_mode == 3)
 
     float *filter_out_X_ptr = NULL; // only needed for full PFB inversion (fft_mode == 3)
     float *filter_out_Y_ptr = NULL; // only needed for full PFB inversion (fft_mode == 3)
-    
+
     int8_t *out_buffer_8 = NULL;
-    
+
     if (make_psrfits == 1) {
         data_buffer = (float *) valloc(nchan * outpol * pf.hdr.nsblk*sizeof(float));
         out_buffer_8 = (int8_t *) malloc(outpol*nchan* pf.hdr.nsblk*sizeof(int8_t));
@@ -1577,21 +1582,21 @@ int main(int argc, char **argv) {
     }
 
     if (make_vdif == 1) {
-        
+
         // data_buffer needs to hold a seconds worth of complex float samples //
         // remember in vdif we pack the polarisations as channels
         // and most readers only want 2 channels so we are going to invert the pfb
         fprintf(stderr,"Samples per frame:%zu\n",vf.samples_per_frame);
         fprintf(stderr,"Sample rate (samps/sec):%d\n",vf.sample_rate);
         fprintf(stderr,"frame rate (frames/sec): %d\n",vf.frame_rate);
-        
-        
+
+
         vf.sizeof_beam = vf.samples_per_frame * vf.nchan * (vf.iscomplex+1); // a single frame (128 samples), remember vf.nchan is kludged to npol
 
         fprintf(stderr,"Size of frame (pre-process):%zu\n",vf.sizeof_beam);
-        
+
         vf.sizeof_buffer = vf.frame_rate * vf.sizeof_beam; // one full second (1.28 million 2 bit samples)
-        
+
         fprintf(stderr,"Size of buffer (pre-process):%zu\n",vf.sizeof_buffer);
         data_buffer = (float *) valloc (vf.sizeof_buffer*sizeof(float)); // one full second (1.28 million time samples) as floats
         out_buffer_8 = (int8_t *) malloc(vf.block_size);
@@ -1600,19 +1605,19 @@ int main(int argc, char **argv) {
             goto BARRIER;
         }
         if (fft_mode == 3) {
-            filter_buffer_X = (float *) valloc ((vf.sizeof_buffer/vf.nchan+2*fcontext.ntaps)*sizeof(float)); // one full second (1.28 million time samples) + ntap as floats  
-            filter_buffer_Y = (float *) valloc ((vf.sizeof_buffer/vf.nchan+2*fcontext.ntaps)*sizeof(float)); // one full second (1.28 million time samples) + ntap as floats  
+            filter_buffer_X = (float *) valloc ((vf.sizeof_buffer/vf.nchan+2*fcontext.ntaps)*sizeof(float)); // one full second (1.28 million time samples) + ntap as floats
+            filter_buffer_Y = (float *) valloc ((vf.sizeof_buffer/vf.nchan+2*fcontext.ntaps)*sizeof(float)); // one full second (1.28 million time samples) + ntap as floats
             if (filter_buffer_X == NULL || filter_buffer_Y == NULL) {
                 fprintf(stderr,"Failed to allocate buffer space for filter\n");
                 goto BARRIER;
             }
-        
+
             filter_buffer_X_ptr = &filter_buffer_X[2*fcontext.ntaps];
             filter_buffer_Y_ptr = &filter_buffer_Y[2*fcontext.ntaps];
 
-            filter_out_X = (float *) valloc ((vf.sizeof_buffer/vf.nchan)*sizeof(float)); // one full second (1.28 million time samples) + ntap as floats  
-            filter_out_Y = (float *) valloc ((vf.sizeof_buffer/vf.nchan)*sizeof(float)); // one full second (1.28 million time samples) + ntap as floats  
-            
+            filter_out_X = (float *) valloc ((vf.sizeof_buffer/vf.nchan)*sizeof(float)); // one full second (1.28 million time samples) + ntap as floats
+            filter_out_Y = (float *) valloc ((vf.sizeof_buffer/vf.nchan)*sizeof(float)); // one full second (1.28 million time samples) + ntap as floats
+
             if (filter_out_X == NULL || filter_out_Y == NULL) {
                 fprintf(stderr,"Failed to allocate buffer space for filtered samples\n");
                 goto BARRIER;
@@ -1649,7 +1654,7 @@ int main(int argc, char **argv) {
     char working_file[MAX_COMMAND_LENGTH];
 
     while(finished == 0) { // keep going indefinitely
-        
+
         if (agc == agccount) {
             if (make_psrfits) {
                 set_levels = 1;
@@ -1685,7 +1690,7 @@ int main(int argc, char **argv) {
                 }
                 else {
                     sprintf(working_file,"%s",filenames[file_no]);
-                } 
+                }
                 fp = fopen(working_file, "r");
 
                 if (fp == NULL) {
@@ -1727,20 +1732,20 @@ int main(int argc, char **argv) {
             }
             if (heap_step < sample_rate) {
                 memcpy(buffer,heap+(items_to_read*heap_step),items_to_read);
-                
+
                 heap_step++;
                // fprintf(stderr,"make_beam copied %d steps out if the heap\n",heap_step);
             }
             else {
                 heap_step = 0;
                 file_no++;
-             
+
                 if (file_no >= nfiles) { // finished file list
                     fprintf(stderr,"make_beam finished:\n");
                     finished = 1;
                     continue;
                 }
-                
+
                 if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0) {
                     goto BARRIER;
                 }
@@ -1749,25 +1754,25 @@ int main(int argc, char **argv) {
 
             }
         }
-        
+
         int8_t *in_ptr=(int8_t *) buffer;
-        int stat = 0;    
-        bzero(spectrum,(nchan*sizeof(float)));
+        int stat = 0;
+        bzero(spectrum,(nchan*outpol*sizeof(float)));
         for (stat=0;stat<nchan;stat++) {
             bzero(beam[stat],(nstation*npol*sizeof(complex float)));
         }
         bzero(incoherent_sum,(nchan*sizeof(float)));
         bzero(noise_floor,(nchan*npol*npol*sizeof(float)));
-        
+
         if (offset_in == 0 && make_psrfits == 1) {
             bzero(data_buffer,(pf.hdr.nsblk*nchan*outpol*sizeof(float)));
         }
         else if (offset_in == 0 && make_vdif == 1) {
             bzero(data_buffer,(vf.sizeof_buffer*sizeof(float)));
         }
-                  
+
         for (index = 0; index < nstation*npol;index = index + 2) {
-            
+
             for (ch=0;ch<nchan;ch++) {
                 complex float e_true[2],e_dash[2];
 
@@ -1795,12 +1800,12 @@ int main(int argc, char **argv) {
                     e_true[1] = conjf(e_dash[1]);
                 }
                 if (complex_weights==1) {
-                    
+
                     if (apply_jones == 0){
-                        
+
                         e_true[0] = e_true[0] * complex_weights_array[index][ch];
                         e_true[1] = e_true[1] * complex_weights_array[index+1][ch];
-                        
+
                         if (non_rts_gains == 1) {
                             if (antenna_gains[natural_to_mwac[index]] != 0.0 + I*0.0) {
                                 e_true[0] = e_true[0] / antenna_gains[natural_to_mwac[index]];
@@ -1818,16 +1823,16 @@ int main(int argc, char **argv) {
                         }
                     }
                     else {
-                        
+
                         /* apply the inv(jones) to the e_dash */
                         e_dash[0] = e_dash[0] * complex_weights_array[index][ch];
                         e_dash[1] = e_dash[1] * complex_weights_array[index+1][ch];
-                        
+
                         e_true[0] = invJi[index/npol][0]*e_dash[0] + invJi[index/npol][1]*e_dash[1];
                         e_true[1] = invJi[index/npol][2]*e_dash[0] + invJi[index/npol][3]*e_dash[1];
-                        
+
                     }
-                    
+
 
 
                         // next thing to do is to output the fringe for two antennas -
@@ -1842,19 +1847,19 @@ int main(int argc, char **argv) {
                         fringe[ch][3] = e_true[1];
                     }
 
-                   
+
                     noise_floor[ch*npol*npol] += e_true[0] * conj(e_true[0]);
                     noise_floor[ch*npol*npol+1] += e_true[0] * conj(e_true[1]);
                     noise_floor[ch*npol*npol+2] += e_true[1] * conj(e_true[0]);
                     noise_floor[ch*npol*npol+3] += e_true[1] * conj(e_true[1]);
-                 
-                
+
+
                     beam[ch][index] = e_true[0];
                     beam[ch][index+1] = e_true[1];
 
                     incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index]*weights_array[index]*(e_true[0] * conj(e_true[0])))/wgt_sum;
                     incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index+1]*weights_array[index+1]*(e_true[1] * conj(e_true[1])))/wgt_sum;
-                  
+
                 }
                 else {
 
@@ -1865,19 +1870,19 @@ int main(int argc, char **argv) {
             }
             in_ptr = in_ptr + (nchan*2); // next pol0
         }
-        
+
         // detect the beam or prep from invert_pfb
         // reduce over each channel for the beam
         // do this by twos
         int polnum = 0;
         int step = 0;
-        if (complex_weights == 1) {        
+        if (complex_weights == 1) {
             for (ch=0;ch<nchan;ch++) {
                 for (polnum = 0; polnum < npol; polnum++) {
                     int next_good = 2;
                     int stride = 4;
 
-                    while (next_good < nstation*npol) { 
+                    while (next_good < nstation*npol) {
                         for (step=polnum;step<nstation*npol;step=step+stride) {
                             beam[ch][step] = beam[ch][step] + beam[ch][step+next_good];
                         }
@@ -1918,54 +1923,85 @@ int main(int argc, char **argv) {
                         stopped_fringe[ch][1] = 0;
                         stopped_fringe[ch][2] = 0;
                         stopped_fringe[ch][3] = 0;
-                        
+
                     }
 
                     integ++;
                 }
             }
         }
-        for (ch=0;ch<nchan;ch++) {
-            
-            if (coherent_out) { // only used in the case of PSRFITS output and coherent beam
-               spectrum[ch] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
-               spectrum[ch] = spectrum[ch] + ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
-              
+        if (make_psrfits == 1) {
+            int index = 0;
+            for (int product = 0; product < outpol; product++) {
+                for (ch=0;ch<nchan;ch++,index++) {
+                    if (coherent_out) { // only used in the case of PSRFITS output and coherent beam
+                        // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
+                        // so for a single timestep we do not have to interleave - I could just stack these
+
+                        // So coherency or Stokes?
+                        if (product == 0) {
+                            // Stokes I
+                            spectrum[index] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
+                            spectrum[index] = spectrum[index] + ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
+                        }
+                        else if (product == 1) {
+                            // This will be Stokes Q
+                            spectrum[index] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
+                            spectrum[index] = spectrum[index] - ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
+
+                        }
+                        else if (product == 2) {
+                            // This will be Stokes U
+                            complex double temp = (beam[ch][0]*conj(beam[ch][1]) - noise_floor[ch*npol*npol+1])/wgt_sum;
+                            spectrum[index] = 2.0 * creal(temp);
+                        }
+                        else if (product == 3) {
+                            // This will be Stokes V
+                            complex double temp = (beam[ch][0]*conj(beam[ch][1]) - noise_floor[ch*npol*npol+1])/wgt_sum;
+                            spectrum[index] = -2.0 * cimag(temp);;
+                        }
+                    }
+                    else if (incoherent_out){
+                        spectrum[ch] = incoherent_sum[ch];
+                    }
+
+                }
             }
-            else if (incoherent_out){
-                spectrum[ch] = incoherent_sum[ch];
-            }
-            
-            if (make_vdif==1) { // single time step
+        }
+        if (make_vdif==1) { // single time step
+
+            for (ch=0;ch<nchan;ch++) {
+
                 pol_X[ch] = beam[ch][0]/sqrt(wgt_sum);
                 pol_Y[ch] = beam[ch][1]/sqrt(wgt_sum);
                 //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_X[ch]),cimag(pol_X[ch]));
                 //fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_Y[ch]),cimag(pol_Y[ch]));
             }
-          
+
         }
-        
+
+
         if (make_psrfits == 1 && !finished) {
-            
-            
+
+
             if (offset_out < pf.sub.bytes_per_subint) {
-                
-                memcpy((void *)((char *)data_buffer + offset_in),spectrum,sizeof(float)*nchan);
-                offset_in += sizeof(float)*nchan;
-                
+
+                memcpy((void *)((char *)data_buffer + offset_in),spectrum,sizeof(float)*nchan*outpol);
+                offset_in += sizeof(float)*nchan*outpol;
+
                 //for (ch=0;ch<nchan;ch++) {
                 //    fprintf(stdout,"XX+YY:ch: %d spec: %f\n",ch,spectrum[ch]);
                 //}
-              
+
                 offset_out = offset_out + bytes_per_spec;
                 // fprintf(stderr,"specnum %d: %lu of %d bytes for this subint (buffer is %lu bytes) \n",specnum,offset_out,pf.sub.bytes_per_subint,pf.hdr.nsblk*nchan*outpol*sizeof(float));
-                
+
             }
-            
+
             if (offset_out == pf.sub.bytes_per_subint) {
-                
+
                 if (type == 1) {
-                    
+
                     if (set_levels) {
                         flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
                         set_levels = 0;
@@ -1992,10 +2028,10 @@ int main(int argc, char **argv) {
                 pf.sub.lst += pf.sub.tsubint;;
                 fprintf(stderr,"Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
                        pf.tot_rows, pf.T, pf.filenum, pf.status);
-                
-                
-                
-                
+
+
+
+
                 if (complex_weights) {
                     phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
                     if (phase_pos < 0) {
@@ -2012,12 +2048,12 @@ int main(int argc, char **argv) {
                     }
                     fprintf(stderr,"new jones checkpoint=%ld",jones_pos);
                 }
-                
-                
+
+
                 offset_out = 0;
                 offset_in = 0;
             }
-           
+
 
         }
         else if (make_vdif == 1 && !finished) {
@@ -2026,20 +2062,20 @@ int main(int argc, char **argv) {
             // have relatively simple bookkeeping
             // in vdif mode we just want the beam sum - not the Stokes
             // this is essentailly a two bit sampled (undetected) complex voltage stream
-            
+
             // we are beginnging with a beam that has both pols next to each other for each channel
-            
+
             float *data_buffer_ptr = &data_buffer[offset_in]; // are we going to keep going until we have a seconds worth ...
             //fprintf(stderr,"offset %ld of %ld: %p\n",offset_in,vf.sizeof_buffer,data_buffer_ptr);
             // we are going to invert the nchan signals into a single channel
             // we may have some missing data but we do not know that
             // perhaps ignore it for now
-            
+
             //
             float rmean,imean;
             complex float cmean;
-            
-            if (fft_mode==1 || fft_mode==2) { 
+
+            if (fft_mode==1 || fft_mode==2) {
                 // these modes do not expect any input buffering
                 //fprintf(stderr,"Inverting %d chan PFB...",nchan);
                 if (offset_in == vf.sizeof_buffer-vf.sizeof_beam) {
@@ -2054,40 +2090,40 @@ int main(int argc, char **argv) {
                 // now we have nchan - time steps and 2 channels
                 // fprintf(stderr,"done\n");
                 for (ch=0;ch<(nchan+2*edge);ch=ch+1) { // input channels have become time steps ....
-               
+
                     int data_offset = 4*ch;
                     data_buffer_ptr[data_offset]   = crealf(pol_X[ch]);
                     data_buffer_ptr[data_offset+1] = cimagf(pol_X[ch]);
                     data_buffer_ptr[data_offset+2] = crealf(pol_Y[ch]);
                     data_buffer_ptr[data_offset+3] = cimagf(pol_Y[ch]);
-                
-                
+
+
                 }
-           
-           
-            
+
+
+
                 offset_in = offset_in + vf.sizeof_beam;
-            
+
                 // we now have built a nchan (time) samples for both pols - continue going until we
                 // have 1 second of data
 
             }
             else if (fft_mode == 3) {
-                
-                 
+
+
                 for (ch=0;ch<nchan;ch=ch+1) { // fill up the buffers ....
-               
+
                     int filter_offset = 2*ch;
                     filter_buffer_X_ptr[filter_offset]   = crealf(pol_X[ch]);
                     filter_buffer_X_ptr[filter_offset+1] = cimagf(pol_X[ch]);
                     filter_buffer_Y_ptr[filter_offset] = crealf(pol_Y[ch]);
                     filter_buffer_Y_ptr[filter_offset+1] = cimagf(pol_Y[ch]);
-                
-                
+
+
                     // fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_X[ch]),cimag(pol_X[ch]));
                     // fprintf(stderr,"ch: %d r: %f i: %f\n",ch,creal(pol_Y[ch]),cimag(pol_Y[ch]));
                 }
-                
+
                 filter_buffer_X_ptr += 2*nchan;
                 filter_buffer_Y_ptr += 2*nchan;
 
@@ -2105,7 +2141,7 @@ int main(int argc, char **argv) {
                     fcontext.nsamples = ntap_per_call*fcontext.ntaps;
                     int ngood_per_call = fcontext.nsamples - fcontext.ntaps;
                     int ncalls = vf.sizeof_buffer/(4*ngood_per_call);
-                    fprintf(stderr,"Sizeof Complex %lu\n",sizeof(Complex)); 
+                    fprintf(stderr,"Sizeof Complex %lu\n",sizeof(Complex));
                     fprintf(stderr,"Call invert_pfb expecting %d filtered timesamples per call and %d calls \n",ngood_per_call,ncalls);
                     fprintf(stderr,"last call will have produced %d samples of %lu\n",(ngood_per_call*ncalls),vf.sizeof_buffer/4);
                     fprintf(stderr,"Data is channelised to 128 ch (10kHz sampling) so number of input time samples in call is %d\n",fcontext.nsamples/nchan);
@@ -2117,15 +2153,15 @@ int main(int argc, char **argv) {
                         Complex *in_ptr_Y = (Complex *) &filter_buffer_Y[2*sub_samp - 2*fcontext.ntaps];
                         Complex *out_ptr_X = (Complex *) &filter_out_X[2*sub_samp];
                         Complex *out_ptr_Y = (Complex *) &filter_out_X[2*sub_samp];
-                        fprintf(stderr,"cuda_invert\n"); 
+                        fprintf(stderr,"cuda_invert\n");
                         cuda_invert_pfb ((Complex *) in_ptr_X,(Complex *) out_ptr_X,(Complex *) fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples/nchan);
                         cuda_invert_pfb ((Complex *) in_ptr_Y,(Complex *) out_ptr_Y,(Complex *) fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples/nchan);
-#else                        
-                        fprintf(stderr,"invert\n"); 
+#else
+                        fprintf(stderr,"invert\n");
                         invert_pfb((complex float *) filter_buffer_X+(2*(sub_samp - fcontext.ntaps)),(complex float *) filter_out_X+(2*sub_samp),nchan,1,1,1,fft_mode,0,(void *) &fcontext);
                         invert_pfb((complex float *) filter_buffer_Y+(2*(sub_samp - fcontext.ntaps)),(complex float *) filter_out_Y+(2*sub_samp),nchan,1,1,1,fft_mode,0, (void *) &fcontext);
-#endif                    
-                    
+#endif
+
                     }
                     // fill the data buffer
                     // we have to interleave for compatibility .... so many passes through memory ... so little time
@@ -2134,10 +2170,10 @@ int main(int argc, char **argv) {
                     filter_out_X_ptr = filter_out_X;
                     filter_out_Y_ptr = filter_out_Y;
                     for (t=0;t<vf.sizeof_buffer;t=t+4) {
-                       
+
                         data_buffer[t] = *filter_out_X_ptr;
                         data_buffer[t+1] = *(filter_out_X_ptr+1);
-                        
+
                         data_buffer[t+2] = *filter_out_Y_ptr;
                         data_buffer[t+3] = *(filter_out_Y_ptr+1);
 
@@ -2165,91 +2201,91 @@ int main(int argc, char **argv) {
                 }
 
             }
-                       
+
             if (offset_in == vf.sizeof_buffer) { // data_buffer is full_
                 if (vf.got_scales == 0) {
-                    
+
                     get_mean_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,&rmean,&imean,&cmean);
                     complex float stddev = get_std_dev_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0);
-                                    
+
                     fprintf(stderr,"DUAL POL: mean_r,sigma: %f,%f mean_i,sigma: %f,%f\n",rmean,crealf(stddev),imean,cimagf(stddev));
-                    
+
                     if (fabsf(rmean) > 0.001) {
                         fprintf(stderr,"Error significantly non-zero mean");
                         MPI_Finalize();
                         goto BARRIER;
                     }
-                    
+
                     vf.b_scales[0] = crealf(stddev);
                     vf.b_scales[1] = crealf(stddev);
-                    
-                  
+
+
                     vf.got_scales = 1;
                     for (ch=0;ch<vf.nchan;ch=ch+1) {
                          fprintf(stderr,"ch: %d (stddev): %f\n",ch,vf.b_scales[ch]);
                     }
                     set_level_occupancy((complex float *) data_buffer,vf.sizeof_buffer/2.0,&gain);
-                    
+
                     fprintf(stderr,"Gain by level occupancy %f\n",gain);
-                 
+
                 }
                 agccount++;
-                
-              
-                
+
+
+
                 normalise_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,1.0/gain);
 
                 data_buffer_ptr = data_buffer;
                 offset_out = 0;
-                
+
                 while  (offset_out < vf.block_size) {
-                   
+
                     memcpy((out_buffer_8+offset_out),&vhdr,32); // add the current header
                     offset_out = offset_out + 32; // offset into the output array
-                    
+
                     float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out));
-                    to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
-                    
+                    //to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
+
                     offset_out = vf.frame_length + offset_out - 32; // increment output offset
                     data_buffer_ptr = data_buffer_ptr + vf.sizeof_beam;
                     nextVDIFHeader(&vhdr,vf.frame_rate);
-                    
+
                 }
                 if (offset_out == vf.block_size) {
                     // full seconds worth of samples
                     vdif_write_second(&vf,out_buffer_8); // remember this header is the next one.
-                    
-                    
-                    
-                    
+
+
+
+
                     if (complex_weights) {
-                       
+
                         phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
                         if (phase_pos == -1)
                             goto BARRIER;
-                        
+
                          fprintf(stderr,"new phase checkpoint=%ld\n",phase_pos);
                     }
                     if (apply_jones) {
-                       
+
                         jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
                         if (jones_pos == -1)
                             goto BARRIER;
-                        
+
                          fprintf(stderr,"new jones checkpoint=%ld\n",jones_pos);
-                    
+
                     }
-                    
+
                     offset_out=0;
                     offset_in=0;
                 }
             }
         }
         else {
-            
+
             fwrite(spectrum,sizeof(float),nchan,stdout);
-            
-           
+
+
         }
         specnum++;
     }
@@ -2267,13 +2303,13 @@ BARRIER:
         int itmp2 = 0;
         double dtmp = 0;
         int status = 0;
-        
+
         //fits_open_file(&(pf.fptr),pf.filename,READWRITE,&status);
 
         fits_read_key(pf.fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, &status);
         fits_read_key(pf.fptr, TINT, "STT_SMJD", &itmp, NULL, &status);
         fits_read_key(pf.fptr, TINT, "STT_IMJD", &itmp2, NULL, &status);
-        
+
         if (dtmp > 0.5) {
             itmp = itmp+1;
             if (itmp == 86400) {
@@ -2295,7 +2331,7 @@ BARRIER:
         flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,0,0,0,1);
 
     }
-    
+
     // Free up memory for filenames
     if (procdirroot && datadirroot) {
         int second;
@@ -2310,12 +2346,11 @@ BARRIER:
     if (out2 >= 0) {
         fclose(out2_file);
     }
-    
+
 /* Parallel processing will be shifted to the wrapper script
     MPI_Barrier(MPI_COMM_WORLD);
 
     MPI_Finalize();
 */
-    
-}
 
+}
