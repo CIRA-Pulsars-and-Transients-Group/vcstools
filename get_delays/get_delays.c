@@ -500,7 +500,7 @@ int     main(int argc, char **argv) {
         utc2mjd(time_utc,&intmjd,&fracmjd);
         
 
-        fprintf(stdout,"calib:start intmjd=%.1f fracmjd=%f\n",intmjd,fracmjd);
+        //fprintf(stdout,"calib:start intmjd=%.1f fracmjd=%f\n",intmjd,fracmjd);
         
         /**/
         
@@ -510,11 +510,11 @@ int     main(int argc, char **argv) {
         
         mjd = mjd + (secs+0.5)/86400.0;
 
-        fprintf(stdout,"calib:increment %d seconds to: %f\n",secs,mjd);
+        //fprintf(stdout,"calib:increment %d seconds to: %f\n",secs,mjd);
         
         mjd2lst(mjd,&lmst);
 
-        fprintf(stdout,"calib: current lmst (radian) = %f\n",lmst);
+        //fprintf(stdout,"calib: current lmst (radian) = %f\n",lmst);
         // last is in epoch of MJD (
         
         /* for the look direction <not the tile> */
@@ -522,7 +522,7 @@ int     main(int argc, char **argv) {
         mean_ra = ra_hours * DH2R;
         mean_dec = dec_degs * DD2R;
 
-        fprintf(stdout,"calib:Mean (HA RA /Dec) HA %lf RA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,mean_ra,mean_dec);
+        //fprintf(stdout,"calib:Mean (HA RA /Dec) HA %lf RA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,mean_ra,mean_dec);
         slaMap(mean_ra,mean_dec,pr,pd,px,rv,eq,mjd,&ra_ap,&dec_ap);
         
         // Lets go mean to apparent precess from J2000.0 to EPOCH of date.
@@ -531,9 +531,9 @@ int     main(int argc, char **argv) {
         ha = slaRanorm(lmst-ra_ap)*DR2H;
 
         
-        fprintf(stdout,"calib:Apparent (look direction/precessed HA RA /Dec) HA %lf RA %lf hrs  Apparent Dec %f degrees \n",ha,ra_ap*DR2H,dec_ap*DR2D);
-        fprintf(stdout,"calib:Apparent (look direction/precessed HA RA /Dec) HA %lf RA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,ra_ap,dec_ap);
-        fprintf(stdout,"calib:LMST %lf (radian) \n",lmst);
+        //fprintf(stdout,"calib:Apparent (look direction/precessed HA RA /Dec) HA %lf RA %lf hrs  Apparent Dec %f degrees \n",ha,ra_ap*DR2H,dec_ap*DR2D);
+        //fprintf(stdout,"calib:Apparent (look direction/precessed HA RA /Dec) HA %lf RA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,ra_ap,dec_ap);
+        //fprintf(stdout,"calib:LMST %lf (radian) \n",lmst);
 
         /* now HA/Dec to Az/El */
         
@@ -544,7 +544,7 @@ int     main(int argc, char **argv) {
         slaDe2h(app_ha_rad,dec_ap,MWA_LAT*DD2R,&az,&el);
         
 
-        fprintf(stdout,"calib:Look direction Azimuth %lf (deg)  Elevation %lf (deg) \n",az*DR2D,el*DR2D);
+        //fprintf(stdout,"calib:Look direction Azimuth %lf (deg)  Elevation %lf (deg) \n",az*DR2D,el*DR2D);
         
         /* now we need the direction cosines */
         
@@ -553,7 +553,7 @@ int     main(int argc, char **argv) {
         unit_H = sin(el);
         
         if (get_rts || get_offringa) {
-            fprintf(stdout, "Calculating direction-dependent matrices\n");
+            //fprintf(stdout, "Calculating direction-dependent matrices\n");
             double Fnorm;
             calcEjones(E, // pointer to 4-element (2x2) voltage gain Jones matrix
                        frequency, // observing freq (Hz)
@@ -563,16 +563,16 @@ int     main(int argc, char **argv) {
                        az, // azimuth & zenith angle to sample
                        (DPIBY2-el));
             for (i=0; i < 4;i++) {
-                fprintf(stdout,"calib:Jones Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
-                fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
+                //fprintf(stdout,"calib:Jones Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
+                //fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
             }
             for (i=0;i<nstation;i++){
                 mult2x2d(M[i],invJref,G[i]); // forms the DI gain
                 mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
                 
                 for (j=0; j < 4;j++) {
-                    fprintf(stdout,"calib:Jones Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
-                    fprintf(stdout,"calib:ratio Mi/Ji [%d]  %f %f \n",i,creal(M[i][j])/creal(Ji[i][j]),cimag(M[i][j])/cimag(Ji[i][j]));
+                    //fprintf(stdout,"calib:Jones Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
+                    //fprintf(stdout,"calib:ratio Mi/Ji [%d]  %f %f \n",i,creal(M[i][j])/creal(Ji[i][j]),cimag(M[i][j])/cimag(Ji[i][j]));
                 }
                 // this automatically spots an RTS flagged tile
                 Fnorm = 0;
@@ -599,10 +599,10 @@ int     main(int argc, char **argv) {
         /* for the tile <not the look direction> */
         
 
-        fprintf(stdout,"calib: Tile position (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az,tile_pointing_el,tile_pointing_ra,tile_pointing_dec );
-         fprintf(stdout,"calib: Tile position (radian) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az*DD2R,tile_pointing_el*DD2R,tile_pointing_ra*DD2R,tile_pointing_dec*DD2R);
-        fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az*DR2D,el*DR2D,ra_ap*DR2D,dec_ap*DR2D);
-        fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az,el,ra_ap,dec_ap);
+        //fprintf(stdout,"calib: Tile position (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az,tile_pointing_el,tile_pointing_ra,tile_pointing_dec );
+         //fprintf(stdout,"calib: Tile position (radian) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az*DD2R,tile_pointing_el*DD2R,tile_pointing_ra*DD2R,tile_pointing_dec*DD2R);
+        //fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az*DR2D,el*DR2D,ra_ap*DR2D,dec_ap*DR2D);
+        //fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az,el,ra_ap,dec_ap);
 
         
         
@@ -623,7 +623,7 @@ int     main(int argc, char **argv) {
         size_t ninput = 0;
         fits_read_key(fptr,TINT,"NAXIS2",&ninput,NULL,&status);
 
-        fprintf(stdout,"Status: will read %zu inputs\n",ninput);
+        //fprintf(stdout,"Status: will read %zu inputs\n",ninput);
 
         if (status != 0){
             fprintf(stderr,"Error:Failed to read size of binary table in TILEDATA\n");
@@ -655,7 +655,7 @@ int     main(int argc, char **argv) {
             }
 
             sscanf(testval,"EL_%f",&cable_array[i]);
-            fprintf(stdout,"Input %d Cable %f\n",i,cable_array[i]);
+            //fprintf(stdout,"Input %d Cable %f\n",i,cable_array[i]);
         }
 
         fits_get_colnum(fptr, 1, "North", &colnum, &status);
@@ -704,7 +704,7 @@ int     main(int argc, char **argv) {
             
             ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
 
-            fprintf(stdout,"calib: Antenna %d: HA %f Dec %f --  X: %f Y: %f Z: %f\n",row,app_ha_rad, app_dec_rad,X,Y,Z);
+            //fprintf(stdout,"calib: Antenna %d: HA %f Dec %f --  X: %f Y: %f Z: %f\n",row,app_ha_rad, app_dec_rad,X,Y,Z);
             calcUVW (app_ha_rad,app_dec_rad,X,Y,Z,&u,&v,&w);
 
             // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
@@ -725,12 +725,12 @@ int     main(int argc, char **argv) {
             double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
             double delay_samples = delay_time * samples_per_sec;
 
-            fprintf(stdout,"Antenna %d, E %f, N %f, H %f\n",row,E,N,H);
-            fprintf(stdout,"Distance from reference, E-E_ref %f, N-N_ref %f, H-N_ref %f\n",E-E_ref,N-N_ref,H-H_ref);
+            //fprintf(stdout,"Antenna %d, E %f, N %f, H %f\n",row,E,N,H);
+            //fprintf(stdout,"Distance from reference, E-E_ref %f, N-N_ref %f, H-N_ref %f\n",E-E_ref,N-N_ref,H-H_ref);
 
-            fprintf(stdout,"Look direction, E %f, N %f, H %f\n",unit_E,unit_N,unit_H);
-            fprintf(stdout,"calib:geom: %f w: %f cable(-cable_ref): %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
-            fprintf(stdout,"calib:geom: u %f v %f w %f\n",u,v,w);// we have to get this amount of delay into the data
+            //fprintf(stdout,"Look direction, E %f, N %f, H %f\n",unit_E,unit_N,unit_H);
+            //fprintf(stdout,"calib:geom: %f w: %f cable(-cable_ref): %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
+            //fprintf(stdout,"calib:geom: u %f v %f w %f\n",u,v,w);// we have to get this amount of delay into the data
 
 
 
@@ -751,9 +751,9 @@ int     main(int argc, char **argv) {
                 phase[ch] = phase[ch]*2*M_PI*conjugate;
 
                 if (ch == 0) {
-                    fprintf(stdout,"Comp:ch %d Freq (Cycles/s) %ld\n",ch,freq_ch);
-                    fprintf(stdout,"Comp:ch %d Freq (Cycles/sample) %lf\n",ch,(double)freq_ch/samples_per_sec);
-                    fprintf(stdout,"Comp:Geo: %f Cable %f (total (s)) %g:Phase (raw) %f Phase (sample) %f\n",geometry,cable,(geometry+cable)/VLIGHT,phase[ch],phase[ch]/samples_per_sec);
+                    //fprintf(stdout,"Comp:ch %d Freq (Cycles/s) %ld\n",ch,freq_ch);
+                    //fprintf(stdout,"Comp:ch %d Freq (Cycles/sample) %lf\n",ch,(double)freq_ch/samples_per_sec);
+                    //fprintf(stdout,"Comp:Geo: %f Cable %f (total (s)) %g:Phase (raw) %f Phase (sample) %f\n",geometry,cable,(geometry+cable)/VLIGHT,phase[ch],phase[ch]/samples_per_sec);
                 }
 
                 if (phase_file != NULL) {
@@ -1078,7 +1078,7 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
     // assuming that the beam centre is normal to the ground plane, the separation should be used instead of the za.
     // ground_plane = 2.0 * sin( 2.0*pi * dpl_hgt/lambda * cos(za) );
     
-    fprintf(stdout,"calib: dpl_hgt %f radperm %f za %f\n",dpl_hgt,radperm,za);
+    //fprintf(stdout,"calib: dpl_hgt %f radperm %f za %f\n",dpl_hgt,radperm,za);
     
     ground_plane = 2.0 * sin(dpl_hgt * radperm * cos(za)) / n_dipoles;
     
@@ -1100,13 +1100,13 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
     rot[2] = sin(dec) * sin(ha);
     rot[3] = cos(ha);
     
-    fprintf(stdout,"calib:HA is %f hours \n",ha*DR2H);
+    //fprintf(stdout,"calib:HA is %f hours \n",ha*DR2H);
     // rot is the Jones matrix, response just contains the phases, so this should be an element-wise multiplication.
     response[0] *= rot[0] * ground_plane;
     response[1] *= rot[1] * ground_plane;
     response[2] *= rot[2] * ground_plane;
     response[3] *= rot[3] * ground_plane;
-    fprintf(stdout,"calib:HA is %f groundplane factor is %f\n",ha*DR2H,ground_plane);
+    //fprintf(stdout,"calib:HA is %f groundplane factor is %f\n",ha*DR2H,ground_plane);
     return (result);
     
 } /* calcEjones */
