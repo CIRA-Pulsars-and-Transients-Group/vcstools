@@ -229,6 +229,7 @@ int     main(int argc, char **argv) {
     FILE *phase_file = NULL;
     FILE *flag_file = NULL;
     FILE *jones_file = NULL;
+    FILE *map_file = NULL;
     FILE *psrfits_file = NULL;
     int nsecs = 1;
     int secs = 0;
@@ -378,18 +379,16 @@ int     main(int argc, char **argv) {
         char filename[1024];
         
         sprintf(filename,"%s/phases.txt",add_str);
-        
         phase_file = fopen(filename,"w");
         
         sprintf(filename,"%s/flags.txt",add_str);
-        
         flag_file = fopen(filename,"w");
         
         sprintf(filename,"%s/jones.txt",add_str);
-        
         jones_file = fopen(filename,"w");
         
-        
+        sprintf(filename,"%s/antenna_map.txt",add_str);
+        map_file = fopen(filename,"w");
     }
 
 
@@ -470,6 +469,7 @@ int     main(int argc, char **argv) {
     double unit_N;
     double unit_E;
     double unit_H;
+    int    ant; // Used for iterating through tiles
     
 
     // Read in the Jones matrices for this (coarse) channel, if requested
@@ -636,6 +636,9 @@ int     main(int argc, char **argv) {
         float *cable_array = (float *) malloc(ninput*sizeof(float));
         char *testval = (char *) malloc(1024);
         int *flag_array = (int *)malloc(ninput*sizeof(int));
+        int *antenna_num = (int *)malloc(ninput*sizeof(int));
+        int *antenna_idx = (int *)malloc(ninput*sizeof(int));
+        int *antenna_map = (int *)malloc(ninput*sizeof(int));
         int colnum;
         
         /* read the columns */
@@ -678,6 +681,27 @@ int     main(int argc, char **argv) {
         if (status != 0){
             fprintf(stderr,"Error:Failed to read H coord in metafile\n");
             exit(-1);
+        }
+
+        fits_get_colnum(fptr, 1, "Antenna", &colnum, &status);
+        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,antenna_num,&anynull,&status);
+
+        if (status != 0){
+            fprintf(stderr,"Error:Failed to read Antenna number in metafile\n");
+            exit(-1);
+        }
+
+        fits_get_colnum(fptr, 1, "Input", &colnum, &status);
+        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,antenna_idx,&anynull,&status);
+
+        if (status != 0){
+            fprintf(stderr,"Error:Failed to read Input number in metafile\n");
+            exit(-1);
+        }
+
+        // Create mapping based on metafits file "Input" and "Antenna" fields
+        for (ant = 0; ant < ninput; ant++) {
+            antenna_map[antenna_idx[ant]] = antenna_num[ant];
         }
 
         fits_close_file(fptr,&status);
@@ -771,6 +795,11 @@ int     main(int argc, char **argv) {
                         fprintf(flag_file,"1.0\n");
                     }
                 }
+
+                if (map_file != NULL) {
+                    for (ant = 0; ant < ninput; ant++)
+                        fprintf(map_file,"%d\n",antenna_map[ant]);
+                }
             }
             if (row%npol == 0) {
                 if (jones_file != NULL) {
@@ -784,6 +813,17 @@ int     main(int argc, char **argv) {
             
             
         }
+
+        // Free up memory allocated in this loop! (FIX ME: Take allocations out of loop!)
+        free(N_array);
+        free(E_array);
+        free(H_array);
+        free(cable_array);
+        free(testval);
+        free(flag_array);
+        free(antenna_num);
+        free(antenna_idx);
+        free(antenna_map);
     }
     if (verbose)
         puts("==========================");
@@ -792,9 +832,10 @@ int     main(int argc, char **argv) {
         fclose(phase_file);
     if (flag_file !=NULL)
         fclose(flag_file);
-    if (jones_file != NULL) {
+    if (jones_file != NULL)
         fclose(jones_file);
-    }
+    if (map_file != NULL)
+        fclose(map_file);
       /* ========= Generate a FITS HEADER ==========*/
     if (get_psrfits) {
         
