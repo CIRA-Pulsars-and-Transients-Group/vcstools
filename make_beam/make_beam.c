@@ -1261,7 +1261,7 @@ int main(int argc, char **argv) {
         }
 
         // Open file containing antenna mapping information
-        tmp = fopen(map_file,"R");
+        tmp = fopen(map_file,"r");
 
         if (tmp) {
             // Count number of numbers in file
@@ -1279,6 +1279,8 @@ int main(int argc, char **argv) {
 
             fprintf(stdout, "Number of antenna mappings read in from %s: %d\n", map_file, nant);
         }
+        else
+            fprintf(stderr, "Unable to open %s\n", map_file);
 
         if (datadirroot) {
 

@@ -498,17 +498,9 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
     int bytes_to_next_jones = npols * (channelCount-1) * sizeof(complex double);
 
     int ant, pol;           // Iterate through antennas and polarisations
-    int ant_idx, pol_idx;   // Used for "re-ordering" the antennas and pols
+    int pol_idx;   // Used for "re-ordering" the antennas and pols
     int count = 0;          // Keep track of how many solutions have actually been read in
     double re, im;          // Temporary placeholders for the real and imaginary doubles read in
-
-    // Create mapping from antenna number in offringa (ant) to
-    // Antenna number similar to RTS (ant_idx)
-    int nant_mwa = 128;
-    int mwac_to_natural[nant_mwa];
-    int n;
-    for (n = 0; n < nant_mwa; n++)
-        mwac_to_natural[natural_to_mwac[n*2]/2] = n;
 
     // Loop through antennas and read in calibration solution
     int first = 1;
@@ -523,9 +515,6 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
             fseek(fp, bytes_to_next_jones, SEEK_CUR);
         }
 
-        // Reorder the antennas
-        ant_idx = mwac_to_natural[ant];
-
         // Read in the data
         for (pol = 0; pol < npols; pol++) {
 
@@ -539,13 +528,13 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
 
                 // If NaN, set to identity matrix
                 if (pol_idx == 0 || pol_idx == 3)
-                    antenna_gain[ant_idx][pol_idx] = 1.0 + I*0.0;
+                    antenna_gain[ant][pol_idx] = 1.0 + I*0.0;
                 else
-                    antenna_gain[ant_idx][pol_idx] = 0.0 + I*0.0;
+                    antenna_gain[ant][pol_idx] = 0.0 + I*0.0;
 
             }
             else {
-                antenna_gain[ant_idx][pol_idx] = re  + I*im;
+                antenna_gain[ant][pol_idx] = re  + I*im;
             }
 
             count++;

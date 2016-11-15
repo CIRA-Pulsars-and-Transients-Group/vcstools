@@ -700,8 +700,22 @@ int     main(int argc, char **argv) {
         }
 
         // Create mapping based on metafits file "Input" and "Antenna" fields
-        for (ant = 0; ant < ninput; ant++) {
-            antenna_map[antenna_idx[ant]] = antenna_num[ant]*2;
+        if (secs == 0) {
+            if (get_rts) {
+                for (ant = 0; ant < ninput; ant++) {
+                    antenna_map[antenna_idx[ant]] = antenna_num[ant]*2;
+                }
+            }
+            else if (get_offringa) {
+                for (ant = 0; ant < ninput; ant++) {
+                    antenna_map[antenna_idx[ant]] = ant*2;
+                }
+            }
+
+            if (map_file != NULL) {
+                for (ant = 0; ant < ninput; ant++)
+                    fprintf(map_file,"%d\n",antenna_map[ant]);
+            }
         }
 
         fits_close_file(fptr,&status);
@@ -794,11 +808,6 @@ int     main(int argc, char **argv) {
                     else {
                         fprintf(flag_file,"1.0\n");
                     }
-                }
-
-                if (map_file != NULL) {
-                    for (ant = 0; ant < ninput; ant++)
-                        fprintf(map_file,"%d\n",antenna_map[ant]);
                 }
             }
             if (row%npol == 0) {
