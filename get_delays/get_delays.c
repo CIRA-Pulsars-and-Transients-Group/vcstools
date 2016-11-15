@@ -708,7 +708,7 @@ int     main(int argc, char **argv) {
             }
             else if (get_offringa) {
                 for (ant = 0; ant < ninput; ant++) {
-                    antenna_map[antenna_idx[ant]] = ant*2;
+                    antenna_map[antenna_idx[ant]] = (ant/2)*2; // [0, 0, 2, 2, 4, 4,...]
                 }
             }
 
