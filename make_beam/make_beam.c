@@ -1962,7 +1962,8 @@ int main(int argc, char **argv) {
         }
         if (make_psrfits == 1) {
             int index = 0;
-            for (int product = 0; product < outpol; product++) {
+            int product;
+            for (product = 0; product < outpol; product++) {
                 for (ch=0;ch<nchan;ch++,index++) {
                     if (coherent_out) { // only used in the case of PSRFITS output and coherent beam
                         // Looking at the dspsr loader the expected order is <ntime><npol><nchan>

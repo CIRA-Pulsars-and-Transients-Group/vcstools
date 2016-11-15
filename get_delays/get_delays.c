@@ -636,8 +636,8 @@ int     main(int argc, char **argv) {
         float *cable_array = (float *) malloc(ninput*sizeof(float));
         char *testval = (char *) malloc(1024);
         int *flag_array = (int *)malloc(ninput*sizeof(int));
-        int *antenna_num = (int *)malloc(ninput*sizeof(int));
-        int *antenna_idx = (int *)malloc(ninput*sizeof(int));
+        short int *antenna_num = (short int *)malloc(ninput*sizeof(short int));
+        short int *antenna_idx = (short int *)malloc(ninput*sizeof(short int));
         int *antenna_map = (int *)malloc(ninput*sizeof(int));
         int colnum;
         
@@ -684,7 +684,7 @@ int     main(int argc, char **argv) {
         }
 
         fits_get_colnum(fptr, 1, "Antenna", &colnum, &status);
-        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,antenna_num,&anynull,&status);
+        fits_read_col_sht(fptr,colnum,1,1,ninput,0.0,antenna_num,&anynull,&status);
 
         if (status != 0){
             fprintf(stderr,"Error:Failed to read Antenna number in metafile\n");
@@ -692,7 +692,7 @@ int     main(int argc, char **argv) {
         }
 
         fits_get_colnum(fptr, 1, "Input", &colnum, &status);
-        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,antenna_idx,&anynull,&status);
+        fits_read_col_sht(fptr,colnum,1,1,ninput,0.0,antenna_idx,&anynull,&status);
 
         if (status != 0){
             fprintf(stderr,"Error:Failed to read Input number in metafile\n");
