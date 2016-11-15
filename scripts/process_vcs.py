@@ -519,7 +519,7 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
             batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
-            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (execpath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
+            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (execpath, obs_id, start, stop, coarse_chan, jones, map, working_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
         
         submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
@@ -540,6 +540,7 @@ if __name__ == '__main__':
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
     chan_list = []
     jones = "-j jones.txt"
+    map = "-M antenna_map.txt"
 
     from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 
