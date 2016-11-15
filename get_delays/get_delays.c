@@ -701,7 +701,7 @@ int     main(int argc, char **argv) {
 
         // Create mapping based on metafits file "Input" and "Antenna" fields
         for (ant = 0; ant < ninput; ant++) {
-            antenna_map[antenna_idx[ant]] = antenna_num[ant];
+            antenna_map[antenna_idx[ant]] = antenna_num[ant]*2;
         }
 
         fits_close_file(fptr,&status);
