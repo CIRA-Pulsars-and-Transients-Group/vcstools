@@ -229,7 +229,6 @@ int     main(int argc, char **argv) {
     FILE *phase_file = NULL;
     FILE *flag_file = NULL;
     FILE *jones_file = NULL;
-    FILE *map_file = NULL;
     FILE *psrfits_file = NULL;
     int nsecs = 1;
     int secs = 0;
@@ -387,8 +386,6 @@ int     main(int argc, char **argv) {
         sprintf(filename,"%s/jones.txt",add_str);
         jones_file = fopen(filename,"w");
         
-        sprintf(filename,"%s/antenna_map.txt",add_str);
-        map_file = fopen(filename,"w");
     }
 
 
@@ -456,6 +453,99 @@ int     main(int argc, char **argv) {
         exit(1);
     }
     // ====================================================================================== //
+    // Get tile coordinate information from metafits file
+
+    /* open the metafits file */
+    status = 0;
+    int anynull = 0;
+    fits_open_file(&fptr,metafits,READONLY,&status);
+    
+    fits_movnam_hdu(fptr, BINARY_TBL, "TILEDATA", 0, &status);
+
+    if (status != 0) {
+        fprintf(stderr,"Error:Failed to move to TILEDATA HDU\n");
+        exit(-1);
+    }
+
+    size_t ninput = 0;
+    fits_read_key(fptr,TINT,"NAXIS2",&ninput,NULL,&status);
+
+    //fprintf(stdout,"Status: will read %zu inputs\n",ninput);
+
+    if (status != 0){
+        fprintf(stderr,"Error:Failed to read size of binary table in TILEDATA\n");
+        exit(-1);
+    }
+
+    /* allocate arrays for tile positions */
+    float *N_array = (float *) malloc(ninput*sizeof(float));
+    float *E_array = (float *) malloc(ninput*sizeof(float));
+    float *H_array = (float *) malloc(ninput*sizeof(float));
+    float *cable_array = (float *) malloc(ninput*sizeof(float));
+    char *testval = (char *) malloc(1024);
+    int *flag_array = (int *)malloc(ninput*sizeof(int));
+    short int *antenna_num = (short int *)malloc(ninput*sizeof(short int));
+    int colnum;
+    
+    /* read the columns */
+    fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
+    fits_read_col_int(fptr,colnum,1,1,ninput,0.0,flag_array,&anynull,&status);
+    if (status != 0){
+        fprintf(stderr,"Error:Failed to read flags column in metafile\n");
+        exit(-1);
+    }
+    for (i=0;i<ninput;i++) {
+
+        fits_get_colnum(fptr, 1, "Length", &colnum, &status);
+        if(fits_read_col_str(fptr,colnum,i+1,1,1,"0.0",&testval,&anynull,&status)) {
+
+            fprintf(stderr,"Error:Failed to cable column  in metafile\n");
+            exit(-1);
+        }
+
+        sscanf(testval,"EL_%f",&cable_array[i]);
+        //fprintf(stdout,"Input %d Cable %f\n",i,cable_array[i]);
+    }
+
+    fits_get_colnum(fptr, 1, "North", &colnum, &status);
+    fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,N_array,&anynull,&status);
+    if (status != 0){
+        fprintf(stderr,"Error:Failed to read  N coord in metafile\n");
+        exit(-1);
+    }
+
+    fits_get_colnum(fptr, 1, "East", &colnum, &status);
+    fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,E_array,&anynull,&status);
+    if (status != 0){
+        fprintf(stderr,"Error:Failed to read E coord in metafile\n");
+        exit(-1);
+    }
+
+    fits_get_colnum(fptr, 1, "Height", &colnum, &status);
+    fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,H_array,&anynull,&status);
+
+    if (status != 0){
+        fprintf(stderr,"Error:Failed to read H coord in metafile\n");
+        exit(-1);
+    }
+
+    fits_get_colnum(fptr, 1, "Antenna", &colnum, &status);
+    fits_read_col_sht(fptr,colnum,1,1,ninput,0.0,antenna_num,&anynull,&status);
+
+    if (status != 0){
+        fprintf(stderr,"Error:Failed to read field \"Antenna\" in metafile\n");
+        exit(-1);
+    }
+
+    fits_close_file(fptr,&status);
+    int refinp = 84; // Tile012
+    double E_ref = E_array[refinp];
+    double N_ref = N_array[refinp];
+    double H_ref = H_array[refinp];
+
+    // END (get tile coordinate information from metafits file)
+    // ====================================================================================== //
+
     
     double intmjd;
     double fracmjd;
@@ -479,7 +569,15 @@ int     main(int argc, char **argv) {
         inv2x2(Jref, invJref);
     }
     else if (get_offringa) {
-        read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file);
+        // Find the ordering of antennas in Offringa solutions from metafits file
+        int *order = (int *)malloc(nstation*sizeof(int));
+        int n;
+        for (n = 0; n < ninput; n += 2) {
+            order[n/2] = (int)antenna_num[n];
+            fprintf(stdout, "order[%3d] = %d\n", n/2, order[n/2]);
+        }
+        read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file, order);
+        free(order);
         // Just make Jref (and invJref) the identity matrix since they don't apply to
         // Offringa's calibration solution.
         Jref[0] = 1 + I*0;
@@ -608,123 +706,6 @@ int     main(int argc, char **argv) {
         
         int ch=0;
 
-        /* open the metafits file */
-        status = 0;
-        int anynull = 0;
-        fits_open_file(&fptr,metafits,READONLY,&status);
-        
-        fits_movnam_hdu(fptr, BINARY_TBL, "TILEDATA", 0, &status);
-
-        if (status != 0) {
-            fprintf(stderr,"Error:Failed to move to TILEDATA HDU\n");
-            exit(-1);
-        }
-
-        size_t ninput = 0;
-        fits_read_key(fptr,TINT,"NAXIS2",&ninput,NULL,&status);
-
-        //fprintf(stdout,"Status: will read %zu inputs\n",ninput);
-
-        if (status != 0){
-            fprintf(stderr,"Error:Failed to read size of binary table in TILEDATA\n");
-            exit(-1);
-        }
-        /* allocate arrays for tile positions */
-        float *N_array = (float *) malloc(ninput*sizeof(float));
-        float *E_array = (float *) malloc(ninput*sizeof(float));
-        float *H_array = (float *) malloc(ninput*sizeof(float));
-        float *cable_array = (float *) malloc(ninput*sizeof(float));
-        char *testval = (char *) malloc(1024);
-        int *flag_array = (int *)malloc(ninput*sizeof(int));
-        short int *antenna_num = (short int *)malloc(ninput*sizeof(short int));
-        short int *antenna_idx = (short int *)malloc(ninput*sizeof(short int));
-        int *antenna_map = (int *)malloc(ninput*sizeof(int));
-        int colnum;
-        
-        /* read the columns */
-        fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
-        fits_read_col_int(fptr,colnum,1,1,ninput,0.0,flag_array,&anynull,&status);
-        if (status != 0){
-            fprintf(stderr,"Error:Failed to read flags column in metafile\n");
-            exit(-1);
-        }
-        for (i=0;i<ninput;i++) {
-
-            fits_get_colnum(fptr, 1, "Length", &colnum, &status);
-            if(fits_read_col_str(fptr,colnum,i+1,1,1,"0.0",&testval,&anynull,&status)) {
-
-                fprintf(stderr,"Error:Failed to cable column  in metafile\n");
-                exit(-1);
-            }
-
-            sscanf(testval,"EL_%f",&cable_array[i]);
-            //fprintf(stdout,"Input %d Cable %f\n",i,cable_array[i]);
-        }
-
-        fits_get_colnum(fptr, 1, "North", &colnum, &status);
-        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,N_array,&anynull,&status);
-        if (status != 0){
-            fprintf(stderr,"Error:Failed to read  N coord in metafile\n");
-            exit(-1);
-        }
-
-        fits_get_colnum(fptr, 1, "East", &colnum, &status);
-        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,E_array,&anynull,&status);
-        if (status != 0){
-            fprintf(stderr,"Error:Failed to read E coord in metafile\n");
-            exit(-1);
-        }
-
-        fits_get_colnum(fptr, 1, "Height", &colnum, &status);
-        fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,H_array,&anynull,&status);
-
-        if (status != 0){
-            fprintf(stderr,"Error:Failed to read H coord in metafile\n");
-            exit(-1);
-        }
-
-        fits_get_colnum(fptr, 1, "Antenna", &colnum, &status);
-        fits_read_col_sht(fptr,colnum,1,1,ninput,0.0,antenna_num,&anynull,&status);
-
-        if (status != 0){
-            fprintf(stderr,"Error:Failed to read Antenna number in metafile\n");
-            exit(-1);
-        }
-
-        fits_get_colnum(fptr, 1, "Input", &colnum, &status);
-        fits_read_col_sht(fptr,colnum,1,1,ninput,0.0,antenna_idx,&anynull,&status);
-
-        if (status != 0){
-            fprintf(stderr,"Error:Failed to read Input number in metafile\n");
-            exit(-1);
-        }
-
-        // Create mapping based on metafits file "Input" and "Antenna" fields
-        if (secs == 0) {
-            if (get_rts) {
-                for (ant = 0; ant < ninput; ant++) {
-                    antenna_map[antenna_idx[ant]] = antenna_num[ant]*2;
-                }
-            }
-            else if (get_offringa) {
-                for (ant = 0; ant < ninput; ant++) {
-                    antenna_map[antenna_idx[ant]] = (ant/2)*2; // [0, 0, 2, 2, 4, 4,...]
-                }
-            }
-
-            if (map_file != NULL) {
-                for (ant = 0; ant < ninput; ant++)
-                    fprintf(map_file,"%d\n",antenna_map[ant]);
-            }
-        }
-
-        fits_close_file(fptr,&status);
-        int refinp = 84; // Tile012
-        double E_ref = E_array[refinp];
-        double N_ref = N_array[refinp];
-        double H_ref = H_array[refinp];
-
-
         for (row=0; row<ninput; row++) {
 
 
@@ -823,16 +804,6 @@ int     main(int argc, char **argv) {
             
         }
 
-        // Free up memory allocated in this loop! (FIX ME: Take allocations out of loop!)
-        free(N_array);
-        free(E_array);
-        free(H_array);
-        free(cable_array);
-        free(testval);
-        free(flag_array);
-        free(antenna_num);
-        free(antenna_idx);
-        free(antenna_map);
     }
     if (verbose)
         puts("==========================");
@@ -843,8 +814,6 @@ int     main(int argc, char **argv) {
         fclose(flag_file);
     if (jones_file != NULL)
         fclose(jones_file);
-    if (map_file != NULL)
-        fclose(map_file);
       /* ========= Generate a FITS HEADER ==========*/
     if (get_psrfits) {
         
@@ -1037,6 +1006,7 @@ int     main(int argc, char **argv) {
     }
     
 
+    // Free up memory
     free(delay);
     free(phase);
     
@@ -1051,6 +1021,14 @@ int     main(int argc, char **argv) {
     free(G);
     free(M);
     free(Ji);
+
+    free(N_array);
+    free(E_array);
+    free(H_array);
+    free(cable_array);
+    free(testval);
+    free(flag_array);
+    free(antenna_num);
     
     return 0;
 }

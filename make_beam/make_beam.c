@@ -952,11 +952,8 @@ int main(int argc, char **argv) {
     char *weights_file = NULL;
     char *phases_file = NULL;
     char *jones_file = NULL;
-    char *map_file = NULL;
     char *psrfits_file = NULL;
     char *vdif_file = NULL;
-
-    int *antenna_map = NULL;
 
     char *gains_file = NULL;
 
@@ -1104,9 +1101,6 @@ int main(int argc, char **argv) {
                              fclose(filter_file);
                          }
                     break;
-                case 'M':
-                    map_file = strdup(optarg);
-                    break;
                 case 'N':
                     chan = atoi(optarg);
                     break;
@@ -1234,12 +1228,6 @@ int main(int argc, char **argv) {
             jones_file=strdup(pattern);
             fprintf(stdout,"jones_file: %s\n",jones_file);
         }
-        if (map_file) {
-            sprintf(pattern,"%s/%s",procdir,map_file);
-            free(map_file);
-            map_file=strdup(pattern);
-            fprintf(stdout,"map_file: %s\n",map_file);
-        }
         if (gains_file) {
             sprintf(pattern,"%s/%s",procdir,gains_file);
             free(gains_file);
@@ -1259,28 +1247,6 @@ int main(int argc, char **argv) {
             perror("Cannot find channel file - version missmatch - update get_delays");
             exit(EXIT_FAILURE);
         }
-
-        // Open file containing antenna mapping information
-        tmp = fopen(map_file,"r");
-
-        if (tmp) {
-            // Count number of numbers in file
-            int nant = 0;
-            int dummy;
-            while (!feof(tmp))
-                nant += fscanf(tmp, "%d", &dummy);
-
-            antenna_map = (int *)malloc(nant*sizeof(int));
-
-            // Read in the numbers to "antenna_map" array
-            int ant = 0;
-            for (ant = 0; ant < nant; ant++)
-            fscanf(tmp, "%d", &(antenna_map[ant]));
-
-            fprintf(stdout, "Number of antenna mappings read in from %s: %d\n", map_file, nant);
-        }
-        else
-            fprintf(stderr, "Unable to open %s\n", map_file);
 
         if (datadirroot) {
 
@@ -1839,15 +1805,15 @@ int main(int argc, char **argv) {
                         e_true[1] = e_true[1] * complex_weights_array[index+1][ch];
 
                         if (non_rts_gains == 1) {
-                            if (antenna_gains[antenna_map[index]] != 0.0 + I*0.0) {
-                                e_true[0] = e_true[0] / antenna_gains[antenna_map[index]];
+                            if (antenna_gains[natural_to_mwac[index]] != 0.0 + I*0.0) {
+                                e_true[0] = e_true[0] / antenna_gains[natural_to_mwac[index]];
                                 //:fprintf(stdout,"mwac %d miriad %d\n",index,miriad_to_mwac[index]);
                             }
                             else {
                                 e_true[0] = 0.0 + I*0.0;
                             }
-                            if (antenna_gains[antenna_map[index]+1] != 0.0 + I*0.0) {
-                                e_true[1] = e_true[1] / antenna_gains[antenna_map[index]+1];
+                            if (antenna_gains[natural_to_mwac[index]+1] != 0.0 + I*0.0) {
+                                e_true[1] = e_true[1] / antenna_gains[natural_to_mwac[index]+1];
                             }
                             else {
                                 e_true[1] = 0.0 + I*0.0;
@@ -1869,12 +1835,12 @@ int main(int argc, char **argv) {
 
                         // next thing to do is to output the fringe for two antennas -
 
-                    if (antenna_map[index] == out1) {
+                    if (natural_to_mwac[index] == out1) {
                         fringe[ch][0] = e_true[0];
                         fringe[ch][1] = e_true[1];
 
                     }
-                    if (antenna_map[index] == out2) {
+                    if (natural_to_mwac[index] == out2) {
                         fringe[ch][2] = e_true[0];
                         fringe[ch][3] = e_true[1];
                     }
@@ -2380,9 +2346,6 @@ BARRIER:
         fclose(out2_file);
     }
 
-    if (procdirroot) {
-        free(antenna_map);
-    }
 /* Parallel processing will be shifted to the wrapper script
     MPI_Barrier(MPI_COMM_WORLD);
 
