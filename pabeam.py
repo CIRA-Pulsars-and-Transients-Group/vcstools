@@ -2,39 +2,31 @@
 
 
 """
-Script to calcaulte the array factor and determine the tied-array beam of the MWA.
+Script to calculate the array factor and determine the tied-array beam of the MWA.
 
 Author: Bradley Meyers
-Date: 14 Nov 2016
+Date: 2016-12-8
 """
 
 
 
-
+# numerical and maths modules
 import numpy as np
-from scipy.integrate import simps
-from scipy.interpolate import interp2d
 from astropy.coordinates import SkyCoord,EarthLocation,AltAz
 from astropy.time import Time
 from astropy.io import fits
 import astropy.units as u
 from astropy.constants import c,k_B
-import matplotlib as mpl
-#mpl.use('Qt4Agg')
-mpl.rcParams['agg.path.chunksize'] = 10000
-import matplotlib.pyplot as plt
-#from mpl_toolkits.mplot3d import Axes3D
-import sys
+
+#utility and processing modules
 import os
 from mpi4py import MPI
 import argparse
-#from multiprocessing import Pool,Queue,Process
+from mwapy import ephem_utils,metadata
 from mwapy.pb import primary_beam as pb
 import urllib
 import urllib2
 import json
-from mwapy import ephem_utils,metadata
-#import progressbar
 
 
 
@@ -90,7 +82,6 @@ def get_delay_steps(obs):
     return [obs,ra,dec,dura,xdelays,centrefreq,channels]
 
 
-
 def getTileLocations(obsid,flags=[]):
 	"""
 	Function grab the MWA tile locations for any given observation ID. Downloads the relevant metafits file from the database, saves it as <obdID>_metafits_ppds.fits.
@@ -115,7 +106,7 @@ def getTileLocations(obsid,flags=[]):
 	mwacentre_h = 377.827
 	height = height - mwacentre_h
 
-	#flag the tile from flag
+	#flag the tiles from the x,y,z positions
 	for i in flags:
 		east = np.delete(east,i)
 		north = np.delete(north,i)
@@ -194,8 +185,8 @@ def calcWaveNumbers(wl,p,t):
 
 	Input:
 	  wl - central wavelength for the observation
-	  az - azimuth (either a scalar or an array)
-	  za - zenith angle (either a scalar or an array)
+	  p - azimuth/phi (either a scalar or an array)
+	  t - zenith angle/theta (either a scalar or an array)
 	
 	Return:
 	  [kx,ky,kz] - the 3D wavenumbers 
@@ -213,11 +204,24 @@ def calcWaveNumbers(wl,p,t):
 
 	return [kx,ky,kz]
 
+
 # Make generator functions for Azimuth and Zenith so we don't have to create the whole
 # meshgrid at once and then store it.
 # This is far more memory efficient that storing the entire AZ and ZA planes in memory, 
 # especially with the required resolution.
 def genAZZA(start,stop,step,end=False):
+	"""
+	Generator function to use for iterating over angles (both ZA and Azimuth).
+
+	Input:
+	  start - angle to start iteration from 
+	  stop - angle to finish iteration before
+	  step - step size between iterations
+	  end - return the "stop" parameter to make range [start,stop] rather than [start,stop)
+
+	Return:
+	  None - is a generator
+	"""
 	i = 0
 	num = int((stop-start)/step)
 	while i<num:
@@ -227,93 +231,29 @@ def genAZZA(start,stop,step,end=False):
 		yield stop
 	return
     
+
 def createArrayFactor(targetRA,targetDEC,obsid,delays,obstime,obsfreq,eff,flagged_tiles,theta_res,phi_res,coplanar,zenith,start,end):
 	"""
-	Main function that organises the information required and plots results/outputs info.
+	Primary function to calcaulte the array factor with the given information.
+
+	Input:
+	  targetRA,targetDEC - the desired target Right Ascension and Declination
+	  obsid - the observation ID for which to create the phased array beam
+	  delays - the beamformer delays required for point tile beam (should be a set of 16 numbers)
+	  obstime -  the time at which to evaluate the target position (as we need Azimuth and Zenith angle, which are time dependent)
+	  obsfreq - the centre observing frequency for the observation
+	  eff - the array efficiency (frequency and pointing dependent, currently require engineers to calculate for us...)
+	  flagged_tiles - the flagged tiles from the calibration solution (in the RTS format)
+	  theta_res - the zenith angle resolution in degrees
+	  phi_res - the azimuth resolution in degrees
+	  coplanar - whether or not to assume that the z-components of antenna locations is 0m
+	  zenith - force the pointing to be zenith (i.e. ZA = 0deg, Az = 0deg)
+	  start - the starting angle for the ZA band to calcualted across
+	  end - the end angle for the ZA band to be calculated across
+
+	Return:
+	  results -  a list of lists cotaining [ZA, Az, beam power], for all ZA and Az in the given band
 	"""	
-	#print np.degrees(start),np.degrees(end)
-        #def calcArrayFactor(az,za,xpos,ypos,zpos,obswl,targetAZ,targetZA):
-        #    """
-        #    Actually do the array factor calcualtion on a grid
-        #    """
-        #    fx = np.zeros_like(az,dtype=np.complex64)
-        #    bar = progressbar.ProgressBar(widgets=[progressbar.Percentage(),progressbar.Bar(),progressbar.ETA()]).start()
-        #    
-        #    kx,ky,kz = calcWaveNumbers(obswl,np.pi/2-az,za)
-        #    target_kx,target_ky,target_kz = calcWaveNumbers(obswl,np.pi/2-targetAZ,targetZA)
-        #    
-        #    for x,y,z in bar(zip(xpos,ypos,zpos)):
-	#	#fx += calcAX([x,y,z,kx,ky,kz,target_kx,target_ky,target_kz])
-        #        np.add(fx,calcAX([x,y,z,kx,ky,kz,target_kx,target_ky,target_kz]),out=fx)  
-	#
-        #    # Normalise: fx = fx/len(xpos)
-        #    fx /= len(xpos)
-        #    print "normalised maximum:",np.max(np.abs(fx)**2)
-	#
-        #    return fx
-            
-            
-        #def plot_polar(az,za,tilebeam,af,tabeam,obsid,obsfreq,targetAZ,targetZA,suffix):
-        #    fig = plt.figure()
-        #    ax = fig.add_subplot(111,polar=True)
-        #    cc=ax.contourf(az,za,tilebeam,50,cmap=plt.get_cmap('jet'))
-        #    ax.set_xlabel("Azimuth [rad]")
-        #    ax.set_ylabel("Zenith Angle [rad]")
-        #    ax.set_rlabel_position(-45)
-        #    plt.colorbar(cc,label="normalised power")
-        #    plt.savefig("{0}_gx_{1:.2f}MHz_{2:.2f}_{3:.2f}_polar_{4}.png".format(obsid,obsfreq/1e6,targetAZ,targetZA,suffix))
-        #    plt.clf()
-	#
-        #    fig = plt.figure()
-        #    ax = fig.add_subplot(111,polar=True)
-        #    cc=ax.contourf(az,za,np.abs(af)**2,50,cmap=plt.get_cmap('jet'))
-        #    ax.set_xlabel("Azimuth [rad]")
-        #    ax.set_ylabel("Zenith Angle [rad]")
-        #    ax.set_rlabel_position(-45)
-        #    plt.colorbar(cc,label="normalised power")
-        #    plt.savefig("{0}_fx_{1:.2f}MHz_{2:.2f}_{3:.2f}_polar_{4}.png".format(obsid,obsfreq/1e6,targetAZ,targetZA,suffix))
-        #    plt.clf()
-	#
-        #    fig = plt.figure()
-        #    ax = fig.add_subplot(111,polar=True)
-        #    cc=ax.contourf(az,za,tabeam,50,cmap=plt.get_cmap('jet'))
-        #    ax.set_xlabel("Azimuth [rad]")
-        #    ax.set_ylabel("Zenith Angle [rad]")
-        #    ax.set_rlabel_position(-45)
-        #    plt.colorbar(cc,label="normalised power")
-        #    plt.savefig("{0}_gxfx_{1:.2f}MHz_{2:.2f}_{3:.2f}_polar_{4}.png".format(obsid,obsfreq/1e6,targetAZ,targetZA,suffix))	
-        #    plt.clf()
-
-        #def plot_cartesian(az,za,tilebeam,af,tabeam,obsid,obsfreq,targetAZ,targetZA,suffix):
-        #    fig = plt.figure()
-        #    ax = fig.add_subplot(111)
-        #    cc=ax.contourf(az,za,tilebeam,50,cmap=plt.get_cmap('jet'))
-        #    ax.set_xlabel("Azimuth [rad]")
-        #    ax.set_ylabel("Zenith Angle [rad]")
-        #    plt.colorbar(cc,label="normalised power")
-        #    plt.savefig("{0}_gx_{1:.2f}MHz_{2:.2f}_{3:.2f}_cart_{4}.png".format(obsid,obsfreq/1e6,targetAZ,targetZA,suffix))
-        #    plt.clf()
-
-        #   fig = plt.figure()
-        #   ax = fig.add_subplot(111)
-        #    cc=ax.contourf(az,za,np.abs(af)**2,50,cmap=plt.get_cmap('jet'))
-        #    ax.set_xlabel("Azimuth [rad]")
-        #    ax.set_ylabel("Zenith Angle [rad]")
-        #    plt.colorbar(cc,label="normalised power")
-        #    plt.savefig("{0}_fx_{1:.2f}MHz_{2:.2f}_{3:.2f}_cart_{4}.png".format(obsid,obsfreq/1e6,targetAZ,targetZA,suffix))
-        #    plt.clf()
-	#
-        #    fig = plt.figure()
-        #    ax = fig.add_subplot(111)
-        #    cc=ax.contourf(az,za,tabeam,50,cmap=plt.get_cmap('jet'))
-        #    ax.set_xlabel("Azimuth [rad]")
-        #    ax.set_ylabel("Zenith Angle [rad]")
-        #    plt.colorbar(cc,label="normalised power")
-        #    plt.savefig("{0}_gxfx_{1:.2f}MHz_{2:.2f}_{3:.2f}_cart_{4}.png".format(obsid,obsfreq/1e6,targetAZ,targetZA,suffix))	
-        #    plt.clf()
-        
-
-
 	# convert frequency to wavelength
 	obswl = obsfreq/c.value
 	#print "Evaluating array factor at {0:.3f} MHz ({1:.3f} m)".format(obsfreq/1e6,obswl)
@@ -329,8 +269,6 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,obstime,obsfreq,eff,flagge
 	if coplanar: 
 		#print "Assuming array is co-planar"
 		zpos = np.zeros(len(zpos))
-
-	#print "\tafter flagging, there are {0} tiles left to form a tied-array beam".format(len(xpos))
 
 	# get observation information (start-time, duration, etc)
 	#print "Retrieving observation start time and duration"
@@ -378,6 +316,9 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,obstime,obsfreq,eff,flagge
 
 	
 
+#####################
+##  OPTION PARSING ##
+#####################
 parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA.""",\
                                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -417,13 +358,7 @@ args = parser.parse_args()
 ra,dec = args.target
 tres,pres = args.grid_res
 ntheta,nphi = 90/tres,360/pres
-#if args.showtarget and not args.plotting:
-#	print "!!WARNING!! ::  opted to show target location, but did not opt to plot - ignoring --showtarget option."
-#	args.showtarget = False
-#
-#if args.polar and args.zoom:
-#	print "!!WARNING!! :: currently can't use zoom with polar coords - ignoring zoom option"	
-#
+
 if args.flagged_tiles == None:
 	flags = []
 else:
@@ -445,25 +380,24 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 # figure out how many chunks to split up ZA into
-#print rank,size,(np.pi/2)/np.radians(tres),np.radians(tres)
 totalcalcs = (np.pi/2)/np.radians(tres) #total number of calculations required
 assert totalcalcs >= size, "Total calculations must be >= the number of cores available"
-#print "total calcs",totalcalcs
+
 start = rank * np.radians(tres) * (totalcalcs//size)
 end = (rank+1) * np.radians(tres) * (totalcalcs//size)
 if rank == size-1:
 	end = np.pi/2 # give the last core anything that's left
-print "worker:",rank,"total calcs:",totalcalcs
-print "start ZA:",np.degrees(start),"end ZA",np.degrees(end)
+print "worker:",rank,"total calcs:",totalcalcs,"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
 
 # get the chunk of data for this thread
 chunk = createArrayFactor(ra,dec,args.obsid,delays,args.time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
 if args.time is None:
 	time = Time(get_obstime_duration(args.obsid)[0])
+else:
+	time = Time(args.time)
 oname = "/scratch2/mwaops/{0}/{1}_{2}_{3}MHz_{4}_{5}.dat".format(os.environ['USER'],args.obsid,time.gps,args.freq/1e6,ra,dec)
-# write the header of the file (for FEKO compatability-ish)
-#print "writing to {0}".format(oname)
-#print "gathering results from workers"
+
+# calculate a gather results from processes
 if rank != 0:
 	# not the master, send data back to master (node 0)
 	print "sending from {0}".format(rank)
@@ -472,10 +406,10 @@ elif rank == 0:
 	# I am the master, receive data from other nodes
 	print "receiving at master"
 	result = chunk
-	# write the master node's results first
+	# write the master node's results first (plus FEKO-like header)
 	print "writing master"
 	with open(oname,"w") as f:
-		f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa-phased-array\n##Date: 2016-11-14 15:14:00\n** File exported by FEKO kernel version 7.0.1-482\n\n")
+		f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa-phased-array\n##Date: {0}\n** File exported by FEKO kernel version 7.0.1-482\n\n")
 		f.write("#Request Name: FarField\n#Frequency: {0}\n#Coordinate System: Spherical\n".format(args.freq))
 		f.write("#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}\n".format(ntheta,nphi))
 		f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
@@ -491,7 +425,3 @@ elif rank == 0:
 		with open(oname,"a") as f:
 			for res in result:
 				f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
-
-		#result.extend(comm.recv(source=i))
-	#print "final size:",np.shape(result)
-		
