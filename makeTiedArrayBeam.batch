@@ -1,0 +1,13 @@
+#!/bin/bash -l
+
+#SBATCH --partition=workq
+#SBATCH --time=12:00:00
+#SBATCH --output=makeTiedArrayBeam.out
+#SBATCH --nodes=5
+#SBATCH --account=mwaops
+
+
+aprun -n 80 python vcs_coherent_beam_gen.py -o 1099414416 -f 184.96e6 -e 0.98037 -p 05:34:31.973 +22:00:52.06 --flagged_tiles 4 10 11 75 76 82 83 89 --grid_res 0.1 0.1
+
+
+
