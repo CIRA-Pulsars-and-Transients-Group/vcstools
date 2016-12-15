@@ -232,7 +232,7 @@ def genAZZA(start,stop,step,end=False):
 	return
     
 
-def createArrayFactor(targetRA,targetDEC,obsid,delays,obstime,obsfreq,eff,flagged_tiles,theta_res,phi_res,coplanar,zenith,start,end):
+def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_tiles,theta_res,phi_res,coplanar,zenith,start,end):
 	"""
 	Primary function to calcaulte the array factor with the given information.
 
@@ -260,7 +260,7 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,obstime,obsfreq,eff,flagge
 	
 	# get the array tile positions
 	#print "Getting tile locations"
-	xpos,ypos,zpos = getTileLocations(obsid,flagged_tiles)
+	#xpos,ypos,zpos = getTileLocations(obsid,flagged_tiles)
 	#print "\t defined tile positions with:"
 	#print "\t\t x = distance East from array centre, in metres"
 	#print "\t\t y = distance North from array centre, in metres"
@@ -272,12 +272,12 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,obstime,obsfreq,eff,flagge
 
 	# get observation information (start-time, duration, etc)
 	#print "Retrieving observation start time and duration"
-	t,d = get_obstime_duration(obsid) 
-	if obstime is None:
-		time = t.replace("T"," ")
-	else:
+	#t,d = get_obstime_duration(obsid) 
+	#if obstime is None:
+	#	time = t.replace("T"," ")
+	#else:
 		#print "Over-riding observation time with user-given option"
-		time = obstime
+	#	time = obstime
 	
 	# get the target azimuth and zenith angle in radians and degrees
 	# these are define in the normal sense: za = 90 - elevation, az = angle east of North (i.e. E=90)
@@ -390,18 +390,30 @@ if rank == 0:
 	if os.path.isfile('/scratch2/mwaops/{0}/beam_tests/{1}_metafits_ppds.fits'.format(os.environ['USER'],args.obsid)) is False:
 		os.system('wget -O /scratch2/mwaops/{0}/beam_tests/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={0}'.format(os.environ['USER'],args.obsid))
 
-# for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
-if args.zenith:
-	delays = [0]*16
-else:
-	delays = get_delay_steps(args.obsid)[4]
+	# for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
+	if args.zenith:
+		delays = [0]*16
+	else:
+		delays = get_delay_steps(args.obsid)[4]
 
-# same for obs time, master reads and then distributes
-if args.time is None:
-        time = Time(get_obstime_duration(args.obsid)[0])
-else:
-        time = Time(args.time)
+	# same for obs time, master reads and then distributes
+	if args.time is None:
+		time = Time(get_obstime_duration(args.obsid)[0])
+	else:
+		time = Time(args.time)
 
+	# get the tile locations from the metafits
+	xpos,ypos,zpos = getTileLocations(args.obsid,flags)	
+
+# wait for the master node to do this if necessary
+comm.Barrier()
+if rank == 0:
+	comm.bcast((delays,time,xpos,ypos,zpos))
+else:
+	delays,time,xpos,ypos,zpos = comm.recv(source=0)
+
+# wait again to make sure everything is synced
+comm.Barrier()	
 
 
 oname = "/scratch2/mwaops/{0}/beam_tests/{1}_{2}_{3}MHz_{4}_{5}.dat".format(os.environ['USER'],args.obsid,time.gps,args.freq/1e6,ra,dec)
@@ -419,34 +431,8 @@ if rank == size-1:
 print "worker:",rank,"total calcs:",totalcalcs,"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
 
 # crate array factor for given ZA band and write to file
-createArrayFactor(ra,dec,args.obsid,delays,args.time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
-"""
-# calculate a gather results from processes
-if rank != 0:
-	# not the master, send data back to master (node 0)
-	print "sending from {0}".format(rank)
-	comm.send(chunk,dest=0)
-elif rank == 0:
-	# I am the master, receive data from other nodes
-	print "receiving at master"
-	result = chunk
-	# write the master node's results first (plus FEKO-like header)
-	print "writing master"
-	with open(oname,"w") as f:
-		f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa-phased-array\n##Date: {0}\n** File exported by FEKO kernel version 7.0.1-482\n\n")
-		f.write("#Request Name: FarField\n#Frequency: {0}\n#Coordinate System: Spherical\n".format(args.freq))
-		f.write("#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}\n".format(ntheta,nphi))
-		f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
-		f.write('#"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
+createArrayFactor(ra,dec,args.obsid,delays,time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
 
-		for res in result:
-			f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
 
-	for i in range(1,size):
-		# then write the worker nodes results
-		print "writing from worker",i
-		result = comm.recv(source=i)
-		with open(oname,"a") as f:
-			for res in result:
-				f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
-"""
+
+
