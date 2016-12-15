@@ -19,7 +19,7 @@ import astropy.units as u
 from astropy.constants import c,k_B
 
 #utility and processing modules
-import os
+import os,sys
 from mpi4py import MPI
 import argparse
 from mwapy import ephem_utils,metadata
@@ -256,28 +256,6 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 	"""	
 	# convert frequency to wavelength
 	obswl = obsfreq/c.value
-	#print "Evaluating array factor at {0:.3f} MHz ({1:.3f} m)".format(obsfreq/1e6,obswl)
-	
-	# get the array tile positions
-	#print "Getting tile locations"
-	#xpos,ypos,zpos = getTileLocations(obsid,flagged_tiles)
-	#print "\t defined tile positions with:"
-	#print "\t\t x = distance East from array centre, in metres"
-	#print "\t\t y = distance North from array centre, in metres"
-	#print "\t\t z = height above array centre, in metres"
-
-	if coplanar: 
-		#print "Assuming array is co-planar"
-		zpos = np.zeros(len(zpos))
-
-	# get observation information (start-time, duration, etc)
-	#print "Retrieving observation start time and duration"
-	#t,d = get_obstime_duration(obsid) 
-	#if obstime is None:
-	#	time = t.replace("T"," ")
-	#else:
-		#print "Over-riding observation time with user-given option"
-	#	time = obstime
 	
 	# get the target azimuth and zenith angle in radians and degrees
 	# these are define in the normal sense: za = 90 - elevation, az = angle east of North (i.e. E=90)
@@ -291,9 +269,13 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 
 
 	results = []
+
 	# is this the last process?
 	lastrank = rank == size-1
 
+	# we will also calculate the beam area contribution of this part of the sky
+	omega_A = 0
+	
 	# for each ZA "pixel", 90deg inclusive
 	for za in genAZZA(start,end,np.radians(theta_res),end=lastrank):
 		# for each Az "pixel", 360deg not included
@@ -318,12 +300,17 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 			phased_array_pattern = tile_pattern * np.abs(array_factor)**2			
 		
 			results.append([np.degrees(za),np.degrees(az),phased_array_pattern])
+		
+			# add this contribution to the beam solid angle
+			omega_A += np.sin(za) * np.abs(array_factor)**2 * np.radians(theta_res) * np.radians(phi_res)
+
 
 	# write a file based on rank of the process being used
 	with open(oname.replace(".dat",".{0}.dat".format(rank)),'w') as f:
 		for res in results:
                         f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
-	return 
+	
+	return omega_A
 
 	
 
@@ -387,6 +374,7 @@ else:
 
 # if the observation ID metafits file doesn't exist, get the master node to download it
 if rank == 0:
+	print "gathering required data"
 	if os.path.isfile('/scratch2/mwaops/{0}/beam_tests/{1}_metafits_ppds.fits'.format(os.environ['USER'],args.obsid)) is False:
 		os.system('wget -O /scratch2/mwaops/{0}/beam_tests/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={0}'.format(os.environ['USER'],args.obsid))
 
@@ -404,18 +392,26 @@ if rank == 0:
 
 	# get the tile locations from the metafits
 	xpos,ypos,zpos = getTileLocations(args.obsid,flags)	
-
+	if args.coplanar:
+		zpos = np.zeros(len(xpos))
+	
 # wait for the master node to do this if necessary
-comm.Barrier()
+comm.barrier()
 if rank == 0:
-	comm.bcast((delays,time,xpos,ypos,zpos))
-else:
-	delays,time,xpos,ypos,zpos = comm.recv(source=0)
+	# create the object that contains all the data from master
+	data = (delays,time,xpos,ypos,zpos)
+elif rank != 0:
+	# create the data object, but leave it empty (will be filled by bcast call)
+	data = None
 
-# wait again to make sure everything is synced
-comm.Barrier()	
-
-
+# now broadcast the data from the master to the slaves
+data = comm.bcast(data,root=0)
+if data:
+	print "broadcast received by worker {0} successfully".format(rank)
+	delays,time,xpos,ypos,zpos = data
+	
+# set the base output file name (will be editted based on the worker rank)
+# TODO: make this more generic - maybe as an option for what directory?
 oname = "/scratch2/mwaops/{0}/beam_tests/{1}_{2}_{3}MHz_{4}_{5}.dat".format(os.environ['USER'],args.obsid,time.gps,args.freq/1e6,ra,dec)
 	
 
@@ -431,8 +427,35 @@ if rank == size-1:
 print "worker:",rank,"total calcs:",totalcalcs,"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
 
 # crate array factor for given ZA band and write to file
-createArrayFactor(ra,dec,args.obsid,delays,time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
+beam_area = createArrayFactor(ra,dec,args.obsid,delays,time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
 
+# collect results for the beam area calculation
+if rank != 0:
+	comm.send(beam_area,dest=0)
+elif rank == 0:
+	result = beam_area
+	for i in range(1,size):
+		result += comm.recv(source=i)
 
+# wait for everything to be collected
+comm.barrier()
 
+# calcualte the gain for that pointing and frequency and write a "stats" file
+if rank == 0:
+	eff_area = args.efficiency*((c.value/args.freq)**2/result)
+	gain = (1e-26)*eff_area/(2*k_B.value)
+	
+	# write the stats file
+	with open(oname.replace(".dat",".stats"),"w") as f:
+		f.write("#observation ID\n{0}\n".format(args.obsid))
+		f.write("#pointing (ra,dec)\n{0} {1}\n".format(ra,dec))
+		f.write("#time (gps seconds)\n{0}\n".format(time.gps))
+		f.write("#frequency (MHz)\n{0}\n".format(args.freq/1e6))
+		f.write("#telescope efficiency\n{0}\n".format(args.efficiency))
+		f.write("#flagged tiles\n{0}\n".format(flags))
+		f.write("#beam solid angle (sr)\n{0}\n".format(result))
+		f.write("#effective area (m^2)\n{0}\n".format(eff_area))
+		f.write("#gain (K/Jy)\n{0}\n".format(gain))
+		f.write("#ZA and Az resolution (degrees per pixel)\n({0} , {1})".format(tres,pres))
 
+	print "Gain for {0} at {1} MHz pointed at {2} {3} is: {4:.6f} K/Jy".format(args.obsid,args.freq,ra,dec,gain)
