@@ -1,4 +1,4 @@
-#/usr/bin/env python
+#!/usr/bin/env python
 
 
 """
@@ -108,9 +108,9 @@ def getTileLocations(obsid,flags=[]):
 
 	#flag the tiles from the x,y,z positions
 	for i in flags:
-		east = np.delete(east,i)
-		north = np.delete(north,i)
-		height = np.delete(height,i)
+		east = np.delete(east,int(i))
+		north = np.delete(north,int(i))
+		height = np.delete(height,int(i))
 			
 	return east,north,height
 
@@ -282,37 +282,48 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,obstime,obsfreq,eff,flagge
 	# get the target azimuth and zenith angle in radians and degrees
 	# these are define in the normal sense: za = 90 - elevation, az = angle east of North (i.e. E=90)
 	if zenith:
-		#print "Assuming a zenith pointing"
 		targetAZ,targetZA,targetAZdeg,targetZAdeg = 0,0,0,0
 	else:
         	targetAZ,targetZA,targetAZdeg,targetZAdeg = getTargetAZZA(targetRA,targetDEC,time)
 
+	# calculate the target (kx,ky,kz)
 	target_kx,target_ky,target_kz = calcWaveNumbers(obswl,np.pi/2-targetAZ,targetZA)
 
 
 	results = []
+	# is this the last process?
 	lastrank = rank == size-1
+
+	# for each ZA "pixel", 90deg inclusive
 	for za in genAZZA(start,end,np.radians(theta_res),end=lastrank):
+		# for each Az "pixel", 360deg not included
 		for az in genAZZA(0,2*np.pi,np.radians(phi_res)):
 			
-			#calculate the relevent wavenumber for theta,phi
+			# calculate the relevent wavenumber for (theta,phi)
 			kx,ky,kz = calcWaveNumbers(obswl,np.pi/2-az,za)
 			array_factor = 0+0.j
+			# determine the interference pattern seen for each tile
 			for x,y,z in zip(xpos,ypos,zpos):
 				ph = kx*x+ky*y+kz*z
 				ph_target = target_kx*x+target_ky*y+target_kz*z
 				array_factor += np.cos(ph-ph_target) + 1.j*np.sin(ph-ph_target)
+			# normalise to 1
 			array_factor /= len(xpos)
 			
-			#tile_xpol,tile_ypol = pb.MWA_Tile_full_EE(za,az,freq=obsfreq,delays=delays,power=True,zenithnorm=True,interp=False)
+			# calculate the tile beam at the given Az,ZA pixel
 			tile_xpol,tile_ypol = pb.MWA_Tile_analytic(za,az,freq=obsfreq,delays=delays,power=True,zenithnorm=True)
 			tile_pattern = (tile_xpol+tile_ypol)/2.0
 			
+			# calculate the phased array power pattern 
 			phased_array_pattern = tile_pattern * np.abs(array_factor)**2			
-			
+		
 			results.append([np.degrees(za),np.degrees(az),phased_array_pattern])
 
-	return results
+	# write a file based on rank of the process being used
+	with open(oname.replace(".dat",".{0}.dat".format(rank)),'w') as f:
+		for res in results:
+                        f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
+	return 
 
 	
 
@@ -355,6 +366,14 @@ parser.add_argument("--zenith",action='store_true',help="Assume zenith pointing 
 args = parser.parse_args()
 
 
+# Setup MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+
+
+# small calculations and data gethering from arguments is fine and won't run into trouble by having multiple processes do it simultaneously
 ra,dec = args.target
 tres,pres = args.grid_res
 ntheta,nphi = 90/tres,360/pres
@@ -364,39 +383,44 @@ if args.flagged_tiles == None:
 else:
 	flags = args.flagged_tiles
 
+# For jobs involving downloads, reading files and accessing databases, ONLY let the master node gather and then broadcast
+
+# if the observation ID metafits file doesn't exist, get the master node to download it
+if rank == 0:
+	if os.path.isfile('/scratch2/mwaops/{0}/beam_tests/{1}_metafits_ppds.fits'.format(os.environ['USER'],args.obsid)) is False:
+		os.system('wget -O /scratch2/mwaops/{0}/beam_tests/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={0}'.format(os.environ['USER'],args.obsid))
+
+# for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
 if args.zenith:
 	delays = [0]*16
 else:
 	delays = get_delay_steps(args.obsid)[4]
-	
-#grab the relavnt metafits file
-if os.path.isfile('/scratch2/mwaops/{0}/{1}_metafits_ppds.fits'.format(os.environ['USER'],args.obsid)) is False:
-	os.system('wget -O /scratch2/mwaops/{0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={0}'.format(os.environ['USER'],args.obsid))
-	
 
-# Setup stuff for MPI
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+# same for obs time, master reads and then distributes
+if args.time is None:
+        time = Time(get_obstime_duration(args.obsid)[0])
+else:
+        time = Time(args.time)
+
+
+
+oname = "/scratch2/mwaops/{0}/beam_tests/{1}_{2}_{3}MHz_{4}_{5}.dat".format(os.environ['USER'],args.obsid,time.gps,args.freq/1e6,ra,dec)
+	
 
 # figure out how many chunks to split up ZA into
 totalcalcs = (np.pi/2)/np.radians(tres) #total number of calculations required
 assert totalcalcs >= size, "Total calculations must be >= the number of cores available"
 
+# iterate through the ZA range given the process rank
 start = rank * np.radians(tres) * (totalcalcs//size)
 end = (rank+1) * np.radians(tres) * (totalcalcs//size)
 if rank == size-1:
-	end = np.pi/2 # give the last core anything that's left
+	end = np.pi/2 # give the last process anything that's left
 print "worker:",rank,"total calcs:",totalcalcs,"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
 
-# get the chunk of data for this thread
-chunk = createArrayFactor(ra,dec,args.obsid,delays,args.time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
-if args.time is None:
-	time = Time(get_obstime_duration(args.obsid)[0])
-else:
-	time = Time(args.time)
-oname = "/scratch2/mwaops/{0}/{1}_{2}_{3}MHz_{4}_{5}.dat".format(os.environ['USER'],args.obsid,time.gps,args.freq/1e6,ra,dec)
-
+# crate array factor for given ZA band and write to file
+createArrayFactor(ra,dec,args.obsid,delays,args.time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
+"""
 # calculate a gather results from processes
 if rank != 0:
 	# not the master, send data back to master (node 0)
@@ -425,3 +449,4 @@ elif rank == 0:
 		with open(oname,"a") as f:
 			for res in result:
 				f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
+"""
