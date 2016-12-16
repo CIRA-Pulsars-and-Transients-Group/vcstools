@@ -388,6 +388,7 @@ else:
 
 # if the observation ID metafits file doesn't exist, get the master node to download it
 if rank == 0:
+	print "will use {0} processes".format(size)
 	print "gathering required data"
 	if os.path.isfile('{0}/{1}_metafits_ppds.fits'.format(args.out_dir,args.obsid)) is False:
 		os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir,args.obsid))
