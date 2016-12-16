@@ -299,6 +299,9 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 			# calculate the phased array power pattern 
 			phased_array_pattern = tile_pattern * np.abs(array_factor)**2			
 		
+			#with open(oname.replace(".dat",".{0}.dat".format(rank)),"a") as f:
+			#	f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(np.degrees(za),np.degrees(az),phased_array_pattern))
+
 			results.append([np.degrees(za),np.degrees(az),phased_array_pattern])
 		
 			# add this contribution to the beam solid angle
@@ -306,6 +309,7 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 
 
 	# write a file based on rank of the process being used
+	print "writing file from worker {0}".format(rank)
 	with open(oname.replace(".dat",".{0}.dat".format(rank)),'w') as f:
 		for res in results:
                         f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
@@ -395,8 +399,9 @@ if rank == 0:
 	if args.coplanar:
 		zpos = np.zeros(len(xpos))
 	
-# wait for the master node to do this if necessary
+# wait for the master node to gather the data
 comm.barrier()
+
 if rank == 0:
 	# create the object that contains all the data from master
 	data = (delays,time,xpos,ypos,zpos)
@@ -409,22 +414,25 @@ data = comm.bcast(data,root=0)
 if data:
 	print "broadcast received by worker {0} successfully".format(rank)
 	delays,time,xpos,ypos,zpos = data
-	
+
+# wait for all processes to have recieved the data
+comm.barrier()	
+
 # set the base output file name (will be editted based on the worker rank)
 # TODO: make this more generic - maybe as an option for what directory?
 oname = "/scratch2/mwaops/{0}/beam_tests/{1}_{2}_{3}MHz_{4}_{5}.dat".format(os.environ['USER'],args.obsid,time.gps,args.freq/1e6,ra,dec)
 	
 
 # figure out how many chunks to split up ZA into
-totalcalcs = (np.pi/2)/np.radians(tres) #total number of calculations required
-assert totalcalcs >= size, "Total calculations must be >= the number of cores available"
+totalcalcs = (np.pi/2)/np.radians(tres) #total number of calculation cycles required
+assert totalcalcs >= size, "Total calculation cycles must be >= the number of cores available"
 
 # iterate through the ZA range given the process rank
 start = rank * np.radians(tres) * (totalcalcs//size)
 end = (rank+1) * np.radians(tres) * (totalcalcs//size)
 if rank == size-1:
 	end = np.pi/2 # give the last process anything that's left
-print "worker:",rank,"total calcs:",totalcalcs,"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
+print "worker:",rank,"total calcs:",(2*np.pi/np.radians(pres))*((end-start)/np.radians(tres)),"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
 
 # crate array factor for given ZA band and write to file
 beam_area = createArrayFactor(ra,dec,args.obsid,delays,time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
@@ -437,10 +445,10 @@ elif rank == 0:
 	for i in range(1,size):
 		result += comm.recv(source=i)
 
-# wait for everything to be collected
+# wait for everything to be collected (not really sure if this is necessary...)
 comm.barrier()
 
-# calcualte the gain for that pointing and frequency and write a "stats" file
+# calculate the gain for that pointing and frequency and write a "stats" file
 if rank == 0:
 	eff_area = args.efficiency*((c.value/args.freq)**2/result)
 	gain = (1e-26)*eff_area/(2*k_B.value)
@@ -456,6 +464,6 @@ if rank == 0:
 		f.write("#beam solid angle (sr)\n{0}\n".format(result))
 		f.write("#effective area (m^2)\n{0}\n".format(eff_area))
 		f.write("#gain (K/Jy)\n{0}\n".format(gain))
-		f.write("#ZA and Az resolution (degrees per pixel)\n({0} , {1})".format(tres,pres))
-
+		f.write("#ZA and Az resolution (degrees per pixel)\n({0} , {1})\n".format(tres,pres))
+		f.write("#Number of files written\n{0}".format(size))
 	print "Gain for {0} at {1} MHz pointed at {2} {3} is: {4:.6f} K/Jy".format(args.obsid,args.freq,ra,dec,gain)
