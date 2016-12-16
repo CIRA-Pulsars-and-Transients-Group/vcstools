@@ -311,7 +311,17 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 	# write a file based on rank of the process being used
 	print "writing file from worker {0}".format(rank)
 	with open(oname.replace(".dat",".{0}.dat".format(rank)),'w') as f:
+		if rank == 0:
+			# if master process, write the header information first and then the data
+			f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa_tiedarray\n##Date: 2016-11-14 15:14:00\n")
+			f.write("** File exported by FEKO kernel version 7.0.1-482\n\n")
+			f.write("#Request Name: FarField\n#Frequency: {0}\n".format(obsfreq))
+			f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}".format(ntheta,nphi))
+			f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
+			f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n'
+
 		for res in results:
+			# write each line of the data
                         f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
 	
 	return omega_A
@@ -321,39 +331,39 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 #####################
 ##  OPTION PARSING ##
 #####################
-parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA.""",\
-                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA. 
+						This is an MPI-based simulation code and will use all available processes when run 
+						(i.e. there is no user choice in how many to use)""",\
+				formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 parser.add_argument("-o","--obsid",type=str,action='store',metavar="obsID",\
 		help="""Observation ID (used to figure out spatial configuration of array). 
 			Also used to retrieve observation start-time and duration.""",default=None)
-parser.add_argument("--flagged_tiles",type=str,nargs='+',action='store',metavar="tile",help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5",default=None)
+
+parser.add_argument("--flagged_tiles",type=str,nargs='+',action='store',metavar="tile",\
+		help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5",default=None)
+
 parser.add_argument("-p","--target",type=str,nargs=2,action='store',metavar=("ra","dec"),\
-		help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.sss dd\"mm\'ss.ssss",default=("00:00:00.0000","00:00:00.0000"))
+		help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.sss dd\"mm\'ss.ssss",\
+		default=("00:00:00.0000","00:00:00.0000"))
 
 parser.add_argument("-t","--time",type=str,action='store',metavar="time",\
-		help="The UTC time to evaluate the array factor. This overrides the start-time retrieved from the observation ID metafits. Should be formatted like: yyyy-mm-dd hh:mm:ss.ssss",default=None)
+		help="""The UTC time to evaluate the array factor. This overrides the start-time retrieved from the observation ID metafits. 
+			Should be formatted like: yyyy-mm-dd hh:mm:ss.ssss""",default=None)
+
 parser.add_argument("-f","--freq",type=float,action='store',metavar="frequency",help="The centre observing frequency for the observation (in Hz!)",default=184.96e6)
-parser.add_argument("-e","--efficiency",type=float,action='store',metavar="eta",help="Frequency and pointing dependent efficiency",default=1)
+
+parser.add_argument("-e","--efficiency",type=float,action='store',metavar="eta",help="Frequency and pointing dependent array efficiency",default=1)
+
 parser.add_argument("--grid_res",type=float,action='store',nargs=2,metavar=("theta_res","phi_res"),
-		help="""Resolution of the (theta,phi) grid to be created in degrees per pixel. This equivaently determines the size of the (az,za) grid. 
-			So, if you want 0.1 degrees per pixel in both theta and phi, then --grid_res 0.1 0.1, etc. 
-			!!CAUTION!!: this can easily use up all of your available memory if you set the resolution too fine!""",default=(0.1,0.1))
-#parser.add_argument("--write",action='store_true',help="Write the tied-array beam matrix to file - in FEKO-like format")
-#parser.add_argument("--plotting",action='store_true',help="""Output figures of the calculated MWA beam, array factor and product (i.e. the tied-array beam).\
-#								 Figures are produced in both normalised power and dB scales.\
-#								 MWA beam patterns as: <obsid>_gx_<freq>MHz_<Az>_<ZA>.png,\
-#							 	 array factor patterns as: <obsid>_fx_<freq>MHz_<Az>_<ZA>.png,\
-#								 and the product as <obsid>_gxfx_<freq>MHz_<Az>_<ZA>.png""")
-#parser.add_argument("--dB",action='store_true',help="Plot with dB scale as well as normalised power.")
-#parser.add_argument("--polar",action='store_true',help="""Plot in polar coordinates. Note that the zoom option will only work nicely for zenith pointings\
-#							 (due to matplotlib not being able to handle arbitrary zoom in polar mode)""")
-#parser.add_argument("--zoom",action='store',type=float,nargs=2,metavar=("lo","hi"),help="""Zoom factor for Az,ZA coords. Does not apply to dB plots.\
-#									 Think of these as multiplication factors on the target position.\
-#									 So: --zoom 0.8 1.2 would set the x and y axis limits to (0.8*target_position, 1.2*target_position).""",default=None)
-#parser.add_argument("--showtarget",action='store_true',help="When plotting, marker the target pointing")
+		help="""Resolution of the Azimuth (Az) and Zenith Angle (ZA) grid to be created in degrees. 
+			Be warned: setting these too small will result in a MemoryError and the job will die.""",default=(0.1,0.1))
+
 parser.add_argument("--coplanar",action='store_true',help="Assume the array is co-planar (i.e. height above array centre is 0 for all tiles)")
+
 parser.add_argument("--zenith",action='store_true',help="Assume zenith pointing (i.e  delays are 0), ZA = 0 and AZ = 0")
+
+# parse the arguments
 args = parser.parse_args()
 
 
@@ -361,8 +371,6 @@ args = parser.parse_args()
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
-
-
 
 # small calculations and data gethering from arguments is fine and won't run into trouble by having multiple processes do it simultaneously
 ra,dec = args.target
@@ -414,6 +422,10 @@ data = comm.bcast(data,root=0)
 if data:
 	print "broadcast received by worker {0} successfully".format(rank)
 	delays,time,xpos,ypos,zpos = data
+else:
+	print "broadcast failed to worker {0}".format(rank)
+	print "!!! ABORTING !!!"
+	comm.Abort(errorcode=1)
 
 # wait for all processes to have recieved the data
 comm.barrier()	
@@ -424,15 +436,20 @@ oname = "/scratch2/mwaops/{0}/beam_tests/{1}_{2}_{3}MHz_{4}_{5}.dat".format(os.e
 	
 
 # figure out how many chunks to split up ZA into
-totalcalcs = (np.pi/2)/np.radians(tres) #total number of calculation cycles required
-assert totalcalcs >= size, "Total calculation cycles must be >= the number of cores available"
+totalZAevals = (np.pi/2)/np.radians(tres) #total number of ZA evaluations required
+assert totalZAevals >= size, "Total number of ZA evalutions must be >= the number of processors available"
 
 # iterate through the ZA range given the process rank
-start = rank * np.radians(tres) * (totalcalcs//size)
-end = (rank+1) * np.radians(tres) * (totalcalcs//size)
-if rank == size-1:
+start = rank * np.radians(tres) * (totalZAevals//size)
+end = (rank+1) * np.radians(tres) * (totalZAevals//size)
+if rank == (size-1):
 	end = np.pi/2 # give the last process anything that's left
-print "worker:",rank,"total calcs:",(2*np.pi/np.radians(pres))*((end-start)/np.radians(tres)),"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
+
+# calculate how many calculations this worker will do
+numZA_calcs = (end-start)/np.radians(tres)
+numAZ_calcs = 2*np.pi/np.radians(pres)
+numWorker_calcs = numZA_calcs * numAZ_calcs
+print "worker:",rank,"total calcs:",numWorker_calcs,"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
 
 # crate array factor for given ZA band and write to file
 beam_area = createArrayFactor(ra,dec,args.obsid,delays,time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
@@ -465,5 +482,6 @@ if rank == 0:
 		f.write("#effective area (m^2)\n{0}\n".format(eff_area))
 		f.write("#gain (K/Jy)\n{0}\n".format(gain))
 		f.write("#ZA and Az resolution (degrees per pixel)\n({0} , {1})\n".format(tres,pres))
-		f.write("#Number of files written\n{0}".format(size))
+		f.write("#number of data files written\n{0}".format(size))
+	
 	print "Gain for {0} at {1} MHz pointed at {2} {3} is: {4:.6f} K/Jy".format(args.obsid,args.freq,ra,dec,gain)
