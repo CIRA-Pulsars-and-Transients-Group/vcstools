@@ -313,7 +313,7 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 	with open(oname.replace(".dat",".{0}.dat".format(rank)),'w') as f:
 		if rank == 0:
 			# if master process, write the header information first and then the data
-			f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa_tiedarray\n##Date: 2016-11-14 15:14:00\n")
+			f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa_tiedarray\n##Date: {0}\n".format(time.iso))
 			f.write("** File exported by FEKO kernel version 7.0.1-482\n\n")
 			f.write("#Request Name: FarField\n#Frequency: {0}\n".format(obsfreq))
 			f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}".format(ntheta,nphi))
@@ -363,11 +363,13 @@ parser.add_argument("--coplanar",action='store_true',help="Assume the array is c
 
 parser.add_argument("--zenith",action='store_true',help="Assume zenith pointing (i.e  delays are 0), ZA = 0 and AZ = 0")
 
+parser.add_argument("--out_dir",type=str,action='store',help="Location (full path) to write the output data files",default=".")
 # parse the arguments
 args = parser.parse_args()
 
-
-# Setup MPI
+###############
+## Setup MPI ##
+###############
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
@@ -387,8 +389,8 @@ else:
 # if the observation ID metafits file doesn't exist, get the master node to download it
 if rank == 0:
 	print "gathering required data"
-	if os.path.isfile('/scratch2/mwaops/{0}/beam_tests/{1}_metafits_ppds.fits'.format(os.environ['USER'],args.obsid)) is False:
-		os.system('wget -O /scratch2/mwaops/{0}/beam_tests/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={0}'.format(os.environ['USER'],args.obsid))
+	if os.path.isfile('{0}/{1}_metafits_ppds.fits'.format(args.out_dir,args.obsid)) is False:
+		os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir,args.obsid))
 
 	# for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
 	if args.zenith:
@@ -432,7 +434,7 @@ comm.barrier()
 
 # set the base output file name (will be editted based on the worker rank)
 # TODO: make this more generic - maybe as an option for what directory?
-oname = "/scratch2/mwaops/{0}/beam_tests/{1}_{2}_{3}MHz_{4}_{5}.dat".format(os.environ['USER'],args.obsid,time.gps,args.freq/1e6,ra,dec)
+oname = "{0}/{1}_{2}_{3}MHz_{4}_{5}.dat".format(args.out_dir,args.obsid,time.gps,args.freq/1e6,ra,dec)
 	
 
 # figure out how many chunks to split up ZA into
