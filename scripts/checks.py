@@ -22,7 +22,7 @@ def check_download(obsID, directory=None, required_size=None, required_size_ics=
     print base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range."
     files = np.array(getmeta(service='obs', params={'obs_id':obsID})['files'].keys())
     if not required_size:
-        required_size = 253440000 if data_type == 'raw' else 7864340480
+        required_size = 253440000 if data_type == 'raw' else 7865368576 #7864340480
     else:
         required_size = required_size
     suffix = '.dat' if data_type == 'raw' else '.tar'
