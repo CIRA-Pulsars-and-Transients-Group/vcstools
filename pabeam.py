@@ -316,7 +316,7 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 			f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa_tiedarray\n##Date: {0}\n".format(time.iso))
 			f.write("** File exported by FEKO kernel version 7.0.1-482\n\n")
 			f.write("#Request Name: FarField\n#Frequency: {0}\n".format(obsfreq))
-			f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}".format(ntheta,nphi))
+			f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}\n".format(ntheta,nphi))
 			f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
 			f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
 
