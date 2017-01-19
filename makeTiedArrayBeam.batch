@@ -16,8 +16,8 @@ dec="+22:00:52.06" # target DEC
 flags="4 10 11 75 76 82 83 89" # flagged tiles (as in RTS solutions)
 tres=0.1 # resolution for ZA grid
 pres=0.1 # resolution for Azimuth grid
-obstime=1099414416
-odir="/scratch2/mwaops/bmeyers/beam_tests"
+obstime=1099414416 # GPS time to evaluate the beam
+odir="/scratch2/mwaops/bmeyers/beam_tests" # where to dump the outputs
 
 
 echo "aprun -n $nprocesses python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}" 
