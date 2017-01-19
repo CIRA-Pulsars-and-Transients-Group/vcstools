@@ -318,7 +318,7 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 			f.write("#Request Name: FarField\n#Frequency: {0}\n".format(obsfreq))
 			f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}".format(ntheta,nphi))
 			f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
-			f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n'
+			f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
 
 		for res in results:
 			# write each line of the data
@@ -347,9 +347,8 @@ parser.add_argument("-p","--target",type=str,nargs=2,action='store',metavar=("ra
 		help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.sss dd\"mm\'ss.ssss",\
 		default=("00:00:00.0000","00:00:00.0000"))
 
-parser.add_argument("-t","--time",type=str,action='store',metavar="time",\
-		help="""The UTC time to evaluate the array factor. This overrides the start-time retrieved from the observation ID metafits. 
-			Should be formatted like: yyyy-mm-dd hh:mm:ss.ssss""",default=None)
+parser.add_argument("-t","--time",type=float,action='store',metavar="time",\
+		help="""The GPS time desired for beam evaluation. This will override whatever is read from the metafits.""",default=None)
 
 parser.add_argument("-f","--freq",type=float,action='store',metavar="frequency",help="The centre observing frequency for the observation (in Hz!)",default=184.96e6)
 
@@ -401,9 +400,9 @@ if rank == 0:
 
 	# same for obs time, master reads and then distributes
 	if args.time is None:
-		time = Time(get_obstime_duration(args.obsid)[0])
+		time = Time(get_obstime_duration(args.obsid)[0],format='gps')
 	else:
-		time = Time(args.time)
+		time = Time(args.time,format='gps')
 
 	# get the tile locations from the metafits
 	xpos,ypos,zpos = getTileLocations(args.obsid,flags)	
