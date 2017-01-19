@@ -3,23 +3,25 @@
 #SBATCH --partition=workq
 #SBATCH --time=12:00:00
 #SBATCH --output=makeTiedArrayBeam.out
-#SBATCH --nodes=6
+#SBATCH --nodes=1
 #SBATCH --account=mwaops
 
-nnodes=6
-nprocesses=`bc -l <<< "${nnodes}*16"`
-
+nnodes=1
+#nprocesses=`bc -l <<< "${nnodes}*16"`
+nprocesses=1
 obsid=1099414416 # observation ID
 freq=184.96e6 # centre observing frequency in Hz
 eff=0.98037 # antenna efficiency
 ra="05:34:31.973" # target RA
 dec="+22:00:52.06" # target DEC
 flags="4 10 11 75 76 82 83 89" # flagged tiles (as in RTS solutions)
-tres=0.1 # resolution for ZA grid
-pres=0.1 # resolution for Azimuth grid
+tres=1 # resolution for ZA grid
+pres=1 # resolution for Azimuth grid
+obstime=1099414416
+odir="/scratch2/mwaops/bmeyers/beam_tests"
 
 
-time aprun -n $nprocesses python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -e ${freq} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres}
-
+echo "aprun -n $nprocesses python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}" 
+time aprun -n $nprocesses python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}
 
 
