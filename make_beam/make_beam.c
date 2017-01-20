@@ -1642,8 +1642,10 @@ int main(int argc, char **argv) {
     int integ=0;
     int index=0;
     int finished = 0;
-    size_t offset_out = 0;
-    size_t offset_in = 0;
+    size_t offset_out_psrfits = 0;
+    size_t offset_out_vdif    = 0;
+    size_t offset_in_psrfits  = 0;
+    size_t offset_in_vdif     = 0;
 
     float gain=1.0;
     int file_no = 0;
@@ -1762,10 +1764,10 @@ int main(int argc, char **argv) {
         bzero(incoherent_sum,(nchan*sizeof(float)));
         bzero(noise_floor,(nchan*npol*npol*sizeof(float)));
 
-        if (offset_in == 0 && make_psrfits == 1) {
+        if (offset_in_psrfits == 0 && make_psrfits == 1) {
             bzero(data_buffer,(pf.hdr.nsblk*nchan*outpol*sizeof(float)));
         }
-        else if (offset_in == 0 && make_vdif == 1) {
+        else if (offset_in_vdif == 0 && make_vdif == 1) {
             bzero(data_buffer,(vf.sizeof_buffer*sizeof(float)));
         }
 
@@ -1983,21 +1985,21 @@ int main(int argc, char **argv) {
         if (make_psrfits == 1 && !finished) {
 
 
-            if (offset_out < pf.sub.bytes_per_subint) {
+            if (offset_out_psrfits < pf.sub.bytes_per_subint) {
 
-                memcpy((void *)((char *)data_buffer + offset_in),spectrum,sizeof(float)*nchan*outpol);
-                offset_in += sizeof(float)*nchan*outpol;
+                memcpy((void *)((char *)data_buffer + offset_in_psrfits),spectrum,sizeof(float)*nchan*outpol);
+                offset_in_psrfits += sizeof(float)*nchan*outpol;
 
                 //for (ch=0;ch<nchan;ch++) {
                 //    fprintf(stdout,"XX+YY:ch: %d spec: %f\n",ch,spectrum[ch]);
                 //}
 
-                offset_out = offset_out + bytes_per_spec;
-                // fprintf(stderr,"specnum %d: %lu of %d bytes for this subint (buffer is %lu bytes) \n",specnum,offset_out,pf.sub.bytes_per_subint,pf.hdr.nsblk*nchan*outpol*sizeof(float));
+                offset_out_psrfits += bytes_per_spec;
+                // fprintf(stderr,"specnum %d: %lu of %d bytes for this subint (buffer is %lu bytes) \n",specnum,offset_out_psrfits,pf.sub.bytes_per_subint,pf.hdr.nsblk*nchan*outpol*sizeof(float));
 
             }
 
-            if (offset_out == pf.sub.bytes_per_subint) {
+            if (offset_out_psrfits == pf.sub.bytes_per_subint) {
 
                 if (type == 1) {
 
@@ -2049,13 +2051,13 @@ int main(int argc, char **argv) {
                 }
 
 
-                offset_out = 0;
-                offset_in = 0;
+                offset_out_psrfits = 0;
+                offset_in_psrfits = 0;
             }
 
 
         }
-        else if (make_vdif == 1 && !finished) {
+        if (make_vdif == 1 && !finished) {
             // write out the vdif block
             // as we are just writing out a single timestep per frame this should
             // have relatively simple bookkeeping
@@ -2064,8 +2066,8 @@ int main(int argc, char **argv) {
 
             // we are beginnging with a beam that has both pols next to each other for each channel
 
-            float *data_buffer_ptr = &data_buffer[offset_in]; // are we going to keep going until we have a seconds worth ...
-            //fprintf(stderr,"offset %ld of %ld: %p\n",offset_in,vf.sizeof_buffer,data_buffer_ptr);
+            float *data_buffer_ptr = &data_buffer[offset_in_vdif]; // are we going to keep going until we have a seconds worth ...
+            //fprintf(stderr,"offset %ld of %ld: %p\n",offset_in_vdif,vf.sizeof_buffer,data_buffer_ptr);
             // we are going to invert the nchan signals into a single channel
             // we may have some missing data but we do not know that
             // perhaps ignore it for now
@@ -2077,7 +2079,7 @@ int main(int argc, char **argv) {
             if (fft_mode==1 || fft_mode==2) {
                 // these modes do not expect any input buffering
                 //fprintf(stderr,"Inverting %d chan PFB...",nchan);
-                if (offset_in == vf.sizeof_buffer-vf.sizeof_beam) {
+                if (offset_in_vdif == vf.sizeof_buffer-vf.sizeof_beam) {
 
                     invert_pfb(pol_X,pol_X,nchan,1,1,1,fft_mode,1,NULL); // finishing up this second
                     invert_pfb(pol_Y,pol_Y,nchan,1,1,1,fft_mode,1,NULL);
@@ -2101,7 +2103,7 @@ int main(int argc, char **argv) {
 
 
 
-                offset_in = offset_in + vf.sizeof_beam;
+                offset_in_vdif += vf.sizeof_beam;
 
                 // we now have built a nchan (time) samples for both pols - continue going until we
                 // have 1 second of data
@@ -2126,10 +2128,10 @@ int main(int argc, char **argv) {
                 filter_buffer_X_ptr += 2*nchan;
                 filter_buffer_Y_ptr += 2*nchan;
 
-                offset_in = offset_in + 4*nchan; // this is twice as big as this counter counts both pols
+                offset_in_vdif += 4*nchan; // this is twice as big as this counter counts both pols
 
-                if (offset_in == vf.sizeof_buffer) { // a full second
-                    fprintf(stderr,"Done %zu of %zu samples (ntime*npol*complexity)\n",offset_in,vf.sizeof_buffer);
+                if (offset_in_vdif == vf.sizeof_buffer) { // a full second
+                    fprintf(stderr,"Done %zu of %zu samples (ntime*npol*complexity)\n",offset_in_vdif,vf.sizeof_buffer);
                     // call invert_pfb
                     // doing this in very small chunks to keep the arrays small - may help performance
                     //
@@ -2201,7 +2203,7 @@ int main(int argc, char **argv) {
 
             }
 
-            if (offset_in == vf.sizeof_buffer) { // data_buffer is full_
+            if (offset_in_vdif == vf.sizeof_buffer) { // data_buffer is full_
                 if (vf.got_scales == 0) {
 
                     get_mean_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,&rmean,&imean,&cmean);
@@ -2235,22 +2237,22 @@ int main(int argc, char **argv) {
                 normalise_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,1.0/gain);
 
                 data_buffer_ptr = data_buffer;
-                offset_out = 0;
+                offset_out_vdif = 0;
 
-                while  (offset_out < vf.block_size) {
+                while  (offset_out_vdif < vf.block_size) {
 
-                    memcpy((out_buffer_8+offset_out),&vhdr,32); // add the current header
-                    offset_out = offset_out + 32; // offset into the output array
+                    memcpy((out_buffer_8+offset_out_vdif),&vhdr,32); // add the current header
+                    offset_out_vdif += 32; // offset into the output array
 
-                    float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out));
-                    //to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
+                    float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out_vdif));
+                    //to_offset_binary( (out_buffer_8+offset_out_vdif),vf.sizeof_beam);
 
-                    offset_out = vf.frame_length + offset_out - 32; // increment output offset
+                    offset_out_vdif += vf.frame_length - 32; // increment output offset
                     data_buffer_ptr = data_buffer_ptr + vf.sizeof_beam;
                     nextVDIFHeader(&vhdr,vf.frame_rate);
 
                 }
-                if (offset_out == vf.block_size) {
+                if (offset_out_vdif == vf.block_size) {
                     // full seconds worth of samples
                     vdif_write_second(&vf,out_buffer_8); // remember this header is the next one.
 
@@ -2275,12 +2277,12 @@ int main(int argc, char **argv) {
 
                     }
 
-                    offset_out=0;
-                    offset_in=0;
+                    offset_out_vdif=0;
+                    offset_in_vdif=0;
                 }
             }
         }
-        else {
+        if (!(make_vdif == 1 && !finished) && !(make_psrfits == 1 && !finished)) {
 
             fwrite(spectrum,sizeof(float),nchan,stdout);
 
