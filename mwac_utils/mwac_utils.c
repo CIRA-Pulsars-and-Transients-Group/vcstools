@@ -509,10 +509,12 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
         // Get correct antenna index
         // To wit: The nth antenna in the Offringa binary file will get put into
         // position number order[n]. Default is no re-ordering.
-        if (order)
+        if (order) {
             ant_idx = order[ant];
-        else
+        }
+        else {
             ant_idx = ant;
+        }
 
         // Jump to next Jones matrix position for this channel
         if (first) {
@@ -548,6 +550,7 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
             count++;
 
         }
+        fprintf(stdout,"ant = %d;    ant_idx = %d\n", ant, ant_idx);
     }
 
     // Close the file, print a summary, and return

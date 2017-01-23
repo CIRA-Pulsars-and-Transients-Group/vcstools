@@ -567,16 +567,42 @@ int     main(int argc, char **argv) {
     if (get_rts) {
         read_rts_file(M, Jref, nstation, &amp, DI_Jones_file);
         inv2x2(Jref, invJref);
+//DEBUG
+FILE *fm = fopen("Mfile_rts.txt", "w");
+int antcount;
+int polcount;
+for (antcount = 0; antcount < nstation; antcount++) {
+    for (polcount = 0; polcount < 4; polcount++)
+        fprintf(fm, "%e %e ", creal(M[antcount][polcount]), cimag(M[antcount][polcount]));
+    fprintf(fm, "\n");
+}
+fclose(fm);
+//END DEBUG
     }
     else if (get_offringa) {
         // Find the ordering of antennas in Offringa solutions from metafits file
         int *order = (int *)malloc(nstation*sizeof(int));
         int n;
-        for (n = 0; n < ninput; n += 2) {
-            order[n/2] = (int)antenna_num[n];
-            fprintf(stdout, "order[%3d] = %d\n", n/2, order[n/2]);
+        for (n = 0; n < nstation; n++) {
+            order[antenna_num[n*2]] = n;
+        }
+        for (n = 0; n < nstation; n++) {
+            fprintf(stdout, "antenna_num[%3d] = %3d;   ", n*2, antenna_num[n*2]);
+            fprintf(stdout, "order[%3d] = %3d\n", n, order[n]);
         }
         read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file, order);
+        //read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file, NULL);
+//DEBUG
+FILE *fm = fopen("Mfile_offringa.txt", "w");
+int antcount;
+int polcount;
+for (antcount = 0; antcount < nstation; antcount++) {
+    for (polcount = 0; polcount < 4; polcount++)
+        fprintf(fm, "%e %e ", creal(M[antcount][polcount]), cimag(M[antcount][polcount]));
+    fprintf(fm, "\n");
+}
+fclose(fm);
+//END DEBUG
         free(order);
         // Just make Jref (and invJref) the identity matrix since they don't apply to
         // Offringa's calibration solution.

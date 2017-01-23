@@ -2062,7 +2062,7 @@ int main(int argc, char **argv) {
             // as we are just writing out a single timestep per frame this should
             // have relatively simple bookkeeping
             // in vdif mode we just want the beam sum - not the Stokes
-            // this is essentailly a two bit sampled (undetected) complex voltage stream
+            // this is essentially a two bit sampled (undetected) complex voltage stream
 
             // we are beginnging with a beam that has both pols next to each other for each channel
 
@@ -2117,7 +2117,7 @@ int main(int argc, char **argv) {
                     int filter_offset = 2*ch;
                     filter_buffer_X_ptr[filter_offset]   = crealf(pol_X[ch]);
                     filter_buffer_X_ptr[filter_offset+1] = cimagf(pol_X[ch]);
-                    filter_buffer_Y_ptr[filter_offset] = crealf(pol_Y[ch]);
+                    filter_buffer_Y_ptr[filter_offset]   = crealf(pol_Y[ch]);
                     filter_buffer_Y_ptr[filter_offset+1] = cimagf(pol_Y[ch]);
 
 
