@@ -411,7 +411,7 @@ def run_rts(working_dir, rts_in_file):
     submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
 
 
-def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f', DI_dir=None, calibration_type='rts'):
+def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
     # Print relevant version numbers to screen
     mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
     mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -519,7 +519,7 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
             batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
-            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s psrfits_header.txt\n" % (execpath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
+            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s \n" % (execpath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
         
         submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
@@ -608,13 +608,12 @@ if __name__ == '__main__':
             print "Pointing (-p) required in beamformer mode"
             quit()
         if (opts.bf_out_format == 'psrfits'):
-            bf_format = " -f "
+            bf_format = " -f psrfits_header.txt"
         elif  (opts.bf_out_format == 'vdif'):
-            bf_format = " -v "
+            bf_format = " -v psrfits_header.txt"
         elif (opts.bf_out_format == 'both'):
-            bf_format = " -v -f"
+            bf_format = " -v psrfits_header.txt -f psrfits_header.txt"
             print "Writing out both psrfits and vdif."
-            sys.exit(1)
 
         if opts.execpath:
             execpath = opts.execpath
