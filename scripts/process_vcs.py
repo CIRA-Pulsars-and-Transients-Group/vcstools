@@ -612,7 +612,8 @@ if __name__ == '__main__':
         elif  (opts.bf_out_format == 'vdif'):
             bf_format = " -v "
         elif (opts.bf_out_format == 'both'):
-            print "We cannot write out both vdif and psrfits simultaneously yet, sorry! Aborting here..."
+            bf_format = " -v -f"
+            print "Writing out both psrfits and vdif."
             sys.exit(1)
 
         if opts.execpath:
