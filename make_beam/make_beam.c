@@ -2244,8 +2244,8 @@ int main(int argc, char **argv) {
                     memcpy((out_buffer_8+offset_out_vdif),&vhdr,32); // add the current header
                     offset_out_vdif += 32; // offset into the output array
 
-                    float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out));
-                    to_offset_binary( (out_buffer_8+offset_out),vf.sizeof_beam);
+                    float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out_vdif));
+                    to_offset_binary( (out_buffer_8+offset_out_vdif),vf.sizeof_beam);
 
                     offset_out_vdif += vf.frame_length - 32; // increment output offset
                     data_buffer_ptr = data_buffer_ptr + vf.sizeof_beam;
