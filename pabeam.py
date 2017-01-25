@@ -82,7 +82,7 @@ def get_delay_steps(obs):
     return [obs,ra,dec,dura,xdelays,centrefreq,channels]
 
 
-def getTileLocations(obsid,flags=[]):
+def getTileLocations(obsid,flags=[],fdir="."):
 	"""
 	Function grab the MWA tile locations for any given observation ID. Downloads the relevant metafits file from the database, saves it as <obdID>_metafits_ppds.fits.
 	
@@ -97,7 +97,7 @@ def getTileLocations(obsid,flags=[]):
 		list[2] = a list of tile heights about sea-level 
 	"""
 
-	f = fits.open('{0}_metafits_ppds.fits'.format(obsid))		
+	f = fits.open('{0}/{1}_metafits_ppds.fits'.format(fdir,obsid))		
 	#names = f[1].data['Antenna'][::2]
 	east = f[1].data['East'][::2]
 	north = f[1].data['North'][::2]
@@ -107,15 +107,14 @@ def getTileLocations(obsid,flags=[]):
 	height = height - mwacentre_h
 
 	#flag the tiles from the x,y,z positions
-	for i in flags:
-		east = np.delete(east,int(i))
-		north = np.delete(north,int(i))
-		height = np.delete(height,int(i))
+	east = np.delete(east,flags)
+	north = np.delete(north,flags)
+	height = np.delete(height,flags)
 			
 	return east,north,height
 
 
-def get_obstime_duration(obsid):
+def get_obstime_duration(obsid,fdir="."):
 	"""
 	Funciton to grab the recorded start-time and duration of the observation
 	
@@ -128,7 +127,7 @@ def get_obstime_duration(obsid):
 		list[1] = observation duration in seconds
 	"""
 	# metafits file will already have been downloaded
-	f = fits.open('{0}_metafits_ppds.fits'.format(obsid))
+	f = fits.open('{0}/{1}_metafits_ppds.fits'.format(obsid,fdir))
 	
 	return [f[0].header['DATE-OBS'],f[0].header['EXPOSURE']]
 
@@ -322,6 +321,9 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 
 		for res in results:
 			# write each line of the data
+			# we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
+				# values are calculated using that convetion, so we need to represent that here
+			
                         f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
 	
 	return omega_A
@@ -389,8 +391,7 @@ else:
 if rank == 0:
 	print "will use {0} processes".format(size)
 	print "gathering required data"
-	if os.path.isfile('{0}/{1}_metafits_ppds.fits'.format(args.out_dir,args.obsid)) is False:
-		os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir,args.obsid))
+	os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir,args.obsid))
 
 	# for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
 	if args.zenith:
@@ -400,12 +401,12 @@ if rank == 0:
 
 	# same for obs time, master reads and then distributes
 	if args.time is None:
-		time = Time(get_obstime_duration(args.obsid)[0],format='gps')
+		time = Time(get_obstime_duration(args.obsid)[0],format='gps',fdir=args.out_dir)
 	else:
 		time = Time(args.time,format='gps')
 
 	# get the tile locations from the metafits
-	xpos,ypos,zpos = getTileLocations(args.obsid,flags)	
+	xpos,ypos,zpos = getTileLocations(args.obsid,flags,fdir=args.out_dir)	
 	if args.coplanar:
 		zpos = np.zeros(len(xpos))
 	
