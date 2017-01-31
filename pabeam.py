@@ -231,7 +231,7 @@ def genAZZA(start,stop,step,end=False):
 	return
     
 
-def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_tiles,theta_res,phi_res,coplanar,zenith,start,end):
+def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_tiles,theta_res,phi_res,coplanar,zenith,start,end,write):
 	"""
 	Primary function to calcaulte the array factor with the given information.
 
@@ -308,24 +308,27 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 
 
 	# write a file based on rank of the process being used
-	print "writing file from worker {0}".format(rank)
-	with open(oname.replace(".dat",".{0}.dat".format(rank)),'w') as f:
-		if rank == 0:
-			# if master process, write the header information first and then the data
-			f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa_tiedarray\n##Date: {0}\n".format(time.iso))
-			f.write("** File exported by FEKO kernel version 7.0.1-482\n\n")
-			f.write("#Request Name: FarField\n#Frequency: {0}\n".format(obsfreq))
-			f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}\n".format(ntheta,nphi))
-			f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
-			f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
+	if write:
+		print "writing file from worker {0}".format(rank)
+		with open(oname.replace(".dat",".{0}.dat".format(rank)),'w') as f:
+			if rank == 0:
+				# if master process, write the header information first and then the data
+				f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa_tiedarray\n##Date: {0}\n".format(time.iso))
+				f.write("** File exported by FEKO kernel version 7.0.1-482\n\n")
+				f.write("#Request Name: FarField\n#Frequency: {0}\n".format(obsfreq))
+				f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}\n".format(ntheta,nphi))
+				f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
+				f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
 
-		for res in results:
-			# write each line of the data
-			# we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
-				# values are calculated using that convetion, so we need to represent that here
-			
-                        f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
-	
+			for res in results:
+				# write each line of the data
+				# we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
+					# values are calculated using that convetion, so we need to represent that here
+				
+				f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
+	else:
+		print "worker {0} not writing".format(rank)
+		
 	return omega_A
 
 	
@@ -365,6 +368,11 @@ parser.add_argument("--coplanar",action='store_true',help="Assume the array is c
 parser.add_argument("--zenith",action='store_true',help="Assume zenith pointing (i.e  delays are 0), ZA = 0 and AZ = 0")
 
 parser.add_argument("--out_dir",type=str,action='store',help="Location (full path) to write the output data files",default=".")
+
+parser.add_argument("--write",action='store_true',
+		help="""Write the beam pattern to disk when done calculating. 
+			If this option is not passed, you will just get a '.stats' files containing basic information about simulation parameters and the calculated gain.""")
+
 # parse the arguments
 args = parser.parse_args()
 
@@ -454,8 +462,8 @@ numAZ_calcs = 2*np.pi/np.radians(pres)
 numWorker_calcs = numZA_calcs * numAZ_calcs
 print "worker:",rank,"total calcs:",numWorker_calcs,"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
 
-# crate array factor for given ZA band and write to file
-beam_area = createArrayFactor(ra,dec,args.obsid,delays,time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end)
+# create array factor for given ZA band and write to file
+beam_area = createArrayFactor(ra,dec,args.obsid,delays,time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end,args.write)
 
 # collect results for the beam area calculation
 if rank != 0:
@@ -473,6 +481,11 @@ if rank == 0:
 	eff_area = args.efficiency*((c.value/args.freq)**2/result)
 	gain = (1e-26)*eff_area/(2*k_B.value)
 	
+	if args.write:
+		nfiles = size
+	else:
+		nfiles = 0
+
 	# write the stats file
 	with open(oname.replace(".dat",".stats"),"w") as f:
 		f.write("#observation ID\n{0}\n".format(args.obsid))
@@ -485,6 +498,6 @@ if rank == 0:
 		f.write("#effective area (m^2)\n{0}\n".format(eff_area))
 		f.write("#gain (K/Jy)\n{0}\n".format(gain))
 		f.write("#ZA and Az resolution (degrees per pixel)\n({0} , {1})\n".format(tres,pres))
-		f.write("#number of data files written\n{0}".format(size))
+		f.write("#number of data files written\n{0}".format(nfiles))
 	
 	print "Gain for {0} at {1} MHz pointed at {2} {3} is: {4:.6f} K/Jy".format(args.obsid,args.freq,ra,dec,gain)
