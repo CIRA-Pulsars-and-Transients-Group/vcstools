@@ -274,7 +274,8 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 
 	# we will also calculate the beam area contribution of this part of the sky
 	omega_A = 0
-	
+	array_factor_max = -1
+
 	# for each ZA "pixel", 90deg inclusive
 	for za in genAZZA(start,end,np.radians(theta_res),end=lastrank):
 		# for each Az "pixel", 360deg not included
@@ -288,24 +289,26 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 				ph = kx*x+ky*y+kz*z
 				ph_target = target_kx*x+target_ky*y+target_kz*z
 				array_factor += np.cos(ph-ph_target) + 1.j*np.sin(ph-ph_target)
-			# normalise to 1
+			# normalise to unity at pointing position
 			array_factor /= len(xpos)
 			
+			# keep track of maximum value calculated
+			if array_factor > array_factor_max: array_factor_max = array_factor
+	
 			# calculate the tile beam at the given Az,ZA pixel
-			tile_xpol,tile_ypol = pb.MWA_Tile_analytic(za,az,freq=obsfreq,delays=delays,power=True,zenithnorm=True)
+			tile_xpol,tile_ypol = pb.MWA_Tile_full_EE([[za]],[[az]],freq=obsfreq,delays=[delays,delays],power=True,zenithnorm=True,interp=False)
 			tile_pattern = (tile_xpol+tile_ypol)/2.0
 			
 			# calculate the phased array power pattern 
 			phased_array_pattern = tile_pattern * np.abs(array_factor)**2			
 		
-			#with open(oname.replace(".dat",".{0}.dat".format(rank)),"a") as f:
-			#	f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(np.degrees(za),np.degrees(az),phased_array_pattern))
-
+			# append results to a reference list for later	
 			results.append([np.degrees(za),np.degrees(az),phased_array_pattern])
 		
 			# add this contribution to the beam solid angle
 			omega_A += np.sin(za) * np.abs(array_factor)**2 * np.radians(theta_res) * np.radians(phi_res)
 
+	print "worker {0}, array factor maximum = {1}".format(rank,array_factor_max)
 
 	# write a file based on rank of the process being used
 	if write:
@@ -324,8 +327,9 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 				# write each line of the data
 				# we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
 					# values are calculated using that convetion, so we need to represent that here
-				
 				f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0],res[1],res[2]))
+		
+		print "worker {0} pattern maximum = {1}".format(rank,pattern_max)	
 	else:
 		print "worker {0} not writing".format(rank)
 		
