@@ -15,6 +15,6 @@ for step in range (nstep):
             f.write('0.0')
 f.close()
 
-f = open ('channel','w')
-f.write('100')
+#f = open ('channel','w')
+#f.write('100')
 
