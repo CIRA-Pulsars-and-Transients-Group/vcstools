@@ -283,7 +283,7 @@ int append(char **to_append, void *total, int n){
                 size_t input_step_between_row = pf->hdr.nchan*(pf->hdr.npol);
 
                 while (bytes_transferred < bytes_per_subint_per_pol){
-                    printf("step %d bytes: %lu/r",timestep,bytes_transferred);
+                //    printf("step %d bytes: %lu\r",timestep,bytes_transferred);
                     unsigned char *output_pos = output_pos_init+(timestep*output_step_between_row);
                     unsigned char *pf_input_pos = pf_input_pos_init+(timestep*input_step_between_row);
                 // memcpy the pad and set to zero
