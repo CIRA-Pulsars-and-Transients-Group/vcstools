@@ -275,19 +275,24 @@ int append(char **to_append, void *total, int n){
                 size_t bytes_per_subint_per_pol = pf->sub.bytes_per_subint/pf->hdr.npol;
 
                 unsigned char *output_pos_init = pf_total->sub.rawdata + start_offset;
-                unsigned char *pf_input_pos = pf->sub.rawdata + p*pf->hdr.nchan;
+                unsigned char *pf_input_pos_init = pf->sub.rawdata + p*pf->hdr.nchan;
 
 
                 int timestep = 0;
-                while (bytes_transferred < bytes_per_subint_per_pol){
+                size_t output_step_between_row = pf_total->hdr.nchan*(pf_total->hdr.npol);
+                size_t input_step_between_row = pf->hdr.nchan*(pf->hdr.npol);
 
-                    unsigned char *output_pos = output_pos_init+(timestep*pf_total->hdr.nchan);
+                while (bytes_transferred < bytes_per_subint_per_pol){
+                    printf("step %d bytes: %lu/r",timestep,bytes_transferred);
+                    unsigned char *output_pos = output_pos_init+(timestep*output_step_between_row);
+                    unsigned char *pf_input_pos = pf_input_pos_init+(timestep*input_step_between_row);
                 // memcpy the pad and set to zero
 
                     bytes_to_copy = (chans_to_pad/2);
                     bzero(output_pos,bytes_to_copy);
                     output_pos += bytes_to_copy;
-                    bytes_transferred += bytes_to_copy;
+
+
                 //memcpy the channels
 
 
@@ -295,7 +300,6 @@ int append(char **to_append, void *total, int n){
 
                     memcpy(output_pos,pf_input_pos,bytes_to_copy);
                     bytes_transferred += bytes_to_copy;
-                    pf_input_pos += bytes_to_copy;
                     output_pos += bytes_to_copy;
 
                 // memcpy the pad
@@ -303,7 +307,6 @@ int append(char **to_append, void *total, int n){
                     bytes_to_copy = chans_to_pad/2;
                     bzero(output_pos,bytes_to_copy);
                     output_pos += bytes_to_copy;
-                    bytes_transferred += bytes_to_copy;
 
                     timestep++;
 
