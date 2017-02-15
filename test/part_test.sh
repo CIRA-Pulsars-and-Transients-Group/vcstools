@@ -119,25 +119,27 @@ python ../make_auxfiles.py
 echo 101 > channel
 
 $runner make_beam -N 1 -e dat -i -f psrfits_header.txt -d $dir -n 128 -a 128 -r 10000 -o xx -w flags.txt -c phases.txt -t 1 -D $dir/../
-dspsr  -c 0.0064 -L 0.1 -A G0024_1118168248_02_0001.fits
+dspsr  -c 0.0064  -A G0024_1118168248_02_0001.fits
 mv G0024_1118168248_02_0001.fits incoherent.fits
 mv 2*.ar incoherent.ar
 $runner make_beam -N 1 -e dat -f psrfits_header.txt -d $dir -n 128 -a 128 -r 10000 -o xx -w flags.txt -c phases.txt -t 1 -D $dir/../
-dspsr -c 0.0064 -L 0.1 -A G0024_1118168248_02_0001.fits
+dspsr -c 0.0064 -A G0024_1118168248_02_0001.fits
 mv G0024_1118168248_02_0001.fits coherent.fits
 mv 2*.ar coherent.ar
 
 cd ../
 
-rm splice_coherent.fits
-rm splice_incoherent.fits
+rm splice_coherent_0001.fits
+rm splice_incoherent_0001.fits
 rm *.ar
 
-splice_psrfits 01/coherent.fits 02/coherent.fits splice_coherent
 splice_psrfits 01/incoherent.fits 02/incoherent.fits splice_incoherent
+splice_psrfits 01/coherent.fits 02/coherent.fits splice_coherent
 
-dspsr -c 0.0064 -L 0.1 -A splice_incoherent_0001.fits
+dspsr -c 0.0064 -A splice_incoherent_0001.fits
+sleep 1
 mv 2*.ar incoherent_splice.ar
 
-dspsr -c 0.0064 -L 0.1 -A splice_coherent_0001.fits
+dspsr -c 0.0064 -A splice_coherent_0001.fits
+sleep 1
 mv 2*.ar coherent_splice.ar
