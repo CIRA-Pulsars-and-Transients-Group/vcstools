@@ -133,8 +133,8 @@ rm splice_coherent_0001.fits
 rm splice_incoherent_0001.fits
 rm *.ar
 
-splice_psrfits 01/coherent.fits 02/coherent.fits splice_coherent
 splice_psrfits 01/incoherent.fits 02/incoherent.fits splice_incoherent
+splice_psrfits 01/coherent.fits 02/coherent.fits splice_coherent
 
 dspsr -c 0.0064 -A splice_incoherent_0001.fits
 sleep 1
