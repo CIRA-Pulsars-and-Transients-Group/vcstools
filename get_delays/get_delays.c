@@ -320,11 +320,11 @@ int     main(int argc, char **argv) {
                 case 'r':
                 {
                     int ih=0,im=0,J=0;
-                    float fs=0.,ra_rad=0.;
+                    double fs=0.,ra_rad=0.;
                     
                     char *ra_hhmmss = strdup(optarg);
                     
-                    sscanf(ra_hhmmss,"%d:%d:%f",&ih,&im,&fs);
+                    sscanf(ra_hhmmss,"%d:%d:%lf",&ih,&im,&fs);
                     
                     slaCtf2r(ih,im,fs,&ra_rad,&J);
                     
@@ -333,6 +333,7 @@ int     main(int argc, char **argv) {
                     }
                     else {
                         fprintf(stderr,"Error parsing %s as hhmmss\nslalib error code: j=%d\n",ra_hhmmss,J);
+                        fprintf(stderr,"ih = %d, im = %d, fs = %lf\n", ih, im, fs);
                         usage();
                         exit(-1);
                     }
