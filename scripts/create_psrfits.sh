@@ -1,16 +1,26 @@
 #!/bin/bash
 
+usage()
+{
+cat <<EOF
+Usage: $0 obsID [base_directory] [lowest channel] [# of channels]
+    script will produce psrfits files in folder fits under obsID
+    base_directory is optional, default is /scratch2/mwaops/vcs/obsID
+    if base_directory is provided script expects the combined folder
+    to exist, will create fits folder.
+    For picket fence observations you have to supply base_directory,
+    the lowest coarse channel of the desired subband, and the number
+    of contiguous channels in the subband. Each subband needs to be
+    dealt with individually
+EOF
+}
 if [ $# -lt 1 ] ; then
-    echo "Usage: $0 obsID [base_directory] [lowest channel] [# of channels] "  1>&2
-    echo "    script will produce psrfits files in folder fits under obsID "  1>&2
-    echo "    base_directory is optional, default is /scratch2/mwaops/vcs/obsID "  1>&2
-    echo "    if base_directory is provided script expects the combined folder " 1>&2
-    echo "    to exist, will create fits folder."  1>&2
-    echo "    For picket fence observations you have to supply base_directory, " 1>&2
-    echo "    the lowest coarse channel of the desired subband, and the number " 1>&2
-    echo "    of contiguous channels in the subband. Each subband needs to be " 1>&2
-    echo "    dealt with individually" 1>&2
+    usage
     exit 1
+fi
+if [ $1 == '-h' ];then
+    usage
+    exit 0
 fi
 
 obsID=$1

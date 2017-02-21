@@ -230,7 +230,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
                         if data_type == 16:
                             tar_batch = "untar_{0}".format(time_to_get)
-                            tar_secs_to_run = "01:00:00"
+                            tar_secs_to_run = "05:00:00"
                             #tar_submit_line = "sbatch --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(tar_secs_to_run, dl_dir, tar_batch)
                             body = []
                             untar = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/untar.sh'
@@ -272,8 +272,8 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 			body.append("if [ ${newcount} -gt 10 ]; then")
 			body.append("echo \"Tried ten times, this is silly. Aborting here.\";exit")
 			body.append("fi")
-			body.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(check_batch+".batch"))
-			body.append("sed -i -e \"s/.out.${{oldcount}}/.out.${{newcount}}/\" {0}\n".format(check_batch+".batch"))
+			body.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(batch_dir+check_batch+".batch"))
+			body.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
 			body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch"))
 			body.append(get_data)
 			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
