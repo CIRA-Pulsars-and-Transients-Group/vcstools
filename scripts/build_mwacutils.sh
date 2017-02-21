@@ -13,7 +13,7 @@ install_dir=`readlink -f "$2"`
 mkdir -p "${install_dir}"
 
 # Set up the necessary dependencies for cmake
-root_dir=/group/mwaops/smcsweeney
+root_dir=/group/mwaops/PULSAR
 
 cmake_install_prefix=${install_dir}
 
