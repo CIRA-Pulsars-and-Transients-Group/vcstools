@@ -332,7 +332,7 @@ int     main(int argc, char **argv) {
                         ra_hours = ra_rad*DR2H;
                     }
                     else {
-                        fprintf(stderr,"Error parsing %s as hhmmss\n",ra_hhmmss);
+                        fprintf(stderr,"Error parsing %s as hhmmss\nslalib error code: j=%d\n",ra_hhmmss,J);
                         usage();
                         exit(-1);
                     }
