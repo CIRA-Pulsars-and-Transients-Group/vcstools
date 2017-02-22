@@ -527,34 +527,34 @@ def run_rts(working_dir, rts_in_file):
 	chan_file_dict = lodict.copy()
 	chan_file_dict.update(hidict)
 
-    print "Editting run_rts.sh script for group sizes... (creating temporary copies)"	     
-    # the new, channel-based rts_in files should now be in the same location as the original rts_in file
-    # we need to now adjust the run_rts.sh script to work for each of the groups
-    lolengths = set([len(l) for l in lochan_groups]) # figure out the unique lengths 
-    hilengths = set([len(h) for h in hichan_groups])
-    lengths = lolengths.union(hilengths) # combine the sets
-
-    # read the base copy of run_rts.sh for editting
-    run_rts_contents = open(rts_run_file,"rb").read()
-    for length in lengths:
-	# add 1 to the length as it's 1 node per channel PLUS 1 master node
-	# e.g. so 2 consecutive channels need 3 nodes
-	tmp = run_rts_contents.replace("#SBATCH --nodes=25\n","#SBATCH --nodes={0}\n".format(length+1))
-	tmp = tmp.replace("aprun -n 25","aprun -n {0}".format(length+1))
-	# label the file as the number of channels (not total nodes used)
-	with open("{0}/run_rts{1}.sh".format(basepath,length),"wb") as f:
-	    f.write(tmp)	
-
-    # Now submit the RTS jobs
-    print "Submitting RTS jobs"
+        print "Editting run_rts.sh script for group sizes... (creating temporary copies)"	     
+        # the new, channel-based rts_in files should now be in the same location as the original rts_in file
+        # we need to now adjust the run_rts.sh script to work for each of the groups
+        lolengths = set([len(l) for l in lochan_groups]) # figure out the unique lengths 
+        hilengths = set([len(h) for h in hichan_groups])
+        lengths = lolengths.union(hilengths) # combine the sets
     
-    for k,v in chan_file_dict.iteritems():
-	rts_run_file_tmp = "{0}/run_rts{1}.sh".format(basepath,v)
-	os.system("chmod +x {0}".format(rts_run_file_tmp))
-	batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file_tmp, working_dir, k)
-	print batch_submit_line
-	submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)	
-    	
+        # read the base copy of run_rts.sh for editting
+        run_rts_contents = open(rts_run_file,"rb").read()
+        for length in lengths:
+     	    # add 1 to the length as it's 1 node per channel PLUS 1 master node
+    	    # e.g. so 2 consecutive channels need 3 nodes
+    	    tmp = run_rts_contents.replace("#SBATCH --nodes=25\n","#SBATCH --nodes={0}\n".format(length+1))
+    	    tmp = tmp.replace("aprun -n 25","aprun -n {0}".format(length+1))
+    	    # label the file as the number of channels (not total nodes used)
+    	    with open("{0}/run_rts{1}.sh".format(basepath,length),"wb") as f:
+    	        f.write(tmp)	
+    
+        # Now submit the RTS jobs
+        print "Submitting RTS jobs"
+        
+        for k,v in chan_file_dict.iteritems():
+    	    rts_run_file_tmp = "{0}/run_rts{1}.sh".format(basepath,v)
+    	    os.system("chmod +x {0}".format(rts_run_file_tmp))
+    	    batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file_tmp, working_dir, k)
+    	    print batch_submit_line
+    	    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)	
+        	
 
 			
 
