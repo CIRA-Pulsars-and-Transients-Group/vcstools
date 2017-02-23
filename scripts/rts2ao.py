@@ -1,11 +1,23 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import numpy as np
 from aocal import AOCal
 from astropy.io import fits
 import glob
+from reorder_chans import *
+from optparse import OptionParser
 
 def real2cmplx2x2mat(riririri):
+    """
+    Converts a list of 8 floats (real, imag, real, imag...)
+    to a 2x2 complex matrix:
+
+      (ra, ia, rb, ib, rc, ic, rd, id) -->
+
+          [ ra+ia*I  rb+ib*I ]
+          [ rc+ic*I  rd+id*I ]
+
+    """
     result = np.empty((2, 2,),dtype=np.complex128)
     for i in range(4):
         result[i/2][i%2] = riririri[2*i] + riririri[2*i+1]*1j
@@ -38,7 +50,8 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
     ao_order  = [0 for i in range(len(ant_map)/2)]
     for i in range(len(ant_map)/2):
         ao_order[ant_map[i*2]] = i
-    #print f[0].header['CHANNELS']
+    chans = [int(f) for f in f[0].header['CHANNELS'].split(',')]
+    ch_order = np.argsort(sfreq(chans))
 
     # Assumptions:
     nintervals = 1
@@ -49,7 +62,8 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
     #rts_filenames.reverse()
     nchannels = len(rts_filenames)
 
-    for chan in range(len(rts_filenames)):
+    firsttime = True
+    for chan in ch_order:
         rts_filename = rts_filenames[chan]
         with open(rts_filename, "r") as rts_file:
             # Common factor of all gains is a single number in the first line of the file
@@ -64,11 +78,12 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
             lines = rts_file.readlines()
 
             # If first time through, get number of antennas and set up data array for solution
-            if chan == 0:
+            if firsttime:
                 nantennas = len(lines)
                 # Create numpy array structure
                 data = np.empty((nintervals, nantennas, nchannels, npols,),dtype=np.complex128)
                 data[:] = np.nan
+                firsttime = False
             else:
                 assert len(lines) == nantennas, "Files contain different numbers of antennas"
 
@@ -95,8 +110,6 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
 if __name__ == "__main__":
 
     # Parse command line
-    from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
-
     parser = OptionParser(description="rts2ao.py is a tool for converting an RTS solution to an Offringa-style solution.")
 
     # Add valid command line options
