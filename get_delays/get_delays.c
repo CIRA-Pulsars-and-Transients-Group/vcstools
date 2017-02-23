@@ -482,6 +482,10 @@ int     main(int argc, char **argv) {
     float *N_array = (float *) malloc(ninput*sizeof(float));
     float *E_array = (float *) malloc(ninput*sizeof(float));
     float *H_array = (float *) malloc(ninput*sizeof(float));
+    char **tilenames = (char **) malloc(ninput*sizeof(char *));
+    for (i = 0; i < ninput; i++) {
+        tilenames[i] = (char *) malloc(32*sizeof(char));
+    }
     float *cable_array = (float *) malloc(ninput*sizeof(float));
     char *testval = (char *) malloc(1024);
     int *flag_array = (int *)malloc(ninput*sizeof(int));
@@ -506,6 +510,21 @@ int     main(int argc, char **argv) {
 
         sscanf(testval,"EL_%f",&cable_array[i]);
         //fprintf(stdout,"Input %d Cable %f\n",i,cable_array[i]);
+    }
+
+    fits_get_colnum(fptr, 1, "TileName", &colnum, &status);
+    if (status != 0) {
+        status = 0;
+        fits_get_colnum(fptr, 1, "Tile", &colnum, &status);
+    }
+    if (status != 0) {
+        fprintf(stderr, "Could not find either column \"TileName\" or \"Tile\" in metafits file\n");
+        exit(-1);
+    }
+    fits_read_col(fptr,TSTRING,colnum,1,1,ninput,NULL,tilenames,&anynull,&status);
+    if (status != 0){
+        fprintf(stderr,"Error:Failed to read Tile(Name) in metafile\n");
+        exit(-1);
     }
 
     fits_get_colnum(fptr, 1, "North", &colnum, &status);
@@ -561,52 +580,28 @@ int     main(int argc, char **argv) {
     double unit_E;
     double unit_H;
     int    ant; // Used for iterating through tiles
-    
+    int    n;
 
     // Read in the Jones matrices for this (coarse) channel, if requested
     complex double invJref[4];
     if (get_rts) {
         read_rts_file(M, Jref, nstation, &amp, DI_Jones_file);
         inv2x2(Jref, invJref);
-//DEBUG
-FILE *fm = fopen("Mfile_rts.txt", "w");
-int antcount;
-int polcount;
-for (antcount = 0; antcount < nstation; antcount++) {
-    for (polcount = 0; polcount < 4; polcount++)
-        fprintf(fm, "%e %e ", creal(M[antcount][polcount]), cimag(M[antcount][polcount]));
-    fprintf(fm, "\n");
-}
-fclose(fm);
-//END DEBUG
+        fprintf(stdout, "RTS antenna order:\n");
+        for (n = 0; n < nstation; n++)
+            fprintf(stdout, "%10s\n", tilenames[n*2]);
     }
     else if (get_offringa) {
         // Find the ordering of antennas in Offringa solutions from metafits file
         int *order = (int *)malloc(nstation*sizeof(int));
-        int n;
         for (n = 0; n < nstation; n++) {
             order[antenna_num[n*2]] = n;
         }
-        for (n = 0; n < nstation; n++) {
-            fprintf(stdout, "antenna_num[%3d] = %3d;   ", n*2, antenna_num[n*2]);
-            fprintf(stdout, "order[%3d] = %3d\n", n, order[n]);
-        }
         read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file, order);
         //read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file, NULL);
-//DEBUG
-FILE *fm = fopen("Mfile_offringa.txt", "w");
-int antcount;
-int polcount;
-for (antcount = 0; antcount < nstation; antcount++) {
-    for (polcount = 0; polcount < 4; polcount++)
-        fprintf(fm, "%e %e ", creal(M[antcount][polcount]), cimag(M[antcount][polcount]));
-    fprintf(fm, "\n");
-}
-fclose(fm);
-//END DEBUG
         free(order);
-        // Just make Jref (and invJref) the identity matrix since they don't apply to
-        // Offringa's calibration solution.
+        // Just make Jref (and invJref) the identity matrix since they are already
+        // incorporated into Offringa's calibration solutions.
         Jref[0] = 1 + I*0;
         Jref[1] = 0 + I*0;
         Jref[2] = 0 + I*0;
@@ -615,7 +610,7 @@ fclose(fm);
     }
 
 
-   
+
     for (secs = 0; secs < nsecs; secs++) {
         
         
@@ -1052,6 +1047,9 @@ fclose(fm);
     free(N_array);
     free(E_array);
     free(H_array);
+    for (i = 0; i < ninput; i++)
+        free(tilenames[i]);
+    free(tilenames);
     free(cable_array);
     free(testval);
     free(flag_array);

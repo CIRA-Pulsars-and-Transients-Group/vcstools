@@ -550,7 +550,6 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
             count++;
 
         }
-        fprintf(stdout,"ant = %d;    ant_idx = %d\n", ant, ant_idx);
     }
 
     // Close the file, print a summary, and return
