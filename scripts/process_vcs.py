@@ -10,6 +10,7 @@ import hashlib
 import datetime
 import distutils.spawn
 from astropy.io import fits as pyfits
+from reorder_chans import *
 
 
 TMPL = """#!/bin/bash
@@ -164,31 +165,15 @@ def obs_max_min(obs_id):
     obs_end = int(max(times))
     return obs_start, obs_end
 
-def sfreq(freqs):
-
-    if len(freqs) != 24:
-        print "There are not 24 coarse chans defined for this obs. Got: %s" % freqs
-        return
-
-    #freqs.sort()   # It should already be sorted, but just in case...[SET] Commenting this out because sort() is ironically putting 2-digit channels out of order
-    lowchans = [f for f in freqs if int(f) <= int(128)]
-    print "lowchans", lowchans
-    highchans = [f for f in freqs if int(f) > int(128)]
-    print "highchans", highchans
-    highchans.reverse()
-    freqs = lowchans + highchans
-    print "freqs", freqs
-    return freqs
-
-
 def get_frequencies(metafits,resort=False):
 	# TODO: for robustness, this should force the entries to be 3-digit numbers
-    hdulist = pyfits.open(metafits)
-    freq_array = hdulist[0].header['CHANNELS']
+    hdulist    = pyfits.open(metafits)
+    freq_str   = hdulist[0].header['CHANNELS']
+    freq_array = [int(f) for f in freq_str.split(',')]
     if resort:
-        return sfreq(freq_array.split(','))
+        return sfreq(freq_array)
     else:
-        return [int(f) for f in freq_array.split(',')]
+        return freq_array
 
 def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, parallel, ics=False, n_untar=2, keep=""):
 	print "Downloading files from archive"
