@@ -52,6 +52,9 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
         ao_order[ant_map[i*2]] = i
     chans = [int(f) for f in f[0].header['CHANNELS'].split(',')]
     ch_order = np.argsort(sfreq(chans))
+    print "Assuming RTS channel order: "
+    for i in range(len(ch_order)):
+        print "   GPUBOX {0:02d} == Channel {1:3d}".format(i+1, chans[ch_order[i]])
 
     # Assumptions:
     nintervals = 1
