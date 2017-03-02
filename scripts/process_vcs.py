@@ -799,7 +799,7 @@ s the RTS will not run..."
             rts_file = os.path.abspath(opts.rts_in_file).split('/')[-1]
             rts_working_dir = os.path.abspath(opts.rts_in_file).replace(rts_file, '')
         mdir(rts_working_dir, "RTS")
-        run_rts(rts_working_dir, rts_in_file)
+        run_rts(opts.obs, rts_working_dir, rts_in_file)
     elif opts.mode == 'beamform':
         print opts.mode
         if opts.flagged_tiles:
