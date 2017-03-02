@@ -467,11 +467,11 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
     return chan_file_dict
 
 
-def run_rts(working_dir, rts_in_file):
+def run_rts(obs_id, working_dir, rts_in_file):
     rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/run_rts.sh'
     #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
     # get the obs ID from the rts_in file name
-    obs_id = rts_in_file.split("/")[-1].split('_')[0]
+    #obs_id = rts_in_file.split("/")[-1].split('_')[0]
     print "Querying the database for obs ID {0}...".format(obs_id)
     obs_info = getmeta(service='obs', params={'obs_id':str(obs_id)})
     channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
@@ -789,6 +789,9 @@ if __name__ == '__main__':
             print "Your are not pointing at a file with your input to --rts_in_file. Aboring here a\
 s the RTS will not run..."
             quit()
+	if not opts.obs:
+	    print "You need to also pass the observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
+	    quit()
         # turn whatever path we got into an absolute path 
         rts_in_file = os.path.abspath(opts.rts_in_file)
         rts_working_dir = opts.rts_output_dir
