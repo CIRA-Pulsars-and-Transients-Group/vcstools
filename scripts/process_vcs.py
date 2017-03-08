@@ -755,7 +755,7 @@ if __name__ == '__main__':
             execpath = opts.execpath
 
     mdir(opts.work_dir, "Working")
-    obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
+    obs_dir = "{0}/{1}".format(os.path.abspath(opts.work_dir),opts.obs)
     if not opts.mode == 'calibrate':
         mdir(obs_dir, "Observation")
         batch_dir = "{0}/batch".format(obs_dir)
