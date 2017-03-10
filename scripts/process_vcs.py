@@ -10,6 +10,7 @@ import hashlib
 import datetime
 import distutils.spawn
 from astropy.io import fits as pyfits
+from reorder_chans import *
 
 
 TMPL = """#!/bin/bash
@@ -164,28 +165,15 @@ def obs_max_min(obs_id):
     obs_end = int(max(times))
     return obs_start, obs_end
 
-def sfreq(freqs):
-
-    if len(freqs) != 24:
-        print "There are not 24 coarse chans defined for this obs. Got: %s" % freqs
-        return
-
- #   freqs.sort()   # It should already be sorted, but just in case...[SET] Commenting this out because sort() is ironically putting 2-digit channels out of order
-    lowchans = [f for f in freqs if int(f) <= int(128)]
-    print "lowchans", lowchans
-    highchans = [f for f in freqs if int(f) > int(128)]
-    print "highchans", highchans
-    highchans.reverse()
-    freqs = lowchans + highchans
-    print "freqs", freqs
-    return freqs
-
-
-def get_frequencies(metafits):
+def get_frequencies(metafits,resort=False):
 	# TODO: for robustness, this should force the entries to be 3-digit numbers
-    hdulist = pyfits.open(metafits)
-    freq_array = hdulist[0].header['CHANNELS']
-    return sfreq(freq_array.split(','))
+    hdulist    = pyfits.open(metafits)
+    freq_str   = hdulist[0].header['CHANNELS']
+    freq_array = [int(f) for f in freq_str.split(',')]
+    if resort:
+        return sfreq(freq_array)
+    else:
+        return freq_array
 
 def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, parallel, ics=False, n_untar=2, keep=""):
 	print "Downloading files from archive"
@@ -342,7 +330,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 	mdir(corr_dir, "Correlator Product")
 	batch_dir = working_dir+"/batch/"
 	
-	chan_list = get_frequencies(metafits_file)
+	chan_list = get_frequencies(metafits_file, resort=True)
 	#gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
 	gpu_int = 10 # Code was compiled with a hard-coded 100 sample minimum integration. For 'normal' data this means 10 milliseconds.
 	integrations=int(ft_res[1]/gpu_int)
@@ -405,11 +393,158 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 				print "Couldn't find any recombine files. Aborting here."
 
 
-def run_rts(working_dir, rts_in_file):
-    rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/run_rts.sh'
-    batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file, working_dir, rts_in_file)
-    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
+    import re
 
+    chan_file_dict = {} # used to keep track of which file needs how many nodes
+    
+    count = 0
+    for c in chan_groups:
+        if len(c)==1:
+            #single channel group, write its own rts_in file
+	    if chan_type == "low":
+                subid = str(count+1)
+	    elif chan_type == "high":
+		subid = str(24-count)
+	    else:
+		print "No channel group given, assuming low"
+		subid = str(count+1)
+
+            basefreq = 1.28*(c[0]-count)-0.625
+
+            # use re.compile to make search expressions
+            with open(rts_in_file,'rb') as f:
+                string = f.read()
+                # find the pattern and select the entire line for replacement
+                string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq),string)
+                # include the SubBandIDs tag 
+                string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(subid),string)
+
+            fname = "{0}/chan{1}_rts.in".format(basepath,c[0])
+            chan_file_dict[fname] = 1 # this particular rts_in file has only 1 channel
+            with open(fname,'wb') as f:
+                f.write(string)
+
+            count += 1
+        elif len(c)>1:
+            # multiple consecutive channels
+	    if chan_type == "low":
+                subids = [str(count+i+1) for i in range(len(c))]
+	    elif chan_type == "high":
+		subids = [str(24-count-i) for i in range(len(c))]
+	    else:
+		print "No channel group given, assuming low"
+                subid = [str(count+i+1) for i in range(len(c))]
+
+            basefreq = 1.28*(min(c)-count)-0.625
+
+            # use re.compile to make search expressions
+            with open(rts_in_file,'rb') as f:
+                string = f.read()
+                # find the pattern and select the entire line for replacement
+                string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq),string)
+                # include the SubBandIDs tag
+                string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)),string)
+
+	    if chan_type == "low":
+                fname = "{0}/chan{1}-{2}_rts.in".format(basepath,min(c),max(c))
+	    elif chan_type == "high":
+		fname = "{0}/chan{1}-{2}_rts.in".format(basepath,max(c),min(c))
+	    else:
+		print "No channel group given, assuming low"
+		fname = "{0}/chan{1}-{2}_rts.in".format(basepath,min(c),max(c))
+
+            chan_file_dict[fname] = len(c)
+            with open(fname,'wb') as f:
+                f.write(string)
+
+            count += len(c)
+        else:
+            print "Reached a channel group with no entries!? Aborting."
+            sys.exit(1)
+
+
+    return chan_file_dict
+
+
+def run_rts(obs_id, working_dir, rts_in_file):
+    rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/run_rts.sh'
+    #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
+    # get the obs ID from the rts_in file name
+    #obs_id = rts_in_file.split("/")[-1].split('_')[0]
+    print "Querying the database for obs ID {0}...".format(obs_id)
+    obs_info = getmeta(service='obs', params={'obs_id':str(obs_id)})
+    channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
+    
+    # from the channels, first figure out if they are all consecutive
+    if channels[-1]-channels[0] == len(channels)-1: #TODO: this assumes also ascending order: is that always true??
+	# the channels are consecutive and this is a normal observation
+	# submit the jobs as normal
+	print "The channels are consecutive: this is a normal observation"
+	batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file, working_dir, rts_in_file)
+    	submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+    else:
+	# it is a picket fence observation, we need to do some magic
+	# will use the given rts_in file as a base format
+	# ** THIS ASSUMES THAT THE ORIGINAL RTS_IN FILE HAS BEEN EDITTED TO APPROPRIATELY REPRESENT THE CORRELATOR SETUP **
+	#    e.g. the channel width, number of channels, correlator dump times, etc.
+	print "The channels are NOT consecutive: this is a picket-fence observation"
+	# figure out whether channels are "high" or "low"
+	hichans = [c for c in channels if c>128]
+	lochans = [c for c in channels if c<=128]
+	print "High channels:",hichans
+	print "Low channels:",lochans
+
+	# get the consecutive chunks within each channel subselection
+	print "Grouping individual channels into consecutive chunks (if possible)"
+	from itertools import groupby
+	from operator import itemgetter
+	# create a list of lists with consecutive channels grouped wihtin a list
+	hichan_groups = [map(itemgetter(1),g)[::-1] for k,g in groupby(enumerate(hichans), lambda (i, x): i-x)][::-1] # reversed order (both of internal lists and globally)
+	lochan_groups = [map(itemgetter(1),g) for k,g in groupby(enumerate(lochans), lambda (i, x): i-x)]
+	print "High channels (grouped):",hichan_groups
+	print "Low channels (grouped):",lochan_groups
+
+	# for each group of channels, we need to write 1 rts_in file
+	print "Writing subband rts_in files"
+	basepath = "/".join(rts_in_file.split("/")[:-1]) # re-create the path to where the original RTS in file is kept (is there an easier way?)
+
+	# write out the RTS in files and keep track of the number of nodes required for each
+	lodict = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low")
+	hidict = write_rts_in_files(hichan_groups,basepath,rts_in_file,"high")
+	chan_file_dict = lodict.copy()
+	chan_file_dict.update(hidict)
+
+        print "Editting run_rts.sh script for group sizes... (creating temporary copies)"	     
+        # the new, channel-based rts_in files should now be in the same location as the original rts_in file
+        # we need to now adjust the run_rts.sh script to work for each of the groups
+        lolengths = set([len(l) for l in lochan_groups]) # figure out the unique lengths 
+        hilengths = set([len(h) for h in hichan_groups])
+        lengths = lolengths.union(hilengths) # combine the sets
+    
+        # read the base copy of run_rts.sh for editting
+        run_rts_contents = open(rts_run_file,"rb").read()
+        for length in lengths:
+     	    # add 1 to the length as it's 1 node per channel PLUS 1 master node
+    	    # e.g. so 2 consecutive channels need 3 nodes
+    	    tmp = run_rts_contents.replace("#SBATCH --nodes=25\n","#SBATCH --nodes={0}\n".format(length+1))
+    	    tmp = tmp.replace("aprun -n 25","aprun -n {0}".format(length+1))
+    	    # label the file as the number of channels (not total nodes used)
+    	    with open("{0}/run_rts{1}.sh".format(basepath,length),"wb") as f:
+    	        f.write(tmp)	
+    
+        # Now submit the RTS jobs
+        print "Submitting RTS jobs"
+        
+        for k,v in chan_file_dict.iteritems():
+    	    rts_run_file_tmp = "{0}/run_rts{1}.sh".format(basepath,v)
+    	    os.system("chmod +x {0}".format(rts_run_file_tmp))
+    	    batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file_tmp, working_dir, k)
+    	    print batch_submit_line
+    	    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)	
+        	
+
+			
 
 def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
     # Print relevant version numbers to screen
@@ -438,7 +573,6 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
     mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
 
     startjobs = True
-    chan_list = get_frequencies(metafits_file)
     chan_index = 0
     get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(working_dir,start, stop)
     bf_adjust_flags = distutils.spawn.find_executable("bf_adjust_flags.py")
@@ -454,9 +588,11 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
             mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}".format(RA, Dec, gpubox))
 
             if calibration_type == 'rts':
+                chan_list = get_frequencies(metafits_file, resort=True)
                 DI_file = "{0}/DI_JonesMatrices_node0{1}.dat".format(DI_dir, gpubox)
                 jones_option = "-R {0}".format(DI_file)
             elif calibration_type == 'offringa':
+                chan_list = get_frequencies(metafits_file, resort=False)
                 DI_file = "{0}/calibration_solution.bin".format(DI_dir)
                 jones_option = "-O {0} -C {1}".format(DI_file, int(gpubox)-1)
             channel_file = "{0}/channel".format(pointing_chan_dir)
@@ -619,7 +755,7 @@ if __name__ == '__main__':
             execpath = opts.execpath
 
     mdir(opts.work_dir, "Working")
-    obs_dir = "{0}/{1}".format(opts.work_dir,opts.obs)
+    obs_dir = "{0}/{1}".format(os.path.abspath(opts.work_dir),opts.obs)
     if not opts.mode == 'calibrate':
         mdir(obs_dir, "Observation")
         batch_dir = "{0}/batch".format(obs_dir)
@@ -653,6 +789,9 @@ if __name__ == '__main__':
             print "Your are not pointing at a file with your input to --rts_in_file. Aboring here a\
 s the RTS will not run..."
             quit()
+	if not opts.obs:
+	    print "You need to also pass the observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
+	    quit()
         # turn whatever path we got into an absolute path 
         rts_in_file = os.path.abspath(opts.rts_in_file)
         rts_working_dir = opts.rts_output_dir
@@ -660,7 +799,7 @@ s the RTS will not run..."
             rts_file = os.path.abspath(opts.rts_in_file).split('/')[-1]
             rts_working_dir = os.path.abspath(opts.rts_in_file).replace(rts_file, '')
         mdir(rts_working_dir, "RTS")
-        run_rts(rts_working_dir, rts_in_file)
+        run_rts(opts.obs, rts_working_dir, rts_in_file)
     elif opts.mode == 'beamform':
         print opts.mode
         if opts.flagged_tiles:
