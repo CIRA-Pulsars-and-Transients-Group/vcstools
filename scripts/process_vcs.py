@@ -788,14 +788,13 @@ if __name__ == '__main__':
     if opts.work_dir:
         print "YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!"
         time.wait(5)
-        data_dir = opts.work_dir + '/' + opts.obs
-        product_dir = opts.work_dir + '/' + opts.obs
+        data_dir = product_dir = "{0}/{1}".format(opts.work_dir, opts.obs)
     else:
-        data_dir = '/scratch2/mwaops/vcs/' + opts.obs
-        product_dir = '/group/mwaops/vcs/' + opts.obs
+        data_dir = '/scratch2/mwaops/vcs/{0}'.format(opts.obs)
+        product_dir = '/group/mwaops/vcs/{0}'.format(opts.obs)
     batch_dir = "{0}/batch".format(product_dir)
-    mdir(opts.data_dir, "Data")
-    mdir(opts.product_dir, "Products")
+    mdir(data_dir, "Data")
+    mdir(product_dir, "Products")
     mdir(batch_dir, "Batch")
     metafits_file = "{0}/{1}_metafits_ppds.fits".format(product_dir,opts.obs)
     # TODO: modify metafits downloader
