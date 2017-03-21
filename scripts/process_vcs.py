@@ -305,14 +305,17 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 			print "cannot open working dir:{0}".format(product_dir)
 			sys.exit()
 
-def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
+def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir):
 	print "Running recombine on files"
 	jobs_per_node = 8
-	batch_dir = working_dir+"/batch/"
+        target_dir = link = 'combined'
+	mdir(data_dir + '/' + target_dir, 'Combined')
+        create_link(data_dir, target_dir, product_dir, link)
+	batch_dir = product_dir+"/batch/"
 	recombine = distutils.spawn.find_executable("recombine.py")
 	#recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
 	checks = distutils.spawn.find_executable("checks.py")
-	recombine_binary = "/group/mwaops/PULSAR/bin/recombine" # Hard coding this temporarily to ensure correct version of code is envoked
+	recombine_binary = distutils.spawn.find_executable("recombine")
 	for time_to_get in range(start_time,stop_time,increment):
 	
 		process_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
@@ -327,11 +330,11 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 		commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+recombine_batch+".batch"))
 		commands.append("oldcount=$newcount; let newcount=$newcount+1")
 		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+recombine_batch+".batch"))
-		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, working_dir, time_to_get, process_nsecs))
+		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, data_dir, time_to_get, process_nsecs))
 		commands.append("if [ $? -eq 1 ];then")
 		commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))  
 		commands.append("fi")
-		submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : "15:00", "partition" : "gpuq"}, submit=False, outfile=batch_dir+check_batch+"_0.out")
+		submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "15:00", "partition" : "gpuq"}, submit=False, outfile=batch_dir+check_batch+"_0.out")
 		
 		commands = []
 		commands.append("module switch PrgEnv-cray PrgEnv-gnu")
@@ -345,9 +348,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 		commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
 		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
 		commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
-		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
+		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,data_dir,recombine_binary))
 		
-		submit_slurm(recombine_batch,commands,batch_dir="{0}/batch/".format(working_dir), slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
+		submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
 def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
@@ -758,6 +761,8 @@ if __name__ == '__main__':
         quit()
     elif opts.all:
         opts.begin, opts.end = obs_max_min(opts.obs)
+    if opts.end - opts.begin +1 < opts.increment:
+        opts.increment = opts.end - opts.begin + 1
     e_mail = ""
     if opts.mail:
         e_mail = get_user_email()
@@ -787,7 +792,7 @@ if __name__ == '__main__':
             execpath = opts.execpath
     if opts.work_dir:
         print "YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!"
-        time.wait(5)
+        time.sleep(5)
         data_dir = product_dir = "{0}/{1}".format(opts.work_dir, opts.obs)
     else:
         data_dir = '/scratch2/mwaops/vcs/{0}'.format(opts.obs)
@@ -810,9 +815,7 @@ if __name__ == '__main__':
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
-        combined_dir = "{0}/combined".format(obs_dir)
-        mdir(combined_dir, "Combined")
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, obs_dir)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(metafits_file)
