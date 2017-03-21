@@ -114,7 +114,7 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 	fid.write("\n") 
 
 	# read the metafits file
-	fid.write("ReadMetafits=1\n")
+	fid.write("ReadMetafitsFile=1\n")
 	fid.write("MetafitsFilename=%s\n" % metafits_file)
 	fid.write("\n")
 
