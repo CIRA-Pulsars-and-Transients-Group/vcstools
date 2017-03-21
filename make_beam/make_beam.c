@@ -120,7 +120,6 @@ void usage() {
     fprintf(stderr,"-w <weights file> -- this is now a flag file 1/0 for each input\n");
     fprintf(stderr,"-c <phases file> -- use complex weights\n");
     fprintf(stderr,"-j <Jones file> -- antenna Jones matrices\n");
-    fprintf(stderr,"-M <map file> -- antenna number mapping file. Should have been derived from metafits file in get_delays.\n");
     fprintf(stderr,"-D <processing directory root> -- where all the direction dependent files live and where the beams will be put\n");
     fprintf(stderr,"-d <data directory root> -- where the recombined data is\n");
     fprintf(stderr,"-g <miriad/CASA complex gains> -- complex gains from MIRIAD/CASA\n");
@@ -1014,7 +1013,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "1:2:A:a:b:Cc:d:D:e:E:f:g:G:hij:m:M:n:N:o:p:Rr:v:Vw:s:S:t:X")) != -1) {
+        while ((c = getopt(argc, argv, "1:2:A:a:b:Cc:d:D:e:E:f:g:G:hij:m:n:N:o:p:Rr:v:Vw:s:S:t:X")) != -1) {
             switch(c) {
 
                 case 'A': {
