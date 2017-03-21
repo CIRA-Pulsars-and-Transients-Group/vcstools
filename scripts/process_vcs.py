@@ -130,7 +130,7 @@ def mdir(path,description, gid=30832):
     # end up belonging to the user and the group mwaops
     # with rwx permissions and the sticky bit set for both user and group
     try:
-        os.mkdir(path)
+        os.makedirs(path)
         # we leave the uid unchanged but change gid to mwaops
         os.chown(path,-1,gid)
         os.chmod(path,0771)
@@ -353,15 +353,23 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 		submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
-def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
+def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res):
 	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
 	import astropy
 	from astropy.time import Time
 	import calendar
-	
-	corr_dir = "{0}/vis".format(working_dir)
+
+	batch_dir = product_dir+"/batch/"
+        target_dir = link = 'vis'
+
+	if data_dir == product_dir:
+            corr_dir = "{0}/cal/{1}/{2}".format(product_dir, obsid, target_dir)
+        else:
+            corr_dir = "{0}/{1}".format(data_dir, target_dir)
+            product_dir = "{0}/cal/{1}/".format(product_dir, obsid)
+            mdir(product_dir, "Correlator")
 	mdir(corr_dir, "Correlator Product")
-	batch_dir = working_dir+"/batch/"
+        create_link(data_dir, target_dir, product_dir, link)
 	
 	chan_list = get_frequencies(metafits_file, resort=True)
 	#gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
@@ -379,7 +387,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 			gpubox_label = (index+1)
 			f=[]
 			for time_to_corr in range(inc_start,inc_stop,1):
-				file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(working_dir,obsid,time_to_corr,channel)
+				file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(data_dir,obsid,time_to_corr,channel)
 				#check the file exists
 				if (os.path.isfile(file_to_process) == True):
 					f.append(file_to_process)
@@ -801,8 +809,8 @@ if __name__ == '__main__':
     mdir(data_dir, "Data")
     mdir(product_dir, "Products")
     mdir(batch_dir, "Batch")
-    metafits_file = "{0}/{1}_metafits_ppds.fits".format(product_dir,opts.obs)
-    # TODO: modify metafits downloader
+    metafits_file = "{0}/{1}.metafits".format(data_dir,opts.obs) # recombine has this format hardcoded for the metafits file...
+    # TODO: modify metafits downloader to not just do a trivial wget 
 
  #   options(opts)
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
@@ -819,7 +827,7 @@ if __name__ == '__main__':
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, obs_dir, opts.ft_res)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res)
     elif opts.mode == 'calibrate':
         print opts.mode
         if not opts.rts_in_file:
