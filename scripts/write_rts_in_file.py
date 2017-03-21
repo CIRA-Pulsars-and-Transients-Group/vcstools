@@ -115,7 +115,7 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 
 	# read the metafits file
 	fid.write("ReadMetafitsFile=1\n")
-	fid.write("MetafitsFilename=%s\n" % metafits_file)
+	fid.write("MetafitsFilename=%s\n" % metafits_file.split("_")[0])
 	fid.write("\n")
 
 	# set the calibration configuration
@@ -201,4 +201,10 @@ gpuboxes = os.path.abspath(args.gpubox_dir)
 metafits = os.path.abspath(args.f)
 srclist = os.path.abspath(args.s)
 
+if "_ppds" not in metafits:
+	print "Looks like you have an old-style metafits. You'll need to download the new version, which is named like: {0}_metafits_ppds.fit".format(args.o)
+	print "Aborting here."
+	sys.exit(0)
+
 write_rts_in_file(args.o,utctime,gpuboxes,metafits,srclist,fname)
+#write_rts_in_file(args.o,utctime,gpuboxes,srclist,fname)
