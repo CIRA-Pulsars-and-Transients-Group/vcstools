@@ -733,7 +733,7 @@ if __name__ == '__main__':
     if not opts.mode:
       print "Mode required {0}. Please specify with -m or --mode.".format(modes)
       quit()
-    if not opts.obs and not opts.mode == 'calibrate':
+    if not opts.obs:
         print "Observation ID required, please put in with -o or --obs"
         quit()
     if opts.begin > opts.end:
@@ -789,9 +789,7 @@ if __name__ == '__main__':
             print "Your are not pointing at a file with your input to --rts_in_file. Aboring here a\
 s the RTS will not run..."
             quit()
-	if not opts.obs:
-	    print "You need to also pass the observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
-	    quit()
+
         # turn whatever path we got into an absolute path 
         rts_in_file = os.path.abspath(opts.rts_in_file)
         rts_working_dir = opts.rts_output_dir
