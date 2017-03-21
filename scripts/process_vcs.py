@@ -8,6 +8,7 @@ import tempfile
 import atexit
 import hashlib
 import datetime
+import time
 import distutils.spawn
 from astropy.io import fits as pyfits
 from reorder_chans import *
@@ -151,6 +152,32 @@ def ensure_metafits(metafits_file):
             subprocess.call(metafile_line,shell=True)
 
 
+def create_link(data_dir, target_dir, product_dir, link):
+    data_dir = os.path.abspath(data_dir)
+    product_dir = os.path.abspath(product_dir)
+    if data_dir == product_dir:
+        return
+    link = link.replace(product_dir, '') # just in case...
+    link = product_dir + '/' + link
+    target_dir = target_dir.replace(data_dir,'')
+    target_dir = data_dir + '/' + target_dir
+    # check if link exists and whether it already points to where we'd like it to
+    if os.path.exists(link):
+        if os.path.islink(link):
+            if os.readlink(link) == target_dir:
+                return
+            else:
+                print "The link {0} already exists but points at {1} while you asked it to point at {2}. Aborting...".format(link, os.readlink(link), target_dir)
+                quit()
+        else:
+            print "{0} is an existing directory and cannot be turned into a link. Aborting...".format(link)
+            quit()
+    else:
+        #needs to point at vis on scratch for gpubox files
+        print "Trying to link {0} against {1}".format(link, target_dir)
+        os.symlink(target_dir, link)
+    
+
 def obs_max_min(obs_id):
     """
     Small function to query the database and returns the times of the first and last file
@@ -175,7 +202,7 @@ def get_frequencies(metafits,resort=False):
     else:
         return freq_array
 
-def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, parallel, ics=False, n_untar=2, keep=""):
+def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, ics=False, n_untar=2, keep=""):
 	print "Downloading files from archive"
 	voltdownload = distutils.spawn.find_executable("voltdownload.py")
 	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
@@ -183,29 +210,32 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 	obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
 	data_format = obsinfo['dataquality']
 	if data_format == 1:
+                target_dir = link = '/raw'
 		if ics:
 			print "Data have not been recombined in the archive yet. Exiting"
 			quit()
 		data_type = 11
-		dl_dir = "{0}/raw".format(working_dir)
+		dl_dir = "{0}/{1}".format(data_dir, target_dir)
 		dir_description = "Raw"
 	elif data_format == 6:
+                target_dir = link = '/combined'
 		if ics:
 			data_type = 15
 		else:
 			data_type = 16
-		dl_dir = "{0}/combined".format(working_dir)
+		dl_dir = "{0}/{1}".format(data_dir, target_dir)
 		dir_description = "Combined"
 	else:
 		print "Unable to determine data format from archive. Exiting"
 		quit()
 	mdir(dl_dir, dir_description)
-	batch_dir = working_dir+"/batch/"
+        create_link(data_dir, target_dir, product_dir, link)
+	batch_dir = product_dir+"/batch/"
 
 	for time_to_get in range(start_time,stop_time,increment):
 		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
 		if head:
-			log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
+			log_name="{0}/voltdownload_{1}.log".format(product_dir,time_to_get)
 			with open(log_name, 'w') as log:
 				subprocess.call(get_data, shell=True, stdout=log, stderr=log)
 		else:
@@ -221,7 +251,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
                             tar_secs_to_run = "05:00:00"
                             #tar_submit_line = "sbatch --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(tar_secs_to_run, dl_dir, tar_batch)
                             body = []
-                            untar = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/untar.sh'
+                            untar = distutils.spawn.find_executable('untar.sh')
                             body.append("aprun -n 1 {0} -w {1} -o {2} -b {3} -e {4} -j {5} {6}".format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep))
                             #body.append("cd {0};for i in `seq {1} 1 {2}`; do aprun tar xf {3}_${{i}}_combined.tar;done".format(dl_dir, time_to_get, time_to_get+check_nsecs-1, obsid))
                             submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
@@ -243,7 +273,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
                             commands.append("else")
                             commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
 			commands.append("fi")
-			submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
+			submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
 			
 			# Write out the tar batch file if in mode 15
 			#if format == 16:
@@ -264,15 +294,15 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 			body.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
 			body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch"))
 			body.append(get_data)
-			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
+			submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
 			
 			# submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
 			continue
-		
+		# TODO: what is the below doing here???
 		try:
-			os.chdir(working_dir)
+			os.chdir(product_dir)
 		except:
-			print "cannot open working dir:{0}".format(working_dir)
+			print "cannot open working dir:{0}".format(product_dir)
 			sys.exit()
 
 def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
@@ -710,7 +740,9 @@ if __name__ == '__main__':
     parser.add_option("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
     parser.add_option("-i", "--increment", type="int", default=64, help="Increment in seconds (how much we process at once) [default=%default]")
     parser.add_option("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
-    parser.add_option("-w", "--work_dir", metavar="DIR", default="/scratch2/mwaops/vcs/", help="Base directory you want to run from. This will create a folder for the Obs. ID if it doesn't exist [default=%default]")
+    parser.add_option("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default " + \
+                          "raw data will will be downloaded into /scratch2/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."+ \
+                          " If set, this will create a folder for the Obs. ID if it doesn't exist [default=%default]")
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
     parser.add_option("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.[default=%default]")
@@ -753,23 +785,29 @@ if __name__ == '__main__':
 
         if opts.execpath:
             execpath = opts.execpath
-
-    mdir(opts.work_dir, "Working")
-    obs_dir = "{0}/{1}".format(os.path.abspath(opts.work_dir),opts.obs)
-    if not opts.mode == 'calibrate':
-        mdir(obs_dir, "Observation")
-        batch_dir = "{0}/batch".format(obs_dir)
-        mdir(batch_dir, "Batch")
-        metafits_file = "{0}/{1}.metafits".format(obs_dir,opts.obs)
+    if opts.work_dir:
+        print "YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!"
+        time.wait(5)
+        data_dir = opts.work_dir + '/' + opts.obs
+        product_dir = opts.work_dir + '/' + opts.obs
+    else:
+        data_dir = '/scratch2/mwaops/vcs/' + opts.obs
+        product_dir = '/group/mwaops/vcs/' + opts.obs
+    batch_dir = "{0}/batch".format(product_dir)
+    mdir(opts.data_dir, "Data")
+    mdir(opts.product_dir, "Products")
+    mdir(batch_dir, "Batch")
+    metafits_file = "{0}/{1}_metafits_ppds.fits".format(product_dir,opts.obs)
+    # TODO: modify metafits downloader
 
  #   options(opts)
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
 
     if opts.mode == 'download_ics':
-		vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl, ics=True)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, ics=True)
     if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
