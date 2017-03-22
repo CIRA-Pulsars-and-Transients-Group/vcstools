@@ -174,12 +174,11 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 
 	
 parser = argparse.ArgumentParser(description="Gather calibration information and prepare a RTS configuration file.")
-parser.add_argument("-o",metavar="obsID",type=str,help="The observation ID")
-parser.add_argument("-f",metavar="metafits_file",type=str,help="Full path to the metafits file for the observation")
-parser.add_argument("-s",metavar="srclist_file",type=str,help="Full path to the source list file created by srclist_by_beam.py")
-parser.add_argument("--gpubox_dir",type=str,help="Full path to where the *_gpubox files are located")
-parser.add_argument("--output_dir",type=str,help="Full path to where you want the RTS configuration file to be written")
-
+parser.add_argument("-o",metavar="obsID",type=str,help="The observation ID",required=True)
+parser.add_argument("-f",metavar="metafits_file",type=str,help="Full path to the metafits file for the observation",required=True)
+parser.add_argument("-s",metavar="srclist_file",type=str,help="Full path to the source list file created by srclist_by_beam.py",required=True)
+parser.add_argument("--gpubox_dir",type=str,help="Full path to where the *_gpubox files are located",default='`pwd`')
+parser.add_argument("--output_dir",type=str,help="Full path to where you want the RTS configuration file to be written",default='`pwd`')
 
 if len(sys.argv)==1:
 	# no arguments passed, print help and quit
@@ -188,25 +187,38 @@ if len(sys.argv)==1:
 
 args = parser.parse_args()
 
+# check for default gpubox_dir
+if args.gpubox_dir == "`pwd`":
+	gpubox_dir = os.getcwd()
+else:
+	gpubox_dir = args.gpubox_dir
+
+#check for default output_dir
+if args.output_dir == "`pwd`":
+	output_dir = os.getcwd()
+else:
+	output_dir = args.output_dir 
+
 # figure out RTS config file name
-fname = "{0}/rts_{1}.in".format(os.path.abspath(args.output_dir),args.o)
+fname = "{0}/rts_{1}.in".format(os.path.abspath(output_dir),args.o)
 
 # figure out the start time from the first gpubox file
 print "Finding start time from gpubox files"
-gpubox_file_glob = "{0}/*_gpubox*.fits".format(os.path.abspath(args.gpubox_dir))
+gpubox_file_glob = "{0}/*_gpubox*.fits".format(os.path.abspath(gpubox_dir))
 gpubox_files = sorted(glob.glob(gpubox_file_glob))
 first_gpubox_file = gpubox_files[0]
 utctime = os.path.splitext(os.path.basename(first_gpubox_file))[0].split("_")[1]
 print "Determined start time is {0} from {1}".format(utctime,first_gpubox_file)
 
-gpuboxes = os.path.abspath(args.gpubox_dir)
+# make absolute paths
+gpuboxes = os.path.abspath(gpubox_dir)
 metafits = os.path.abspath(args.f)
 srclist = os.path.abspath(args.s)
 
+# check to ensure metafits file is the new version (with ppds included)
 if "_ppds" not in metafits:
 	print "Looks like you have an old-style metafits. You'll need to download the new version, which is named like: {0}_metafits_ppds.fit".format(args.o)
 	print "Aborting here."
 	sys.exit(0)
 
 write_rts_in_file(args.o,utctime,gpuboxes,metafits,srclist,fname)
-#write_rts_in_file(args.o,utctime,gpuboxes,srclist,fname)
