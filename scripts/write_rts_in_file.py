@@ -93,6 +93,8 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 
 	print " * Frequency lower edge = {0} MHz".format(freq_base)
 
+	# make metafits file formatted for RTS
+	metafits_rtsform = metafits_file.split("_metafits_ppds.fits")[0]	
 	
 	# define array position
 	ArrayPositionLat = -26.70331940
@@ -115,7 +117,7 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 
 	# read the metafits file
 	fid.write("ReadMetafitsFile=1\n")
-	fid.write("MetafitsFilename=%s\n" % metafits_file.split("_")[0])
+	fid.write("MetafitsFilename=%s\n" % metafits_rtsform)
 	fid.write("\n")
 
 	# set the calibration configuration
