@@ -594,7 +594,8 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, rts_output_dir=None):
 
 			
 
-def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
+def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing, 
+                  rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
     # Print relevant version numbers to screen
     mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
     mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -604,7 +605,8 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
 
     # Need to run get_delays and then the beamformer on each desired coarse channel
     if not DI_dir:
-        DI_dir = working_dir+"/DIJ"
+        print "You need to specify the path to the calibrator files, either where the DIJs are or where the offringe calibration_solution.bin file is. Aborting here."
+        quit()
     DI_dir = os.path.abspath(DI_dir)
     RA = pointing[0]
     Dec = pointing[1]
@@ -615,18 +617,17 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
     utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
 
     print "Running get_delays"
-    P_dir = working_dir+"/pointings"
+    P_dir = product_dir+"/pointings"
     mdir(P_dir, "Pointings")
     pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
     mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
 
     startjobs = True
     chan_index = 0
-    get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(working_dir,start, stop)
+    get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(product_dir,start, stop)
     bf_adjust_flags = distutils.spawn.find_executable("bf_adjust_flags.py")
-    #bf_adjust_flags = '/home/fkirsten/software/galaxy-scripts/scripts/bf_adjust_flags.py'
     with open(get_delays_batch,'w') as batch_file:
-        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n#SBATCH --mail-type=ALL\n".format(working_dir,start,stop)
+        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n#SBATCH --mail-type=ALL\n".format(product_dir,start,stop)
         batch_file.write(batch_line)
         batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
         batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
@@ -689,13 +690,13 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
 
     # Run one coarse channel per node
     for coarse_chan in range(24):
-        make_beam_batch = "{0}/batch/mb_{1}_{2}_ch{3}.batch".format(working_dir, RA, Dec, coarse_chan)
-        make_beam_batch_out = "mb_{1}_{2}_ch{3}.out".format(working_dir, RA, Dec, coarse_chan)
+        make_beam_batch = "{0}/batch/mb_{1}_{2}_ch{3}.batch".format(product_dir, RA, Dec, coarse_chan)
+        make_beam_batch_out = make_beam_batch.replace('.batch','.out')
         with open(make_beam_batch, 'w') as batch_file:
             batch_file.write("#!/bin/bash -l\n")
             nodes_line = "#SBATCH --nodes=1\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n" 
             batch_file.write(nodes_line)
-            output_line = "#SBATCH --output={0}/batch/{1}\n".format(working_dir,make_beam_batch_out)
+            output_line = "#SBATCH --output={0}\n".format(make_beam_batch_out)
             batch_file.write(output_line)
             time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
             batch_file.write(time_line)
@@ -703,7 +704,7 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
             batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
-            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s \n" % (execpath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
+            aprun_line = "aprun -n 1 -N 1 {0}/make_beam -o {1} -b {2} -e {3} -a 128 -n 128 -N {4} -t 1 {5} -c phases.txt -w flags.txt -d {6}/combined -D {7}/ {8} \n".format(execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
         
         submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
@@ -748,7 +749,8 @@ if __name__ == '__main__':
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
-    group_beamform.add_option("--DI_dir", default=None, help="Directory containing Direction Independent Jones Matrices (as created by either the RTS or Andre Offringa's tools). Default is work_dir/obsID/DIJ.")
+    group_beamform.add_option("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) " +\
+                                  "or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
     group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
@@ -857,6 +859,9 @@ s the RTS will not run..."
         run_rts(opts.obs, opts.cal_obs, product_dir, rts_in_file, opts.rts_output_dir)
     elif opts.mode == 'beamform':
         print opts.mode
+        if not opts.DI_dir:
+            print "You need to specify the path to either where the DIJs are or where the offringe calibration_solution.bin file is. Aborting here."
+            quit()
         if opts.flagged_tiles:
             flagged_tiles_file = os.path.abspath(opts.flagged_tiles)
             if not os.path.isfile(opts.flagged_tiles):
@@ -864,12 +869,10 @@ s the RTS will not run..."
                 quit()
         else:
             flagged_tiles_file = None
-        if not opts.DI_dir and not os.path.exists(obs_dir + '/DIJ'):
-            print "You did not specify the path to the DI_Jones matrices (--DI_dir) and there is no directory DIJ under {0} (which is the default look up directory, you need to create that and put the DI_Jones matrices there if this is what you want to do.). Aborting here.".format(obs_dir)
-            quit()
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
-        coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, obs_dir, metafits_file, opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
+        coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, metafits_file, 
+                      opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
