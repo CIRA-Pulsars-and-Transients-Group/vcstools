@@ -508,7 +508,7 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
     return chan_file_dict
 
 
-def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file):
+def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, rts_output_dir=None):
     rts_run_file = distutils.spawn.find_executable('run_rts.sh')
     #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
     # get the obs ID from the rts_in file name
@@ -517,8 +517,13 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file):
     obs_info = getmeta(service='obs', params={'obs_id':str(obs_id)})
     channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
 
-    # as with the other functions product_dir should come as /group/mwaops/obs_id
-    product_dir = "{0}/{1}/{2}/{3}".format(product_dir,'cal', cal_obs_id,'rts')
+    if rts_output_dir:
+        product_dir = rts_output_dir
+    else:
+        # as with the other functions product_dir should come as /group/mwaops/obs_id
+        product_dir = "{0}/{1}/{2}/{3}".format(product_dir,'cal', cal_obs_id,'rts')
+    mdir(product_dir,'RTS output')
+
     # from the channels, first figure out if they are all consecutive
     if channels[-1]-channels[0] == len(channels)-1: #TODO: this assumes also ascending order: is that always true??
 	# the channels are consecutive and this is a normal observation
@@ -849,7 +854,6 @@ s the RTS will not run..."
         rts_in_file = os.path.abspath(opts.rts_in_file)
         if opts.rts_output_dir:
             rts_output_dir = os.path.abspath(opts.rts_output_dir)
-            mdir(rts_output_dir, "RTS output")
         run_rts(opts.obs, opts.cal_obs, product_dir, rts_in_file, opts.rts_output_dir)
     elif opts.mode == 'beamform':
         print opts.mode
