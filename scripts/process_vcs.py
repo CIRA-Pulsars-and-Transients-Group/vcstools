@@ -607,7 +607,7 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
             if (os.path.isfile(DI_file)):
                 ch_dir_line = "cd {0}\n".format(pointing_chan_dir)
                 batch_file.write(ch_dir_line)
-                delays_line = "{0}/get_delays -a {1} -b {2} {3} -m {4} -c -i -p -z {5} -o {6} -f {7} -n {8} -w 10000 -r {9} -d {10}\n".format(execpath, pointing_chan_dir,stop-start,jones_option,metafile,utctime,obs_id,basefreq,nfine_chan,RA,Dec) 
+                delays_line = "{0}/get_delays -a {1} -b {2} {3} -m {4} -c -i -p -z {5} -o {6} -f {7} -n {8} -w 10000 -r {9} -d {10}\n".format(execpath, pointing_chan_dir,stop-start+1,jones_option,metafile,utctime,obs_id,basefreq,nfine_chan,RA,Dec) 
                 batch_file.write(delays_line)
                 if rts_flag_file:
                     flags_file = "{0}/flags.txt".format(pointing_chan_dir)
@@ -633,11 +633,11 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
  
  
     # Run make_beam
-    seconds_to_run = 60*(stop-start)
+    seconds_to_run = 60*(stop-start+1)
     if seconds_to_run > 86399.:
         secs_to_run = datetime.timedelta(seconds=86399)
     else:
-        secs_to_run = datetime.timedelta(seconds=60*(stop-start))
+        secs_to_run = datetime.timedelta(seconds=60*(stop-start+1))
 
     # Run one coarse channel per node
     for coarse_chan in range(24):
