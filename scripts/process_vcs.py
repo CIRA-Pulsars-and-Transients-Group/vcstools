@@ -846,12 +846,15 @@ if __name__ == '__main__':
             print "You have to provide the full path to the setup file for the RTS. Aborting here."
             quit()
         if not os.path.isfile(opts.rts_in_file):
-            print "Your are not pointing at a file with your input to --rts_in_file. Aboring here a\
-s the RTS will not run..."
+            print "Your are not pointing at a file with your input to --rts_in_file. Aboring here as the RTS will not run..."
             quit()
 	if not opts.cal_obs:
 	    print "You need to also pass the calibrator observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
 	    quit()
+        if opts.cal_obs == opts.obs:
+            print "Currently in-beam calibration does not work as rts_gpu cannot read the offline_correlator " +\
+                "files for some reason. Use a dedicated calibrator observation for the time being. Aborting."
+            quit()
         # turn whatever path we got into an absolute path 
         rts_in_file = os.path.abspath(opts.rts_in_file)
         if opts.rts_output_dir:
