@@ -513,8 +513,8 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, rts_output_dir=None):
     #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
     # get the obs ID from the rts_in file name
     #obs_id = rts_in_file.split("/")[-1].split('_')[0]
-    print "Querying the database for obs ID {0}...".format(obs_id)
-    obs_info = getmeta(service='obs', params={'obs_id':str(obs_id)})
+    print "Querying the database for obs ID {0}...".format(cal_obs_id)
+    obs_info = getmeta(service='obs', params={'obs_id':str(cal_obs_id)})
     channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
 
     if rts_output_dir:
