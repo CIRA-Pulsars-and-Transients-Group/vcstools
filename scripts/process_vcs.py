@@ -8,6 +8,7 @@ import tempfile
 import atexit
 import hashlib
 import datetime
+import time
 import distutils.spawn
 from astropy.io import fits as pyfits
 from reorder_chans import *
@@ -129,7 +130,7 @@ def mdir(path,description, gid=30832):
     # end up belonging to the user and the group mwaops
     # with rwx permissions and the sticky bit set for both user and group
     try:
-        os.mkdir(path)
+        os.makedirs(path)
         # we leave the uid unchanged but change gid to mwaops
         os.chown(path,-1,gid)
         os.chmod(path,0771)
@@ -150,6 +151,32 @@ def ensure_metafits(metafits_file):
             metafile_line = "wget  http://mwa-metadata01.pawsey.org.au/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
             subprocess.call(metafile_line,shell=True)
 
+
+def create_link(data_dir, target_dir, product_dir, link):
+    data_dir = os.path.abspath(data_dir)
+    product_dir = os.path.abspath(product_dir)
+    if data_dir == product_dir:
+        return
+    link = link.replace(product_dir, '') # just in case...
+    link = product_dir + '/' + link
+    target_dir = target_dir.replace(data_dir,'')
+    target_dir = data_dir + '/' + target_dir
+    # check if link exists and whether it already points to where we'd like it to
+    if os.path.exists(link):
+        if os.path.islink(link):
+            if os.readlink(link) == target_dir:
+                return
+            else:
+                print "The link {0} already exists but points at {1} while you asked it to point at {2}. Aborting...".format(link, os.readlink(link), target_dir)
+                quit()
+        else:
+            print "{0} is an existing directory and cannot be turned into a link. Aborting...".format(link)
+            quit()
+    else:
+        #needs to point at vis on scratch for gpubox files
+        print "Trying to link {0} against {1}".format(link, target_dir)
+        os.symlink(target_dir, link)
+    
 
 def obs_max_min(obs_id):
     """
@@ -175,7 +202,7 @@ def get_frequencies(metafits,resort=False):
     else:
         return freq_array
 
-def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, parallel, ics=False, n_untar=2, keep=""):
+def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, ics=False, n_untar=2, keep=""):
 	print "Downloading files from archive"
 	voltdownload = distutils.spawn.find_executable("voltdownload.py")
 	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
@@ -183,29 +210,32 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 	obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
 	data_format = obsinfo['dataquality']
 	if data_format == 1:
+                target_dir = link = '/raw'
 		if ics:
 			print "Data have not been recombined in the archive yet. Exiting"
 			quit()
 		data_type = 11
-		dl_dir = "{0}/raw".format(working_dir)
+		dl_dir = "{0}/{1}".format(data_dir, target_dir)
 		dir_description = "Raw"
 	elif data_format == 6:
+                target_dir = link = '/combined'
 		if ics:
 			data_type = 15
 		else:
 			data_type = 16
-		dl_dir = "{0}/combined".format(working_dir)
+		dl_dir = "{0}/{1}".format(data_dir, target_dir)
 		dir_description = "Combined"
 	else:
 		print "Unable to determine data format from archive. Exiting"
 		quit()
 	mdir(dl_dir, dir_description)
-	batch_dir = working_dir+"/batch/"
+        create_link(data_dir, target_dir, product_dir, link)
+	batch_dir = product_dir+"/batch/"
 
 	for time_to_get in range(start_time,stop_time,increment):
 		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
 		if head:
-			log_name="{0}/voltdownload_{1}.log".format(working_dir,time_to_get)
+			log_name="{0}/voltdownload_{1}.log".format(product_dir,time_to_get)
 			with open(log_name, 'w') as log:
 				subprocess.call(get_data, shell=True, stdout=log, stderr=log)
 		else:
@@ -221,7 +251,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
                             tar_secs_to_run = "05:00:00"
                             #tar_submit_line = "sbatch --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(tar_secs_to_run, dl_dir, tar_batch)
                             body = []
-                            untar = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/untar.sh'
+                            untar = distutils.spawn.find_executable('untar.sh')
                             body.append("aprun -n 1 {0} -w {1} -o {2} -b {3} -e {4} -j {5} {6}".format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep))
                             #body.append("cd {0};for i in `seq {1} 1 {2}`; do aprun tar xf {3}_${{i}}_combined.tar;done".format(dl_dir, time_to_get, time_to_get+check_nsecs-1, obsid))
                             submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
@@ -243,7 +273,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
                             commands.append("else")
                             commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
 			commands.append("fi")
-			submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
+			submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
 			
 			# Write out the tar batch file if in mode 15
 			#if format == 16:
@@ -264,25 +294,28 @@ def vcs_download(obsid, start_time, stop_time, increment, head, working_dir, par
 			body.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
 			body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch"))
 			body.append(get_data)
-			submit_slurm(voltdownload_batch, body, batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
+			submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
 			
 			# submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
 			continue
-		
+		# TODO: what is the below doing here???
 		try:
-			os.chdir(working_dir)
+			os.chdir(product_dir)
 		except:
-			print "cannot open working dir:{0}".format(working_dir)
+			print "cannot open working dir:{0}".format(product_dir)
 			sys.exit()
 
-def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
+def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir):
 	print "Running recombine on files"
 	jobs_per_node = 8
-	batch_dir = working_dir+"/batch/"
+        target_dir = link = 'combined'
+	mdir(data_dir + '/' + target_dir, 'Combined')
+        create_link(data_dir, target_dir, product_dir, link)
+	batch_dir = product_dir+"/batch/"
 	recombine = distutils.spawn.find_executable("recombine.py")
 	#recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
 	checks = distutils.spawn.find_executable("checks.py")
-	recombine_binary = "/group/mwaops/PULSAR/bin/recombine" # Hard coding this temporarily to ensure correct version of code is envoked
+	recombine_binary = distutils.spawn.find_executable("recombine")
 	for time_to_get in range(start_time,stop_time,increment):
 	
 		process_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
@@ -297,11 +330,11 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 		commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+recombine_batch+".batch"))
 		commands.append("oldcount=$newcount; let newcount=$newcount+1")
 		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+recombine_batch+".batch"))
-		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, working_dir, time_to_get, process_nsecs))
+		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, data_dir, time_to_get, process_nsecs))
 		commands.append("if [ $? -eq 1 ];then")
 		commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))  
 		commands.append("fi")
-		submit_slurm(check_batch,commands,batch_dir=working_dir+"/batch/", slurm_kwargs={"time" : "15:00", "partition" : "gpuq"}, submit=False, outfile=batch_dir+check_batch+"_0.out")
+		submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "15:00", "partition" : "gpuq"}, submit=False, outfile=batch_dir+check_batch+"_0.out")
 		
 		commands = []
 		commands.append("module switch PrgEnv-cray PrgEnv-gnu")
@@ -315,20 +348,28 @@ def vcs_recombine(obsid, start_time, stop_time, increment, working_dir):
 		commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
 		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
 		commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
-		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,working_dir,recombine_binary))
+		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,data_dir,recombine_binary))
 		
-		submit_slurm(recombine_batch,commands,batch_dir="{0}/batch/".format(working_dir), slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
+		submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
-def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
+def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res):
 	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
 	import astropy
 	from astropy.time import Time
 	import calendar
-	
-	corr_dir = "{0}/vis".format(working_dir)
+
+	batch_dir = product_dir+"/batch/"
+        target_dir = link = 'vis'
+
+	if data_dir == product_dir:
+            corr_dir = "{0}/cal/{1}/{2}".format(product_dir, obsid, target_dir)
+        else:
+            corr_dir = "{0}/{1}".format(data_dir, target_dir)
+            product_dir = "{0}/cal/{1}/".format(product_dir, obsid)
+            mdir(product_dir, "Correlator")
 	mdir(corr_dir, "Correlator Product")
-	batch_dir = working_dir+"/batch/"
+        create_link(data_dir, target_dir, product_dir, link)
 	
 	chan_list = get_frequencies(metafits_file, resort=True)
 	#gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
@@ -346,7 +387,7 @@ def vcs_correlate(obsid,start,stop,increment,working_dir, ft_res):
 			gpubox_label = (index+1)
 			f=[]
 			for time_to_corr in range(inc_start,inc_stop,1):
-				file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(working_dir,obsid,time_to_corr,channel)
+				file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(data_dir,obsid,time_to_corr,channel)
 				#check the file exists
 				if (os.path.isfile(file_to_process) == True):
 					f.append(file_to_process)
@@ -467,21 +508,28 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
     return chan_file_dict
 
 
-def run_rts(obs_id, working_dir, rts_in_file):
-    rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/run_rts.sh'
+def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, rts_output_dir=None):
+    rts_run_file = distutils.spawn.find_executable('run_rts.sh')
     #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
     # get the obs ID from the rts_in file name
     #obs_id = rts_in_file.split("/")[-1].split('_')[0]
-    print "Querying the database for obs ID {0}...".format(obs_id)
-    obs_info = getmeta(service='obs', params={'obs_id':str(obs_id)})
+    print "Querying the database for obs ID {0}...".format(cal_obs_id)
+    obs_info = getmeta(service='obs', params={'obs_id':str(cal_obs_id)})
     channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
-    
+
+    if rts_output_dir:
+        product_dir = rts_output_dir
+    else:
+        # as with the other functions product_dir should come as /group/mwaops/obs_id
+        product_dir = "{0}/{1}/{2}/{3}".format(product_dir,'cal', cal_obs_id,'rts')
+    mdir(product_dir,'RTS output')
+
     # from the channels, first figure out if they are all consecutive
     if channels[-1]-channels[0] == len(channels)-1: #TODO: this assumes also ascending order: is that always true??
 	# the channels are consecutive and this is a normal observation
 	# submit the jobs as normal
 	print "The channels are consecutive: this is a normal observation"
-	batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file, working_dir, rts_in_file)
+	batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(product_dir, rts_run_file, product_dir, rts_in_file)
     	submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
     else:
 	# it is a picket fence observation, we need to do some magic
@@ -507,7 +555,7 @@ def run_rts(obs_id, working_dir, rts_in_file):
 
 	# for each group of channels, we need to write 1 rts_in file
 	print "Writing subband rts_in files"
-	basepath = "/".join(rts_in_file.split("/")[:-1]) # re-create the path to where the original RTS in file is kept (is there an easier way?)
+	basepath = os.path.dirname(rts_in_file)
 
 	# write out the RTS in files and keep track of the number of nodes required for each
 	lodict = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low")
@@ -539,14 +587,15 @@ def run_rts(obs_id, working_dir, rts_in_file):
         for k,v in chan_file_dict.iteritems():
     	    rts_run_file_tmp = "{0}/run_rts{1}.sh".format(basepath,v)
     	    os.system("chmod +x {0}".format(rts_run_file_tmp))
-    	    batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file_tmp, working_dir, k)
+    	    batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(product_dir, rts_run_file_tmp, product_dir, k)
     	    print batch_submit_line
     	    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)	
         	
 
 			
 
-def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_chan, pointing, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
+def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing, 
+                  rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
     # Print relevant version numbers to screen
     mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
     mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -556,7 +605,8 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
 
     # Need to run get_delays and then the beamformer on each desired coarse channel
     if not DI_dir:
-        DI_dir = working_dir+"/DIJ"
+        print "You need to specify the path to the calibrator files, either where the DIJs are or where the offringe calibration_solution.bin file is. Aborting here."
+        quit()
     DI_dir = os.path.abspath(DI_dir)
     RA = pointing[0]
     Dec = pointing[1]
@@ -567,18 +617,17 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
     utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
 
     print "Running get_delays"
-    P_dir = working_dir+"/pointings"
+    P_dir = product_dir+"/pointings"
     mdir(P_dir, "Pointings")
     pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
     mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
 
     startjobs = True
     chan_index = 0
-    get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(working_dir,start, stop)
+    get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(product_dir,start, stop)
     bf_adjust_flags = distutils.spawn.find_executable("bf_adjust_flags.py")
-    #bf_adjust_flags = '/home/fkirsten/software/galaxy-scripts/scripts/bf_adjust_flags.py'
     with open(get_delays_batch,'w') as batch_file:
-        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n#SBATCH --mail-type=ALL\n".format(working_dir,start,stop)
+        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n#SBATCH --mail-type=ALL\n".format(product_dir,start,stop)
         batch_file.write(batch_line)
         batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
         batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
@@ -641,13 +690,13 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
 
     # Run one coarse channel per node
     for coarse_chan in range(24):
-        make_beam_batch = "{0}/batch/mb_{1}_{2}_ch{3}.batch".format(working_dir, RA, Dec, coarse_chan)
-        make_beam_batch_out = "mb_{1}_{2}_ch{3}.out".format(working_dir, RA, Dec, coarse_chan)
+        make_beam_batch = "{0}/batch/mb_{1}_{2}_ch{3}.batch".format(product_dir, RA, Dec, coarse_chan)
+        make_beam_batch_out = make_beam_batch.replace('.batch','.out')
         with open(make_beam_batch, 'w') as batch_file:
             batch_file.write("#!/bin/bash -l\n")
             nodes_line = "#SBATCH --nodes=1\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n" 
             batch_file.write(nodes_line)
-            output_line = "#SBATCH --output={0}/batch/{1}\n".format(working_dir,make_beam_batch_out)
+            output_line = "#SBATCH --output={0}\n".format(make_beam_batch_out)
             batch_file.write(output_line)
             time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
             batch_file.write(time_line)
@@ -655,7 +704,7 @@ def coherent_beam(obs_id, start, stop, execpath, working_dir, metafile, nfine_ch
             batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
-            aprun_line = "aprun -n 1 -N 1 %s/make_beam -o %d -b %d -e %d -a 128 -n 128 -N %d -t 1 %s -c phases.txt -w flags.txt -d %s/combined -D %s/ %s \n" % (execpath, obs_id, start, stop, coarse_chan, jones, working_dir, pointing_dir, bf_format)
+            aprun_line = "aprun -n 1 -N 1 {0}/make_beam -o {1} -b {2} -e {3} -a 128 -n 128 -N {4} -t 1 {5} -c phases.txt -w flags.txt -d {6}/combined -D {7}/ {8} \n".format(execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
         
         submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
@@ -692,12 +741,16 @@ if __name__ == '__main__':
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
     group_calibrate = OptionGroup(parser, 'Calibration Options')
+    group_calibrate.add_option('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type="int", help="Observation ID of calibrator you want to process. In case of " + \
+                                   "in-beam calibration should be the same as input to -o (obsID). [no default]", default=None)
     group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.", default=None)
-    group_calibrate.add_option('--rts_output_dir', type='string', help="Working directory for RTS -- all RTS output files will end up here. Default is where the rts_in_file lives.", default=None)
+    group_calibrate.add_option('--rts_output_dir', help="Working directory for RTS -- all RTS output files will end up here. "+\
+                                   "Default is /group/mwaops/[obsID]/cal/cal_obsID/.", default=None)
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
-    group_beamform.add_option("--DI_dir", default=None, help="Directory containing Direction Independent Jones Matrices (as created by either the RTS or Andre Offringa's tools). Default is work_dir/obsID/DIJ.")
+    group_beamform.add_option("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) " +\
+                                  "or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. Note 'both' is not implemented yet. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
     group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
@@ -710,7 +763,9 @@ if __name__ == '__main__':
     parser.add_option("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
     parser.add_option("-i", "--increment", type="int", default=64, help="Increment in seconds (how much we process at once) [default=%default]")
     parser.add_option("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
-    parser.add_option("-w", "--work_dir", metavar="DIR", default="/scratch2/mwaops/vcs/", help="Base directory you want to run from. This will create a folder for the Obs. ID if it doesn't exist [default=%default]")
+    parser.add_option("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default " + \
+                          "raw data will will be downloaded into /scratch2/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."+ \
+                          " If set, this will create a folder for the Obs. ID if it doesn't exist [default=%default]")
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
     parser.add_option("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.[default=%default]")
@@ -726,6 +781,8 @@ if __name__ == '__main__':
         quit()
     elif opts.all:
         opts.begin, opts.end = obs_max_min(opts.obs)
+    if opts.end - opts.begin +1 < opts.increment:
+        opts.increment = opts.end - opts.begin + 1
     e_mail = ""
     if opts.mail:
         e_mail = get_user_email()
@@ -753,33 +810,36 @@ if __name__ == '__main__':
 
         if opts.execpath:
             execpath = opts.execpath
+    if opts.work_dir:
+        print "YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!"
+        time.sleep(5)
+        data_dir = product_dir = "{0}/{1}".format(opts.work_dir, opts.obs)
+    else:
+        data_dir = '/scratch2/mwaops/vcs/{0}'.format(opts.obs)
+        product_dir = '/group/mwaops/vcs/{0}'.format(opts.obs)
+    batch_dir = "{0}/batch".format(product_dir)
+    mdir(data_dir, "Data")
+    mdir(product_dir, "Products")
+    mdir(batch_dir, "Batch")
+    metafits_file = "{0}/{1}.metafits".format(data_dir,opts.obs) # recombine has this format hardcoded for the metafits file...
+    # TODO: modify metafits downloader to not just do a trivial wget 
 
-    mdir(opts.work_dir, "Working")
-    obs_dir = "{0}/{1}".format(os.path.abspath(opts.work_dir),opts.obs)
-    if not opts.mode == 'calibrate':
-        mdir(obs_dir, "Observation")
-        batch_dir = "{0}/batch".format(obs_dir)
-        mdir(batch_dir, "Batch")
-        metafits_file = "{0}/{1}.metafits".format(obs_dir,opts.obs)
-
- #   options(opts)
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
 
     if opts.mode == 'download_ics':
-		vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl, ics=True)
-    if opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, obs_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, ics=True)
+    elif opts.mode == 'download':
+        print opts.mode
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
-        combined_dir = "{0}/combined".format(obs_dir)
-        mdir(combined_dir, "Combined")
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, obs_dir)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, obs_dir, opts.ft_res)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res)
     elif opts.mode == 'calibrate':
         print opts.mode
         if not opts.rts_in_file:
@@ -789,17 +849,19 @@ if __name__ == '__main__':
             print "Your are not pointing at a file with your input to --rts_in_file. Aboring here a\
 s the RTS will not run..."
             quit()
-
+	if not opts.cal_obs:
+	    print "You need to also pass the calibrator observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
+	    quit()
         # turn whatever path we got into an absolute path 
         rts_in_file = os.path.abspath(opts.rts_in_file)
-        rts_working_dir = opts.rts_output_dir
-        if not opts.rts_output_dir:
-            rts_file = os.path.abspath(opts.rts_in_file).split('/')[-1]
-            rts_working_dir = os.path.abspath(opts.rts_in_file).replace(rts_file, '')
-        mdir(rts_working_dir, "RTS")
-        run_rts(opts.obs, rts_working_dir, rts_in_file)
+        if opts.rts_output_dir:
+            rts_output_dir = os.path.abspath(opts.rts_output_dir)
+        run_rts(opts.obs, opts.cal_obs, product_dir, rts_in_file, opts.rts_output_dir)
     elif opts.mode == 'beamform':
         print opts.mode
+        if not opts.DI_dir:
+            print "You need to specify the path to either where the DIJs are or where the offringe calibration_solution.bin file is. Aborting here."
+            quit()
         if opts.flagged_tiles:
             flagged_tiles_file = os.path.abspath(opts.flagged_tiles)
             if not os.path.isfile(opts.flagged_tiles):
@@ -807,12 +869,10 @@ s the RTS will not run..."
                 quit()
         else:
             flagged_tiles_file = None
-        if not opts.DI_dir and not os.path.exists(obs_dir + '/DIJ'):
-            print "You did not specify the path to the DI_Jones matrices (--DI_dir) and there is no directory DIJ under {0} (which is the default look up directory, you need to create that and put the DI_Jones matrices there if this is what you want to do.). Aborting here.".format(obs_dir)
-            quit()
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
-        coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, obs_dir, metafits_file, opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
+        coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, metafits_file, 
+                      opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
