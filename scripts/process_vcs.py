@@ -508,21 +508,23 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
     return chan_file_dict
 
 
-def run_rts(obs_id, working_dir, rts_in_file):
-    rts_run_file = '/group/mwaops/PULSAR/src/galaxy-scripts/scripts/run_rts.sh'
+def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file):
+    rts_run_file = distutils.spawn.find_executable('run_rts.sh')
     #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
     # get the obs ID from the rts_in file name
     #obs_id = rts_in_file.split("/")[-1].split('_')[0]
     print "Querying the database for obs ID {0}...".format(obs_id)
     obs_info = getmeta(service='obs', params={'obs_id':str(obs_id)})
     channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
-    
+
+    # as with the other functions product_dir should come as /group/mwaops/obs_id
+    product_dir = "{0}/{1}/{2}/{3}".format(product_dir,'cal', cal_obs_id,'rts')
     # from the channels, first figure out if they are all consecutive
     if channels[-1]-channels[0] == len(channels)-1: #TODO: this assumes also ascending order: is that always true??
 	# the channels are consecutive and this is a normal observation
 	# submit the jobs as normal
 	print "The channels are consecutive: this is a normal observation"
-	batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file, working_dir, rts_in_file)
+	batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(product_dir, rts_run_file, product_dir, rts_in_file)
     	submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
     else:
 	# it is a picket fence observation, we need to do some magic
@@ -548,7 +550,7 @@ def run_rts(obs_id, working_dir, rts_in_file):
 
 	# for each group of channels, we need to write 1 rts_in file
 	print "Writing subband rts_in files"
-	basepath = "/".join(rts_in_file.split("/")[:-1]) # re-create the path to where the original RTS in file is kept (is there an easier way?)
+	basepath = os.path.dirname(rts_in_file)
 
 	# write out the RTS in files and keep track of the number of nodes required for each
 	lodict = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low")
@@ -580,7 +582,7 @@ def run_rts(obs_id, working_dir, rts_in_file):
         for k,v in chan_file_dict.iteritems():
     	    rts_run_file_tmp = "{0}/run_rts{1}.sh".format(basepath,v)
     	    os.system("chmod +x {0}".format(rts_run_file_tmp))
-    	    batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(working_dir, rts_run_file_tmp, working_dir, k)
+    	    batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(product_dir, rts_run_file_tmp, product_dir, k)
     	    print batch_submit_line
     	    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)	
         	
@@ -733,8 +735,11 @@ if __name__ == '__main__':
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
     group_calibrate = OptionGroup(parser, 'Calibration Options')
+    group_calibrate.add_option('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type="int", help="Observation ID of calibrator you want to process. In case of " + \
+                                   "in-beam calibration should be the same as input to -o (obsID). [no default]", default=None)
     group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.", default=None)
-    group_calibrate.add_option('--rts_output_dir', type='string', help="Working directory for RTS -- all RTS output files will end up here. Default is where the rts_in_file lives.", default=None)
+    group_calibrate.add_option('--rts_output_dir', help="Working directory for RTS -- all RTS output files will end up here. "+\
+                                   "Default is /group/mwaops/[obsID]/cal/cal_obsID/.", default=None)
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
@@ -812,12 +817,12 @@ if __name__ == '__main__':
     metafits_file = "{0}/{1}.metafits".format(data_dir,opts.obs) # recombine has this format hardcoded for the metafits file...
     # TODO: modify metafits downloader to not just do a trivial wget 
 
- #   options(opts)
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
 
     if opts.mode == 'download_ics':
+        print opts.mode
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, ics=True)
-    if opts.mode == 'download':
+    elif opts.mode == 'download':
         print opts.mode
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'recombine':
@@ -837,17 +842,15 @@ if __name__ == '__main__':
             print "Your are not pointing at a file with your input to --rts_in_file. Aboring here a\
 s the RTS will not run..."
             quit()
-	if not opts.obs:
-	    print "You need to also pass the observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
+	if not opts.cal_obs:
+	    print "You need to also pass the calibrator observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
 	    quit()
         # turn whatever path we got into an absolute path 
         rts_in_file = os.path.abspath(opts.rts_in_file)
-        rts_working_dir = opts.rts_output_dir
-        if not opts.rts_output_dir:
-            rts_file = os.path.abspath(opts.rts_in_file).split('/')[-1]
-            rts_working_dir = os.path.abspath(opts.rts_in_file).replace(rts_file, '')
-        mdir(rts_working_dir, "RTS")
-        run_rts(opts.obs, rts_working_dir, rts_in_file)
+        if opts.rts_output_dir:
+            rts_output_dir = os.path.abspath(opts.rts_output_dir)
+            mdir(rts_output_dir, "RTS output")
+        run_rts(opts.obs, opts.cal_obs, product_dir, rts_in_file, opts.rts_output_dir)
     elif opts.mode == 'beamform':
         print opts.mode
         if opts.flagged_tiles:
