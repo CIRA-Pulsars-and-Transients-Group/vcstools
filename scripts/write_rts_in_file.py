@@ -110,20 +110,20 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 	# read the gpubox files
 	fid.write("\n")
 	fid.write("ReadAllFromSingleFile=\n")
-	fid.write("BaseFilename=%s/*_gpubox\n" % data_dir)
-	fid.write("ReadGpuboxDirect=1\n")
-	fid.write("UseCorrelatorInput=0\n")
+	fid.write("BaseFilename={0}/*_gpubox\n".format(data_dir))
+	fid.write("ReadGpuboxDirect=1\n") # read gpubox files directly from disk
+	fid.write("UseCorrelatorInput=0\n") # don't expect an input stream from the correlator
 	fid.write("\n") 
 
 	# read the metafits file
 	fid.write("ReadMetafitsFile=1\n")
-	fid.write("MetafitsFilename=%s\n" % metafits_rtsform)
+	fid.write("MetafitsFilename={0}\n".format(metafits_rtsform))
 	fid.write("\n")
 
 	# set the calibration configuration
 	fid.write("DoCalibration=\n")
 	fid.write("doMWArxCorrections=1\n")
-	fid.write("doRawDataCorrections=1\n")
+	fid.write("doRawDataCorrections=1\n") 
 	fid.write("doRFIflagging=0\n")
 	fid.write("useFastPrimaryBeamModels=1\n")
         fid.write("generateDIjones=1\n")
@@ -133,10 +133,10 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 	fid.write("\n")
 	
 	# observation details
-	fid.write("ObservationFrequencyBase=%f\n" % freq_base )
-	fid.write("ObservationTimeBase=%s\n" % jd )
-	fid.write("ObservationPointCentreHA=%f\n" % PB_HA )
-	fid.write("ObservationPointCentreDec=%f\n" % PB_DEC )
+	fid.write("ObservationFrequencyBase={0}\n".format(freq_base))
+	fid.write("ObservationTimeBase={0}\n".format(jd))
+	fid.write("ObservationPointCentreHA={0}\n".format(PB_HA))
+	fid.write("ObservationPointCentreDec={0}\n".format(PB_DEC))
 	fid.write("ChannelBandwidth=0.01\n")
 	fid.write("NumberOfChannels=128\n")
 	fid.write("\n")
@@ -151,20 +151,24 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 	fid.write("\n")
 
 	# array information
-	fid.write("ArrayPositionLat=%f\n" % ArrayPositionLat )
-	fid.write("ArrayPositionLong=%f\n" % ArrayPositionLong )
-	fid.write("\n")
-	fid.write("ArrayFile=%s/array_file.txt\n" % data_dir)
+	fid.write("ArrayPositionLat={0}\n".format(ArrayPositionLat))
+	fid.write("ArrayPositionLong={0}\n".format(ArrayPositionLong))
 	fid.write("ArrayNumberOfStations=128\n")
+	fid.write("\n")
+
+	# turns out the RTS still needs this option, but it can be left blank as the relevent info is retrieved from the metafits file
+	fid.write("ArrayFile=\n")
+	fid.write("\n")
 
 	# source list and calibration info
-	fid.write("SourceCatalogueFile=%s\n" % srclist_file)
+	fid.write("SourceCatalogueFile={0}\n".format(srclist_file))
 	fid.write("NumberOfCalibrators=1\n")
 	fid.write("NumberOfSourcesToPeel=0\n")
 	fid.write("calBaselineMin=20.0\n")
-	fid.write("calShortBaselineTaper=40.0\n" )
+	fid.write("calShortBaselineTaper=40.0\n")
 	fid.write("FieldOfViewDegrees=1\n")
 	fid.write("\n")
+	
 	fid.close()
 
 	print "\nRTS configuration setup written to: {0}".format(rts_fname)
@@ -174,12 +178,11 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 
 	
 parser = argparse.ArgumentParser(description="Gather calibration information and prepare a RTS configuration file.")
-parser.add_argument("-o",metavar="obsID",type=str,help="The observation ID")
-parser.add_argument("-f",metavar="metafits_file",type=str,help="Full path to the metafits file for the observation")
-parser.add_argument("-s",metavar="srclist_file",type=str,help="Full path to the source list file created by srclist_by_beam.py")
-parser.add_argument("--gpubox_dir",type=str,help="Full path to where the *_gpubox files are located")
-parser.add_argument("--output_dir",type=str,help="Full path to where you want the RTS configuration file to be written")
-
+parser.add_argument("-o",metavar="obsID",type=str,help="The observation ID",required=True)
+parser.add_argument("-f",metavar="metafits_file",type=str,help="Where the observation metafits file is located",required=True)
+parser.add_argument("-s",metavar="srclist_file",type=str,help="Where the source list file created by srclist_by_beam.py is located",required=True)
+parser.add_argument("--gpubox_dir",type=str,help="Where the *_gpubox files are located (default: `pwd`)",default='`pwd`')
+parser.add_argument("--output_dir",type=str,help="Where you want the RTS configuration file to be written (default: `pwd`)",default='`pwd`')
 
 if len(sys.argv)==1:
 	# no arguments passed, print help and quit
@@ -188,25 +191,70 @@ if len(sys.argv)==1:
 
 args = parser.parse_args()
 
-# figure out RTS config file name
-fname = "{0}/rts_{1}.in".format(os.path.abspath(args.output_dir),args.o)
+# check for default gpubox_dir and make absolute paths
+if args.gpubox_dir == "`pwd`":
+	gpubox_dir = os.path.abspath(os.getcwd())
+else:
+	gpubox_dir = os.path.abspath(args.gpubox_dir)
 
-# figure out the start time from the first gpubox file
-print "Finding start time from gpubox files"
-gpubox_file_glob = "{0}/*_gpubox*.fits".format(os.path.abspath(args.gpubox_dir))
-gpubox_files = sorted(glob.glob(gpubox_file_glob))
-first_gpubox_file = gpubox_files[0]
-utctime = os.path.splitext(os.path.basename(first_gpubox_file))[0].split("_")[1]
-print "Determined start time is {0} from {1}".format(utctime,first_gpubox_file)
+# check for default output_dir and make absolute paths
+if args.output_dir == "`pwd`":
+	output_dir = os.path.abspath(os.getcwd())
+else:
+	output_dir = os.path.abspath(args.output_dir) 
 
-gpuboxes = os.path.abspath(args.gpubox_dir)
+
+# check to make sure output_dir and gpubox_dir exists
+if os.path.isdir(output_dir) == False:
+	print "output directory does not exist at:"
+	print "\t {0}".format(output_dir)
+	print "Aborting here."
+	sys.exit(0)
+elif os.path.isdir(gpubox_dir) == False:
+	print "gpubox directory does not exist at:"
+        print "\t {0}".format(gpubox_dir)
+        print "Aborting here."
+        sys.exit(0)
+
+# make absolute path to metafits, check it exists and make sure it's the "new" version
 metafits = os.path.abspath(args.f)
-srclist = os.path.abspath(args.s)
-
-if "_ppds" not in metafits:
+if os.path.isfile(metafits) == False:
+	print "metafits file does not exist at:"
+        print "\t {0}".format(metafits)
+        print "Aborting here."
+        sys.exit(0)
+elif "_ppds" not in metafits:
 	print "Looks like you have an old-style metafits. You'll need to download the new version, which is named like: {0}_metafits_ppds.fit".format(args.o)
 	print "Aborting here."
 	sys.exit(0)
 
-write_rts_in_file(args.o,utctime,gpuboxes,metafits,srclist,fname)
-#write_rts_in_file(args.o,utctime,gpuboxes,srclist,fname)
+# make absolute path to srclist and check it exists
+srclist = os.path.abspath(args.s)
+if os.path.isfile(srclist) == False:
+	print "srclist file does not exist at:"
+        print "\t {0}".format(srclist)
+        print "Aborting here."
+        sys.exit(0)
+       
+
+# set RTS configuration file name and location
+fname = "{0}/rts_{1}.in".format(output_dir,args.o)
+
+# figure out the start time from the first gpubox file
+print "Finding start time from gpubox files"
+gpubox_file_glob = "{0}/*_gpubox*.fits".format(gpubox_dir)
+print "Globbing {0}".format(gpubox_file_glob)
+gpubox_files = sorted(glob.glob(gpubox_file_glob))
+
+if len(gpubox_files) == 0:
+	print "No gpubox files found in {0}".format(gpubox_dir)
+	print "Aborting here."
+	sys.exit(0)
+
+first_gpubox_file = gpubox_files[0]
+# get the utc time assuming gpubox files are named: [prefix]_UTCtime_gpubox*.fits
+utctime = os.path.splitext(os.path.basename(first_gpubox_file))[0].split("_")[1]
+print "Determined start time is {0} from {1}".format(utctime,first_gpubox_file)
+
+# now write the configuration file
+write_rts_in_file(args.o,utctime,gpubox_dir,metafits,srclist,fname)
