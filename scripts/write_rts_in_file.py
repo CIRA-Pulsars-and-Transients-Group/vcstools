@@ -9,6 +9,7 @@ import glob
 import os
 import sys
 import subprocess
+import math
 
 import urllib
 import urllib2
@@ -48,7 +49,7 @@ def getmeta(service='obs', params=None):
 	return result
 
 
-def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fname):
+def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fname,chan_bw,nchan,dumptime,ndumps):
 	"""
 	Gather the respective information and write the input conifiguration file for the RTS
 	"""
@@ -111,8 +112,11 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 	fid.write("\n")
 	fid.write("ReadAllFromSingleFile=\n")
 	fid.write("BaseFilename={0}/*_gpubox\n".format(data_dir))
-	fid.write("ReadGpuboxDirect=1\n") # read gpubox files directly from disk
-	fid.write("UseCorrelatorInput=0\n") # don't expect an input stream from the correlator
+	# reading gpubox files from offline correlator (as of 23 March 2017) actually requires
+	fid.write("ReadGpuboxDirect=0\n")
+        fid.write("UseCorrelatorInput=1\n") # this can handle BOTH online and offline correaltor products (though it throughs errors which are seemingly harmless)
+	#fid.write("ReadGpuboxDirect=1\n") # read gpubox files directly from disk
+	#fid.write("UseCorrelatorInput=0\n") # don't expect an input stream from the correlator
 	fid.write("\n") 
 
 	# read the metafits file
@@ -137,13 +141,13 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 	fid.write("ObservationTimeBase={0}\n".format(jd))
 	fid.write("ObservationPointCentreHA={0}\n".format(PB_HA))
 	fid.write("ObservationPointCentreDec={0}\n".format(PB_DEC))
-	fid.write("ChannelBandwidth=0.01\n")
-	fid.write("NumberOfChannels=128\n")
+	fid.write("ChannelBandwidth={0}\n".format(chan_bw))
+	fid.write("NumberOfChannels={0}\n".format(nchan))
 	fid.write("\n")
 	
 	# set the time integration and iterations
-	fid.write("CorrDumpsPerCadence=16\n")
-	fid.write("CorrDumpTime=2.0\n")
+	fid.write("CorrDumpsPerCadence={0}\n".format(ndumps))
+	fid.write("CorrDumpTime={0}\n".format(dumptime))
 	fid.write("NumberOfIntegrationBins=3\n")
 	fid.write("NumberOfIterations=1\n")
 	fid.write("\n")
@@ -181,6 +185,9 @@ parser = argparse.ArgumentParser(description="Gather calibration information and
 parser.add_argument("-o",metavar="obsID",type=str,help="The observation ID",required=True)
 parser.add_argument("-f",metavar="metafits_file",type=str,help="Where the observation metafits file is located",required=True)
 parser.add_argument("-s",metavar="srclist_file",type=str,help="Where the source list file created by srclist_by_beam.py is located",required=True)
+parser.add_argument("--fine_chan_bw",type=float,help="Fine channel bandwidth for the observation in MHz (default: 0.01)",default=0.01)
+parser.add_argument("--corr_dump_time",type=float,help="Correlator dump time in seconds (default: 2.0)",default=2.0)
+parser.add_argument("--ndumps_to_average",type=int,help="Number of correlator dumps to average together (default: 16)",default=16)
 parser.add_argument("--gpubox_dir",type=str,help="Where the *_gpubox files are located (default: `pwd`)",default='`pwd`')
 parser.add_argument("--output_dir",type=str,help="Where you want the RTS configuration file to be written (default: `pwd`)",default='`pwd`')
 
@@ -190,7 +197,7 @@ if len(sys.argv)==1:
 	sys.exit(0)
 
 args = parser.parse_args()
-
+print "\n"
 # check for default gpubox_dir and make absolute paths
 if args.gpubox_dir == "`pwd`":
 	gpubox_dir = os.path.abspath(os.getcwd())
@@ -235,7 +242,26 @@ if os.path.isfile(srclist) == False:
         print "\t {0}".format(srclist)
         print "Aborting here."
         sys.exit(0)
+
+# check that the frequency resolution makes sense
+if args.fine_chan_bw < 0.01:
+	print "!!!WARNING!!! :: Typically for VCS observations, the finest channel bandwith we have is 10 kHz."
+	print "Continuing, but this frequency resolution will probably cause errors later down the pipeline.\n"
+
+# calculate how many fine channels per coarse channel there are
+nfine_per_coarse = int(math.ceil(1.28/args.fine_chan_bw))
+print "Determined there are {0} fine channels per coarse channel\n".format(nfine_per_coarse)
+
        
+# calcaulte how much data in seconds are required
+req_data_len = args.corr_dump_time * args.ndumps_to_average
+print "Options passed require at least {0} seconds of data".format(req_data_len)
+print "This amount needs to be less than the total amount of data supplied for calibration, else the solutions will be degraded and/or the RTS will crash.\n"
+# TODO: need to figure out a way that we can smartly asses how much data is available (from metafits?). This is fine for online, but not so clear cut for offline products.
+if req_data_len < 10:
+	print "!!!WARNING!!! :: This is a small amount of data to get a decent calibration solution from."
+	print "Continuing, but the RTS may produce poor quality solutions and/or crash.\n"
+
 
 # set RTS configuration file name and location
 fname = "{0}/rts_{1}.in".format(output_dir,args.o)
@@ -254,7 +280,7 @@ if len(gpubox_files) == 0:
 first_gpubox_file = gpubox_files[0]
 # get the utc time assuming gpubox files are named: [prefix]_UTCtime_gpubox*.fits
 utctime = os.path.splitext(os.path.basename(first_gpubox_file))[0].split("_")[1]
-print "Determined start time is {0} from {1}".format(utctime,first_gpubox_file)
+print "Determined start time is {0} from {1}\n".format(utctime,first_gpubox_file)
 
 # now write the configuration file
-write_rts_in_file(args.o,utctime,gpubox_dir,metafits,srclist,fname)
+write_rts_in_file(args.o,utctime,gpubox_dir,metafits,srclist,fname,args.fine_chan_bw,nfine_per_coarse,args.corr_dump_time,args.ndumps_to_average)
