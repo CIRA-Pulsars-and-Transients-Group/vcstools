@@ -77,7 +77,7 @@ def deg2sex( ra, dec):
     return coords
     
     
-def grab_RRATalog():
+def grab_RRATalog(jlist=None):
     """
     Creates a catalogue csv file using data from http://astro.phys.wvu.edu/rratalog/rratalog.txt
     
@@ -91,7 +91,10 @@ def grab_RRATalog():
 
     print "Converting to CSV format for easier use..."
     txt_file = "rratalog.txt"
-    csv_file = "rratalog.csv"
+    if jlist==None:
+        csv_file = "rratalog.csv"
+    else:
+        csv_file = "temp.csv"
 
 
     with open(txt_file,"rb") as in_txt:
@@ -108,12 +111,13 @@ def grab_RRATalog():
         for l in lines[1:]:
             columns = l.strip().replace(" ", '\t').split('\t')
             temp = []
-            for entry in columns:
-                if entry not in ['', ' ', '\t']:
-                    temp.append(entry.replace('--','')) 
-            data.append(temp[0:14])
-
-
+            if jlist == None or (columns[0] in jlist):
+                for entry in columns:
+                    if entry not in ['', ' ', '\t']:
+                        temp.append(entry.replace('--','')) 
+                data.append(temp[0:14])
+    
+    #loop to format ra and dec
     for i in range(len(data)):
         data[i][0] = data[i][0].replace('*','')
 
@@ -144,8 +148,6 @@ def grab_RRATalog():
         if len(data[i][5])==7 and data[i][5].endswith(':'):
             data[i][5]=data[i][5]+'00'
     
-
-    print ','.join(header)
     with open(csv_file,"wb") as out_csv:
         out_csv.write(','.join(header)+'\n')
         for d in data:
@@ -168,38 +170,27 @@ def grab_pulsaralog(jlist=None):
     #The proper motion is not accounted for as it is assumed that the beam is not accurate 
     #enought to be necessary
     pulsars = [[]]
-    if jlist != None:
-        for p in params:
-            #Gets the output of PSRCAT for each pparameter for each pulsar as a list
-            cmd = ['psrcat', '-c', p]
+    for p in params:
+        #Gets the output of PSRCAT for each pparameter for each pulsar as a list
+        cmd = ['psrcat', '-c', p]
+        if jlist != None:
             for j in jlist:
                 cmd.append(j)
-            output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
-            temp = []
-            lines = output.split('\n')
-            for l in lines[4:-1]: 
-                columns = l.split()
-                if len(columns) > 1:
-                    temp.append([columns[1]])
-            if p == params[0]:
-                pulsars=temp
-            else:
-                pulsars = [pulsars[x] + temp[x] for x in range(len(pulsars))]
-    else:
-        for p in params:
-            #Gets the output of PSRCAT for each pparameter for each pulsar as a list
-            cmd = ['psrcat', '-c', p]
-            output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
-            temp = []
-            lines = output.split('\n')
-            for l in lines[4:-1]: 
-                columns = l.split()
-                if len(columns) > 1:
-                    temp.append([columns[1]])
-            if p == params[0]:
-                pulsars=temp
-            else:
-                pulsars = [pulsars[x] + temp[x] for x in range(len(pulsars))]
+        output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
+        if output.startswith("WARNING: PSR"):
+            print "Pulsar not on psrcat. Please use the --RRAT option if it's an RRAT or -c to use a position"
+            quit()
+        temp = []
+        lines = output.split('\n')
+        for l in lines[4:-1]: 
+            columns = l.split()
+            if len(columns) > 1:
+                temp.append([columns[1]])
+        if p == params[0]:
+            pulsars=temp
+        else:
+            pulsars = [pulsars[x] + temp[x] for x in range(len(pulsars))]
+    
 
     i = 0
     while i < len(pulsars):
@@ -556,7 +547,7 @@ def get_beam_power(obsid_data,
                                                      power=True)
                 PowersX[:,itime,ifreq]=rX
                 PowersY[:,itime,ifreq]=rY
-            print '{0:.2f}'.format(float(itime)/float(Ntimes)) + "% complete"    
+            print '{0:.2f}'.format(100.*float(itime)/float(Ntimes))+"% complete for obsid: "+str(obsid)    
     #Power [#sources, #times, #frequencies]
     Powers=0.5*(PowersX+PowersY)
     
@@ -701,7 +692,8 @@ def get_beam_power_obsforsource(obsid_data,
                                                          power=True)
                     PowersX[:,itime,ifreq]=rX
                     PowersY[:,itime,ifreq]=rY
-                print '{0:.2f}'.format(float(itime)/float(Ntimes)) + "% complete" 
+                print '{0:.2f}'.format(100.*float(itime)/float(Ntimes))+"% complete for obsid: "\
+                                        +str(obsid)  
             #temp_power [#sources, #times, #frequencies]
         temp_power=0.5*(PowersX+PowersY)
         counter = 0
@@ -746,7 +738,7 @@ parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation 
 sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
 sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"')
 sourargs.add_argument('--RRAT',action='store_true',help='Searches for all known RRATs.')
-#Eventually impliment to search for FRBs and a search for all mode
+#TODO Eventually impliment to search for FRBs and a search for all mode
 sourargs.add_argument('--dl_RRAT',action='store_true',help='Download the RRATalog from http://astro.phys.wvu.edu/rratalog/ and uses this as the source catalogue.')
 sourargs.add_argument('--dl_PSRCAT',action='store_true',help='Download the Puslar alog from http://www.atnf.csiro.au/research/pulsar/psrcat/ and uses this as the source catalogue.')
 sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be readable by astropy.table.Table (i.e. csv, txt, votable, fits) . Default: for pulsars pulsaralog.csv from grab_pulsaralog.py and for RRATs rratalog.csv from grab_RRATalog.py')
@@ -790,7 +782,10 @@ else:
         if args.pulsar != None:
             #converts the list of pulsars into a string so they can be used as an agrument
             jlist = args.pulsar
-            grab_pulsaralog(jlist)
+            if args.RRAT:
+                grab_RRATalog(jlist)
+            else:
+                grab_pulsaralog(jlist)
             catDIR = 'temp.csv'
     else:
         catDIR = 'pulsaralog.csv'
@@ -799,10 +794,10 @@ else:
 if args.coord_names:
     c1, c2 = args.coord_names.split(',')
 else:
-    if args.RRAT:
-        c1, c2 = ['RA','DEC']
     if args.pulsar:
         c1, c2 = ['Raj', 'Decj']
+    if args.RRAT:
+        c1, c2 = ['RA','DEC']
     else:
         c1, c2 = ['Raj', 'Decj']
 
@@ -843,8 +838,12 @@ else:
         catalog = Table.read( catDIR)
     except IOError as e:
         print "No file {0} found. Using grab_pulsars.py to creat directory.".format( e.strerror)
-        grab_pulsaralog()
-        catalog = Table.read('pulsaralog.csv')
+        if args.RRAT:
+            grab_RRATalog()
+            catalog = Table.read('RRATalog.csv')
+        else:
+            grab_pulsaralog()
+            catalog = Table.read('pulsaralog.csv')
         
 header = catalog.colnames
 if args.pulsar != None:
