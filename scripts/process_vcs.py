@@ -42,6 +42,9 @@ def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", dep
 	"""
 	
 	header = []
+	if batch_dir[-1] is not "/":
+		batch_dir += "/"
+
 	if not outfile:
 		outfile=batch_dir+name+".out"
 	for k, v in slurm_kwargs.iteritems():
@@ -53,8 +56,6 @@ def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", dep
 	header = "\n".join(header)
 	
 	commands = "\n".join(commands)
-	if batch_dir[-1] is not "/":
-		batch_dir.append("/")
 	
 	tmpl = tmpl.format(script=commands,outfile=outfile, header=header, cluster=cluster)
 	
@@ -147,11 +148,30 @@ def get_user_email():
     email = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).communicate()[0]
     return email.strip()
 
-def ensure_metafits(metafits_file):
-        if (os.path.isfile(metafits_file) == False):
-            metafile_line = "wget  http://mwa-metadata01.pawsey.org.au/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
-            subprocess.call(metafile_line,shell=True)
-
+def ensure_metafits(data_dir, obs_id, metafits_file):
+    # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
+    if not os.path.exists(metafits_file):
+	print "{0} does not exists".format(metafits_file)
+	print "Will download it from the archive. This can take a while so please do not ctrl-C."
+	obsdownload = distutils.spawn.find_executable("obsdownload.py")
+    	get_metafits = "{0} -o {1} -d {2} -m".format(obsdownload, obs_id, data_dir.replace(str(obs_id), ''))
+        try:
+            subprocess.call(get_metafits,shell=True)
+        except:
+            print "Couldn't download {0}. Aborting.".format(os.basename(metafits_file))
+            quit()
+        # clean up
+        os.remove('obscrt.crt')
+        os.remove('obskey.key')
+    # make a copy of the file in the product_dir if that directory exists
+    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /scratch2)
+    # in case --work_dir was specified in process_vcs call product_dir and data_dir
+    # are the same and thus we will not perform the copy
+    product_dir = data_dir.replace('/scratch2/mwaops/vcs/', '/group/mwaops/vcs/') # being pedantic
+    if os.path.exists(product_dir) and not os.path.exists(product_dir + metafits_file):
+        print "Copying {0} to {1}".format(metafits_file, product_dir)
+        from shutil import copy2
+        copy2("{0}".format(metafits_file), "{0}".format(product_dir))
 
 def create_link(data_dir, target_dir, product_dir, link):
     data_dir = os.path.abspath(data_dir)
@@ -207,8 +227,6 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 	vcs_database_id = database_command(args, obsid)
 	print "Downloading files from archive"
 	voltdownload = distutils.spawn.find_executable("voltdownload.py")
-	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
-	# voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
 	obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
 	data_format = obsinfo['dataquality']
 	if data_format == 1:
@@ -245,21 +263,16 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 			check_batch = "check_volt_{0}".format(time_to_get)
 			volt_secs_to_run = datetime.timedelta(seconds=300*increment)
 			check_secs_to_run = "15:00"
-			volt_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops {2}\n".format(volt_secs_to_run,dl_dir,voltdownload_batch)
-			check_submit_line = "sbatch --time={0} --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(check_secs_to_run, dl_dir, check_batch)
 			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
                         if data_type == 16:
                             tar_batch = "untar_{0}".format(time_to_get)
                             tar_secs_to_run = "05:00:00"
-                            #tar_submit_line = "sbatch --workdir={1} --gid=mwaops -d afterany:${{SLURM_JOB_ID}} {2}\n".format(tar_secs_to_run, dl_dir, tar_batch)
                             body = []
                             untar = distutils.spawn.find_executable('untar.sh')
                             body.append("aprun -n 1 {0} -w {1} -o {2} -b {3} -e {4} -j {5} {6}".format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep))
-                            #body.append("cd {0};for i in `seq {1} 1 {2}`; do aprun tar xf {3}_${{i}}_combined.tar;done".format(dl_dir, time_to_get, time_to_get+check_nsecs-1, obsid))
-                            submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
+                            submit_slurm(tar_batch,body,batch_dir=batch_dir, slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
                                              submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
                         checks = distutils.spawn.find_executable("checks.py")
-			#checks = '/group/mwaops/fkirsten/software/src/galaxy-scripts/scripts/checks.py'
 			# Write out the checks batch file but don't submit it
 			commands = []
 			commands.append("newcount=0")
@@ -307,8 +320,55 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 			print "cannot open working dir:{0}".format(product_dir)
 			sys.exit()
 
+<<<<<<< HEAD
 def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args):
 	vcs_database_id = database_command(args, obsid)
+=======
+def download_cal(obs_id, cal_obs_id, data_dir, product_dir, head=False):
+    batch_dir = product_dir + '/batch/'
+    product_dir = '{0}/cal/{1}'.format(product_dir,cal_obs_id)
+    mdir(product_dir, 'Calibrator product')
+    mdir(batch_dir, 'Batch')
+    # obsdownload creates the folder cal_obs_id regardless where it runs
+    # this deviates from our initially inteded naming conventions of 
+    # /scratch2/mwaopos/vcs/[cal_obs_id]/vis but the renaming and linking is a pain otherwise,
+    # hence we'll link vis agains /scratch2/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
+    target_dir = '{0}'.format(cal_obs_id) 
+    link = 'vis'
+
+    obsdownload = distutils.spawn.find_executable("obsdownload.py")
+    get_data = "{0} -o {1} -d {2}".format(obsdownload,cal_obs_id, data_dir)
+    if head:
+	print "Will download the data from the archive. This can take a while so please do not ctrl-C."
+        log_name="{0}/caldownload_{1}.log".format(batch_dir,cal_obs_id)
+        with open(log_name, 'w') as log:
+            subprocess.call(get_data, shell=True, stdout=log, stderr=log)
+        create_link(data_dir, target_dir, product_dir, link)
+        #clean up
+        try:
+            os.remove('obscrt.crt')
+            os.remove('obskey.key')
+        except:
+            pass
+    else:
+        # we create the link using bash and not our create_link function 
+        # as we'd like to do this only once the data have arrived,
+        # i.e. the download worked.
+        make_link = "ln -s {0}/{1} {2}/{3}".format(data_dir, target_dir, product_dir, link)
+        obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
+        secs_to_run = "01:00:00" # sometimes the staging can take a while... 
+        commands = []
+        commands.append('source /group/mwaops/PULSAR/psrBash.profile')
+        commands.append('module load setuptools')
+        commands.append('cd {0}'.format(data_dir))
+        commands.append(get_data)
+        commands.append(make_link)
+        commands.append('rm obscrt.crt obskey.key')
+        submit_slurm(obsdownload_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : secs_to_run, "partition" : "copyq"}, cluster="zeus")
+
+
+def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir):
+>>>>>>> 38763c6d201c95d8c60b3f514758f45ba11bd0bb
 	print "Running recombine on files"
 	jobs_per_node = 8
         target_dir = link = 'combined'
@@ -356,8 +416,12 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 		submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
+<<<<<<< HEAD
 def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args):
 	vcs_database_id = database_command(args, obsid)
+=======
+def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, metafits_file):
+>>>>>>> 38763c6d201c95d8c60b3f514758f45ba11bd0bb
 	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
 	import astropy
 	from astropy.time import Time
@@ -597,11 +661,16 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
     	    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)	
         	
 
+<<<<<<< HEAD
 			
 
 def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing,
                  args, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
     vcs_database_id = database_command(args, obs_id)
+=======
+def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing, 
+                  rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
+>>>>>>> 38763c6d201c95d8c60b3f514758f45ba11bd0bb
     # Print relevant version numbers to screen
     mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
     mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -740,7 +809,7 @@ def database_command(args, obsid):
 
 if __name__ == '__main__':
 
-    modes=['download', 'download_ics', 'recombine','correlate','calibrate', 'beamform']
+    modes=['download', 'download_ics', 'download_cal', 'recombine','correlate','calibrate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
@@ -762,8 +831,6 @@ if __name__ == '__main__':
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
     group_calibrate = OptionGroup(parser, 'Calibration Options')
-    group_calibrate.add_option('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type="int", help="Observation ID of calibrator you want to process. In case of " + \
-                                   "in-beam calibration should be the same as input to -o (obsID). [no default]", default=None)
     group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.", default=None)
     group_calibrate.add_option('--rts_output_dir', help="Working directory for RTS -- all RTS output files will end up here. "+\
                                    "Default is /group/mwaops/[obsID]/cal/cal_obsID/.", default=None)
@@ -777,8 +844,11 @@ if __name__ == '__main__':
     group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
     group_beamform.add_option("-E", "--execpath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
 
-    parser.add_option("-m", "--mode", type="choice", choices=['download','download_ics', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
+    parser.add_option("-m", "--mode", type="choice", choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
+    parser.add_option('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type="int", help="Only required in 'calibrate' and 'download_cal' mode."+\
+                          "Observation ID of calibrator you want to process. In case of " + \
+                          "in-beam calibration should be the same as input to -o (obsID). [no default]", default=None)
     parser.add_option("-b", "--begin", type="int", help="First GPS time to process [no default]")
     parser.add_option("-e", "--end", type="int", help="Last GPS time to process [no default]")
     parser.add_option("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
@@ -802,12 +872,14 @@ if __name__ == '__main__':
         quit()
     elif opts.all:
         opts.begin, opts.end = obs_max_min(opts.obs)
-    if opts.end - opts.begin +1 < opts.increment:
-        opts.increment = opts.end - opts.begin + 1
+    # make sure we can process increments smaller than 64 seconds when not in calibration related mode
+    if opts.mode not in ['download_cal','calibrate']:
+        if opts.end - opts.begin +1 < opts.increment:
+            opts.increment = opts.end - opts.begin + 1
     e_mail = ""
     if opts.mail:
         e_mail = get_user_email()
-        print e_mail
+        print "Sending info to {0}".format(e_mail)
     if not opts.mode:
       print "Mode required {0}. Please specify with -m or --mode.".format(modes)
       quit()
@@ -842,7 +914,7 @@ if __name__ == '__main__':
     mdir(data_dir, "Data")
     mdir(product_dir, "Products")
     mdir(batch_dir, "Batch")
-    metafits_file = "{0}/{1}.metafits".format(data_dir,opts.obs) # recombine has this format hardcoded for the metafits file...
+    metafits_file = "{0}/{1}_metafits_ppds.fits".format(data_dir, opts.obs)
     # TODO: modify metafits downloader to not just do a trivial wget 
 
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
@@ -852,6 +924,7 @@ if __name__ == '__main__':
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, ics=True)
     elif opts.mode == 'download':
         print opts.mode
+<<<<<<< HEAD
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'recombine':
         print opts.mode
@@ -861,6 +934,28 @@ if __name__ == '__main__':
         print opts.mode 
         ensure_metafits(metafits_file)
         vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv)
+=======
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
+    elif opts.mode == 'download_cal':
+        print opts.mode
+        if not opts.cal_obs:
+	    print "You need to also pass the calibrator observation ID. Aborting here."
+	    quit()
+        if opts.cal_obs == opts.obs:
+            print "The calibrator obsID cannot be the same as the target obsID -- there are not gpubox files for VCS data on the archive." 
+            quit()
+        data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
+        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, opts.head)
+            
+    elif opts.mode == 'recombine':
+        print opts.mode
+        ensure_metafits(data_dir, opts.obs, metafits_file)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir)
+    elif opts.mode == 'correlate':
+        print opts.mode 
+        ensure_metafits(data_dir, opts.obs, metafits_file)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, metafits_file)
+>>>>>>> 38763c6d201c95d8c60b3f514758f45ba11bd0bb
     elif opts.mode == 'calibrate':
         print opts.mode
         if not opts.rts_in_file:
@@ -872,10 +967,6 @@ if __name__ == '__main__':
 	if not opts.cal_obs:
 	    print "You need to also pass the calibrator observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
 	    quit()
-        if opts.cal_obs == opts.obs:
-            print "Currently in-beam calibration does not work as rts_gpu cannot read the offline_correlator " +\
-                "files for some reason. Use a dedicated calibrator observation for the time being. Aborting."
-            quit()
         # turn whatever path we got into an absolute path 
         rts_in_file = os.path.abspath(opts.rts_in_file)
         if opts.rts_output_dir:
@@ -893,7 +984,7 @@ if __name__ == '__main__':
                 quit()
         else:
             flagged_tiles_file = None
-        ensure_metafits(metafits_file)
+        ensure_metafits(data_dir, opts.obs, metafits_file)
         from mwapy import ephem_utils
         coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, metafits_file, 
                       opts.nfine_chan, opts.pointing, sys.argv, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
