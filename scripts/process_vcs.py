@@ -147,13 +147,30 @@ def get_user_email():
     email = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).communicate()[0]
     return email.strip()
 
-def ensure_metafits(metafits_file):
+def ensure_metafits(data_dir, obs_id, metafits_file):
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
-    # need to be careful though as recombine expects the file name to be <obsID>.metafits
-    if (os.path.isfile(metafits_file) == False):
-        metafile_line = "wget  http://mwa-metadata01.pawsey.org.au/metadata/fits?obs_id=%d -O %s\n" % (opts.obs,metafits_file)
-        subprocess.call(metafile_line,shell=True)
-
+    if not os.path.exists(metafits_file):
+	print "{0} does not exists".format(metafits_file)
+	print "Will download it from the archive. This can take a while so please do not ctrl-C."
+	obsdownload = distutils.spawn.find_executable("obsdownload.py")
+    	get_metafits = "{0} -o {1} -d {2} -m".format(obsdownload, obs_id, data_dir.replace(str(obs_id), ''))
+        try:
+            subprocess.call(get_metafits,shell=True)
+        except:
+            print "Couldn't download {0}. Aborting.".format(os.basename(metafits_file))
+            quit()
+        # clean up
+        os.remove('obscrt.crt')
+        os.remove('obskey.key')
+    # make a copy of the file in the product_dir if that directory exists
+    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /scratch2)
+    # in case --work_dir was specified in process_vcs call product_dir and data_dir
+    # are the same and thus we will not perform the copy
+    product_dir = data_dir.replace('/scratch2/mwaops/vcs/', '/group/mwaops/vcs/') # being pedantic
+    if os.path.exists(product_dir) and not os.path.exists(product_dir + metafits_file):
+        print "Copying {0} to {1}".format(metafits_file, product_dir)
+        from shutil import copy2
+        copy2("{0}".format(metafits_file), "{0}".format(product_dir))
 
 def create_link(data_dir, target_dir, product_dir, link):
     data_dir = os.path.abspath(data_dir)
@@ -208,8 +225,6 @@ def get_frequencies(metafits,resort=False):
 def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, ics=False, n_untar=2, keep=""):
 	print "Downloading files from archive"
 	voltdownload = distutils.spawn.find_executable("voltdownload.py")
-	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
-	# voltdownload = "python /home/fkirsten/software/galaxy-scripts/scripts/voltdownload.py"
 	obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
 	data_format = obsinfo['dataquality']
 	if data_format == 1:
@@ -304,8 +319,10 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 			sys.exit()
 
 def download_cal(obs_id, cal_obs_id, data_dir, product_dir, head=False):
+    batch_dir = product_dir + '/batch/'
     product_dir = '{0}/cal/{1}'.format(product_dir,cal_obs_id)
     mdir(product_dir, 'Calibrator product')
+    mdir(batch_dir, 'Batch')
     # obsdownload creates the folder cal_obs_id regardless where it runs
     # this deviates from our initially inteded naming conventions of 
     # /scratch2/mwaopos/vcs/[cal_obs_id]/vis but the renaming and linking is a pain otherwise,
@@ -315,16 +332,11 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, head=False):
 
     obsdownload = distutils.spawn.find_executable("obsdownload.py")
     get_data = "{0} -o {1} -d {2}".format(obsdownload,cal_obs_id, data_dir)
-    # we create the link using bash and not our create_link function 
-    # as we'd like to do this only once the data have arrived,
-    # i.e. the download worked.
-    make_link = "ln -s {0}/{1} {2}/{3}".format(data_dir, target_dir, product_dir, link)
     if head:
-        product_dir = product_dir.replace('cal/{0}'.format(cal_obs_id),'')
-        log_name="{0}/batch/caldownload_{1}.log".format(product_dir,cal_obs_id)
+	print "Will download the data from the archive. This can take a while so please do not ctrl-C."
+        log_name="{0}/caldownload_{1}.log".format(batch_dir,cal_obs_id)
         with open(log_name, 'w') as log:
             subprocess.call(get_data, shell=True, stdout=log, stderr=log)
-            subprocess.call(make_link, shell=True, stdout=log, stderr=log)
         create_link(data_dir, target_dir, product_dir, link)
         #clean up
         try:
@@ -333,6 +345,10 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, head=False):
         except:
             pass
     else:
+        # we create the link using bash and not our create_link function 
+        # as we'd like to do this only once the data have arrived,
+        # i.e. the download worked.
+        make_link = "ln -s {0}/{1} {2}/{3}".format(data_dir, target_dir, product_dir, link)
         obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
         secs_to_run = "01:00:00" # sometimes the staging can take a while... 
         commands = []
@@ -393,7 +409,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 		submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
-def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res):
+def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, metafits_file):
 	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
 	import astropy
 	from astropy.time import Time
@@ -862,7 +878,7 @@ if __name__ == '__main__':
     mdir(data_dir, "Data")
     mdir(product_dir, "Products")
     mdir(batch_dir, "Batch")
-    metafits_file = "{0}/{1}.metafits".format(data_dir,opts.obs) # recombine has this format hardcoded for the metafits file...
+    metafits_file = "{0}/{1}_metafits_ppds.fits".format(data_dir, opts.obs)
     # TODO: modify metafits downloader to not just do a trivial wget 
 
     print "Processing Obs ID {0} from GPS times {1} till {2}".format(opts.obs, opts.begin, opts.end)
@@ -886,12 +902,12 @@ if __name__ == '__main__':
             
     elif opts.mode == 'recombine':
         print opts.mode
-        ensure_metafits(metafits_file)
+        ensure_metafits(data_dir, opts.obs, metafits_file)
         vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir)
     elif opts.mode == 'correlate':
         print opts.mode 
-        ensure_metafits(metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res)
+        ensure_metafits(data_dir, opts.obs, metafits_file)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, metafits_file)
     elif opts.mode == 'calibrate':
         print opts.mode
         if not opts.rts_in_file:
@@ -920,7 +936,7 @@ if __name__ == '__main__':
                 quit()
         else:
             flagged_tiles_file = None
-        ensure_metafits(metafits_file)
+        ensure_metafits(data_dir, opts.obs, metafits_file)
         from mwapy import ephem_utils
         coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, metafits_file, 
                       opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)

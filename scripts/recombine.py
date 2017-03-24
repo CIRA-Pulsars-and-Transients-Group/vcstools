@@ -74,7 +74,7 @@ if __name__ == '__main__':
                 f.append(file_to_combine)
 
 
-        recombine_line = "%s %s -o %s -t %d -m %s/%d.metafits -i %s/combined -f " % (the_options['recombine'],the_options['skip'],the_options['obsid'],time_to_combine,the_options['root'],the_options['obsid'],the_options['root'])
+        recombine_line = "%s %s -o %s -t %d -m %s/%d_metafits_ppds.fits -i %s/combined -f " % (the_options['recombine'],the_options['skip'],the_options['obsid'],time_to_combine,the_options['root'],the_options['obsid'],the_options['root'])
 
 
 
