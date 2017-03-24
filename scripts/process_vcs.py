@@ -10,6 +10,7 @@ import hashlib
 import datetime
 import time
 import distutils.spawn
+import sqlite3 as lite
 from astropy.io import fits as pyfits
 from reorder_chans import *
 
@@ -202,7 +203,8 @@ def get_frequencies(metafits,resort=False):
     else:
         return freq_array
 
-def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, ics=False, n_untar=2, keep=""):
+def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, args, ics=False, n_untar=2, keep=""):
+	vcs_database_id = database_command(args, obsid)
 	print "Downloading files from archive"
 	voltdownload = distutils.spawn.find_executable("voltdownload.py")
 	# voltdownload = "/group/mwaops/stremblay/MWA_CoreUtils/voltage/scripts/voltdownload.py"
@@ -305,7 +307,8 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 			print "cannot open working dir:{0}".format(product_dir)
 			sys.exit()
 
-def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir):
+def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args):
+	vcs_database_id = database_command(args, obsid)
 	print "Running recombine on files"
 	jobs_per_node = 8
         target_dir = link = 'combined'
@@ -353,7 +356,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 		submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
-def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res):
+def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args):
+	vcs_database_id = database_command(args, obsid)
 	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
 	import astropy
 	from astropy.time import Time
@@ -508,8 +512,9 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
     return chan_file_dict
 
 
-def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, rts_output_dir=None):
+def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=None):
     rts_run_file = distutils.spawn.find_executable('run_rts.sh')
+    vcs_database_id = database_command(args, obs_id)
     #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
     # get the obs ID from the rts_in file name
     #obs_id = rts_in_file.split("/")[-1].split('_')[0]
@@ -594,8 +599,9 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, rts_output_dir=None):
 
 			
 
-def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing, 
-                  rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
+def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing,
+                 args, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
+    vcs_database_id = database_command(args, obs_id)
     # Print relevant version numbers to screen
     mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
     mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -716,6 +722,21 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
             print "Submitted as job {0}".format(jobID)
         else:
             print "Not submitted. \n"
+            
+def database_command(args, obsid):
+	DB_FILE = os.environ['CMD_VCS_DB_FILE']
+	args_string = ""
+	for a in args:
+		if not a == args[0]:
+			args_string = args_string + str(a) + " "
+			
+	con = lite.connect(DB_FILE)
+	with con:
+		cur = con.cursor()
+		
+		cur.execute("INSERT INTO ProcessVCS(Arguments, Obsid, UserId, Started) VALUES(?, ?, ?, ?)", (args_string, obsid, os.environ['USER'], datetime.datetime.now()))
+		vcs_command_id = cur.lastrowid
+	return vcs_command_id
 
 if __name__ == '__main__':
 
@@ -828,18 +849,18 @@ if __name__ == '__main__':
 
     if opts.mode == 'download_ics':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, ics=True)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, ics=True)
     elif opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(metafits_file)
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv)
     elif opts.mode == 'calibrate':
         print opts.mode
         if not opts.rts_in_file:
@@ -855,7 +876,7 @@ if __name__ == '__main__':
         rts_in_file = os.path.abspath(opts.rts_in_file)
         if opts.rts_output_dir:
             rts_output_dir = os.path.abspath(opts.rts_output_dir)
-        run_rts(opts.obs, opts.cal_obs, product_dir, rts_in_file, opts.rts_output_dir)
+        run_rts(opts.obs, opts.cal_obs, product_dir, rts_in_file, sys.argv, opts.rts_output_dir)
     elif opts.mode == 'beamform':
         print opts.mode
         if not opts.DI_dir:
@@ -871,7 +892,7 @@ if __name__ == '__main__':
         ensure_metafits(metafits_file)
         from mwapy import ephem_utils
         coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, metafits_file, 
-                      opts.nfine_chan, opts.pointing, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
+                      opts.nfine_chan, opts.pointing, sys.argv, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
