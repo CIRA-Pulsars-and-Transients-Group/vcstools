@@ -320,8 +320,8 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 			print "cannot open working dir:{0}".format(product_dir)
 			sys.exit()
 
-def download_cal(obs_id, cal_obs_id, data_dir, product_dir, head=False, args):
-    vcs_database_id = database_command(args, obsid)
+def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False):
+    vcs_database_id = database_command(args, obs_id)
     batch_dir = product_dir + '/batch/'
     product_dir = '{0}/cal/{1}'.format(product_dir,cal_obs_id)
     mdir(product_dir, 'Calibrator product')
@@ -923,7 +923,7 @@ if __name__ == '__main__':
             print "The calibrator obsID cannot be the same as the target obsID -- there are not gpubox files for VCS data on the archive." 
             quit()
         data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
-        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, opts.head, sys.argv)
+        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head)
             
     elif opts.mode == 'recombine':
         print opts.mode
