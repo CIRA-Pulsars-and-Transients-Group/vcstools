@@ -320,11 +320,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 			print "cannot open working dir:{0}".format(product_dir)
 			sys.exit()
 
-<<<<<<< HEAD
-def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args):
-	vcs_database_id = database_command(args, obsid)
-=======
-def download_cal(obs_id, cal_obs_id, data_dir, product_dir, head=False):
+
+def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False):
+    vcs_database_id = database_command(args, obs_id)
     batch_dir = product_dir + '/batch/'
     product_dir = '{0}/cal/{1}'.format(product_dir,cal_obs_id)
     mdir(product_dir, 'Calibrator product')
@@ -367,8 +365,8 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, head=False):
         submit_slurm(obsdownload_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : secs_to_run, "partition" : "copyq"}, cluster="zeus")
 
 
-def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir):
->>>>>>> 38763c6d201c95d8c60b3f514758f45ba11bd0bb
+def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args):
+	vcs_database_id = database_command(args, obsid)
 	print "Running recombine on files"
 	jobs_per_node = 8
         target_dir = link = 'combined'
@@ -416,12 +414,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 		submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
-<<<<<<< HEAD
-def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args):
+
+def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args, metafits):
 	vcs_database_id = database_command(args, obsid)
-=======
-def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, metafits_file):
->>>>>>> 38763c6d201c95d8c60b3f514758f45ba11bd0bb
 	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
 	import astropy
 	from astropy.time import Time
@@ -660,17 +655,11 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
     	    print batch_submit_line
     	    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)	
         	
-
-<<<<<<< HEAD
 			
 
 def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing,
                  args, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
     vcs_database_id = database_command(args, obs_id)
-=======
-def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing, 
-                  rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
->>>>>>> 38763c6d201c95d8c60b3f514758f45ba11bd0bb
     # Print relevant version numbers to screen
     mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
     mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -924,7 +913,6 @@ if __name__ == '__main__':
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, ics=True)
     elif opts.mode == 'download':
         print opts.mode
-<<<<<<< HEAD
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'recombine':
         print opts.mode
@@ -934,8 +922,6 @@ if __name__ == '__main__':
         print opts.mode 
         ensure_metafits(metafits_file)
         vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv)
-=======
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'download_cal':
         print opts.mode
         if not opts.cal_obs:
@@ -945,17 +931,16 @@ if __name__ == '__main__':
             print "The calibrator obsID cannot be the same as the target obsID -- there are not gpubox files for VCS data on the archive." 
             quit()
         data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
-        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, opts.head)
+        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head)
             
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, metafits_file)
->>>>>>> 38763c6d201c95d8c60b3f514758f45ba11bd0bb
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file)
     elif opts.mode == 'calibrate':
         print opts.mode
         if not opts.rts_in_file:
