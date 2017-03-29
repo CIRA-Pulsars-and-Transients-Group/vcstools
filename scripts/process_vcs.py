@@ -567,18 +567,38 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
 def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, rts_output_dir=None):
     rts_run_file = distutils.spawn.find_executable('run_rts.sh')
     #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
-    # get the obs ID from the rts_in file name
-    #obs_id = rts_in_file.split("/")[-1].split('_')[0]
-    print "Querying the database for obs ID {0}...".format(cal_obs_id)
-    obs_info = getmeta(service='obs', params={'obs_id':str(cal_obs_id)})
-    channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
-
+    
     if rts_output_dir:
         product_dir = rts_output_dir
     else:
         # as with the other functions product_dir should come as /group/mwaops/obs_id
         product_dir = "{0}/{1}/{2}/{3}".format(product_dir,'cal', cal_obs_id,'rts')
     mdir(product_dir,'RTS output')
+  
+    # check if the meta-file has already been created, in which case don't query the database again
+    metafile = "{0}/{1}.meta".format(product_dir,cal_obs_id)
+    metafile_exists = False
+    if os.path.isfile(metafile):
+	print "Found observation metafile: {0}".format(metafile)
+	channels = None
+	with open(metafile,'rb') as m:
+	    for line in m.readlines():
+		if line.startswith("channels"):
+		    channels = line.strip().split(",")[1:]
+	if channels == None :
+	    print "Channels keyword not found in metafile. Re-querying the database."
+	else:
+	    metafile_exists = True
+	    channels = [int(c) for c in channels]
+    
+    if metafile_exists == False:
+        print "Querying the database for calibrator obs ID {0}...".format(cal_obs_id)
+        obs_info = getmeta(service='obs', params={'obs_id':str(cal_obs_id)})
+        channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
+	with open(metafile,"wb") as m:
+	    m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(cal_obs_id))
+	    m.write("channels,{0}".format(",".join([str(c) for c in channels])))
+
 
     # from the channels, first figure out if they are all consecutive
     if channels[-1]-channels[0] == len(channels)-1: #TODO: this assumes also ascending order: is that always true??
