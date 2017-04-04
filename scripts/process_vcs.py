@@ -789,6 +789,8 @@ def database_command(args, obsid):
 			args_string = args_string + str(a) + " "
 			
 	con = lite.connect(DB_FILE)
+	con.isolation_level = 'EXCLUSIVE'
+	con.execute('BEGIN EXCLUSIVE')
 	with con:
 		cur = con.cursor()
 		
