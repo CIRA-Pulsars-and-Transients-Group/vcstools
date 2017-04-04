@@ -28,9 +28,11 @@ SCRIPT_TARGETS = bf_adjust_flags.py \
           test_mwacutils.sh \
           untar.sh \
           vcs_obs_w_files.txt \
-          write_rts_in_file.py         
+          write_rts_in_file.py
 
-TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS))
+DATABSE_TARGETS = submit_to_database.py
+
+TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS)) $(addprefix database/, $(DATABASE_TARGETS))
 
 install: $(TARGETS)
 	cp $^ $(INSTALL_DIR)
