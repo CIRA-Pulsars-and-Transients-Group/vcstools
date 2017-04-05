@@ -21,21 +21,26 @@ Print rows from the job database
 con = lite.connect(DB_FILE)
 #con = lite.connect(DB_FILE, detect_types=lite.PARSE_DECLTYPES|lite.PARSE_COLNAMES) # return datetime as datetime objects
 con.row_factory = dict_factory
-parser.add_option("-u", "--unfinished", dest="unfinished", action="store_true", help="print only jobs with no endtime")
 parser.add_option("-r", "--recent", dest="recent", metavar="HOURS", default=None, type=float, help="print only jobs started in the last N hours")
 parser.add_option("-n", "--number", dest="n", metavar="N", default=20, type=int, help="number of jobs to print [default=%default]")
 parser.add_option("-a", "--all", dest="all", action="store_true", help="print all lines of the database")
 parser.add_option("-s", "--startrow", dest="startrow", default=0, type=int, help="ignore any row earlier than this one")
 parser.add_option("-e", "--endrow", dest="endrow", default=None, type=int, help="ignore any row later than this one")
+parser.add_option("-u", "--user", dest="user", default=None, type=str, help="Only prints one user's jobs.")
+parser.add_option("-o", "--obsid", dest="obsid", default=None, type=str, help="Only prints one obsid's jobs.")
 opts, args = parser.parse_args()
 
 if len(args) != 0:
     parser.error("Incorrect number of arguments")
 
 query = "SELECT * FROM ProcessVCS"
+    
+print opts.user
+if opts.user:
+    query += " WHERE UserId='" + str(opts.user) + "'"
 
-if opts.unfinished:
-    query += " WHERE Ended IS NULL"
+if opts.obsid:
+    query += " WHERE Arguments LIKE '%" + str(opts.obsid) + "%'"
 
 if opts.recent is not None:
     query += ''' WHERE Started > "%s"''' % str(datetime.datetime.now() - relativedelta(hours=opts.recent))
@@ -43,6 +48,7 @@ if opts.recent is not None:
 
 with con:
     cur = con.cursor()
+    print query
     cur.execute(query)
     rows = cur.fetchall()
 
@@ -50,10 +56,10 @@ if opts.startrow or opts.endrow:
     rows = rows[opts.startrow:]
     if opts.endrow is not None:
         rows = rows[:opts.endrow+1]
-elif not (opts.all or opts.unfinished or opts.recent):
+elif not (opts.all or opts.recent):
     rows = rows[-opts.n:]
 
-print 'RowNum','Obsid','Start','User'
+print 'RowNum','Obsid','Started','UserID','Arguments'
 
 for row in rows:
     print str(row['Rownum']).rjust(4),
