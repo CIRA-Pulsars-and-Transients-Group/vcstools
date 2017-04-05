@@ -889,7 +889,7 @@ else:
                 'inner join rf_stream as r on a.starttime = r.starttime '
                 'inner join schedule_metadata as m on a.starttime = m.observation_number '
                 'inner join data_files as d on a.starttime = d.observation_num '
-                'where d.filetype = 11 and a.starttime = %s')
+                'where (d.filetype = 11 or d.filetype = 15) and a.starttime = %s')
 
 sql_delay = ('select xdelaysetting from obsc_recv_cmds where observation_number = %s')
 
