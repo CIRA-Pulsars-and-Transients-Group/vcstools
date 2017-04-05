@@ -30,7 +30,8 @@ SCRIPT_TARGETS = bf_adjust_flags.py \
           vcs_obs_w_files.txt \
           write_rts_in_file.py
 
-DATABSE_TARGETS = submit_to_database.py
+DATABSE_TARGETS = submit_to_database.py\
+         cmd_vcs_db_cat.py
 
 TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS)) $(addprefix database/, $(DATABASE_TARGETS))
 
