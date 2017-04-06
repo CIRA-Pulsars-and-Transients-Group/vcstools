@@ -815,9 +815,9 @@ elif args.source_names:
 else:
     if args.RRAT:
         name_col = 'Name'
-    if args.pulsar:
+    elif args.pulsar:
         name_col = 'Jname'
-    if args.coords:
+    elif args.coords:
         name_col = '-1'
     else:
         name_col = 'Jname'
@@ -840,7 +840,7 @@ else:
         print "No file {0} found. Using grab_pulsars.py to creat directory.".format( e.strerror)
         if args.RRAT:
             grab_RRATalog()
-            catalog = Table.read('RRATalog.csv')
+            catalog = Table.read('rratalog.csv')
         else:
             grab_pulsaralog()
             catalog = Table.read('pulsaralog.csv')
@@ -988,31 +988,20 @@ else:
                 else:
                     cord = [ob, ra, dec, time, delays,centrefreq, channels]
                     #print catalog
-                    if args.beam == 'e':
+                    if args.beam:
                         get_beam_power(cord, catalog, c1, c2, name_col, dt=300,
-                                        centeronly=True, verbose=False, option ='e')
-                    elif args.beam == 'd':
-                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100, 
-                                    centeronly=True, verbose=False, option = 'd')
-                    elif args.beam == 'a':    #center only means it isn't in picket fence mode
-                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
-                                        centeronly=True, verbose=False)
-                    elif not args.beam: #TODO impliment a picket fence mode
+                                        centeronly=True, verbose=False, option = args.beam)
+                    else: #TODO impliment a picket fence mode
                         get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
                                         centeronly=True, verbose=False)
 
 #chooses the beam type and whether to list the source in each obs or the obs for each source
 #more options will be included later
 if args.obs_for_source:
-    if args.beam == 'e':
+    if args.beam:
         get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=300,
-                                        centeronly=True, verbose=False, option='e')
-    elif args.beam == 'd':
-        get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,
-                                        centeronly=True, verbose=False, option='d')
-    elif args.beam == 'a':    
-        get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
-    elif not args.beam:
+                                        centeronly=True, verbose=False, option=args.beam)
+    else:
         get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
 
 
