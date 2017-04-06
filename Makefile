@@ -33,7 +33,9 @@ SCRIPT_TARGETS = bf_adjust_flags.py \
 DATABASE_TARGETS = submit_to_database.py\
          cmd_vcs_db_cat.py
 
-TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS)) $(addprefix database/, $(DATABASE_TARGETS))
+UTILITY_TARGETS = zapchan.py
+
+TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS)) $(addprefix database/, $(DATABASE_TARGETS)) $(addprefix utils/, $(UTILITY_TARGETS))
 
 install: $(TARGETS)
 	cp $^ $(INSTALL_DIR)
