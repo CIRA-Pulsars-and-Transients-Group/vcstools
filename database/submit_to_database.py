@@ -113,7 +113,9 @@ def get_from_bestprof(file_loc):
             obsid = int(obsid)
         except:
             obsid = lines[0][28:38]
-        pulsar = 'J' + str(lines[1][26:-1])
+        pulsar = str(lines[1][26:-1])
+        if not pulsar.startswith('J'):
+            pulsar = 'J' + pulsar
         dm = lines[14][22:-1]
         period = lines[15][22:-1]
         period, period_uncer = period.split('  +/- ')
@@ -250,6 +252,7 @@ def get_pulsar_ra_dec(pulsar):
     output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
     temp = []
     lines = output.split('\n')
+    print lines
     for l in lines[4:-1]: 
         columns = l.split()
         if len(columns) > 1:
@@ -330,6 +333,7 @@ else:
 #get info from .bestprof file
 if args.bp_file:
     obsid, pulsar, dm, period, period_uncer, time_detection, profile, num_bins = get_from_bestprof(args.bp_file)
+    print pulsar
 elif args.obsid and args.pulsar:
     num_bins = 128
     obsid = args.obsid
