@@ -33,7 +33,8 @@ SCRIPT_TARGETS = bf_adjust_flags.py \
 DATABASE_TARGETS = submit_to_database.py\
          cmd_vcs_db_cat.py
 
-UTILITY_TARGETS = zapchan.py
+UTILITY_TARGETS = zapchan.py\
+	calc_ephem.py
 
 TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS)) $(addprefix database/, $(DATABASE_TARGETS)) $(addprefix utils/, $(UTILITY_TARGETS))
 
