@@ -418,7 +418,6 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args, metafits):
 	vcs_database_id = database_command(args, obsid)
 	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
-	import astropy
 	from astropy.time import Time
 	import calendar
 
@@ -474,10 +473,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
 					(current_time,ext) = os.path.splitext(os.path.basename(file))
 					(obsid,gpstime,chan) = current_time.split('_')
 					t = Time(int(gpstime), format='gps', scale='utc')
-					time_str =  t.datetime.strftime('%Y-%m-%d %H:%M:%S')
-	
-					current_time = time.strptime(time_str, "%Y-%m-%d  %H:%M:%S")
-					unix_time = calendar.timegm(current_time)
+					unix_time = int(t.unix)
 	
 					body.append(" aprun -n 1 -N 1 {0} -o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}".format("mwac_offline",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file))
 					to_corr += 1
@@ -485,7 +481,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
 					#     batch_file.write(corr_line)
 					#     to_corr = to_corr+1
 	
-				secs_to_run = str(datetime.timedelta(seconds=12*num_frames*to_corr))
+				secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr)) # added factor two on 10 April 2017 as galaxy seemed really slow...
 				submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq"}, batch_dir=batch_dir)
 				# batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
 				# submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
