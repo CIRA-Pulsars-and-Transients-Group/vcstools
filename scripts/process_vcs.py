@@ -938,11 +938,11 @@ if __name__ == '__main__':
         vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
     elif opts.mode == 'recombine':
         print opts.mode
-        ensure_metafits(metafits_file, opts.obs, metafits_file)
+        ensure_metafits(data_dir, opts.obs, metafits_file)
         vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv)
     elif opts.mode == 'correlate':
         print opts.mode 
-        ensure_metafits(metafits_file, opts.obs, metafits_file)
+        ensure_metafits(data_dir, opts.obs, metafits_file)
         vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file)
     elif opts.mode == 'download_cal':
         print opts.mode
