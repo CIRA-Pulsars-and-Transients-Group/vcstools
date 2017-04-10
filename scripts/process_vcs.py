@@ -943,7 +943,7 @@ if __name__ == '__main__':
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(metafits_file, opts.obs, metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file)
     elif opts.mode == 'download_cal':
         print opts.mode
         if not opts.cal_obs:
@@ -954,15 +954,6 @@ if __name__ == '__main__':
             quit()
         data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
         download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head)
-            
-    elif opts.mode == 'recombine':
-        print opts.mode
-        ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv)
-    elif opts.mode == 'correlate':
-        print opts.mode 
-        ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file)
     elif opts.mode == 'calibrate':
         print opts.mode
         if not opts.rts_in_file:
