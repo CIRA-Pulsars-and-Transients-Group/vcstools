@@ -266,7 +266,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
                         if data_type == 16:
                             tar_batch = "untar_{0}".format(time_to_get)
-                            tar_secs_to_run = "05:00:00"
+                            tar_secs_to_run = "10:00:00"
                             body = []
                             untar = distutils.spawn.find_executable('untar.sh')
                             body.append("aprun -n 1 {0} -w {1} -o {2} -b {3} -e {4} -j {5} {6}".format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep))
