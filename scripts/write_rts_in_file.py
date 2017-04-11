@@ -113,7 +113,7 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 	# read the gpubox files
 	fid.write("\n")
 	fid.write("ReadAllFromSingleFile=\n")
-	fid.write("BaseFilename={0}/*_gpubox\n".format(data_dir))
+	fid.write("BaseFilename={0}/*_gpubox\n".format(os.path.realpath(data_dir))) # there are symlinks here, so expand those
 	# reading gpubox files from offline correlator (as of 23 March 2017) actually requires
 	fid.write("ReadGpuboxDirect=0\n")
         fid.write("UseCorrelatorInput=1\n") # this can handle BOTH online and offline correaltor products (though it throughs errors which are seemingly harmless)
