@@ -18,6 +18,8 @@ import urllib2
 import json
 import distutils.spawn
 
+from process_vcs import mdir
+
 BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
 
 def getmeta(service='obs', params=None):
@@ -260,13 +262,6 @@ elif "_ppds" not in metafits:
 	print "Aborting here."
 	sys.exit(0)
 
-# make absolute path to srclist and check it exists
-srclist = os.path.abspath(args.s)
-if os.path.isfile(srclist) == False:
-	print "srclist file does not exist at:"
-        print "\t {0}".format(srclist)
-        print "Aborting here."
-        sys.exit(0)
 
 # check that the frequency resolution makes sense
 if args.fine_chan_bw < 0.01:
@@ -277,7 +272,6 @@ if args.fine_chan_bw < 0.01:
 nfine_per_coarse = int(math.ceil(1.28/args.fine_chan_bw))
 print "Determined there are {0} fine channels per coarse channel\n".format(nfine_per_coarse)
 
-       
 # calcaulte how much data in seconds are required
 req_data_len = args.corr_dump_time * args.ndumps_to_average
 print "Options passed require at least {0} seconds of data".format(req_data_len)
@@ -287,9 +281,6 @@ if req_data_len < 10:
 	print "!!!WARNING!!! :: This is a small amount of data to get a decent calibration solution from."
 	print "Continuing, but the RTS may produce poor quality solutions and/or crash.\n"
 
-
-# set RTS configuration file name and location
-fname = "{0}/rts_{1}.in".format(output_dir,args.o)
 
 # figure out the start time from the first gpubox file
 print "Finding start time from gpubox files"
@@ -307,7 +298,37 @@ first_gpubox_file = gpubox_files[0]
 utctime = os.path.splitext(os.path.basename(first_gpubox_file))[0].split("_")[1]
 print "Determined start time is {0} from {1}\n".format(utctime,first_gpubox_file)
 
+
+#first, create an rts/ subdirectory in the output_dir
+write_dir = "{0}/rts".format(output_dir)
+if os.path.isdir(write_dir):
+	print "rts subdirectory already prepared"
+else:
+	mdir(write_dir,"rts")
+
+# set RTS configuration file name and location
+fname = "{0}/rts_{1}.in".format(write_dir,args.o)
+
+# check the source list file 
+srclist = os.path.abspath(args.s)
+if os.path.isfile(srclist) == False:
+	# if it's not at the path given, check in the rts directory
+	print "srclist file does not exist at:"
+	print "\t {0}".format(srclist)
+	print "Checking in rts/ subdirectory"
+	if os.path.basename(srclist) in os.listdir(write_dir):
+		print "Found in rts/ subdirectory"
+	else:
+		print "Could not find srclist, please create a new one"
+		sys.exit(0)
+else:	
+	# move the srclist file into the rts directory
+	os.system("mv {0} {1}".format(srclist,write_dir))
+	
+srclist = "{0}/rts/{1}".format(os.path.dirname(srclist),os.path.basename(srclist))
+print "Found source list at {0}".format(srclist)
+
 # now write the configuration file
 write_rts_in_file(args.o,utctime,gpubox_dir,metafits,srclist,fname,args.fine_chan_bw,nfine_per_coarse,args.corr_dump_time,args.ndumps_to_average)
 # now write the initial flagged_tiles.txt and flagged_channels.txt files
-write_flag_files(output_dir,metafits,nfine_per_coarse)
+write_flag_files(write_dir,metafits,nfine_per_coarse)
