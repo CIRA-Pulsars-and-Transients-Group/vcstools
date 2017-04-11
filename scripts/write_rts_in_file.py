@@ -10,6 +10,8 @@ import os
 import sys
 import subprocess
 import math
+from astropy.io import fits
+import numpy as np
 
 import urllib
 import urllib2
@@ -176,10 +178,33 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
 	fid.close()
 
 	print "\nRTS configuration setup written to: {0}".format(rts_fname)
+	
 
+def write_flag_files(odir, metafits_file, nchan):
+	"""
+	Given the output directory, write initial flagging files based on bad tiles in metafits and number of fine channels
+	""" 
+	metafits = fits.open(metafits_file) # read metafits file
+	bad_tiles = metafits[1].data['Flag'][::2] # both polarisation recorded, so we just want every second value 
+	bad_tiles = np.where(bad_tiles == 1)[0]
+	flagged_tiles = "{0}/flagged_tiles.txt".format(odir) 
+	with open(flagged_tiles,'w') as fid:
+		for b in bad_tiles:
+			fid.write("{0}\n".format(b))
 
-
-
+	# figure out how many edge channels to flag based on the fact that with 128, we flag the edge 8
+	ntoflag = 8 * nchan/128 
+	chans = np.arange(nchan)
+	start_chans = chans[:ntoflag]
+	end_chans = chans[-ntoflag:]
+	center_chan = [nchan/2 - 1] # zero based, so -1 from nchan/2
+	bad_chans = np.hstack((start_chans,center_chan,end_chans))
+	flagged_channels = "{0}/flagged_channels.txt".format(odir)
+	with open(flagged_channels,'w') as fid:
+		for b in bad_chans:
+			fid.write("{0}\n".format(b))
+	
+	
 	
 parser = argparse.ArgumentParser(description="Gather calibration information and prepare a RTS configuration file.")
 parser.add_argument("-o",metavar="obsID",type=str,help="The observation ID",required=True)
@@ -284,3 +309,5 @@ print "Determined start time is {0} from {1}\n".format(utctime,first_gpubox_file
 
 # now write the configuration file
 write_rts_in_file(args.o,utctime,gpubox_dir,metafits,srclist,fname,args.fine_chan_bw,nfine_per_coarse,args.corr_dump_time,args.ndumps_to_average)
+# now write the initial flagged_tiles.txt and flagged_channels.txt files
+write_flag_files(output_dir,metafits,nfine_per_coarse)
