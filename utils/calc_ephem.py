@@ -21,7 +21,7 @@ from datetime import datetime
 import sys
 import argparse
 
-def calculate_ephem(ra,dec,date,tzoffset,lat=-26.7033,lon=116.671,elev=377.827):
+def calculate_ephem(ra,dec,date,tzoffset,lat,lon,elev):
     
     location = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=elev*u.m)
 
@@ -47,7 +47,8 @@ def calculate_ephem(ra,dec,date,tzoffset,lat=-26.7033,lon=116.671,elev=377.827):
     lst = lst[:-6]
     print "Local time (UTC{0}) of maximum elevation: {1}".format(utcoff,lst)
 
-    fig,ax = plt.subplots()
+    fig = plt.figure(figsize=(10,8))
+    ax = fig.add_subplot(111)
     ax.plot(hours,alt,color='r',lw=2,alpha=0.6)
     ax.axhline(0,ls="--",color='k')
     ax.axvline(hours[maxidx],ls="--",color='r',lw=2)
@@ -58,11 +59,28 @@ def calculate_ephem(ra,dec,date,tzoffset,lat=-26.7033,lon=116.671,elev=377.827):
 	
     zero = np.zeros(len(alt))
     ax.fill_between(hours,[ax.get_ylim()[0]]*len(hours),interpolate=True,color='gray')
-    ax.set_title("Source: {0} {1},\n max. elev: {2:.2f}deg @  {3} UTC{4}".format(ra,dec,alt.max(),lst,utcoff))
+    ax.set_title("Source: {0} {1}\n site coords: lon={2:.3f}d lat={3:.3f}d elev.={4:.2f}m\n max. elev: {5:.2f}d @  {6} UTC{7}".format(ra,dec,lat,lon,elev,alt.max(),lst,utcoff))
     ax.set_xlabel("Time since UTC {0} 00:00:00  [hours]".format(date))
     ax.set_ylabel("Elevation  [deg]")
     plt.show()
 
+
+
+
+#radio telescope sites
+site_dict = {'MWA':(-26.7033,116.671,377.827),\
+		'PKS':(-32.999944,148.262306,372),\
+		'ATCA':(-30.312778,149.550278,209),\
+		'ASKAP':(-26.696,116.637,372),\
+		'MOST':(-35.370707,149.424658,737),\
+		'GMRT':(19.096517,74.049742,656),\
+		'LWA':(34.07,-107.63,2124),\
+		'GBT':(38.4331,-79.8397,807),\
+		'VLA':(34.078749,-107.618283,2124),\
+		'Arecibo':(18.34417,-66.75278,323),\
+		'LOFAR':(52.90889,6.86889,6),\
+		'JodrellBank':(53.23625,-2.307139,77),\
+		'Effelsberg':(50.5247,6.8828,346)}
 
 
 
@@ -71,9 +89,18 @@ parser.add_argument('--ra',type=str,metavar="RAJ2000",help="RAJ2000 coordinate o
 parser.add_argument('--dec',type=str,metavar="DECJ2000",help="DECJ2000 coordinate of target source (dd:mm:ss.ss)",required=True)
 parser.add_argument('--utcdate',type=str,metavar="date",help="Desired ephemeris UTC date (YYYY/MM/DD)",required=True)
 parser.add_argument('--utcoff',type=int,metavar="offset",help="Hour offset from UTC [default = 0]",default=0)
-parser.add_argument('--observer',nargs=3,metavar=("lat","lon","elev"),help="Latitude (deg), longitude (deg) and elevation (m) of observer. Defaults to MWA.",default=(-26.7033,116.671,377.827))
+parser.add_argument('--site',type=str,metavar="name",nargs=1,choices=site_dict.keys(),help="Common radio telescope sites to use as observer position. Choose from: {0}. No default.".format(site_dict.keys()),default=None)
+parser.add_argument('--observer',type=float,nargs=3,metavar=("lat", "lon", "elev"),help="Latitude (deg), longitude (deg) and elevation (m) of observer. No default.",default=(None,None,None))
 args = parser.parse_args()
 
+# chekc to see if multiple sites were given
+if args.site:
+	if args.observer:
+		print "--site takes priority over --observer argument"
+	observatory = site_dict[args.site[0]]
+elif args.observer:
+	observatory = args.observer
+else:
+	print "Somehow managed to get by with providing an observer location?"
 
-calculate_ephem(args.ra,args.dec,args.utcdate,args.utcoff,*args.observer)
-
+calculate_ephem(args.ra,args.dec,args.utcdate,args.utcoff,*observatory)
