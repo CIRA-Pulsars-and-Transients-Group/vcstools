@@ -252,7 +252,6 @@ def get_pulsar_ra_dec(pulsar):
     output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
     temp = []
     lines = output.split('\n')
-    print lines
     for l in lines[4:-1]: 
         columns = l.split()
         if len(columns) > 1:
@@ -620,7 +619,7 @@ if args.bp_file:
     cal_list = client.calibrator_list(web_address, auth)
     cal_already_created = False
     for c in cal_list:
-        if ( c[u'observationid'] == int(obsid) ) and ( c[u'caltype'] == calibrator_type ):
+        if ( c[u'observationid'] == int(args.cal_id) ) and ( c[u'caltype'] == calibrator_type ):
             cal_already_created = True
             cal_db_id = c[u'id']
     if not cal_already_created:
