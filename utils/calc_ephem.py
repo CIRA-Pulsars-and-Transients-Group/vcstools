@@ -47,7 +47,7 @@ def calculate_ephem(ra,dec,date,tzoffset,center, lat,lon,elev):
         times = (maxtime - 12*u.hour) + dt * np.arange(len(times))
         altaz = target.transform_to(AltAz(obstime=times,location=location))
         alt = altaz.alt.deg
-        times += tzoffset*u.hour
+        #times += tzoffset*u.hour
         # for things to be unaltered downstream
         maxidx = 1200
 
@@ -72,7 +72,7 @@ def calculate_ephem(ra,dec,date,tzoffset,center, lat,lon,elev):
     zero = np.zeros(len(alt))
     ax.fill_between(times,[ax.get_ylim()[0]]*len(hours),interpolate=True,color='gray')
     ax.set_title("Source: {0} {1}\n site coords: lon={2:.3f}d lat={3:.3f}d elev.={4:.2f}m\n max. elev: {5:.2f}d @  {6} UTC{7}".format(ra,dec,lat,lon,elev,alt.max(),lst,utcoff))
-    ax.set_xlabel("Time (UTC{0})  ".format(utcoff))
+    ax.set_xlabel("Time (UTC)")
     ax.set_ylabel("Elevation  [deg]")
     plt.show()
 
