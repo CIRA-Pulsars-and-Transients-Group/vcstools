@@ -88,7 +88,7 @@ parser = argparse.ArgumentParser(description="Determine ephemeris for source obj
 parser.add_argument('--ra',type=str,metavar="RAJ2000",help="RAJ2000 coordinate of target source (hh:mm:ss.ss)",required=True)
 parser.add_argument('--dec',type=str,metavar="DECJ2000",help="DECJ2000 coordinate of target source (dd:mm:ss.ss)",required=True)
 parser.add_argument('--utcdate',type=str,metavar="date",help="Desired ephemeris UTC date (YYYY/MM/DD)",required=True)
-parser.add_argument('--utcoff',type=int,metavar="offset",help="Hour offset from UTC [default = 0]",default=0)
+parser.add_argument('--utcoff',type=float,metavar="offset",help="Hour offset from UTC [default = 0]",default=0)
 parser.add_argument('--site',type=str,metavar="name",nargs=1,choices=site_dict.keys(),help="Common radio telescope sites to use as observer position. Choose from: {0}. No default.".format(site_dict.keys()),default=None)
 parser.add_argument('--observer',type=float,nargs=3,metavar=("lat", "lon", "elev"),help="Latitude (deg), longitude (deg) and elevation (m) of observer. No default.",default=(None,None,None))
 args = parser.parse_args()
