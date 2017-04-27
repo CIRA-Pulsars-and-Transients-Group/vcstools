@@ -13,15 +13,16 @@ Author: Bradley Meyers
 #from psr_constants import *
 #from math import pi
 import matplotlib.pyplot as plt
+from matplotlib import dates
 import numpy as np
 from astropy.coordinates import EarthLocation,SkyCoord,AltAz
 from astropy import units as u
 from astropy.time import Time,TimezoneInfo
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import argparse
 
-def calculate_ephem(ra,dec,date,tzoffset,lat,lon,elev):
+def calculate_ephem(ra,dec,date,tzoffset,center, lat,lon,elev):
     
     location = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=elev*u.m)
 
@@ -36,11 +37,22 @@ def calculate_ephem(ra,dec,date,tzoffset,lat,lon,elev):
  
     times = Time(t,scale='utc',format='datetime')
     altaz = target.transform_to(AltAz(obstime=times,location=location))
-
     alt = altaz.alt.deg
- 
-    maxidx = np.where(alt==alt.max())[0][0]
+
+    maxidx = alt.argmax() #np.where(alt==alt.max())[0][0]
     maxtime = times[maxidx]
+    if center:
+        # shifting things to the centre of the plot
+        dt = (times[-1]-times[0]) / len(times)
+        times = (maxtime - 12*u.hour) + dt * np.arange(len(times))
+        altaz = target.transform_to(AltAz(obstime=times,location=location))
+        alt = altaz.alt.deg
+        #times += tzoffset*u.hour
+        # for things to be unaltered downstream
+        maxidx = 1200
+
+    # converting the times to something plottable
+    times = dates.date2num([t for t in times.datetime])
     tz = TimezoneInfo(utc_offset=tzoffset*u.hour)
     lst = str(maxtime.to_datetime(timezone=tz))
     utcoff = lst[-6:]
@@ -49,18 +61,18 @@ def calculate_ephem(ra,dec,date,tzoffset,lat,lon,elev):
 
     fig = plt.figure(figsize=(10,8))
     ax = fig.add_subplot(111)
-    ax.plot(hours,alt,color='r',lw=2,alpha=0.6)
+    ax.plot_date(times,alt,color='r',lw=2,alpha=0.6)
     ax.axhline(0,ls="--",color='k')
-    ax.axvline(hours[maxidx],ls="--",color='r',lw=2)
-    ax.set_xlim(0,24)
+    ax.axvline(times[maxidx],ls="--",color='r',lw=2)
+    #ax.set_xlim(times[0], times[-1])
     ylims = ax.get_ylim()
     if ylims[1] > 90:
 	ax.set_ylim(ylims[0],90)
 	
     zero = np.zeros(len(alt))
-    ax.fill_between(hours,[ax.get_ylim()[0]]*len(hours),interpolate=True,color='gray')
+    ax.fill_between(times,[ax.get_ylim()[0]]*len(hours),interpolate=True,color='gray')
     ax.set_title("Source: {0} {1}\n site coords: lon={2:.3f}d lat={3:.3f}d elev.={4:.2f}m\n max. elev: {5:.2f}d @  {6} UTC{7}".format(ra,dec,lat,lon,elev,alt.max(),lst,utcoff))
-    ax.set_xlabel("Time since UTC {0} 00:00:00  [hours]".format(date))
+    ax.set_xlabel("Time (UTC)")
     ax.set_ylabel("Elevation  [deg]")
     plt.show()
 
@@ -88,9 +100,10 @@ parser = argparse.ArgumentParser(description="Determine ephemeris for source obj
 parser.add_argument('--ra',type=str,metavar="RAJ2000",help="RAJ2000 coordinate of target source (hh:mm:ss.ss)",required=True)
 parser.add_argument('--dec',type=str,metavar="DECJ2000",help="DECJ2000 coordinate of target source (dd:mm:ss.ss)",required=True)
 parser.add_argument('--utcdate',type=str,metavar="date",help="Desired ephemeris UTC date (YYYY/MM/DD)",required=True)
-parser.add_argument('--utcoff',type=int,metavar="offset",help="Hour offset from UTC [default = 0]",default=0)
+parser.add_argument('--utcoff',type=float,metavar="offset",help="Hour offset from UTC [default = 0]",default=0)
 parser.add_argument('--site',type=str,metavar="name",nargs=1,choices=site_dict.keys(),help="Common radio telescope sites to use as observer position. Choose from: {0}. No default.".format(site_dict.keys()),default=None)
 parser.add_argument('--observer',type=float,nargs=3,metavar=("lat", "lon", "elev"),help="Latitude (deg), longitude (deg) and elevation (m) of observer. No default.",default=(None,None,None))
+parser.add_argument('-c', '--center', action='store_true', help='if set will center the plot the time of maximum elevation')
 args = parser.parse_args()
 
 # chekc to see if multiple sites were given
@@ -103,4 +116,4 @@ elif args.observer:
 else:
 	print "Somehow managed to get by with providing an observer location?"
 
-calculate_ephem(args.ra,args.dec,args.utcdate,args.utcoff,*observatory)
+calculate_ephem(args.ra,args.dec,args.utcdate,args.utcoff, args.center, *observatory)
