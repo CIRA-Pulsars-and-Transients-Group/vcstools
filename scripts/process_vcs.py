@@ -354,7 +354,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False):
         # i.e. the download worked.
         make_link = "ln -s {0}/{1} {2}/{3}".format(data_dir, target_dir, product_dir, link)
         obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
-        secs_to_run = "01:00:00" # sometimes the staging can take a while... 
+        secs_to_run = "02:00:00" # sometimes the staging can take a while... 
         commands = []
         commands.append('source /group/mwaops/PULSAR/psrBash.profile')
         commands.append('module load setuptools')
@@ -878,7 +878,7 @@ if __name__ == '__main__':
         print "Please specify EITHER (-b,-e) OR -a"
         quit()
     elif opts.all:
-        opts.begin, opts.end = obs_max_min(opts.obs)
+        opts.begin, opts.end = obs_max_min(opts.cal_obs if opts.mode == 'download_cal' else opts.obs)
     # make sure we can process increments smaller than 64 seconds when not in calibration related mode
     if opts.mode not in ['download_cal','calibrate']:
         if opts.end - opts.begin +1 < opts.increment:
@@ -949,6 +949,7 @@ if __name__ == '__main__':
             print "The calibrator obsID cannot be the same as the target obsID -- there are not gpubox files for VCS data on the archive." 
             quit()
         data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
+        mdir(data_dir, "Calibrator Data")
         download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head)
     elif opts.mode == 'calibrate':
         print opts.mode
