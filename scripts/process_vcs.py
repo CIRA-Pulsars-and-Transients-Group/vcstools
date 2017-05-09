@@ -168,7 +168,7 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
     # in case --work_dir was specified in process_vcs call product_dir and data_dir
     # are the same and thus we will not perform the copy
     product_dir = data_dir.replace('/scratch2/mwaops/vcs/', '/group/mwaops/vcs/') # being pedantic
-    if os.path.exists(product_dir) and not os.path.exists(product_dir + metafits_file):
+    if os.path.exists(product_dir) and not os.path.exists(metafits_file):
         print "Copying {0} to {1}".format(metafits_file, product_dir)
         from shutil import copy2
         copy2("{0}".format(metafits_file), "{0}".format(product_dir))
