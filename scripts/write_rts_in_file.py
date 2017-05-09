@@ -195,11 +195,12 @@ def write_flag_files(odir, metafits_file, nchan):
 			fid.write("{0}\n".format(b))
 
 	# figure out how many edge channels to flag based on the fact that with 128, we flag the edge 8
-	ntoflag = 8 * nchan/128 
+	ntoflag = int(8 * nchan/128.)
+	print "nchan = {0}, flagging {1} edge channels".format(nchan,ntoflag) 
 	chans = np.arange(nchan)
 	start_chans = chans[:ntoflag]
 	end_chans = chans[-ntoflag:]
-	center_chan = [nchan/2 - 1] # zero based, so -1 from nchan/2
+	center_chan = [nchan/2]
 	bad_chans = np.hstack((start_chans,center_chan,end_chans))
 	flagged_channels = "{0}/flagged_channels.txt".format(odir)
 	with open(flagged_channels,'w') as fid:
