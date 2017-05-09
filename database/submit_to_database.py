@@ -678,7 +678,18 @@ if args.pulsar and not args.bp_file:
                                 subband = 1,
                                 incoherent = incoh,
                                 observation_type = '1')  
-        temp_dict = client.detection_get(web_address, auth, str(obsid))  
+        temp_dict = client.detection_get(web_address, auth, observationid =str(obsid))  
+        subbands=1
+    
+    if not temp_dict:
+        #no obsid so creats a blank one and assumes the subbands are continuous
+        client.detection_create(web_address, auth, 
+                                observationid = str(obsid),
+                                pulsar = str(pulsar),
+                                subband = 1,
+                                incoherent = incoh,
+                                observation_type = '1')  
+        temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))  
         subbands=1
     
     
