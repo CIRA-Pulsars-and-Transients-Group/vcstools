@@ -644,10 +644,6 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
                 chan_list = get_frequencies(metafits_file, resort=False)
                 DI_file = "{0}/calibration_solution.bin".format(DI_dir)
                 jones_option = "-O {0} -C {1}".format(DI_file, int(gpubox)-1)
-            channel_file = "{0}/channel".format(pointing_chan_dir)
-            with open(channel_file,"w") as ch_file:
-                ch_line = "{0}".format(chan_list[chan_index]);
-                ch_file.write(ch_line)
 
             #ASSUMES 10kHz channels <beware>
 
@@ -656,7 +652,7 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
             if (os.path.isfile(DI_file)):
                 ch_dir_line = "cd {0}\n".format(pointing_chan_dir)
                 batch_file.write(ch_dir_line)
-                delays_line = "{0}/get_delays -a {1} -b {2} {3} -m {4} -c -i -p -z {5} -o {6} -f {7} -n {8} -w 10000 -r {9} -d {10}\n".format(execpath, pointing_chan_dir,stop-start+1,jones_option,metafile,utctime,obs_id,basefreq,nfine_chan,RA,Dec) 
+                delays_line = "{0}/get_delays -a {1} -b {2} {3} -m {4} -c -i -p -z {5} -o {6} -f {7} -n {8} -w 10000 -r {9} -d {10}\n".format(execpath, pointing_chan_dir, stop-start+1, jones_option, metafile, utctime, obs_id, basefreq, nfine_chan, RA,Dec) 
                 batch_file.write(delays_line)
                 if rts_flag_file:
                     flags_file = "{0}/flags.txt".format(pointing_chan_dir)
@@ -704,7 +700,7 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
             batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
-            aprun_line = "aprun -n 1 -N 1 {0}/make_beam -o {1} -b {2} -e {3} -a 128 -n 128 -N {4} -t 1 {5} -c phases.txt -w flags.txt -d {6}/combined -D {7}/ {8} \n".format(execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format)
+            aprun_line = "aprun -n 1 -N 1 {0}/make_beam -o {1} -b {2} -e {3} -a 128 -n 128 -N {4} -t 1 {5} -c phases.txt -w flags.txt -H {6} -d {7}/combined -D {8}/ {9} \n".format(execpath, obs_id, start, stop, coarse_chan, jones, chan_list[coarse_chan], data_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
         
         submit_line = "sbatch --workdir={0} --partition=gpuq -d afterok:{1} --gid=mwaops --mail-user={2} {3} \n".format(pointing_dir,dependsOn,e_mail, make_beam_batch)
