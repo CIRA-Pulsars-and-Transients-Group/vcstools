@@ -24,14 +24,14 @@ if [ $1 == '-h' ];then
 fi
 
 obsID=$1
-basedir=${2:-/scratch2/mwaops/vcs/${obsID}}
+basedir=${2:-/group/mwaops/vcs/${obsID}}
 lowchan=${3:-0}
 n_chans=${4:-24}
 
 
 # check for old pipe in target directory, delete if exists
-if [ -p $FILE ${basedir}/fits/mk_psrfits_in ];then
-    rm -rf ${basedir}/fits/mk_psrfits_in
+if [ -p $FILE ${basedir}/ics/mk_psrfits_in ];then
+    rm -rf ${basedir}/ics/mk_psrfits_in
     if [[ ! $? -eq 0 ]];then
 	echo "Cannot remove old data pipe. Aborting..."
 	exit $?
@@ -39,8 +39,8 @@ if [ -p $FILE ${basedir}/fits/mk_psrfits_in ];then
 fi
 # check for fits files in target directory that have the same obsID
 # abort if found, will not delete anything.
-if [ -f $FILE ${basedir}/fits/${obsID}*.fits ];then
-    echo "There already exist fits files with obsID ${obsID} in ${basedir}/fits."
+if [ -f $FILE ${basedir}/ics/${obsID}*.fits ];then
+    echo "There already exist fits files with obsID ${obsID} in ${basedir}/ics."
     echo "Please delete those before running this script. Aborting here..."
     exit 1
 fi
@@ -91,9 +91,9 @@ mjd=(${time_out[9]})
 mjd_whole=${mjd:0:5}
 #echo "Truncated MJD: $mjd_whole"
 
-mkdir ${basedir}/fits
-cd ${basedir}/fits
-echo -e "${basedir}/fits/mk_psrfits_in\n\n$1\n\n${length}\n${USER}\n\n$1\n\n\nMWA-G0024\n${start}\n\n${freq}\n${bandwidth}\n${RA}\n${Dec}\n${Azimuth}\n${Zenith}\n\n${lst_s}\n${utc_s}\n${mjd_whole}\n\n\n\n\n\n\n\n\n" | make_psrfits & sleep 1.0
-cat ${basedir}/combined/*ics.dat > ${basedir}/fits/mk_psrfits_in
+mkdir ${basedir}/ics
+cd ${basedir}/ics
+echo -e "${basedir}/ics/mk_psrfits_in\n\n$1\n\n${length}\n${USER}\n\n$1\n\n\nMWA-G0024\n${start}\n\n${freq}\n${bandwidth}\n${RA}\n${Dec}\n${Azimuth}\n${Zenith}\n\n${lst_s}\n${utc_s}\n${mjd_whole}\n\n\n\n\n\n\n\n\n" | make_psrfits & sleep 1.0
+cat ${basedir}/combined/*ics.dat > ${basedir}/ics/mk_psrfits_in
 wait
-rm -rf ${basedir}/fits/mk_psrfits_in
+rm -rf ${basedir}/ics/mk_psrfits_in
