@@ -431,7 +431,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
 
             // current mean
             *out = ((band[p][j]/nstep))/new_var; // removed a divide by 32 here ....
-            fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f (max-min) %f\n",j,p,(band[p][j]/nstep),*out,(chan_max[p][j] - chan_min[p][j]));
+            //fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f (max-min) %f\n",j,p,(band[p][j]/nstep),*out,(chan_max[p][j] - chan_min[p][j]));
             out++;
             *off = 0.0;
 
@@ -692,7 +692,7 @@ float get_weights(int nstation, int nchan, int npol, int weights, char *weights_
 
 
     if (weights == 1) {
-        fprintf(stderr,"Open weights file %s\n",weights_file);
+        fprintf(stdout,"Open weights file %s\n",weights_file);
         wgts = fopen(weights_file,"r");
         if (wgts==NULL) {
             fprintf(stderr,"Cannot open weights file %s:%s\n",weights_file,strerror(errno));
@@ -720,7 +720,7 @@ float get_weights(int nstation, int nchan, int npol, int weights, char *weights_
             fclose(wgts);
 
         }
-         fprintf(stderr,"Closed weights file %s\n",weights_file);
+         fprintf(stdout,"Closed weights file %s\n",weights_file);
     }
     else if (weights == 0) {
         int count = 0;
@@ -735,6 +735,8 @@ float get_weights(int nstation, int nchan, int npol, int weights, char *weights_
 }
 
 int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weights, double ***phases_array, complex double ***complex_weights_array,long checkpoint) {
+
+    fprintf(stdout, "Getting phases: checkpoint = %ld\n", checkpoint);
 
     int count = 0;
     FILE *phases = NULL;
@@ -763,7 +765,7 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
 
     }
     if (phases_file != NULL) {
-        fprintf(stderr,"Open phases file %s\n",phases_file);
+        fprintf(stdout,"Open phases file %s\n",phases_file);
         phases = fopen(phases_file,"r");
 
         if (phases==NULL) {
@@ -799,13 +801,13 @@ int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weigh
             }
             else {
                 checkpoint = ftell(phases);
-                fprintf(stderr,"Checkpoint set to %ld\n",checkpoint);
+                fprintf(stdout,"Checkpoint set to %ld\n",checkpoint);
             }
 
             fclose(phases);
         }
 
-        fprintf(stderr,"Closed phases file %s\n",phases_file);
+        fprintf(stdout,"Closed phases file %s\n",phases_file);
     }
 
     for (count = 0 ;count < nstation*npol; count++) {
@@ -1237,6 +1239,7 @@ int main(int argc, char **argv) {
             gains_file=strdup(pattern);
             fprintf(stdout,"gains_file: %s\n",gains_file);
         }
+        fprintf(stdout, "\n");
         sprintf(pattern,"%s/%s",procdir,"channel");
 
         FILE *tmp;
@@ -1306,11 +1309,16 @@ int main(int argc, char **argv) {
     vdif_header vhdr;
     vdifinfo vf;
 
-    // these are the filepositions of the Jones and Phases files
+    // these are the file positions of the Jones and Phases files
 
     long jones_pos=0;
     long phase_pos=0;
 
+    long new_jones_pos=0;
+    long new_phase_pos=0;
+
+    int get_new_jones=1; // boolean: 1 iff next second's worth of jones are to be retrieved
+    int get_new_phase=1; // boolean: 1 iff next second's worth of phase are to be retrieved
 
     float wgt_sum = get_weights(nstation,nchan,npol,weights,weights_file, &weights_array); // this is now a flag file
 
@@ -1318,16 +1326,25 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Zero weight sum or error on read -- check %s\n",weights_file);
         goto BARRIER;
     }
+
+    // Get first second's worth of phases and Jones matrices
     if (complex_weights) {
-        phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
+        new_phase_pos = get_phases(nstation, nchan, npol, phases_file,
+                                   &weights_array, &phases_array,
+                                   &complex_weights_array, phase_pos);
+        phase_pos = new_phase_pos;
+        get_new_phase = 0;
     }
     if (apply_jones) {
-        jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
+        new_jones_pos = get_jones(nstation, nchan, npol, jones_file,
+                                  &invJi, jones_pos);
+        jones_pos = new_jones_pos;
+        get_new_jones = 0;
     }
 
     if (phase_pos < 0 || jones_pos < 0) {
-	 fprintf(stderr,"Failed to parse the correct number of Jones matrices or phases\n");
-	 goto BARRIER;
+        fprintf(stderr,"Failed to parse the correct number of Jones matrices or phases\n");
+        goto BARRIER;
     }
     if (non_rts_gains) {
 
@@ -1556,7 +1573,9 @@ int main(int argc, char **argv) {
 
 
 
-    float *data_buffer = NULL;
+    float *data_buffer_psrfits = NULL;
+    float *data_buffer_vdif    = NULL;
+
     float *filter_buffer_X = NULL; // only needed for full PFB inversion (fft_mode == 3)
     float *filter_buffer_Y = NULL; // only needed for full PFB inversion (fft_mode == 3)
 
@@ -1569,12 +1588,13 @@ int main(int argc, char **argv) {
     float *filter_out_X_ptr = NULL; // only needed for full PFB inversion (fft_mode == 3)
     float *filter_out_Y_ptr = NULL; // only needed for full PFB inversion (fft_mode == 3)
 
-    int8_t *out_buffer_8 = NULL;
+    int8_t *out_buffer_8_psrfits = NULL;
+    int8_t *out_buffer_8_vdif    = NULL;
 
     if (make_psrfits == 1) {
-        data_buffer = (float *) valloc(nchan * outpol * pf.hdr.nsblk*sizeof(float));
-        out_buffer_8 = (int8_t *) malloc(outpol*nchan* pf.hdr.nsblk*sizeof(int8_t));
-        if (data_buffer == NULL){
+        data_buffer_psrfits = (float *) valloc(nchan * outpol * pf.hdr.nsblk*sizeof(float));
+        out_buffer_8_psrfits = (int8_t *) malloc(outpol*nchan* pf.hdr.nsblk*sizeof(int8_t));
+        if (data_buffer_psrfits == NULL){
             fprintf(stderr,"Failed to allocate data buffer\n");
             goto BARRIER;
         }
@@ -1584,7 +1604,7 @@ int main(int argc, char **argv) {
 
     if (make_vdif == 1) {
 
-        // data_buffer needs to hold a seconds worth of complex float samples //
+        // data_buffer_vdif needs to hold a seconds worth of complex float samples //
         // remember in vdif we pack the polarisations as channels
         // and most readers only want 2 channels so we are going to invert the pfb
         fprintf(stderr,"Samples per frame:%zu\n",vf.samples_per_frame);
@@ -1599,9 +1619,9 @@ int main(int argc, char **argv) {
         vf.sizeof_buffer = vf.frame_rate * vf.sizeof_beam; // one full second (1.28 million 2 bit samples)
 
         fprintf(stderr,"Size of buffer (pre-process):%zu\n",vf.sizeof_buffer);
-        data_buffer = (float *) valloc (vf.sizeof_buffer*sizeof(float)); // one full second (1.28 million time samples) as floats
-        out_buffer_8 = (int8_t *) malloc(vf.block_size);
-        if (data_buffer == NULL){
+        data_buffer_vdif = (float *) valloc (vf.sizeof_buffer*sizeof(float)); // one full second (1.28 million time samples) as floats
+        out_buffer_8_vdif = (int8_t *) malloc(vf.block_size);
+        if (data_buffer_vdif == NULL){
             fprintf(stderr,"Failed to allocate data buffer\n");
             goto BARRIER;
         }
@@ -1768,10 +1788,10 @@ int main(int argc, char **argv) {
         bzero(noise_floor,(nchan*npol*npol*sizeof(float)));
 
         if (offset_in_psrfits == 0 && make_psrfits == 1) {
-            bzero(data_buffer,(pf.hdr.nsblk*nchan*outpol*sizeof(float)));
+            bzero(data_buffer_psrfits,(pf.hdr.nsblk*nchan*outpol*sizeof(float)));
         }
         else if (offset_in_vdif == 0 && make_vdif == 1) {
-            bzero(data_buffer,(vf.sizeof_buffer*sizeof(float)));
+            bzero(data_buffer_vdif,(vf.sizeof_buffer*sizeof(float)));
         }
 
         for (index = 0; index < nstation*npol;index = index + 2) {
@@ -1990,7 +2010,7 @@ int main(int argc, char **argv) {
 
             if (offset_out_psrfits < pf.sub.bytes_per_subint) {
 
-                memcpy((void *)((char *)data_buffer + offset_in_psrfits),spectrum,sizeof(float)*nchan*outpol);
+                memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits),spectrum,sizeof(float)*nchan*outpol);
                 offset_in_psrfits += sizeof(float)*nchan*outpol;
 
                 //for (ch=0;ch<nchan;ch++) {
@@ -2002,25 +2022,26 @@ int main(int argc, char **argv) {
 
             }
 
+            // If we've arrived at the end of a second's worth of data...
             if (offset_out_psrfits == pf.sub.bytes_per_subint) {
 
                 if (type == 1) {
 
                     if (set_levels) {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer_psrfits,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
                         set_levels = 0;
                     }
                     else {
-                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
+                        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer_psrfits,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
                     }
-                    float2int8_trunc(data_buffer, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8);
-                    int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8);
+                    float2int8_trunc(data_buffer_psrfits, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8_psrfits);
+                    int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8_psrfits);
                    // for (i=0;i<pf.hdr.nsblk*nchan*outpol;i++) {
-                   //    fprintf(stdout,"%d:%"PRIu8":%f\n",i,out_buffer_8[i],data_buffer[i]);
+                   //    fprintf(stdout,"%d:%"PRIu8":%f\n",i,out_buffer_8_psrfits[i],data_buffer_psrfits[i]);
                    // }
-                    memcpy(pf.sub.data,out_buffer_8,pf.sub.bytes_per_subint);
+                    memcpy(pf.sub.data,out_buffer_8_psrfits,pf.sub.bytes_per_subint);
                 } else if (type == 2) {
-                    memcpy(pf.sub.data,data_buffer,pf.sub.bytes_per_subint);
+                    memcpy(pf.sub.data,data_buffer_psrfits,pf.sub.bytes_per_subint);
                 }
 
                 if (psrfits_write_subint(&pf) != 0) {
@@ -2033,29 +2054,13 @@ int main(int argc, char **argv) {
                 fprintf(stderr,"Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
                        pf.tot_rows, pf.T, pf.filenum, pf.status);
 
-
-
-
-                if (complex_weights) {
-                    phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
-                    if (phase_pos < 0) {
-                        fprintf(stderr,"get_phases has returned an error - closing down\n");
-                        goto BARRIER;
-                    }
-                    fprintf(stderr,"new phase checkpoint=%ld",phase_pos);
-                }
-                if (apply_jones) {
-                    jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
-                    if (jones_pos < 0) {
-                        fprintf(stderr,"get_jones has returned an error - closing down\n");
-                        goto BARRIER;
-                    }
-                    fprintf(stderr,"new jones checkpoint=%ld",jones_pos);
-                }
-
+                if (complex_weights)  get_new_phase = 1;
+                if (apply_jones)      get_new_jones = 1;
 
                 offset_out_psrfits = 0;
                 offset_in_psrfits = 0;
+
+                fprintf(stdout, "\n"); // To separate out the output between seconds
             }
 
 
@@ -2067,9 +2072,9 @@ int main(int argc, char **argv) {
             // in vdif mode we just want the beam sum - not the Stokes
             // this is essentially a two bit sampled (undetected) complex voltage stream
 
-            // we are beginnging with a beam that has both pols next to each other for each channel
+            // we are beginning with a beam that has both pols next to each other for each channel
 
-            float *data_buffer_ptr = &data_buffer[offset_in_vdif]; // are we going to keep going until we have a seconds worth ...
+            float *data_buffer_ptr = &data_buffer_vdif[offset_in_vdif]; // are we going to keep going until we have a seconds worth ...
             //fprintf(stderr,"offset %ld of %ld: %p\n",offset_in_vdif,vf.sizeof_buffer,data_buffer_ptr);
             // we are going to invert the nchan signals into a single channel
             // we may have some missing data but we do not know that
@@ -2175,11 +2180,11 @@ int main(int argc, char **argv) {
                     filter_out_Y_ptr = filter_out_Y;
                     for (t=0;t<vf.sizeof_buffer;t=t+4) {
 
-                        data_buffer[t] = *filter_out_X_ptr;
-                        data_buffer[t+1] = *(filter_out_X_ptr+1);
+                        data_buffer_vdif[t] = *filter_out_X_ptr;
+                        data_buffer_vdif[t+1] = *(filter_out_X_ptr+1);
 
-                        data_buffer[t+2] = *filter_out_Y_ptr;
-                        data_buffer[t+3] = *(filter_out_Y_ptr+1);
+                        data_buffer_vdif[t+2] = *filter_out_Y_ptr;
+                        data_buffer_vdif[t+3] = *(filter_out_Y_ptr+1);
 
                         filter_out_X_ptr += 2;
                         filter_out_Y_ptr += 2;
@@ -2206,11 +2211,11 @@ int main(int argc, char **argv) {
 
             }
 
-            if (offset_in_vdif == vf.sizeof_buffer) { // data_buffer is full_
+            if (offset_in_vdif == vf.sizeof_buffer) { // data_buffer_vdif is full_
                 if (vf.got_scales == 0) {
 
-                    get_mean_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,&rmean,&imean,&cmean);
-                    complex float stddev = get_std_dev_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0);
+                    get_mean_complex((complex float *) data_buffer_vdif,vf.sizeof_buffer/2.0,&rmean,&imean,&cmean);
+                    complex float stddev = get_std_dev_complex((complex float *) data_buffer_vdif,vf.sizeof_buffer/2.0);
 
                     fprintf(stderr,"DUAL POL: mean_r,sigma: %f,%f mean_i,sigma: %f,%f\n",rmean,crealf(stddev),imean,cimagf(stddev));
 
@@ -2228,7 +2233,7 @@ int main(int argc, char **argv) {
                     for (ch=0;ch<vf.nchan;ch=ch+1) {
                          fprintf(stderr,"ch: %d (stddev): %f\n",ch,vf.b_scales[ch]);
                     }
-                    set_level_occupancy((complex float *) data_buffer,vf.sizeof_buffer/2.0,&gain);
+                    set_level_occupancy((complex float *) data_buffer_vdif,vf.sizeof_buffer/2.0,&gain);
 
                     fprintf(stderr,"Gain by level occupancy %f\n",gain);
 
@@ -2237,62 +2242,79 @@ int main(int argc, char **argv) {
 
 
 
-                normalise_complex((complex float *) data_buffer,vf.sizeof_buffer/2.0,1.0/gain);
+                normalise_complex((complex float *) data_buffer_vdif,vf.sizeof_buffer/2.0,1.0/gain);
 
-                data_buffer_ptr = data_buffer;
+                data_buffer_ptr = data_buffer_vdif;
                 offset_out_vdif = 0;
 
                 while  (offset_out_vdif < vf.block_size) {
 
-                    memcpy((out_buffer_8+offset_out_vdif),&vhdr,32); // add the current header
+                    memcpy((out_buffer_8_vdif+offset_out_vdif),&vhdr,32); // add the current header
                     offset_out_vdif += 32; // offset into the output array
 
-                    float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8+offset_out_vdif));
-                    to_offset_binary( (out_buffer_8+offset_out_vdif),vf.sizeof_beam);
+                    float2int8_trunc(data_buffer_ptr, vf.sizeof_beam, -126.0, 127.0, (out_buffer_8_vdif+offset_out_vdif));
+                    to_offset_binary( (out_buffer_8_vdif+offset_out_vdif),vf.sizeof_beam);
 
                     offset_out_vdif += vf.frame_length - 32; // increment output offset
                     data_buffer_ptr = data_buffer_ptr + vf.sizeof_beam;
                     nextVDIFHeader(&vhdr,vf.frame_rate);
 
                 }
+
+                // If we've arrived at the end of a second's worth of data...
                 if (offset_out_vdif == vf.block_size) {
-                    // full seconds worth of samples
-                    vdif_write_second(&vf,out_buffer_8); // remember this header is the next one.
+                    // write a full seconds worth of samples
+                    vdif_write_second(&vf,out_buffer_8_vdif); // remember this header is the next one.
 
+                    if (complex_weights)  get_new_phase = 1;
+                    if (apply_jones)      get_new_jones = 1;
 
+                    offset_out_vdif = 0;
+                    offset_in_vdif  = 0;
 
+                    fprintf(stdout, "\n"); // To separate out the output between seconds
 
-                    if (complex_weights) {
-
-                        phase_pos = get_phases(nstation,nchan,npol,phases_file, &weights_array, &phases_array, &complex_weights_array,phase_pos);
-                        if (phase_pos == -1)
-                            goto BARRIER;
-
-                         fprintf(stderr,"new phase checkpoint=%ld\n",phase_pos);
-                    }
-                    if (apply_jones) {
-
-                        jones_pos = get_jones(nstation,nchan,npol,jones_file,&invJi,jones_pos);
-                        if (jones_pos == -1)
-                            goto BARRIER;
-
-                         fprintf(stderr,"new jones checkpoint=%ld\n",jones_pos);
-
-                    }
-
-                    offset_out_vdif=0;
-                    offset_in_vdif=0;
                 }
             }
         }
+
+        // Get the next second's worth of phases / jones matrices, if needed
+        if (get_new_phase) {
+
+            new_phase_pos = get_phases(nstation, nchan, npol, phases_file,
+                                       &weights_array, &phases_array,
+                                       &complex_weights_array, phase_pos);
+
+            if (new_phase_pos == -1)
+                goto BARRIER;
+
+            phase_pos = new_phase_pos;
+            get_new_phase = 0;
+            //fprintf(stderr,"new phase checkpoint=%ld\n",new_phase_pos);
+        }
+        if (get_new_jones) {
+
+            new_jones_pos = get_jones(nstation, nchan, npol, jones_file,
+                                      &invJi, jones_pos);
+
+            if (new_jones_pos == -1)
+                goto BARRIER;
+
+            jones_pos = new_jones_pos;
+            get_new_jones = 0;
+            //fprintf(stderr,"new jones checkpoint=%ld\n",new_jones_pos);
+
+        }
+
         if (!(make_vdif == 1 && !finished) && !(make_psrfits == 1 && !finished)) {
 
             fwrite(spectrum,sizeof(float),nchan,stdout);
 
-
         }
         specnum++;
-    }
+
+    } // end while loop
+
 BARRIER:
     if (execute == 1 && (fp != NULL)) {
         //cleanup
@@ -2332,7 +2354,7 @@ BARRIER:
                pf.tot_rows, pf.T, pf.filenum, pf.status);
 
         // free some memory
-        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,0,0,0,1);
+        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer_psrfits,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,0,0,0,1);
 
     }
 
