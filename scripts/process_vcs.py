@@ -18,8 +18,9 @@ from reorder_chans import *
 TMPL = """#!/bin/bash
 
 #SBATCH --export=NONE
-#SBATCH --output {outfile}
+#SBATCH --output={outfile}
 #SBATCH --account=mwaops
+#SBATCH --gid=mwaops
 #SBATCH --clusters={cluster}
 #
 {header}
@@ -493,7 +494,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
 				print "Couldn't find any recombine files. Aborting here."
 
 
-def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
+def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id):
     import re
 
     chan_file_dict = {} # used to keep track of which file needs how many nodes
@@ -520,7 +521,7 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
                 # include the SubBandIDs tag 
                 string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(subid),string)
 
-            fname = "{0}/chan{1}_rts.in".format(basepath,c[0])
+            fname = "{0}/rts_{1}_chan{2}.in".format(basepath,cal_obs_id,c[0])
             chan_file_dict[fname] = 1 # this particular rts_in file has only 1 channel
             with open(fname,'wb') as f:
                 f.write(string)
@@ -547,12 +548,12 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type):
                 string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)),string)
 
 	    if chan_type == "low":
-                fname = "{0}/chan{1}-{2}_rts.in".format(basepath,min(c),max(c))
+                fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,min(c),max(c))
 	    elif chan_type == "high":
-		fname = "{0}/chan{1}-{2}_rts.in".format(basepath,max(c),min(c))
+		fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,max(c),min(c))
 	    else:
 		print "No channel group given, assuming low"
-		fname = "{0}/chan{1}-{2}_rts.in".format(basepath,min(c),max(c))
+		fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,min(c),max(c))
 
             chan_file_dict[fname] = len(c)
             with open(fname,'wb') as f:
@@ -572,8 +573,9 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
     vcs_database_id = database_command(args, obs_id)
     #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
     
+    batch_dir = product_dir+"/batch"
     if rts_output_dir:
-        product_dir = rts_output_dir
+        product_dir = os.path.abspath(rts_output_dir)
     else:
         # as with the other functions product_dir should come as /group/mwaops/obs_id
         product_dir = "{0}/{1}/{2}/{3}".format(product_dir,'cal', cal_obs_id,'rts')
@@ -604,13 +606,24 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
 	    m.write("channels,{0}".format(",".join([str(c) for c in channels])))
 
 
+    #define some of the header/body text to go into the slurm submission script
+    body = []
+    body.append("module load cudatoolkit")
+    body.append("module load cfitsio")
+
+    body.append("cd {0}".format(product_dir))
+
     # from the channels, first figure out if they are all consecutive
     if channels[-1]-channels[0] == len(channels)-1: #TODO: this assumes also ascending order: is that always true??
 	# the channels are consecutive and this is a normal observation
 	# submit the jobs as normal
 	print "The channels are consecutive: this is a normal observation"
-	batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(product_dir, rts_run_file, product_dir, rts_in_file)
-    	submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+	nnodes = 25 
+	rts_batch = "RTS_{0}".format(cal_obs_id)
+	slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:20:00", "nodes":"{0}".format(nnodes)}
+	commands = list(body) # make a copy of body to then extend
+	commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes,rts_in_file))
+	submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
     else:
 	# it is a picket fence observation, we need to do some magic
 	# will use the given rts_in file as a base format
@@ -638,8 +651,8 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
 	basepath = os.path.dirname(rts_in_file)
 
 	# write out the RTS in files and keep track of the number of nodes required for each
-	lodict = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low")
-	hidict = write_rts_in_files(hichan_groups,basepath,rts_in_file,"high")
+	lodict = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low",cal_obs_id)
+	hidict = write_rts_in_files(hichan_groups,basepath,rts_in_file,"high",cal_obs_id)
 	chan_file_dict = lodict.copy()
 	chan_file_dict.update(hidict)
 
@@ -650,27 +663,18 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
         hilengths = set([len(h) for h in hichan_groups])
         lengths = lolengths.union(hilengths) # combine the sets
     
-        # read the base copy of run_rts.sh for editting
-        run_rts_contents = open(rts_run_file,"rb").read()
-        for length in lengths:
-     	    # add 1 to the length as it's 1 node per channel PLUS 1 master node
-    	    # e.g. so 2 consecutive channels need 3 nodes
-    	    tmp = run_rts_contents.replace("#SBATCH --nodes=25\n","#SBATCH --nodes={0}\n".format(length+1))
-    	    tmp = tmp.replace("aprun -n 25","aprun -n {0}".format(length+1))
-    	    # label the file as the number of channels (not total nodes used)
-    	    with open("{0}/run_rts{1}.sh".format(basepath,length),"wb") as f:
-    	        f.write(tmp)	
-    
         # Now submit the RTS jobs
         print "Submitting RTS jobs"
         
         for k,v in chan_file_dict.iteritems():
-    	    rts_run_file_tmp = "{0}/run_rts{1}.sh".format(basepath,v)
-    	    os.system("chmod +x {0}".format(rts_run_file_tmp))
-    	    batch_submit_line = "sbatch -p gpuq --account=mwaops --gid=mwaops --workdir={0} {1} {2} {3}".format(product_dir, rts_run_file_tmp, product_dir, k)
-    	    print batch_submit_line
-    	    submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)	
-        	
+       	    nnodes = v + 1
+	    channels = k.split('_')[-1].split(".")[0]
+ 	    rts_batch = "RTS_{0}_{1}".format(cal_obs_id,channels)
+            slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:45:00", "nodes":"{0}".format(nnodes)}
+            commands = list(body) # make a copy of body to then extend
+            commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes,k))
+            submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
+	   
 			
 
 def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing,
