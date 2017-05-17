@@ -7,42 +7,29 @@ Creation Date: /05/2016
 The MWA Pulsar Database was created by David Pallot and he wrote the database call functions.
 
 This code is used to submit observations to the MWA Pulsar Database. The goal is to calculate all need values (flux density, width, scattering) for each observation and  submit them to the pulsar database without having to manually input them.
-
-To load mwa_pulsar_client 
-export /group/mwaops/PULSAR/src/mwa-voltage/
-will be need to be included in your .bashrc 
 """
-#TODO actually get mwa_pulsar client to load properly
 
 __author__ = 'Nicholas Swainston'
 __date__ = '2016-05-12'
 
 
 import os
-import requests
 import argparse
-import matplotlib.pyplot as plt #compatibiality issues or isn't loaded for python 2.7
 import numpy as np
-import urllib
-import urllib2
-import json
-import math
 import subprocess
-from mwapy.pb import primary_beam
-import ephem
-from mwapy import ephem_utils,metadata
-from scipy import constants
-from astropy.coordinates import SkyCoord
-from astropy import units as u
-from astropy.time import Time
-#from mwa_pulsar_client import client
-#removes urllib3 ssl platform warnings
-import requests.packages.urllib3
-requests.packages.urllib3.disable_warnings()
-from mwapy.pb import get_Tsys #TODO change when moved to MWA tools
-from mwa_pulsar_client import client
 import sys
 from shutil import copyfile as cp
+import matplotlib.pyplot as plt
+
+import ephem
+from mwapy import ephem_utils
+
+#TODO check if I need the below two imports
+import requests.packages.urllib3
+requests.packages.urllib3.disable_warnings()
+
+from mwa_pulsar_client import client
+from mwapy.pb import get_Tsys 
 
 
 def psrcat(addr, auth, pulsar):
@@ -55,42 +42,13 @@ def psrcat(addr, auth, pulsar):
     Exception:
         pulsar not found or bad input.
     """
+    import requests
     path = 'https://{0}/{1}/'.format(addr, 'psrcat')
     payload = {'name': pulsar, 'format': 'json'}
     r = requests.post(url = path, auth = auth, data = payload)
     r.raise_for_status()
     return r.json()
 
-    
-def getmeta(service='obs', params=None):
-    """
-    getmeta(service='obs', params=None)
-    
-    Given a JSON web service ('obs', find, or 'con') and a set of parameters as
-    a Python dictionary, return the RA and Dec in degrees from the Python dictionary.
-    """
-    BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
-    if params:
-        data = urllib.urlencode(params)  # Turn the dictionary into a string with encoded 'name=value' pairs
-    else:
-        data = ''
-    #Validate the service name
-    if service.strip().lower() in ['obs', 'find', 'con']:
-        service = service.strip().lower()
-    else:
-        print "invalid service name: %s" % service
-        return
-    #Get the data
-    try:
-        result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
-    except urllib2.HTTPError as error:
-        print "HTTP error from server: code=%d, response:\n %s" % (error.code, error.read())
-        return
-    except urllib2.URLError as error:
-        print "URL or network error: %s" % error.reason
-        return
-    #Return the result dictionary
-    return result
     
 def sex2deg( ra, dec):
     """
@@ -100,6 +58,8 @@ def sex2deg( ra, dec):
     
     Convert sexagesimal coordinates to degrees.
     """ 
+    from astropy.coordinates import SkyCoord
+    from astropy import units as u
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.hourangle,u.deg))
     
     # return RA and DEC in degrees in degrees
@@ -149,6 +109,8 @@ def get_beam_power(obsid_data,
     the min_power then it outputs it to the text file.
 
     """
+    from mwapy.pb import primary_beam
+    from astropy.time import Time
     print "Calculating beam power"
     obsid,ra, dec, time, delays,centrefreq, channels = obsid_data
     
@@ -281,13 +243,13 @@ web_address = 'mwa-pawsey-volt01.pawsey.ivec.org'
 auth = ('mwapulsar','veovys9OUTY=')
 
 parser = argparse.ArgumentParser(description="""
-R|This code is used to submit observations to the MWA Pulsar Database. The goal is to calculate all need values (flux density, width, scattering) for each observation and  submit them to the pulsar database without having to manually input them.
-Two common uses are to simply upload a calibration file (if there is no observation on the database it will create a blank one that won't be able to be updated without deleting it at this time)\n
-> submit_to_database.py -c /scratch2/mwaops/vcs/1133775752/calibrate/1133775752-cal.tar.gz -o 1133775758 -p J2325-0530\n
-Another is to give the .bestprof file to calculate all values of the detection\n
-> submit_to_database.py -b 1120799848_PSR_0837-4135.pfd.bestprof\n
-To process the needed databse files can be done by:
-> submit_to_database.py  -o 1133775758 -p J2325-0530 --u_diagnostics --u_timeseries --u_archive
+This code is used to submit observations to the MWA Pulsar Database. The goal is to calculate all need values (flux density, width, scattering) for each observation and  submit them to the pulsar database without having to manually input them. It can also submit diagnostic files such as pulse profiles and calibrations. This code assumes that the observation is coherent and correlated using the RTS so please use --incoh and --andre if your observation is incoherent or correlated using Andre's Tools respectively.
+Two common uses are to simply upload a tarred calibration file (this can be done before a detection is uploaded)\n
+> submit_to_database.py -c <calibration tar file location> -o <obsid> --cal_id <calibrator obsid>\n
+Another is to upload the pulsars parameters, such as flux density and width, to the database. To do this the bestprof file is needed \n
+> submit_to_database.py -b <bestprof file location>\n
+An example of uploading a diagnostic file is:
+> submit_to_database.py  -o <obsid> -p <pulsar> --ppps <PRESTO prepfold output post script file location> --cal_id <calid>
 """, formatter_class=SmartFormatter)
 parser.add_argument('-o','--obsid',type=str,help='The obsid.')
 parser.add_argument('--incoh',action='store_true',help='Used for incoherent detections to accurately calculate gain. Default is coherent.')
@@ -295,27 +257,31 @@ parser.add_argument('--andre',action='store_true',help="Used for calibrations do
 parser.add_argument('-p','--pulsar',type=str,help='The pulsar J name.')
 parser.add_argument('-f','--fits_files',type=str,help='The fits files location to be used to for creating extra files. Recommended to end in *.fits and surrounded by quotation marks.')#TODO word this better
 parser.add_argument('--cal_id',type=str,help='The obsid of the calibrator.')
+
 calcargs = parser.add_argument_group('Detection Calculation Options', 'All the values of a pulsar detection for the MWA pulsar databse can be calculated by this code using either a .besprof file or a (Soon to be implimented dspsr equivalent). If neither are included then all values will be left as null and the observation(/detection) can still be used to upload files without the calculation being performed')
-calcargs.add_argument('-b','--bp_file',type=str,help='The location of the .bestprof file. Using this option will Can be used instead of inputing the obsid and pulsar.')
+calcargs.add_argument('-b','--bestprof',type=str,help='The location of the .bestprof file. Using this option will cause the code to calculate the needed paramters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputing the obsid and pulsar.')
 calcargs.add_argument('--start',type=str,help='The start time of the detection in seconds. For example: 0')
 calcargs.add_argument('--stop',type=str,help='The stop time of the detection in seconds. For example: 1000')
-#parser.add_argument('-n','--no_calc',action='store_true',help="Exits the code before the calculations begin. Used to only upload files after a previous calculation has been completed.")
+
 uploadargs = parser.add_argument_group('Upload options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
-uploadargs.add_argument('-a','--archive',type=str,help="The archive file location to be uploaded to the database. Expects a single file that is the output of dspsr using the pulsar's ephemeris.")
-uploadargs.add_argument('-t','--timeseries',type=str,help='The timeseries file location to be uploaded to the database. Expects a single file that is the output of dspsr in single pulse mode (the -s option).')
-uploadargs.add_argument('-d','--diagnostics',type=str,nargs='*',help="The diagnostics file location to be uploaded to the database. Expects three arguments of the locations of the presto's prepfold output, an intergrated pulse profile using dspsr's pav output and a waterfall plot of pulse phase vs frequency using dspsr's psrplot. If don't have all there right None instead, for example: --diagnostics None <waterfall_plot>.ps None")
-uploadargs.add_argument('-c','--calibration',type=str,help='The calibration solution file location to be uploaded to the database. Expects a single file so please zip or tar up multiple files.')
-dspsrargs = parser.add_argument_group('Dspsr Calculation Options', "These options will process the needed files for the database but will have to be uploaded using this script once checked. The files will be uploaded automatically when the dspsr scripts are tested more") #TODO remove when I'm confident with dspsr
+uploadargs.add_argument('-a','--archive',type=str,help="The dspsr archive file location to be uploaded to the database. Expects a single file that is the output of dspsr using the pulsar's ephemeris.")
+uploadargs.add_argument('--single_pulse_series',type=str,help='The single pulse series file location to be uploaded to the database. Expects a single file that is the output of dspsr in single pulse mode (the -s option).')
+uploadargs.add_argument('--ppps',type=str,help="The Presto Prepfold PostScript file location to be uploaded to the database.")
+uploadargs.add_argument('-i','--ippd',type=str,help="The Intergrates Pulse Profile given by Dspsr.")
+uploadargs.add_argument('-w','--waterfall',type=str,help="A waterfall plot of pulse phase vs frequency using dspsr's psrplot.")
+uploadargs.add_argument('-c','--calibration',type=str,help='The calibration solution file location to be uploaded to the database. Expects a single file so please zip or tar up the bandpass calibrations, the DI Jones matrices, the flagged_channels.txt file, the flagged_tiles.txt file, the rts.in file and the source file.')
+
+dspsrargs = parser.add_argument_group('Dspsr Calculation Options', "Requires the --fits_files. These options will send off dspsr jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the dspsr scripts are tested more") #TODO remove when I'm confident with dspsr
 dspsrargs.add_argument('--u_archive',action='store_true',help='The archive to be processed with dspsr and then uploaded to the database')
-dspsrargs.add_argument('--u_timeseries',action='store_true',help='The timeseries to be processed with dspsr and then uploaded to the database')
-dspsrargs.add_argument('--u_diagnostics',action='store_true',help='The diagnostics to be processed with dspsr and then uploaded to the database')
+dspsrargs.add_argument('--u_single_pulse_series',action='store_true',help='The single pulse series to be processed with dspsr and then uploaded to the database')
+dspsrargs.add_argument('--u_ppps',type=str,help="The Presto Prepfold PostScript file will be process by sending off PRESTO jobs.")
+dspsrargs.add_argument('--u_ippd',type=str,help="The Intergrates Pulse Profile file will be process by sending off DSPSR jobs.")
+dspsrargs.add_argument('--u_waterfall',type=str,help="A waterfall plot of pulse phase vs frequency file will be process by sending off DSPSR jobs.")
 args=parser.parse_args()
 
 
 
-#print client.detection_list(web_address, auth)
-
-#defults for incoh and calibrator type
+#defaults for incoh and calibrator type
 if args.incoh:
     incoh = True
     calibrator_type = None
@@ -330,17 +296,16 @@ else:
         calibrator_type = 2
 
 #get info from .bestprof file
-if args.bp_file:
-    obsid, pulsar, dm, period, period_uncer, time_detection, profile, num_bins = get_from_bestprof(args.bp_file)
-    print pulsar
+if args.bestprof:
+    obsid, pulsar, dm, period, period_uncer, time_detection, profile, num_bins = get_from_bestprof(args.bestprof)
 elif args.obsid and args.pulsar:
     num_bins = 128
     obsid = args.obsid
     pulsar = args.pulsar
-elif args.obsid and args.calibration and not (args.archive or args.timeseries or args.diagnostics or args.u_archive or args.u_timeseries or args.u_diagnostics):
+elif args.obsid and args.calibration and not (args.archive or args.single_pulse_series or args.ppps or args.ippd  or args.waterfall or args.u_archive or args.u_single_pulse_series or args.u_ppps or args.u_ippd  or args.u_waterfall):
     obsid = args.obsid
 else:
-    print "Please us either --obsid and --pulsar or --bp_file"
+    print "Please us either --obsid and --pulsar or --bestprof"
     sys.exit(0)
     
 """
@@ -356,7 +321,7 @@ if args.fits_files:
 else:
     fits_files_loc = '/scratch2/mwaops/vcs/'+str(obsid)+'/fits/*.fits'
 
-if args.pulsar or args.bp_file:
+if args.pulsar or args.bestprof:
     #Checks to see if the pulsar is already on the database
     pul_list_dict = client.pulsar_list(web_address, auth)
     pul_list_str = ''
@@ -388,7 +353,7 @@ maxfreq = float(max(channels))
 bandwidth = 30720000.
 
 
-if args.bp_file:
+if args.bestprof:
     #check if the obs time is entire obs. The meta data will round down to the nearest 200 seconds
     #(someitmmes 100 depending on the obs type) 
     entire_obs = False
@@ -460,38 +425,19 @@ if args.bp_file:
 
 
 
-
-
-    #Old gain calc
-    """
-    #once you know the time of the obs calc the average power
-    avg_power = get_beam_power([obsid,ra_obs, dec_obs, time_detection, delays ,centrefreq, channels],
-                                enter, exit, [[pul_ra, pul_dec]], option = 'e')
-                                
-    
-    #calc system temp by assiming attena temperature is a linear fucntion of frequency
-    t_sys = skytemp - 0.5 * centrefreq / 1000000.  + 125. #TODO check with engineers if this t_ant is accurate
-    print "Old T_sys:",t_sys
-
-    #once you know the time of the obs calc the average power
-    avg_power = get_beam_power([obsid,ra_obs, dec_obs, time_detection, delays ,centrefreq, channels],
-                                enter, exit, [[pul_ra, pul_dec]], option = 'e')
-    print "Average power (fraction)" + str(avg_power)
-
-    #gain calc
-
-    #gain for incoherent beam using a forumla from oransaye 2015
-    obswav = constants.c / (centrefreq)
-    gain = math.pow(obswav,2) * 4. *math.sqrt(128.) * avg_power\
-         / (constants.k * constants.pi * math.pow(10,26) )
-    print "Old gain val:",gain
-    """
-
-
-    #New gain calc
+    #Gain calc
+    import math
+    from astropy.time import Time
     sys_temp, gain_table, avg_power = get_Tsys.main(obsid,[pul_ra, pul_dec],enter,exit,incoh)
     gain = np.mean(gain_table)
     t_sys = np.mean(sys_temp)
+    
+    #remove unwanted files from get_Tsys and scripts within
+    from glob import glob
+    os.remove("{0}_gains_{1:.2f}.png".format(obsid,centrefreq))
+    files_to_remove = glob("{0}.0_{1:.2f}MHz_*_full_EE.*".format(obsid,centrefreq))
+    for f in files_to_remove:
+        os.remove(f)
 
     
     
@@ -665,7 +611,7 @@ if args.bp_file:
 
 
 
-if args.pulsar and not args.bp_file:  
+if args.pulsar and not args.bestprof:  
     #uploads files to database if there's the no calc option
     #checks if the observation is on the database
     try:
@@ -708,38 +654,54 @@ if args.archive:
                                 filetype = 1,
                                 filepath = str(args.archive))
 
-if args.timeseries:
-    print "Uploading timeseries file to database"
+if args.single_pulse_series:
+    print "Uploading single_pulse_series file to database"
     client.detection_file_upload(web_address, auth,
                                 observationid = str(obsid),
                                 pulsar = str(pulsar), 
                                 subband = int(subbands),
                                 incoherent = incoh,
                                 filetype = 2,
-                                filepath = str(args.timeseries))
+                                filepath = str(args.single_pulse_series))
 
-if args.diagnostics:
-    diag = args.diagnostics
-    for i in range(3):
-        if diag[i] != 'None':
-            if i == 0:
-                cp(str(args.diagnostics[0]) ,str(obsid) + "_" + str(pulsar) + ".prepfold.ps")
-                d_file_loc = str(obsid) + "_" + str(pulsar) + ".prepfold.ps"
-            if i == 1:
-                cp(str(args.diagnostics[1]),str(obsid) + "_" + str(pulsar) + ".prof.ps")
-                d_file_loc = str(obsid) + "_" + str(pulsar) + ".prof.ps"
-            if i ==2:
-                cp(str(args.diagnostics[2]),str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps")
-                d_file_loc = str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps"
-            print "Uploading diagnostic file to database"
-            client.detection_file_upload(web_address, auth, 
-                                observationid = str(obsid),
-                                pulsar = str(pulsar), 
-                                subband = int(subbands),
-                                incoherent = incoh,
-                                filetype = 3,
-                                filepath = str(d_file_loc))
-            os.system("rm " + d_file_loc)
+if args.ppps:
+    cp(str(args.ppps) ,str(obsid) + "_" + str(pulsar) + ".prepfold.ps")
+    d_file_loc = str(obsid) + "_" + str(pulsar) + ".prepfold.ps"
+    print "Uploading Presto Prepfold PostScript file to database"
+    client.detection_file_upload(web_address, auth, 
+                        observationid = str(obsid),
+                        pulsar = str(pulsar), 
+                        subband = int(subbands),
+                        incoherent = incoh,
+                        filetype = 3,
+                        filepath = str(d_file_loc))
+    os.system("rm " + d_file_loc)
+    
+if args.ippd:
+    cp(str(args.ippd),str(obsid) + "_" + str(pulsar) + ".prof.ps")
+    d_file_loc = str(obsid) + "_" + str(pulsar) + ".prof.ps"
+    print "Uploading Intergrates Pulse Profile file to database"
+    client.detection_file_upload(web_address, auth, 
+                        observationid = str(obsid),
+                        pulsar = str(pulsar), 
+                        subband = int(subbands),
+                        incoherent = incoh,
+                        filetype = 3,
+                        filepath = str(d_file_loc))
+    os.system("rm " + d_file_loc)
+    
+if args.waterfall:
+    cp(str(args.waterfall),str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps")
+    d_file_loc = str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps"
+    print "Uploading waterfall file to database"
+    client.detection_file_upload(web_address, auth, 
+                        observationid = str(obsid),
+                        pulsar = str(pulsar), 
+                        subband = int(subbands),
+                        incoherent = incoh,
+                        filetype = 3,
+                        filepath = str(d_file_loc))
+    os.system("rm " + d_file_loc)
     
 if args.calibration:
     cal_list = client.calibrator_list(web_address, auth)
@@ -754,11 +716,11 @@ if args.calibration:
                                               caltype = calibrator_type)#[u'id']
     
     if args.andre:
-        cp(str(args.calibration),str(args.cal_id) + "_" + str(obsid) + ".bin")
-        cal_file_loc = str(args.cal_id) + "_" + str(obsid) + ".bin"
+        cp(str(args.calibration),str(args.cal_id) + "_andre_calibrator.bin")
+        cal_file_loc = str(args.cal_id) + "_andre_calibrator.bin"
     else:
-        cp(str(args.calibration),str(args.cal_id) + "_" + str(obsid) + ".tar")
-        cal_file_loc = str(args.cal_id) + "_" + str(obsid) + ".tar"
+        cp(str(args.calibration),str(args.cal_id) + "_rts_calibrator.tar")
+        cal_file_loc = str(args.cal_id) + "_rts_calibrator.tar"
     
     print "Uploading calibration solution to database"
     client.calibrator_file_upload(web_address, auth, 
@@ -774,7 +736,7 @@ if args.calibration:
     
 
 
-if args.u_archive or args.u_timeseries or args.u_diagnostics:
+if args.u_archive or args.u_single_pulse_series or args.u_ppps or args.u_ippd  or args.u_waterfall:
     #runs all needed jobs to create all files
     with open(str(obsid) + '_' + str(pulsar) + '.batch','w') as batch_file:
         batch_line = "#!/bin/bash -l\n" +\
@@ -794,10 +756,10 @@ if args.u_archive or args.u_timeseries or args.u_diagnostics:
         if args.archive:
             batch_line = "ar_loc=" + str(args.archive)[:-3] + "\n"
             batch_file.write(batch_line)
-        elif args.timeseries:
-            batch_line = "ar_loc=" + str(args.timeseries)[:-3] + "\n"
+        elif args.single_pulse_series:
+            batch_line = "ar_loc=" + str(args.single_pulse_series)[:-3] + "\n"
             batch_file.write(batch_line)
-        elif args.u_diagnostics or args.u_archive:
+        elif args.u_ippd  or args.u_waterfall or args.u_archive:
             batch_line = "aprun -b -cc none -d $ncpus dspsr -E " +\
                             str(pulsar) + ".par -b " + str(num_bins) + " -A -cont -O "+\
                             str(obsid) + "_" + str(pulsar) + " " + "${fits}\n" +\
@@ -810,13 +772,20 @@ if args.u_archive or args.u_timeseries or args.u_diagnostics:
                          "ar_loc=" + str(obsid) + "_" + str(pulsar) + "\n"
             batch_file.write(batch_line)
         
-        if args.u_diagnostics:
+        if args.u_ippd:
             batch_line = "pav -CDFTp -N1,1 -g " + str(obsid) + "_" + str(pulsar) + ".prof.ps/cps " +\
-                             "${ar_loc}.ar\n" +\
-                         'psrplot -pG -jCDTp -j "B ' +str(num_bins) + '" -D '+ str(obsid) + "_" +\
+                             "${ar_loc}.ar\n"
+            batch_file.write(batch_line)
+        if args.u_waterfall:
+            batch_line = 'psrplot -pG -jCDTp -j "B ' +str(num_bins) + '" -D '+ str(obsid) + "_" +\
                              str(pulsar) + ".freq.vs.phase.ps/cps ${ar_loc}.ar\n" 
             batch_file.write(batch_line)
-        if args.u_timeseries:
+        if args.u_ppps:
+            batch_line = "psrcat -e " + str(pulsar) + " > " + str(pulsar) + ".eph\n" +\
+                         "aprun -b -cc none -d $ncpus prepfold -ncpus $ncpus -o "+ str(obsid) +\
+                            " -topo -runavg -noclip -par " + str(pulsar) + ".eph -nsub 256 ${fits}\n"
+            batch_file.write(batch_line)
+        if args.u_single_pulse_series:
             batch_line = "aprun -b -cc none -d $ncpus dspsr -E " + str(pulsar) + ".par -b " + str(num_bins)\
                             + " -cont -s -K ${fits}\n" +\
                          'psraddstring="psradd -o '+ str(obsid) + "_" + str(pulsar) + '.ts.ar "\n' +\
@@ -835,9 +804,9 @@ if args.u_archive or args.u_timeseries or args.u_diagnostics:
 """
 Program tests:
 python submit_to_database.py  ../1120799848/fold/1120799848_PSR_0837-4135.pfd.bestprof
-python submit_to_database.py --bp_file /group/mwaops/incoh_census_psr/PSR_Prof/1121173352nsch_PSR_1534-5334.pfd.bestprof  --u_archive --u_timeseries --u_diagnostics
-python submit_to_database.py --bp_file ../PSR_Prof/1152636328_PSR_1943-1237.pfd.bestprof  --u_archive --u_timeseries --u_diagnostics --incoh
+python submit_to_database.py --bestprof /group/mwaops/incoh_census_psr/PSR_Prof/1121173352nsch_PSR_1534-5334.pfd.bestprof  --u_archive --u_single_pulse_series --u_diagnostics
+python submit_to_database.py --bestprof ../PSR_Prof/1152636328_PSR_1943-1237.pfd.bestprof  --u_archive --u_single_pulse_series --u_diagnostics --incoh
 #^ no fits
-python submit_to_database.py --bp_file ../PSR_Prof/1139324488_PSR_0837+0610.pfd.bestprof --u_archive --u_timeseries --u_diagnostics --incoh
+python submit_to_database.py --bestprof ../PSR_Prof/1139324488_PSR_0837+0610.pfd.bestprof --u_archive --u_single_pulse_series --u_diagnostics --incoh
 
 """
