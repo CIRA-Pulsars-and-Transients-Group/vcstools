@@ -12,6 +12,7 @@
 #include "ascii_header.h"
 #include "mwa_header.h"
 #include "vdifio.h"
+#include <omp.h>
 #include <mpi.h>
 #include <glob.h>
 #include <fcntl.h>
@@ -1778,7 +1779,6 @@ int main(int argc, char **argv) {
             }
         }
 
-        int8_t *in_ptr=(int8_t *) buffer;
         int stat = 0;
         bzero(spectrum,(nchan*outpol*sizeof(float)));
         for (stat=0;stat<nchan;stat++) {
@@ -1796,7 +1796,9 @@ int main(int argc, char **argv) {
 
         for (index = 0; index < nstation*npol;index = index + 2) {
 
+#pragma omp parallel for
             for (ch=0;ch<nchan;ch++) {
+                int8_t *in_ptr = (int8_t *)buffer + index*nchan + 2*ch;
                 complex float e_true[2],e_dash[2];
 
                 if (swap_complex) {
@@ -1889,9 +1891,7 @@ int main(int argc, char **argv) {
                     incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index]*weights_array[index]*(e_true[0] * conj(e_true[0])))/wgt_sum;
                     incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index+1]*weights_array[index+1]*(e_true[1] * conj(e_true[1])))/wgt_sum;
                 }
-                in_ptr = in_ptr+2;
-            }
-            in_ptr = in_ptr + (nchan*2); // next pol0
+            } // end OMP for loop
         }
 
         // detect the beam or prep from invert_pfb
