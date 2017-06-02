@@ -775,10 +775,11 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
     # VDIF needs gpu for inverting the pfb, otherwise cpu nodes are fine
     if bf_format == " -v psrfits_header.txt" or bf_format == " -v psrfits_header.txt -f psrfits_header.txt":
         partition = "gpuq"
-        openmp_line = "export OMP_NUM_THREADS=8\n"
+        n_omp_threads = 8
     else:
         partition = "workq"
-        openmp_line = "export OMP_NUM_THREADS=20\n"
+        n_omp_threads = 20
+    openmp_line = "export OMP_NUM_THREADS={0}\n".format(n_omp_threads)
 
     # Run one coarse channel per node
     for coarse_chan in range(24):
@@ -797,7 +798,7 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
             batch_file.write(openmp_line)
-            aprun_line = "aprun -n 1 -N 1 {0}/make_beam -o {1} -b {2} -e {3} -a 128 -n 128 -N {4} -t 1 {5} -c phases.txt -w flags.txt -d {6}/combined -D {7}/ {8} \n".format(execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format)
+            aprun_line = "aprun -n 1 -d {0} {1}/make_beam -o {2} -b {3} -e {4} -a 128 -n 128 -N {5} -t 1 {6} -c phases.txt -w flags.txt -d {7}/combined -D {8}/ {9} \n".format(n_omp_threads, execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format)
             batch_file.write(aprun_line)
         
         submit_line = "sbatch --workdir={0} --partition={1} -d afterok:{2} --gid=mwaops --mail-user={3} {4} \n".format(pointing_dir, partition, dependsOn, e_mail, make_beam_batch)
