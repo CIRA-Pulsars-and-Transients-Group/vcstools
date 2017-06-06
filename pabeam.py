@@ -296,12 +296,13 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 			if np.abs(array_factor)**2 > array_factor_max: array_factor_max = np.abs(array_factor)**2
 	
 			# calculate the tile beam at the given Az,ZA pixel
-			#tile_xpol,tile_ypol = pb.MWA_Tile_full_EE([[za]],[[az]],freq=obsfreq,delays=[delays,delays],power=True,zenithnorm=True,interp=False)
-			tile_xpol,tile_ypol = pb.MWA_Tile_analytic(za,az,freq=obsfreq,delays=delays,power=True,zenithnorm=True)
+			tile_xpol,tile_ypol = pb.MWA_Tile_full_EE([[za]],[[az]],freq=obsfreq,delays=[delays,delays],power=True,zenithnorm=True,interp=False)
+			#tile_xpol,tile_ypol = pb.MWA_Tile_analytic(za,az,freq=obsfreq,delays=delays,power=True,zenithnorm=True)
 			tile_pattern = (tile_xpol+tile_ypol)/2.0
 			
 			# calculate the phased array power pattern 
-			phased_array_pattern = tile_pattern * np.abs(array_factor)**2			
+			#phased_array_pattern = tile_pattern * np.abs(array_factor)**2			
+			phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
 		
 			# append results to a reference list for later	
 			results.append([np.degrees(za),np.degrees(az),phased_array_pattern])
