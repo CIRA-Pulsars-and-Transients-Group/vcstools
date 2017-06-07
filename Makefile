@@ -34,7 +34,8 @@ DATABASE_TARGETS = submit_to_database.py\
 UTILITY_TARGETS = zapchan.py\
 	calc_ephem.py \
 	check_disk_usage.sh \
-	check_quota.sh
+	check_quota.sh \
+	plot_tilebeams.py
 
 TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS)) $(addprefix database/, $(DATABASE_TARGETS)) $(addprefix utils/, $(UTILITY_TARGETS))
 
