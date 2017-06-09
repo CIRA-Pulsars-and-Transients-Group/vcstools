@@ -9,6 +9,9 @@
 #define RAD2DEG (180.0 / PI)
 #define DEG2RAD (PI / 180.0)
 
+#define MWA_LAT -26.703319  //Array latitude, degrees North
+#define MWA_LON 116.67081   //Array longitude, degrees East
+#define MWA_HGT 377.827     //Array elevation above sea level, in meters
 
 /* struct to hold all the wavenumbers for each (Az,ZA) */
 typedef struct wavenums_t
@@ -52,20 +55,56 @@ void calcWaveNumber(double lambda, double az, double za, wavenums* p_wn)
      *      theta = za
      *      phi = pi/2 - az
     */
-
     p_wn->kx = a_sinTheta * cos(az); 
     p_wn->ky = a_sinTheta * sin(az); 
     p_wn->kz = a_sinTheta;   
 }
 
-void calcTargetAZZA(char* ra, char* dec)
+void calcTargetAZZA(char* ra_hhmmss, char* dec_ddmmss)
 {
-    int* jflag, start;
-    double ra_rad, dec_rad;
+    int ra_ih, ra_im, ra_j;
+    int dec_id, dec_im, dec_j;
+    int sign;
+    double ra_rad, ra_fs;
+    double dec_rad, dec_fs;
+    char id_str[20];
 
-    start = 1;
-    slaDfltin(ra, &start, &ra_rad, &jflag); // function expects pointers to be passed;
-    printf("flag: %d  ra: %f\n", &jflag, &ra_rad); // print whatever was put in those memory locations
+    // read ra string into hours, minutes and seconds
+    sscanf(ra_hhmmss,"%d:%d:%lf",&ra_ih,&ra_im,&ra_fs);
+
+    //read dec string into degrees, arcmin and arsec (extra steps for sign, '+' or '-')
+    sscanf(dec_ddmmss,"%s:%d:%lf",id_str,&dec_im,&dec_fs);
+    if (id_str[0] == '-') 
+    {
+        sign = -1;
+    }
+    else 
+    {
+        sign = 1;
+    }
+    sscanf(dec_ddmmss,"%d:%d:%lf",&dec_id,&dec_im,&dec_fs); // assign values
+    dec_id = dec_id * sign; // ensure correct sign
+
+    
+    // convert angles to radians
+    slaCtf2r(ra_ih, ra_im, ra_fs, &ra_rad, &ra_j); //right ascension
+    slaDaf2r(dec_id, dec_im, dec_fs, &dec_rad, &dec_j); //declination
+
+    if (ra_j != 0) 
+    {
+        fprintf(stderr,"Error parsing %s as hhmmss\nslalib error code: j=%d\n",ra_hhmmss,ra_j);
+        fprintf(stderr,"ih = %d, im = %d, fs = %lf\n", ra_ih, ra_im, ra_fs);
+        exit(-1);
+    }
+
+    if (dec_j != 0) 
+    {
+        fprintf(stderr,"Error parsing %s as ddmmss\nslalib error code: j=%d\n",dec_ddmmss,dec_j);
+        fprintf(stderr,"ih = %d, im = %d, fs = %lf\n", dec_id, dec_im, dec_fs);
+        exit(-1);
+    }
+
+    printf("%f %f\n",ra_rad,dec_rad);
 }
 
 
@@ -82,7 +121,7 @@ int main()
     za_step = 1;
 
     // copy RA and DEC coords into ra, dec variables
-    strcpy(ra,"05:34:31.97");
+    strcpy(ra,"06:34:31.97");
     strcpy(dec,"+22:00:52.06");
 
     for (double az = 0.0; az < 360.0; az += az_step)
