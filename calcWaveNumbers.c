@@ -70,19 +70,13 @@ void calcTargetAZZA(char* ra_hhmmss, char* dec_ddmmss)
     char id_str[20];
 
     // read ra string into hours, minutes and seconds
-    sscanf(ra_hhmmss,"%d:%d:%lf",&ra_ih,&ra_im,&ra_fs);
+    sscanf(ra_hhmmss, "%d:%d:%lf", &ra_ih, &ra_im, &ra_fs);
 
     //read dec string into degrees, arcmin and arsec (extra steps for sign, '+' or '-')
-    sscanf(dec_ddmmss,"%s:%d:%lf",id_str,&dec_im,&dec_fs);
-    if (id_str[0] == '-') 
-    {
-        sign = -1;
-    }
-    else 
-    {
-        sign = 1;
-    }
-    sscanf(dec_ddmmss,"%d:%d:%lf",&dec_id,&dec_im,&dec_fs); // assign values
+    sscanf(dec_ddmmss, "%s:%d:%lf", id_str, &dec_im, &dec_fs);
+    sign = (id_str[0] == '-' ? -1 : 1); // check sign of dec
+
+    sscanf(dec_ddmmss, "%d:%d:%lf", &dec_id, &dec_im, &dec_fs); // assign values
     dec_id = dec_id * sign; // ensure correct sign
 
     
@@ -92,19 +86,19 @@ void calcTargetAZZA(char* ra_hhmmss, char* dec_ddmmss)
 
     if (ra_j != 0) 
     {
-        fprintf(stderr,"Error parsing %s as hhmmss\nslalib error code: j=%d\n",ra_hhmmss,ra_j);
+        fprintf(stderr,"Error parsing %s as hhmmss\nslalib error code: j=%d\n", ra_hhmmss, ra_j);
         fprintf(stderr,"ih = %d, im = %d, fs = %lf\n", ra_ih, ra_im, ra_fs);
         exit(-1);
     }
 
     if (dec_j != 0) 
     {
-        fprintf(stderr,"Error parsing %s as ddmmss\nslalib error code: j=%d\n",dec_ddmmss,dec_j);
+        fprintf(stderr,"Error parsing %s as ddmmss\nslalib error code: j=%d\n", dec_ddmmss, dec_j);
         fprintf(stderr,"ih = %d, im = %d, fs = %lf\n", dec_id, dec_im, dec_fs);
         exit(-1);
     }
 
-    printf("%f %f\n",ra_rad,dec_rad);
+    
 }
 
 
