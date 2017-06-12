@@ -3,7 +3,7 @@
 CFLAGS=-Wall -O3
 
 
-wavenum: calcWaveNumbers.c
+pabeam: pabeam.c
 	gcc $(CFLAGS) -o $@ $^ -L/usr/lib -lm -lsla 
 
 
