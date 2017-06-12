@@ -1,6 +1,6 @@
 
 
-CFLAGS=-Wall
+CFLAGS=-Wall -O3
 
 
 wavenum: calcWaveNumbers.c
