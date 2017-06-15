@@ -42,6 +42,8 @@ void getTilePositions(char *metafits, int ninput,\
         float *n_pols, float *e_pols, float *h_pols,\
         float *n_tile, float *e_tile, float *h_tile);
 
+
+
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
 {
     /* Convert a UTC string (YYYY-MM-DDThh:mm:ss.ss) into MJD in radians.
@@ -124,13 +126,13 @@ void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_
     if (ra_j != 0) 
     {
         fprintf(stderr,"Error parsing %s as hhmmss\nslalib error code: j=%d\n", ra_hhmmss, ra_j);
-        fprintf(stderr,"ih = %d, im = %d, fs = %lf\n", ra_ih, ra_im, ra_fs);
+        fprintf(stderr,"ih = %d, im = %d, fs = %f\n", ra_ih, ra_im, ra_fs);
         exit(-1);
     }
     if (dec_j != 0) 
     {
         fprintf(stderr,"Error parsing %s as ddmmss\nslalib error code: j=%d\n", dec_ddmmss, dec_j);
-        fprintf(stderr,"ih = %d, im = %d, fs = %lf\n", dec_id, dec_im, dec_fs);
+        fprintf(stderr,"ih = %d, im = %d, fs = %f\n", dec_id, dec_im, dec_fs);
         exit(-1);
     }
 
@@ -241,22 +243,24 @@ void getTilePositions(char *metafits, int ninput,\
 }
 
 
-int main()
+
+int main(int argc, char *argv[])
 {
-    char ra[64], dec[64], time[64], metafits[100];
+    char ra[64], dec[64], time[64], metafits[100], flagfile[100];
+    int flagged[128];
     int ntiles = 0;
     double lambda, freq, az_step, za_step;
     double ph, omega_A, af_max, eff_area, gain, eta;
     long double complex af;
     tazza target;
-    wavenums wn, target_wn; 
+    wavenums wn, target_wn;
 
     freq = 184.96e6;
     lambda = SOL/freq;
     eta = 1.0;
 
-    az_step = 0.01;
-    za_step = 1;
+    az_step = 0.1;
+    za_step = 0.1;
 
     
 
@@ -298,8 +302,7 @@ int main()
     printf("Computing array factor\n");
     for (double az = 0.0; az < 360.0; az += az_step)
     {
-        /* one loop is ok, but we'll want to vectorise the next parts... */
-        
+        /* one loop is ok, but we'll want to vectorise the next parts... */ 
         for (double za = 0.0; za <= 90.0; za += za_step)
         {
             af = 0.0 + 0.0*I;
@@ -321,14 +324,19 @@ int main()
 
             // calculate this pixel's contribution to beam solid angle
             omega_A = omega_A + sin(za*DEG2RAD) * powl(cabsl(af),2) * (az_step*DEG2RAD) * (za_step*DEG2RAD);
-        }
+
+            printf("\rCalculating: %.1f%%",(az/360.0)*100); fflush(stdout);
+        } 
     }
-    printf("Array factor max: %f\n",af_max);
-    printf("Beam solid angle (sr): %f\n",omega_A);
+    printf("\n");
+    printf("Finished -- now computing relevant parameters:\n");
     eff_area = eta * pow((SOL / freq),2) * (4 * PI / omega_A);
     gain = (1e-26) * eff_area / (2 * KB);
-    printf("Effective collecting area (m^2): %.4f\n",eff_area);
-    printf("Effective array gain (K/Jy): %.4f\n",gain);
+
+    printf("   Array factor max:                 %f\n",af_max);
+    printf("   Beam solid angle (sr):            %f\n",omega_A);
+    printf("   Effective collecting area (m^2):  %.4f\n",eff_area);
+    printf("   Effective array gain (K/Jy):      %.4f\n",gain);
     
 
     return 0;
