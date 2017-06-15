@@ -243,7 +243,6 @@ void getTilePositions(char *metafits, int ninput,\
 }
 
 
-
 int main(int argc, char *argv[])
 {
     char ra[64], dec[64], time[64], metafits[100], flagfile[100];
@@ -259,8 +258,8 @@ int main(int argc, char *argv[])
     lambda = SOL/freq;
     eta = 1.0;
 
-    az_step = 0.1;
-    za_step = 0.1;
+    az_step = 1;
+    za_step = 1;
 
     
 
@@ -299,7 +298,6 @@ int main(int argc, char *argv[])
     omega_A = 0.0;
     eff_area = 0.0;
     af_max = -1.0;
-    printf("Computing array factor\n");
     for (double az = 0.0; az < 360.0; az += az_step)
     {
         /* one loop is ok, but we'll want to vectorise the next parts... */ 
@@ -309,7 +307,8 @@ int main(int argc, char *argv[])
             calcWaveNumber(lambda, PI/2-(az*DEG2RAD), za*DEG2RAD, &wn);
             for (int i = 0; i < ntiles; i++)
             {
-                // af = exp(i*k.r)exp(i*k'.r)*
+                // af = exp(i*k.r)exp(i*k'.r)* = exp(i*[k-k'].r)
+                //    = cos([k-k'].r) + i*sin([k-k'].r)
                 // where k' is the target pointing wavenumbers, thus
                 // af is maximised when pointing directly at the target
                 ph = (wn.kx - target_wn.kx) * E_tile[i] +\
@@ -325,7 +324,7 @@ int main(int argc, char *argv[])
             // calculate this pixel's contribution to beam solid angle
             omega_A = omega_A + sin(za*DEG2RAD) * powl(cabsl(af),2) * (az_step*DEG2RAD) * (za_step*DEG2RAD);
 
-            printf("\rCalculating: %.1f%%",(az/360.0)*100); fflush(stdout);
+            printf("\rComputing array factor: %.1f%%",(az/360.0)*100); fflush(stdout);
         } 
     }
     printf("\n");
