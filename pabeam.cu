@@ -255,11 +255,12 @@ void getDeviceDimensions(int *nDevices)
     {
         cudaDeviceProp prop; // create struct to store device info
         cudaGetDeviceProperties(&prop, i); // populate prop for this device
-        printf("Total global memory available: %f MB\n",prop.totalGlobalMem/1e6);
-        printf("Max grid size (# blocks): (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
+        printf("Total global memory available:    %f       MB\n",prop.totalGlobalMem/1e6);
+        printf("Max grid size (# blocks):        (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
         printf("Max number of threads per block: (%d, %d, %d)\n", prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
     }
 }
+
 
 
 int main(int argc, char *argv[])
@@ -283,6 +284,7 @@ int main(int argc, char *argv[])
 
     // get info about avilable devices
     getDeviceDimensions(&nDevices);
+    printf("Number of devices: %d",nDevices);
 
     // copy RA and DEC coords into ra, dec variables
     strcpy(ra,"05:34:31.97");
@@ -324,7 +326,7 @@ int main(int argc, char *argv[])
         /* one loop is ok, but we'll want to vectorise the next parts... */ 
         for (double za = 0.0; za <= 90.0; za += za_step)
         {
-            af = make_cuDoubleComplex(0.0,0.0);
+            af = make_cuDoubleComplex(0.0, 0.0);
             calcWaveNumber(lambda, PI/2-(az*DEG2RAD), za*DEG2RAD, &wn);
             for (int i = 0; i < ntiles; i++)
             {
@@ -335,16 +337,15 @@ int main(int argc, char *argv[])
                 ph = (wn.kx - target_wn.kx) * E_tile[i] +\
                      (wn.ky - target_wn.ky) * N_tile[i] +\
                      (wn.kz - target_wn.kz) * H_tile[i];
-                cuCadd(af, make_cuDoubleComplex(cos(ph),sin(ph))); // sum over tiles
+                cuCadd(af, make_cuDoubleComplex(cos(ph), sin(ph))); // sum over tiles
             }
-            af = cuCdiv(af,make_cuDoubleComplex(ntiles,0)); // normalise it
+            af = cuCdiv(af, make_cuDoubleComplex(ntiles, 0)); // normalise it
             
             // keep array factor maximum up-to-date (booking keeping)
             if (pow(cuCabs(af),2) > af_max) {af_max = pow(cuCabs(af),2);}
 
             // calculate this pixel's contribution to beam solid angle
             omega_A = omega_A + sin(za*DEG2RAD) * pow(cuCabs(af),2) * (az_step*DEG2RAD) * (za_step*DEG2RAD);
-            printf("af = %f + %fi",cuCreal(af),cuCimag(af));
             //printf("\rComputing array factor: %.1f%%",(az/360.0)*100); fflush(stdout);
         } 
     }
