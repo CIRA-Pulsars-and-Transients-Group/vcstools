@@ -242,7 +242,6 @@ void getTilePositions(char *metafits, int ninput,\
     }
 }
 
-
 int getFlaggedTiles(char *badfile, int *badtiles)
 {
     /* Open the flagged tiles file, read into an array and count how many lines are read.
@@ -270,6 +269,27 @@ int getFlaggedTiles(char *badfile, int *badtiles)
     return nlines;
 }
 
+void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile, int *badtiles, int nbad, int nelements)
+{
+    int counter=0,bidx=0;
+    
+    for (int b=0; b < nbad; b++)
+    {
+        // for each bad tile index in badtiles
+        bidx = badtiles[b];
+        for (int i=(bidx-counter); i < nelements-1; i++)
+        {
+            // shift each element in tile positions to the left by one
+            // excluding the last element
+            n_tile[i] = n_tile[i+1];
+            e_tile[i] = e_tile[i+1];
+            h_tile[i] = h_tile[i+1];
+        }
+        // array shifted left one, but the bad indexes refer to original tile positions
+        // so we need to move the bad index to the left by one, too
+        counter++;
+    }
+}
 
 
 
@@ -304,6 +324,7 @@ int main(int argc, char *argv[])
     printf("Computing wavenumbers towards target\n");
     calcWaveNumber(lambda, PI/2-target.az, target.za, &target_wn);
 
+    // Have to get tile positions and remove the tiles that were flagged
     printf("Determining number of tiles from metafits\n");
     ntiles = getNumTiles(metafits); // returns 2x the number of tiles, 1 per pol.
     ntiles = ntiles / 2;
@@ -313,9 +334,11 @@ int main(int argc, char *argv[])
     float *N_pols = (float *)malloc(2 * ntiles * sizeof(float));
     float *E_pols = (float *)malloc(2 * ntiles * sizeof(float));
     float *H_pols = (float *)malloc(2 * ntiles * sizeof(float));
-    // allocate static memory for tile positions
-    float N_tile[ntiles], E_tile[ntiles], H_tile[ntiles];
-    
+    // allocate dynamic memory for tile positions
+    float *N_tile = (float *)malloc(ntiles * sizeof(float));
+    float *E_tile = (float *)malloc(ntiles * sizeof(float));
+    float *H_tile = (float *)malloc(ntiles * sizeof(float));
+
     printf("Getting tile positions\n");
     getTilePositions(metafits, 2*ntiles,\
             N_pols, E_pols, H_pols,\
@@ -336,7 +359,24 @@ int main(int argc, char *argv[])
         flagged[i] = flagged_tiles[i];
     }
     free(flagged_tiles);
+    removeFlaggedTiles(N_tile, E_tile, H_tile, flagged, ntoread, ntiles);
+    // but, the last ntoread elements are pointless 
+    // so now we can allocate static memory for the final list of positions
+    float xpos[ntiles-ntoread], ypos[ntiles-ntoread], zpos[ntiles-ntoread];
 
+    for (int i=0; i<(ntiles-ntoread); i++)
+    {
+        // x = East, y = North, z = Height
+        xpos[i] = E_tile[i];
+        ypos[i] = N_tile[i];
+        zpos[i] = H_tile[i];
+    }
+    
+    
+
+    free(N_tile);
+    free(E_tile);
+    free(H_tile);
     
 
     ph = 0.0;
@@ -356,9 +396,9 @@ int main(int argc, char *argv[])
                 //    = cos([k-k'].r) + i*sin([k-k'].r)
                 // where k' is the target pointing wavenumbers, thus
                 // af is maximised when pointing directly at the target
-                ph = (wn.kx - target_wn.kx) * E_tile[i] +\
-                     (wn.ky - target_wn.ky) * N_tile[i] +\
-                     (wn.kz - target_wn.kz) * H_tile[i];
+                ph = (wn.kx - target_wn.kx) * xpos[i] +\
+                     (wn.ky - target_wn.ky) * ypos[i] +\
+                     (wn.kz - target_wn.kz) * zpos[i];
                 af += cos(ph) + 1.0*I*sin(ph); // sum over all tiles
             }
             af = af / ntiles; // normalise it
