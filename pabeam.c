@@ -42,7 +42,8 @@ void getTilePositions(char *metafits, int ninput,\
         float *n_pols, float *e_pols, float *h_pols,\
         float *n_tile, float *e_tile, float *h_tile);
 int getFlaggedTiles(char *badfile, int *badtiles);
-
+void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
+        int *badtiles, int nbad, int nelements)
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
 {
@@ -260,7 +261,7 @@ int getFlaggedTiles(char *badfile, int *badtiles)
 
     while(fscanf(fp, "%d\n", &tile) > 0)
     {
-        printf("    flagged tile: %d\n",tile);
+        printf("    bad tile: %d\n",tile);
         badtiles[i++] = tile;
         nlines++;
     }
@@ -338,15 +339,14 @@ int main(int argc, char *argv[])
     float *N_tile = (float *)malloc(ntiles * sizeof(float));
     float *E_tile = (float *)malloc(ntiles * sizeof(float));
     float *H_tile = (float *)malloc(ntiles * sizeof(float));
-
     printf("Getting tile positions\n");
     getTilePositions(metafits, 2*ntiles,\
             N_pols, E_pols, H_pols,\
-            N_tile, E_tile, H_tile); // East = x, North = y, Height = z
+            N_tile, E_tile, H_tile);
     free(N_pols);
     free(E_pols);
     free(H_pols);
-
+    
     // have to remove tiles from the flagged tiles list.
     // each row in the list is the index of the tile that needs to be removed.
     printf("Getting flagged tiles\n");
@@ -354,12 +354,14 @@ int main(int argc, char *argv[])
     int ntoread;
     ntoread = getFlaggedTiles(flagfile, flagged_tiles);
     int flagged[ntoread];
-    for (int i=0; i<ntoread; i++)
+    
+    for (int i=0; i < ntoread; i++)
     {
         flagged[i] = flagged_tiles[i];
     }
-    free(flagged_tiles);
+    printf("    removing %d flagged tiles\n",ntoread);
     removeFlaggedTiles(N_tile, E_tile, H_tile, flagged, ntoread, ntiles);
+
     // but, the last ntoread elements are pointless 
     // so now we can allocate static memory for the final list of positions
     float xpos[ntiles-ntoread], ypos[ntiles-ntoread], zpos[ntiles-ntoread];
@@ -370,14 +372,13 @@ int main(int argc, char *argv[])
         xpos[i] = E_tile[i];
         ypos[i] = N_tile[i];
         zpos[i] = H_tile[i];
-    }
-    
-    
-
+    }   
     free(N_tile);
     free(E_tile);
     free(H_tile);
-    
+  
+     
+
 
     ph = 0.0;
     omega_A = 0.0;
