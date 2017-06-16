@@ -41,7 +41,7 @@ int getNumTiles(char *metafits);
 void getTilePositions(char *metafits, int ninput,\
         float *n_pols, float *e_pols, float *h_pols,\
         float *n_tile, float *e_tile, float *h_tile);
-
+int getFlaggedTiles(char *badfile, int *badtiles);
 
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
@@ -243,14 +243,43 @@ void getTilePositions(char *metafits, int ninput,\
 }
 
 
+int getFlaggedTiles(char *badfile, int *badtiles)
+{
+    /* Open the flagged tiles file, read into an array and count how many lines are read.
+     * Update the array pointer and return number of elements to read from that array
+     * (as it's initialised to be able to hold every tile) */
+    FILE *fp;
+    int tile=0, i=0;
+    int nlines=0;
+
+    fp = fopen(badfile,"r");
+    if (fp == NULL)
+    {
+        fprintf(stderr,"Error opening flagged tiles file.");
+        exit(-1);
+    }
+
+    while(fscanf(fp, "%d\n", &tile) > 0)
+    {
+        printf("    flagged tile: %d\n",tile);
+        badtiles[i++] = tile;
+        nlines++;
+    }
+
+    fclose(fp);
+    return nlines;
+}
+
+
+
+
 int main(int argc, char *argv[])
 {
     char ra[64], dec[64], time[64], metafits[100], flagfile[100];
-    int flagged[128];
     int ntiles = 0;
     double lambda, freq, az_step, za_step;
     double ph, omega_A, af_max, eff_area, gain, eta;
-    long double complex af;
+    double complex af;
     tazza target;
     wavenums wn, target_wn;
 
@@ -263,11 +292,12 @@ int main(int argc, char *argv[])
 
     
 
-    // copy RA and DEC coords into ra, dec variables
+    // copy test values into appropriate variables
     strcpy(ra,"05:34:31.97");
     strcpy(dec,"+22:00:52.06");
     strcpy(time,"2014-11-07T16:53:20");
     strcpy(metafits,"1099414416_metafits_ppds.fits");
+    strcpy(flagfile,"flagged_tiles.txt");
 
     printf("Getting target (Az,ZA)\n");
     calcTargetAZZA(ra, dec, time, &target);
@@ -275,9 +305,9 @@ int main(int argc, char *argv[])
     calcWaveNumber(lambda, PI/2-target.az, target.za, &target_wn);
 
     printf("Determining number of tiles from metafits\n");
-    ntiles = getNumTiles(metafits); // returns 2x the number of tiles, 1 per pol.   
+    ntiles = getNumTiles(metafits); // returns 2x the number of tiles, 1 per pol.
     ntiles = ntiles / 2;
-    printf("  number of tiles: %d\n",ntiles); 
+    printf("    number of tiles: %d\n",ntiles); 
 
     // allocate dynamic memory for intermediate tile position arrays
     float *N_pols = (float *)malloc(2 * ntiles * sizeof(float));
@@ -293,6 +323,21 @@ int main(int argc, char *argv[])
     free(N_pols);
     free(E_pols);
     free(H_pols);
+
+    // have to remove tiles from the flagged tiles list.
+    // each row in the list is the index of the tile that needs to be removed.
+    printf("Getting flagged tiles\n");
+    int *flagged_tiles = (int *)malloc(ntiles * sizeof(int));
+    int ntoread;
+    ntoread = getFlaggedTiles(flagfile, flagged_tiles);
+    int flagged[ntoread];
+    for (int i=0; i<ntoread; i++)
+    {
+        flagged[i] = flagged_tiles[i];
+    }
+    free(flagged_tiles);
+
+    
 
     ph = 0.0;
     omega_A = 0.0;
@@ -319,10 +364,10 @@ int main(int argc, char *argv[])
             af = af / ntiles; // normalise it
             
             // keep array factor maximum up-to-date (booking keeping)
-            if (pow(cabsl(af),2) > af_max) {af_max = cpowl(cabsl(af),2);}
+            if (pow(cabs(af),2) > af_max) {af_max = pow(cabs(af),2);}
 
             // calculate this pixel's contribution to beam solid angle
-            omega_A = omega_A + sin(za*DEG2RAD) * powl(cabsl(af),2) * (az_step*DEG2RAD) * (za_step*DEG2RAD);
+            omega_A = omega_A + sin(za*DEG2RAD) * powl(cabs(af),2) * (az_step*DEG2RAD) * (za_step*DEG2RAD);
 
             printf("\rComputing array factor: %.1f%%",(az/360.0)*100); fflush(stdout);
         } 
