@@ -2,10 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <complex.h>
-#include <cuComplex.h>
 #include <slalib.h>
 #include <fitsio.h>
+// CUDA specific includes
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#include <cuComplex.h>
+
 
 #define PI (acos(-1.0))         //Ensures PI is defined on all systems
 #define RAD2DEG (180.0 / PI)
@@ -243,23 +246,78 @@ void getTilePositions(char *metafits, int ninput,\
     }
 }
 
+int getFlaggedTiles(char *badfile, int *badtiles)
+{
+    /* Open the flagged tiles file, read into an array and count how many lines are read.
+     * Update the array pointer and return number of elements to read from that array
+     * (as it's initialised to be able to hold every tile) */
+    FILE *fp;
+    int tile=0, i=0;
+    int nlines=0;
+
+    fp = fopen(badfile,"r");
+    if (fp == NULL)
+    {
+        fprintf(stderr,"Error opening flagged tiles file.");
+        exit(-1);
+    }
+
+    while(fscanf(fp, "%d\n", &tile) > 0)
+    {
+        printf("    bad tile: %d\n",tile);
+        badtiles[i++] = tile;
+        nlines++;
+    }
+
+    fclose(fp);
+    return nlines;
+}
+
+void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile, int *badtiles, int nbad, int nelements)
+{
+    int counter=0,bidx=0;
+
+    for (int b=0; b < nbad; b++)
+    {
+        // for each bad tile index in badtiles
+        bidx = badtiles[b];
+        for (int i=(bidx-counter); i < nelements-1; i++)
+        {
+            // shift each element in tile positions to the left by one
+            // excluding the last element
+            n_tile[i] = n_tile[i+1];
+            e_tile[i] = e_tile[i+1];
+            h_tile[i] = h_tile[i+1];
+        }
+        // array shifted left one, but the bad indexes refer to original tile positions
+        // so we need to move the bad index to the left by one, too
+        counter++;
+    }
+}
+
+
+
 void getDeviceDimensions(int *nDevices)
 {
     /* We need to know how many devices are available and how to split the 
      * problem up to maximise the occupancy of each device. */
-
+    printf("Querying system for device information --\n");
     cudaGetDeviceCount(nDevices); // get CUDA to count GPUs
-    printf("Detected %d device(s)\n",*nDevices);
 
     for (int i = 0; i < *nDevices; i++)
     {
-        cudaDeviceProp prop; // create struct to store device info
+        struct cudaDeviceProp prop; // create struct to store device info
         cudaGetDeviceProperties(&prop, i); // populate prop for this device
-        printf("Total global memory available:    %f       MB\n",prop.totalGlobalMem/1e6);
-        printf("Max grid size (# blocks):        (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
-        printf("Max number of threads per block: (%d, %d, %d)\n", prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
+        printf("    Device number:                       %d\n",*nDevices);
+        printf("    Total global memory available (MB):  %f\n",prop.totalGlobalMem/1e6);
+        printf("    Max grid size (# blocks):           (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
+        printf("    Max number of threads per block:    (%d, %d, %d)\n", prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
     }
 }
+
+
+
+
 
 
 
@@ -284,7 +342,7 @@ int main(int argc, char *argv[])
 
     // get info about avilable devices
     getDeviceDimensions(&nDevices);
-    printf("Number of devices: %d",nDevices);
+    printf("Number of devices on system: %d\n",nDevices);
 
     // copy RA and DEC coords into ra, dec variables
     strcpy(ra,"05:34:31.97");
@@ -296,26 +354,60 @@ int main(int argc, char *argv[])
     calcTargetAZZA(ra, dec, time, &target);
     printf("Computing wavenumbers towards target\n");
     calcWaveNumber(lambda, PI/2-target.az, target.za, &target_wn);
+    printf("    kx = %f    ky = %f    kz = %f\n",target_wn.kx,target_wn.ky,target_wn.kz);
 
+    // Have to get tile positions and remove the tiles that were flagged
     printf("Determining number of tiles from metafits\n");
-    ntiles = getNumTiles(metafits); // returns 2x the number of tiles, 1 per pol.   
+    ntiles = getNumTiles(metafits); // returns 2x the number of tiles, 1 per pol.
     ntiles = ntiles / 2;
-    printf("  number of tiles: %d\n",ntiles); 
+    printf("    number of tiles: %d\n",ntiles);
 
     // allocate dynamic memory for intermediate tile position arrays
     float *N_pols = (float *)malloc(2 * ntiles * sizeof(float));
     float *E_pols = (float *)malloc(2 * ntiles * sizeof(float));
     float *H_pols = (float *)malloc(2 * ntiles * sizeof(float));
-    // allocate static memory for tile positions
-    float N_tile[ntiles], E_tile[ntiles], H_tile[ntiles];
-    
+    // allocate dynamic memory for tile positions
+    float *N_tile = (float *)malloc(ntiles * sizeof(float));
+    float *E_tile = (float *)malloc(ntiles * sizeof(float));
+    float *H_tile = (float *)malloc(ntiles * sizeof(float));
     printf("Getting tile positions\n");
     getTilePositions(metafits, 2*ntiles,\
             N_pols, E_pols, H_pols,\
-            N_tile, E_tile, H_tile); // East = x, North = y, Height = z
+            N_tile, E_tile, H_tile);
     free(N_pols);
     free(E_pols);
     free(H_pols);
+
+    // have to remove tiles from the flagged tiles list.
+    // each row in the list is the index of the tile that needs to be removed.
+    printf("Getting flagged tiles\n");
+    int *flagged_tiles = (int *)malloc(ntiles * sizeof(int));
+    int ntoread;
+    ntoread = getFlaggedTiles(flagfile, flagged_tiles);
+    int flagged[ntoread];
+
+    for (int i=0; i < ntoread; i++)
+    {
+        flagged[i] = flagged_tiles[i];
+    }
+    printf("    removing %d flagged tiles\n",ntoread);
+    removeFlaggedTiles(N_tile, E_tile, H_tile, flagged, ntoread, ntiles);
+
+    // but, the last ntoread elements are pointless 
+    // so now we can allocate static memory for the final list of positions
+    float xpos[ntiles-ntoread], ypos[ntiles-ntoread], zpos[ntiles-ntoread];
+
+    for (int i=0; i<(ntiles-ntoread); i++)
+    {
+        // x = East, y = North, z = Height
+        xpos[i] = E_tile[i];
+        ypos[i] = N_tile[i];
+        zpos[i] = H_tile[i];
+    }
+    free(N_tile);
+    free(E_tile);
+    free(H_tile);
+
 
     ph = 0.0;
     omega_A = 0.0;
