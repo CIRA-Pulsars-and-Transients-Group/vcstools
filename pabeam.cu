@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <math.h>
 #include <slalib.h>
 #include <fitsio.h>
@@ -37,6 +38,7 @@ typedef struct tazza_t
 
 
 /* Define all the function prototypes */
+void usage();
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd);
 void mjd2lst(double mjd, double *lst);
 void calcWaveNumber(double lambda, double phi, double theta, wavenums *p_wn);
@@ -45,6 +47,25 @@ int getNumTiles(char *metafits);
 void getTilePositions(char *metafits, int ninput,\
         float *n_pols, float *e_pols, float *h_pols,\
         float *n_tile, float *e_tile, float *h_tile);
+
+
+void usage()
+{
+    printf("pabeam -- computes the array factor that represents the MWA tied-array beam for a given observation and pointing\n");
+    printf("syntax:\n\
+    pabeam -f <frequency (Hz)> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <utc time string> -m <metafits file> -b <RTS flagged_tiles.txt file>\n\n\
+    Options:\n\
+     -f observing frequncy, in Hz\n\
+     -e radiation efficiency (default: 1.0)\n\
+     -r target RA (J2000), in hh:mm:ss.ss format\n\
+     -d target DEC (J2000), in dd:mm:ss.ss format\n\
+     -t UTC time to evaluate, in format YYYY-MM-DDThh:mm:ss\n\
+     -m metafits files for the observation\n\
+     -b RTS flagged_tiles.txt file from calibration\n\
+     -x Azimuth grid resolution element (default: 1.0)\n\
+     -y Zenith angle grid resolution element (default: 1.0)\n");
+}
+
 
 
 
@@ -258,7 +279,7 @@ int getFlaggedTiles(char *badfile, int *badtiles)
     fp = fopen(badfile,"r");
     if (fp == NULL)
     {
-        fprintf(stderr,"Error opening flagged tiles file.");
+        fprintf(stderr,"Error opening flagged tiles file.\n");
         exit(-1);
     }
 
@@ -316,39 +337,99 @@ void getDeviceDimensions(int *nDevices)
 }
 
 
+__global__ void kernalComputeArrayFactor(double *az_mat, double *za_mat, double *res_mat)
+{
 
+}
 
 
 
 
 int main(int argc, char *argv[])
 {
-    char ra[64], dec[64], time[64], metafits[100], flagfile[100];
-    int flagged[128];
-    int ntiles = 0;
+    char *ra="00:00:00.00";
+    char *dec="-26:00:00.00";
+    char *time="2017-06-19T11:13:00";
+    char *metafits=NULL;
+    char *flagfile=NULL;
+    int c, ntiles=0;
     int nDevices = 0;
-    double lambda, freq, az_step, za_step;
-    double ph, omega_A, af_max, eff_area, gain, eta;
+    int n_az, n_za, azxza;
+    double freq=0, lambda=0;
+    double az_step=1.0, za_step=1.0, eta=1.0;
+    double ph, omega_A, af_max, eff_area, gain;
     cuDoubleComplex af;
     tazza target;
     wavenums wn, target_wn;
 
-    freq = 184.96e6;
-    lambda = SOL/freq;
-    eta = 1.0;
+    /* Parse options */
+    if (argc > 1)
+    {
+        while ((c = getopt(argc, argv, "f:e:r:d:t:m:b:x:y:")) != -1)
+        {
+            switch(c)
+            {
+                case 'f':
+                    freq = atof(optarg);
+                    lambda = SOL/freq;
+                    break;
+                case 'e': 
+                    eta = atof(optarg);
+                    break;
+                case 'r':
+                    ra = strdup(optarg);
+                    break;
+                case 'd': 
+                    dec = strdup(optarg);
+                    break;
+                case 't':
+                    time = strdup(optarg);
+                    break;
+                case 'm':
+                    metafits = strdup(optarg);
+                    break;
+                case 'b':
+                    flagfile = strdup(optarg);
+                    break;
+                case 'x':
+                    az_step = atof(optarg);
+                    break;
+                case 'y':
+                    za_step = atof(optarg);
+                    break;
+                default:
+                    usage();
+                    exit(1);
+            }
+        }
 
-    az_step = 1;
-    za_step = 1;
+    }
+
+    if (argc == 1)
+    {
+        usage();
+        exit(1);
+    }
+
+
+    //az_step = 0.01;
+    n_az = (int)(360.0/az_step);
+    //za_step = 0.01;
+    n_za = (int)(90.0/za_step)+1;
+    printf("Number of az steps: %d\n",n_az); // step from [0,360)
+    printf("Number of za steps: %d\n",n_za); // step from [0,90]
+    azxza = n_az * n_za;
 
     // get info about avilable devices
     getDeviceDimensions(&nDevices);
     printf("Number of devices on system: %d\n",nDevices);
 
     // copy RA and DEC coords into ra, dec variables
-    strcpy(ra,"05:34:31.97");
-    strcpy(dec,"+22:00:52.06");
-    strcpy(time,"2014-11-07T16:53:20");
-    strcpy(metafits,"1099414416_metafits_ppds.fits");
+    //strcpy(ra,"05:34:31.97");
+    //strcpy(dec,"+22:00:52.06");
+    //strcpy(time,"2014-11-07T16:53:20");
+    //strcpy(metafits,"1099414416_metafits_ppds.fits");
+    //strcpy(flagfile,"flagged_tiles.txt");
 
     printf("Getting target (Az,ZA)\n");
     calcTargetAZZA(ra, dec, time, &target);
@@ -413,9 +494,34 @@ int main(int argc, char *argv[])
     omega_A = 0.0;
     eff_area = 0.0;
     af_max = -1.0;
+   
+    double *az_array, *d_az_array, *za_array, *d_za_array;
+    double *res, *d_res;
+    az_array = (double *)malloc(azxza * sizeof(double));
+    cudaMalloc((void**)&d_az_array, azxza * sizeof(double));
+    za_array = (double *)malloc(azxza * sizeof(double));
+    cudaMalloc((void**)&d_za_array,azxza * sizeof(double));
+    res = (double *)malloc(azxza * sizeof(double));
+    cudaMalloc((void**)&d_res, azxza * sizeof(double));
+    // for some reason we need to cast to void** for the double array?
+
+    for (int i=0; i < (n_az-1); i++) // populate az array (0 to 360-az_step)
+    {
+        az_array[i+1] = az_array[i] + az_step*DEG2RAD;
+    }
+    for (int i=0; i < (n_za-1); i++) // populate za array (0 to 90)
+    {
+        za_array[i+1] = za_array[i] + za_step*DEG2RAD;
+    }
+    
+    printf("%f %f\n",az_array[n_az-1]*RAD2DEG, za_array[n_za-1]*RAD2DEG);
+
+    
+
+    /*
     for (double az = 0.0; az < 360.0; az += az_step)
     {
-        /* one loop is ok, but we'll want to vectorise the next parts... */ 
+        //one loop is ok, but we'll want to vectorise the next parts...
         for (double za = 0.0; za <= 90.0; za += za_step)
         {
             af = make_cuDoubleComplex(0.0, 0.0);
@@ -441,6 +547,8 @@ int main(int argc, char *argv[])
             //printf("\rComputing array factor: %.1f%%",(az/360.0)*100); fflush(stdout);
         } 
     }
+    free(az_array);
+    free(za_array);
     printf("\n");
     printf("Finished -- now computing relevant parameters:\n");
     eff_area = eta * pow((SOL / freq),2) * (4 * PI / omega_A);
@@ -450,7 +558,7 @@ int main(int argc, char *argv[])
     printf("   Beam solid angle (sr):            %f\n",omega_A);
     printf("   Effective collecting area (m^2):  %.4f\n",eff_area);
     printf("   Effective array gain (K/Jy):      %.4f\n",gain);
-    
+    */
 
     return 0;
 }
