@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <math.h>
 #include <complex.h>
 #include <slalib.h>
@@ -33,6 +34,7 @@ typedef struct tazza_t
 
 
 /* Define all the function prototypes */
+void usage();
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd);
 void mjd2lst(double mjd, double *lst);
 void calcWaveNumber(double lambda, double phi, double theta, wavenums *p_wn);
@@ -43,7 +45,28 @@ void getTilePositions(char *metafits, int ninput,\
         float *n_tile, float *e_tile, float *h_tile);
 int getFlaggedTiles(char *badfile, int *badtiles);
 void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
-        int *badtiles, int nbad, int nelements)
+        int *badtiles, int nbad, int nelements);
+
+
+
+void usage()
+{
+printf("pabeam -- computes the array factor that represents the MWA tied-array beam for a given observation and pointing\n");
+printf("syntax:\n\
+        pabeam -f <frequency (Hz)> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <utc time string> -m <metafits file> -b <RTS flagged_tiles.txt file>\n\n\
+Options:\n\
+ -f observing frequncy, in Hz\n\
+ -e radiation efficiency (default: 1.0)\n\
+ -r target RA (J2000), in hh:mm:ss.ss format\n\
+ -d target DEC (J2000), in dd:mm:ss.ss format\n\
+ -t UTC time to evaluate, in format YYYY-MM-DDThh:mm:ss\n\
+ -m metafits files for the observation\n\
+ -b RTS flagged_tiles.txt file from calibration\n\
+ -x Azimuth grid resolution element (default: 1.0)\n\
+ -y Zenith angle grid resolution element (default: 1.0)\n");
+}
+
+
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
 {
@@ -255,7 +278,7 @@ int getFlaggedTiles(char *badfile, int *badtiles)
     fp = fopen(badfile,"r");
     if (fp == NULL)
     {
-        fprintf(stderr,"Error opening flagged tiles file.");
+        fprintf(stderr,"Error opening flagged tiles file.\n");
         exit(-1);
     }
 
@@ -296,29 +319,77 @@ void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile, int *badtil
 
 int main(int argc, char *argv[])
 {
-    char ra[64], dec[64], time[64], metafits[100], flagfile[100];
-    int ntiles = 0;
-    double lambda, freq, az_step, za_step;
-    double ph, omega_A, af_max, eff_area, gain, eta;
+    char *ra="00:00:00.00";
+    char *dec="-26:00:00.00";
+    char *time="2017-06-19T11:13:00";
+    char *metafits=NULL;
+    char *flagfile=NULL;
+    int c, ntiles=0;
+    double freq=0, lambda=0;
+    double az_step=1.0, za_step=1.0, eta=1.0;
+    double ph, omega_A, af_max, eff_area, gain;
     double complex af;
     tazza target;
     wavenums wn, target_wn;
 
-    freq = 184.96e6;
-    lambda = SOL/freq;
-    eta = 1.0;
 
-    az_step = 1;
-    za_step = 1;
+    /* Parse options */
+    if (argc > 1)
+    {
+        while ((c = getopt(argc, argv, "f:e:r:d:t:m:b:x:y:")) != -1)
+        {
+            switch(c)
+            {
+                case 'f':
+                    freq = atof(optarg);
+                    lambda = SOL/freq;
+                    break;
+                case 'e':
+                    eta = atof(optarg);
+                    break;
+                case 'r':
+                    ra = strdup(optarg);
+                    break;
+                case 'd':
+                    dec = strdup(optarg);
+                    break;
+                case 't':
+                    time = strdup(optarg);
+                    break;
+                case 'm':
+                    metafits = strdup(optarg);
+                    break;
+                case 'b':
+                    flagfile = strdup(optarg);
+                    break;
+                case 'x':
+                    az_step = atof(optarg);
+                    break;
+                case 'y':
+                    za_step = atof(optarg);
+                    break;
+                default:
+                    usage();
+                    exit(1);
+            }
+        }
+        
+    }
+    
+    if (argc == 1)
+    {
+        usage();
+        exit(1);
+    }
 
     
 
     // copy test values into appropriate variables
-    strcpy(ra,"05:34:31.97");
-    strcpy(dec,"+22:00:52.06");
-    strcpy(time,"2014-11-07T16:53:20");
-    strcpy(metafits,"1099414416_metafits_ppds.fits");
-    strcpy(flagfile,"flagged_tiles.txt");
+    //strcpy(ra,"05:34:31.97");
+    //strcpy(dec,"+22:00:52.06");
+    //strcpy(time,"2014-11-07T16:53:20");
+    //strcpy(metafits,"1099414416_metafits_ppds.fits");
+    //strcpy(flagfile,"flagged_tiles.txt");
 
     printf("Getting target (Az,ZA)\n");
     calcTargetAZZA(ra, dec, time, &target);
