@@ -51,19 +51,19 @@ void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
 
 void usage()
 {
-printf("pabeam -- computes the array factor that represents the MWA tied-array beam for a given observation and pointing\n");
-printf("syntax:\n\
-        pabeam -f <frequency (Hz)> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <utc time string> -m <metafits file> -b <RTS flagged_tiles.txt file>\n\n\
-Options:\n\
- -f observing frequncy, in Hz\n\
- -e radiation efficiency (default: 1.0)\n\
- -r target RA (J2000), in hh:mm:ss.ss format\n\
- -d target DEC (J2000), in dd:mm:ss.ss format\n\
- -t UTC time to evaluate, in format YYYY-MM-DDThh:mm:ss\n\
- -m metafits files for the observation\n\
- -b RTS flagged_tiles.txt file from calibration\n\
- -x Azimuth grid resolution element (default: 1.0)\n\
- -y Zenith angle grid resolution element (default: 1.0)\n");
+    printf("pabeam -- computes the array factor that represents the MWA tied-array beam for a given observation and pointing\n");
+    printf("syntax:\n\
+    pabeam -f <frequency (Hz)> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <utc time string> -m <metafits file> -b <RTS flagged_tiles.txt file>\n\n\
+    Options:\n\
+     -f observing frequncy, in Hz\n\
+     -e radiation efficiency (default: 1.0)\n\
+     -r target RA (J2000), in hh:mm:ss.ss format\n\
+     -d target DEC (J2000), in dd:mm:ss.ss format\n\
+     -t UTC time to evaluate, in format YYYY-MM-DDThh:mm:ss\n\
+     -m metafits files for the observation\n\
+     -b RTS flagged_tiles.txt file from calibration\n\
+     -x Azimuth grid resolution element (default: 1.0)\n\
+     -y Zenith angle grid resolution element (default: 1.0)\n");
 }
 
 
