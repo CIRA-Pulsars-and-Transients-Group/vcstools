@@ -59,21 +59,22 @@ void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
 void getDeviceDimensions(int *nDevices);
 
 
+
 void usage()
 {
     printf("pabeam -- computes the array factor that represents the MWA tied-array beam for a given observation and pointing\n");
     printf("syntax:\n\
-    pabeam -f <frequency (Hz)> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <utc time string> -m <metafits file> -b <RTS flagged_tiles.txt file>\n\n");
+            pabeam -f <frequency (Hz)> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <utc time string> -m <metafits file> -b <RTS flagged_tiles.txt file>\n\n");
     printf("Options:\n\
-     -f observing frequncy, in Hz\n\
-     -e radiation efficiency (default: 1.0)\n\
-     -r target RA (J2000), in hh:mm:ss.ss format\n\
-     -d target DEC (J2000), in dd:mm:ss.ss format\n\
-     -t UTC time to evaluate, in format YYYY-MM-DDThh:mm:ss\n\
-     -m metafits files for the observation\n\
-     -b RTS flagged_tiles.txt file from calibration\n\
-     -x Azimuth grid resolution element (default: 1.0)\n\
-     -y Zenith angle grid resolution element (default: 1.0)\n");
+            -f observing frequncy, in Hz\n\
+            -e radiation efficiency (default: 1.0)\n\
+            -r target RA (J2000), in hh:mm:ss.ss format\n\
+            -d target DEC (J2000), in dd:mm:ss.ss format\n\
+            -t UTC time to evaluate, in format YYYY-MM-DDThh:mm:ss\n\
+            -m metafits files for the observation\n\
+            -b RTS flagged_tiles.txt file from calibration\n\
+            -x Azimuth grid resolution element (default: 1.0)\n\
+            -y Zenith angle grid resolution element (default: 1.0)\n");
 }
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
@@ -121,7 +122,7 @@ void calcWaveNumber(double lambda, double phi, double theta, wavenums *p_wn)
      * the convention from Sutinjo et al. 2015, where
      *      theta = za
      *      phi = pi/2 - az
-    */
+     */
 
     p_wn->kx = ast * cos(phi); 
     p_wn->ky = ast * sin(phi); 
@@ -150,7 +151,7 @@ void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_
     sscanf(dec_ddmmss, "%d:%d:%lf", &dec_id, &dec_im, &dec_fs); // assign values
     dec_id = dec_id * sign; // ensure correct sign
 
-    
+
     // convert angles to radians
     slaCtf2r(ra_ih, ra_im, ra_fs, &ra_rad, &ra_j); //right ascension
     slaDaf2r(dec_id, dec_im, dec_fs, &dec_rad, &dec_j); //declination
@@ -182,7 +183,7 @@ void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_
 
     // convert (HA, Dec) to (az, el)
     slaDe2h(ha_rad, dec_rad, MWA_LAT*DEG2RAD, &az, &el);
-    
+
     printf("Az = %.4f  ZA = %.4f\n", az, PI/2-el);
     p_tazza->az = az;
     p_tazza->za = (PI/2) - el;
@@ -342,39 +343,87 @@ void getDeviceDimensions(int *nDevices)
     }
 }
 
-/*
-__global__ void kernal(cublasStatus_t *retVal, int naz, int nza, const double *alpha, const double *az, const double *za, const double *beta, double *res)
+
+//static const char *_cudaGetErrorEnum(cublasStatus_t error)
+//{
+//    /* Function to convert cublas error to string */
+//    switch (error)
+//    {
+//        case CUBLAS_STATUS_SUCCESS:
+//            return "CUBLAS_STATUS_SUCCESS";
+//
+//        case CUBLAS_STATUS_NOT_INITIALIZED:
+//            return "CUBLAS_STATUS_NOT_INITIALIZED";
+//
+//        case CUBLAS_STATUS_ALLOC_FAILED:
+//            return "CUBLAS_STATUS_ALLOC_FAILED";
+//
+//        case CUBLAS_STATUS_INVALID_VALUE:
+//            return "CUBLAS_STATUS_INVALID_VALUE";
+//
+//        case CUBLAS_STATUS_ARCH_MISMATCH:
+//            return "CUBLAS_STATUS_ARCH_MISMATCH";
+//
+//        case CUBLAS_STATUS_MAPPING_ERROR:
+//            return "CUBLAS_STATUS_MAPPING_ERROR";
+//
+//       case CUBLAS_STATUS_EXECUTION_FAILED:
+//            return "CUBLAS_STATUS_EXECUTION_FAILED";
+//
+//        case CUBLAS_STATUS_INTERNAL_ERROR:
+//            return "CUBLAS_STATUS_INTERNAL_ERROR";
+//    }
+//
+//    return "<unknown>";
+//}
+
+inline void gpuAssert(cudaError_t code, char *file, int line, bool abort=true)
 {
-    //int bx = blockIdx.x;
-    //int tx = threadIdx.x;
-    //int row = bx * BLOCK_SIZE + tx;
-    cublasHandle_t handle;
-    cublasStatus_t status;
-
-    // now create the CUBLAS matrix handle
-    status = cublasCreate(&handle);
-    // if CUBLAS couldn't be initilaised, stop here
-    if (status != CUBLAS_STATUS_SUCCESS)
+    if (code != 0)
     {
-        *retVal = status;
-        return;
+        fprintf(stderr, "GPUAssert:: %s - %s (%d)\n", cudaGetErrorString(code), file, line);
+        if (abort)
+        {
+            exit(code);
+        }
     }
-
-    // perform operation
-    status = cublasDgemm(handle,
-                        CUBLAS_OP_N, CUBLAS_OP_T, 
-                        nza, naz, naz,
-                        alpha,
-                        az, nza,
-                        za, naz,
-                        beta,
-                        res, nza);
-   
-    cublasDestroy(handle);
-
-    *retVal = status;
 }
-*/
+
+// define a macro for accessing gpuAssert
+#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
+
+
+__global__ void getWavevectors(int nel, double a, double *theta, double *phi, wavenums *p_twn, wavenums *p_wn)
+{
+    /* Kernal to compute the wavevectors for a list of theta/phi.
+       nel   = total number of elements in each array
+       a     = amplitude factor (i.e. 2pi/lambda)
+       theta = array of zenith angles
+       phi   = array of azimuths
+       p_twn = target wavenumber struct
+       p_wn  = array of structs to contain kx, ky and kz
+
+       The standard equations are:
+       a = 2 * pi / lambda
+       kx = a * sin(theta) * cos(phi)
+       ky = a * sin(theta) * sin(phi)
+       kz = a * cos(theta)
+
+       Assuming that theta,phi are in the convention from Sutinjo et al. 2015
+       i.e. phi = pi/2 - az
+     */
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+    double ast;
+
+    for (int i = index; i < nel; i+= stride)
+    {
+        ast = a * sin(theta[i]);
+        p_wn[i].kx = ast * cos(phi[i]) - p_twn->kx; 
+        p_wn[i].ky = ast * sin(phi[i]) - p_twn->ky;
+        p_wn[i].kz = ast - p_twn->kz;
+    } 
+}
 
 
 
@@ -385,15 +434,16 @@ int main(int argc, char *argv[])
     char *time="2017-06-19T11:13:00";
     char *metafits=NULL;
     char *flagfile=NULL;
-    int c, ntiles=0;
-    int nDevices = 0;
-    int n_az, n_za;
+    int c=0;
+    int ntiles=0;
+    int nDevices=0,blockSize,numBlocks;
+    int n_az, n_za, size, niter=1, iter=0;
+    double reqMem=0.0, devMem=0.0;
     double freq=0, lambda=0;
     double az_step=1.0, za_step=1.0, eta=1.0;
-    double ph=0.0, omega_A=0.0, af_max=-1.0, eff_area=0.0, gain=0.0;
-    cuDoubleComplex af;
+    //double ph=0.0, omega_A=0.0, af_max=-1.0, eff_area=0.0, gain=0.0;
     tazza target;
-    wavenums wn, target_wn;
+    wavenums target_wn;
 
     /* Parse options */
     if (argc > 1)
@@ -444,41 +494,15 @@ int main(int argc, char *argv[])
     }
 
 
-    //az_step = 0.01;
-    n_az = (int)(360.0/az_step);
-    //za_step = 0.01;
-    n_za = (int)(90.0/za_step)+1;
-    printf("Number of az steps: %d\n",n_az); // step from [0,360)
-    printf("Number of za steps: %d\n",n_za); // step from [0,90]
 
-
-
-    // get info about avilable devices
-    getDeviceDimensions(&nDevices);
-    printf("Number of devices on system: %d\n",nDevices);
-    printf("Using device: %d\n", nDevices-1);
-    struct cudaDeviceProp prop; // create struct to store device info
-    cudaGetDeviceProperties(&prop, 0); // populate prop for this device
-    
-    if (prop.totalGlobalMem <= n_az * n_za * sizeof(double))
-    {
-        fprintf(stderr, "Matrices will not fit on device!\n");
-        fprintf(stderr, "   resolutions imply matrix size = %ld bytes\n", (long int)(n_az * n_za * sizeof(double)));
-        fprintf(stderr, "   total device memory required >= %ld bytes\n", (long int)(3 * n_az * n_za * sizeof(double)));
-        fprintf(stderr, "   device global memory          = %ld bytes\n", (long int)prop.totalGlobalMem);
-        return EXIT_FAILURE;
-    }
-        
-    /* TODO: this actually shouldn't matter -- just split the problem up into parts. */
-
-    // calculate target parameters 
+    // calculate target az,za and wavevector 
     printf("Getting target (Az,ZA)\n");
     calcTargetAZZA(ra, dec, time, &target);
     printf("Computing wavenumbers towards target\n");
     calcWaveNumber(lambda, PI/2-target.az, target.za, &target_wn);
     printf("    kx = %f    ky = %f    kz = %f\n",target_wn.kx,target_wn.ky,target_wn.kz);
 
-    // get tile positions and remove the tiles that were flagged
+    // get the number of tiles in array
     printf("Determining number of tiles from metafits\n");
     ntiles = getNumTiles(metafits); // returns 2x the number of tiles, 1 per pol.
     ntiles = ntiles / 2;
@@ -514,6 +538,7 @@ int main(int argc, char *argv[])
         flagged[i] = flagged_tiles[i];
     }
     printf("Removing %d flagged tiles\n",ntoread);
+    printf("Tiles remaining: %d\n",ntiles-ntoread);
     removeFlaggedTiles(N_tile, E_tile, H_tile, flagged, ntoread, ntiles);
     free(flagged_tiles);
 
@@ -532,71 +557,264 @@ int main(int argc, char *argv[])
     free(E_tile);
     free(H_tile);
 
+
+    // determine number of az/za elements from specified pixel size
+    n_az = (int)(360.0/az_step);
+    n_za = (int)(90.0/za_step);
+    size = n_az * n_za;
+    printf("Number of az steps: %d\n",n_az); // step from [0,360)
+    printf("Number of za steps: %d\n",n_za); // step from [0,90]
+    niter = 1; // how many times do I need to split the problem up?
+
+
+    // get info about avilable devices
+    getDeviceDimensions(&nDevices);
+    printf("Number of devices on system: %d\n",nDevices);
+    printf("Using device: %d\n", nDevices-1);
+    struct cudaDeviceProp prop; // create struct to store device info
+    cudaGetDeviceProperties(&prop, 0); // populate prop for this device
+
+    // estimate how much device memory will be required
+    //      az array = n_az * n_za * sizeof(double) - array of azimuth coords
+    //      za array = n_za * n_az * sizeof(double) - array of zenith coords
+    //      wv array = n_az * n_za * sizeof(wavenums) - 3D wavenumbers (structs)
+    //      xpos = ntiles * sizeof(double) - x position of tiles from array center
+    //      ypos = ntiles * sizeof(double) - y position of tiles from array center
+    //      zpos = ntiles * sizeof(double) - z position of tiles from array center
+    //      af_array = n_az * n_za * sizeof(double) - array factor 
+    //      
+    // so in total, will need:
+    //       3 * n_az * n_za * sizeof(double) + n_az * n_za * sizeof(wavenums) + 3 * ntiles * sizeof(double)
+    reqMem = (double)(3 * size * sizeof(double)) + (size * sizeof(wavenums)) + (3 * ntiles * sizeof(double));
+    devMem = (double)prop.totalGlobalMem;
+
+    if (devMem <= reqMem)
+    {
+        fprintf(stderr, "Matrices will not fit on device!\n");
+        fprintf(stderr, "   total device memory required  = %f MB\n", reqMem/1.0e6);
+        fprintf(stderr, "   device global memory          = %f MB\n", devMem/1.0e6);
+
+        niter = (int)ceil(reqMem / devMem)+1;
+        printf("Will split task into: %d (%f MB per task)\n", niter, (reqMem/(1.0e6*niter)));
+    }
+  
+    blockSize = prop.maxThreadsDim[0]; // number of threads available per block, in x-direction
+
+   // printf("%d %d\n",blockSize,numBlocks);
+
+
+
     /* We now have the relevant array configuration and target source information 
        needed to calculate the array factor. The best way is to use a matrix approach
-       and split it up into managable chunks (depending on the device capabilities).
-    */
+       and split it up into managable chunks (depending on the device capabilities). */
 
-    n_az = 6;
-    n_za = 5;
+    int iter_n_az = (int)floor(n_az / niter);
+    int iter_n_za = (int)floor(n_za / niter);
+    int az_idx1, az_idx2, za_idx1, za_idx2;
 
-    // construct arrays for computation
-    double *az_array, *d_az_array, *za_array, *d_za_array;
-    double *res_array, *d_res_array;
-    wavenums *wv_array, *d_wv_array;
-
+    // construct arrays for computation on host
+    double *az_array, *za_array, *af_array;
+    wavenums *wn_array;
+    
     // allocate memory on host and check
-    // azimuth grid
-    az_array = (double *)malloc(n_az * n_za * sizeof(double));
+    // azimuth vector
+    az_array = (double *)malloc(size * sizeof(double));
     if (!az_array)
     {
         fprintf(stderr,"Host memory allocation failed (allocate az_array)\n");
         return EXIT_FAILURE;
     }
-    // zenith angle grid
-    za_array = (double *)malloc(n_az * n_za * sizeof(double));
+    // zenith vector
+    za_array = (double *)malloc(size * sizeof(double));
     if (!za_array)
     {
         fprintf(stderr,"Host memory allocation failed (allocate za_array)\n");
         return EXIT_FAILURE;
     }
+
+    // populate the host vectors
+    printf("Initialising az, za and result matrix\n");
+    // want arrays to be something like:
+    // az = [0 0 0 0 ... 1 1 1 1 ...]
+    // za = [0 1 2 3 ... 0 1 2 3 ...]
+    int cc=0;
+    do
+    {
+        for (int j=0; j<n_za; j++)
+        {
+            za_array[cc+j] = j * za_step * DEG2RAD;
+        }
+        cc += n_za;
+    } while(cc < size);
+    
+    cc=0;
+    int i=0;
+    do
+    {
+        for (int j=0; j<n_az; j++)
+        {
+            az_array[cc+j] = i * az_step * DEG2RAD;
+        }
+        cc += n_az;
+        i++;
+    } while(cc < size);
+
+    //printf("%f %f %f %f\n",za_array[0],za_array[1],za_array[n_za-1],za_array[n_za]);
+    //exit(0);
+
     // 3D wave number grid (array of structs)
-    wv_array = (wavenums *)malloc(n_az * n_za * sizeof(wavenums));
-    if (!wv_array)
+    wn_array = (wavenums *)malloc(size * sizeof(wavenums));
+    if (!wn_array)
     {
         fprintf(stderr,"Host memory allocation failed (allocate wv_array)\n");
         return EXIT_FAILURE;
     }
-    res_array = (double *)malloc(n_az * n_za * sizeof(double));
-    if (!res_array)
+    // result matrix 
+    af_array = (double *)malloc(size * sizeof(double));
+    if (!af_array)
     {
-        fprintf(stderr,"Host memory allocation failed (allocate res_array)\n");
+        fprintf(stderr,"Host memory allocation failed (allocate af_array)\n");
         return EXIT_FAILURE;
     }
-   
-
-
-    // populate the host matrices
-    for (int j=0; j<n_za; j++)
+    for (int i=0; i<size; i++)
     {
-        for (int i=0; i<n_az; i++)
-        {
-            //printf("row i=%d col j=%d\n",i,j);
-            // for azimuth, leading dimension is n_az
-            //az_array[IDX2C(i,j,n_az)] = i * az_step * DEG2RAD;
-            az_array[IDX2C(i,j,n_az)] = (double)IDX2C(i,j,n_az);
-            // for zenith, leadind dimension is n_za
-            //za_array[IDX2C(j,i,n_za)] = j * za_step * DEG2RAD;
-            za_array[IDX2C(j,i,n_za)] = (double)IDX2C(j,i,n_za);
-            // for 3D wave vectors, leading dimension is n_az, array of structs
-            //printf("az [%d]: %f za [%d]: %f ",IDX2C(i,j,n_az),az_array[IDX2C(i,j,n_az)]*RAD2DEG,IDX2C(j,i,n_za),za_array[IDX2C(j,i,n_za)]*RAD2DEG);
-            //calcWaveNumber(lambda, az_array[IDX2C(i,j,n_az)], za_array[IDX2C(j,i,n_za)], &wv_array[IDX2C(i,j,n_az)]);
-            //printf("(kx,ky,kz): (%f %f %f)\n",wv_array[IDX2C(i,j,n_az)].kx,wv_array[IDX2C(i,j,n_az)].ky,wv_array[IDX2C(i,j,n_az)].kz);
-            // for the result array, just have to initialise
-            // so we will use n_az as the leading dimension
-            res_array[IDX2C(i,j,n_az)] = 0.0;
-        }
+        wn_array[i].kx = 0.0;
+        wn_array[i].ky = 0.0;
+        wn_array[i].kz = 0.0;
+        af_array[i]    = 0.0;
     }
+
+
+
+    // construct arrays on device
+    double *d_az_array, *d_za_array, *d_af_array;
+    wavenums *d_wn_array, *d_twn;
+    int itersize = iter_n_az * iter_n_za;
+    double *subAz, *subZA;
+    wavenums *subwn;
+
+    subAz = (double *)malloc(itersize * sizeof(double));
+    if (!subAz)
+    {
+        fprintf(stderr,"Host memory allocation failed (allocate subAz)\n");
+        return EXIT_FAILURE;
+    }
+    subZA = (double *)malloc(itersize * sizeof(double));
+    if (!subZA)
+    {
+        fprintf(stderr,"Host memory allocation failed (allocate subZA)\n");
+        return EXIT_FAILURE;
+    }
+    subwn = (wavenums *)malloc(itersize * sizeof(wavenums));
+    if (!subwn)
+    {
+        fprintf(stderr,"Host memory allocation failed (allocate subwn)\n");
+        return EXIT_FAILURE;
+    }
+
+    // populated full array, but we want to split that up into chunks
+    printf("%d az , %d za per iteration\n", iter_n_az, iter_n_za);
+    int stride=0;
+    for (iter = 0; iter < niter; iter++)
+    {  
+        numBlocks = ((iter_n_az-1) * iter_n_za + blockSize - 1) / blockSize; // number of blocks required 
+        printf("==== Iteration %d ====\n",iter);
+        az_idx1 = iter * iter_n_az;
+        az_idx2 = (iter+1) * iter_n_az - 1; // -1 to zero based for output: e.g. 4000 elements = 0--3999 = 0--(iter_n_az-1)
+        za_idx1 = iter * iter_n_za;
+        za_idx2 = (iter+1) * iter_n_za - 1; // -1 to zero based for output: e.g. 1000 elements = 0--999 = 0--(iter_n_za-1)
+
+
+
+        printf("azimuth idx: %d - %d\n",az_idx1, az_idx2);
+        printf("zentih  idx: %d - %d\n",za_idx1, za_idx2);
+        printf("number of GPU blocks used: %d\n",numBlocks);
+    
+        // place subset of az/za array into subAz/subZA
+        for (int i=0; i<itersize; i++)
+        {
+            subAz[i]    = az_array[i+stride];
+            subZA[i]    = za_array[i+stride];
+            subwn[i].kx = wn_array[i+stride].kx;
+            subwn[i].ky = wn_array[i+stride].ky;
+            subwn[i].kz = wn_array[i+stride].kz;
+        }
+        stride += itersize;
+
+        // allocate memory on device
+        gpuErrchk( cudaMalloc((void**)&d_az_array, itersize * sizeof(double)));
+        gpuErrchk( cudaMalloc((void**)&d_za_array, itersize * sizeof(double)));
+        gpuErrchk( cudaMalloc((void**)&d_wn_array, itersize * sizeof(wavenums)));
+        gpuErrchk( cudaMalloc((void**)&d_twn, sizeof(wavenums)));
+
+        // copy arrays onto device
+        gpuErrchk( cudaMemcpy(d_az_array, subAz, itersize * sizeof(double), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_za_array, subZA, itersize * sizeof(double), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_wn_array, subwn, itersize * sizeof(wavenums), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_twn, &target_wn, sizeof(wavenums), cudaMemcpyHostToDevice));
+
+        // launch kernal to compute wavenumbers
+        getWavevectors<<<numBlocks, blockSize>>>(itersize, 2*PI/lambda, d_za_array, d_az_array, d_twn, d_wn_array);
+    
+        // copy relevant memory back to host
+        gpuErrchk( cudaMemcpy(subwn, d_wn_array, itersize * sizeof(wavenums), cudaMemcpyDeviceToHost));
+        cudaDeviceSynchronize();
+
+        printf("%f %f %f\n",subwn[12].kx,subwn[12].ky,subwn[12].kz);
+
+        // done for now free the memory on the device
+        gpuErrchk( cudaFree(d_az_array));
+        gpuErrchk( cudaFree(d_za_array));
+        gpuErrchk( cudaFree(d_wn_array));
+        gpuErrchk( cudaFree(d_twn));
+    }
+    /* TODO: is the cudaMalloc/cudaFree calls impacting performance drastically? they are relatively expensive... */
+
+    free(az_array);
+    free(za_array);
+    free(af_array);
+    free(wn_array);
+    free(subAz);
+    free(subZA);
+    free(subwn);
+    //cudaFree(d_az_array);
+    //cudaFree(d_za_array);
+    //cudaFree(d_af_array);
+    //cudaFree(d_wn_array);
+
+
+    exit(0);
+
+    /*
+       for (int i=0; i<n_az; i++)
+       {
+       for (int j=0; j<n_za; j++)
+       {
+    // for azimuth, leading dimension is n_az
+    az_array[IDX2C(i,j,n_az)] = i * az_step * DEG2RAD;
+    //az_array[IDX2C(i,j,n_az)] = (double)(j%n_az);
+
+    // for zenith, leadind dimension is n_za
+    za_array[IDX2C(j,i,n_za)] = j * za_step * DEG2RAD;
+    //za_array[IDX2C(i,j,n_za)] = (double)(i%n_za);
+
+    // for 3D wave vectors, leading dimension is n_az, array of structs
+    calcWaveNumber(lambda, az_array[IDX2C(i,j,n_az)], za_array[IDX2C(j,i,n_za)], &wn_array[IDX2C(i,j,n_az)]);
+    //wn_array->kx -= target_wn.kx;
+    //wn_array->ky -= target_wn.ky;
+    //wn_array->kz -= target_wn.kz;
+
+    // for the result array, just have to initialise
+    // so we will use n_az as the leading dimension
+    res_array[IDX2C(i,j,n_az)] = 0.0;
+    }
+    }
+
+    //printf("%f %f %f %f %f %f\n",az_array[0],az_array[1],az_array[2],az_array[3],az_array[4],az_array[5]);
+    //printf("%f %f %f %f %f %f\n",az_array[6],az_array[7],az_array[8],az_array[9],az_array[10],az_array[5]);
+    //printf("%f %f %f %f %f\n",za_array[0],za_array[1],za_array[2],za_array[3],za_array[4]);
+    //printf("%f %f %f %f %f\n",za_array[5],za_array[6],za_array[7],za_array[8],za_array[9]);
+
 
     //printf("Testing matrix setup:\n");
     //printf("az[0] = az[%d] :: %.5f = %.5f\n",n_az,az_array[0]*RAD2DEG,az_array[n_az]*RAD2DEG);
@@ -610,167 +828,235 @@ int main(int argc, char *argv[])
     printf("az matrix:\n");
     for (int j = 0; j < n_za; j++)
     {
-        for (int i = 0; i < n_az; i++)
-        {
-            printf ("%7.3f", az_array[IDX2C(i,j,n_az)]);
-        }
-        printf ("\n");
+    for (int i = 0; i < n_az; i++)
+    {
+    printf ("%7.3f", az_array[IDX2C(i,j,n_az)]);
+    }
+    printf ("\n");
     }
     printf("za matrix:\n");
+    for (int j = 0; j < n_az; j++)
+    {
+    for (int i = 0; i < n_za; i++)
+    {
+    printf ("%7.3f", za_array[IDX2C(j,i,n_za)]);
+    }
+    printf ("\n");
+    }
+    printf("res matrix (init):\n");
     for (int j = 0; j < n_za; j++)
     {
-        for (int i = 0; i < n_az; i++)
-        {
-            printf ("%7.3f", za_array[IDX2C(j,i,n_za)]);
-        }
-        printf ("\n");
+    for (int i = 0; i < n_az; i++)
+    {
+    printf ("%7.3f", res_array[IDX2C(i,j,n_az)]);
     }
+    printf ("\n");
+    }
+     */
 
-   
+
     // Setup CUDA stuff
-    cudaError_t cudaStat;
-    cublasStatus_t cublasStat;
-    cublasStatus_t *d_status;
-    cublasHandle_t cublasHandle;
-    double alpha, beta;
-    beta=0.0;
-    alpha=1.0;
-
+    //double *d_az_array, *d_za_array, *d_af_array;
+    //wavenums * d_wn_array;
+    //cudaError_t cudaStat;
+    //cublasStatus_t cublasStat;
+    //cublasStatus_t *d_status;
+    //cublasHandle_t cublasHandle;
+    //double alpha, beta;
+    //beta=0.0;
+    //alpha=1.0;
 
     // Initialise CUBLAS
-    cublasStat = cublasCreate(&cublasHandle);
-    // don't bother going further if CUBLAS failed
-    if (cublasStat != CUBLAS_STATUS_SUCCESS)
-    {
-        fprintf(stderr, "CUBLAS initialization error!\n");
-        return EXIT_FAILURE;
-    }
+    //cublasStat = cublasCreate(&cublasHandle);
+    // don't bother going further if CUBLAS failed to intialise
+    //if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //{
+    //    fprintf(stderr, "CUBLAS initialisation error!\n");
+    //    return EXIT_FAILURE;
+    //}
 
     // allocate memory on device and check
-    cudaStat = cudaMalloc((void**)&d_az_array, n_az*n_za*sizeof(*az_array));
-    if (cudaStat != cudaSuccess)
-    {
-        fprintf(stderr,"Device memory allocation failed (allocate d_az_array)\n");
-        return EXIT_FAILURE;
-    }
-    cudaStat = cudaMalloc((void**)&d_za_array, n_az*n_za*sizeof(*za_array));
-    if (cudaStat != cudaSuccess)
-    {
-        fprintf(stderr,"Device memory allocation failed (allocate d_za_array)\n");
-        return EXIT_FAILURE;
-    }
-    cudaStat = cudaMalloc((void**)&d_res_array, n_az*n_za*sizeof(*res_array));
-    if (cudaStat != cudaSuccess)
-    {
-        fprintf(stderr,"Device memory allocation failed (allocate d_res_array)\n");
-        return EXIT_FAILURE;
-    }
-//    cudaStat = cudaMalloc((void**)&d_params, sizeof(params));
+//    gpuErrchk( cudaMalloc((void**)&d_az_array, n_az*sizeof(*az_array)));
+//    cudaStat = cudaMalloc((void**)&d_az_array, n_az*sizeof(*az_array));
 //    if (cudaStat != cudaSuccess)
 //    {
-//        fprintf(stderr,"Device memory allocation failed (allocate d_params)\n");
+//        fprintf(stderr,"Device memory allocation failed (allocate d_az_array)\n");
 //        return EXIT_FAILURE;
 //    }
-//    cudaStat = cudaMalloc((void**)&d_status, sizeof(cublasStatus_t));
+//   cudaStat = cudaMalloc((void**)&d_za_array, n_za*sizeof(*za_array));
 //    if (cudaStat != cudaSuccess)
 //    {
-//        fprintf(stderr, "!!!! device memory allocation error (allocate d_status)\n");
+//        fprintf(stderr,"Device memory allocation failed (allocate d_za_array)\n");
 //        return EXIT_FAILURE;
 //    }
-       
-    // setup CUBLAS matrices on device
-    cublasStat = cublasSetMatrix(n_az, n_za, sizeof(*az_array), az_array, n_az, d_az_array, n_az);
-    if (cublasStat != CUBLAS_STATUS_SUCCESS)
-    {
-        fprintf(stderr, "!!!! device access error (write az_array)\n");
-        return EXIT_FAILURE;
-    }
-    cublasStat = cublasSetMatrix(n_za, n_az, sizeof(*za_array), za_array, n_za, d_za_array, n_za);
-    if (cublasStat != CUBLAS_STATUS_SUCCESS)
-    {
-        fprintf(stderr, "!!!! device access error (write za_array)\n");
-        return EXIT_FAILURE;
-    }
-    cublasStat = cublasSetMatrix(n_az, n_za, sizeof(*res_array), res_array, n_az, d_res_array, n_az);
-    if (cublasStat != CUBLAS_STATUS_SUCCESS)
-    {
-        fprintf(stderr, "!!!! device access error (write res_array)\n");
-        return EXIT_FAILURE;
-    }
-    
-    // run the CUBLAS operation
-    cublasDgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, n_az, n_az, n_za, &alpha, d_az_array, n_az, d_za_array, n_za, &beta, d_res_array, n_az);
+    //cudaStat = cudaMalloc((void**)&d_azzagrid, n_az*n_za*sizeof(*azzagrid));
+    //if (cudaStat != cudaSuccess)
+    //{
+    //   fprintf(stderr,"Device memory allocation failed (allocate d_azzagrid)\n");
+    //    return EXIT_FAILURE;
+    //}
 
-    cublasStat = cublasGetMatrix(n_az, n_za, sizeof(*res_array), d_res_array, n_az , res_array, n_az);
-    if (cublasStat != CUBLAS_STATUS_SUCCESS)
-    {
-        fprintf(stderr, "!!!! device access error (read res_array)\n");
-        return EXIT_FAILURE;
-    }
-    printf("result matrix (using CUBLAS):\n");
-    for (int j = 0; j < n_za; j++)
-    {
-        for (int i = 0; i < n_az; i++)
-        {
-            printf ("%8.2f", res_array[IDX2C(i,j,n_az)]);
-        }
-        printf ("\n");
-    }
+    // setup CUBLAS vectors and matrices on device
+    //cublasStat = cublasSetMatrix(n_az, 1, sizeof(*az_array), az_array, n_az, d_az_array, n_az);
+    //if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //{
+    //    fprintf(stderr, "!!!! device access error (write az_array)\n");
+    //    return EXIT_FAILURE;
+    //}
+    //cublasStat = cublasSetMatrix(n_za, 1, sizeof(*za_array), za_array, n_za, d_za_array, n_za);
+    //if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //{
+    //    fprintf(stderr, "!!!! device access error (write za_array)\n");
+    //    return EXIT_FAILURE;
+    //}
+    //cublasStat = cublasSetMatrix(n_az, n_za, sizeof(*azzagrid), azzagrid, n_az, d_azzagrid, n_az);
+    //if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //{
+    //    fprintf(stderr, "!!!! device access error (write azzagrid)\n");
+    //    return EXIT_FAILURE;
+    //}
 
-    // actually run the kernal 
-    /*
-    kernal<<<1,128>>>(d_status, n_az, n_za, &h_params.alpha, d_az_array, d_za_array, &h_params.beta, d_res_array);
+
+    //    
+    //    printf("%d %d\n",n_az,n_za);
+    //    
+    //    // generate outer product
+    //    cublasStat = cublasDgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, 
+    //                            n_za,           /* rows in az_array */
+    //                            n_az,           /* columns in za_array */
+    //                            1,              /* columns in az_array */ 
+    //                            &alpha,         /* scaling factor */
+    //                            az_array, n_az, /* az array and columns in az array */
+    //                            za_array, n_za, /* za array and columns in za array */
+    //                            &beta,          /* initlisation of output matrix */
+    //                            d_azzagrid,     /* output matrix */
+    //                            n_az            /* columns in output = columns in za_array */);
+    //    if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //    {
+    //        fprintf(stderr, "!!!! outer product computation failed\n");
+    //        fprintf(stderr, "     %s\n", _cudaGetErrorEnum(cublasStat));
+    //        return EXIT_FAILURE;
+    //    }
+    //
+    //    // get the matrix back from device memory
+    //    cublasStat = cublasGetMatrix(n_az, n_za, sizeof(*azzagrid), d_azzagrid, n_az, azzagrid, n_az);
+    //    if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //    {
+    //        fprintf(stderr, "!!!! device access error (read azzagrid)\n");
+    //        fprintf(stderr, "     %s\n", _cudaGetErrorEnum(cublasStat));
+    //        return EXIT_FAILURE;
+    //    }
+    //
+    //    printf("%f %f %f\n",azzagrid[0],azzagrid[n_az],azzagrid[n_az+2]);
+    //
+    //
+    //    
+    //    
+    //    cudaStat = cudaMalloc((void**)&d_res_array, n_az*n_az*sizeof(*res_array));
+    //    if (cudaStat != cudaSuccess)
+    //    {
+    //        fprintf(stderr,"Device memory allocation failed (allocate d_res_array)\n");
+    //        return EXIT_FAILURE;
+    //    }
+    //    cudaStat = cudaMalloc((void**)&d_params, sizeof(params));
+    //    if (cudaStat != cudaSuccess)
+    //    {
+    //        fprintf(stderr,"Device memory allocation failed (allocate d_params)\n");
+    //        return EXIT_FAILURE;
+    //    }
+    //    cudaStat = cudaMalloc((void**)&d_status, sizeof(cublasStatus_t));
+    //    if (cudaStat != cudaSuccess)
+    //    {
+    //        fprintf(stderr, "!!!! device memory allocation error (allocate d_status)\n");
+    //        return EXIT_FAILURE;
+    //    }
+    //       
+    //    // setup CUBLAS matrices on device
+    //    cublasStat = cublasSetMatrix(n_az, n_za, sizeof(*az_array), az_array, n_az, d_az_array, n_az);
+    //    if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //    {
+    //        fprintf(stderr, "!!!! device access error (write az_array)\n");
+    //        return EXIT_FAILURE;
+    //    }
+    //    cublasStat = cublasSetMatrix(n_za, n_az, sizeof(*za_array), za_array, n_za, d_za_array, n_za);
+    //    if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //    {
+    //        fprintf(stderr, "!!!! device access error (write za_array)\n");
+    //        return EXIT_FAILURE;
+    //    }
+    //    cublasStat = cublasSetMatrix(n_az, n_az, sizeof(*res_array), res_array, n_az, d_res_array, n_az);
+    //    if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //    {
+    //        fprintf(stderr, "!!!! device access error (write res_array)\n");
+    //        return EXIT_FAILURE;
+    //    }
+    //    
+    //    // run the CUBLAS operation
+    //    cublasDgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, n_az, n_az, n_za, &alpha, d_az_array, n_az, d_za_array, n_za, &beta, d_res_array, n_az);
+    //
+    //    cublasStat = cublasGetMatrix(n_az, n_az, sizeof(*res_array), d_res_array, n_az , res_array, n_az);
+    //    if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //    {
+    //        fprintf(stderr, "!!!! device access error (read res_array)\n");
+    //        return EXIT_FAILURE;
+    //    }
+    //    printf("res matrix (post CUBLAS compute):\n");
+    //    for (int j = 0; j < n_za; j++)
+    //    {
+    //        for (int i = 0; i < n_az; i++)
+    //        {
+    //            printf ("%8.2f", res_array[IDX2C(i,j,n_az)]);
+    //        }
+    //        printf ("\n");
+    //    }
+    //
+    //    // actually run the kernal 
+    //    kernal<<<1,128>>>(d_status, n_az, n_za, &h_params.alpha, d_az_array, d_za_array, &h_params.beta, d_res_array);
+    // 
+    //    cudaStat = cudaGetLastError();
+    //    if (cudaStat != cudaSuccess)
+    //    {
+    //        fprintf(stderr, "!!!! kernel execution error: %s\n", cudaGetErrorString(cudaStat));
+    //        return EXIT_FAILURE;
+    //    }
+    //    
+    //        
+    //    cudaMemcpy(&cublasStat, d_status, sizeof(cublasStatus_t), cudaMemcpyDeviceToHost);
+    //    if (cublasStat != CUBLAS_STATUS_SUCCESS)
+    //    {
+    //        fprintf(stderr, "!!!! CUBLAS Device API call failed with code %d\n", cublasStat);
+    //        return EXIT_FAILURE;
+    //    }
+    //    */
  
-    cudaStat = cudaGetLastError();
-    if (cudaStat != cudaSuccess)
-    {
-        fprintf(stderr, "!!!! kernel execution error: %s\n", cudaGetErrorString(cudaStat));
-        return EXIT_FAILURE;
-    }
-    
-        
-    cudaMemcpy(&cublasStat, d_status, sizeof(cublasStatus_t), cudaMemcpyDeviceToHost);
-    if (cublasStat != CUBLAS_STATUS_SUCCESS)
-    {
-        fprintf(stderr, "!!!! CUBLAS Device API call failed with code %d\n", cublasStat);
-        return EXIT_FAILURE;
-    }
-    */
-    free(az_array);
-    free(za_array);
-    free(res_array);
-    cudaFree(az_array);
-    cudaFree(za_array);
-    cudaFree(res_array);
-
     /*
-    for (double az = 0.0; az < 360.0; az += az_step)
+       for (double az = 0.0; az < 360.0; az += az_step)
+       {
+    //one loop is ok, but we'll want to vectorise the next parts...
+    for (double za = 0.0; za <= 90.0; za += za_step)
     {
-        //one loop is ok, but we'll want to vectorise the next parts...
-        for (double za = 0.0; za <= 90.0; za += za_step)
-        {
-            af = make_cuDoubleComplex(0.0, 0.0);
-            calcWaveNumber(lambda, PI/2-(az*DEG2RAD), za*DEG2RAD, &wn);
-            for (int i = 0; i < ntiles; i++)
-            {
-                // af = exp(i*k.r)exp(i*k'.r)* = exp(i*[k-k'].r)
-                //    = cos([k-k'].r) + i*sin([k-k'].r)
-                // where k' is the target pointing wavenumbers, thus
-                // af is maximised when pointing directly at the target
-                ph = (wn.kx - target_wn.kx) * E_tile[i] +\
-                     (wn.ky - target_wn.ky) * N_tile[i] +\
-                     (wn.kz - target_wn.kz) * H_tile[i];
-                cuCadd(af, make_cuDoubleComplex(cos(ph), sin(ph))); // sum over tiles
-            }
-            af = cuCdiv(af, make_cuDoubleComplex(ntiles, 0)); // normalise it
-            
-            // keep array factor maximum up-to-date (booking keeping)
-            if (pow(cuCabs(af),2) > af_max) {af_max = pow(cuCabs(af),2);}
+    af = make_cuDoubleComplex(0.0, 0.0);
+    calcWaveNumber(lambda, PI/2-(az*DEG2RAD), za*DEG2RAD, &wn);
+    for (int i = 0; i < ntiles; i++)
+    {
+    // af = exp(i*k.r)exp(i*k'.r)* = exp(i*[k-k'].r)
+    //    = cos([k-k'].r) + i*sin([k-k'].r)
+    // where k' is the target pointing wavenumbers, thus
+    // af is maximised when pointing directly at the target
+    ph = (wn.kx - target_wn.kx) * E_tile[i] +\
+    (wn.ky - target_wn.ky) * N_tile[i] +\
+    (wn.kz - target_wn.kz) * H_tile[i];
+    cuCadd(af, make_cuDoubleComplex(cos(ph), sin(ph))); // sum over tiles
+    }
+    af = cuCdiv(af, make_cuDoubleComplex(ntiles, 0)); // normalise it
 
-            // calculate this pixel's contribution to beam solid angle
-            omega_A = omega_A + sin(za*DEG2RAD) * pow(cuCabs(af),2) * (az_step*DEG2RAD) * (za_step*DEG2RAD);
-            //printf("\rComputing array factor: %.1f%%",(az/360.0)*100); fflush(stdout);
-        } 
+    // keep array factor maximum up-to-date (booking keeping)
+    if (pow(cuCabs(af),2) > af_max) {af_max = pow(cuCabs(af),2);}
+
+    // calculate this pixel's contribution to beam solid angle
+    omega_A = omega_A + sin(za*DEG2RAD) * pow(cuCabs(af),2) * (az_step*DEG2RAD) * (za_step*DEG2RAD);
+    //printf("\rComputing array factor: %.1f%%",(az/360.0)*100); fflush(stdout);
+    } 
     }
     free(az_array);
     free(za_array);
@@ -783,7 +1069,7 @@ int main(int argc, char *argv[])
     printf("   Beam solid angle (sr):            %f\n",omega_A);
     printf("   Effective collecting area (m^2):  %.4f\n",eff_area);
     printf("   Effective array gain (K/Jy):      %.4f\n",gain);
-    */
+     */
 
     return 0;
 }
