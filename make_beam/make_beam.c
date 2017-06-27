@@ -12,6 +12,7 @@
 #include "ascii_header.h"
 #include "mwa_header.h"
 #include "vdifio.h"
+#include <omp.h>
 #include <mpi.h>
 #include <glob.h>
 #include <fcntl.h>
@@ -931,6 +932,16 @@ int main(int argc, char **argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
 */
 
+    // Profiling the code
+    clock_t tbegin, tend; // For profiling the code
+    double tprelude = 0.0;
+    double tpreomp = 0.0;
+    double tomp = 0.0;
+    double tpostomp = 0.0;
+    double tcoda = 0.0;
+
+    tbegin = clock(); // Begin timing "tprelude"
+
     int dir_index;
     int ii;
     double dtmp;
@@ -1676,7 +1687,12 @@ int main(int argc, char **argv) {
 
     char working_file[MAX_COMMAND_LENGTH];
 
+    tend = clock();
+    tprelude = (double)(tend-tbegin)/CLOCKS_PER_SEC;
+
     while(finished == 0) { // keep going indefinitely
+
+        tbegin = clock(); // Start timing "tpreomp"
 
         if (agc == agccount) {
             if (make_psrfits) {
@@ -1778,7 +1794,6 @@ int main(int argc, char **argv) {
             }
         }
 
-        int8_t *in_ptr=(int8_t *) buffer;
         int stat = 0;
         bzero(spectrum,(nchan*outpol*sizeof(float)));
         for (stat=0;stat<nchan;stat++) {
@@ -1794,9 +1809,17 @@ int main(int argc, char **argv) {
             bzero(data_buffer_vdif,(vf.sizeof_buffer*sizeof(float)));
         }
 
+        tend = clock();
+        tpreomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
+
+        tbegin = clock(); // Start timing "tomp"
+
+#pragma omp parallel for
         for (index = 0; index < nstation*npol;index = index + 2) {
 
             for (ch=0;ch<nchan;ch++) {
+                int8_t *in_ptr = (int8_t *)buffer + 2*index*nchan + 2*ch;
+
                 complex float e_true[2],e_dash[2];
 
                 if (swap_complex) {
@@ -1889,10 +1912,13 @@ int main(int argc, char **argv) {
                     incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index]*weights_array[index]*(e_true[0] * conj(e_true[0])))/wgt_sum;
                     incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index+1]*weights_array[index+1]*(e_true[1] * conj(e_true[1])))/wgt_sum;
                 }
-                in_ptr = in_ptr+2;
             }
-            in_ptr = in_ptr + (nchan*2); // next pol0
-        }
+        } // end OMP for loop
+
+        tend = clock();
+        tomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
+
+        tbegin = clock(); // Start timing "tpostomp"
 
         // detect the beam or prep from invert_pfb
         // reduce over each channel for the beam
@@ -2313,9 +2339,15 @@ int main(int argc, char **argv) {
         }
         specnum++;
 
+        tend = clock();
+        tpostomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
+
     } // end while loop
 
 BARRIER:
+
+    tbegin = clock(); // Start timing "tcoda"
+
     if (execute == 1 && (fp != NULL)) {
         //cleanup
         fclose(fp);
@@ -2373,10 +2405,16 @@ BARRIER:
         fclose(out2_file);
     }
 
+    tend = clock();
+    tcoda = (double)(tend-tbegin)/CLOCKS_PER_SEC;
+
 /* Parallel processing will be shifted to the wrapper script
     MPI_Barrier(MPI_COMM_WORLD);
 
     MPI_Finalize();
 */
+
+    fprintf( stdout, "# omp tprelude tpreomp tomp tpostomp tcoda\n" );
+    fprintf( stdout, "%e %e %e %e %e\n", tprelude, tpreomp, tomp, tpostomp, tcoda );
 
 }
