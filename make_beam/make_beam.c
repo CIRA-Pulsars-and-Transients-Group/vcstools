@@ -1796,9 +1796,11 @@ int main(int argc, char **argv) {
 
         for (index = 0; index < nstation*npol;index = index + 2) {
 
-#pragma omp parallel for
+//#pragma omp parallel for
             for (ch=0;ch<nchan;ch++) {
                 int8_t *in_ptr = (int8_t *)buffer + index*nchan + 2*ch;
+fprintf(stdout, "index = %d,  ch = %d,  in_ptr = %p\n", index, ch, in_ptr);
+
                 complex float e_true[2],e_dash[2];
 
                 if (swap_complex) {
@@ -1893,6 +1895,7 @@ int main(int argc, char **argv) {
                 }
             } // end OMP for loop
         }
+exit(0);
 
         // detect the beam or prep from invert_pfb
         // reduce over each channel for the beam
