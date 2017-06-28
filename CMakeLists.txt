@@ -2,8 +2,8 @@
 cmake_minimum_required (VERSION 2.6)
 project (MWA_Utilities)
 
-set(CMAKE_C_FLAGS "-O3 -g -fPIC -fopenmp")
-set(CMAKE_C_FLAGS_DEBUG "-O0 -g -fPIC -fopenmp")
+set(CMAKE_C_FLAGS "-O3 -g -fPIC")
+set(CMAKE_C_FLAGS_DEBUG "-O0 -g -fPIC")
 
 set (MWA_Utilities_MAJOR_VERSION 1)
 set (MWA_Utilities_MINOR_VERSION 1)
@@ -58,6 +58,7 @@ endif (CUDA_FOUND)
 
 if (PSRFITS_UTILS_FOUND)
     add_subdirectory(make_beam)
+    add_subdirectory(make_beam_small)
 endif (PSRFITS_UTILS_FOUND)
 
 
@@ -73,7 +74,7 @@ SET(CPACK_PACKAGE_VERSION_MINOR "1")
 SET(CPACK_PACKAGE_VERSION_PATCH "1")
 SET(CPACK_PACKAGE_INSTALL_DIRECTORY "CMake
 ${CMake_VERSION_MAJOR}.${CMake_VERSION_MINOR}")
-SET(CPACK_PACKAGE_EXECUTABLES "read_mwac" "make_beam" "read_pfb" "get_delays")
+SET(CPACK_PACKAGE_EXECUTABLES "read_mwac" "make_beam" "read_pfb" "get_delays" "make_beam_small")
 SET(CPACK_GENERATOR "RPM")
 SET(CPACK_SET_DESTDIR ON)
 
