@@ -281,8 +281,8 @@ void get_delays(
     double dec_degs = parse_dec( dec_ddmmss );
     double ra_hours = parse_ra( ra_hhmmss );
 
-    int conjugate = 1;
-    int invert = 1;
+    int conjugate = -1;
+    int invert = -1;
     int write_files = 1;
     
     FILE *phase_file = NULL;
@@ -658,12 +658,10 @@ void get_delays(
     
     /* get requested Az/El from command line */
   
-    mjd=intmjd+fracmjd;
-    
+    mjd = intmjd + fracmjd;
+
     mjd = mjd + (sec_offset+0.5)/86400.0;
 
-    //fprintf(stdout,"calib:increment %d seconds to: %f\n",secs,mjd);
-    
     mjd2lst(mjd,&lmst);
 
     //fprintf(stdout,"calib: current lmst (radian) = %f\n",lmst);

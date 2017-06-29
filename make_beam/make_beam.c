@@ -1553,6 +1553,7 @@ int main(int argc, char **argv) {
     int nspec = 1;
     size_t items_to_read = nstation*npol*nchan*2;
     float *spectrum = (float *) calloc(nspec*nchan*outpol,sizeof(float));
+fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpol);
     float *incoherent_sum = (float *) calloc(nspec*nchan,sizeof(float));
 
     complex float **fringe = calloc(nchan,sizeof(complex float));
@@ -1690,9 +1691,12 @@ int main(int argc, char **argv) {
     tend = clock();
     tprelude = (double)(tend-tbegin)/CLOCKS_PER_SEC;
 
+    int sample = -1;
     while(finished == 0) { // keep going indefinitely
 
         tbegin = clock(); // Start timing "tpreomp"
+
+        sample++;
 
         if (agc == agccount) {
             if (make_psrfits) {
@@ -2354,6 +2358,8 @@ BARRIER:
         if (expunge)
             unlink(working_file);
     }
+
+fprintf(stdout, "sample = %d\n", sample);
 
     if (make_psrfits == 1 && pf.status == 0) {
         /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/

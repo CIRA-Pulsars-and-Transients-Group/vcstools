@@ -626,12 +626,10 @@ int     main(int argc, char **argv) {
         
         /* get requested Az/El from command line */
       
-        mjd=intmjd+fracmjd;
+        mjd = intmjd + fracmjd;
         
         mjd = mjd + (secs+0.5)/86400.0;
 
-        //fprintf(stdout,"calib:increment %d seconds to: %f\n",secs,mjd);
-        
         mjd2lst(mjd,&lmst);
 
         //fprintf(stdout,"calib: current lmst (radian) = %f\n",lmst);

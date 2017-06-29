@@ -916,6 +916,8 @@ int main(int argc, char **argv) {
             NULL           // invJi array           (answer will be output here)
     );
 
+    recalc_delays = 0;
+
     // Read in flag weights
     float wgt_sum = get_weights(nstation, npol, weights, weights_file, &weights_array); // this is now a flag file
 
@@ -935,8 +937,6 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Failed to parse the correct number of Jones matrices or phases\n");
         exit(EXIT_FAILURE);
     }
-
-    recalc_delays = 0;
 
     // Read in psrfits header
     fitsheader=fopen(proc_psrfits_file,"r");
@@ -992,6 +992,7 @@ int main(int argc, char **argv) {
     unsigned int nspec = 1;
     size_t items_to_read = nstation*npol*nchan*2;
     float *spectrum = (float *) calloc(nspec*nchan*outpol,sizeof(float));
+fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpol);
 
     complex float **fringe = calloc(nchan,sizeof(complex float));
 
@@ -1289,7 +1290,7 @@ int main(int argc, char **argv) {
                     0,             // coarse_chan (used for Offringa solutions)
                     dec_ddmmss,    // dec as a string "dd:mm:ss"
                     ra_hhmmss,     // ra  as a string "hh:mm:ss"
-                    0,             // "edge" (seems to be always called with value 0 just now)
+                    edge,          // "edge" (seems to be always called with value 0 just now)
                     frequency,     // middle of the first frequency channel in Hz
                     metafits,      // filename of the metafits file for this obsID
                     128,           // number of fine channels
@@ -1303,7 +1304,7 @@ int main(int argc, char **argv) {
                     0,             // turn verbose off
                     chan_width,    // width of fine channel (Hz)
                     time_utc,      // utc time string
-                    (double)(sample / sample_rate), // seconds offset from time_utc at which to calculate delays
+                    (double)(sample / sample_rate + 1), // seconds offset from time_utc at which to calculate delays
                     phases_file,        // For now, output phases here
                     weights_file,       // For now, output flags here
                     jones_file,         // For now, output jones matrices here
@@ -1338,6 +1339,8 @@ int main(int argc, char **argv) {
         tpostomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
 
     } // end while loop
+
+fprintf(stdout, "sample = %d\n", sample);
 
     tbegin = clock(); // Start timing "tcoda"
 
