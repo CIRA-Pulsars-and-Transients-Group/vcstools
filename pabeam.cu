@@ -47,7 +47,7 @@ typedef struct tazza_t
 void usage();
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd);
 void mjd2lst(double mjd, double *lst);
-void calcWaveNumber(double lambda, double phi, double theta, wavenums *p_wn);
+void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn);
 void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza);
 int getNumTiles(char *metafits);
 void getTilePositions(char *metafits, int ninput,\
@@ -103,14 +103,15 @@ void mjd2lst(double mjd, double *lst)
     *lst = lmst;
 }
 
-void calcWaveNumber(double lambda, double phi, double theta, wavenums *p_wn)
+void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn)
 {
     /* Calculate the 3D wavenumbers for a given wavelength (lambda) from the direction (az,za).
      * Accepts wavelength (m), azimuth (rad) and zenith angle (rad) and a pointer to a wavenums struct to populate.*/
-    double a, ast;
+    double a, ast, phi;
 
     a = 2 * PI / lambda;
-    ast = a * sin(theta);
+    ast = a * sin(za);
+    phi = PI/2 - az;
 
     /* 
      * the standard equations are:
@@ -122,6 +123,7 @@ void calcWaveNumber(double lambda, double phi, double theta, wavenums *p_wn)
      * the convention from Sutinjo et al. 2015, where
      *      theta = za
      *      phi = pi/2 - az
+     * i.e. the azimuth is measured clockwise from East (standard for antenna theory, offset from astronomy)
      */
 
     p_wn->kx = ast * cos(phi); 
@@ -393,13 +395,13 @@ inline void gpuAssert(cudaError_t code, char *file, int line, bool abort=true)
 #define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
 
 
-__global__ void getWavevectors(int nel, double a, double *theta, double *phi, wavenums *p_twn, wavenums *p_wn)
+__global__ void getWavevectors(int nel, double a, double *za, double *az, wavenums *p_twn, wavenums *p_wn)
 {
     /* Kernal to compute the wavevectors for a list of theta/phi.
        nel   = total number of elements in each array
        a     = amplitude factor (i.e. 2pi/lambda)
-       theta = array of zenith angles
-       phi   = array of azimuths
+       za    = array of zenith angles
+       az    = array of azimuths
        p_twn = target wavenumber struct
        p_wn  = array of structs to contain kx, ky and kz
 
@@ -409,20 +411,24 @@ __global__ void getWavevectors(int nel, double a, double *theta, double *phi, wa
        ky = a * sin(theta) * sin(phi)
        kz = a * cos(theta)
 
-       Assuming that theta,phi are in the convention from Sutinjo et al. 2015
-       i.e. phi = pi/2 - az
+       Assuming that (theta,phi) are in the convention from Sutinjo et al. 2015:
+       i.e. phi = pi/2 - az   AND   theta = za
+
+       The azimuth is measured clockwise from East (standard for antenna theory, offset from astronomy)
      */
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
-    double ast;
+    double ast, phi;
 
     for (int i = index; i < nel; i+= stride)
     {
-        ast = a * sin(theta[i]);
-        p_wn[i].kx = ast * cos(phi[i]) - p_twn->kx; 
-        p_wn[i].ky = ast * sin(phi[i]) - p_twn->ky;
+        ast = a * sin(za[i]);
+        phi = PI/2 - az[i];
+        p_wn[i].kx = ast * cos(phi) - p_twn->kx; 
+        p_wn[i].ky = ast * sin(phi) - p_twn->ky;
         p_wn[i].kz = ast - p_twn->kz;
     } 
+    __syncthreads();
 }
 
 
@@ -499,7 +505,7 @@ int main(int argc, char *argv[])
     printf("Getting target (Az,ZA)\n");
     calcTargetAZZA(ra, dec, time, &target);
     printf("Computing wavenumbers towards target\n");
-    calcWaveNumber(lambda, PI/2-target.az, target.za, &target_wn);
+    calcWaveNumber(lambda, target.az, target.za, &target_wn);
     printf("    kx = %f    ky = %f    kz = %f\n",target_wn.kx,target_wn.ky,target_wn.kz);
 
     // get the number of tiles in array
@@ -633,6 +639,7 @@ int main(int argc, char *argv[])
     }
 
     // populate the host vectors
+    //      this is currently the most memory intensive part: ~20GB at 0.01x0.01 resolution
     printf("Initialising az, za and result matrix\n");
     // want arrays to be something like:
     // az = [0 0 0 0 ... 1 1 1 1 ...]
@@ -691,7 +698,7 @@ int main(int argc, char *argv[])
     wavenums *d_wn_array, *d_twn;
     int itersize = iter_n_az * iter_n_za;
     double *subAz, *subZA;
-    wavenums *subwn;
+    wavenums *subwn, *tmpsubwn; 
 
     subAz = (double *)malloc(itersize * sizeof(double));
     if (!subAz)
@@ -711,6 +718,7 @@ int main(int argc, char *argv[])
         fprintf(stderr,"Host memory allocation failed (allocate subwn)\n");
         return EXIT_FAILURE;
     }
+    tmpsubwn = (wavenums *)malloc(sizeof(wavenums));
 
     // populated full array, but we want to split that up into chunks
     printf("%d az , %d za per iteration\n", iter_n_az, iter_n_za);
@@ -754,13 +762,20 @@ int main(int argc, char *argv[])
         gpuErrchk( cudaMemcpy(d_twn, &target_wn, sizeof(wavenums), cudaMemcpyHostToDevice));
 
         // launch kernal to compute wavenumbers
+        printf("Launching kernal to compute wave vectors\n");
         getWavevectors<<<numBlocks, blockSize>>>(itersize, 2*PI/lambda, d_za_array, d_az_array, d_twn, d_wn_array);
     
         // copy relevant memory back to host
         gpuErrchk( cudaMemcpy(subwn, d_wn_array, itersize * sizeof(wavenums), cudaMemcpyDeviceToHost));
         cudaDeviceSynchronize();
 
-        printf("%f %f %f\n",subwn[12].kx,subwn[12].ky,subwn[12].kz);
+        // test the CPU equaivlent to make sure we get the same numbers
+        printf("    comparing GPU and CPU output\n");
+        calcWaveNumber(lambda, subAz[12], subZA[12], tmpsubwn);
+        printf("    %f %f %f\n",subwn[12].kx,subwn[12].ky,subwn[12].kz);
+        printf("    %f %f %f\n",tmpsubwn->kx-target_wn.kx,tmpsubwn->ky-target_wn.ky,tmpsubwn->kz-target_wn.kz);
+
+        
 
         // done for now free the memory on the device
         gpuErrchk( cudaFree(d_az_array));
@@ -777,6 +792,7 @@ int main(int argc, char *argv[])
     free(subAz);
     free(subZA);
     free(subwn);
+    free(tmpsubwn);
     //cudaFree(d_az_array);
     //cudaFree(d_za_array);
     //cudaFree(d_af_array);
