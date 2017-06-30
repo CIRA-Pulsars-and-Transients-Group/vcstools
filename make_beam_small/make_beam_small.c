@@ -899,17 +899,15 @@ int main(int argc, char **argv) {
             0,             // get_offringa? For now, always no
             1,             // get_rts?      For now, always yes
             DI_Jones_file, // filename of the DI Jones file
-            1,             // generate a psrfits header
-            1,             // write a psrfits header
             sample_rate,   // = 10000 samples per sec
             0,             // turn verbose off
             chan_width,    // width of fine channel (Hz)
             time_utc,      // utc time string
             0.0,           // seconds offset from time_utc at which to calculate delays
-            phases_file,        // For now, output phases here
-            weights_file,       // For now, output flags here
-            jones_file,         // For now, output jones matrices here
-            proc_psrfits_file,  // For now, output psrfits header here
+            phases_file,   // For now, output phases here
+            weights_file,  // For now, output flags here
+            jones_file,    // For now, output jones matrices here
+            &pf,           // Populate psrfits header info
             NULL,          // weights array         (answer will be output here)
             NULL,          // phases array          (answer will be output here)
             NULL,          // complex weights array (answer will be output here)
@@ -1298,17 +1296,15 @@ printf_psrfits( &pf );
                     0,             // get_offringa? For now, always no
                     1,             // get_rts?      For now, always yes
                     DI_Jones_file, // filename of the DI Jones file
-                    0,             // generate a psrfits header
-                    0,             // write a psrfits header
                     sample_rate,   // = 10000 samples per sec
                     0,             // turn verbose off
                     chan_width,    // width of fine channel (Hz)
                     time_utc,      // utc time string
                     (double)(sample / sample_rate + 1), // seconds offset from time_utc at which to calculate delays
-                    phases_file,        // For now, output phases here
-                    weights_file,       // For now, output flags here
-                    jones_file,         // For now, output jones matrices here
-                    proc_psrfits_file,  // For now, output psrfits header here
+                    phases_file,   // For now, output phases here
+                    weights_file,  // For now, output flags here
+                    jones_file,    // For now, output jones matrices here
+                    NULL,          // Don't update psrfits header
                     NULL,          // weights array         (answer will be output here)
                     NULL,          // phases array          (answer will be output here)
                     NULL,          // complex weights array (answer will be output here)
