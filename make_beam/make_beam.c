@@ -1818,7 +1818,6 @@ fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpo
 
         tbegin = clock(); // Start timing "tomp"
 
-#pragma omp parallel for
         for (index = 0; index < nstation*npol;index = index + 2) {
 
             for (ch=0;ch<nchan;ch++) {
@@ -1917,7 +1916,7 @@ fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpo
                     incoherent_sum[ch] = incoherent_sum[ch] + (weights_array[index+1]*weights_array[index+1]*(e_true[1] * conj(e_true[1])))/wgt_sum;
                 }
             }
-        } // end OMP for loop
+        }
 
         tend = clock();
         tomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
@@ -2073,6 +2072,7 @@ fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpo
                 } else if (type == 2) {
                     memcpy(pf.sub.data,data_buffer_psrfits,pf.sub.bytes_per_subint);
                 }
+fprintf(stdout, "   Just copied %d bytes to pf.sub.data\n", pf.sub.bytes_per_subint );
 
                 if (psrfits_write_subint(&pf) != 0) {
                     fprintf(stderr,"Write subint failed file exists?\n");

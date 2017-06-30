@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -40,6 +39,43 @@ int nfrequency;
 int npol;
 int nstation;
 //=====================//
+
+void printf_psrfits( struct psrfits *pf ) {
+    fprintf(stdout, "PSRFITS:\n");
+    fprintf(stdout, "Basename of output file     [%s]\n", pf->basefilename);
+    fprintf(stdout, "Filename of output file     [%s]\n", pf->filename);
+
+    fprintf(stdout, "PSRFITS HDRINFO:\n");
+    fprintf(stdout, "Obs mode                    [%s]\n", pf->hdr.obs_mode);
+    fprintf(stdout, "Telescope                   [%s]\n", pf->hdr.telescope);
+    fprintf(stdout, "Observer                    [%s]\n", pf->hdr.observer);
+    fprintf(stdout, "Source                      [%s]\n", pf->hdr.source);
+    fprintf(stdout, "Front End                   [%s]\n", pf->hdr.frontend);
+    fprintf(stdout, "Back End                    [%s]\n", pf->hdr.backend);
+    fprintf(stdout, "project_id                  [%s]\n", pf->hdr.project_id);
+    fprintf(stdout, "Date Obs                    [%s]\n", pf->hdr.date_obs);
+    fprintf(stdout, "Sample Time (s)             [%lf]\n", pf->hdr.dt);
+    fprintf(stdout, "Centre Frequency (MHz)      [%lf]\n", pf->hdr.fctr);
+    fprintf(stdout, "Bandwidth (MHz)             [%lf]\n", pf->hdr.BW);
+    fprintf(stdout, "RA (2000) (deg)             [%lf]\n", pf->hdr.ra2000);
+    fprintf(stdout, "Dec (2000) (deg)            [%lf]\n", pf->hdr.dec2000);
+    fprintf(stdout, "Azimuth (deg)               [%lf]\n", pf->hdr.azimuth);
+    fprintf(stdout, "Zenith Angle (deg)          [%lf]\n", pf->hdr.zenith_ang);
+    fprintf(stdout, "Beam FWHM (deg)             [%lf]\n", pf->hdr.beam_FWHM);
+    fprintf(stdout, "Seconds past 00h LST        [%lf]\n", pf->hdr.start_lst);
+    fprintf(stdout, "Seconds past 00h UTC        [%lf]\n", pf->hdr.start_sec);
+    fprintf(stdout, "Start MJD (whole day)       [%d]\n", pf->hdr.start_day);
+    fprintf(stdout, "Scan Number                 [%d]\n", pf->hdr.scan_number);
+    fprintf(stdout, "Receiver Polarisation       [%d]\n", pf->hdr.rcvr_polns);
+    fprintf(stdout, "Summed Polarisations? [1/0] [%d]\n", pf->hdr.summed_polns);
+    fprintf(stdout, "Number of polarisations     [%d]\n", pf->hdr.npol);
+    fprintf(stdout, "Length of scan in this file [%lf]\n", pf->hdr.scanlen);
+    fprintf(stdout, "Offset Subint               [%d]\n", pf->hdr.offset_subint);
+    fprintf(stdout, "Number of Channels          [%d]\n", pf->hdr.nchan);
+    fprintf(stdout, "Number of bits per sample   [%d]\n", pf->hdr.nbits);
+    fprintf(stdout, "Number of spectra per row   [%d]\n", pf->hdr.nsblk);
+    fprintf(stdout, "Start MJD                   [%Lf]\n", pf->hdr.MJD_epoch);
+}
 
 double parse_dec( char* dec_ddmmss ) {
 /* Parse a string containing a declination in dd:mm:ss format into
@@ -270,9 +306,7 @@ void get_delays(
         )
 {
     
-    fprintf(stdout, "\n**********************\n");
     fprintf(stdout, "* RUNNING GET_DELAYS *\n");
-    fprintf(stdout, "**********************\n\n");
     int row;
     int i, j;
 
@@ -867,174 +901,95 @@ void get_delays(
 
         fits_open_file(&fptr,metafits,READONLY,&status);
         fits_read_key(fptr,TSTRING,"PROJECT",pf.hdr.project_id,NULL,&status);
-
-
         fits_close_file(fptr,&status);
 
         strcpy(pf.basefilename, "/tmp/obsfile");
         
-        fprintf(stdout,"Basename of output file [%s]:\n",pf.basefilename);
-        
         // Now set values for our hdrinfo structure
         strcpy(pf.hdr.obs_mode,"SEARCH");
-        
         pf.hdr.scanlen = 1.0; // in sec
-        
-        fprintf(stdout,"Length of scan in this file [%lf]:\n",pf.hdr.scanlen);
-        
         strcpy(pf.hdr.observer, "MWA User");
-        
-        fprintf(stdout,"Observer [%s]:\n",pf.hdr.observer);
-        
         strcpy(pf.hdr.telescope, "MWA");
-        
-        fprintf(stdout,"Telescope [%s]:\n",pf.hdr.telescope);
-        
-
         strncpy(pf.hdr.source,obsid,23);
         
-        fprintf(stdout,"Source [%s]:\n",pf.hdr.source);
         
         strcpy(pf.hdr.frontend, "MWA-RECVR");
-        fprintf(stdout,"Front End [%s]:\n",pf.hdr.frontend);
         char backend[24];
         snprintf(backend, 24*sizeof(char), "GD-%s-MB-%s-U-%s", GET_DELAYS_VERSION, MAKE_BEAM_VERSION, UTILS_VERSION);
         strcpy(pf.hdr.backend, backend);
-        fprintf(stdout,"Back End [%s]:\n",pf.hdr.backend);
-
-        
-        fprintf(stdout,"project_id [%s]:\n",pf.hdr.project_id);
         
         /* Now let us finally get the time right */
         
         strcpy(pf.hdr.date_obs, time_utc);
-        fprintf(stdout,"Date Obs [%s]:\n",pf.hdr.date_obs);
-        
         strcpy(pf.hdr.poln_type, "LIN");
         strcpy(pf.hdr.track_mode, "TRACK");
         strcpy(pf.hdr.cal_mode, "OFF");
         strcpy(pf.hdr.feed_mode, "FA");
         
-        pf.hdr.dt = 1.0/samples_per_sec;			// sample rate (s)
-        
-        fprintf(stdout,"Sample Time (s) [%lf]:\n",pf.hdr.dt);
-        
-        pf.hdr.fctr = (frequency + (edge+(nchan/2.0))*chan_width)/1.0e6;			// frequency (MHz)
-        
-        fprintf(stdout,"Centre Frequency (MHz) [%lf]:\n",pf.hdr.fctr);
-        
-        pf.hdr.BW = (nchan*chan_width)/1.0e6;
-        
-        fprintf(stdout,"Bandwidth (MHz) [%lf]:\n",pf.hdr.BW);
-        
-        pf.hdr.ra2000 = mean_ra * DR2D;
-        
-        fprintf(stdout,"RA (2000) (deg) [%lf]:\n",pf.hdr.ra2000);
-        
-        dec2hms(pf.hdr.ra_str, pf.hdr.ra2000/15.0, 0);
-        
-        pf.hdr.dec2000 = mean_dec * DR2D;
-        
-        fprintf(stdout,"Dec (2000) (deg) [%lf]:\n",pf.hdr.dec2000);
-        
-        dec2hms(pf.hdr.dec_str, pf.hdr.dec2000, 1);
-        
-        pf.hdr.azimuth = az*DR2D;
-        
-        fprintf(stdout,"Azimuth (deg) [%lf]:\n",pf.hdr.azimuth);
-        
-        pf.hdr.zenith_ang = 90.0 - (el*DR2D);
-        
-        fprintf(stdout,"Zenith Angle (deg) [%lf]:\n",pf.hdr.zenith_ang);
-        
-        pf.hdr.beam_FWHM = 0.25;
-        
-        fprintf(stdout,"Beam FWHM (deg) [%lf]:\n",pf.hdr.beam_FWHM);
-        
-        pf.hdr.start_lst = lmst * 60.0 * 60.0; // Local Apparent Sidereal Time in seconds
+        pf.hdr.dt   = 1.0/samples_per_sec;                                   // sample rate (s)
+        pf.hdr.fctr = (frequency + (edge+(nchan/2.0))*chan_width)/1.0e6;     // frequency (MHz)
+        pf.hdr.BW   = (nchan*chan_width)/1.0e6;
 
-        fprintf(stdout,"Seconds past 00h LST (%lf hours) [%lf]:\n",lmst,pf.hdr.start_lst);
-        
-        pf.hdr.start_sec = roundf(fracmjd*86400.0);
-        
-        /* this will always be a whole second - so I'm rounding. */
-        
-        fprintf(stdout,"Seconds past 00h UTC [%lf]:\n",pf.hdr.start_sec);
-        
+        pf.hdr.ra2000    = mean_ra  * DR2D;
+        pf.hdr.dec2000   = mean_dec * DR2D;
+
+        dec2hms(pf.hdr.ra_str, pf.hdr.ra2000/15.0, 0);
+        dec2hms(pf.hdr.dec_str, pf.hdr.dec2000, 1);
+
+        pf.hdr.azimuth    = az*DR2D;
+        pf.hdr.zenith_ang = 90.0 - (el*DR2D);
+
+        pf.hdr.beam_FWHM = 0.25;
+        pf.hdr.start_lst = lmst * 60.0 * 60.0;        // Local Apparent Sidereal Time in seconds
+        pf.hdr.start_sec = roundf(fracmjd*86400.0);   // this will always be a whole second - so I'm rounding.
         pf.hdr.start_day = intmjd;
-        
-        fprintf(stdout,"Start MJD (whole day) [%d]:\n",pf.hdr.start_day);
-        
-        pf.hdr.scan_number = 1;
-        fprintf(stdout,"Scan Number [%d]:\n",pf.hdr.scan_number);
-        
-        pf.hdr.rcvr_polns = 2;
-        fprintf(stdout,"Receiver Polarisation [%d]:\n",pf.hdr.rcvr_polns);
-        
-        
-        pf.hdr.summed_polns = 0;
-        fprintf(stdout,"Summed Polarisations? [1/0]  [%d]:\n",pf.hdr.summed_polns);
-        
-        
+
+        pf.hdr.scan_number   = 1;
+        pf.hdr.rcvr_polns    = 2;
+        pf.hdr.summed_polns  = 0;
         pf.hdr.offset_subint = 0;
-        fprintf(stdout,"Offset Subint   [%d]:\n",pf.hdr.offset_subint);
-        
-        
-        pf.hdr.nchan = nchan;
-        fprintf(stdout,"Number of Channels  [%d]:\n",pf.hdr.nchan);
-        
-        pf.hdr.df = chan_width/1.0e6;
-        
+
+        pf.hdr.nchan      = nchan;
+        pf.hdr.df         = chan_width/1.0e6;
         pf.hdr.orig_nchan = pf.hdr.nchan;
-        pf.hdr.orig_df = pf.hdr.df;
-        
-        pf.hdr.nbits = 8;
-        
-        fprintf(stdout,"Number of bits per sample  [%d]:\n",pf.hdr.nbits);
-        
-        pf.hdr.npol = 2;
-        
-        pf.hdr.nsblk = samples_per_sec;  // block is always 1 second of data
-        
-        fprintf(stdout,"Number of spectra per row  [%d]:\n",pf.hdr.nsblk);
-        
-        pf.hdr.MJD_epoch = intmjd + fracmjd;
-    
-        fprintf(stdout,"Start MJD intmjd=%.1f fracmjd=%f (%Lf)\n",intmjd,fracmjd, pf.hdr.MJD_epoch);
-        
+        pf.hdr.orig_df    = pf.hdr.df;
+        pf.hdr.nbits      = 8;
+        pf.hdr.npol       = 2;
+        pf.hdr.nsblk      = samples_per_sec;  // block is always 1 second of data
+        pf.hdr.MJD_epoch  = intmjd + fracmjd;
         
         pf.hdr.ds_freq_fact = 1;
         pf.hdr.ds_time_fact = 1;
-        
-        
+
         // some things that we are unlikely to change
-        //
-        pf.hdr.fd_hand = 0;
-        pf.hdr.fd_sang = 0.0;
-        pf.hdr.fd_xyph = 0.0;
+        pf.hdr.fd_hand  = 0;
+        pf.hdr.fd_sang  = 0.0;
+        pf.hdr.fd_xyph  = 0.0;
         pf.hdr.be_phase = 0.0;
-        pf.hdr.chan_dm = 0.0;
-        
-        
+        pf.hdr.chan_dm  = 0.0;
+
         // Now set values for our subint structure
-        pf.tot_rows = 0;
-        pf.sub.tsubint = roundf(pf.hdr.nsblk * pf.hdr.dt);
-        pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
-        pf.sub.lst = pf.hdr.start_lst;
-        pf.sub.ra = pf.hdr.ra2000;
-        pf.sub.dec = pf.hdr.dec2000;
+        pf.tot_rows     = 0;
+        pf.sub.tsubint  = roundf(pf.hdr.nsblk * pf.hdr.dt);
+        pf.sub.offs     = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
+        pf.sub.lst      = pf.hdr.start_lst;
+        pf.sub.ra       = pf.hdr.ra2000;
+        pf.sub.dec      = pf.hdr.dec2000;
         slaEqgal(pf.hdr.ra2000*DD2R, pf.hdr.dec2000*DD2R,
                  &pf.sub.glon, &pf.sub.glat);
-        pf.sub.glon *= DR2D;
-        pf.sub.glat *= DR2D;
+        pf.sub.glon    *= DR2D;
+        pf.sub.glat    *= DR2D;
         pf.sub.feed_ang = 0.0;
-        pf.sub.pos_ang = 0.0;
-        pf.sub.par_ang = 0.0;
-        pf.sub.tel_az = pf.hdr.azimuth;
-        pf.sub.tel_zen = pf.hdr.zenith_ang;
+        pf.sub.pos_ang  = 0.0;
+        pf.sub.par_ang  = 0.0;
+        pf.sub.tel_az   = pf.hdr.azimuth;
+        pf.sub.tel_zen  = pf.hdr.zenith_ang;
         pf.sub.bytes_per_subint = (pf.hdr.nbits * pf.hdr.nchan *
                                    pf.hdr.npol * pf.hdr.nsblk) / 8;
         pf.sub.FITS_typecode = TBYTE;  // 11 = byte
+        
+        // Print out values to stdout
+        printf_psrfits( &pf );
         
         /* now copy this to a file that can be read by the beamformer */
         if (write_psrfits) {
@@ -1073,9 +1028,7 @@ void get_delays(
     free(flag_array);
     free(antenna_num);
 
-    fprintf(stdout, "\n**********************\n");
     fprintf(stdout, "* EXITING GET_DELAYS *\n");
-    fprintf(stdout, "**********************\n\n");
 }
 
 int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix

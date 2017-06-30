@@ -1031,7 +1031,6 @@ fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpo
     }
 
     int set_levels = 1;
-    int specnum    = 0;
     int index      = 0;
     int finished   = 0;
     int offset_out_psrfits = 0;
@@ -1260,7 +1259,9 @@ fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpo
                 }
                 float2int8_trunc(data_buffer_psrfits, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8_psrfits);
                 int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8_psrfits);
-                memcpy(pf.sub.data,out_buffer_8_psrfits,pf.sub.bytes_per_subint);
+                memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
+fprintf(stdout, "   Just copied %d bytes to pf.sub.data\n", pf.sub.bytes_per_subint );
+printf_psrfits( &pf );
 
                 if (psrfits_write_subint(&pf) != 0) {
                     fprintf(stderr,"Write subint failed file exists?\n");
@@ -1298,8 +1299,8 @@ fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpo
                     0,             // get_offringa? For now, always no
                     1,             // get_rts?      For now, always yes
                     DI_Jones_file, // filename of the DI Jones file
-                    1,             // generate a psrfits header
-                    1,             // write a psrfits header
+                    0,             // generate a psrfits header
+                    0,             // write a psrfits header
                     sample_rate,   // = 10000 samples per sec
                     0,             // turn verbose off
                     chan_width,    // width of fine channel (Hz)
@@ -1333,7 +1334,6 @@ fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpo
             fwrite(spectrum,sizeof(float),nchan,stdout);
 
         }
-        specnum++;
 
         tend = clock();
         tpostomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;

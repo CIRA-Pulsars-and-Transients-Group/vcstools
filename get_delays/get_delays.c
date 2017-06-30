@@ -951,6 +951,7 @@ int     main(int argc, char **argv) {
         
         pf.hdr.summed_polns = 0;
         fprintf(stdout,"Summed Polarisations? [1/0]  [%d]:\n",pf.hdr.summed_polns);
+        fprintf(stdout,"Number of polarisations  [%d]\n",pf.hdr.npol);
         
         
         pf.hdr.offset_subint = 0;
