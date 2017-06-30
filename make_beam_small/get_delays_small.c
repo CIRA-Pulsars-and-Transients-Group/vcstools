@@ -41,40 +41,74 @@ int nstation;
 //=====================//
 
 void printf_psrfits( struct psrfits *pf ) {
-    fprintf(stdout, "PSRFITS:\n");
+    fprintf(stdout, "\nPSRFITS:\n");
     fprintf(stdout, "Basename of output file     [%s]\n", pf->basefilename);
     fprintf(stdout, "Filename of output file     [%s]\n", pf->filename);
+    fprintf(stdout, "CFITSIO file pointer        [%p]\n", pf->fptr);
 
-    fprintf(stdout, "PSRFITS HDRINFO:\n");
+    fprintf(stdout, "\nPSRFITS HDRINFO:\n");
     fprintf(stdout, "Obs mode                    [%s]\n", pf->hdr.obs_mode);
     fprintf(stdout, "Telescope                   [%s]\n", pf->hdr.telescope);
     fprintf(stdout, "Observer                    [%s]\n", pf->hdr.observer);
     fprintf(stdout, "Source                      [%s]\n", pf->hdr.source);
     fprintf(stdout, "Front End                   [%s]\n", pf->hdr.frontend);
     fprintf(stdout, "Back End                    [%s]\n", pf->hdr.backend);
-    fprintf(stdout, "project_id                  [%s]\n", pf->hdr.project_id);
+    fprintf(stdout, "Project ID                  [%s]\n", pf->hdr.project_id);
     fprintf(stdout, "Date Obs                    [%s]\n", pf->hdr.date_obs);
+    fprintf(stdout, "RA (string)                 [%s]\n", pf->hdr.ra_str);
+    fprintf(stdout, "Dec (string)                [%s]\n", pf->hdr.dec_str);
+    fprintf(stdout, "Pol recorded (LIN or CIRC)  [%s]\n", pf->hdr.poln_type);
+    fprintf(stdout, "Order of pols               [%s]\n", pf->hdr.poln_order);
+    fprintf(stdout, "Track mode                  [%s]\n", pf->hdr.track_mode);
+    fprintf(stdout, "Cal mode                    [%s]\n", pf->hdr.cal_mode);
+    fprintf(stdout, "Feed mode                   [%s]\n", pf->hdr.feed_mode);
+    fprintf(stdout, "Start MJD                   [%Lf]\n", pf->hdr.MJD_epoch);
     fprintf(stdout, "Sample Time (s)             [%lf]\n", pf->hdr.dt);
     fprintf(stdout, "Centre Frequency (MHz)      [%lf]\n", pf->hdr.fctr);
+    fprintf(stdout, "Orig freq spacing (MHz)     [%lf]\n", pf->hdr.orig_df);
+    fprintf(stdout, "Freq spacing (MHz)          [%lf]\n", pf->hdr.df);
     fprintf(stdout, "Bandwidth (MHz)             [%lf]\n", pf->hdr.BW);
     fprintf(stdout, "RA (2000) (deg)             [%lf]\n", pf->hdr.ra2000);
     fprintf(stdout, "Dec (2000) (deg)            [%lf]\n", pf->hdr.dec2000);
     fprintf(stdout, "Azimuth (deg)               [%lf]\n", pf->hdr.azimuth);
     fprintf(stdout, "Zenith Angle (deg)          [%lf]\n", pf->hdr.zenith_ang);
     fprintf(stdout, "Beam FWHM (deg)             [%lf]\n", pf->hdr.beam_FWHM);
+
+    fprintf(stdout, "Length of scan in this file [%lf]\n", pf->hdr.scanlen);
     fprintf(stdout, "Seconds past 00h LST        [%lf]\n", pf->hdr.start_lst);
     fprintf(stdout, "Seconds past 00h UTC        [%lf]\n", pf->hdr.start_sec);
+
     fprintf(stdout, "Start MJD (whole day)       [%d]\n", pf->hdr.start_day);
     fprintf(stdout, "Scan Number                 [%d]\n", pf->hdr.scan_number);
-    fprintf(stdout, "Receiver Polarisation       [%d]\n", pf->hdr.rcvr_polns);
-    fprintf(stdout, "Summed Polarisations? [1/0] [%d]\n", pf->hdr.summed_polns);
-    fprintf(stdout, "Number of polarisations     [%d]\n", pf->hdr.npol);
-    fprintf(stdout, "Length of scan in this file [%lf]\n", pf->hdr.scanlen);
-    fprintf(stdout, "Offset Subint               [%d]\n", pf->hdr.offset_subint);
-    fprintf(stdout, "Number of Channels          [%d]\n", pf->hdr.nchan);
     fprintf(stdout, "Number of bits per sample   [%d]\n", pf->hdr.nbits);
+
+    fprintf(stdout, "Number of Channels          [%d]\n", pf->hdr.nchan);
+    fprintf(stdout, "Number of polarisations     [%d]\n", pf->hdr.npol);
     fprintf(stdout, "Number of spectra per row   [%d]\n", pf->hdr.nsblk);
-    fprintf(stdout, "Start MJD                   [%Lf]\n", pf->hdr.MJD_epoch);
+
+    fprintf(stdout, "Summed Polarisations? [1/0] [%d]\n", pf->hdr.summed_polns);
+    fprintf(stdout, "Receiver Polarisation       [%d]\n", pf->hdr.rcvr_polns);
+    fprintf(stdout, "Offset Subint               [%d]\n", pf->hdr.offset_subint);
+    fprintf(stdout, "Dwnsmpl fact in time        [%d]\n", pf->hdr.ds_time_fact);
+    fprintf(stdout, "Dwnsmpl fact in freq        [%d]\n", pf->hdr.ds_freq_fact);
+    fprintf(stdout, "Only Stokes I?              [%d]\n", pf->hdr.onlyI);
+
+    fprintf(stdout, "\nPSRFITS SUBINT:\n");
+    fprintf(stdout, "Length of subint (sec)      [%lf]\n", pf->sub.tsubint);
+    fprintf(stdout, "Offset (sec)                [%lf]\n", pf->sub.offs);
+    fprintf(stdout, "LST (sec)                   [%lf]\n", pf->sub.lst);
+    fprintf(stdout, "RA (J2000) (deg)            [%lf]\n", pf->sub.ra);
+    fprintf(stdout, "Dec (J2000) (deg)           [%lf]\n", pf->sub.dec);
+    fprintf(stdout, "Gal. long. (deg)            [%lf]\n", pf->sub.glon);
+    fprintf(stdout, "Gal. lat. (deg)             [%lf]\n", pf->sub.glat);
+    fprintf(stdout, "Feed angle (deg)            [%lf]\n", pf->sub.feed_ang);
+    fprintf(stdout, "Pos angle of feed (deg)     [%lf]\n", pf->sub.pos_ang);
+    fprintf(stdout, "Parallactic angle           [%lf]\n", pf->sub.par_ang);
+    fprintf(stdout, "Telescope azimuth           [%lf]\n", pf->sub.tel_az);
+    fprintf(stdout, "Telescope zenith angle      [%lf]\n", pf->sub.tel_zen);
+    fprintf(stdout, "Bytes per row of raw data   [%d]\n", pf->sub.bytes_per_subint);
+    fprintf(stdout, "FITS data typecode          [%d]\n", pf->sub.FITS_typecode);
+
 }
 
 double parse_dec( char* dec_ddmmss ) {
@@ -678,24 +712,14 @@ void get_delays(
         inv2x2(Jref, invJref);
     }
 
-
-
     /* get mjd */
-  
-    
-    utc2mjd(time_utc,&intmjd,&fracmjd);
-    
 
-    //fprintf(stdout,"calib:start intmjd=%.1f fracmjd=%f\n",intmjd,fracmjd);
-    
-    /**/
-    
+    utc2mjd(time_utc,&intmjd,&fracmjd);
+
     /* get requested Az/El from command line */
   
     mjd = intmjd + fracmjd;
-
     mjd = mjd + (sec_offset+0.5)/86400.0;
-
     mjd2lst(mjd,&lmst);
 
     //fprintf(stdout,"calib: current lmst (radian) = %f\n",lmst);
@@ -706,30 +730,19 @@ void get_delays(
     mean_ra = ra_hours * DH2R;
     mean_dec = dec_degs * DD2R;
 
-    //fprintf(stdout,"calib:Mean (HA RA /Dec) HA %lf RA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,mean_ra,mean_dec);
     slaMap(mean_ra,mean_dec,pr,pd,px,rv,eq,mjd,&ra_ap,&dec_ap);
     
     // Lets go mean to apparent precess from J2000.0 to EPOCH of date.
-    //
     
     ha = slaRanorm(lmst-ra_ap)*DR2H;
-
-    
-    //fprintf(stdout,"calib:Apparent (look direction/precessed HA RA /Dec) HA %lf RA %lf hrs  Apparent Dec %f degrees \n",ha,ra_ap*DR2H,dec_ap*DR2D);
-    //fprintf(stdout,"calib:Apparent (look direction/precessed HA RA /Dec) HA %lf RA %lf (radian)  Apparent Dec %f (radian) \n",ha*DH2R,ra_ap,dec_ap);
-    //fprintf(stdout,"calib:LMST %lf (radian) \n",lmst);
 
     /* now HA/Dec to Az/El */
     
     app_ha_rad = ha * DH2R;
     app_dec_rad = dec_ap;
-  
-    
-    slaDe2h(app_ha_rad,dec_ap,MWA_LAT*DD2R,&az,&el);
-    
 
-    //fprintf(stdout,"calib:Look direction Azimuth %lf (deg)  Elevation %lf (deg) \n",az*DR2D,el*DR2D);
-    
+    slaDe2h(app_ha_rad,dec_ap,MWA_LAT*DD2R,&az,&el);
+
     /* now we need the direction cosines */
     
     unit_N = cos(el) * cos(az);
@@ -987,9 +1000,6 @@ void get_delays(
         pf.sub.bytes_per_subint = (pf.hdr.nbits * pf.hdr.nchan *
                                    pf.hdr.npol * pf.hdr.nsblk) / 8;
         pf.sub.FITS_typecode = TBYTE;  // 11 = byte
-        
-        // Print out values to stdout
-        printf_psrfits( &pf );
         
         /* now copy this to a file that can be read by the beamformer */
         if (write_psrfits) {

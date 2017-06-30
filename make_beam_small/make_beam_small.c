@@ -958,9 +958,10 @@ int main(int argc, char **argv) {
     pf.filenum = 0;             // This is the crucial one to set to initialize things
     pf.rows_per_file = 200;     // I assume this is a max subint issue
     
-    pf.hdr.npol = outpol;
+    pf.hdr.npol         = outpol;
     pf.hdr.summed_polns = summed_polns;
-    pf.hdr.nchan = nchan;
+    pf.hdr.nchan        = nchan;
+    pf.hdr.onlyI        = 0;
 
     // Specify psrfits data type
     pf.hdr.nbits = 8;
@@ -992,7 +993,6 @@ int main(int argc, char **argv) {
     unsigned int nspec = 1;
     size_t items_to_read = nstation*npol*nchan*2;
     float *spectrum = (float *) calloc(nspec*nchan*outpol,sizeof(float));
-fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpol);
 
     complex float **fringe = calloc(nchan,sizeof(complex float));
 
@@ -1260,13 +1260,12 @@ fprintf(stderr, "  nspec = %d,  nchan = %d,  outpol = %d\n", nspec, nchan, outpo
                 float2int8_trunc(data_buffer_psrfits, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8_psrfits);
                 int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8_psrfits);
                 memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
-fprintf(stdout, "   Just copied %d bytes to pf.sub.data\n", pf.sub.bytes_per_subint );
-printf_psrfits( &pf );
 
                 if (psrfits_write_subint(&pf) != 0) {
                     fprintf(stderr,"Write subint failed file exists?\n");
                     break; // Exit from while loop
                 }
+printf_psrfits( &pf );
 
                 pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
                 pf.sub.lst += pf.sub.tsubint;;
@@ -1339,8 +1338,6 @@ printf_psrfits( &pf );
         tpostomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
 
     } // end while loop
-
-fprintf(stdout, "sample = %d\n", sample);
 
     tbegin = clock(); // Start timing "tcoda"
 
