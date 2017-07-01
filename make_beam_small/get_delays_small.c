@@ -270,10 +270,8 @@ void get_delays(
         char *time_utc,
         double sec_offset,
         char *phases_filename,            // soon-deprecated output
-        char *flag_filename,              // soon-deprecated output
         char *jones_filename,             // soon-deprecated output
         struct psrfits *pf,
-        double **weights_array,           // output
         double ***phases_array,           // output
         double ***complex_weights_array,  // output
         complex double ***invJi           // output
@@ -294,21 +292,17 @@ void get_delays(
     int write_files = 1;
     
     FILE *phase_file = NULL;
-    FILE *flag_file = NULL;
     FILE *jones_file = NULL;
-    FILE *psrfits_file = NULL;
-    int secs = 0;
 
     /* easy -- now the positions from the database */
     
     if (write_files) {
         
         phase_file = fopen(phases_filename, "w");
-        flag_file  = fopen(flag_filename,   "w");
         jones_file = fopen(jones_filename,  "w");
 
-        if (phase_file == NULL || flag_file == NULL || jones_file == NULL) {
-            fprintf(stderr, "Failed to open %s or %s or %s\n", phases_filename, flag_filename, jones_filename );
+        if (phase_file == NULL || jones_file == NULL) {
+            fprintf(stderr, "Failed to open %s or %s\n", phases_filename, jones_filename );
             exit(EXIT_FAILURE);
         }
     }
@@ -410,17 +404,10 @@ void get_delays(
     }
     float *cable_array = (float *) malloc(ninput*sizeof(float));
     char *testval = (char *) malloc(1024);
-    int *flag_array = (int *)malloc(ninput*sizeof(int));
     short int *antenna_num = (short int *)malloc(ninput*sizeof(short int));
     int colnum;
     
     /* read the columns */
-    fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
-    fits_read_col_int(fptr,colnum,1,1,ninput,0.0,flag_array,&anynull,&status);
-    if (status != 0){
-        fprintf(stderr,"Error:Failed to read flags column in metafile\n");
-        exit(-1);
-    }
     for (i=0; i < (int)ninput; i++) {
 
         fits_get_colnum(fptr, 1, "Length", &colnum, &status);
@@ -582,10 +569,6 @@ void get_delays(
             mult2x2d(M[i],invJref,G[i]); // forms the DI gain
             mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
             
-            for (j=0; j < 4;j++) {
-                //fprintf(stdout,"calib:Jones Mi[%d] %f %f: Delay Ji[%d] %f %f\n",i,creal(M[i][j]),cimag(M[i][j]),i,creal(Ji[i][j]),cimag(Ji[i][j]));
-                //fprintf(stdout,"calib:ratio Mi/Ji [%d]  %f %f \n",i,creal(M[i][j])/creal(Ji[i][j]),cimag(M[i][j])/cimag(Ji[i][j]));
-            }
             // this automatically spots an RTS flagged tile
             Fnorm = 0;
             for (j=0; j < 4;j++) {
@@ -630,8 +613,6 @@ void get_delays(
 
 
         double integer_phase;
-
-        int flag = flag_array[row];
 
         double X,Y,Z,u,v,w;
         
@@ -686,17 +667,6 @@ void get_delays(
             }
             
         }
-        if (secs == 0) {
-            
-            if (flag_file != NULL) {
-                if (flag > 0) {
-                    fprintf(flag_file,"0.0\n");
-                }
-                else {
-                    fprintf(flag_file,"1.0\n");
-                }
-            }
-        }
         if (row%npol == 0) {
             if (jones_file != NULL) {
                 for (i=0;i<4;i++){
@@ -715,8 +685,6 @@ void get_delays(
     
     if (phase_file != NULL)
         fclose(phase_file);
-    if (flag_file !=NULL)
-        fclose(flag_file);
     if (jones_file != NULL)
         fclose(jones_file);
       /* ========= Generate a FITS HEADER ==========*/
@@ -834,12 +802,11 @@ void get_delays(
     free(N_array);
     free(E_array);
     free(H_array);
-    for (i = 0; i < ninput; i++)
+    for (i = 0; i < (int)ninput; i++)
         free(tilenames[i]);
     free(tilenames);
     free(cable_array);
     free(testval);
-    free(flag_array);
     free(antenna_num);
 
     fprintf(stdout, "* EXITING GET_DELAYS *\n");

@@ -12,7 +12,7 @@
 #include "ascii_header.h"
 #include "mwa_header.h"
 //#include <omp.h>
-#include <mpi.h>
+//#include <mpi.h>
 #include <glob.h>
 #include <fcntl.h>
 #include <assert.h>
@@ -56,7 +56,7 @@ void usage() {
     fprintf(stderr,"-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
     fprintf(stderr,"-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
     fprintf(stderr,"-V print version number and exit\n");
-    fprintf(stderr,"-w <weights file> -- this is now a flag file 1/0 for each input\n");
+    fprintf(stderr,"-w use weights from metafits file [0]\n");
     fprintf(stderr,"-W fine channel width (Hz)\n");
     fprintf(stderr,"-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
     fprintf(stderr,"options: -t [1 or 2] sample size : 1 == 8 bit (INT); 2 == 32 bit (FLOAT)\n");
@@ -379,58 +379,82 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
 
 }
 
-float get_weights(int nstation, int npol, int weights, char *weights_file, double **array){
+float get_weights(char *metafits, int nstation, int npol, double **weights_array) {
 
-    float wgt_sum=0;
+    fitsfile *fptr     = NULL;          // File pointer for metafits file
+    int status         = 0;             // Status flags for FITS file operations
+    int ninput         = nstation*npol; // The size of the weights array
+    int colnum;                         // The column number for the "Flag" column in the metafits file
+    int anynull        = 0;             // One of the outputs of fits_read_col_int()
+    float wgt_sum      = 0.0;           // Initialise accumulating sum to zero
+    int flags[ninput];                  // The temporary flags array (weight = 1 - flag)
+    int i;                              // A generic counter
 
-    FILE *wgts = NULL;
+    // Allocate memory for weights_array, if needed
+    // It's up to the caller to make sure that either *weights_array is NULL,
+    // or that it points to sufficient memory
+    if (*weights_array == NULL)
+        *weights_array = (double *)malloc( nstation * npol * sizeof(double) );
 
-    if (*array == NULL) {
-        *array = (double *) calloc(nstation*npol,sizeof(double));
+    // Populate weights, either from the metafits file, or (if no metafits
+    // file was supplied), with default values of 1
+    if (metafits == NULL) {
+        for (i = 0; i < nstation*npol; i++) {
+            (*weights_array)[i] = 1.0;
+        }
+        wgt_sum = nstation * npol;
+    }
+    else { // A metafits file was supplied
+
+        // Open metafits file
+        fits_open_file(&fptr, metafits, READONLY, &status);
+        if (status != 0) {
+            fprintf( stderr, "Error opening metafits file [%s] ", metafits );
+            fprintf( stderr, "with status = %d\n", status );
+            exit(EXIT_FAILURE);
+        }
+        fits_movnam_hdu(fptr, BINARY_TBL, "TILEDATA", 0, &status);
+
+        // Read in metafits file's value of ninput
+        fits_read_key(fptr, TINT, "NAXIS2", &ninput, NULL, &status);
+        if (status != 0) {
+            fprintf(stderr, "Error: Failed to read size of binary table in ");
+            fprintf(stderr, "metafits file '%s'\n", metafits);
+            fprintf(stderr, "       status = %d\n", status);
+            exit(EXIT_FAILURE);
+        }
+
+        // Make sure ninput == nstation * npol supplied by caller of this function
+        if (ninput != nstation*npol) {
+            fprintf(stderr,"Mismatch between weights and antennas - check weight file\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // Read in values
+        fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
+        fits_read_col_int(fptr, colnum, 1, 1, ninput, 0.0, flags, &anynull, &status);
+        if (status != 0){
+            fprintf(stderr,"Error:Failed to read flags column in metafile\n");
+            exit(-1);
+        }
+
+        // Invert value (flag off = full weight; flag on = zero weight)
+        for (i = 0; i < ninput; i++) {
+            (*weights_array)[i] = 1.0 - (double)flags[i];
+            wgt_sum += (*weights_array)[i];
+            // This differs from Ord's orig code, which sums squares. However,
+            // all values should be =1, so end result should be the same
+        }
     }
 
-    double *weights_array = *array;
+    // Close the metafits file
+    fits_close_file( fptr, &status );
 
-
-    if (weights == 1) {
-        fprintf(stdout,"Open weights file %s\n",weights_file);
-        wgts = fopen(weights_file,"r");
-        if (wgts==NULL) {
-            fprintf(stderr,"Cannot open weights file %s:%s\n",weights_file,strerror(errno));
-            return -1;
-        }
-        else {
-            int count = 0;
-            while (!feof(wgts)) {
-                // fprintf(stderr,"count: %d: nstation %d npol %d\n",count,nstation,npol);
-                if (count < nstation*npol) {
-                    fscanf(wgts,"%lf\n",&weights_array[count]);
-                    wgt_sum = wgt_sum + pow(weights_array[count],2);
-                    // fprintf(stderr,"wgt_sum: %f\n",wgt_sum);
-                }
-                else {
-                    break;
-                }
-                count++;
-            }
-            if (count != nstation*npol) {
-                fprintf(stderr,"Mismatch between weights and antennas - check weight file\n");
-                fclose(wgts);
-                return -1;
-            }
-            fclose(wgts);
-
-        }
-         fprintf(stdout,"Closed weights file %s\n",weights_file);
+    // Exit with error if there are no weights
+    if (wgt_sum == 0.0) {
+        fprintf(stderr,"Zero weight sum on read\n");
+        exit(EXIT_FAILURE);
     }
-    else if (weights == 0) {
-        int count = 0;
-        for (count = 0 ;count < nstation*npol; count++) {
-            weights_array[count]=1.0;
-        }
-        wgt_sum = nstation*npol;
-    }
-
 
     return wgt_sum;
 }
@@ -641,7 +665,7 @@ int main(int argc, char **argv) {
 
     tbegin = clock(); // Begin timing "tprelude"
 
-    int dir_index;
+    int dir_index = 0;
     int ii;
     double dtmp;
     int c = 0;
@@ -655,7 +679,6 @@ int main(int argc, char **argv) {
     char rec_channel[4]; // 0 - 255 receiver 1.28MHz channel
 
 
-    char *weights_file = NULL;
     char *phases_file = NULL;
     char *jones_file = NULL;
     char *psrfits_file = NULL;
@@ -664,7 +687,7 @@ int main(int argc, char **argv) {
     char *procdirroot = NULL;
     char *datadirroot = NULL;
     char procdir[256];
-    char **filenames;
+    char **filenames = NULL;
     int read_stdin = 0;
     int nfiles = 0;
     int expunge = 0;
@@ -693,7 +716,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:c:d:D:e:f:F:hj:J:m:n:N:o:p:r:R:Vw:W:Xz:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:c:d:D:e:f:F:hj:J:m:n:N:o:p:r:R:VwW:Xz:")) != -1) {
             switch(c) {
 
                 case 'a':
@@ -757,7 +780,6 @@ int main(int argc, char **argv) {
                     break;
                 case 'w':
                     weights=1;
-                    weights_file = strdup(optarg);
                     break;
                 case 'W':
                     chan_width = atol(optarg);
@@ -799,12 +821,6 @@ int main(int argc, char **argv) {
 
 
         /* update the phases and weights file names */
-        if (weights_file) {
-            sprintf(pattern,"%s/%s",procdir,weights_file);
-            free(weights_file);
-            weights_file=strdup(pattern);
-            fprintf(stdout,"weights_file: %s\n",weights_file);
-        }
         if (phases_file) {
             sprintf(pattern,"%s/%s",procdir,phases_file);
             free(phases_file);
@@ -905,10 +921,8 @@ int main(int argc, char **argv) {
             time_utc,      // utc time string
             0.0,           // seconds offset from time_utc at which to calculate delays
             phases_file,   // For now, output phases here
-            weights_file,  // For now, output flags here
             jones_file,    // For now, output jones matrices here
             &pf,           // Populate psrfits header info
-            NULL,          // weights array         (answer will be output here)
             NULL,          // phases array          (answer will be output here)
             NULL,          // complex weights array (answer will be output here)
             NULL           // invJi array           (answer will be output here)
@@ -917,12 +931,11 @@ int main(int argc, char **argv) {
     recalc_delays = 0;
 
     // Read in flag weights
-    float wgt_sum = get_weights(nstation, npol, weights, weights_file, &weights_array); // this is now a flag file
-
-    if (wgt_sum == 0 || wgt_sum == -1) {
-        fprintf(stderr,"Zero weight sum or error on read -- check %s\n",weights_file);
-        exit(EXIT_FAILURE);
-    }
+    float wgt_sum;
+    if (weights)
+        wgt_sum = get_weights(metafits, nstation, npol, &weights_array);
+    else
+        wgt_sum = get_weights(NULL, nstation, npol, &weights_array);
 
     // Read in the phases and jones matrices
     new_phase_pos = get_phases(nstation, nchan, npol, phases_file,
@@ -1302,10 +1315,8 @@ printf_psrfits( &pf );
                     time_utc,      // utc time string
                     (double)(sample / sample_rate + 1), // seconds offset from time_utc at which to calculate delays
                     phases_file,   // For now, output phases here
-                    weights_file,  // For now, output flags here
                     jones_file,    // For now, output jones matrices here
                     NULL,          // Don't update psrfits header
-                    NULL,          // weights array         (answer will be output here)
                     NULL,          // phases array          (answer will be output here)
                     NULL,          // complex weights array (answer will be output here)
                     NULL           // invJi array           (answer will be output here)
