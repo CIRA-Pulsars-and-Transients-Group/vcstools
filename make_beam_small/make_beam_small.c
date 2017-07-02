@@ -68,7 +68,6 @@ void populate_psrfits_header(
         char           *time_utc,
         unsigned int    sample_rate,
         long int        frequency,
-        int             edge,
         int             nchan,
         long int        chan_width,
         int             outpol,
@@ -101,9 +100,9 @@ void populate_psrfits_header(
     strcpy(pf->hdr.cal_mode,   "OFF");
     strcpy(pf->hdr.feed_mode,  "FA");
 
-    pf->hdr.dt   = 1.0/sample_rate;                                   // (sec)
-    pf->hdr.fctr = (frequency + (edge+(nchan/2.0))*chan_width)/1.0e6; // (MHz)
-    pf->hdr.BW   = (nchan*chan_width)/1.0e6;                          // (MHz)
+    pf->hdr.dt   = 1.0/sample_rate;                            // (sec)
+    pf->hdr.fctr = (frequency + (nchan/2.0)*chan_width)/1.0e6; // (MHz)
+    pf->hdr.BW   = (nchan*chan_width)/1.0e6;                   // (MHz)
 
     // npols + nbits and whether pols are added
     pf->filenum       = 0;       // This is the crucial one to set to initialize things
@@ -640,8 +639,6 @@ int main(int argc, char **argv) {
 
     unsigned int sample_rate = 10000;
 
-    int edge = 0;
-
     int nchan = 128;
 
     nfrequency = nchan;
@@ -680,8 +677,8 @@ int main(int argc, char **argv) {
                     end = atol(optarg);
                     break;
                 case 'f':
-                    frequency = atoi(optarg) * 1.28e6 - 640e3;
                     rec_channel = strdup(optarg);
+                    frequency = atoi(optarg) * 1.28e6 - 640e3; // The base frequency in Hz
                     break;
                 case 'h':
                     usage();
@@ -732,16 +729,6 @@ int main(int argc, char **argv) {
     }
 
     fprintf(stderr,"Starting ...\n");
-
-    switch (nchan) {
-        case 88:
-            edge = 20;
-            break;
-        case 128:
-            edge = 0;
-        default:
-            edge = 0;
-    }
 
     if (datadirroot) {
 
@@ -803,7 +790,6 @@ int main(int argc, char **argv) {
             0,             // coarse_chan (used for Offringa solutions)
             dec_ddmmss,    // dec as a string "dd:mm:ss"
             ra_hhmmss,     // ra  as a string "hh:mm:ss"
-            edge,          // "edge" (seems to be always called with value 0 just now)
             frequency,     // middle of the first frequency channel in Hz
             metafits,      // filename of the metafits file for this obsID
             128,           // number of fine channels
@@ -824,7 +810,7 @@ int main(int argc, char **argv) {
 
     // now we need to create a fits file and populate its header
     populate_psrfits_header( &pf, metafits, obsid, time_utc, sample_rate,
-            frequency, edge, nchan, chan_width, outpol, summed_polns,
+            frequency, nchan, chan_width, outpol, summed_polns,
             rec_channel, &delay_vals );
 
     size_t bytes_per_spec = pf.hdr.nbits * pf.hdr.nchan * pf.hdr.npol/8;
@@ -1128,7 +1114,6 @@ int main(int argc, char **argv) {
                     0,             // coarse_chan (used for Offringa solutions)
                     dec_ddmmss,    // dec as a string "dd:mm:ss"
                     ra_hhmmss,     // ra  as a string "hh:mm:ss"
-                    edge,          // "edge" (seems to be always called with value 0 just now)
                     frequency,     // middle of the first frequency channel in Hz
                     metafits,      // filename of the metafits file for this obsID
                     128,           // number of fine channels

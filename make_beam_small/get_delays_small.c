@@ -251,7 +251,6 @@ void get_delays(
         int coarse_chan,
         char *dec_ddmmss,
         char *ra_hhmmss,
-        int edge,
         long int frequency,
         char *metafits,
         int nchan,
@@ -594,7 +593,7 @@ void get_delays(
             double delay_samples = delay_time * samples_per_sec;
 
             for (ch=0;ch<nchan;ch++) {
-                long int freq_ch = frequency + (edge+ch)*chan_width;
+                long int freq_ch = frequency + ch*chan_width;
 
                 // freq should be in cycles per sample and delay in samples
                 // which essentially means that the samples_per_sec cancels
