@@ -28,7 +28,9 @@
 #define MWA_LON 116.67081         // Array longitude. degrees East
 #define MWA_HGT 377               // Array altitude. meters above sea level
 #define MAXREQUEST 3000000
+#define NCHAN   128
 #define NANT    128
+#define NPOL    2
 #define VLIGHT 299792458.0        // speed of light. m/s
 double arr_lat_rad=MWA_LAT*(M_PI/180.0),arr_lon_rad=MWA_LON*(M_PI/180.0),height=MWA_HGT;
 
@@ -207,24 +209,6 @@ void mjd2lst(double mjd, double *lst) {
     double arr_lon_rad = MWA_LON * M_PI/180.0;
     double lmst = slaRanorm(slaGmst(mjd) + arr_lon_rad);
 
-    // we need the eq of the equinoxes - as this might shift our LST by +/- a second
-
-    // double gast = slaEqeqx(mjd) + gmst; // GAST in radians
-    
-    // lst (at epoch of date) is therefore
-    
-    /// double last = gast + (lon_hours*DH2R); // last in radians
-    
-    // last = last * DR2H;
-    
-    // if (last > 24.0) {
-       // last = last - 24.0;
-    //}
-    //else if (last < 0.0) {
-      //  last = 24.0 + last;
-    //}
-
-
     *lst = lmst;
 }
 
@@ -253,7 +237,6 @@ void get_delays(
         char *ra_hhmmss,
         long int frequency,
         char *metafits,
-        int nchan,
         int get_offringa,
         int get_rts,
         char *DI_Jones_file,
@@ -286,36 +269,34 @@ void get_delays(
 
     /* Calibration related defines */
     /* set these here for the library */
-    nfrequency = nchan;
-    nstation = NANT;
-    npol = 2;
-    
-    
+    nfrequency = NCHAN;
+    nstation   = NANT;
+    npol       = NPOL;
+
     double amp = 0;
-    
+
     // Jref is the reference Jones direction - for which the calibration was generated
     // Mref is measured Jones in Jref direction
     // G = DI gain formed by inv(Jref).Mref
     // E = model is desired direction
     // Ji = Jones in desired direction (formed by G.E)
-    
-    complex double *Jref = (complex double *) calloc(npol*npol, sizeof(complex double)); // Calibration Direction
-    complex double *E = (complex double *) calloc(npol*npol, sizeof(complex double)); // Model Jones	in Desired Direction	//
-    complex double **G = (complex double **) calloc(nstation, sizeof(complex double *)); // Actual DI Gain			//
-    complex double **M = (complex double **) calloc(nstation, sizeof(complex double *)); // Gain in direction of Calibration
-    complex double **Ji = (complex double **) calloc(nstation, sizeof(complex double *)); // Gain in Desired Direction ..... da da da dum.....
 
-    for (i = 0; i < nstation; i++) { //
-        G[i] = (complex double *) malloc(npol * npol * sizeof(complex double)); //
-        M[i] = (complex double *) malloc(npol * npol * sizeof(complex double)); //
-        Ji[i] =(complex double *) malloc(npol * npol * sizeof(complex double)); //
+    complex double *Jref = (complex double *) calloc(NPOL*NPOL, sizeof(complex double));   // Calibration Direction
+    complex double *E    = (complex double *) calloc(NPOL*NPOL, sizeof(complex double));   // Model Jones in Desired Direction
+    complex double **G   = (complex double **) calloc(NANT, sizeof(complex double *)); // Actual DI Gain
+    complex double **M   = (complex double **) calloc(NANT, sizeof(complex double *)); // Gain in direction of Calibration
+    complex double **Ji  = (complex double **) calloc(NANT, sizeof(complex double *)); // Gain in Desired Direction
+
+    for (i = 0; i < NANT; i++) { //
+        G[i] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
+        M[i] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
+        Ji[i] =(complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
         if (G[i] == NULL || M[i] == NULL || Ji[i] == NULL) { //
             fprintf(stderr, "malloc failed: G[i], M[i], J[i]\n"); //
             exit(1); //
         } //
     } //
-    
-    
+
     // ===================================================================================== //
     // Get actual tile pointing Az El from metafits file
 
@@ -325,7 +306,6 @@ void get_delays(
     double tile_pointing_dec = 0.0;
     double tile_pointing_az;
     double tile_pointing_el;
-
 
     fits_open_file(&fptr,metafits,READONLY,&status);
     if (fptr == NULL) {
@@ -468,17 +448,17 @@ void get_delays(
     // Read in the Jones matrices for this (coarse) channel, if requested
     complex double invJref[4];
     if (get_rts) {
-        read_rts_file(M, Jref, nstation, &amp, DI_Jones_file);
+        read_rts_file(M, Jref, NANT, &amp, DI_Jones_file);
         inv2x2(Jref, invJref);
     }
     else if (get_offringa) {
         // Find the ordering of antennas in Offringa solutions from metafits file
-        int *order = (int *)malloc(nstation*sizeof(int));
-        for (n = 0; n < nstation; n++) {
+        int *order = (int *)malloc(NANT*sizeof(int));
+        for (n = 0; n < NANT; n++) {
             order[antenna_num[n*2]] = n;
         }
-        read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file, order);
-        //read_offringa_gains_file(M, nstation, coarse_chan, DI_Jones_file, NULL);
+        read_offringa_gains_file(M, NANT, coarse_chan, DI_Jones_file, order);
+        //read_offringa_gains_file(M, NANT, coarse_chan, DI_Jones_file, NULL);
         free(order);
         // Just make Jref (and invJref) the identity matrix since they are already
         // incorporated into Offringa's calibration solutions.
@@ -537,7 +517,7 @@ void get_delays(
             //fprintf(stdout,"calib:Jones Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
             //fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
         }
-        for (i=0;i<nstation;i++){
+        for (i=0;i<NANT;i++){
             mult2x2d(M[i],invJref,G[i]); // forms the DI gain
             mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
             
@@ -592,7 +572,7 @@ void get_delays(
             double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
             double delay_samples = delay_time * samples_per_sec;
 
-            for (ch=0;ch<nchan;ch++) {
+            for (ch=0; ch < NCHAN;ch++) {
                 long int freq_ch = frequency + ch*chan_width;
 
                 // freq should be in cycles per sample and delay in samples
@@ -612,14 +592,14 @@ void get_delays(
             }
         }
         else {
-            for (ch=0;ch<nchan;ch++)
+            for (ch=0; ch < NCHAN; ch++)
                 complex_weights_array[row][ch] = weights_array[row]; // i.e. =0.0
         }
 
         // Now, calculate the inverse Jones matrix
-        if (row % npol == 0) {
+        if (row % NPOL == 0) {
 
-            int station = row / npol;
+            int station = row / NPOL;
             double Fnorm;
 
             conj2x2( Ji[station], Ji[station] ); // The RTS conjugates the sky so beware
@@ -651,7 +631,7 @@ void get_delays(
 
     // Free up memory
 
-    for (i = 0; i < nstation; i++) { //
+    for (i = 0; i < NANT; i++) { //
         free(G[i]);
         free(M[i]);
         free(Ji[i]);

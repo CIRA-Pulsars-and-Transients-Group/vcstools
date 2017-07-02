@@ -792,7 +792,6 @@ int main(int argc, char **argv) {
             ra_hhmmss,     // ra  as a string "hh:mm:ss"
             frequency,     // middle of the first frequency channel in Hz
             metafits,      // filename of the metafits file for this obsID
-            128,           // number of fine channels
             0,             // get_offringa? For now, always no
             1,             // get_rts?      For now, always yes
             DI_Jones_file, // filename of the DI Jones file
@@ -1116,7 +1115,6 @@ int main(int argc, char **argv) {
                     ra_hhmmss,     // ra  as a string "hh:mm:ss"
                     frequency,     // middle of the first frequency channel in Hz
                     metafits,      // filename of the metafits file for this obsID
-                    128,           // number of fine channels
                     0,             // get_offringa? For now, always no
                     1,             // get_rts?      For now, always yes
                     DI_Jones_file, // filename of the DI Jones file

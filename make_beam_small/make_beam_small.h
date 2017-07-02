@@ -37,7 +37,6 @@ void get_delays(
         char *ra_hhmmss,
         long int frequency,
         char *metafits,
-        int nchan,
         int get_offringa,
         int get_rts,
         char *DI_Jones_file,
