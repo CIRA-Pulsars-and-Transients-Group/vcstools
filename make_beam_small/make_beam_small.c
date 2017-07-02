@@ -890,46 +890,19 @@ int main(int argc, char **argv) {
             frequency, nchan, mi.chan_width, outpol, summed_polns,
             rec_channel, &delay_vals );
 
-    size_t bytes_per_spec = pf.hdr.nbits * pf.hdr.nchan * pf.hdr.npol/8;
-
     unsigned int nspec = 1;
     size_t items_to_read = nstation*npol*nchan*2;
-    float *spectrum = (float *) calloc(nspec*nchan*outpol, sizeof(float));
 
-    complex float **fringe = calloc(nchan, sizeof(complex float));
-
-    complex float **stopped_fringe = calloc(nchan, sizeof(complex float));
-    complex float **beam = calloc(nchan, sizeof(complex float *));
-    int stat = 0;
-
-    for (stat = 0; stat < nchan;stat++) {
-        beam[stat] = (complex float *) calloc(nstation*npol, sizeof(complex float));
-        fringe[stat] = (complex float *) calloc(2*npol, sizeof(complex float));
-        stopped_fringe[stat] = (complex float *) calloc(2*npol, sizeof(complex float));
-    }
-
-    float *noise_floor = calloc(nchan*npol*npol, sizeof(float));
-
-    char *buffer = (char *) malloc(nspec*items_to_read*sizeof(int8_t));
     char *heap = NULL;
 
     heap = (char *) malloc(nspec*items_to_read*sample_rate);
 
     assert(heap);
 
-    float *data_buffer_psrfits = NULL;
-
-    int8_t *out_buffer_8_psrfits = NULL;
-
-    data_buffer_psrfits = (float *) valloc(nchan * outpol * pf.hdr.nsblk*sizeof(float));
-    out_buffer_8_psrfits = (int8_t *) malloc(outpol*nchan* pf.hdr.nsblk*sizeof(int8_t));
-    if (data_buffer_psrfits == NULL){
-        fprintf(stderr, "Failed to allocate data buffer\n");
-        exit(EXIT_FAILURE);
-    }
+    int8_t *out_buffer_8_psrfits = (int8_t *)malloc( outpol*nchan*pf.hdr.nsblk * sizeof(int8_t) );
+    float  *data_buffer_psrfits  =  (float *)malloc( nchan*outpol*pf.hdr.nsblk * sizeof(float) );
 
     int index = 0;
-    int offset_out_psrfits;
     int offset_in_psrfits;
 
     FILE *fp = NULL;
@@ -962,22 +935,23 @@ int main(int argc, char **argv) {
 
         timestamped("Calculating beam for next second of data", begintime);
 
-        offset_out_psrfits = 0;
         offset_in_psrfits  = 0;
 
-        bzero(data_buffer_psrfits, (pf.hdr.nsblk*nchan*outpol*sizeof(float)));
+        for (i = 0; i < nchan*outpol*pf.hdr.nsblk; i++)
+            data_buffer_psrfits[i] = 0.0;
 
 #pragma omp parallel for
         for (sample = 0; sample < (int)sample_rate; sample++ ) {
 
-            memcpy(buffer, heap+(items_to_read*sample), items_to_read);
+            complex float beam[nchan][nstation*npol];
+            float spectrum[nspec*nchan*outpol];
+            float noise_floor[nchan*npol*npol];
+            char buffer[nspec*items_to_read];
 
-            int stat = 0;
-            bzero(spectrum, (nchan*outpol*sizeof(float)));
-            for (stat=0;stat<nchan;stat++) {
-                bzero(beam[stat], (nstation*npol*sizeof(complex float)));
-            }
-            bzero(noise_floor, (nchan*npol*npol*sizeof(float)));
+            for (i = 0; i < nchan*npol*npol; i++)
+                noise_floor[i] = 0.0;
+
+            memcpy(buffer, heap+(items_to_read*sample), items_to_read);
 
             for (index = 0; index < nstation*npol;index = index + 2) {
 
@@ -1058,7 +1032,6 @@ int main(int argc, char **argv) {
                 }
             }
 
-            offset_out_psrfits = bytes_per_spec * sample;
             offset_in_psrfits  = sizeof(float)*nchan*outpol * sample;
 
             memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
@@ -1144,6 +1117,8 @@ int main(int argc, char **argv) {
     }
 
     destroy_metafits_info( &mi );
+    free( out_buffer_8_psrfits );
+    free( data_buffer_psrfits  );
 
     return 0;
 }
