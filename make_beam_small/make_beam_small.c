@@ -459,97 +459,7 @@ float get_weights(char *metafits, int nstation, int npol, double **weights_array
     return wgt_sum;
 }
 
-int get_phases(int nstation,int nchan,int npol,char *phases_file, double **weights, double ***phases_array, complex double ***complex_weights_array,long checkpoint) {
 
-    fprintf(stdout, "Getting phases: checkpoint = %ld\n", checkpoint);
-
-    int count = 0;
-    FILE *phases = NULL;
-    int ch=0;
-
-    int rval = 0;
-
-    if (*phases_array == NULL) {
-        *phases_array = (double **) calloc(nstation*npol,sizeof(double *));
-
-        for (count = 0;count < nstation*npol;count++) {
-            (*phases_array)[count] = (double *) calloc(nchan,sizeof(double));
-
-        }
-
-    }
-
-    if (*complex_weights_array == NULL) {
-
-        *complex_weights_array = (complex double **) calloc(nstation*npol,sizeof(complex double *));
-
-        for (count = 0;count < nstation*npol;count++) {
-
-            (*complex_weights_array)[count] = (complex double *) calloc(nchan,sizeof(complex double));
-        }
-
-    }
-    if (phases_file != NULL) {
-        fprintf(stdout,"Open phases file %s\n",phases_file);
-        phases = fopen(phases_file,"r");
-
-        if (phases==NULL) {
-            fprintf(stderr,"Cannot open phases file %s:%s\n",phases_file,strerror(errno));
-            return -1;
-        }
-        else {
-
-            if (checkpoint != 0) {
-                fseek(phases,checkpoint,SEEK_SET);
-            }
-
-            count = 0;
-
-            while ((count < nstation*npol) && !feof(phases)) {
-                for (ch=0;ch<nchan;ch++) {
-                    rval = fscanf(phases,"%lf\n",&(*phases_array)[count][ch]);
-                   // fprintf(stdout,"Phases: %d %d %lf\n",count,ch,(*phases_array)[count][ch]);
-                }
-                if (rval != 1)
-                    break;
-
-                count++;
-            }
-
-            if (count != nstation*npol) {
-                if (feof(phases))
-                    fprintf(stderr,"Unexpected end of file in phases - found %d and expected %d!\n",count,nstation*npol);
-                else
-                    fprintf(stderr,"Mismatch between phases and antennas - check phases file\n");
-                fclose(phases);
-                return -1;
-            }
-            else {
-                checkpoint = ftell(phases);
-                fprintf(stdout,"Checkpoint set to %ld\n",checkpoint);
-            }
-
-            fclose(phases);
-        }
-
-        fprintf(stdout,"Closed phases file %s\n",phases_file);
-    }
-
-    for (count = 0; count < nstation*npol; count++) {
-        for (ch = 0; ch < nchan; ch++) {
-            if (phases_file == NULL) {
-                (*phases_array)[count][ch] = 0.0;
-                (*complex_weights_array)[count][ch] = (*weights)[count]*1.0;
-            }
-            else {
-                (*complex_weights_array)[count][ch] = (*weights)[count] * cexp(I*(*phases_array)[count][ch]);
-            }
-        }
-    }
-
-    return checkpoint;
-
-}
 int get_jones(int nstation, int npol, char *jones_file, complex double ***invJi, long checkpoint) {
 
     int i=0;
@@ -678,8 +588,6 @@ int main(int argc, char **argv) {
     int weights = 0;
     char rec_channel[4]; // 0 - 255 receiver 1.28MHz channel
 
-
-    char *phases_file = NULL;
     char *jones_file = NULL;
     char *psrfits_file = NULL;
 
@@ -716,7 +624,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:c:d:D:e:f:F:hj:J:m:n:N:o:p:r:R:VwW:Xz:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:d:D:e:f:F:hj:J:m:n:N:o:p:r:R:VwW:Xz:")) != -1) {
             switch(c) {
 
                 case 'a':
@@ -724,9 +632,6 @@ int main(int argc, char **argv) {
                     break;
                 case 'b':
                     begin = atol(optarg);
-                    break;
-                case 'c':
-                    phases_file = strdup(optarg);
                     break;
                 case 'd':
                     datadirroot = strdup(optarg);
@@ -821,12 +726,6 @@ int main(int argc, char **argv) {
 
 
         /* update the phases and weights file names */
-        if (phases_file) {
-            sprintf(pattern,"%s/%s",procdir,phases_file);
-            free(phases_file);
-            phases_file=strdup(pattern);
-            fprintf(stdout,"phases_file: %s\n",phases_file);
-        }
         if (jones_file) {
             sprintf(pattern,"%s/%s",procdir,jones_file);
             free(jones_file);
@@ -880,10 +779,15 @@ int main(int argc, char **argv) {
     size_t bytes_per_spec=0;
 
     double *weights_array = NULL;
-    double **phases_array = NULL;
 
     complex double **complex_weights_array = NULL;
     complex double **invJi = NULL;
+
+    // Allocate memory for complex weights (and jones matrices...YET TO IMPLEMENT)
+    int i;
+    complex_weights_array = (complex double **)malloc( nstation * npol * sizeof(complex double *) );
+    for (i = 0; i < nstation*npol; i++)
+        complex_weights_array[i] = (complex double *)malloc( nchan * sizeof(complex double) );
 
     // these are only used if we are prepending the fitsheader
     FILE *fitsheader = NULL;
@@ -895,12 +799,17 @@ int main(int argc, char **argv) {
     // these are the file positions of the Jones and Phases files
 
     long jones_pos=0;
-    long phase_pos=0;
 
     long new_jones_pos=0;
-    long new_phase_pos=0;
 
     int recalc_delays = 1; // boolean: 1 iff next second's worth of jones and phase are to be calculated
+
+    // Read in flag weights
+    float wgt_sum;
+    if (weights)
+        wgt_sum = get_weights(metafits, nstation, npol, &weights_array);
+    else
+        wgt_sum = get_weights(NULL, nstation, npol, &weights_array);
 
     // Get first second's worth of phases and Jones matrices
     get_delays(
@@ -920,32 +829,20 @@ int main(int argc, char **argv) {
             chan_width,    // width of fine channel (Hz)
             time_utc,      // utc time string
             0.0,           // seconds offset from time_utc at which to calculate delays
-            phases_file,   // For now, output phases here
             jones_file,    // For now, output jones matrices here
             &pf,           // Populate psrfits header info
-            NULL,          // phases array          (answer will be output here)
-            NULL,          // complex weights array (answer will be output here)
+            &complex_weights_array,  // complex weights array (answer will be output here)
+            weights_array, // 0 or 1 for each antenna/pol combination
             NULL           // invJi array           (answer will be output here)
     );
 
     recalc_delays = 0;
 
-    // Read in flag weights
-    float wgt_sum;
-    if (weights)
-        wgt_sum = get_weights(metafits, nstation, npol, &weights_array);
-    else
-        wgt_sum = get_weights(NULL, nstation, npol, &weights_array);
-
-    // Read in the phases and jones matrices
-    new_phase_pos = get_phases(nstation, nchan, npol, phases_file,
-                               &weights_array, &phases_array,
-                               &complex_weights_array, phase_pos);
-
+    // Read in the jones matrices
     new_jones_pos = get_jones(nstation, npol, jones_file, &invJi, jones_pos);
 
-    if (new_phase_pos < 0 || new_jones_pos < 0) {
-        fprintf(stderr,"Failed to parse the correct number of Jones matrices or phases\n");
+    if (new_jones_pos < 0) {
+        fprintf(stderr,"Failed to parse the correct number of Jones matrices\n");
         exit(EXIT_FAILURE);
     }
 
@@ -1314,21 +1211,16 @@ printf_psrfits( &pf );
                     chan_width,    // width of fine channel (Hz)
                     time_utc,      // utc time string
                     (double)(sample / sample_rate + 1), // seconds offset from time_utc at which to calculate delays
-                    phases_file,   // For now, output phases here
                     jones_file,    // For now, output jones matrices here
                     NULL,          // Don't update psrfits header
-                    NULL,          // phases array          (answer will be output here)
-                    NULL,          // complex weights array (answer will be output here)
+                    &complex_weights_array,  // complex weights array (answer will be output here)
+                    weights_array, // 0 or 1 for each antenna/pol combination
                     NULL           // invJi array           (answer will be output here)
             );
 
-            new_phase_pos = get_phases(nstation, nchan, npol, phases_file,
-                                       &weights_array, &phases_array,
-                                       &complex_weights_array, phase_pos);
-
             new_jones_pos = get_jones(nstation, npol, jones_file, &invJi, jones_pos);
 
-            if (new_phase_pos == -1 || new_jones_pos == -1)
+            if (new_jones_pos == -1)
                 break; // Exit from while loop
 
             recalc_delays = 0;

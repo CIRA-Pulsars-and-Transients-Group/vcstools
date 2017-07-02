@@ -269,12 +269,11 @@ void get_delays(
         long int chan_width,
         char *time_utc,
         double sec_offset,
-        char *phases_filename,            // soon-deprecated output
         char *jones_filename,             // soon-deprecated output
         struct psrfits *pf,
-        double ***phases_array,           // output
-        double ***complex_weights_array,  // output
-        complex double ***invJi           // output
+        complex double ***complex_weights_array,  // output
+        double *weights_array,
+        complex double ***invJi                   // output
         )
 {
     
@@ -291,23 +290,21 @@ void get_delays(
     int invert = -1;
     int write_files = 1;
     
-    FILE *phase_file = NULL;
     FILE *jones_file = NULL;
 
     /* easy -- now the positions from the database */
     
     if (write_files) {
         
-        phase_file = fopen(phases_filename, "w");
         jones_file = fopen(jones_filename,  "w");
 
-        if (phase_file == NULL || jones_file == NULL) {
-            fprintf(stderr, "Failed to open %s or %s\n", phases_filename, jones_filename );
+        if (jones_file == NULL) {
+            fprintf(stderr, "Failed to open %s\n", jones_filename );
             exit(EXIT_FAILURE);
         }
     }
 
-    double *phase = calloc(nchan,sizeof(double));
+    double phase;
 
     /* Calibration related defines */
     /* set these here for the library */
@@ -592,81 +589,58 @@ void get_delays(
         
     
     /* for the tile <not the look direction> */
-    
 
-    //fprintf(stdout,"calib: Tile position (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az,tile_pointing_el,tile_pointing_ra,tile_pointing_dec );
-     //fprintf(stdout,"calib: Tile position (radian) (Az:%f,El:%f,RA:%f,Dec:%f) -- Not precessing -- assuming fixed Az-El \n", tile_pointing_az*DD2R,tile_pointing_el*DD2R,tile_pointing_ra*DD2R,tile_pointing_dec*DD2R);
-    //fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az*DR2D,el*DR2D,ra_ap*DR2D,dec_ap*DR2D);
-    //fprintf(stdout,"calib: Requested  Look direction (degrees) (Az:%f,El:%f,RA:%f,Dec:%f) -- After precession \n", az,el,ra_ap,dec_ap);
-
-    
-    
     int ch=0;
 
     for (row=0; row < (int)ninput; row++) {
 
+        if (weights_array[row] != 0.0) {
 
-        double cable = cable_array[row]-cable_array[refinp];
-        double E = E_array[row];
-        double N = N_array[row];
-        double H = H_array[row];
+            double cable = cable_array[row]-cable_array[refinp];
+            double E = E_array[row];
+            double N = N_array[row];
+            double H = H_array[row];
 
+            double integer_phase;
+            double X,Y,Z,u,v,w;
 
-        double integer_phase;
+            ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
 
-        double X,Y,Z,u,v,w;
-        
-        ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
+            calcUVW (app_ha_rad,app_dec_rad,X,Y,Z,&u,&v,&w);
 
-        //fprintf(stdout,"calib: Antenna %d: HA %f Dec %f --  X: %f Y: %f Z: %f\n",row,app_ha_rad, app_dec_rad,X,Y,Z);
-        calcUVW (app_ha_rad,app_dec_rad,X,Y,Z,&u,&v,&w);
+            // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
 
-        // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
+            double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
+            // double geometry = E*unit_E + N*unit_N + H*unit_H ;
+            // Above is just w as you should see from the check.
 
+            double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
+            double delay_samples = delay_time * samples_per_sec;
 
+            for (ch=0;ch<nchan;ch++) {
+                long int freq_ch = frequency + (edge+ch)*chan_width;
 
-        double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
-        // double geometry = E*unit_E + N*unit_N + H*unit_H ;
-        // Above is just w as you should see from the check.
+                // freq should be in cycles per sample and delay in samples
+                // which essentially means that the samples_per_sec cancels
 
-        double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
-        double delay_samples = delay_time * samples_per_sec;
+                // and we only need the fractional part of the turn
+                double cycles_per_sample = (double)freq_ch/samples_per_sec;
 
-        //fprintf(stdout,"Antenna %d, E %f, N %f, H %f\n",row,E,N,H);
-        //fprintf(stdout,"Distance from reference, E-E_ref %f, N-N_ref %f, H-N_ref %f\n",E-E_ref,N-N_ref,H-H_ref);
+                phase = cycles_per_sample*delay_samples;
+                phase = modf(phase, &integer_phase);
 
-        //fprintf(stdout,"Look direction, E %f, N %f, H %f\n",unit_E,unit_N,unit_H);
-        //fprintf(stdout,"calib:geom: %f w: %f cable(-cable_ref): %f time (s):%g (samples):%g \n",geometry, w, cable, delay_time,delay_samples);
-        //fprintf(stdout,"calib:geom: u %f v %f w %f\n",u,v,w);// we have to get this amount of delay into the data
+                phase = phase*2*M_PI*conjugate;
 
+                // Store result for later use
+                (*complex_weights_array)[row][ch] = weights_array[row]*cexp(I*phase);
 
-
-
-        for (ch=0;ch<nchan;ch++) {
-            long int freq_ch = frequency + (edge+ch)*chan_width;
-
-            // freq should be in cycles per sample and delay in samples
-            // which essentially means that the samples_per_sec cancels
-
-            // and we only need the fractional part of the turn
-            double cycles_per_sample = (double)freq_ch/samples_per_sec;
-
-            phase[ch] = cycles_per_sample*delay_samples;
-            phase[ch] = modf(phase[ch], &integer_phase);
-
-            phase[ch] = phase[ch]*2*M_PI*conjugate;
-
-            if (ch == 0) {
-                //fprintf(stdout,"Comp:ch %d Freq (Cycles/s) %ld\n",ch,freq_ch);
-                //fprintf(stdout,"Comp:ch %d Freq (Cycles/sample) %lf\n",ch,(double)freq_ch/samples_per_sec);
-                //fprintf(stdout,"Comp:Geo: %f Cable %f (total (s)) %g:Phase (raw) %f Phase (sample) %f\n",geometry,cable,(geometry+cable)/VLIGHT,phase[ch],phase[ch]/samples_per_sec);
             }
-
-            if (phase_file != NULL) {
-                fprintf(phase_file,"%lf\n",phase[ch]);
-            }
-            
         }
+        else {
+            for (ch=0;ch<nchan;ch++)
+                (*complex_weights_array)[row][ch] = weights_array[row];
+        }
+
         if (row%npol == 0) {
             if (jones_file != NULL) {
                 for (i=0;i<4;i++){
@@ -683,8 +657,6 @@ void get_delays(
     if (verbose)
         puts("==========================");
     
-    if (phase_file != NULL)
-        fclose(phase_file);
     if (jones_file != NULL)
         fclose(jones_file);
       /* ========= Generate a FITS HEADER ==========*/
@@ -785,8 +757,6 @@ void get_delays(
     
 
     // Free up memory
-    free(phase);
-    
 
     for (i = 0; i < nstation; i++) { //
         free(G[i]);
