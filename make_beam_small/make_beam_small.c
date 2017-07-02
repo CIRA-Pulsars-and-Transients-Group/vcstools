@@ -9,6 +9,8 @@
 #include <errno.h>
 #include <time.h>
 #include "mwac_utils.h"
+#include "slalib.h"
+#include "slamac.h"
 #include "ascii_header.h"
 #include "mwa_header.h"
 //#include <omp.h>
@@ -63,6 +65,151 @@ void usage() {
 
 }
 
+void populate_psrfits_header(
+        struct psrfits *pf,
+        char           *metafits,
+        char           *obsid,
+        char           *time_utc,
+        unsigned int    sample_rate,
+        long int        frequency,
+        int             edge,
+        int             nchan,
+        long int        chan_width,
+        int             outpol,
+        int             summed_polns,
+        char           *rec_channel,
+        struct delays  *delay_vals ) {
+
+    fitsfile *fptr = NULL;
+    int status      = 0;
+
+    fits_open_file(&fptr, metafits, READONLY, &status);
+    fits_read_key(fptr, TSTRING, "PROJECT", pf->hdr.project_id, NULL, &status);
+    fits_close_file(fptr,&status);
+
+    // Now set values for our hdrinfo structure
+    strcpy(pf->hdr.obs_mode,  "SEARCH");
+    strcpy(pf->hdr.observer,  "MWA User");
+    strcpy(pf->hdr.telescope, "MWA");
+    strncpy(pf->hdr.source, obsid, 23);
+    pf->hdr.scanlen = 1.0; // in sec
+
+    strcpy(pf->hdr.frontend, "MWA-RECVR");
+    snprintf(pf->hdr.backend, 24*sizeof(char), "GD-%s-MB-%s-U-%s",
+            GET_DELAYS_VERSION, MAKE_BEAM_VERSION, UTILS_VERSION);
+
+    // Now let us finally get the time right
+    strcpy(pf->hdr.date_obs,   time_utc);
+    strcpy(pf->hdr.poln_type,  "LIN");
+    strcpy(pf->hdr.track_mode, "TRACK");
+    strcpy(pf->hdr.cal_mode,   "OFF");
+    strcpy(pf->hdr.feed_mode,  "FA");
+
+    pf->hdr.dt   = 1.0/sample_rate;                                   // (sec)
+    pf->hdr.fctr = (frequency + (edge+(nchan/2.0))*chan_width)/1.0e6; // (MHz)
+    pf->hdr.BW   = (nchan*chan_width)/1.0e6;                          // (MHz)
+
+    // npols + nbits and whether pols are added
+    pf->filenum       = 0;       // This is the crucial one to set to initialize things
+    pf->rows_per_file = 200;     // I assume this is a max subint issue
+
+    pf->hdr.npol         = outpol;
+    pf->hdr.summed_polns = summed_polns;
+    pf->hdr.nchan        = nchan;
+    pf->hdr.onlyI        = 0;
+
+    pf->hdr.scan_number   = 1;
+    pf->hdr.rcvr_polns    = 2;
+    pf->hdr.summed_polns  = 0;
+    pf->hdr.offset_subint = 0;
+
+    pf->hdr.df         = chan_width/1.0e6; // (MHz)
+    pf->hdr.orig_nchan = pf->hdr.nchan;
+    pf->hdr.orig_df    = pf->hdr.df;
+    pf->hdr.nbits      = 8;
+    pf->hdr.nsblk      = sample_rate;  // block is always 1 second of data
+
+    pf->hdr.ds_freq_fact = 1;
+    pf->hdr.ds_time_fact = 1;
+
+    // some things that we are unlikely to change
+    pf->hdr.fd_hand  = 0;
+    pf->hdr.fd_sang  = 0.0;
+    pf->hdr.fd_xyph  = 0.0;
+    pf->hdr.be_phase = 0.0;
+    pf->hdr.chan_dm  = 0.0;
+
+    // Now set values for our subint structure
+    pf->tot_rows     = 0;
+    pf->sub.tsubint  = roundf(pf->hdr.nsblk * pf->hdr.dt);
+    pf->sub.offs     = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
+
+    pf->sub.feed_ang = 0.0;
+    pf->sub.pos_ang  = 0.0;
+    pf->sub.par_ang  = 0.0;
+
+    // Specify psrfits data type
+    pf->sub.FITS_typecode = TBYTE;
+
+    pf->sub.bytes_per_subint = (pf->hdr.nbits * pf->hdr.nchan *
+                                pf->hdr.npol  * pf->hdr.nsblk) / 8;
+
+    // Create and initialize the subint arrays
+    pf->sub.dat_freqs   = (float *)malloc(sizeof(float) * pf->hdr.nchan);
+    pf->sub.dat_weights = (float *)malloc(sizeof(float) * pf->hdr.nchan);
+
+    double dtmp = pf->hdr.fctr - 0.5 * pf->hdr.BW + 0.5 * pf->hdr.df;
+    int i;
+    for (i = 0 ; i < pf->hdr.nchan ; i++) {
+        pf->sub.dat_freqs[i] = dtmp + i * pf->hdr.df;
+        pf->sub.dat_weights[i] = 1.0;
+    }
+
+    // the following is definitely needed for 8 bit numbers
+    pf->sub.dat_offsets = (float *)malloc(sizeof(float) * pf->hdr.nchan * pf->hdr.npol);
+    pf->sub.dat_scales  = (float *)malloc(sizeof(float) * pf->hdr.nchan * pf->hdr.npol);
+    for (i = 0 ; i < pf->hdr.nchan * pf->hdr.npol ; i++) {
+        pf->sub.dat_offsets[i] = 0.0;
+        pf->sub.dat_scales[i]  = 1.0;
+    }
+
+    pf->sub.data    = (unsigned char *)malloc(pf->sub.bytes_per_subint);
+    pf->sub.rawdata = pf->sub.data;
+
+    int ch = atoi(rec_channel);
+    sprintf(pf->basefilename, "%s_%s_ch%03d",
+            pf->hdr.project_id, pf->hdr.source, ch);
+
+    // Update values that depend on get_delays()
+    if (delay_vals != NULL) {
+
+        pf->hdr.ra2000  = delay_vals->mean_ra  * DR2D;
+        pf->hdr.dec2000 = delay_vals->mean_dec * DR2D;
+
+        dec2hms(pf->hdr.ra_str,  pf->hdr.ra2000/15.0, 0);
+        dec2hms(pf->hdr.dec_str, pf->hdr.dec2000,     1);
+
+        pf->hdr.azimuth    = delay_vals->az*DR2D;
+        pf->hdr.zenith_ang = 90.0 - (delay_vals->el*DR2D);
+
+        pf->hdr.beam_FWHM = 0.25;
+        pf->hdr.start_lst = delay_vals->lmst * 60.0 * 60.0;        // Local Apparent Sidereal Time in seconds
+        pf->hdr.start_sec = roundf(delay_vals->fracmjd*86400.0);   // this will always be a whole second
+        pf->hdr.start_day = delay_vals->intmjd;
+        pf->hdr.MJD_epoch  = delay_vals->intmjd + delay_vals->fracmjd;
+
+        // Now set values for our subint structure
+        pf->sub.lst      = pf->hdr.start_lst;
+        pf->sub.ra       = pf->hdr.ra2000;
+        pf->sub.dec      = pf->hdr.dec2000;
+        slaEqgal(pf->hdr.ra2000*DD2R, pf->hdr.dec2000*DD2R,
+                 &pf->sub.glon, &pf->sub.glat);
+        pf->sub.glon    *= DR2D;
+        pf->sub.glat    *= DR2D;
+        pf->sub.tel_az   = pf->hdr.azimuth;
+        pf->sub.tel_zen  = pf->hdr.zenith_ang;
+    }
+}
 
 void int8_to_uint8(int n, int shift, char * to_convert) {
     int j;
@@ -478,8 +625,6 @@ int main(int argc, char **argv) {
     tbegin = clock(); // Begin timing "tprelude"
 
     int dir_index = 0;
-    int ii;
-    double dtmp;
     int c = 0;
     int ch=0;
     int chan = 0; // 0-offset coarse channel number to process
@@ -639,36 +784,36 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
         }
 
-        if (datadirroot) {
+    }
 
-            // Generate list of files to work on
+    if (datadirroot) {
 
-            // Calculate the number of files
-            nfiles = end - begin + 1;
-            if (nfiles <= 0) {
-                fprintf(stderr,"Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
-                exit(EXIT_FAILURE);
-            }
+        // Generate list of files to work on
 
-            // Allocate memory for the file name list
-            filenames = (char **)malloc( nfiles*sizeof(char *) );
-
-            // Allocate memory and write filenames
-            int second;
-            unsigned long int timestamp;
-            for (second = 0; second < nfiles; second++) {
-                timestamp = second + begin;
-                filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
-                sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadirroot, obsid, timestamp, rec_channel );
-                //sprintf( filenames[second], "%s_%ld_ch%s.dat", obsid, timestamp, rec_channel );
-            }
-            fprintf( stderr, "Opening files from %s to %s\n", filenames[0], filenames[nfiles-1] );
-
+        // Calculate the number of files
+        nfiles = end - begin + 1;
+        if (nfiles <= 0) {
+            fprintf(stderr,"Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
+            exit(EXIT_FAILURE);
         }
+
+        // Allocate memory for the file name list
+        filenames = (char **)malloc( nfiles*sizeof(char *) );
+
+        // Allocate memory and write filenames
+        int second;
+        unsigned long int timestamp;
+        for (second = 0; second < nfiles; second++) {
+            timestamp = second + begin;
+            filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
+            sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadirroot, obsid, timestamp, rec_channel );
+            //sprintf( filenames[second], "%s_%ld_ch%s.dat", obsid, timestamp, rec_channel );
+        }
+        fprintf( stderr, "Opening files from %s to %s\n", filenames[0], filenames[nfiles-1] );
+
     }
 
 
-    size_t bytes_per_spec=0;
 
     double *weights_array = NULL;
 
@@ -686,7 +831,6 @@ int main(int argc, char **argv) {
         invJi[i] =(complex double *)malloc( npol * npol * sizeof(complex double) );
 
     // these are only used if we are prepending the fitsheader
-    FILE *fitsheader = NULL;
     struct psrfits pf;
 
     char proc_psrfits_file[1024];
@@ -702,6 +846,7 @@ int main(int argc, char **argv) {
         wgt_sum = get_weights(NULL, nstation, npol, &weights_array);
 
     // Get first second's worth of phases and Jones matrices
+    struct delays delay_vals;
     get_delays(
             0,             // coarse_chan (used for Offringa solutions)
             dec_ddmmss,    // dec as a string "dd:mm:ss"
@@ -710,16 +855,14 @@ int main(int argc, char **argv) {
             frequency,     // middle of the first frequency channel in Hz
             metafits,      // filename of the metafits file for this obsID
             128,           // number of fine channels
-            obsid,         // the obsid
             0,             // get_offringa? For now, always no
             1,             // get_rts?      For now, always yes
             DI_Jones_file, // filename of the DI Jones file
             sample_rate,   // = 10000 samples per sec
-            0,             // turn verbose off
             chan_width,    // width of fine channel (Hz)
             time_utc,      // utc time string
             0.0,           // seconds offset from time_utc at which to calculate delays
-            &pf,           // Populate psrfits header info
+            &delay_vals,   // Populate psrfits header info
             complex_weights_array,  // complex weights array (answer will be output here)
             weights_array, // 0 or 1 for each antenna/pol combination
             invJi          // invJi array           (answer will be output here)
@@ -727,57 +870,12 @@ int main(int argc, char **argv) {
 
     recalc_delays = 0;
 
-    // Read in psrfits header
-    fitsheader=fopen(proc_psrfits_file,"r");
-    if (fitsheader != NULL) {
-        fread((void *)&pf,sizeof(pf),1,fitsheader);
-    }
-    else {
-        fprintf(stderr,"Cannot load fitsheader - check %s\n",proc_psrfits_file);
-        exit(EXIT_FAILURE);
+    // now we need to create a fits file and populate its header
+    populate_psrfits_header( &pf, metafits, obsid, time_utc, sample_rate,
+            frequency, edge, nchan, chan_width, outpol, summed_polns,
+            rec_channel, &delay_vals );
 
-    }
-    fclose(fitsheader);
-    // now we need to create a fits file with this header
-
-
-    // We need to change a few things to pick up the type of beam we are:
-
-    // npols + nbits and whether pols are added
-    pf.filenum = 0;             // This is the crucial one to set to initialize things
-    pf.rows_per_file = 200;     // I assume this is a max subint issue
-    
-    pf.hdr.npol         = outpol;
-    pf.hdr.summed_polns = summed_polns;
-    pf.hdr.nchan        = nchan;
-    pf.hdr.onlyI        = 0;
-
-    // Specify psrfits data type
-    pf.hdr.nbits = 8;
-    pf.sub.FITS_typecode = TBYTE;
-
-    bytes_per_spec = pf.hdr.nbits * pf.hdr.nchan * pf.hdr.npol/8;
-    pf.sub.bytes_per_subint = (pf.hdr.nbits * pf.hdr.nchan *
-                               pf.hdr.npol * pf.hdr.nsblk) / 8;
-    // Create and initialize the subint arrays
-    pf.sub.dat_freqs = (float *)malloc(sizeof(float) * pf.hdr.nchan);
-    pf.sub.dat_weights = (float *)malloc(sizeof(float) * pf.hdr.nchan);
-    dtmp = pf.hdr.fctr - 0.5 * pf.hdr.BW + 0.5 * pf.hdr.df;
-    for (ii = 0 ; ii < pf.hdr.nchan ; ii++) {
-        pf.sub.dat_freqs[ii] = dtmp + ii * pf.hdr.df;
-        pf.sub.dat_weights[ii] = 1.0;
-    }
-    pf.sub.dat_offsets = (float *)malloc(sizeof(float) * pf.hdr.nchan * pf.hdr.npol); // definitely needed for 8 bit numbers
-    pf.sub.dat_scales = (float *)malloc(sizeof(float) * pf.hdr.nchan * pf.hdr.npol);
-    for (ii = 0 ; ii < pf.hdr.nchan * pf.hdr.npol ; ii++) {
-        pf.sub.dat_offsets[ii] = 0.0;
-        pf.sub.dat_scales[ii] = 1.0;
-    }
-
-    pf.sub.data = (unsigned char *)malloc(pf.sub.bytes_per_subint);
-    pf.sub.rawdata = pf.sub.data;
-
-    sprintf(pf.basefilename,"%s_%s_%02d",pf.hdr.project_id,pf.hdr.source,dir_index);
+    size_t bytes_per_spec = pf.hdr.nbits * pf.hdr.nchan * pf.hdr.npol/8;
 
     unsigned int nspec = 1;
     size_t items_to_read = nstation*npol*nchan*2;
@@ -1054,7 +1152,6 @@ int main(int argc, char **argv) {
                     fprintf(stderr,"Write subint failed file exists?\n");
                     break; // Exit from while loop
                 }
-printf_psrfits( &pf );
 
                 pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
                 pf.sub.lst += pf.sub.tsubint;;
@@ -1083,16 +1180,14 @@ printf_psrfits( &pf );
                     frequency,     // middle of the first frequency channel in Hz
                     metafits,      // filename of the metafits file for this obsID
                     128,           // number of fine channels
-                    obsid,         // the obsid
                     0,             // get_offringa? For now, always no
                     1,             // get_rts?      For now, always yes
                     DI_Jones_file, // filename of the DI Jones file
                     sample_rate,   // = 10000 samples per sec
-                    0,             // turn verbose off
                     chan_width,    // width of fine channel (Hz)
                     time_utc,      // utc time string
                     (double)(sample / sample_rate + 1), // seconds offset from time_utc at which to calculate delays
-                    NULL,          // Don't update psrfits header
+                    NULL,          // Don't update delay_vals
                     complex_weights_array,  // complex weights array (answer will be output here)
                     weights_array, // 0 or 1 for each antenna/pol combination
                     invJi          // invJi array           (answer will be output here)

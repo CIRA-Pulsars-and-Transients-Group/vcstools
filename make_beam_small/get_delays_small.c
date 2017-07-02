@@ -32,8 +32,6 @@
 #define VLIGHT 299792458.0        // speed of light. m/s
 double arr_lat_rad=MWA_LAT*(M_PI/180.0),arr_lon_rad=MWA_LON*(M_PI/180.0),height=MWA_HGT;
 
-int verbose;
-
 /* these externals are needed for the mwac_utils library */
 int nfrequency;
 int npol;
@@ -232,18 +230,15 @@ void mjd2lst(double mjd, double *lst) {
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd) {
     
-    extern int verbose;
     int J=0;
     struct tm *utc;
     utc = calloc(1,sizeof(struct tm));
     
-    //fprintf(stderr,"Parsing UTC from %s\n",opts->utc_str);
+    sscanf(utc_str, "%d-%d-%dT%d:%d:%d",
+            &utc->tm_year, &utc->tm_mon, &utc->tm_mday,
+            &utc->tm_hour, &utc->tm_min, &utc->tm_sec);
     
-    sscanf(utc_str,"%d-%d-%dT%d:%d:%d",&utc->tm_year,&utc->tm_mon,&utc->tm_mday,&utc->tm_hour,&utc->tm_min,&utc->tm_sec);
-    if (verbose)
-        fprintf(stderr,"yr %d, mon %d, day %d, hour %d, min %d, sec %d\n",utc->tm_year, utc->tm_mon, utc->tm_mday, utc->tm_hour, utc->tm_min,utc->tm_sec);
-    
-    slaCaldj(utc->tm_year,utc->tm_mon,utc->tm_mday,intmjd,&J);
+    slaCaldj(utc->tm_year, utc->tm_mon, utc->tm_mday, intmjd, &J);
     
     if (J !=0) {
         fprintf(stderr,"Failed to calculate MJD\n");
@@ -260,16 +255,14 @@ void get_delays(
         long int frequency,
         char *metafits,
         int nchan,
-        char *obsid,
         int get_offringa,
         int get_rts,
         char *DI_Jones_file,
         float samples_per_sec,
-        int verbose,
         long int chan_width,
         char *time_utc,
         double sec_offset,
-        struct psrfits *pf,
+        struct delays *delay_vals,
         complex double **complex_weights_array,  // output
         double *weights_array,
         complex double **invJi                   // output
@@ -499,23 +492,20 @@ void get_delays(
 
     /* get mjd */
 
-    utc2mjd(time_utc,&intmjd,&fracmjd);
+    utc2mjd(time_utc, &intmjd, &fracmjd);
 
     /* get requested Az/El from command line */
   
     mjd = intmjd + fracmjd;
-    mjd = mjd + (sec_offset+0.5)/86400.0;
-    mjd2lst(mjd,&lmst);
+    mjd += (sec_offset+0.5)/86400.0;
+    mjd2lst(mjd, &lmst);
 
-    //fprintf(stdout,"calib: current lmst (radian) = %f\n",lmst);
-    // last is in epoch of MJD (
-    
     /* for the look direction <not the tile> */
     
     mean_ra = ra_hours * DH2R;
     mean_dec = dec_degs * DD2R;
 
-    slaMap(mean_ra,mean_dec,pr,pd,px,rv,eq,mjd,&ra_ap,&dec_ap);
+    slaMap(mean_ra, mean_dec, pr, pd, px, rv, eq, mjd, &ra_ap, &dec_ap);
     
     // Lets go mean to apparent precess from J2000.0 to EPOCH of date.
     
@@ -526,7 +516,7 @@ void get_delays(
     app_ha_rad = ha * DH2R;
     app_dec_rad = dec_ap;
 
-    slaDe2h(app_ha_rad,dec_ap,MWA_LAT*DD2R,&az,&el);
+    slaDe2h(app_ha_rad, dec_ap, MWA_LAT*DD2R, &az, &el);
 
     /* now we need the direction cosines */
     
@@ -641,113 +631,22 @@ void get_delays(
             else
                 for (i = 0; i < 4; i++)
                     invJi[station][i] = 0.0 + I*0.0;
-
-            // Print out values for checking
-            for (i = 0; i < 4; i++)
-                fprintf(stdout, "%f %f ", creal(invJi[station][i]), cimag(invJi[station][i]));
-            fprintf(stdout, "\n");
         }
         
         
     }
 
-    if (verbose)
-        puts("==========================");
-    
-      /* ========= Generate a FITS HEADER ==========*/
-    if (pf != NULL) {
+    // Populate a structure with some of the calculated values
+    if (delay_vals != NULL) {
         
-        status=0;
+        delay_vals->mean_ra  = mean_ra;
+        delay_vals->mean_dec = mean_dec;
+        delay_vals->az       = az;
+        delay_vals->el       = el;
+        delay_vals->lmst     = lmst;
+        delay_vals->fracmjd  = fracmjd;
+        delay_vals->intmjd   = intmjd;
 
-        fits_open_file(&fptr,metafits,READONLY,&status);
-        fits_read_key(fptr,TSTRING,"PROJECT",pf->hdr.project_id,NULL,&status);
-        fits_close_file(fptr,&status);
-
-        strcpy(pf->basefilename, "/tmp/obsfile");
-        
-        // Now set values for our hdrinfo structure
-        strcpy(pf->hdr.obs_mode,"SEARCH");
-        pf->hdr.scanlen = 1.0; // in sec
-        strcpy(pf->hdr.observer, "MWA User");
-        strcpy(pf->hdr.telescope, "MWA");
-        strncpy(pf->hdr.source,obsid,23);
-        
-        
-        strcpy(pf->hdr.frontend, "MWA-RECVR");
-        char backend[24];
-        snprintf(backend, 24*sizeof(char), "GD-%s-MB-%s-U-%s", GET_DELAYS_VERSION, MAKE_BEAM_VERSION, UTILS_VERSION);
-        strcpy(pf->hdr.backend, backend);
-        
-        /* Now let us finally get the time right */
-        
-        strcpy(pf->hdr.date_obs, time_utc);
-        strcpy(pf->hdr.poln_type, "LIN");
-        strcpy(pf->hdr.track_mode, "TRACK");
-        strcpy(pf->hdr.cal_mode, "OFF");
-        strcpy(pf->hdr.feed_mode, "FA");
-        
-        pf->hdr.dt   = 1.0/samples_per_sec;                                   // sample rate (s)
-        pf->hdr.fctr = (frequency + (edge+(nchan/2.0))*chan_width)/1.0e6;     // frequency (MHz)
-        pf->hdr.BW   = (nchan*chan_width)/1.0e6;
-
-        pf->hdr.ra2000    = mean_ra  * DR2D;
-        pf->hdr.dec2000   = mean_dec * DR2D;
-
-        dec2hms(pf->hdr.ra_str, pf->hdr.ra2000/15.0, 0);
-        dec2hms(pf->hdr.dec_str, pf->hdr.dec2000, 1);
-
-        pf->hdr.azimuth    = az*DR2D;
-        pf->hdr.zenith_ang = 90.0 - (el*DR2D);
-
-        pf->hdr.beam_FWHM = 0.25;
-        pf->hdr.start_lst = lmst * 60.0 * 60.0;        // Local Apparent Sidereal Time in seconds
-        pf->hdr.start_sec = roundf(fracmjd*86400.0);   // this will always be a whole second - so I'm rounding.
-        pf->hdr.start_day = intmjd;
-
-        pf->hdr.scan_number   = 1;
-        pf->hdr.rcvr_polns    = 2;
-        pf->hdr.summed_polns  = 0;
-        pf->hdr.offset_subint = 0;
-
-        pf->hdr.nchan      = nchan;
-        pf->hdr.df         = chan_width/1.0e6;
-        pf->hdr.orig_nchan = pf->hdr.nchan;
-        pf->hdr.orig_df    = pf->hdr.df;
-        pf->hdr.nbits      = 8;
-        pf->hdr.npol       = 2;
-        pf->hdr.nsblk      = samples_per_sec;  // block is always 1 second of data
-        pf->hdr.MJD_epoch  = intmjd + fracmjd;
-        
-        pf->hdr.ds_freq_fact = 1;
-        pf->hdr.ds_time_fact = 1;
-
-        // some things that we are unlikely to change
-        pf->hdr.fd_hand  = 0;
-        pf->hdr.fd_sang  = 0.0;
-        pf->hdr.fd_xyph  = 0.0;
-        pf->hdr.be_phase = 0.0;
-        pf->hdr.chan_dm  = 0.0;
-
-        // Now set values for our subint structure
-        pf->tot_rows     = 0;
-        pf->sub.tsubint  = roundf(pf->hdr.nsblk * pf->hdr.dt);
-        pf->sub.offs     = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
-        pf->sub.lst      = pf->hdr.start_lst;
-        pf->sub.ra       = pf->hdr.ra2000;
-        pf->sub.dec      = pf->hdr.dec2000;
-        slaEqgal(pf->hdr.ra2000*DD2R, pf->hdr.dec2000*DD2R,
-                 &pf->sub.glon, &pf->sub.glat);
-        pf->sub.glon    *= DR2D;
-        pf->sub.glat    *= DR2D;
-        pf->sub.feed_ang = 0.0;
-        pf->sub.pos_ang  = 0.0;
-        pf->sub.par_ang  = 0.0;
-        pf->sub.tel_az   = pf->hdr.azimuth;
-        pf->sub.tel_zen  = pf->hdr.zenith_ang;
-        pf->sub.bytes_per_subint = (pf->hdr.nbits * pf->hdr.nchan *
-                                   pf->hdr.npol * pf->hdr.nsblk) / 8;
-        pf->sub.FITS_typecode = TBYTE;  // 11 = byte
-        
     }
     
 
