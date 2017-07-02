@@ -51,7 +51,6 @@ void usage() {
     fprintf(stderr, "-n <number of channels>\n");
     fprintf(stderr, "-o obs id\n");
     fprintf(stderr, "-O <Offringa-style calibration solution file>\n");
-    fprintf(stderr, "-p <processing directory root> -- where all the direction dependent files live and where the beams will be put\n");
     fprintf(stderr, "-r <sample rate in Hz>\n");
     fprintf(stderr, "-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
     fprintf(stderr, "-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
@@ -724,10 +723,8 @@ int main(int argc, char **argv) {
     char *obsid = NULL;
     char *datadirroot = NULL;
     char **filenames = NULL;
-    int read_stdin = 0;
     int nfiles = 0;
     int expunge = 0;
-    int read_files = 0;
 
     unsigned int sample_rate = 10000;
 
@@ -927,8 +924,6 @@ int main(int argc, char **argv) {
     char *buffer = (char *) malloc(nspec*items_to_read*sizeof(int8_t));
     char *heap = NULL;
 
-    size_t heap_step = 0;
-
     heap = (char *) malloc(nspec*items_to_read*sample_rate);
 
     assert(heap);
@@ -950,7 +945,6 @@ int main(int argc, char **argv) {
     int offset_out_psrfits = 0;
     int offset_in_psrfits  = 0;
 
-    int file_no = 0;
     FILE *fp = NULL;
 
     char working_file[MAX_COMMAND_LENGTH];
@@ -958,275 +952,198 @@ int main(int argc, char **argv) {
     tend = clock();
     tprelude = (double)(tend-tbegin)/CLOCKS_PER_SEC;
 
-    int sample = -1; // the sample number being worked on.
-                     // It will be incremented to 0 at the beginning of the first iteration
-    while(finished == 0) { // keep going indefinitely
+    int file_no = 0;
+    int sample;
 
-        tbegin = clock(); // Start timing "tpreomp"
+    for (file_no = 0; file_no < nfiles; file_no++) {
 
-        sample++;
+        if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
+            break; // Exit from while loop
 
-        if (read_stdin) {
-            unsigned int rtn = fread(buffer, items_to_read*sizeof(int8_t), nspec, stdin);
-            if (feof(stdin) || rtn != nspec) {
-                fprintf(stderr, "make_beam finished:\n");
-                finished = 1;
-                continue;
+        for (sample = 0; sample < (int)sample_rate; sample++ ) {
+
+            tbegin = clock(); // Start timing "tpreomp"
+
+            memcpy(buffer, heap+(items_to_read*sample), items_to_read);
+
+            int stat = 0;
+            bzero(spectrum, (nchan*outpol*sizeof(float)));
+            for (stat=0;stat<nchan;stat++) {
+                bzero(beam[stat], (nstation*npol*sizeof(complex float)));
             }
-        }
-        else if (read_files) {
-            if (file_no >= nfiles) { // finished file list
-                fprintf(stderr, "make_beam finished:\n");
-                finished = 1;
-                continue;
+            bzero(noise_floor, (nchan*npol*npol*sizeof(float)));
+
+            if (offset_in_psrfits == 0) {
+                bzero(data_buffer_psrfits, (pf.hdr.nsblk*nchan*outpol*sizeof(float)));
             }
 
-            if (fp == NULL) { // need to open the next file
+            tend = clock();
+            tpreomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
 
-                if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
-                    break; // Exit from while loop
+            tbegin = clock(); // Start timing "tomp"
 
-                sprintf(working_file, "/dev/shm/%s.working", filenames[file_no]);
+            for (index = 0; index < nstation*npol;index = index + 2) {
 
-                fp = fopen(working_file, "r");
+                for (ch=0;ch<nchan;ch++) {
+                    int8_t *in_ptr = (int8_t *)buffer + 2*index*nchan + 2*ch;
 
-                if (fp == NULL) {
-                    fprintf(stderr, "Failed to open file %s\n", working_file);
-                    break; // Exit from while loop
+                    complex float e_true[2], e_dash[2];
+
+                    e_dash[0] = (float) *in_ptr + I*(float)(*(in_ptr+1));
+                    e_dash[1] = (float) *(in_ptr+(nchan*2)) + I*(float)(*(in_ptr+(nchan*2)+1)); // next pol is nchan*2 away
+
+                    /* apply the inv(jones) to the e_dash */
+                    e_dash[0] *= complex_weights_array[index][ch];
+                    e_dash[1] *= complex_weights_array[index+1][ch];
+
+                    e_true[0] = invJi[index/npol][0]*e_dash[0] + invJi[index/npol][1]*e_dash[1];
+                    e_true[1] = invJi[index/npol][2]*e_dash[0] + invJi[index/npol][3]*e_dash[1];
+
+                    noise_floor[ch*npol*npol] += e_true[0] * conj(e_true[0]);
+                    noise_floor[ch*npol*npol+1] += e_true[0] * conj(e_true[1]);
+                    noise_floor[ch*npol*npol+2] += e_true[1] * conj(e_true[0]);
+                    noise_floor[ch*npol*npol+3] += e_true[1] * conj(e_true[1]);
+
+                    beam[ch][index] = e_true[0];
+                    beam[ch][index+1] = e_true[1];
                 }
-                else {
-                  fprintf(stderr, "Opened file %s\n", working_file);
-                }
-
-                continue;
-            }
-            else { // file already open, read next chunk of data
-                unsigned int rtn = fread(buffer, items_to_read*sizeof(int8_t), nspec, fp);
-                if (feof(fp) || rtn != nspec) {
-                    fclose(fp);
-                    fp = NULL;
-                    if (expunge == 1) {
-                        unlink(working_file);
-                    }
-                    fprintf(stderr, "finished file %s\n", filenames[file_no]);
-                    file_no++;
-                    continue;
-                }
-            }
-        }
-        if (heap_step == 0) {
-
-            if (file_no >= nfiles) { // finished file list
-                fprintf(stderr, "make_beam finished:\n");
-                finished = 1;
-                continue;
             }
 
-            if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
-                break; // Exit from while loop
+            tend = clock();
+            tomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
 
-        }
-        if (heap_step < sample_rate) {
-            memcpy(buffer, heap+(items_to_read*heap_step), items_to_read);
+            tbegin = clock(); // Start timing "tpostomp"
 
-            heap_step++;
-           // fprintf(stderr, "make_beam copied %d steps out if the heap\n", heap_step);
-        }
-        else {
-            heap_step = 0;
-            file_no++;
-
-            if (file_no >= nfiles) { // finished file list
-                fprintf(stderr, "make_beam finished:\n");
-                finished = 1;
-                continue;
-            }
-
-            if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
-                break; // Exit from while loop
-
-            memcpy(buffer, heap+(items_to_read*heap_step), items_to_read);
-            heap_step++;
-
-        }
-
-        int stat = 0;
-        bzero(spectrum, (nchan*outpol*sizeof(float)));
-        for (stat=0;stat<nchan;stat++) {
-            bzero(beam[stat], (nstation*npol*sizeof(complex float)));
-        }
-        bzero(noise_floor, (nchan*npol*npol*sizeof(float)));
-
-        if (offset_in_psrfits == 0) {
-            bzero(data_buffer_psrfits, (pf.hdr.nsblk*nchan*outpol*sizeof(float)));
-        }
-
-        tend = clock();
-        tpreomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
-
-        tbegin = clock(); // Start timing "tomp"
-
-        for (index = 0; index < nstation*npol;index = index + 2) {
-
+            // detect the beam or prep from invert_pfb
+            // reduce over each channel for the beam
+            // do this by twos
+            int polnum = 0;
+            int step = 0;
             for (ch=0;ch<nchan;ch++) {
-                int8_t *in_ptr = (int8_t *)buffer + 2*index*nchan + 2*ch;
+                for (polnum = 0; polnum < npol; polnum++) {
+                    int next_good = 2;
+                    int stride = 4;
 
-                complex float e_true[2], e_dash[2];
-
-                e_dash[0] = (float) *in_ptr + I*(float)(*(in_ptr+1));
-                e_dash[1] = (float) *(in_ptr+(nchan*2)) + I*(float)(*(in_ptr+(nchan*2)+1)); // next pol is nchan*2 away
-
-                /* apply the inv(jones) to the e_dash */
-                e_dash[0] *= complex_weights_array[index][ch];
-                e_dash[1] *= complex_weights_array[index+1][ch];
-
-                e_true[0] = invJi[index/npol][0]*e_dash[0] + invJi[index/npol][1]*e_dash[1];
-                e_true[1] = invJi[index/npol][2]*e_dash[0] + invJi[index/npol][3]*e_dash[1];
-
-                noise_floor[ch*npol*npol] += e_true[0] * conj(e_true[0]);
-                noise_floor[ch*npol*npol+1] += e_true[0] * conj(e_true[1]);
-                noise_floor[ch*npol*npol+2] += e_true[1] * conj(e_true[0]);
-                noise_floor[ch*npol*npol+3] += e_true[1] * conj(e_true[1]);
-
-                beam[ch][index] = e_true[0];
-                beam[ch][index+1] = e_true[1];
-            }
-        }
-
-        tend = clock();
-        tomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
-
-        tbegin = clock(); // Start timing "tpostomp"
-
-        // detect the beam or prep from invert_pfb
-        // reduce over each channel for the beam
-        // do this by twos
-        int polnum = 0;
-        int step = 0;
-        for (ch=0;ch<nchan;ch++) {
-            for (polnum = 0; polnum < npol; polnum++) {
-                int next_good = 2;
-                int stride = 4;
-
-                while (next_good < nstation*npol) {
-                    for (step=polnum;step<nstation*npol;step=step+stride) {
-                        beam[ch][step] = beam[ch][step] + beam[ch][step+next_good];
+                    while (next_good < nstation*npol) {
+                        for (step=polnum;step<nstation*npol;step=step+stride) {
+                            beam[ch][step] = beam[ch][step] + beam[ch][step+next_good];
+                        }
+                        stride = stride * 2;
+                        next_good = next_good *2;
                     }
-                    stride = stride * 2;
-                    next_good = next_good *2;
                 }
             }
-        }
 
-        int index = 0;
-        int product;
-        for (product = 0; product < outpol; product++) {
-            for (ch=0;ch<nchan;ch++, index++) {
-                // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
-                // so for a single timestep we do not have to interleave - I could just stack these
+            int index = 0;
+            int product;
+            for (product = 0; product < outpol; product++) {
+                for (ch=0;ch<nchan;ch++, index++) {
+                    // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
+                    // so for a single timestep we do not have to interleave - I could just stack these
 
-                // So coherency or Stokes?
-                if (product == 0) {
-                    // Stokes I
-                    spectrum[index] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
-                    spectrum[index] = spectrum[index] + ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
-                }
-                else if (product == 1) {
-                    // This will be Stokes Q
-                    spectrum[index] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
-                    spectrum[index] = spectrum[index] - ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
+                    // So coherency or Stokes?
+                    if (product == 0) {
+                        // Stokes I
+                        spectrum[index] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
+                        spectrum[index] = spectrum[index] + ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
+                    }
+                    else if (product == 1) {
+                        // This will be Stokes Q
+                        spectrum[index] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
+                        spectrum[index] = spectrum[index] - ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
 
-                }
-                else if (product == 2) {
-                    // This will be Stokes U
-                    complex double temp = (beam[ch][0]*conj(beam[ch][1]) - noise_floor[ch*npol*npol+1])/wgt_sum;
-                    spectrum[index] = 2.0 * creal(temp);
-                }
-                else if (product == 3) {
-                    // This will be Stokes V
-                    complex double temp = (beam[ch][0]*conj(beam[ch][1]) - noise_floor[ch*npol*npol+1])/wgt_sum;
-                    spectrum[index] = -2.0 * cimag(temp);
+                    }
+                    else if (product == 2) {
+                        // This will be Stokes U
+                        complex double temp = (beam[ch][0]*conj(beam[ch][1]) - noise_floor[ch*npol*npol+1])/wgt_sum;
+                        spectrum[index] = 2.0 * creal(temp);
+                    }
+                    else if (product == 3) {
+                        // This will be Stokes V
+                        complex double temp = (beam[ch][0]*conj(beam[ch][1]) - noise_floor[ch*npol*npol+1])/wgt_sum;
+                        spectrum[index] = -2.0 * cimag(temp);
+                    }
                 }
             }
-        }
 
-        if (!finished) {
+            if (!finished) {
 
-            if (offset_out_psrfits < pf.sub.bytes_per_subint) {
+                if (offset_out_psrfits < pf.sub.bytes_per_subint) {
 
-                memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
-                offset_in_psrfits += sizeof(float)*nchan*outpol;
+                    memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
+                    offset_in_psrfits += sizeof(float)*nchan*outpol;
 
-                offset_out_psrfits += bytes_per_spec;
+                    offset_out_psrfits += bytes_per_spec;
+
+                }
+
+                // If we've arrived at the end of a second's worth of data...
+                if (offset_out_psrfits == pf.sub.bytes_per_subint) {
+
+                    if (set_levels) {
+                        flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
+                        set_levels = 0;
+                    }
+                    else {
+                        flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
+                    }
+                    float2int8_trunc(data_buffer_psrfits, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8_psrfits);
+                    int8_to_uint8(pf.hdr.nsblk*nchan*outpol, 128, (char *) out_buffer_8_psrfits);
+                    memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
+
+                    if (psrfits_write_subint(&pf) != 0) {
+                        fprintf(stderr, "Write subint failed file exists?\n");
+                        break; // Exit from while loop
+                    }
+
+                    pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
+                    pf.sub.lst += pf.sub.tsubint;
+                    fprintf(stderr, "Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
+                            pf.tot_rows, pf.T, pf.filenum, pf.status);
+
+                    recalc_delays = 1;
+
+                    offset_out_psrfits = 0;
+                    offset_in_psrfits = 0;
+
+                    fprintf(stdout, "\n"); // To separate out the output between seconds
+                }
+
 
             }
 
-            // If we've arrived at the end of a second's worth of data...
-            if (offset_out_psrfits == pf.sub.bytes_per_subint) {
+            // Get the next second's worth of phases / jones matrices, if needed
+            if (recalc_delays) {
 
-                if (set_levels) {
-                    flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
-                    set_levels = 0;
-                }
-                else {
-                    flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
-                }
-                float2int8_trunc(data_buffer_psrfits, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8_psrfits);
-                int8_to_uint8(pf.hdr.nsblk*nchan*outpol, 128, (char *) out_buffer_8_psrfits);
-                memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
+                get_delays(
+                        dec_ddmmss,    // dec as a string "dd:mm:ss"
+                        ra_hhmmss,     // ra  as a string "hh:mm:ss"
+                        frequency,     // middle of the first frequency channel in Hz
+                        &cal,          // struct holding info about calibration
+                        sample_rate,   // = 10000 samples per sec
+                        time_utc,      // utc time string
+                        (double)file_no, // seconds offset from time_utc at which to calculate delays
+                        NULL,          // Don't update delay_vals
+                        &mi,           // Struct containing info from metafits file
+                        complex_weights_array,  // complex weights array (answer will be output here)
+                        invJi          // invJi array           (answer will be output here)
+                        );
 
-                if (psrfits_write_subint(&pf) != 0) {
-                    fprintf(stderr, "Write subint failed file exists?\n");
-                    break; // Exit from while loop
-                }
+                recalc_delays = 0;
 
-                pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
-                pf.sub.lst += pf.sub.tsubint;
-                fprintf(stderr, "Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
-                       pf.tot_rows, pf.T, pf.filenum, pf.status);
-
-                recalc_delays = 1;
-
-                offset_out_psrfits = 0;
-                offset_in_psrfits = 0;
-
-                fprintf(stdout, "\n"); // To separate out the output between seconds
             }
 
+            if (finished) {
+
+                fwrite(spectrum, sizeof(float), nchan, stdout);
+
+            }
+
+            tend = clock();
+            tpostomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
 
         }
-
-        // Get the next second's worth of phases / jones matrices, if needed
-        if (recalc_delays) {
-
-            get_delays(
-                    dec_ddmmss,    // dec as a string "dd:mm:ss"
-                    ra_hhmmss,     // ra  as a string "hh:mm:ss"
-                    frequency,     // middle of the first frequency channel in Hz
-                    &cal,          // struct holding info about calibration
-                    sample_rate,   // = 10000 samples per sec
-                    time_utc,      // utc time string
-                    (double)(sample / sample_rate + 1), // seconds offset from time_utc at which to calculate delays
-                    NULL,          // Don't update delay_vals
-                    &mi,           // Struct containing info from metafits file
-                    complex_weights_array,  // complex weights array (answer will be output here)
-                    invJi          // invJi array           (answer will be output here)
-            );
-
-            recalc_delays = 0;
-
-        }
-
-        if (finished) {
-
-            fwrite(spectrum, sizeof(float), nchan, stdout);
-
-        }
-
-        tend = clock();
-        tpostomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
-
-    } // end while loop
+    }
 
     tbegin = clock(); // Start timing "tcoda"
 
