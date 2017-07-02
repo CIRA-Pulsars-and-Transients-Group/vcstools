@@ -722,7 +722,6 @@ int main(int argc, char **argv) {
     char *rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
 
     char *obsid = NULL;
-    char *procdirroot = NULL;
     char *datadirroot = NULL;
     char **filenames = NULL;
     int read_stdin = 0;
@@ -751,7 +750,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:C:d:D:e:f:hJ:m:n:o:O:p:r:R:VwW:Xz:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:C:d:D:e:f:hJ:m:n:o:O:r:R:VwW:Xz:")) != -1) {
             switch(c) {
 
                 case 'a':
@@ -796,9 +795,6 @@ int main(int argc, char **argv) {
                 case 'O':
                     cal.filename = strdup(optarg);
                     cal.cal_type = OFFRINGA;
-                    break;
-                case 'p':
-                    procdirroot = strdup(optarg);
                     break;
                 case 'r':
                     sample_rate = atoi(optarg);
@@ -936,8 +932,6 @@ int main(int argc, char **argv) {
     heap = (char *) malloc(nspec*items_to_read*sample_rate);
 
     assert(heap);
-
-
 
     float *data_buffer_psrfits = NULL;
 
@@ -1279,7 +1273,7 @@ int main(int argc, char **argv) {
     }
 
     // Free up memory for filenames
-    if (procdirroot && datadirroot) {
+    if (datadirroot) {
         int second;
         for (second = 0; second < nfiles; second++)
             free( filenames[second] );
