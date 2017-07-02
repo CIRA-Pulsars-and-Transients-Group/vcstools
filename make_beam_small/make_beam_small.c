@@ -940,7 +940,7 @@ int main(int argc, char **argv) {
         for (i = 0; i < nchan*outpol*pf.hdr.nsblk; i++)
             data_buffer_psrfits[i] = 0.0;
 
-#pragma omp parallel for
+#pragma omp parallel for private(ch)
         for (sample = 0; sample < (int)sample_rate; sample++ ) {
 
             complex float beam[nchan][nstation*npol];
@@ -960,7 +960,7 @@ int main(int argc, char **argv) {
 
                     complex float e_true[2], e_dash[2];
 
-                    e_dash[0] = (float) *in_ptr + I*(float)(*(in_ptr+1));
+                    e_dash[0] = (float) *in_ptr             + I*(float)(*(in_ptr+          1));
                     e_dash[1] = (float) *(in_ptr+(nchan*2)) + I*(float)(*(in_ptr+(nchan*2)+1)); // next pol is nchan*2 away
 
                     /* apply the inv(jones) to the e_dash */
@@ -970,12 +970,12 @@ int main(int argc, char **argv) {
                     e_true[0] = invJi[index/npol][0]*e_dash[0] + invJi[index/npol][1]*e_dash[1];
                     e_true[1] = invJi[index/npol][2]*e_dash[0] + invJi[index/npol][3]*e_dash[1];
 
-                    noise_floor[ch*npol*npol] += e_true[0] * conj(e_true[0]);
+                    noise_floor[ch*npol*npol]   += e_true[0] * conj(e_true[0]);
                     noise_floor[ch*npol*npol+1] += e_true[0] * conj(e_true[1]);
                     noise_floor[ch*npol*npol+2] += e_true[1] * conj(e_true[0]);
                     noise_floor[ch*npol*npol+3] += e_true[1] * conj(e_true[1]);
 
-                    beam[ch][index] = e_true[0];
+                    beam[ch][index]   = e_true[0];
                     beam[ch][index+1] = e_true[1];
                 }
             }
@@ -985,17 +985,17 @@ int main(int argc, char **argv) {
             // do this by twos
             int polnum = 0;
             int step = 0;
-            for (ch=0;ch<nchan;ch++) {
+            for (ch = 0; ch < nchan; ch++) {
                 for (polnum = 0; polnum < npol; polnum++) {
                     int next_good = 2;
                     int stride = 4;
 
                     while (next_good < nstation*npol) {
-                        for (step=polnum;step<nstation*npol;step=step+stride) {
-                            beam[ch][step] = beam[ch][step] + beam[ch][step+next_good];
+                        for (step = polnum; step < nstation*npol; step += stride) {
+                            beam[ch][step] += beam[ch][step+next_good];
                         }
-                        stride = stride * 2;
-                        next_good = next_good *2;
+                        stride    *= 2;
+                        next_good *= 2;
                     }
                 }
             }
@@ -1003,31 +1003,38 @@ int main(int argc, char **argv) {
             int index = 0;
             int product;
             for (product = 0; product < outpol; product++) {
-                for (ch=0;ch<nchan;ch++, index++) {
+                for (ch = 0; ch < nchan; ch++, index++) {
                     // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
                     // so for a single timestep we do not have to interleave - I could just stack these
-
                     // So coherency or Stokes?
                     if (product == 0) {
                         // Stokes I
-                        spectrum[index] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
-                        spectrum[index] = spectrum[index] + ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
+                        spectrum[index]  = (double)(beam[ch][0] * conj(beam[ch][0]));
+                        spectrum[index] += (double)(beam[ch][1] * conj(beam[ch][1]));
+                        spectrum[index] -= noise_floor[ch*npol*npol];
+                        spectrum[index] -= noise_floor[ch*npol*npol+3];
+                        spectrum[index] /= wgt_sum;
                     }
                     else if (product == 1) {
                         // This will be Stokes Q
-                        spectrum[index] = (beam[ch][0] * conj(beam[ch][0]) - noise_floor[ch*npol*npol])/wgt_sum;
-                        spectrum[index] = spectrum[index] - ((beam[ch][1] * conj(beam[ch][1]) - noise_floor[ch*npol*npol+3])/wgt_sum);
+                        spectrum[index]  = (double)(beam[ch][0] * conj(beam[ch][0]));
+                        spectrum[index] -= (double)(beam[ch][1] * conj(beam[ch][1]));
+                        spectrum[index] -= noise_floor[ch*npol*npol];
+                        spectrum[index] -= noise_floor[ch*npol*npol+3];
+                        spectrum[index] /= wgt_sum;
 
                     }
                     else if (product == 2) {
                         // This will be Stokes U
-                        complex double temp = (beam[ch][0]*conj(beam[ch][1]) - noise_floor[ch*npol*npol+1])/wgt_sum;
-                        spectrum[index] = 2.0 * creal(temp);
+                        spectrum[index]  = (double)(beam[ch][0]*conj(beam[ch][1]));
+                        spectrum[index] -= noise_floor[ch*npol*npol+1];
+                        spectrum[index] *= 2.0/wgt_sum;
                     }
                     else if (product == 3) {
                         // This will be Stokes V
-                        complex double temp = (beam[ch][0]*conj(beam[ch][1]) - noise_floor[ch*npol*npol+1])/wgt_sum;
-                        spectrum[index] = -2.0 * cimag(temp);
+                        complex double temp = (beam[ch][0]*conj(beam[ch][1]) -
+                                               noise_floor[ch*npol*npol+1]  )/wgt_sum;
+                        spectrum[index] *= -2.0 * cimag(temp);
                     }
                 }
             }
