@@ -460,104 +460,6 @@ float get_weights(char *metafits, int nstation, int npol, double **weights_array
 }
 
 
-int get_jones(int nstation, int npol, char *jones_file, complex double ***invJi, long checkpoint) {
-
-    int i=0;
-    FILE *jones = NULL;
-    int rval=0;
-
-
-    if (*invJi == NULL) {
-        *invJi = (complex double **) calloc(nstation, sizeof(complex double *)); // Gain in Desired Direction ..... da da da dum.....
-        for (i = 0; i < nstation; i++) { //
-            (*invJi)[i] =(complex double *) malloc(npol * npol * sizeof(complex double)); //
-            if ((*invJi)[i] == NULL) { //
-                fprintf(stderr, "malloc failed for J[i]\n"); //
-                return -1; //
-            } //
-        }
-    }
-
-
-    complex double Ji[4];
-    jones = fopen(jones_file,"r");
-    if (jones==NULL) {
-        fprintf(stderr,"Cannot open Jones matrix file %s:%s\n",jones_file,strerror(errno));
-        usage();
-    }
-    else {
-        if (checkpoint !=0) {
-            fseek(jones,checkpoint,SEEK_SET);
-        }
-
-        int count = 0;
-
-
-        while (count < nstation) {
-            for (i=0 ; i < 4; i++) {
-                float re,im;
-                rval = fscanf(jones,"%f %f ",&re,&im);
-
-                Ji[i] = re - I*im; // the RTS conjugates the sky so beware ....
-
-            }
-            if (rval != 2)
-                break;
-
-            double Fnorm = 0;
-            int j=0;
-            for (j=0; j < 4;j++) {
-                Fnorm += (double) Ji[j] * conj(Ji[j]);
-            }
-            Fnorm = sqrt(Fnorm);
-            // fprintf(stderr,"Fnorm (Ji) = (%d) %f\n",count,Fnorm);
-            if (Fnorm != 0) {
-                for (j=0; j < 4;j++) {
-                    Ji[j] = Ji[j]/Fnorm;
-                }
-
-                inv2x2(Ji,(*invJi)[count]);
-            }
-            else {
-
-                (*invJi)[count][0] = 0.0 + I*0;
-                (*invJi)[count][1] = 0.0 + I*0;
-                (*invJi)[count][2] = 0.0 + I*0;
-                (*invJi)[count][3] = 0.0 + I*0;
-
-            }
-            Fnorm = 0;
-            for (j=0; j < 4;j++) {
-                Fnorm += (double) (*invJi)[count][j] * conj((*invJi)[count][j]);
-            }
-            Fnorm = sqrt(Fnorm);
-           //            fprintf(stderr,"Fnorm = (%d) %f\n",count,sqrt(Fnorm));
-//            for (j=0; j < 4;j++) {
-//                fprintf(stderr,"(%d,%d) %f %f",count,j,creal((*invJi)[count][j]),cimag((*invJi)[count][j]) );
- //           }
-//            fprintf(stderr,"\n");
-
-            count++;
-        }
-
-        if (count != nstation) {
-            fprintf(stderr,"Mismatch between Jones matrices and antennas - check Jones file\n");
-            fclose(jones);
-            return -1;
-        }
-        else {
-            checkpoint = ftell(jones);
-        }
-
-        fclose(jones);
-    }
-
-    return checkpoint;
-
-
-}
-
-
 /*****************
  * MAIN FUNCTION *
  *****************/
@@ -588,7 +490,6 @@ int main(int argc, char **argv) {
     int weights = 0;
     char rec_channel[4]; // 0 - 255 receiver 1.28MHz channel
 
-    char *jones_file = NULL;
     char *psrfits_file = NULL;
 
     char *obsid = NULL;
@@ -624,7 +525,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:d:D:e:f:F:hj:J:m:n:N:o:p:r:R:VwW:Xz:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:d:D:e:f:F:hJ:m:n:N:o:p:r:R:VwW:Xz:")) != -1) {
             switch(c) {
 
                 case 'a':
@@ -651,9 +552,6 @@ int main(int argc, char **argv) {
                 case 'h':
                     usage();
                     exit(0);
-                    break;
-                case 'j':
-                    jones_file = strdup(optarg);
                     break;
                 case 'J':
                     DI_Jones_file = strdup(optarg);
@@ -725,13 +623,7 @@ int main(int argc, char **argv) {
         char pattern[256];
 
 
-        /* update the phases and weights file names */
-        if (jones_file) {
-            sprintf(pattern,"%s/%s",procdir,jones_file);
-            free(jones_file);
-            jones_file=strdup(pattern);
-            fprintf(stdout,"jones_file: %s\n",jones_file);
-        }
+        /* update the file names */
         fprintf(stdout, "\n");
         sprintf(pattern,"%s/%s",procdir,"channel");
 
@@ -783,11 +675,15 @@ int main(int argc, char **argv) {
     complex double **complex_weights_array = NULL;
     complex double **invJi = NULL;
 
-    // Allocate memory for complex weights (and jones matrices...YET TO IMPLEMENT)
+    // Allocate memory for complex weights and jones matrices
     int i;
     complex_weights_array = (complex double **)malloc( nstation * npol * sizeof(complex double *) );
     for (i = 0; i < nstation*npol; i++)
         complex_weights_array[i] = (complex double *)malloc( nchan * sizeof(complex double) );
+
+    invJi = (complex double **)malloc( nstation * sizeof(complex double *) );
+    for (i = 0; i < nstation; i++)
+        invJi[i] =(complex double *)malloc( npol * npol * sizeof(complex double) );
 
     // these are only used if we are prepending the fitsheader
     FILE *fitsheader = NULL;
@@ -795,12 +691,6 @@ int main(int argc, char **argv) {
 
     char proc_psrfits_file[1024];
     sprintf(proc_psrfits_file,"%s/%s",procdir,psrfits_file);
-
-    // these are the file positions of the Jones and Phases files
-
-    long jones_pos=0;
-
-    long new_jones_pos=0;
 
     int recalc_delays = 1; // boolean: 1 iff next second's worth of jones and phase are to be calculated
 
@@ -829,22 +719,13 @@ int main(int argc, char **argv) {
             chan_width,    // width of fine channel (Hz)
             time_utc,      // utc time string
             0.0,           // seconds offset from time_utc at which to calculate delays
-            jones_file,    // For now, output jones matrices here
             &pf,           // Populate psrfits header info
-            &complex_weights_array,  // complex weights array (answer will be output here)
+            complex_weights_array,  // complex weights array (answer will be output here)
             weights_array, // 0 or 1 for each antenna/pol combination
-            NULL           // invJi array           (answer will be output here)
+            invJi          // invJi array           (answer will be output here)
     );
 
     recalc_delays = 0;
-
-    // Read in the jones matrices
-    new_jones_pos = get_jones(nstation, npol, jones_file, &invJi, jones_pos);
-
-    if (new_jones_pos < 0) {
-        fprintf(stderr,"Failed to parse the correct number of Jones matrices\n");
-        exit(EXIT_FAILURE);
-    }
 
     // Read in psrfits header
     fitsheader=fopen(proc_psrfits_file,"r");
@@ -1211,17 +1092,11 @@ printf_psrfits( &pf );
                     chan_width,    // width of fine channel (Hz)
                     time_utc,      // utc time string
                     (double)(sample / sample_rate + 1), // seconds offset from time_utc at which to calculate delays
-                    jones_file,    // For now, output jones matrices here
                     NULL,          // Don't update psrfits header
-                    &complex_weights_array,  // complex weights array (answer will be output here)
+                    complex_weights_array,  // complex weights array (answer will be output here)
                     weights_array, // 0 or 1 for each antenna/pol combination
-                    NULL           // invJi array           (answer will be output here)
+                    invJi          // invJi array           (answer will be output here)
             );
-
-            new_jones_pos = get_jones(nstation, npol, jones_file, &invJi, jones_pos);
-
-            if (new_jones_pos == -1)
-                break; // Exit from while loop
 
             recalc_delays = 0;
 

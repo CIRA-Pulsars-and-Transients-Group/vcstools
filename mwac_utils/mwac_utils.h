@@ -51,6 +51,8 @@ extern "C" {
     void cp2x2(complex double *Min, complex double *Mout);
     void inv2x2(complex double *Min, complex double *Mout);
     void mult2x2tlum(complex double *M1, complex double *M2, complex double *M3, complex double *Mout);
+    double norm2x2(complex double *M, complex double *Mout);
+    void conj2x2(complex double *M, complex double *Mout);
     
     int read_cal_file(complex double **G, int ninp, double *amp);
     int read_rts_file(complex double **G, complex double *M, int nant, double *amp, char *fname);

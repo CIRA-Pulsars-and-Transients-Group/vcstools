@@ -269,11 +269,10 @@ void get_delays(
         long int chan_width,
         char *time_utc,
         double sec_offset,
-        char *jones_filename,             // soon-deprecated output
         struct psrfits *pf,
-        complex double ***complex_weights_array,  // output
+        complex double **complex_weights_array,  // output
         double *weights_array,
-        complex double ***invJi                   // output
+        complex double **invJi                   // output
         )
 {
     
@@ -288,22 +287,9 @@ void get_delays(
 
     int conjugate = -1;
     int invert = -1;
-    int write_files = 1;
     
-    FILE *jones_file = NULL;
-
     /* easy -- now the positions from the database */
     
-    if (write_files) {
-        
-        jones_file = fopen(jones_filename,  "w");
-
-        if (jones_file == NULL) {
-            fprintf(stderr, "Failed to open %s\n", jones_filename );
-            exit(EXIT_FAILURE);
-        }
-    }
-
     double phase;
 
     /* Calibration related defines */
@@ -632,23 +618,34 @@ void get_delays(
                 phase = phase*2*M_PI*conjugate;
 
                 // Store result for later use
-                (*complex_weights_array)[row][ch] = weights_array[row]*cexp(I*phase);
+                complex_weights_array[row][ch] = weights_array[row]*cexp(I*phase);
 
             }
         }
         else {
             for (ch=0;ch<nchan;ch++)
-                (*complex_weights_array)[row][ch] = weights_array[row];
+                complex_weights_array[row][ch] = weights_array[row]; // i.e. =0.0
         }
 
-        if (row%npol == 0) {
-            if (jones_file != NULL) {
-                for (i=0;i<4;i++){
-                    fprintf(jones_file,"%f %f ",creal(Ji[row/npol][i]), cimag(Ji[row/npol][i]));
-                    //fprintf(jones_file,"%f %f ",creal(G[row/npol][i]), cimag(G[row/npol][i]));
-                }
-                fprintf(jones_file,"\n");
-            }
+        // Now, calculate the inverse Jones matrix
+        if (row % npol == 0) {
+
+            int station = row / npol;
+            double Fnorm;
+
+            conj2x2( Ji[station], Ji[station] ); // The RTS conjugates the sky so beware
+            Fnorm = norm2x2( Ji[station], Ji[station] );
+
+            if (Fnorm != 0.0)
+                inv2x2( Ji[station], invJi[station] );
+            else
+                for (i = 0; i < 4; i++)
+                    invJi[station][i] = 0.0 + I*0.0;
+
+            // Print out values for checking
+            for (i = 0; i < 4; i++)
+                fprintf(stdout, "%f %f ", creal(invJi[station][i]), cimag(invJi[station][i]));
+            fprintf(stdout, "\n");
         }
         
         
@@ -657,8 +654,6 @@ void get_delays(
     if (verbose)
         puts("==========================");
     
-    if (jones_file != NULL)
-        fclose(jones_file);
       /* ========= Generate a FITS HEADER ==========*/
     if (pf != NULL) {
         

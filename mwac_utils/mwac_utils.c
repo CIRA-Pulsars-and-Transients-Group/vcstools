@@ -108,6 +108,40 @@ void mult2x2tlum(complex double *M1, complex double *M2, complex double *M3, com
     Mout[3] = tmp[2] * conj(M3[2]) + tmp[3] * conj(M3[3]);
 }
 
+double norm2x2(complex double *M, complex double *Mout) {
+/* Normalise a 2x2 matrix via the Frobenius norm
+ * It is safe for M and Mout to point to the same matrix.
+ */
+
+    // Calculate the normalising factor
+    double Fnorm = 0.0;
+    int i;
+    for (i = 0; i < 4; i++)
+        Fnorm += (double)(M[i] * conj(M[i]));
+
+    Fnorm = sqrt(Fnorm);
+
+    // Divide each element through by the normalising factor.
+    // If norm is 0, then output zeros everywhere
+    for (i = 0; i < 4; i++) {
+        if (Fnorm == 0.0)
+            Mout[i] = 0.0;
+        else
+            Mout[i] = M[i] / Fnorm;
+    }
+
+    return Fnorm;
+}
+
+void conj2x2(complex double *M, complex double *Mout) {
+/* Calculate the conjugate of a matrix
+ * It is safe for M and Mout to point to the same matrix
+ */
+    int i;
+    for (i = 0; i < 4; i++)
+        Mout[i] = conj(M[i]);
+}
+
 void invert_pfb(complex float *input, complex float *output, int nchan_in, int nchan_out, int npol_in, int npol_out,int mode,int last, void *fcontext) {
     
     int edges = 0;
