@@ -13,7 +13,7 @@
 #include "slamac.h"
 #include "ascii_header.h"
 #include "mwa_header.h"
-//#include <omp.h>
+#include <omp.h>
 //#include <mpi.h>
 #include <glob.h>
 #include <fcntl.h>
@@ -36,6 +36,10 @@
 #include "beamer_version.h"
 
 #define MAX_COMMAND_LENGTH 1024
+
+void timestamped(char *msg, double begintime) {
+    printf("[%f]  %s\n", omp_get_wtime()-begintime, msg);
+}
 
 void usage() {
     fprintf(stderr, "make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|psrfits\n");
@@ -656,9 +660,6 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
         fprintf(stderr, "Failed to open %s:%s\n", in_name, strerror(errno));
         return -1;
     }
-    else {
-        fprintf(stderr, "Opening %s for input\n", in_name);
-    }
     int fd_out = 0;
     if (heap == NULL) {
 
@@ -701,15 +702,8 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
 
 int main(int argc, char **argv) {
 
-    // Profiling the code
-    clock_t tbegin, tend; // For profiling the code
-    double tprelude = 0.0;
-    double tpreomp = 0.0;
-    double tomp = 0.0;
-    double tpostomp = 0.0;
-    double tcoda = 0.0;
-
-    tbegin = clock(); // Begin timing "tprelude"
+    double begintime = omp_get_wtime();
+    timestamped("Starting make_beam", begintime);
 
     int c  = 0;
     int ch = 0;
@@ -819,8 +813,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    fprintf(stderr, "Starting ...\n");
-
     if (datadirroot) {
 
         // Generate list of files to work on
@@ -842,9 +834,7 @@ int main(int argc, char **argv) {
             timestamp = second + begin;
             filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
             sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadirroot, obsid, timestamp, rec_channel );
-            //sprintf( filenames[second], "%s_%ld_ch%s.dat", obsid, timestamp, rec_channel );
         }
-        fprintf( stderr, "Opening files from %s to %s\n", filenames[0], filenames[nfiles-1] );
 
     }
 
@@ -864,9 +854,9 @@ int main(int argc, char **argv) {
     // these are only used if we are prepending the fitsheader
     struct psrfits pf;
 
-    int recalc_delays = 1; // boolean: 1 iff next second's worth of jones and phase are to be calculated
 
     // Read in info from metafits file
+    timestamped("Reading in metafits file information", begintime);
     struct metafits_info mi;
     get_metafits_info( metafits, &mi );
 
@@ -879,6 +869,7 @@ int main(int argc, char **argv) {
         wgt_sum += mi.weights_array[i];
 
     // Get first second's worth of phases and Jones matrices
+    timestamped("Setting up output header information", begintime);
     struct delays delay_vals;
     get_delays(
             dec_ddmmss,    // dec as a string "dd:mm:ss"
@@ -893,8 +884,6 @@ int main(int argc, char **argv) {
             complex_weights_array,  // complex weights array (answer will be output here)
             invJi          // invJi array           (answer will be output here)
     );
-
-    recalc_delays = 0;
 
     // now we need to create a fits file and populate its header
     populate_psrfits_header( &pf, metafits, obsid, time_utc, sample_rate,
@@ -939,30 +928,47 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    int set_levels = 1;
-    int index      = 0;
-    int finished   = 0;
-    int offset_out_psrfits = 0;
-    int offset_in_psrfits  = 0;
+    int index = 0;
+    int offset_out_psrfits;
+    int offset_in_psrfits;
 
     FILE *fp = NULL;
 
     char working_file[MAX_COMMAND_LENGTH];
 
-    tend = clock();
-    tprelude = (double)(tend-tbegin)/CLOCKS_PER_SEC;
-
     int file_no = 0;
     int sample;
 
+    timestamped("Beginning to work on data", begintime);
     for (file_no = 0; file_no < nfiles; file_no++) {
 
         if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
             break; // Exit from while loop
 
-        for (sample = 0; sample < (int)sample_rate; sample++ ) {
+        // Get the next second's worth of phases / jones matrices, if needed
+        timestamped("Starting get_delays for next second of data", begintime);
+        get_delays(
+                dec_ddmmss,    // dec as a string "dd:mm:ss"
+                ra_hhmmss,     // ra  as a string "hh:mm:ss"
+                frequency,     // middle of the first frequency channel in Hz
+                &cal,          // struct holding info about calibration
+                sample_rate,   // = 10000 samples per sec
+                time_utc,      // utc time string
+                (double)file_no, // seconds offset from time_utc at which to calculate delays
+                NULL,          // Don't update delay_vals
+                &mi,           // Struct containing info from metafits file
+                complex_weights_array,  // complex weights array (answer will be output here)
+                invJi );       // invJi array           (answer will be output here)
 
-            tbegin = clock(); // Start timing "tpreomp"
+        timestamped("Calculating beam for next second of data", begintime);
+
+        offset_out_psrfits = 0;
+        offset_in_psrfits  = 0;
+
+        bzero(data_buffer_psrfits, (pf.hdr.nsblk*nchan*outpol*sizeof(float)));
+
+#pragma omp parallel for
+        for (sample = 0; sample < (int)sample_rate; sample++ ) {
 
             memcpy(buffer, heap+(items_to_read*sample), items_to_read);
 
@@ -972,15 +978,6 @@ int main(int argc, char **argv) {
                 bzero(beam[stat], (nstation*npol*sizeof(complex float)));
             }
             bzero(noise_floor, (nchan*npol*npol*sizeof(float)));
-
-            if (offset_in_psrfits == 0) {
-                bzero(data_buffer_psrfits, (pf.hdr.nsblk*nchan*outpol*sizeof(float)));
-            }
-
-            tend = clock();
-            tpreomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
-
-            tbegin = clock(); // Start timing "tomp"
 
             for (index = 0; index < nstation*npol;index = index + 2) {
 
@@ -1008,11 +1005,6 @@ int main(int argc, char **argv) {
                     beam[ch][index+1] = e_true[1];
                 }
             }
-
-            tend = clock();
-            tomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
-
-            tbegin = clock(); // Start timing "tpostomp"
 
             // detect the beam or prep from invert_pfb
             // reduce over each channel for the beam
@@ -1066,86 +1058,40 @@ int main(int argc, char **argv) {
                 }
             }
 
-            if (!finished) {
+            offset_out_psrfits = bytes_per_spec * sample;
+            offset_in_psrfits  = sizeof(float)*nchan*outpol * sample;
 
-                if (offset_out_psrfits < pf.sub.bytes_per_subint) {
-
-                    memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
-                    offset_in_psrfits += sizeof(float)*nchan*outpol;
-
-                    offset_out_psrfits += bytes_per_spec;
-
-                }
-
-                // If we've arrived at the end of a second's worth of data...
-                if (offset_out_psrfits == pf.sub.bytes_per_subint) {
-
-                    if (set_levels) {
-                        flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
-                        set_levels = 0;
-                    }
-                    else {
-                        flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
-                    }
-                    float2int8_trunc(data_buffer_psrfits, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8_psrfits);
-                    int8_to_uint8(pf.hdr.nsblk*nchan*outpol, 128, (char *) out_buffer_8_psrfits);
-                    memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
-
-                    if (psrfits_write_subint(&pf) != 0) {
-                        fprintf(stderr, "Write subint failed file exists?\n");
-                        break; // Exit from while loop
-                    }
-
-                    pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
-                    pf.sub.lst += pf.sub.tsubint;
-                    fprintf(stderr, "Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
-                            pf.tot_rows, pf.T, pf.filenum, pf.status);
-
-                    recalc_delays = 1;
-
-                    offset_out_psrfits = 0;
-                    offset_in_psrfits = 0;
-
-                    fprintf(stdout, "\n"); // To separate out the output between seconds
-                }
-
-
-            }
-
-            // Get the next second's worth of phases / jones matrices, if needed
-            if (recalc_delays) {
-
-                get_delays(
-                        dec_ddmmss,    // dec as a string "dd:mm:ss"
-                        ra_hhmmss,     // ra  as a string "hh:mm:ss"
-                        frequency,     // middle of the first frequency channel in Hz
-                        &cal,          // struct holding info about calibration
-                        sample_rate,   // = 10000 samples per sec
-                        time_utc,      // utc time string
-                        (double)file_no, // seconds offset from time_utc at which to calculate delays
-                        NULL,          // Don't update delay_vals
-                        &mi,           // Struct containing info from metafits file
-                        complex_weights_array,  // complex weights array (answer will be output here)
-                        invJi          // invJi array           (answer will be output here)
-                        );
-
-                recalc_delays = 0;
-
-            }
-
-            if (finished) {
-
-                fwrite(spectrum, sizeof(float), nchan, stdout);
-
-            }
-
-            tend = clock();
-            tpostomp += (double)(tend-tbegin)/CLOCKS_PER_SEC;
+            memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
 
         }
+
+        // We've arrived at the end of a second's worth of data...
+
+        timestamped("Flattening bandpass", begintime);
+        flatten_bandpass(pf.hdr.nsblk, nchan, outpol,
+                data_buffer_psrfits, pf.sub.dat_scales,
+                pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
+
+        float2int8_trunc(data_buffer_psrfits, pf.hdr.nsblk*nchan*outpol,
+                -126.0, 127.0, out_buffer_8_psrfits);
+
+        int8_to_uint8(pf.hdr.nsblk*nchan*outpol, 128,
+                (char *) out_buffer_8_psrfits);
+
+        memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
+
+        timestamped("Writing data to file", begintime);
+        if (psrfits_write_subint(&pf) != 0) {
+            fprintf(stderr, "Write subint failed file exists?\n");
+            break; // Exit from while loop
+        }
+
+        pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
+        pf.sub.lst += pf.sub.tsubint;
+
     }
 
-    tbegin = clock(); // Start timing "tcoda"
+    timestamped("Finished processing data, start cleaning up", begintime);
 
     if (fp != NULL) {
         //cleanup
@@ -1181,8 +1127,8 @@ int main(int argc, char **argv) {
         fits_update_key(pf.fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, &status);
 
         //fits_close_file(pf.fptr, &status);
-        fprintf(stderr, "Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
-               pf.tot_rows, pf.T, pf.filenum, pf.status);
+        fprintf(stdout, "[%f]  Done.  Wrote %d subints (%f sec) in %d files.\n",
+               omp_get_wtime()-begintime, pf.tot_rows, pf.T, pf.filenum);
 
         // free some memory
         flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 0, 0, 0, 1);
@@ -1198,12 +1144,6 @@ int main(int argc, char **argv) {
     }
 
     destroy_metafits_info( &mi );
-
-    tend = clock();
-    tcoda = (double)(tend-tbegin)/CLOCKS_PER_SEC;
-
-    fprintf( stdout, "# omp tprelude tpreomp tomp tpostomp tcoda\n" );
-    fprintf( stdout, "%e %e %e %e %e\n", tprelude, tpreomp, tomp, tpostomp, tcoda );
 
     return 0;
 }

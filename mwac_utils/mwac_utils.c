@@ -835,7 +835,7 @@ int default_read_pfb_call(int in_fd, int out_fd, char *heap) {
         
         
         if (end_of_file && (items_to_read == gulp)){
-            fprintf(stderr,"heap reader has read %d steps\n",nsteps_read);
+            //fprintf(stderr,"heap reader has read %d steps\n",nsteps_read);
             break;
         }
         else if (end_of_file && (items_to_read != gulp)){

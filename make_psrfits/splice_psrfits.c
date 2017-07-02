@@ -209,7 +209,7 @@ int append(char **to_append, void *total, int n){
         pf->filenum=0;
         pf->numfiles=1; // using explicit filenames
 
-        fprintf(stdout,"Opening file (%s) %d of %d\n",pf->filenames[0],f+1,n);
+        //fprintf(stdout,"Opening file (%s) %d of %d\n",pf->filenames[0],f+1,n);
         // populate the struct
         psrfits_open(pf);
         // allocate the arrays
