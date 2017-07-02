@@ -232,26 +232,19 @@ void utc2mjd(char *utc_str, double *intmjd, double *fracmjd) {
 }
 
 void get_delays(
-        int coarse_chan,
-        char *dec_ddmmss,
-        char *ra_hhmmss,
-        long int frequency,
-        char *metafits,
-        int get_offringa,
-        int get_rts,
-        char *DI_Jones_file,
-        float samples_per_sec,
-        long int chan_width,
-        char *time_utc,
-        double sec_offset,
-        struct delays *delay_vals,
-        complex double **complex_weights_array,  // output
-        double *weights_array,
-        complex double **invJi                   // output
-        )
-{
+        char                  *dec_ddmmss,
+        char                  *ra_hhmmss,
+        long int               frequency,
+        struct                 calibration *cal,
+        float                  samples_per_sec,
+        char                  *time_utc,
+        double                 sec_offset,
+        struct delays         *delay_vals,
+        struct metafits_info  *mi,
+        complex double       **complex_weights_array,  // output
+        complex double       **invJi                   // output
+        ) {
     
-    fprintf(stdout, "* RUNNING GET_DELAYS *\n");
     int row;
     int i, j;
 
@@ -297,147 +290,19 @@ void get_delays(
         } //
     } //
 
-    // ===================================================================================== //
-    // Get actual tile pointing Az El from metafits file
-
-    fitsfile *fptr=NULL;
-    int status = 0;
-    double tile_pointing_ra = 0.0;
-    double tile_pointing_dec = 0.0;
-    double tile_pointing_az;
-    double tile_pointing_el;
-
-    fits_open_file(&fptr,metafits,READONLY,&status);
-    if (fptr == NULL) {
-        fprintf( stderr, "Failed to open metafits file \"%s\"\n", metafits );
-        exit(EXIT_FAILURE);
-    }
-    fits_read_key(fptr,TDOUBLE,"RA",&tile_pointing_ra,NULL,&status);
-    fits_read_key(fptr,TDOUBLE,"DEC",&tile_pointing_dec,NULL,&status);
-    fits_read_key(fptr,TDOUBLE,"AZIMUTH",&tile_pointing_az,NULL,&status);
-    fits_read_key(fptr,TDOUBLE,"ALTITUDE",&tile_pointing_el,NULL,&status);
-
-
-    fits_close_file(fptr,&status);
-
-     if (status != 0) {
-        fprintf(stderr,"Fits status set: failed to read az/alt, ra/dec fitskeysfrom the header\n");
-        exit(1);
-    }
-    // ====================================================================================== //
-    // Get tile coordinate information from metafits file
-
-    /* open the metafits file */
-    status = 0;
-    int anynull = 0;
-    fits_open_file(&fptr,metafits,READONLY,&status);
-    
-    fits_movnam_hdu(fptr, BINARY_TBL, "TILEDATA", 0, &status);
-
-    if (status != 0) {
-        fprintf(stderr,"Error:Failed to move to TILEDATA HDU\n");
-        exit(-1);
-    }
-
-    size_t ninput = 0;
-    fits_read_key(fptr,TINT,"NAXIS2",&ninput,NULL,&status);
-
-    //fprintf(stdout,"Status: will read %zu inputs\n",ninput);
-
-    if (status != 0){
-        fprintf(stderr,"Error:Failed to read size of binary table in TILEDATA\n");
-        exit(-1);
-    }
-
-    /* allocate arrays for tile positions */
-    float *N_array = (float *) malloc(ninput*sizeof(float));
-    float *E_array = (float *) malloc(ninput*sizeof(float));
-    float *H_array = (float *) malloc(ninput*sizeof(float));
-    char **tilenames = (char **) malloc(ninput*sizeof(char *));
-    for (i = 0; i < (int)ninput; i++) {
-        tilenames[i] = (char *) malloc(32*sizeof(char));
-    }
-    float *cable_array = (float *) malloc(ninput*sizeof(float));
-    char *testval = (char *) malloc(1024);
-    short int *antenna_num = (short int *)malloc(ninput*sizeof(short int));
-    int colnum;
-    
-    /* read the columns */
-    for (i=0; i < (int)ninput; i++) {
-
-        fits_get_colnum(fptr, 1, "Length", &colnum, &status);
-        if(fits_read_col_str(fptr,colnum,i+1,1,1,"0.0",&testval,&anynull,&status)) {
-
-            fprintf(stderr,"Error:Failed to cable column  in metafile\n");
-            exit(-1);
-        }
-
-        sscanf(testval,"EL_%f",&cable_array[i]);
-        //fprintf(stdout,"Input %d Cable %f\n",i,cable_array[i]);
-    }
-
-    fits_get_colnum(fptr, 1, "TileName", &colnum, &status);
-    if (status != 0) {
-        status = 0;
-        fits_get_colnum(fptr, 1, "Tile", &colnum, &status);
-    }
-    if (status != 0) {
-        fprintf(stderr, "Could not find either column \"TileName\" or \"Tile\" in metafits file\n");
-        exit(-1);
-    }
-    fits_read_col(fptr,TSTRING,colnum,1,1,ninput,NULL,tilenames,&anynull,&status);
-    if (status != 0){
-        fprintf(stderr,"Error:Failed to read Tile(Name) in metafile\n");
-        exit(-1);
-    }
-
-    fits_get_colnum(fptr, 1, "North", &colnum, &status);
-    fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,N_array,&anynull,&status);
-    if (status != 0){
-        fprintf(stderr,"Error:Failed to read  N coord in metafile\n");
-        exit(-1);
-    }
-
-    fits_get_colnum(fptr, 1, "East", &colnum, &status);
-    fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,E_array,&anynull,&status);
-    if (status != 0){
-        fprintf(stderr,"Error:Failed to read E coord in metafile\n");
-        exit(-1);
-    }
-
-    fits_get_colnum(fptr, 1, "Height", &colnum, &status);
-    fits_read_col_flt(fptr,colnum,1,1,ninput,0.0,H_array,&anynull,&status);
-
-    if (status != 0){
-        fprintf(stderr,"Error:Failed to read H coord in metafile\n");
-        exit(-1);
-    }
-
-    fits_get_colnum(fptr, 1, "Antenna", &colnum, &status);
-    fits_read_col_sht(fptr,colnum,1,1,ninput,0.0,antenna_num,&anynull,&status);
-
-    if (status != 0){
-        fprintf(stderr,"Error:Failed to read field \"Antenna\" in metafile\n");
-        exit(-1);
-    }
-
-    fits_close_file(fptr,&status);
+    // Choose a reference tile
     int refinp = 84; // Tile012
-    double E_ref = E_array[refinp];
-    double N_ref = N_array[refinp];
-    double H_ref = H_array[refinp];
+    double N_ref = mi->N_array[refinp];
+    double E_ref = mi->E_array[refinp];
+    double H_ref = mi->H_array[refinp];
 
-    // END (get tile coordinate information from metafits file)
-    // ====================================================================================== //
-
-    
     double intmjd;
     double fracmjd;
     double lmst;
     double mjd;
-    double pr=0,pd=0,px=0,rv=0,eq=2000,ra_ap=0,dec_ap=0;
-    double mean_ra,mean_dec,ha;
-    double app_ha_rad,app_dec_rad;
+    double pr=0, pd=0, px=0, rv=0, eq=2000, ra_ap=0, dec_ap=0;
+    double mean_ra, mean_dec, ha;
+    double app_ha_rad, app_dec_rad;
     double az,el;
     
     double unit_N;
@@ -447,19 +312,20 @@ void get_delays(
 
     // Read in the Jones matrices for this (coarse) channel, if requested
     complex double invJref[4];
-    if (get_rts) {
-        read_rts_file(M, Jref, NANT, &amp, DI_Jones_file);
+    if (cal->cal_type == RTS) {
+        read_rts_file(M, Jref, NANT, &amp, cal->filename);
         inv2x2(Jref, invJref);
     }
-    else if (get_offringa) {
+    else if (cal->cal_type == OFFRINGA) {
+
         // Find the ordering of antennas in Offringa solutions from metafits file
-        int *order = (int *)malloc(NANT*sizeof(int));
+        int *order = (int *)malloc( NANT*sizeof(int) );
         for (n = 0; n < NANT; n++) {
-            order[antenna_num[n*2]] = n;
+            order[mi->antenna_num[n*2]] = n;
         }
-        read_offringa_gains_file(M, NANT, coarse_chan, DI_Jones_file, order);
-        //read_offringa_gains_file(M, NANT, coarse_chan, DI_Jones_file, NULL);
+        read_offringa_gains_file(M, NANT, cal->offr_chan_num, cal->filename, order);
         free(order);
+
         // Just make Jref (and invJref) the identity matrix since they are already
         // incorporated into Offringa's calibration solutions.
         Jref[0] = 1 + I*0;
@@ -503,58 +369,51 @@ void get_delays(
     unit_E = cos(el) * sin(az);
     unit_H = sin(el);
     
-    if (get_rts || get_offringa) {
-        //fprintf(stdout, "Calculating direction-dependent matrices\n");
-        double Fnorm;
-        calcEjones(E, // pointer to 4-element (2x2) voltage gain Jones matrix
-                   frequency, // observing freq (Hz)
-                   (MWA_LAT*DD2R), // observing latitude (radians)
-                   tile_pointing_az*DD2R, // azimuth & zenith angle of tile pointing
-                   (DPIBY2-(tile_pointing_el*DD2R)), // zenith angle to sample
-                   az, // azimuth & zenith angle to sample
-                   (DPIBY2-el));
-        for (i=0; i < 4;i++) {
-            //fprintf(stdout,"calib:Jones Jref[%d] %f %f: Delay Jref[%d] %f %f\n",i,creal(Jref[i]),cimag(Jref[i]),i,creal(E[i]),cimag(E[i]));
-            //fprintf(stdout,"calib:ratio RTS/Delay [%d]  %f %f \n",i,creal(Jref[i])/creal(E[i]),cimag(Jref[i])/cimag(E[i]));
+    // Calculating direction-dependent matrices
+    double Fnorm;
+    calcEjones(E,                                    // pointer to 4-element (2x2) voltage gain Jones matrix
+               frequency,                            // observing freq (Hz)
+               (MWA_LAT*DD2R),                       // observing latitude (radians)
+               mi->tile_pointing_az*DD2R,            // azimuth & zenith angle of tile pointing
+               (DPIBY2-(mi->tile_pointing_el*DD2R)), // zenith angle to sample
+               az,                                   // azimuth & zenith angle to sample
+               (DPIBY2-el));
+
+    for (i=0;i<NANT;i++){
+
+        mult2x2d(M[i],invJref,G[i]); // forms the DI gain
+        mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
+        
+        // this automatically spots an RTS flagged tile
+        Fnorm = 0;
+        for (j=0; j < 4;j++) {
+            Fnorm += (double) Ji[j][i] * conj(Ji[j][i]);
         }
-        for (i=0;i<NANT;i++){
-            mult2x2d(M[i],invJref,G[i]); // forms the DI gain
-            mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
-            
-            // this automatically spots an RTS flagged tile
-            Fnorm = 0;
-            for (j=0; j < 4;j++) {
-                Fnorm += (double) Ji[j][i] * conj(Ji[j][i]);
-            }
-            if (fabs(cimag(Ji[i][0])) < 0.0000001) {
-                Ji[i][0] = 0.0 + I*0;
-                Ji[i][1] = 0.0 + I*0;
-                Ji[i][2] = 0.0 + I*0;
-                Ji[i][3] = 0.0 + I*0;
+        if (fabs(cimag(Ji[i][0])) < 0.0000001) {
+            Ji[i][0] = 0.0 + I*0;
+            Ji[i][1] = 0.0 + I*0;
+            Ji[i][2] = 0.0 + I*0;
+            Ji[i][3] = 0.0 + I*0;
 
-                G[i][0] = 0.0 + I*0;
-                G[i][1] = 0.0 + I*0;
-                G[i][2] = 0.0 + I*0;
-                G[i][3] = 0.0 + I*0;
-
-            }
+            G[i][0] = 0.0 + I*0;
+            G[i][1] = 0.0 + I*0;
+            G[i][2] = 0.0 + I*0;
+            G[i][3] = 0.0 + I*0;
 
         }
     }
-        
-    
+
     /* for the tile <not the look direction> */
 
-    int ch=0;
+    int ch = 0;
+    for (row=0; row < (int)(mi->ninput); row++) {
 
-    for (row=0; row < (int)ninput; row++) {
+        if (mi->weights_array[row] != 0.0) {
 
-        if (weights_array[row] != 0.0) {
-
-            double cable = cable_array[row]-cable_array[refinp];
-            double E = E_array[row];
-            double N = N_array[row];
-            double H = H_array[row];
+            double cable = mi->cable_array[row] - mi->cable_array[refinp];
+            double E = mi->E_array[row];
+            double N = mi->N_array[row];
+            double H = mi->H_array[row];
 
             double integer_phase;
             double X,Y,Z,u,v,w;
@@ -573,7 +432,7 @@ void get_delays(
             double delay_samples = delay_time * samples_per_sec;
 
             for (ch=0; ch < NCHAN;ch++) {
-                long int freq_ch = frequency + ch*chan_width;
+                long int freq_ch = frequency + ch*mi->chan_width;
 
                 // freq should be in cycles per sample and delay in samples
                 // which essentially means that the samples_per_sec cancels
@@ -587,13 +446,13 @@ void get_delays(
                 phase = phase*2*M_PI*conjugate;
 
                 // Store result for later use
-                complex_weights_array[row][ch] = weights_array[row]*cexp(I*phase);
+                complex_weights_array[row][ch] = mi->weights_array[row]*cexp(I*phase);
 
             }
         }
         else {
             for (ch=0; ch < NCHAN; ch++)
-                complex_weights_array[row][ch] = weights_array[row]; // i.e. =0.0
+                complex_weights_array[row][ch] = mi->weights_array[row]; // i.e. =0.0
         }
 
         // Now, calculate the inverse Jones matrix
@@ -642,17 +501,6 @@ void get_delays(
     free(M);
     free(Ji);
 
-    free(N_array);
-    free(E_array);
-    free(H_array);
-    for (i = 0; i < (int)ninput; i++)
-        free(tilenames[i]);
-    free(tilenames);
-    free(cable_array);
-    free(testval);
-    free(antenna_num);
-
-    fprintf(stdout, "* EXITING GET_DELAYS *\n");
 }
 
 int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix

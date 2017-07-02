@@ -38,26 +38,27 @@
 #define MAX_COMMAND_LENGTH 1024
 
 void usage() {
-    fprintf(stderr,"make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|psrfits\n");
-    fprintf(stderr,"-a <number of antennas>\n");
-    fprintf(stderr,"-b Begin time [must be supplied]\n");
-    fprintf(stderr,"-d <data directory root> -- where the recombined data is\n");
-    fprintf(stderr,"-D dd:mm:ss -- the declination to get passed to get_delays\n");
-    fprintf(stderr,"-e End time [must be supplied]\n");
-    fprintf(stderr,"-f <channel number>\n");
-    fprintf(stderr,"-J <DI Jones file from the RTS> Jones matrix input\n");
-    fprintf(stderr,"-m <metafits file> for this obsID\n");
-    fprintf(stderr,"-n <number of channels>\n");
-    fprintf(stderr,"-o obs id\n");
-    fprintf(stderr,"-p <processing directory root> -- where all the direction dependent files live and where the beams will be put\n");
-    fprintf(stderr,"-r <sample rate in Hz>\n");
-    fprintf(stderr,"-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
-    fprintf(stderr,"-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
-    fprintf(stderr,"-V print version number and exit\n");
-    fprintf(stderr,"-w use weights from metafits file [0]\n");
-    fprintf(stderr,"-W fine channel width (Hz)\n");
-    fprintf(stderr,"-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
-    fprintf(stderr,"options: -t [1 or 2] sample size : 1 == 8 bit (INT); 2 == 32 bit (FLOAT)\n");
+    fprintf(stderr, "make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|psrfits\n");
+    fprintf(stderr, "-a <number of antennas>\n");
+    fprintf(stderr, "-b Begin time [must be supplied]\n");
+    fprintf(stderr, "-C <position of channel solution in Offringa calibration file\n");
+    fprintf(stderr, "-d <data directory root> -- where the recombined data is\n");
+    fprintf(stderr, "-D dd:mm:ss -- the declination to get passed to get_delays\n");
+    fprintf(stderr, "-e End time [must be supplied]\n");
+    fprintf(stderr, "-f <channel number>\n");
+    fprintf(stderr, "-J <DI Jones file from the RTS> Jones matrix input\n");
+    fprintf(stderr, "-m <metafits file> for this obsID\n");
+    fprintf(stderr, "-n <number of channels>\n");
+    fprintf(stderr, "-o obs id\n");
+    fprintf(stderr, "-O <Offringa-style calibration solution file>\n");
+    fprintf(stderr, "-p <processing directory root> -- where all the direction dependent files live and where the beams will be put\n");
+    fprintf(stderr, "-r <sample rate in Hz>\n");
+    fprintf(stderr, "-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
+    fprintf(stderr, "-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
+    fprintf(stderr, "-V print version number and exit\n");
+    fprintf(stderr, "-w use weights from metafits file [0]\n");
+    fprintf(stderr, "-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
+    fprintf(stderr, "options: -t [1 or 2] sample size : 1 == 8 bit (INT); 2 == 32 bit (FLOAT)\n");
 
 }
 
@@ -80,7 +81,7 @@ void populate_psrfits_header(
 
     fits_open_file(&fptr, metafits, READONLY, &status);
     fits_read_key(fptr, TSTRING, "PROJECT", pf->hdr.project_id, NULL, &status);
-    fits_close_file(fptr,&status);
+    fits_close_file(fptr, &status);
 
     // Now set values for our hdrinfo structure
     strcpy(pf->hdr.obs_mode,  "SEARCH");
@@ -206,6 +207,179 @@ void populate_psrfits_header(
     }
 }
 
+
+void get_metafits_info( char *metafits, struct metafits_info *mi ) {
+/* Read in the relevant information from the metafits file.
+ * This function allocates dynamic memory. Destroy it with
+ *   destroy_metafits_info(...)
+ */
+
+    fitsfile *fptr = NULL;
+    int status     = 0;
+    int anynull    = 0;
+
+    // Open the metafits file
+    fits_open_file(&fptr, metafits, READONLY, &status);
+    if (fptr == NULL) {
+        fprintf( stderr, "Failed to open metafits file \"%s\"\n", metafits );
+        exit(EXIT_FAILURE);
+    }
+
+    // Read in the tile pointing information (and channel width)
+    fits_read_key(fptr, TDOUBLE, "RA",       &(mi->tile_pointing_ra),  NULL, &status);
+    fits_read_key(fptr, TDOUBLE, "DEC",      &(mi->tile_pointing_dec), NULL, &status);
+    fits_read_key(fptr, TDOUBLE, "AZIMUTH",  &(mi->tile_pointing_az),  NULL, &status);
+    fits_read_key(fptr, TDOUBLE, "ALTITUDE", &(mi->tile_pointing_el),  NULL, &status);
+    fits_read_key(fptr, TINT,    "FINECHAN", &(mi->chan_width),        NULL, &status);
+    mi->chan_width *= 1000; // Convert from kHz to Hz
+
+    if (status != 0) {
+        fprintf(stderr, "Fits status set: failed to read az/alt, ");
+        fprintf(stderr, "ra/dec fits keys from the header\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Move to the binary table
+    fits_movnam_hdu(fptr, BINARY_TBL, "TILEDATA", 0, &status);
+    if (status != 0) {
+        fprintf(stderr, "Error: Failed to move to TILEDATA HDU\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Read in the number of inputs (= nstation * npol)
+    fits_read_key(fptr, TINT, "NAXIS2", &(mi->ninput), NULL, &status);
+    if (status != 0) {
+        fprintf(stderr, "Error: Failed to read size of binary table in TILEDATA\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate memory
+    mi->N_array         =     (float *)malloc( mi->ninput*sizeof(float)    );
+    mi->E_array         =     (float *)malloc( mi->ninput*sizeof(float)    );
+    mi->H_array         =     (float *)malloc( mi->ninput*sizeof(float)    );
+    mi->cable_array     =     (float *)malloc( mi->ninput*sizeof(float)    );
+    mi->flag_array      =       (int *)malloc( mi->ninput*sizeof(int)      );
+    mi->weights_array   =    (double *)malloc( mi->ninput*sizeof(double)   );
+    mi->antenna_num     = (short int *)malloc( mi->ninput*sizeof(short int));
+    mi->tilenames       =     (char **)malloc( mi->ninput*sizeof(char *)   );
+    int i;
+    for (i = 0; i < (int)(mi->ninput); i++) {
+        mi->tilenames[i] = (char *)malloc( 32*sizeof(char) );
+    }
+    char *testval = (char *) malloc(1024);
+
+    /* Read the columns */
+    int colnum;
+
+    // Cable lengths
+    for (i=0; i < (int)(mi->ninput); i++) {
+
+        fits_get_colnum(fptr, 1, "Length", &colnum, &status);
+        if(fits_read_col_str(fptr, colnum, i+1, 1, 1, "0.0", &testval, &anynull, &status)) {
+            fprintf(stderr, "Error: Failed to cable column  in metafile\n");
+            exit(EXIT_FAILURE);
+        }
+
+        sscanf(testval, "EL_%f", &(mi->cable_array[i]));
+    }
+
+    // Tile names
+    fits_get_colnum(fptr, 1, "TileName", &colnum, &status);
+    if (status != 0) {
+        status = 0;
+        fits_get_colnum(fptr, 1, "Tile", &colnum, &status);
+    }
+    if (status != 0) {
+        fprintf(stderr, "Could not find either column \"TileName\" or \"Tile\" in metafits file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    fits_read_col(fptr, TSTRING, colnum, 1, 1, mi->ninput, NULL, mi->tilenames, &anynull, &status);
+    if (status != 0){
+        fprintf(stderr, "Error: Failed to read Tile(Name) in metafile\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // North coordinate
+    fits_get_colnum(fptr, 1, "North", &colnum, &status);
+    fits_read_col_flt(fptr, colnum, 1, 1, mi->ninput, 0.0, mi->N_array, &anynull, &status);
+    if (status != 0){
+        fprintf(stderr, "Error: Failed to read  N coord in metafile\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // East coordinate
+    fits_get_colnum(fptr, 1, "East", &colnum, &status);
+    fits_read_col_flt(fptr, colnum, 1, 1, mi->ninput, 0.0, mi->E_array, &anynull, &status);
+    if (status != 0){
+        fprintf(stderr, "Error: Failed to read E coord in metafile\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Height coordinate
+    fits_get_colnum(fptr, 1, "Height", &colnum, &status);
+    fits_read_col_flt(fptr, colnum, 1, 1, mi->ninput, 0.0, mi->H_array, &anynull, &status);
+
+    if (status != 0){
+        fprintf(stderr, "Error: Failed to read H coord in metafile\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Antenna number
+    fits_get_colnum(fptr, 1, "Antenna", &colnum, &status);
+    fits_read_col_sht(fptr, colnum, 1, 1, mi->ninput, 0.0, mi->antenna_num, &anynull, &status);
+
+    if (status != 0){
+        fprintf(stderr, "Error: Failed to read field \"Antenna\" in metafile\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Flags & weights
+    float wgt_sum = 0.0;
+    fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
+    fits_read_col_int(fptr, colnum, 1, 1, mi->ninput, 0.0, mi->flag_array, &anynull, &status);
+    if (status != 0){
+        fprintf(stderr, "Error: Failed to read flags column in metafile\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Invert value (flag off = full weight; flag on = zero weight)
+    for (i = 0; i < mi->ninput; i++) {
+        mi->weights_array[i] = 1.0 - (double)mi->flag_array[i];
+        wgt_sum += mi->weights_array[i];
+        // This differs from Ord's orig code, which sums squares. However,
+        // all values should be = 1, so end result should be the same
+    }
+
+    // Exit with error if there are no weights
+    if (wgt_sum == 0.0) {
+        fprintf(stderr, "Zero weight sum on read\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Clean up
+    free( testval );
+    fits_close_file(fptr, &status);
+}
+
+
+void destroy_metafits_info( struct metafits_info *mi ) {
+/* Frees the memory allocated in the metafits_info struct
+ */
+    free( mi->N_array       );
+    free( mi->E_array       );
+    free( mi->H_array       );
+    free( mi->cable_array   );
+    free( mi->flag_array    );
+    free( mi->weights_array );
+    free( mi->antenna_num   );
+    int i;
+    for (i = 0; i < mi->ninput; i++)
+        free( mi->tilenames[i] );
+    free( mi->tilenames     );
+}
+
+
 void int8_to_uint8(int n, int shift, char * to_convert) {
     int j;
     int scratch;
@@ -280,14 +454,14 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain) {
             gain = gain - step;
         }
         percentage = ((float)count/nsamples)*100.0;
-        fprintf(stdout,"Gain set to %f (linear)\n",gain);
-        fprintf(stdout,"percentage of samples in the first 64 (+ve) levels - %f percent \n",percentage);
-        fprintf(stdout,"percentage clipped %f percent\n",percentage_clipped);
+        fprintf(stdout, "Gain set to %f (linear)\n", gain);
+        fprintf(stdout, "percentage of samples in the first 64 (+ve) levels - %f percent \n", percentage);
+        fprintf(stdout, "percentage clipped %f percent\n", percentage_clipped);
     }
     *new_gain = gain;
 }
 
-void get_mean_complex(complex float *input, int nsamples, float *rmean,float *imean, complex float *cmean) {
+void get_mean_complex(complex float *input, int nsamples, float *rmean, float *imean, complex float *cmean) {
 
     int i=0;
     float rtotal = 0;
@@ -313,10 +487,10 @@ void normalise_complex(complex float *input, int nsamples, float scale) {
 
 }
 
-void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,float *offsets,int new_var, int iscomplex,int normalise,int update,int clear,int shutdown) {
+void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales, float *offsets, int new_var, int iscomplex, int normalise, int update, int clear, int shutdown) {
     // putpose is to generate a mean value for each channel/polaridation
 
-    int i=0,j=0;;
+    int i=0, j=0;
     int p=0;
     float *data_ptr = NULL;
 
@@ -330,13 +504,13 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
     static int setup = 0;
 
     if (setup == 0) {
-        band = (float **) calloc (npol,sizeof(float *));
-        chan_min = (float **) calloc (npol,sizeof(float *));
-        chan_max = (float **) calloc (npol,sizeof(float *));
+        band = (float **) calloc (npol, sizeof(float *));
+        chan_min = (float **) calloc (npol, sizeof(float *));
+        chan_max = (float **) calloc (npol, sizeof(float *));
         for (i=0;i<npol;i++) {
-            band[i] = (float *) calloc(nchan,sizeof(float));
-            chan_min[i] = (float *) calloc(nchan,sizeof(float));
-            chan_max[i] = (float *) calloc(nchan,sizeof(float));
+            band[i] = (float *) calloc(nchan, sizeof(float));
+            chan_min[i] = (float *) calloc(nchan, sizeof(float));
+            chan_max[i] = (float *) calloc(nchan, sizeof(float));
         }
         setup = 1;
     }
@@ -399,7 +573,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
 
             // current mean
             *out = ((band[p][j]/nstep))/new_var; // removed a divide by 32 here ....
-            //fprintf(stderr,"Channel %d pol %d mean: %f normaliser %f (max-min) %f\n",j,p,(band[p][j]/nstep),*out,(chan_max[p][j] - chan_min[p][j]));
+            //fprintf(stderr, "Channel %d pol %d mean: %f normaliser %f (max-min) %f\n", j, p, (band[p][j]/nstep), *out, (chan_max[p][j] - chan_min[p][j]));
             out++;
             *off = 0.0;
 
@@ -420,7 +594,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
                 for (j=0;j<nchan;j++){
 
                     *data_ptr = ((*data_ptr) - (*off))/(*normaliser); // 0 mean normalised to 1
-                    //fprintf(stderr,"%f %f %f\n",*data_ptr,*off,*normaliser);
+                    //fprintf(stderr, "%f %f %f\n", *data_ptr, *off, *normaliser);
                     off++;
                     data_ptr++;
                     normaliser++;
@@ -477,36 +651,36 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
     char out_file[MAX_COMMAND_LENGTH];
 
 
-    int fd_in = open(in_name,O_RDONLY);
+    int fd_in = open(in_name, O_RDONLY);
 
     if (fd_in < 0) {
-        fprintf(stderr,"Failed to open %s:%s\n",in_name,strerror(errno));
+        fprintf(stderr, "Failed to open %s:%s\n", in_name, strerror(errno));
         return -1;
     }
     else {
-        fprintf(stderr,"Opening %s for input\n",in_name);
+        fprintf(stderr, "Opening %s for input\n", in_name);
     }
     int fd_out = 0;
     if (heap == NULL) {
 
-        sprintf(out_file,"/dev/shm/%s.working",in_name);
+        sprintf(out_file, "/dev/shm/%s.working", in_name);
 
-        fprintf(stdout,"\nConverting %s to %s\n",in_name,out_file);
+        fprintf(stdout, "\nConverting %s to %s\n", in_name, out_file);
 
-        if ((access(out_file,F_OK) != -1) && (!expunge)){
+        if ((access(out_file, F_OK) != -1) && (!expunge)){
             return 1;
         }
 
-        open(out_file,O_CREAT | O_TRUNC | O_WRONLY | O_SYNC, 0666);
+        open(out_file, O_CREAT | O_TRUNC | O_WRONLY | O_SYNC, 0666);
 
         if (fd_out < 0) {
-            fprintf(stderr,"Failed to open %s:%s\n",out_file,strerror(errno));
+            fprintf(stderr, "Failed to open %s:%s\n", out_file, strerror(errno));
             return -1;
         }
     }
 
-    if ((default_read_pfb_call(fd_in,fd_out,heap)) < 0){
-        fprintf(stderr,"Error in default_read_pfb\n");
+    if ((default_read_pfb_call(fd_in, fd_out, heap)) < 0){
+        fprintf(stderr, "Error in default_read_pfb\n");
         close(fd_in);
         if (fd_out > 0)
             close(fd_out);
@@ -521,91 +695,10 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
 
 }
 
-float get_weights(char *metafits, int nstation, int npol, double **weights_array) {
-
-    fitsfile *fptr     = NULL;          // File pointer for metafits file
-    int status         = 0;             // Status flags for FITS file operations
-    int ninput         = nstation*npol; // The size of the weights array
-    int colnum;                         // The column number for the "Flag" column in the metafits file
-    int anynull        = 0;             // One of the outputs of fits_read_col_int()
-    float wgt_sum      = 0.0;           // Initialise accumulating sum to zero
-    int flags[ninput];                  // The temporary flags array (weight = 1 - flag)
-    int i;                              // A generic counter
-
-    // Allocate memory for weights_array, if needed
-    // It's up to the caller to make sure that either *weights_array is NULL,
-    // or that it points to sufficient memory
-    if (*weights_array == NULL)
-        *weights_array = (double *)malloc( nstation * npol * sizeof(double) );
-
-    // Populate weights, either from the metafits file, or (if no metafits
-    // file was supplied), with default values of 1
-    if (metafits == NULL) {
-        for (i = 0; i < nstation*npol; i++) {
-            (*weights_array)[i] = 1.0;
-        }
-        wgt_sum = nstation * npol;
-    }
-    else { // A metafits file was supplied
-
-        // Open metafits file
-        fits_open_file(&fptr, metafits, READONLY, &status);
-        if (status != 0) {
-            fprintf( stderr, "Error opening metafits file [%s] ", metafits );
-            fprintf( stderr, "with status = %d\n", status );
-            exit(EXIT_FAILURE);
-        }
-        fits_movnam_hdu(fptr, BINARY_TBL, "TILEDATA", 0, &status);
-
-        // Read in metafits file's value of ninput
-        fits_read_key(fptr, TINT, "NAXIS2", &ninput, NULL, &status);
-        if (status != 0) {
-            fprintf(stderr, "Error: Failed to read size of binary table in ");
-            fprintf(stderr, "metafits file '%s'\n", metafits);
-            fprintf(stderr, "       status = %d\n", status);
-            exit(EXIT_FAILURE);
-        }
-
-        // Make sure ninput == nstation * npol supplied by caller of this function
-        if (ninput != nstation*npol) {
-            fprintf(stderr,"Mismatch between weights and antennas - check weight file\n");
-            exit(EXIT_FAILURE);
-        }
-
-        // Read in values
-        fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
-        fits_read_col_int(fptr, colnum, 1, 1, ninput, 0.0, flags, &anynull, &status);
-        if (status != 0){
-            fprintf(stderr,"Error:Failed to read flags column in metafile\n");
-            exit(-1);
-        }
-
-        // Invert value (flag off = full weight; flag on = zero weight)
-        for (i = 0; i < ninput; i++) {
-            (*weights_array)[i] = 1.0 - (double)flags[i];
-            wgt_sum += (*weights_array)[i];
-            // This differs from Ord's orig code, which sums squares. However,
-            // all values should be =1, so end result should be the same
-        }
-    }
-
-    // Close the metafits file
-    fits_close_file( fptr, &status );
-
-    // Exit with error if there are no weights
-    if (wgt_sum == 0.0) {
-        fprintf(stderr,"Zero weight sum on read\n");
-        exit(EXIT_FAILURE);
-    }
-
-    return wgt_sum;
-}
-
 
 /*****************
  * MAIN FUNCTION *
  *****************/
-
 
 int main(int argc, char **argv) {
 
@@ -650,15 +743,15 @@ int main(int argc, char **argv) {
     char *dec_ddmmss    = NULL; // "dd:mm:ss"
     char *ra_hhmmss     = NULL; // "hh:mm:ss"
     char *metafits      = NULL; // filename of the metafits file
-    char *DI_Jones_file = NULL; // filename of the DI Jones file
     char *time_utc      = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
 
     long int frequency  = 0;
-    long int chan_width = 0;
+
+    struct calibration cal;
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:d:D:e:f:hJ:m:n:o:p:r:R:VwW:Xz:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:C:d:D:e:f:hJ:m:n:o:O:p:r:R:VwW:Xz:")) != -1) {
             switch(c) {
 
                 case 'a':
@@ -666,6 +759,9 @@ int main(int argc, char **argv) {
                     break;
                 case 'b':
                     begin = atol(optarg);
+                    break;
+                case 'C':
+                    cal.offr_chan_num = atoi(optarg);
                     break;
                 case 'd':
                     datadirroot = strdup(optarg);
@@ -685,7 +781,8 @@ int main(int argc, char **argv) {
                     exit(0);
                     break;
                 case 'J':
-                    DI_Jones_file = strdup(optarg);
+                    cal.filename = strdup(optarg);
+                    cal.cal_type = RTS;
                     break;
                 case 'm':
                     metafits = strdup(optarg);
@@ -695,6 +792,10 @@ int main(int argc, char **argv) {
                     break;
                 case 'o':
                     obsid = strdup(optarg);
+                    break;
+                case 'O':
+                    cal.filename = strdup(optarg);
+                    cal.cal_type = OFFRINGA;
                     break;
                 case 'p':
                     procdirroot = strdup(optarg);
@@ -710,10 +811,7 @@ int main(int argc, char **argv) {
                     exit(0);
                     break;
                 case 'w':
-                    weights=1;
-                    break;
-                case 'W':
-                    chan_width = atol(optarg);
+                    weights = 1;
                     break;
                 case 'X':
                     expunge = 1;
@@ -728,7 +826,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    fprintf(stderr,"Starting ...\n");
+    fprintf(stderr, "Starting ...\n");
 
     if (datadirroot) {
 
@@ -737,7 +835,7 @@ int main(int argc, char **argv) {
         // Calculate the number of files
         nfiles = end - begin + 1;
         if (nfiles <= 0) {
-            fprintf(stderr,"Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
+            fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
             exit(EXIT_FAILURE);
         }
 
@@ -757,8 +855,6 @@ int main(int argc, char **argv) {
 
     }
 
-    double *weights_array = NULL;
-
     complex double **complex_weights_array = NULL;
     complex double **invJi = NULL;
 
@@ -777,31 +873,31 @@ int main(int argc, char **argv) {
 
     int recalc_delays = 1; // boolean: 1 iff next second's worth of jones and phase are to be calculated
 
-    // Read in flag weights
-    float wgt_sum;
-    if (weights)
-        wgt_sum = get_weights(metafits, nstation, npol, &weights_array);
-    else
-        wgt_sum = get_weights(NULL, nstation, npol, &weights_array);
+    // Read in info from metafits file
+    struct metafits_info mi;
+    get_metafits_info( metafits, &mi );
+
+    if (!weights)
+        for (i = 0; i < nstation*npol; i++)
+            mi.weights_array[i] = 1.0;
+
+    double wgt_sum = 0;
+    for (i = 0; i < nstation*npol; i++)
+        wgt_sum += mi.weights_array[i];
 
     // Get first second's worth of phases and Jones matrices
     struct delays delay_vals;
     get_delays(
-            0,             // coarse_chan (used for Offringa solutions)
             dec_ddmmss,    // dec as a string "dd:mm:ss"
             ra_hhmmss,     // ra  as a string "hh:mm:ss"
             frequency,     // middle of the first frequency channel in Hz
-            metafits,      // filename of the metafits file for this obsID
-            0,             // get_offringa? For now, always no
-            1,             // get_rts?      For now, always yes
-            DI_Jones_file, // filename of the DI Jones file
+            &cal,          // struct holding info about calibration
             sample_rate,   // = 10000 samples per sec
-            chan_width,    // width of fine channel (Hz)
             time_utc,      // utc time string
             0.0,           // seconds offset from time_utc at which to calculate delays
             &delay_vals,   // Populate psrfits header info
+            &mi,           // Struct containing info from metafits file
             complex_weights_array,  // complex weights array (answer will be output here)
-            weights_array, // 0 or 1 for each antenna/pol combination
             invJi          // invJi array           (answer will be output here)
     );
 
@@ -809,28 +905,28 @@ int main(int argc, char **argv) {
 
     // now we need to create a fits file and populate its header
     populate_psrfits_header( &pf, metafits, obsid, time_utc, sample_rate,
-            frequency, nchan, chan_width, outpol, summed_polns,
+            frequency, nchan, mi.chan_width, outpol, summed_polns,
             rec_channel, &delay_vals );
 
     size_t bytes_per_spec = pf.hdr.nbits * pf.hdr.nchan * pf.hdr.npol/8;
 
     unsigned int nspec = 1;
     size_t items_to_read = nstation*npol*nchan*2;
-    float *spectrum = (float *) calloc(nspec*nchan*outpol,sizeof(float));
+    float *spectrum = (float *) calloc(nspec*nchan*outpol, sizeof(float));
 
-    complex float **fringe = calloc(nchan,sizeof(complex float));
+    complex float **fringe = calloc(nchan, sizeof(complex float));
 
-    complex float **stopped_fringe = calloc(nchan,sizeof(complex float));
-    complex float **beam = calloc(nchan,sizeof(complex float *));
+    complex float **stopped_fringe = calloc(nchan, sizeof(complex float));
+    complex float **beam = calloc(nchan, sizeof(complex float *));
     int stat = 0;
 
     for (stat = 0; stat < nchan;stat++) {
-        beam[stat] = (complex float *) calloc(nstation*npol,sizeof(complex float));
-        fringe[stat] = (complex float *) calloc(2*npol,sizeof(complex float));
-        stopped_fringe[stat] = (complex float *) calloc(2*npol,sizeof(complex float));
+        beam[stat] = (complex float *) calloc(nstation*npol, sizeof(complex float));
+        fringe[stat] = (complex float *) calloc(2*npol, sizeof(complex float));
+        stopped_fringe[stat] = (complex float *) calloc(2*npol, sizeof(complex float));
     }
 
-    float *noise_floor = calloc(nchan*npol*npol,sizeof(float));
+    float *noise_floor = calloc(nchan*npol*npol, sizeof(float));
 
     char *buffer = (char *) malloc(nspec*items_to_read*sizeof(int8_t));
     char *heap = NULL;
@@ -850,7 +946,7 @@ int main(int argc, char **argv) {
     data_buffer_psrfits = (float *) valloc(nchan * outpol * pf.hdr.nsblk*sizeof(float));
     out_buffer_8_psrfits = (int8_t *) malloc(outpol*nchan* pf.hdr.nsblk*sizeof(int8_t));
     if (data_buffer_psrfits == NULL){
-        fprintf(stderr,"Failed to allocate data buffer\n");
+        fprintf(stderr, "Failed to allocate data buffer\n");
         exit(EXIT_FAILURE);
     }
 
@@ -877,48 +973,48 @@ int main(int argc, char **argv) {
         sample++;
 
         if (read_stdin) {
-            unsigned int rtn = fread(buffer,items_to_read*sizeof(int8_t),nspec,stdin);
+            unsigned int rtn = fread(buffer, items_to_read*sizeof(int8_t), nspec, stdin);
             if (feof(stdin) || rtn != nspec) {
-                fprintf(stderr,"make_beam finished:\n");
+                fprintf(stderr, "make_beam finished:\n");
                 finished = 1;
                 continue;
             }
         }
         else if (read_files) {
             if (file_no >= nfiles) { // finished file list
-                fprintf(stderr,"make_beam finished:\n");
+                fprintf(stderr, "make_beam finished:\n");
                 finished = 1;
                 continue;
             }
 
             if (fp == NULL) { // need to open the next file
 
-                if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0)
+                if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
                     break; // Exit from while loop
 
-                sprintf(working_file,"/dev/shm/%s.working",filenames[file_no]);
+                sprintf(working_file, "/dev/shm/%s.working", filenames[file_no]);
 
                 fp = fopen(working_file, "r");
 
                 if (fp == NULL) {
-                    fprintf(stderr,"Failed to open file %s\n", working_file);
+                    fprintf(stderr, "Failed to open file %s\n", working_file);
                     break; // Exit from while loop
                 }
                 else {
-                  fprintf(stderr,"Opened file %s\n", working_file);
+                  fprintf(stderr, "Opened file %s\n", working_file);
                 }
 
                 continue;
             }
             else { // file already open, read next chunk of data
-                unsigned int rtn = fread(buffer,items_to_read*sizeof(int8_t),nspec,fp);
+                unsigned int rtn = fread(buffer, items_to_read*sizeof(int8_t), nspec, fp);
                 if (feof(fp) || rtn != nspec) {
                     fclose(fp);
                     fp = NULL;
                     if (expunge == 1) {
                         unlink(working_file);
                     }
-                    fprintf(stderr,"finished file %s\n", filenames[file_no]);
+                    fprintf(stderr, "finished file %s\n", filenames[file_no]);
                     file_no++;
                     continue;
                 }
@@ -927,48 +1023,48 @@ int main(int argc, char **argv) {
         if (heap_step == 0) {
 
             if (file_no >= nfiles) { // finished file list
-                fprintf(stderr,"make_beam finished:\n");
+                fprintf(stderr, "make_beam finished:\n");
                 finished = 1;
                 continue;
             }
 
-            if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0)
+            if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
                 break; // Exit from while loop
 
         }
         if (heap_step < sample_rate) {
-            memcpy(buffer,heap+(items_to_read*heap_step),items_to_read);
+            memcpy(buffer, heap+(items_to_read*heap_step), items_to_read);
 
             heap_step++;
-           // fprintf(stderr,"make_beam copied %d steps out if the heap\n",heap_step);
+           // fprintf(stderr, "make_beam copied %d steps out if the heap\n", heap_step);
         }
         else {
             heap_step = 0;
             file_no++;
 
             if (file_no >= nfiles) { // finished file list
-                fprintf(stderr,"make_beam finished:\n");
+                fprintf(stderr, "make_beam finished:\n");
                 finished = 1;
                 continue;
             }
 
-            if ((read_pfb_call(filenames[file_no],expunge,heap)) < 0)
+            if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
                 break; // Exit from while loop
 
-            memcpy(buffer,heap+(items_to_read*heap_step),items_to_read);
+            memcpy(buffer, heap+(items_to_read*heap_step), items_to_read);
             heap_step++;
 
         }
 
         int stat = 0;
-        bzero(spectrum,(nchan*outpol*sizeof(float)));
+        bzero(spectrum, (nchan*outpol*sizeof(float)));
         for (stat=0;stat<nchan;stat++) {
-            bzero(beam[stat],(nstation*npol*sizeof(complex float)));
+            bzero(beam[stat], (nstation*npol*sizeof(complex float)));
         }
-        bzero(noise_floor,(nchan*npol*npol*sizeof(float)));
+        bzero(noise_floor, (nchan*npol*npol*sizeof(float)));
 
         if (offset_in_psrfits == 0) {
-            bzero(data_buffer_psrfits,(pf.hdr.nsblk*nchan*outpol*sizeof(float)));
+            bzero(data_buffer_psrfits, (pf.hdr.nsblk*nchan*outpol*sizeof(float)));
         }
 
         tend = clock();
@@ -981,7 +1077,7 @@ int main(int argc, char **argv) {
             for (ch=0;ch<nchan;ch++) {
                 int8_t *in_ptr = (int8_t *)buffer + 2*index*nchan + 2*ch;
 
-                complex float e_true[2],e_dash[2];
+                complex float e_true[2], e_dash[2];
 
                 e_dash[0] = (float) *in_ptr + I*(float)(*(in_ptr+1));
                 e_dash[1] = (float) *(in_ptr+(nchan*2)) + I*(float)(*(in_ptr+(nchan*2)+1)); // next pol is nchan*2 away
@@ -1031,7 +1127,7 @@ int main(int argc, char **argv) {
         int index = 0;
         int product;
         for (product = 0; product < outpol; product++) {
-            for (ch=0;ch<nchan;ch++,index++) {
+            for (ch=0;ch<nchan;ch++, index++) {
                 // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
                 // so for a single timestep we do not have to interleave - I could just stack these
 
@@ -1055,7 +1151,7 @@ int main(int argc, char **argv) {
                 else if (product == 3) {
                     // This will be Stokes V
                     complex double temp = (beam[ch][0]*conj(beam[ch][1]) - noise_floor[ch*npol*npol+1])/wgt_sum;
-                    spectrum[index] = -2.0 * cimag(temp);;
+                    spectrum[index] = -2.0 * cimag(temp);
                 }
             }
         }
@@ -1064,7 +1160,7 @@ int main(int argc, char **argv) {
 
             if (offset_out_psrfits < pf.sub.bytes_per_subint) {
 
-                memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits),spectrum,sizeof(float)*nchan*outpol);
+                memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
                 offset_in_psrfits += sizeof(float)*nchan*outpol;
 
                 offset_out_psrfits += bytes_per_spec;
@@ -1075,24 +1171,24 @@ int main(int argc, char **argv) {
             if (offset_out_psrfits == pf.sub.bytes_per_subint) {
 
                 if (set_levels) {
-                    flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer_psrfits,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
+                    flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
                     set_levels = 0;
                 }
                 else {
-                    flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer_psrfits,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,1,1,1,0);
+                    flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
                 }
                 float2int8_trunc(data_buffer_psrfits, pf.hdr.nsblk*nchan*outpol, -126.0, 127.0, out_buffer_8_psrfits);
-                int8_to_uint8(pf.hdr.nsblk*nchan*outpol,128,(char *) out_buffer_8_psrfits);
+                int8_to_uint8(pf.hdr.nsblk*nchan*outpol, 128, (char *) out_buffer_8_psrfits);
                 memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
 
                 if (psrfits_write_subint(&pf) != 0) {
-                    fprintf(stderr,"Write subint failed file exists?\n");
+                    fprintf(stderr, "Write subint failed file exists?\n");
                     break; // Exit from while loop
                 }
 
                 pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
-                pf.sub.lst += pf.sub.tsubint;;
-                fprintf(stderr,"Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
+                pf.sub.lst += pf.sub.tsubint;
+                fprintf(stderr, "Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
                        pf.tot_rows, pf.T, pf.filenum, pf.status);
 
                 recalc_delays = 1;
@@ -1110,21 +1206,16 @@ int main(int argc, char **argv) {
         if (recalc_delays) {
 
             get_delays(
-                    0,             // coarse_chan (used for Offringa solutions)
                     dec_ddmmss,    // dec as a string "dd:mm:ss"
                     ra_hhmmss,     // ra  as a string "hh:mm:ss"
                     frequency,     // middle of the first frequency channel in Hz
-                    metafits,      // filename of the metafits file for this obsID
-                    0,             // get_offringa? For now, always no
-                    1,             // get_rts?      For now, always yes
-                    DI_Jones_file, // filename of the DI Jones file
+                    &cal,          // struct holding info about calibration
                     sample_rate,   // = 10000 samples per sec
-                    chan_width,    // width of fine channel (Hz)
                     time_utc,      // utc time string
                     (double)(sample / sample_rate + 1), // seconds offset from time_utc at which to calculate delays
                     NULL,          // Don't update delay_vals
+                    &mi,           // Struct containing info from metafits file
                     complex_weights_array,  // complex weights array (answer will be output here)
-                    weights_array, // 0 or 1 for each antenna/pol combination
                     invJi          // invJi array           (answer will be output here)
             );
 
@@ -1134,7 +1225,7 @@ int main(int argc, char **argv) {
 
         if (finished) {
 
-            fwrite(spectrum,sizeof(float),nchan,stdout);
+            fwrite(spectrum, sizeof(float), nchan, stdout);
 
         }
 
@@ -1159,7 +1250,7 @@ int main(int argc, char **argv) {
         double dtmp = 0;
         int status = 0;
 
-        //fits_open_file(&(pf.fptr),pf.filename,READWRITE,&status);
+        //fits_open_file(&(pf.fptr), pf.filename, READWRITE, &status);
 
         fits_read_key(pf.fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, &status);
         fits_read_key(pf.fptr, TINT, "STT_SMJD", &itmp, NULL, &status);
@@ -1179,11 +1270,11 @@ int main(int argc, char **argv) {
         fits_update_key(pf.fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, &status);
 
         //fits_close_file(pf.fptr, &status);
-        fprintf(stderr,"Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
+        fprintf(stderr, "Done.  Wrote %d subints (%f sec) in %d files.  status = %d\n",
                pf.tot_rows, pf.T, pf.filenum, pf.status);
 
         // free some memory
-        flatten_bandpass(pf.hdr.nsblk,nchan,outpol,data_buffer_psrfits,pf.sub.dat_scales,pf.sub.dat_offsets,32,0,0,0,0,1);
+        flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 0, 0, 0, 1);
 
     }
 
@@ -1194,6 +1285,8 @@ int main(int argc, char **argv) {
             free( filenames[second] );
         free( filenames );
     }
+
+    destroy_metafits_info( &mi );
 
     tend = clock();
     tcoda = (double)(tend-tbegin)/CLOCKS_PER_SEC;

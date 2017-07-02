@@ -4,21 +4,28 @@
 #include <complex.h>
 #include "psrfits.h"
 
-/* A structure to read in all the relevant info from the observation metafits
- * file.
- */
-/*
-typedef struct metafits_info_t {
+// Calibration solution types
+#define RTS       0
+#define OFFRINGA  1
+
+// A structure to read in all the relevant info from the observation metafits
+// file.
+struct metafits_info {
+    double      tile_pointing_ra;
+    double      tile_pointing_dec;
+    double      tile_pointing_az;
+    double      tile_pointing_el;
     float      *N_array;
     float      *E_array;
     float      *H_array;
     float      *cable_array;
     int        *flag_array;
+    double     *weights_array;
     short int  *antenna_num;
     char      **tilenames;
     int         ninput;
+    int         chan_width;
 } metafits_info;
-*/
 
 struct delays {
     double mean_ra;
@@ -30,24 +37,25 @@ struct delays {
     double intmjd;
 };
 
+struct calibration {
+    char *filename;        // The file that houses the calibration solution
+    int   cal_type;        // Either RTS or OFFRINGA
+    int   offr_chan_num;   // The channel number in the Offringa calibration solution file
+};
+
 /* Running get_delays from within make_beam */
 void get_delays(
-        int coarse_chan,
-        char *dec_ddmmss,
-        char *ra_hhmmss,
-        long int frequency,
-        char *metafits,
-        int get_offringa,
-        int get_rts,
-        char *DI_Jones_file,
-        float samples_per_sec,
-        long int chan_width,
-        char *time_utc,
-        double sec_offset,
-        struct delays *delay_vals,
-        complex double **complex_weights_array,  // output
-        double *weights_array,
-        complex double **invJi           // output
+        char                  *dec_ddmmss,
+        char                  *ra_hhmmss,
+        long int               frequency,
+        struct                 calibration *cal,
+        float                  samples_per_sec,
+        char                  *time_utc,
+        double                 sec_offset,
+        struct delays         *delay_vals,
+        struct metafits_info  *mi,
+        complex double       **complex_weights_array,  // output
+        complex double       **invJi                   // output
 );
 
 
