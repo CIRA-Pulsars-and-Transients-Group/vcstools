@@ -644,9 +644,10 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
 
 
 
-int read_pfb_call(char *in_name, int expunge, char *heap) {
+int read_pfb_call(char *in_name, char *heap) {
 
 
+    int retval = 1;
     char out_file[MAX_COMMAND_LENGTH];
 
 
@@ -654,40 +655,16 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
 
     if (fd_in < 0) {
         fprintf(stderr, "Failed to open %s:%s\n", in_name, strerror(errno));
-        return -1;
-    }
-    int fd_out = 0;
-    if (heap == NULL) {
-
-        sprintf(out_file, "/dev/shm/%s.working", in_name);
-
-        fprintf(stdout, "\nConverting %s to %s\n", in_name, out_file);
-
-        if ((access(out_file, F_OK) != -1) && (!expunge)){
-            return 1;
-        }
-
-        open(out_file, O_CREAT | O_TRUNC | O_WRONLY | O_SYNC, 0666);
-
-        if (fd_out < 0) {
-            fprintf(stderr, "Failed to open %s:%s\n", out_file, strerror(errno));
-            return -1;
-        }
+        exit(EXIT_FAILURE);
     }
 
-    if ((default_read_pfb_call(fd_in, fd_out, heap)) < 0){
+    if ((default_read_pfb_call(fd_in, 0, heap)) < 0){
         fprintf(stderr, "Error in default_read_pfb\n");
-        close(fd_in);
-        if (fd_out > 0)
-            close(fd_out);
-        return -1;
+        retcal = -1;
     }
-    else {
-        close(fd_in);
-        if (fd_out > 0)
-            close(fd_out);
-        return 1;
-    }
+
+    close(fd_in);
+    return retval;
 
 }
 
@@ -714,7 +691,6 @@ int main(int argc, char **argv) {
     char *datadirroot = NULL;
     char **filenames = NULL;
     int nfiles = 0;
-    int expunge = 0;
 
     unsigned int sample_rate = 10000;
 
@@ -737,7 +713,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:C:d:D:e:f:hJ:m:n:o:O:r:R:VwW:Xz:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:C:d:D:e:f:hJ:m:n:o:O:r:R:VwW:z:")) != -1) {
             switch(c) {
 
                 case 'a':
@@ -795,9 +771,6 @@ int main(int argc, char **argv) {
                     break;
                 case 'w':
                     weights = 1;
-                    break;
-                case 'X':
-                    expunge = 1;
                     break;
                 case 'z':
                     time_utc = strdup(optarg);
@@ -863,6 +836,7 @@ int main(int argc, char **argv) {
     double wgt_sum = 0;
     for (i = 0; i < nstation*npol; i++)
         wgt_sum += mi.weights_array[i];
+    double invw = 1.0/wgt_sum;
 
     // Get first second's worth of phases and Jones matrices
     printf("[%f]  Setting up output header information\n", omp_get_wtime()-begintime);
@@ -901,8 +875,6 @@ int main(int argc, char **argv) {
     int index = 0;
     int offset_in_psrfits;
 
-    FILE *fp = NULL;
-
     char working_file[MAX_COMMAND_LENGTH];
 
     int file_no = 0;
@@ -912,8 +884,8 @@ int main(int argc, char **argv) {
     for (file_no = 0; file_no < nfiles; file_no++) {
 
         printf("[%f]  Reading in data from %s [%d/%d]\n", omp_get_wtime()-begintime,
-                filenames[file_no], file_no, nfiles);
-        if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
+                filenames[file_no], file_no+1, nfiles);
+        if ((read_pfb_call(filenames[file_no], heap)) < 0)
             break; // Exit from while loop
 
         // Get the next second's worth of phases / jones matrices, if needed
@@ -998,8 +970,12 @@ int main(int argc, char **argv) {
                 }
             }
 
+            // Calculate the Stokes parameters
             int index = 0;
             int product;
+            double beam00 = (double)(beam[ch][0] * conj(beam[ch][0]));
+            double beam11 = (double)(beam[ch][1] * conj(beam[ch][1]));
+            complex double beam01 = beam[ch][0] * conj(beam[ch][1]);
             for (product = 0; product < outpol; product++) {
                 for (ch = 0; ch < nchan; ch++, index++) {
                     // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
@@ -1007,32 +983,24 @@ int main(int argc, char **argv) {
                     // So coherency or Stokes?
                     if (product == 0) {
                         // Stokes I
-                        spectrum[index]  = (double)(beam[ch][0] * conj(beam[ch][0]));
-                        spectrum[index] += (double)(beam[ch][1] * conj(beam[ch][1]));
-                        spectrum[index] -= noise_floor[ch*npol*npol];
-                        spectrum[index] -= noise_floor[ch*npol*npol+3];
-                        spectrum[index] /= wgt_sum;
+                        spectrum[index]  = beam00 + beam11;
+                        spectrum[index] -= (noise_floor[ch*npol*npol] + noise_floor[ch*npol*npol+3]);
+                        spectrum[index] *= invw;
                     }
                     else if (product == 1) {
                         // This will be Stokes Q
-                        spectrum[index]  = (double)(beam[ch][0] * conj(beam[ch][0]));
-                        spectrum[index] -= (double)(beam[ch][1] * conj(beam[ch][1]));
-                        spectrum[index] -= noise_floor[ch*npol*npol];
-                        spectrum[index] -= noise_floor[ch*npol*npol+3];
-                        spectrum[index] /= wgt_sum;
+                        spectrum[index]  = beam00 - beam11;
+                        spectrum[index] -= (noise_floor[ch*npol*npol] + noise_floor[ch*npol*npol+3]);
+                        spectrum[index] *= invw;
 
                     }
                     else if (product == 2) {
                         // This will be Stokes U
-                        spectrum[index]  = (double)(beam[ch][0]*conj(beam[ch][1]));
-                        spectrum[index] -= noise_floor[ch*npol*npol+1];
-                        spectrum[index] *= 2.0/wgt_sum;
+                        spectrum[index] = 2.0 * (creal(beam01) - noise_floor[ch*npol*npol+1])*invw;
                     }
                     else if (product == 3) {
                         // This will be Stokes V
-                        complex double temp = (beam[ch][0]*conj(beam[ch][1]) -
-                                               noise_floor[ch*npol*npol+1]  )/wgt_sum;
-                        spectrum[index] *= -2.0 * cimag(temp);
+                        spectrum[index] = -2.0 * cimag((beam01 - noise_floor[ch*npol*npol+1])*invw);
                     }
                 }
             }
@@ -1071,13 +1039,6 @@ int main(int argc, char **argv) {
 
     printf("[%f]  **FINISHED BEAMFORMING**\n", omp_get_wtime()-begintime);
     printf("[%f]  Starting clean-up\n", omp_get_wtime()-begintime);
-
-    if (fp != NULL) {
-        //cleanup
-        fclose(fp);
-        if (expunge)
-            unlink(working_file);
-    }
 
     if (pf.status == 0) {
         /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/
