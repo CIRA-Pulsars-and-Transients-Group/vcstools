@@ -967,38 +967,31 @@ int main(int argc, char **argv) {
             }
 
             // Calculate the Stokes parameters
-            int index = 0;
-            int product;
-            double beam00 = (double)(beam[ch][0] * conj(beam[ch][0]));
-            double beam11 = (double)(beam[ch][1] * conj(beam[ch][1]));
-            complex double beam01 = beam[ch][0] * conj(beam[ch][1]);
-            for (product = 0; product < outpol; product++) {
-                for (ch = 0; ch < nchan; ch++, index++) {
-                    // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
-                    // so for a single timestep we do not have to interleave - I could just stack these
-                    // So coherency or Stokes?
-                    if (product == 0) {
-                        // Stokes I
-                        spectrum[index]  = beam00 + beam11;
-                        spectrum[index] -= (noise_floor[ch*npol*npol] + noise_floor[ch*npol*npol+3]);
-                        spectrum[index] *= invw;
-                    }
-                    else if (product == 1) {
-                        // This will be Stokes Q
-                        spectrum[index]  = beam00 - beam11;
-                        spectrum[index] -= (noise_floor[ch*npol*npol] + noise_floor[ch*npol*npol+3]);
-                        spectrum[index] *= invw;
+            double beam00, beam11;
+            double noise0, noise1, noise3;
+            complex double beam01;
+            unsigned int stokesIidx, stokesQidx, stokesUidx, stokesVidx;
+            for (ch = 0; ch < nchan; ch++) {
 
-                    }
-                    else if (product == 2) {
-                        // This will be Stokes U
-                        spectrum[index] = 2.0 * (creal(beam01) - noise_floor[ch*npol*npol+1])*invw;
-                    }
-                    else if (product == 3) {
-                        // This will be Stokes V
-                        spectrum[index] = -2.0 * cimag((beam01 - noise_floor[ch*npol*npol+1])*invw);
-                    }
-                }
+                beam00 = (double)(beam[ch][0] * conj(beam[ch][0]));
+                beam11 = (double)(beam[ch][1] * conj(beam[ch][1]));
+                beam01 = beam[ch][0] * conj(beam[ch][1]);
+
+                noise0 = noise_floor[ch*npol*npol];
+                noise1 = noise_floor[ch*npol*npol+1];
+                noise3 = noise_floor[ch*npol*npol+3];
+
+                stokesIidx = 0*nchan + ch;
+                stokesIidx = 1*nchan + ch;
+                stokesIidx = 2*nchan + ch;
+                stokesIidx = 3*nchan + ch;
+
+                // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
+                // so for a single timestep we do not have to interleave - I could just stack these
+                spectrum[stokesIidx]  = (beam00 + beam11 - noise0 - noise3) * invw;
+                spectrum[stokesQidx]  = (beam00 - beam11 - noise0 - noise3) * invw;
+                spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise_floor[ch*npol*npol+1])*invw;
+                spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise_floor[ch*npol*npol+1])*invw);
             }
 
             offset_in_psrfits  = sizeof(float)*nchan*outpol * sample;
