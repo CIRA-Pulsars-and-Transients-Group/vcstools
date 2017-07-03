@@ -37,10 +37,6 @@
 
 #define MAX_COMMAND_LENGTH 1024
 
-void timestamped(char *msg, double begintime) {
-    printf("[%f]  %s\n", omp_get_wtime()-begintime, msg);
-}
-
 void usage() {
     fprintf(stderr, "make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|psrfits\n");
     fprintf(stderr, "-a <number of antennas>\n");
@@ -703,7 +699,7 @@ int read_pfb_call(char *in_name, int expunge, char *heap) {
 int main(int argc, char **argv) {
 
     double begintime = omp_get_wtime();
-    timestamped("Starting make_beam", begintime);
+    printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
 
     int c  = 0;
     int ch = 0;
@@ -856,7 +852,7 @@ int main(int argc, char **argv) {
 
 
     // Read in info from metafits file
-    timestamped("Reading in metafits file information", begintime);
+    printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, metafits);
     struct metafits_info mi;
     get_metafits_info( metafits, &mi );
 
@@ -869,7 +865,7 @@ int main(int argc, char **argv) {
         wgt_sum += mi.weights_array[i];
 
     // Get first second's worth of phases and Jones matrices
-    timestamped("Setting up output header information", begintime);
+    printf("[%f]  Setting up output header information\n", omp_get_wtime()-begintime);
     struct delays delay_vals;
     get_delays(
             dec_ddmmss,    // dec as a string "dd:mm:ss"
@@ -912,14 +908,16 @@ int main(int argc, char **argv) {
     int file_no = 0;
     int sample;
 
-    timestamped("Beginning to work on data", begintime);
+    printf("[%f]  **BEGINNING BEAMFORMING**\n", omp_get_wtime()-begintime);
     for (file_no = 0; file_no < nfiles; file_no++) {
 
+        printf("[%f]  Reading in data from %s [%d/%d]\n", omp_get_wtime()-begintime,
+                filenames[file_no], file_no, nfiles);
         if ((read_pfb_call(filenames[file_no], expunge, heap)) < 0)
             break; // Exit from while loop
 
         // Get the next second's worth of phases / jones matrices, if needed
-        timestamped("Starting get_delays for next second of data", begintime);
+        printf("[%f]  Calculating delays\n", omp_get_wtime()-begintime);
         get_delays(
                 dec_ddmmss,    // dec as a string "dd:mm:ss"
                 ra_hhmmss,     // ra  as a string "hh:mm:ss"
@@ -933,7 +931,7 @@ int main(int argc, char **argv) {
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );       // invJi array           (answer will be output here)
 
-        timestamped("Calculating beam for next second of data", begintime);
+        printf("[%f]  Calculating beam\n", omp_get_wtime()-begintime);
 
         offset_in_psrfits  = 0;
 
@@ -1047,7 +1045,7 @@ int main(int argc, char **argv) {
 
         // We've arrived at the end of a second's worth of data...
 
-        timestamped("Flattening bandpass", begintime);
+        printf("[%f]  Flattening bandpass\n", omp_get_wtime()-begintime);
         flatten_bandpass(pf.hdr.nsblk, nchan, outpol,
                 data_buffer_psrfits, pf.sub.dat_scales,
                 pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
@@ -1060,7 +1058,7 @@ int main(int argc, char **argv) {
 
         memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
 
-        timestamped("Writing data to file", begintime);
+        printf("[%f]  Writing data to file\n", omp_get_wtime()-begintime);
         if (psrfits_write_subint(&pf) != 0) {
             fprintf(stderr, "Write subint failed file exists?\n");
             break; // Exit from while loop
@@ -1071,7 +1069,8 @@ int main(int argc, char **argv) {
 
     }
 
-    timestamped("Finished processing data, start cleaning up", begintime);
+    printf("[%f]  **FINISHED BEAMFORMING**\n", omp_get_wtime()-begintime);
+    printf("[%f]  Starting clean-up\n", omp_get_wtime()-begintime);
 
     if (fp != NULL) {
         //cleanup
