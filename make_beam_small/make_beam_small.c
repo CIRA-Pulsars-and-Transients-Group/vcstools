@@ -982,16 +982,16 @@ int main(int argc, char **argv) {
                 noise3 = noise_floor[ch*npol*npol+3];
 
                 stokesIidx = 0*nchan + ch;
-                stokesIidx = 1*nchan + ch;
-                stokesIidx = 2*nchan + ch;
-                stokesIidx = 3*nchan + ch;
+                stokesQidx = 1*nchan + ch;
+                stokesUidx = 2*nchan + ch;
+                stokesVidx = 3*nchan + ch;
 
                 // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
                 // so for a single timestep we do not have to interleave - I could just stack these
                 spectrum[stokesIidx]  = (beam00 + beam11 - noise0 - noise3) * invw;
                 spectrum[stokesQidx]  = (beam00 - beam11 - noise0 - noise3) * invw;
-                spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise_floor[ch*npol*npol+1])*invw;
-                spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise_floor[ch*npol*npol+1])*invw);
+                spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise1)*invw;
+                spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
             }
 
             offset_in_psrfits  = sizeof(float)*nchan*outpol * sample;
