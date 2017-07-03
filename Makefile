@@ -5,8 +5,3 @@ pabeam: pabeam.c
 pabeam_gpu: pabeam.cu
 	nvcc -O3 -o $@ $^ -arch=sm_35 -L/usr/lib -lm -lsla -lcfitsio
 
-
-saxpy: saxpy.cu
-	nvcc -o saxpy $^
-
-
