@@ -648,8 +648,6 @@ int read_pfb_call(char *in_name, char *heap) {
 
 
     int retval = 1;
-    char out_file[MAX_COMMAND_LENGTH];
-
 
     int fd_in = open(in_name, O_RDONLY);
 
@@ -660,7 +658,7 @@ int read_pfb_call(char *in_name, char *heap) {
 
     if ((default_read_pfb_call(fd_in, 0, heap)) < 0){
         fprintf(stderr, "Error in default_read_pfb\n");
-        retcal = -1;
+        retval = -1;
     }
 
     close(fd_in);
@@ -874,8 +872,6 @@ int main(int argc, char **argv) {
 
     int index = 0;
     int offset_in_psrfits;
-
-    char working_file[MAX_COMMAND_LENGTH];
 
     int file_no = 0;
     int sample;
