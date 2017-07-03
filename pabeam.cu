@@ -9,7 +9,6 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <cuComplex.h>
-#include <cublas_v2.h>
 
 #define PI (acos(-1.0))         //Ensures PI is defined on all systems
 #define RAD2DEG (180.0 / PI)
@@ -48,11 +47,11 @@ void utc2mjd(char *utc_str, double *intmjd, double *fracmjd);
 void mjd2lst(double mjd, double *lst);
 void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn);
 void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza);
-int getNumTiles(char *metafits);
-void getTilePositions(char *metafits, int ninput,\
+int getNumTiles(const char *metafits);
+void getTilePositions(const char *metafits, int ninput,\
         float *n_pols, float *e_pols, float *h_pols,\
         float *n_tile, float *e_tile, float *h_tile);
-int getFlaggedTiles(char *badfile, int *badtiles);
+int getFlaggedTiles(const char *badfile, int *badtiles);
 void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
         int *badtiles, int nbad, int nelements);
 void getDeviceDimensions(int *nDevices);
@@ -190,7 +189,7 @@ void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_
     p_tazza->za = (PI/2) - el;
 }
 
-int getNumTiles(char *metafits)
+int getNumTiles(const char *metafits)
 {
     fitsfile *fptr=NULL;
     int status=0;
@@ -214,7 +213,7 @@ int getNumTiles(char *metafits)
     return ninput;
 }
 
-void getTilePositions(char *metafits, int ninput,\
+void getTilePositions(const char *metafits, int ninput,\
         float *n_pols, float *e_pols, float *h_pols,\
         float *n_tile, float *e_tile, float *h_tile)
 {
@@ -276,7 +275,7 @@ void getTilePositions(char *metafits, int ninput,\
     }
 }
 
-int getFlaggedTiles(char *badfile, int *badtiles)
+int getFlaggedTiles(const char *badfile, int *badtiles)
 {
     /* Open the flagged tiles file, read into an array and count how many lines are read.
      * Update the array pointer and return number of elements to read from that array
@@ -378,7 +377,7 @@ void getDeviceDimensions(int *nDevices)
 //    return "<unknown>";
 //}
 
-inline void gpuAssert(cudaError_t code, char *file, int line, bool abort=true)
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
     if (code != 0)
     {
@@ -433,7 +432,7 @@ __global__ void getWavevectors(int nel, double a, double *za, double *az, wavenu
 }
 
 
-__global__ void getArrayFactor(int nel, int ntiles, double *xp, double *yp, double *zp, wavenums *p_wn, cuDoubleComplex *af)
+__global__ void getArrayFactor(int nel, int ntiles, float *xp, float *yp, float *zp, wavenums *p_wn, cuDoubleComplex *af)
 {
     /* Kernal to compute the array factor from the tiles positions and wave numbers.
        nel    = total number of elements in final array
@@ -448,18 +447,20 @@ __global__ void getArrayFactor(int nel, int ntiles, double *xp, double *yp, doub
     int stride = blockDim.x * gridDim.x;
     double ph;
     double kx, ky, kz;
+    cuDoubleComplex n = make_cuDoubleComplex(ntiles,0);
 
     for (int i = index; i < nel; i+=stride)
     {
         kx = p_wn[i].kx;
         ky = p_wn[i].ky;
         kz = p_wn[i].kz;
-        af[i] = make_cuDoubleComplex(0, 0);
+        af[i] = make_cuDoubleComplex(0,0);
         for (int j = 0; j < ntiles; j++)
         {
             ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
-            cuCadd(af[i], make_cuDoubleComplex(cos(ph), sin(ph)));
+            af[i] = cuCadd(af[i], make_cuDoubleComplex(cos(ph), sin(ph)));         
         }
+        af[i] = cuCdiv(af[i], n);
         __syncthreads();
     }
     __syncthreads();
@@ -535,7 +536,6 @@ int main(int argc, char *argv[])
     }
 
 
-
     // calculate target az,za and wavevector 
     printf("Getting target (Az,ZA)\n");
     calcTargetAZZA(ra, dec, time, &target);
@@ -585,9 +585,10 @@ int main(int argc, char *argv[])
 
     // but, the last ntoread elements are pointless 
     // so now we can allocate static memory for the final list of positions
-    float xpos[ntiles-ntoread], ypos[ntiles-ntoread], zpos[ntiles-ntoread];
+    ntiles = ntiles - ntoread;
+    float xpos[ntiles], ypos[ntiles], zpos[ntiles];
 
-    for (int i=0; i<(ntiles-ntoread); i++)
+    for (int i=0; i<ntiles; i++)
     {
         // x = East, y = North, z = Height
         xpos[i] = E_tile[i];
@@ -655,8 +656,6 @@ int main(int argc, char *argv[])
 
     // construct arrays for computation on host
     double *az_array, *za_array;
-    wavenums *wn_array;
-    //cuDoubleComplex *af_array;
     
     // allocate memory on host and check
     // azimuth vector
@@ -706,29 +705,14 @@ int main(int argc, char *argv[])
     } while(cc < size);
 
 
-    // 3D wave number grid (array of structs)
-    wn_array = (wavenums *)malloc(size * sizeof(wavenums));
-    if (!wn_array)
-    {
-        fprintf(stderr,"Host memory allocation failed (allocate wv_array)\n");
-        return EXIT_FAILURE;
-    }
-    for (int i=0; i<size; i++)
-    {
-        wn_array[i].kx = 0.0;
-        wn_array[i].ky = 0.0;
-        wn_array[i].kz = 0.0;
-    }
-
-
-
     // construct arrays for device computation
     double *d_az_array, *d_za_array;
-    double *d_xpos, *d_ypos, *d_zpos;
-    wavenums *d_wn_array, *d_twn;
+    float *d_xpos, *d_ypos, *d_zpos;
+    wavenums *wn_array, *d_wn_array, *d_twn;
     int itersize = iter_n_az * iter_n_za;
+    double af_max = -1, omega_A = 0.0;
     double *subAz, *subZA;
-    wavenums *subwn, *tmpsubwn; 
+    wavenums *tmpsubwn; 
     cuDoubleComplex *af_array, *d_af_array; // these will be used within the iteration loop
 
     subAz = (double *)malloc(itersize * sizeof(double));
@@ -743,10 +727,10 @@ int main(int argc, char *argv[])
         fprintf(stderr,"Host memory allocation failed (allocate subZA)\n");
         return EXIT_FAILURE;
     }
-    subwn = (wavenums *)malloc(itersize * sizeof(wavenums));
-    if (!subwn)
+    wn_array = (wavenums *)malloc(itersize * sizeof(wavenums));
+    if (!wn_array)
     {
-        fprintf(stderr,"Host memory allocation failed (allocate subwn)\n");
+        fprintf(stderr,"Host memory allocation failed (allocate wn_array)\n");
         return EXIT_FAILURE;
     }
     tmpsubwn = (wavenums *)malloc(sizeof(wavenums));
@@ -756,8 +740,22 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr,"Host memory allocation failed (allocate af_array)\n");
         return EXIT_FAILURE;
-    } // no need to initilaise as we do that in the kernal for each pixel
+    }
+    for (int i=0; i<itersize; i++)
+    {
+        af_array[i] = make_cuDoubleComplex(0,0);
+    }
 
+    // before we get to the real computation, better open a file ready for writing
+    int obsid;
+    char output[100];
+    sscanf(metafits, "%d%*s", &obsid);
+    printf("Will output beam pattern to:\n");
+    printf("    %d_%.2fMHz_%s.dat\n", obsid, freq/1.0e6, time);
+    sprintf(output, "%d_%.2fMHz_%s.dat", obsid, freq/1.0e6, time);
+    FILE *fp;
+    fp = fopen(output,"w");
+  
     /* This is the primary loop which does the calculations */
     printf("%d az , %d za per iteration\n", iter_n_az, iter_n_za);
     int stride = 0;
@@ -777,25 +775,25 @@ int main(int argc, char *argv[])
         // place subset of az/za array into subAz/subZA
         for (int i=0; i<itersize; i++)
         {
-            subAz[i]    = az_array[i+stride];
-            subZA[i]    = za_array[i+stride];
-            subwn[i].kx = wn_array[i+stride].kx;
-            subwn[i].ky = wn_array[i+stride].ky;
-            subwn[i].kz = wn_array[i+stride].kz;
+            subAz[i] = az_array[i+stride];
+            subZA[i] = za_array[i+stride];
+            wn_array[i].kx = 0.0;
+            wn_array[i].ky = 0.0;
+            wn_array[i].kz = 0.0;
         }
         stride += itersize;
 
         /* Calculate the wavenumbers for each pixel */
         // allocate memory on device
-        gpuErrchk( cudaMalloc((void**)&d_az_array, itersize * sizeof(double)));
-        gpuErrchk( cudaMalloc((void**)&d_za_array, itersize * sizeof(double)));
-        gpuErrchk( cudaMalloc((void**)&d_wn_array, itersize * sizeof(wavenums)));
+        gpuErrchk( cudaMalloc((void**)&d_az_array, itersize * sizeof(*az_array)));
+        gpuErrchk( cudaMalloc((void**)&d_za_array, itersize * sizeof(*za_array)));
+        gpuErrchk( cudaMalloc((void**)&d_wn_array, itersize * sizeof(*wn_array)));
         gpuErrchk( cudaMalloc((void**)&d_twn, sizeof(wavenums)));
 
         // copy arrays onto device
-        gpuErrchk( cudaMemcpy(d_az_array, subAz, itersize * sizeof(double), cudaMemcpyHostToDevice));
-        gpuErrchk( cudaMemcpy(d_za_array, subZA, itersize * sizeof(double), cudaMemcpyHostToDevice));
-        gpuErrchk( cudaMemcpy(d_wn_array, subwn, itersize * sizeof(wavenums), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_az_array, subAz, itersize * sizeof(*subAz), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_za_array, subZA, itersize * sizeof(*subZA), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_wn_array, wn_array, itersize * sizeof(*wn_array), cudaMemcpyHostToDevice));
         gpuErrchk( cudaMemcpy(d_twn, &target_wn, sizeof(wavenums), cudaMemcpyHostToDevice));
 
         // launch kernal to compute wavenumbers
@@ -804,13 +802,13 @@ int main(int argc, char *argv[])
         cudaDeviceSynchronize(); // don't let host code move on until device is finished
 
         // copy relevant memory back to host
-        gpuErrchk( cudaMemcpy(subwn, d_wn_array, itersize * sizeof(wavenums), cudaMemcpyDeviceToHost));
+        gpuErrchk( cudaMemcpy(wn_array, d_wn_array, itersize * sizeof(*wn_array), cudaMemcpyDeviceToHost));
 
         // test the CPU equivalent to make sure we get the same numbers
-        printf("    comparing GPU and CPU output\n");
-        calcWaveNumber(lambda, subAz[12], subZA[12], tmpsubwn);
-        printf("    %f %f %f\n", subwn[12].kx, subwn[12].ky, subwn[12].kz);
-        printf("    %f %f %f\n", tmpsubwn->kx-target_wn.kx, tmpsubwn->ky-target_wn.ky, tmpsubwn->kz-target_wn.kz);
+        //printf("    comparing GPU and CPU output\n");
+        //calcWaveNumber(lambda, subAz[12], subZA[12], tmpsubwn);
+        //printf("    %f %f %f\n", wn_array[12].kx, wn_array[12].ky, wn_array[12].kz);
+        //printf("    %f %f %f\n", tmpsubwn->kx-target_wn.kx, tmpsubwn->ky-target_wn.ky, tmpsubwn->kz-target_wn.kz);
 
         // done for now - free the memory on the device
         gpuErrchk( cudaFree(d_az_array));
@@ -819,94 +817,72 @@ int main(int argc, char *argv[])
         
         /* Calculate the array factor for each pixel */
         // allocate memory on device
-        gpuErrchk( cudaMalloc((void**)&d_xpos, (ntiles-ntoread) * sizeof(double)));
-        gpuErrchk( cudaMalloc((void**)&d_ypos, (ntiles-ntoread) * sizeof(double)));
-        gpuErrchk( cudaMalloc((void**)&d_zpos, (ntiles-ntoread) * sizeof(double)));
-        gpuErrchk( cudaMalloc((void**)&d_af_array, itersize * sizeof(cuDoubleComplex)));
+        gpuErrchk( cudaMalloc((void**)&d_xpos, ntiles * sizeof(*xpos)));
+        gpuErrchk( cudaMalloc((void**)&d_ypos, ntiles * sizeof(*ypos)));
+        gpuErrchk( cudaMalloc((void**)&d_zpos, ntiles * sizeof(*zpos)));
+        gpuErrchk( cudaMalloc((void**)&d_af_array, itersize * sizeof(*af_array)));
 
-        // copy the updated subwn back onto the device
-        gpuErrchk( cudaMemcpy(d_wn_array, subwn, itersize * sizeof(wavenums), cudaMemcpyHostToDevice));
+        // copy the calculated wavenumbers back onto the device
+        gpuErrchk( cudaMemcpy(d_wn_array, wn_array, itersize * sizeof(*wn_array), cudaMemcpyHostToDevice));
 
         // copy the array factor vector to device
-        gpuErrchk( cudaMemcpy(d_af_array, af_array, itersize * sizeof(cuDoubleComplex), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_af_array, af_array, itersize * sizeof(*af_array), cudaMemcpyHostToDevice));
         
         // copy over tile position arrays to device
-        gpuErrchk( cudaMemcpy(d_xpos, xpos, (ntiles-ntoread) * sizeof(double), cudaMemcpyHostToDevice));
-        gpuErrchk( cudaMemcpy(d_ypos, ypos, (ntiles-ntoread) * sizeof(double), cudaMemcpyHostToDevice));
-        gpuErrchk( cudaMemcpy(d_zpos, zpos, (ntiles-ntoread) * sizeof(double), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_xpos, xpos, ntiles * sizeof(*xpos), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_ypos, ypos, ntiles * sizeof(*ypos), cudaMemcpyHostToDevice));
+        gpuErrchk( cudaMemcpy(d_zpos, zpos, ntiles * sizeof(*zpos), cudaMemcpyHostToDevice));
 
         printf("Launching kernal to compute array factor\n");
-        getArrayFactor<<<numBlocks, blockSize>>>(itersize, (ntiles-ntoread), d_xpos, d_ypos, d_zpos, d_wn_array, d_af_array);
+        getArrayFactor<<<numBlocks, blockSize>>>(itersize, ntiles, d_xpos, d_ypos, d_zpos, d_wn_array, d_af_array);
         cudaDeviceSynchronize();
 
         // copy relevant memory back to host
-        gpuErrchk( cudaMemcpy(af_array, d_af_array, itersize * sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost));
+        gpuErrchk( cudaMemcpy(af_array, d_af_array, itersize * sizeof(*af_array), cudaMemcpyDeviceToHost));
 
-        printf("real: %f imag: %f abs: %f\n", af_array[itersize/2].x, af_array[itersize/2].y, cuCabs(af_array[itersize/2]));
+        //printf("real: %f imag: %f abs: %f\n", af_array[itersize/2].x, af_array[itersize/2].y, cuCabs(af_array[itersize/2]));
 
+        // cool, we're done with the GPU computation
         gpuErrchk( cudaFree(d_twn));
         gpuErrchk( cudaFree(d_wn_array));
         gpuErrchk( cudaFree(d_xpos));
         gpuErrchk( cudaFree(d_ypos));
         gpuErrchk( cudaFree(d_zpos));
         gpuErrchk( cudaFree(d_af_array));
-    }
-    /* TODO: is the cudaMalloc/cudaFree calls impacting performance drastically? they are relatively expensive... */
 
+        /* Write the output to a file */
+        double af_power = 0.0;
+        fprintf(fp, "Az\tZA\tP\n");
+        for (int i=0; i<itersize; i++)
+        {
+            af_power = pow(cuCabs(af_array[i]), 2);
+            fprintf(fp, "%f\t%f\t%f\n", subAz[i], subZA[i], af_power);
+            if (af_power > af_max) {af_max = af_power;}
+            omega_A += sin(subZA[i]) * af_power * (za_step*DEG2RAD) * (az_step*DEG2RAD);
+        }
+    }
+    fclose(fp);
+    /* TODO: is the cudaMalloc/cudaFree calls impacting performance drastically? they are relatively expensive... 
+            Actually it seems that the kernals themselves are the longest, and then the synchronisations
+     */
     free(az_array);
     free(za_array);
     free(af_array);
     free(wn_array);
     free(subAz);
     free(subZA);
-    free(subwn);
     free(tmpsubwn);
-    //cudaFree(d_az_array);
-    //cudaFree(d_za_array);
-    //cudaFree(d_af_array);
-    //cudaFree(d_wn_array);
 
-    /*
-       for (double az = 0.0; az < 360.0; az += az_step)
-       {
-    //one loop is ok, but we'll want to vectorise the next parts...
-    for (double za = 0.0; za <= 90.0; za += za_step)
-    {
-    af = make_cuDoubleComplex(0.0, 0.0);
-    calcWaveNumber(lambda, PI/2-(az*DEG2RAD), za*DEG2RAD, &wn);
-    for (int i = 0; i < ntiles; i++)
-    {
-    // af = exp(i*k.r)exp(i*k'.r)* = exp(i*[k-k'].r)
-    //    = cos([k-k'].r) + i*sin([k-k'].r)
-    // where k' is the target pointing wavenumbers, thus
-    // af is maximised when pointing directly at the target
-    ph = (wn.kx - target_wn.kx) * E_tile[i] +\
-    (wn.ky - target_wn.ky) * N_tile[i] +\
-    (wn.kz - target_wn.kz) * H_tile[i];
-    cuCadd(af, make_cuDoubleComplex(cos(ph), sin(ph))); // sum over tiles
-    }
-    af = cuCdiv(af, make_cuDoubleComplex(ntiles, 0)); // normalise it
-
-    // keep array factor maximum up-to-date (booking keeping)
-    if (pow(cuCabs(af),2) > af_max) {af_max = pow(cuCabs(af),2);}
-
-    // calculate this pixel's contribution to beam solid angle
-    omega_A = omega_A + sin(za*DEG2RAD) * pow(cuCabs(af),2) * (az_step*DEG2RAD) * (za_step*DEG2RAD);
-    //printf("\rComputing array factor: %.1f%%",(az/360.0)*100); fflush(stdout);
-    } 
-    }
-    free(az_array);
-    free(za_array);
-    printf("\n");
+    double eff_area = 0.0, gain = 0.0;
     printf("Finished -- now computing relevant parameters:\n");
-    eff_area = eta * pow((SOL / freq),2) * (4 * PI / omega_A);
+    eff_area = eta * pow(lambda, 2) * (4 * PI / omega_A);
     gain = (1e-26) * eff_area / (2 * KB);
 
     printf("   Array factor max:                 %f\n",af_max);
     printf("   Beam solid angle (sr):            %f\n",omega_A);
     printf("   Effective collecting area (m^2):  %.4f\n",eff_area);
     printf("   Effective array gain (K/Jy):      %.4f\n",gain);
-     */
+   
 
     return 0;
 }
