@@ -120,7 +120,7 @@ double parse_dec( char* dec_ddmmss ) {
     double fs=0., dec_rad=0.;
     char id_str[4];
 
-    sscanf(dec_ddmmss,"%s:%d:%lf",id_str,&im,&fs);
+    sscanf(dec_ddmmss, "%s:%d:%lf", id_str, &im, &fs);
 
     if (id_str[0] == '-') {
         sign = -1;
@@ -128,9 +128,9 @@ double parse_dec( char* dec_ddmmss ) {
     else {
         sign = 1;
     }
-    sscanf(dec_ddmmss,"%d:%d:%lf",&id,&im,&fs);
+    sscanf(dec_ddmmss, "%d:%d:%lf", &id, &im, &fs);
     id = id*sign;
-    slaDaf2r(id,im,fs,&dec_rad,&J);
+    slaDaf2r(id, im, fs, &dec_rad, &J);
 
     if (J != 0) {
         fprintf(stderr,"Error parsing %s as dd:mm:ss - got %d:%d:%f -- error code %d\n",dec_ddmmss,id,im,fs,J);
@@ -148,9 +148,9 @@ double parse_ra( char* ra_hhmmss ) {
     int ih=0, im=0, J=0;
     double fs=0., ra_rad=0.;
 
-    sscanf(ra_hhmmss,"%d:%d:%lf",&ih,&im,&fs);
+    sscanf(ra_hhmmss, "%d:%d:%lf", &ih, &im, &fs);
 
-    slaCtf2r(ih,im,fs,&ra_rad,&J);
+    slaCtf2r(ih, im, fs, &ra_rad, &J);
 
     if (J != 0) { // slalib returned an error
         fprintf(stderr,"Error parsing %s as hhmmss\nslalib error code: j=%d\n",ra_hhmmss,J);
