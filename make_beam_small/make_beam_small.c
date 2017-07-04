@@ -954,52 +954,56 @@ int main(int argc, char **argv) {
                 detected_beam[ch][pol] = 0.0 + 0.0*I;
 
             // Calculate the beam, noise floor
-            for (ant = 0; ant < nstation; ant++)
-            for (ch  = 0; ch  < nchan   ; ch++ ) {
+            for (ant = 0; ant < nstation; ant++) {
 
-                // Calculate quantities that depend only on "input" polarisation
-                for (pol = 0; pol < npol    ; pol++) {
+                // Get the index for the data that corresponds to this
+                //   sample, channel, antenna, polarisation
+                // Justification for the rather bizarre mapping is found in
+                // the docs.
+                // (rec depends on polarisation, so is calculating in the inner loop)
+                pfb = ant / 32;
+                inc = (ant / 8) % 4;
 
-                    // Get the index for the data that corresponds to this
-                    //   sample, channel, antenna, polarisation
-                    // Justification for the rather bizarre mapping is found in
-                    // the docs.
-                    pfb = ant / 32;
-                    rec = (2*ant+pol) % 16;
-                    inc = (ant / 8) % 4;
+                for (ch = 0; ch < nchan; ch++ ) {
 
-                    data_idx = sample * (ninc*nrec*npfb*nchan) +
-                               ch     * (ninc*nrec*npfb)       +
-                               pfb    * (ninc*nrec)            +
-                               rec    * (ninc)                 +
-                               inc;
+                    // Calculate quantities that depend only on "input" polarisation
+                    for (pol = 0; pol < npol    ; pol++) {
 
-                    uD  = data[data_idx];
-                    uDr = uD & 0xf;        // Real part = least significant nibble
-                    uDi = (uD >> 4) & 0xf; // Imag part = most  significant nibble
+                        rec = (2*ant+pol) % 16;
 
-                    // Convert from unsigned to signed
-                    sDr = (uDr >= 0x8 ? (signed int)uDr - 0x10 : (signed int) uDr);
-                    sDi = (uDi >= 0x8 ? (signed int)uDi - 0x10 : (signed int) uDi);
+                        data_idx = sample * (ninc*nrec*npfb*nchan) +
+                                   ch     * (ninc*nrec*npfb)       +
+                                   pfb    * (ninc*nrec)            +
+                                   rec    * (ninc)                 +
+                                   inc;
 
-                    e_dash[pol]  = (float)sDr + (float)sDi * I;
-                    e_dash[pol] *= complex_weights_array[ant*npol+pol][ch];
+                        uD  = data[data_idx];
+                        uDr = uD & 0xf;        // Real part = least significant nibble
+                        uDi = (uD >> 4) & 0xf; // Imag part = most  significant nibble
 
-                }
+                        // Convert from unsigned to signed
+                        sDr = (uDr >= 0x8 ? (signed int)uDr - 0x10 : (signed int) uDr);
+                        sDi = (uDi >= 0x8 ? (signed int)uDi - 0x10 : (signed int) uDi);
 
-                // Calculate quantities that depend on output polarisation
-                // (i.e. apply inv(jones))
-                for (pol = 0; pol < npol; pol++) {
+                        e_dash[pol]  = (float)sDr + (float)sDi * I;
+                        e_dash[pol] *= complex_weights_array[ant*npol+pol][ch];
 
-                    e_true[pol] = 0.0 + 0.0*I;
+                    }
 
-                    for (opol = 0; opol < npol; opol++)
-                        e_true[pol] += invJi[ant][npol*pol+opol] * e_dash[opol];
+                    // Calculate quantities that depend on output polarisation
+                    // (i.e. apply inv(jones))
+                    for (pol = 0; pol < npol; pol++) {
 
-                    for (opol = 0; opol < npol; opol++)
-                        noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
+                        e_true[pol] = 0.0 + 0.0*I;
 
-                    beam[ch][ant][pol] = e_true[pol];
+                        for (opol = 0; opol < npol; opol++)
+                            e_true[pol] += invJi[ant][npol*pol+opol] * e_dash[opol];
+
+                        for (opol = 0; opol < npol; opol++)
+                            noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
+
+                        beam[ch][ant][pol] = e_true[pol];
+                    }
                 }
             }
 
