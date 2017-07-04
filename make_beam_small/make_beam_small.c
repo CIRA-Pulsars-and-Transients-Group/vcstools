@@ -643,6 +643,29 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
 }
 
 
+void read_data( char *filename, uint8_t *data, int nbytes ) {
+
+    // Open the file for reading
+    FILE *f = fopen( filename, "r" );
+    if (f == NULL) {
+        fprintf( stderr, "Error opening file '%s'\n", filename );
+        exit(EXIT_FAILURE);
+    }
+
+    // Read in nbytes bytes
+    int nread = fread( (void *)data, sizeof(uint8_t), nbytes, f );
+
+    // Check that I got all nbytes
+    // Any other number is disallowed
+    if (nread != nbytes) {
+        fprintf( stderr, "Error: file %s does not contain %d bytes\n",
+                filename, nbytes );
+        exit(EXIT_FAILURE);
+    }
+
+    fclose(f);
+
+}
 
 int read_pfb_call(char *in_name, char *heap) {
 
@@ -677,7 +700,6 @@ int main(int argc, char **argv) {
     printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
 
     int c  = 0;
-    int ch = 0;
 
     unsigned long int begin = 0;
     unsigned long int end   = 0;
@@ -693,12 +715,15 @@ int main(int argc, char **argv) {
     unsigned int sample_rate = 10000;
 
     int nchan = 128;
-
     nfrequency = nchan;
     nstation = 128;
     npol = 2;
     int outpol = 4;
     int summed_polns = 0;
+    // These are used to calculate how the input data are ordered
+    int npfb = 4;
+    int nrec = 16;
+    int ninc = 4;
 
     char *dec_ddmmss    = NULL; // "dd:mm:ss"
     char *ra_hhmmss     = NULL; // "hh:mm:ss"
@@ -858,19 +883,14 @@ int main(int argc, char **argv) {
             frequency, nchan, mi.chan_width, outpol, summed_polns,
             rec_channel, &delay_vals );
 
-    unsigned int nspec = 1;
-    size_t items_to_read = nstation*npol*nchan*2;
-
-    char *heap = NULL;
-
-    heap = (char *) malloc(nspec*items_to_read*sample_rate);
-
-    assert(heap);
+    // Create array for holding the raw data
+    int bytes_per_file = sample_rate * nstation * npol * nchan;
+    uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
+    assert(data);
 
     int8_t *out_buffer_8_psrfits = (int8_t *)malloc( outpol*nchan*pf.hdr.nsblk * sizeof(int8_t) );
     float  *data_buffer_psrfits  =  (float *)malloc( nchan*outpol*pf.hdr.nsblk * sizeof(float) );
 
-    int index = 0;
     int offset_in_psrfits;
 
     int file_no = 0;
@@ -879,10 +899,10 @@ int main(int argc, char **argv) {
     printf("[%f]  **BEGINNING BEAMFORMING**\n", omp_get_wtime()-begintime);
     for (file_no = 0; file_no < nfiles; file_no++) {
 
+        // Read in data from next file
         printf("[%f]  Reading in data from %s [%d/%d]\n", omp_get_wtime()-begintime,
                 filenames[file_no], file_no+1, nfiles);
-        if ((read_pfb_call(filenames[file_no], heap)) < 0)
-            break; // Exit from while loop
+        read_data( filenames[file_no], data, bytes_per_file  );
 
         // Get the next second's worth of phases / jones matrices, if needed
         printf("[%f]  Calculating delays\n", omp_get_wtime()-begintime);
@@ -906,80 +926,104 @@ int main(int argc, char **argv) {
         for (i = 0; i < nchan*outpol*pf.hdr.nsblk; i++)
             data_buffer_psrfits[i] = 0.0;
 
-#pragma omp parallel for private(ch)
+#pragma omp parallel for
         for (sample = 0; sample < (int)sample_rate; sample++ ) {
 
-            complex float beam[nchan][nstation*npol];
-            float spectrum[nspec*nchan*outpol];
-            float noise_floor[nchan*npol*npol];
-            char buffer[nspec*items_to_read];
+            int ch, ant, pol, opol, opol1, opol2;
+            uint8_t uD, uDr, uDi;
+            int sDr, sDi;
+            int pfb, rec, inc;
+            int data_idx;
 
-            for (i = 0; i < nchan*npol*npol; i++)
-                noise_floor[i] = 0.0;
+            complex float beam[nchan][nstation][npol];
+            complex float detected_beam[nchan][npol];
+            float spectrum[nchan*outpol];
+            float noise_floor[nchan][npol][npol];
+            complex float e_true[npol], e_dash[npol];
 
-            memcpy(buffer, heap+(items_to_read*sample), items_to_read);
 
-            for (index = 0; index < nstation*npol;index = index + 2) {
+            // Initialise noise floor to zero
+            for (ch    = 0; ch    < nchan;  ch++   )
+            for (opol1 = 0; opol1 < npol; opol1++)
+            for (opol2 = 0; opol2 < npol; opol2++)
+                noise_floor[ch][opol1][opol2] = 0.0;
 
-                for (ch=0;ch<nchan;ch++) {
-                    int8_t *in_ptr = (int8_t *)buffer + 2*index*nchan + 2*ch;
+            // Initialise detected beam to zero
+            for (ch  = 0; ch  < nchan   ; ch++ )
+            for (pol = 0; pol < npol    ; pol++)
+                detected_beam[ch][pol] = 0.0 + 0.0*I;
 
-                    complex float e_true[2], e_dash[2];
+            // Calculate the beam, noise floor
+            for (ant = 0; ant < nstation; ant++)
+            for (ch  = 0; ch  < nchan   ; ch++ ) {
 
-                    e_dash[0] = (float) *in_ptr             + I*(float)(*(in_ptr+          1));
-                    e_dash[1] = (float) *(in_ptr+(nchan*2)) + I*(float)(*(in_ptr+(nchan*2)+1)); // next pol is nchan*2 away
+                // Calculate quantities that depend only on "input" polarisation
+                for (pol = 0; pol < npol    ; pol++) {
 
-                    /* apply the inv(jones) to the e_dash */
-                    e_dash[0] *= complex_weights_array[index][ch];
-                    e_dash[1] *= complex_weights_array[index+1][ch];
+                    // Get the index for the data that corresponds to this
+                    //   sample, channel, antenna, polarisation
+                    // Justification for the rather bizarre mapping is found in
+                    // the docs.
+                    pfb = ant / 32;
+                    rec = (2*ant+pol) % 16;
+                    inc = (ant / 8) % 4;
 
-                    e_true[0] = invJi[index/npol][0]*e_dash[0] + invJi[index/npol][1]*e_dash[1];
-                    e_true[1] = invJi[index/npol][2]*e_dash[0] + invJi[index/npol][3]*e_dash[1];
+                    data_idx = sample * (ninc*nrec*npfb*nchan) +
+                               ch     * (ninc*nrec*npfb)       +
+                               pfb    * (ninc*nrec)            +
+                               rec    * (ninc)                 +
+                               inc;
 
-                    noise_floor[ch*npol*npol]   += e_true[0] * conj(e_true[0]);
-                    noise_floor[ch*npol*npol+1] += e_true[0] * conj(e_true[1]);
-                    noise_floor[ch*npol*npol+2] += e_true[1] * conj(e_true[0]);
-                    noise_floor[ch*npol*npol+3] += e_true[1] * conj(e_true[1]);
+                    uD  = data[data_idx];
+                    uDr = uD & 0xf;        // Real part = least significant nibble
+                    uDi = (uD >> 4) & 0xf; // Imag part = most  significant nibble
 
-                    beam[ch][index]   = e_true[0];
-                    beam[ch][index+1] = e_true[1];
+                    // Convert from unsigned to signed
+                    sDr = (uDr >= 0x8 ? (signed int)uDr - 0x10 : (signed int) uDr);
+                    sDi = (uDi >= 0x8 ? (signed int)uDi - 0x10 : (signed int) uDi);
+
+                    e_dash[pol]  = (float)sDr + (float)sDi * I;
+                    e_dash[pol] *= complex_weights_array[ant*npol+pol][ch];
+
+                }
+
+                // Calculate quantities that depend on output polarisation
+                // (i.e. apply inv(jones))
+                for (pol = 0; pol < npol; pol++) {
+
+                    e_true[pol] = 0.0 + 0.0*I;
+
+                    for (opol = 0; opol < npol; opol++)
+                        e_true[pol] += invJi[ant][npol*pol+opol] * e_dash[opol];
+
+                    for (opol = 0; opol < npol; opol++)
+                        noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
+
+                    beam[ch][ant][pol] = e_true[pol];
                 }
             }
 
-            // detect the beam or prep from invert_pfb
-            // reduce over each channel for the beam
-            // do this by twos
-            int polnum = 0;
-            int step = 0;
-            for (ch = 0; ch < nchan; ch++) {
-                for (polnum = 0; polnum < npol; polnum++) {
-                    int next_good = 2;
-                    int stride = 4;
-
-                    while (next_good < nstation*npol) {
-                        for (step = polnum; step < nstation*npol; step += stride) {
-                            beam[ch][step] += beam[ch][step+next_good];
-                        }
-                        stride    *= 2;
-                        next_good *= 2;
-                    }
-                }
-            }
+            // Detect the beam = sum over antennas
+            for (ant = 0; ant < nstation; ant++)
+            for (pol = 0; pol < npol    ; pol++)
+            for (ch  = 0; ch  < nchan   ; ch++ )
+                detected_beam[ch][pol] += beam[ch][ant][pol];
 
             // Calculate the Stokes parameters
             double beam00, beam11;
             double noise0, noise1, noise3;
             complex double beam01;
             unsigned int stokesIidx, stokesQidx, stokesUidx, stokesVidx;
+
             for (ch = 0; ch < nchan; ch++) {
 
-                beam00 = (double)(beam[ch][0] * conj(beam[ch][0]));
-                beam11 = (double)(beam[ch][1] * conj(beam[ch][1]));
-                beam01 = beam[ch][0] * conj(beam[ch][1]);
+                beam00 = (double)(detected_beam[ch][0] * conj(detected_beam[ch][0]));
+                beam11 = (double)(detected_beam[ch][1] * conj(detected_beam[ch][1]));
+                beam01 = detected_beam[ch][0] * conj(detected_beam[ch][1]);
 
-                noise0 = noise_floor[ch*npol*npol];
-                noise1 = noise_floor[ch*npol*npol+1];
-                noise3 = noise_floor[ch*npol*npol+3];
+                noise0 = noise_floor[ch][0][0];
+                noise1 = noise_floor[ch][0][1];
+                noise3 = noise_floor[ch][1][1];
 
                 stokesIidx = 0*nchan + ch;
                 stokesQidx = 1*nchan + ch;
@@ -988,8 +1032,8 @@ int main(int argc, char **argv) {
 
                 // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
                 // so for a single timestep we do not have to interleave - I could just stack these
-                spectrum[stokesIidx]  = (beam00 + beam11 - noise0 - noise3) * invw;
-                spectrum[stokesQidx]  = (beam00 - beam11 - noise0 - noise3) * invw;
+                spectrum[stokesIidx] = (beam00 + beam11 - noise0 - noise3) * invw;
+                spectrum[stokesQidx] = (beam00 - beam11 - noise0 - noise3) * invw;
                 spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise1)*invw;
                 spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
             }
@@ -1075,6 +1119,7 @@ int main(int argc, char **argv) {
     destroy_metafits_info( &mi );
     free( out_buffer_8_psrfits );
     free( data_buffer_psrfits  );
+    free( data );
 
     return 0;
 }
