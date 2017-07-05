@@ -938,7 +938,7 @@ int main(int argc, char **argv) {
             complex float beam[nchan][nstation][npol];
             complex float detected_beam[nchan][npol];
             float spectrum[nchan*outpol];
-            float noise_floor[nchan][npol][npol];
+            complex float noise_floor[nchan][npol][npol];
             complex float e_true[npol], e_dash[npol];
 
 
