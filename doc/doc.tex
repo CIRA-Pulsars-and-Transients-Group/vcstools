@@ -2,11 +2,16 @@
 
 \usepackage{fullpage}
 \usepackage{amsmath}
+\usepackage{hyperref}
 
 \author{Sam McSweeney}
-\title{Notes for the beamformer}
+\title{Miscellaneous Documentation for the Beamformer}
 
 \begin{document}
+
+\maketitle
+
+\tableofcontents
 
 \section{The ordering of the input files}
 
@@ -132,5 +137,30 @@ then we can rewrite the table above as
     \text{rec} &= (2\times\text{ant}+\text{pol}) \% 16 & & \text{(modulus operator)} \\
     \text{inc} &= (\text{ant} / 8) \% 4
 \end{align*}
+
+\section{Beamformer operations}
+
+By the time the data samples have been read in and are ready to be operated on, the beamformer expects two particular quantites to be already pre-calculated and available.
+Both are listed in the table below, and both are calculated in \texttt{get\_delays()}.
+\begin{table}[!h]
+    \centering
+    \begin{tabular}{c|l|l}
+        Symbol & Variable name & Type \& Dimensions \\[5pt]
+        \hline
+        $W = \begin{bmatrix} w_X & 0 \\ 0 & w_Y \end{bmatrix}$ & \texttt{complex\_weights\_array} & \texttt{complex double [nstation*npol][nchan]} \\[12pt]
+        $J^{-1} = \begin{bmatrix} j_{XX} & j_{XY} \\ j_{YX} & j_{YY} \end{bmatrix}$ & \texttt{invJi} & \texttt{complex double [nstation][npol*npol]}
+    \end{tabular}
+\end{table}
+The individual components in the matrices $W$ and $J^{-1}$ are complex numbers\footnote{I have avoided using the inverse notation on the components of $J$ for brevity.}. The subscript indices denote polarisation, so that $w_X$, for example, can be thought of as only a function of antenna and channel number, while $j_{XX}$ is just a function of antenna.
+
+A polarisation pair of samples, $D = \begin{bmatrix} d_X \\ d_Y \end{bmatrix}$ is then operated on as follows to produce the beam product
+\[
+    B = \sum_a J^{-1} W D,
+\]
+where the sum is over the antennas, giving a detected beam that is a function of channel number only.
+Expressed in terms of the individual components with the dependence on antenna ($a$) and channel number ($c$) made explicit, we have
+\[
+    b_{P,c} = \sum_a \bigg(j_{PX,a} \, w_{X,a,c} \, d_{X,a,c} + j_{PY,a} \, w_{Y,a,c} \, d_{Y,a,c}\bigg)
+\]
 
 \end{document}
