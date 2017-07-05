@@ -16,13 +16,13 @@
 \section{The ordering of the input files}
 
 The heirarchy of the input data files is, nominally,
-\[
+\begin{equation}
     [\text{time sample}][\text{channel}][\text{antenna}][\text{polarisation}][\text{complexity}].
-\]
+\end{equation}
 For a second's worth of data in a single file, we have:
-\[
+\begin{equation}
     10000 \times 128 \times 128 \times 2 \times 2\quad (\times 4\,\text{bits}) = 327680000\,\text{bytes}
-\]
+\end{equation}
 
 However, the numbering of the antennas and the polarisations as the data come out of the PFB (and after the \texttt{recombine} stage) are different to the ordering assumed by the beamformer.
 The $128 \times 2 = 256$ possible antenna/polarisation pairs are mapped as follows.
@@ -63,13 +63,13 @@ This becomes easier if we reconsider how we break up the $256$.
 
 \newpage
 \noindent If we recast the data file heirarchy\footnote{I'm not sure of the physical bases of this break up---I'm going off Steve Ord's's original code. rec=``Receiver'' and inc=``increment'' are my own terms.} as
-\[
+\begin{equation}
     [\text{time sample}][\text{channel}][\text{pfb}][\text{receiver}][\text{increment}][\text{complexity}],
-\]
+\end{equation}
 with the sizes being
-\[
+\begin{equation}
     10000 \times 128 \times 4 \times 16 \times 4 \times 2,
-\]
+\end{equation}
 then we can rewrite the table above as
 \begin{table}[!h]
     \centering
@@ -153,14 +153,56 @@ Both are listed in the table below, and both are calculated in \texttt{get\_dela
 \end{table}
 The individual components in the matrices $W$ and $J^{-1}$ are complex numbers\footnote{I have avoided using the inverse notation on the components of $J$ for brevity.}. The subscript indices denote polarisation, so that $w_X$, for example, can be thought of as only a function of antenna and channel number, while $j_{XX}$ is just a function of antenna.
 
+\subsection{Beam detection}
 A polarisation pair of samples, $D = \begin{bmatrix} d_X \\ d_Y \end{bmatrix}$ is then operated on as follows to produce the beam product
-\[
-    B = \sum_a J^{-1} W D,
-\]
-where the sum is over the antennas, giving a detected beam that is a function of channel number only.
-Expressed in terms of the individual components with the dependence on antenna ($a$) and channel number ($c$) made explicit, we have
-\[
-    b_{P,c} = \sum_a \bigg(j_{PX,a} \, w_{X,a,c} \, d_{X,a,c} + j_{PY,a} \, w_{Y,a,c} \, d_{Y,a,c}\bigg)
-\]
+\begin{align}
+    F &= \begin{bmatrix} f_{XX} & f_{XY} \\ f_{YX} & f_{YY} \end{bmatrix} = J^{-1} W, \\[5pt]
+    B &= \begin{bmatrix} b_X \\ b_Y \end{bmatrix} = \sum_a FD
+\end{align}
+where the sum is over the antennas, giving a detected beam, $B$, that is a function of channel number only.
+Expressed in terms of the individual components (remembering the implied dependence on antenna $a$ and channel number $c$ for all of the terms), we have
+\begin{equation}
+    b_P = \sum_a \bigg(f_{PX} \, d_X + f_{PY} \, d_Y\bigg),
+\end{equation}
+where
+\begin{equation}
+    f_{PQ} = J_{PQ} W_Q.
+\end{equation}
+
+\subsection{Noise floor}
+In preparation for calculating the Stokes parameters, a quantity called the \texttt{noise\_floor} is calculated, which is a function of channel only,
+\begin{equation}
+    N = \begin{bmatrix} n_{XX} & n_{XY} \\ n_{YX} & n_{YY} \end{bmatrix}
+      = \sum_a (FD)(FD)^\dagger
+      = \sum_a FDD^\dagger F^\dagger
+\end{equation}
+where $\dagger$ denotes the Hermitian transpose. Expanding for the individual components,
+\begin{equation}
+    n_{PQ} = \sum_a \bigg(f_{PX} \bar{f}_{QX} |d_X|^2       + f_{PX} \bar{f}_{QY} d_X \bar{d}_Y +
+                          f_{PY} \bar{f}_{QX} d_Y \bar{d}_X + f_{PY} \bar{f}_{QY} |d_Y|^2
+                    \bigg)
+    \label{eqn:ncomponents}
+\end{equation}
+In particular, note that $n_{XY,c} = n_{YX,c}$.
+
+The coefficients in Eq. \ref{eqn:ncomponents} can also be precalculated. We set up the 4-dimensional matrix $G$ whose components are
+\begin{equation}
+    g_{PQRS} = f_{PQ} \, \bar{f}_{RS},
+\end{equation}
+and which, like $F$, can also be pre-calculated. Then, Eq. \ref{eqn:ncomponents} becomes
+\begin{equation}
+    n_{PQ} = \sum_a \bigg(g_{PXQX} |d_X|^2 + g_{PXQY} d_X \bar{d}_Y + g_{PYQX} d_Y \bar{d}_X + g_{PYQY} |d_Y|^2 \bigg)
+\end{equation}
+
+\subsection{Stokes parameters}
+
+Finally, the Stokes parameters $I$, $Q$, $U$, and $V$, are calculated as follows.
+\begin{align}
+    I &= \frac{1}{w_\text{ant}}\bigg((|b_X|^2 - n_{XX}) + (|b_Y|^2 - n_{YY})\bigg) \\
+    Q &= \frac{1}{w_\text{ant}}\bigg((|b_X|^2 - n_{XX}) - (|b_Y|^2 - n_{YY})\bigg) \\
+    U &=  2 \text{Re}\bigg[\frac{1}{w_\text{ant}}\bigg(b_X\,\bar{b}_Y - n_{XY}\bigg)\bigg]\\
+    V &= -2 \text{Im}\bigg[\frac{1}{w_\text{ant}}\bigg(b_X\,\bar{b}_Y - n_{XY}\bigg)\bigg]
+\end{align}
+where $w_\text{ant}$ is a weighting factor equal to the number of antennas used in the sums.
 
 \end{document}
