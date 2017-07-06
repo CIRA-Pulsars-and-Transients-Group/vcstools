@@ -921,7 +921,11 @@ int main(int argc, char **argv) {
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );       // invJi array           (answer will be output here)
 
+#ifdef PROFILE
         printf("[%f]  Calculating beam --       ", omp_get_wtime()-begintime);
+#else
+        printf("[%f]  Calculating beam\n", omp_get_wtime()-begintime);
+#endif
 
         offset_in_psrfits  = 0;
 
