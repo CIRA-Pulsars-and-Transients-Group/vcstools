@@ -37,6 +37,8 @@
 
 #define MAX_COMMAND_LENGTH 1024
 
+//#define PROFILE
+
 void usage() {
     fprintf(stderr, "make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|psrfits\n");
     fprintf(stderr, "-a <number of antennas>\n");
@@ -919,15 +921,31 @@ int main(int argc, char **argv) {
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );       // invJi array           (answer will be output here)
 
-        printf("[%f]  Calculating beam\n", omp_get_wtime()-begintime);
+        printf("[%f]  Calculating beam --       ", omp_get_wtime()-begintime);
 
         offset_in_psrfits  = 0;
 
         for (i = 0; i < nchan*outpol*pf.hdr.nsblk; i++)
             data_buffer_psrfits[i] = 0.0;
 
+#ifdef PROFILE
+        double sec1=0.0, sec2=0.0, sec3=0.0, sec4=0.0, sec5=0.0;
+        int progress = 0;
+        int num_threads = omp_get_max_threads();
+#endif
+#ifdef PROFILE
+#pragma omp parallel for reduction(+:sec1,sec2,sec3,sec4,sec5,progress)
+#else
 #pragma omp parallel for
+#endif
         for (sample = 0; sample < (int)sample_rate; sample++ ) {
+
+#ifdef PROFILE
+            double chkpt1, chkpt2, chkpt3, chkpt4, chkpt5, chkpt6, chkpt7;
+            printf("\b\b\b\b\b\b%5.1f%%", progress*num_threads/100.0 + 0.05);
+            fflush(stdout);
+            progress++;
+#endif
 
             int ch, ant, pol, opol, opol1, opol2;
             uint8_t uD, uDr, uDi;
@@ -966,6 +984,9 @@ int main(int argc, char **argv) {
 
                 for (ch = 0; ch < nchan; ch++ ) {
 
+#ifdef PROFILE
+                    chkpt1 = omp_get_wtime();
+#endif
                     // Calculate quantities that depend only on "input" polarisation
                     for (pol = 0; pol < npol    ; pol++) {
 
@@ -990,6 +1011,10 @@ int main(int argc, char **argv) {
 
                     }
 
+#ifdef PROFILE
+                    chkpt2 = omp_get_wtime();
+                    sec1 += chkpt2-chkpt1;
+#endif
                     // Calculate quantities that depend on output polarisation
                     // (i.e. apply inv(jones))
                     for (pol = 0; pol < npol; pol++) {
@@ -1004,14 +1029,26 @@ int main(int argc, char **argv) {
 
                         beam[ch][ant][pol] = e_true[pol];
                     }
+#ifdef PROFILE
+                    chkpt3 = omp_get_wtime();
+                    sec2 += chkpt3-chkpt2;
+#endif
                 }
             }
 
+#ifdef PROFILE
+            chkpt4 = omp_get_wtime();
+#endif
             // Detect the beam = sum over antennas
             for (ant = 0; ant < nstation; ant++)
             for (pol = 0; pol < npol    ; pol++)
             for (ch  = 0; ch  < nchan   ; ch++ )
                 detected_beam[ch][pol] += beam[ch][ant][pol];
+
+#ifdef PROFILE
+            chkpt5 = omp_get_wtime();
+            sec3 += chkpt5-chkpt4;
+#endif
 
             // Calculate the Stokes parameters
             double beam00, beam11;
@@ -1042,11 +1079,33 @@ int main(int argc, char **argv) {
                 spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
             }
 
+#ifdef PROFILE
+            chkpt6 = omp_get_wtime();
+            sec4 += chkpt6-chkpt5;
+#endif
+
             offset_in_psrfits  = sizeof(float)*nchan*outpol * sample;
 
             memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
 
+#ifdef PROFILE
+            chkpt7 = omp_get_wtime();
+            sec5 += chkpt7-chkpt6;
+#endif
+
         }
+#ifdef PROFILE
+        printf("\n");
+        double sectotal = sec1 + sec2 + sec3 + sec4 + sec5;
+        printf("%.1f  %.1f  %.1f  %.1f  %.1f out of %.1f sec on %d threads\n",
+                100.0*sec1/sectotal,
+                100.0*sec2/sectotal,
+                100.0*sec3/sectotal,
+                100.0*sec4/sectotal,
+                100.0*sec5/sectotal,
+                sectotal/num_threads,
+                num_threads);
+#endif
 
         // We've arrived at the end of a second's worth of data...
 
