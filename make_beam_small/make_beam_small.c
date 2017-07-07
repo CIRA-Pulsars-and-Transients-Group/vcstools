@@ -231,8 +231,7 @@ void get_metafits_info( char *metafits, struct metafits_info *mi ) {
     fits_read_key(fptr, TDOUBLE, "DEC",      &(mi->tile_pointing_dec), NULL, &status);
     fits_read_key(fptr, TDOUBLE, "AZIMUTH",  &(mi->tile_pointing_az),  NULL, &status);
     fits_read_key(fptr, TDOUBLE, "ALTITUDE", &(mi->tile_pointing_el),  NULL, &status);
-    fits_read_key(fptr, TINT,    "FINECHAN", &(mi->chan_width),        NULL, &status);
-    mi->chan_width *= 1000; // Convert from kHz to Hz
+    mi->chan_width = 10000; // Always 10 kHz
 
     if (status != 0) {
         fprintf(stderr, "Fits status set: failed to read az/alt, ");
