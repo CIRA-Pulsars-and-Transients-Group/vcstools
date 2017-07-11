@@ -862,7 +862,7 @@ int main(int argc, char **argv) {
         wgt_sum += mi.weights_array[i];
     double invw = 1.0/wgt_sum;
 
-    // Get first second's worth of phases and Jones matrices
+    // Run get_delays to populate the delay_vals struct
     printf("[%f]  Setting up output header information\n", omp_get_wtime()-begintime);
     struct delays delay_vals;
     get_delays(
@@ -875,8 +875,8 @@ int main(int argc, char **argv) {
             0.0,           // seconds offset from time_utc at which to calculate delays
             &delay_vals,   // Populate psrfits header info
             &mi,           // Struct containing info from metafits file
-            complex_weights_array,  // complex weights array (answer will be output here)
-            invJi          // invJi array           (answer will be output here)
+            NULL,          // complex weights array (ignore this time)
+            NULL           // invJi array           (ignore this time)
     );
 
     // now we need to create a fits file and populate its header

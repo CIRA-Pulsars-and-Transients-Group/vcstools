@@ -408,67 +408,72 @@ void get_delays(
     int ch = 0;
     for (row=0; row < (int)(mi->ninput); row++) {
 
-        if (mi->weights_array[row] != 0.0) {
+        // Calculate the complex weights array
+        if (complex_weights_array != NULL) {
+            if (mi->weights_array[row] != 0.0) {
 
-            double cable = mi->cable_array[row] - mi->cable_array[refinp];
-            double E = mi->E_array[row];
-            double N = mi->N_array[row];
-            double H = mi->H_array[row];
+                double cable = mi->cable_array[row] - mi->cable_array[refinp];
+                double E = mi->E_array[row];
+                double N = mi->N_array[row];
+                double H = mi->H_array[row];
 
-            double integer_phase;
-            double X,Y,Z,u,v,w;
+                double integer_phase;
+                double X,Y,Z,u,v,w;
 
-            ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
+                ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
 
-            calcUVW (app_ha_rad,app_dec_rad,X,Y,Z,&u,&v,&w);
+                calcUVW (app_ha_rad,app_dec_rad,X,Y,Z,&u,&v,&w);
 
-            // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
+                // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
 
-            double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
-            // double geometry = E*unit_E + N*unit_N + H*unit_H ;
-            // Above is just w as you should see from the check.
+                double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
+                // double geometry = E*unit_E + N*unit_N + H*unit_H ;
+                // Above is just w as you should see from the check.
 
-            double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
-            double delay_samples = delay_time * samples_per_sec;
+                double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
+                double delay_samples = delay_time * samples_per_sec;
 
-            for (ch=0; ch < NCHAN;ch++) {
-                long int freq_ch = frequency + ch*mi->chan_width;
+                for (ch=0; ch < NCHAN;ch++) {
+                    long int freq_ch = frequency + ch*mi->chan_width;
 
-                // freq should be in cycles per sample and delay in samples
-                // which essentially means that the samples_per_sec cancels
+                    // freq should be in cycles per sample and delay in samples
+                    // which essentially means that the samples_per_sec cancels
 
-                // and we only need the fractional part of the turn
-                double cycles_per_sample = (double)freq_ch/samples_per_sec;
+                    // and we only need the fractional part of the turn
+                    double cycles_per_sample = (double)freq_ch/samples_per_sec;
 
-                phase = cycles_per_sample*delay_samples;
-                phase = modf(phase, &integer_phase);
+                    phase = cycles_per_sample*delay_samples;
+                    phase = modf(phase, &integer_phase);
 
-                phase = phase*2*M_PI*conjugate;
+                    phase = phase*2*M_PI*conjugate;
 
-                // Store result for later use
-                complex_weights_array[row][ch] = mi->weights_array[row]*cexp(I*phase);
+                    // Store result for later use
+                    complex_weights_array[row][ch] = mi->weights_array[row]*cexp(I*phase);
 
+                }
             }
-        }
-        else {
-            for (ch=0; ch < NCHAN; ch++)
-                complex_weights_array[row][ch] = mi->weights_array[row]; // i.e. =0.0
+            else {
+                for (ch=0; ch < NCHAN; ch++)
+                    complex_weights_array[row][ch] = mi->weights_array[row]; // i.e. =0.0
+            }
         }
 
         // Now, calculate the inverse Jones matrix
-        if (row % NPOL == 0) {
+        if (invJi != NULL) {
+            if (row % NPOL == 0) {
 
-            int station = row / NPOL;
-            double Fnorm;
+                int station = row / NPOL;
+                double Fnorm;
 
-            conj2x2( Ji[station], Ji[station] ); // The RTS conjugates the sky so beware
-            Fnorm = norm2x2( Ji[station], Ji[station] );
+                conj2x2( Ji[station], Ji[station] ); // The RTS conjugates the sky so beware
+                Fnorm = norm2x2( Ji[station], Ji[station] );
 
-            if (Fnorm != 0.0)
-                inv2x2( Ji[station], invJi[station] );
-            else
-                for (i = 0; i < 4; i++)
-                    invJi[station][i] = 0.0 + I*0.0;
+                if (Fnorm != 0.0)
+                    inv2x2( Ji[station], invJi[station] );
+                else
+                    for (i = 0; i < 4; i++)
+                        invJi[station][i] = 0.0 + I*0.0;
+            }
         }
         
         
