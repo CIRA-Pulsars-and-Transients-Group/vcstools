@@ -155,44 +155,42 @@ The individual components in the matrices $W$ and $J^{-1}$ are complex numbers\f
 
 \subsection{Beam detection}
 A polarisation pair of samples, $D = \begin{bmatrix} d_X \\ d_Y \end{bmatrix}$ is then operated on as follows to produce the beam product
-\begin{align}
-    F &= \begin{bmatrix} f_{XX} & f_{XY} \\ f_{YX} & f_{YY} \end{bmatrix} = J^{-1} W, \\[5pt]
-    B &= \begin{bmatrix} b_X \\ b_Y \end{bmatrix} = \sum_a FD
-\end{align}
+\begin{equation}
+    B = \begin{bmatrix} b_X \\ b_Y \end{bmatrix} = \sum_a J^{-1}WD
+\end{equation}
 where the sum is over the antennas, giving a detected beam, $B$, that is a function of channel number only.
-Expressed in terms of the individual components (remembering the implied dependence on antenna $a$ and channel number $c$ for all of the terms), we have
+
+\subsubsection{Efficiency via pre-calculation}
+\label{sec:precalc1}
+Since, within a second, every sample is multiplied to the same $J^{-1}$ and $W$, the possibility exists for a processing speed by means of pre-calculating the product
+\begin{equation}
+    F = \begin{bmatrix} f_{XX} & f_{XY} \\ f_{YX} & f_{YY} \end{bmatrix} = J^{-1} W.
+\end{equation}
+Expressed in terms of the individual components, the calculated beam would then be
 \begin{equation}
     b_P = \sum_a \bigg(f_{PX} \, d_X + f_{PY} \, d_Y\bigg),
 \end{equation}
 where
 \begin{equation}
-    f_{PQ} = J_{PQ} W_Q.
+    f_{PQ} = j_{PQ} w_Q.
 \end{equation}
+Unfortunately, such a pre-calculation was found not to reduce significantly the number of mathematical operations required in the innermost for-loop, and the total time was found to be comprable to the case where the pre-calculation step was not used.
+Therefore, this approach was abandoned.
 
 \subsection{Noise floor}
 In preparation for calculating the Stokes parameters, a quantity called the \texttt{noise\_floor} is calculated, which is a function of channel only,
 \begin{equation}
     N = \begin{bmatrix} n_{XX} & n_{XY} \\ n_{YX} & n_{YY} \end{bmatrix}
-      = \sum_a (FD)(FD)^\dagger
-      = \sum_a FDD^\dagger F^\dagger
+      = \sum_a BB^\dagger
 \end{equation}
-where $\dagger$ denotes the Hermitian transpose. Expanding for the individual components,
-\begin{equation}
-    n_{PQ} = \sum_a \bigg(f_{PX} \bar{f}_{QX} |d_X|^2       + f_{PX} \bar{f}_{QY} d_X \bar{d}_Y +
-                          f_{PY} \bar{f}_{QX} d_Y \bar{d}_X + f_{PY} \bar{f}_{QY} |d_Y|^2
-                    \bigg)
-    \label{eqn:ncomponents}
-\end{equation}
+where $\dagger$ denotes the Hermitian transpose.
 In particular, note that $n_{XY,c} = n_{YX,c}$.
 
-The coefficients in Eq. \ref{eqn:ncomponents} can also be precalculated. We set up the 4-dimensional matrix $G$ whose components are
-\begin{equation}
-    g_{PQRS} = f_{PQ} \, \bar{f}_{RS},
-\end{equation}
-and which, like $F$, can also be pre-calculated. Then, Eq. \ref{eqn:ncomponents} becomes
-\begin{equation}
-    n_{PQ} = \sum_a \bigg(g_{PXQX} |d_X|^2 + g_{PXQY} d_X \bar{d}_Y + g_{PYQX} d_Y \bar{d}_X + g_{PYQY} |d_Y|^2 \bigg)
-\end{equation}
+\subsubsection{Efficiency via pre-calculation}
+Similarly to the pre-calculation attempted in Section \ref{sec:precalc1}, pre-calculation of the quantities within the product $BB^\dagger$ was attempted in the effort to speed up the overall computation.
+This involved expanding the product $BB^\dagger$ as a linear combination of $d_X$ and $d_Y$ (and their conjugates) and pre-calculating the coefficients.
+This turned out to actually increase the number of mathematical operations within the innermost for-loop (by virtue of the linear sum), and thus \emph{increase} the total wall time.
+Thus, this approach was also abandoned.
 
 \subsection{Stokes parameters}
 
