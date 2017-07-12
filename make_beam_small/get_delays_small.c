@@ -423,17 +423,17 @@ void get_delays(
                 cp2x2(G, Gf); //Set the fine channel DI gain equal to the coarse channel DI gain
 
             mult2x2d(Gf, E, Ji); // the gain in the desired look direction
-if (ch==20) {
-    printf("row = %3d,   Ji = %7lf,%7lf   %7lf,%7lf   %7lf,%7lf   %7lf,%7lf\n", row,
-        creal(Ji[0]), cimag(Ji[0]),
-        creal(Ji[1]), cimag(Ji[1]),
-        creal(Ji[2]), cimag(Ji[2]),
-        creal(Ji[3]), cimag(Ji[3]));
-}
-if (ch==21) {
-    fflush(stdout);
-    exit(0);
-}
+//if (ch==20) {
+//    printf("row = %3d,   Ji = %7lf,%7lf   %7lf,%7lf   %7lf,%7lf   %7lf,%7lf\n", row,
+//        creal(Ji[0]), cimag(Ji[0]),
+//        creal(Ji[1]), cimag(Ji[1]),
+//        creal(Ji[2]), cimag(Ji[2]),
+//        creal(Ji[3]), cimag(Ji[3]));
+//}
+//if (ch==21) {
+//    fflush(stdout);
+//    exit(0);
+//}
 
             // this automatically spots an RTS flagged tile
             if (fabs(cimag(Ji[0])) < 0.0000001) {  // THIS TEST CAN PROBABLY BE IMPROVED
