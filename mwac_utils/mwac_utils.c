@@ -777,13 +777,12 @@ int read_rts_file(complex double **G, complex double *Jref, int nant, double *am
 } /* read_cal_file */
 
 int read_bandpass_file(
-        complex double ***Jm, // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
-        complex double ***Jf, // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
-        int *chan_idxs,       // Output: Channel numbers (in units of chan_width) that are present
-        int chan_width,       // Input:  channel width of one column in file (in Hz)
-        int nchan,            // Input:  (max) number of channels in one file (=128/(chan_width/10000))
-        int nant,             // Input:  (max) number of antennas in one file (=128)
-        char *filename        // Input:  name of bandpass file
+        complex float ***Jm, // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
+        complex float ***Jf, // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
+        int chan_width,      // Input:  channel width of one column in file (in Hz)
+        int nchan,           // Input:  (max) number of channels in one file (=128/(chan_width/10000))
+        int nant,            // Input:  (max) number of antennas in one file (=128)
+        char *filename       // Input:  name of bandpass file
         )
 {
 
@@ -809,6 +808,7 @@ int read_bandpass_file(
     int pos;
     float freq_offset;
     int chan_count = 0;
+    int chan_idxs[nchan];
     int chan_idx;
     while (sscanf(freqline_ptr, "%f,%n", &freq_offset, &pos) == 1) {
 
@@ -833,7 +833,7 @@ int read_bandpass_file(
     float re,im;               // For holding the read-in value pairs (real, imaginary)
     int pol;                   // Number between 0 and 3. Corresponds to position in Jm/Jf matrices: [0,1]
                                //                                                                    [2,3]
-    complex double ***J;       // Either points to Jm or Jf, according to which row we're on
+    complex float ***J;        // Either points to Jm or Jf, according to which row we're on
 
     while (1) {   // Will terminate when EOF is reached
 

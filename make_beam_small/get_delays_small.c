@@ -245,9 +245,11 @@ void get_delays(
         complex double     ****invJi                   // output: invJi[ant][ch][pol][pol]
         ) {
     
-    int row; // For counting through nstation*npol rows in the metafits file
-    int ant; // Antenna number
-    int pol; // Polarisation number
+    int row;     // For counting through nstation*npol rows in the metafits file
+    int ant;     // Antenna number
+    int pol;     // Polarisation number
+    int ch;      // Channel number
+    int p1, p2;  // Counters for polarisation
 
     // some defaults for testing
     
@@ -280,16 +282,20 @@ void get_delays(
     complex double **G   = (complex double **) calloc(NANT, sizeof(complex double *)); // Actual DI Gain
     complex double **M   = (complex double **) calloc(NANT, sizeof(complex double *)); // Gain in direction of Calibration
     complex double **Ji  = (complex double **) calloc(NANT, sizeof(complex double *)); // Gain in Desired Direction
+    complex float ***Jm  = (complex double ***) calloc(NANT, sizeof(complex double **)); // Bandpass solutions
+    complex float ***Jf  = (complex double ***) calloc(NANT, sizeof(complex double **)); // Fitted bandpass solutions
 
-    for (ant = 0; ant < NANT; ant++) { //
-        G[ant] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
-        M[ant] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
-        Ji[ant] =(complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
-        if (G[ant] == NULL || M[ant] == NULL || Ji[ant] == NULL) { //
-            fprintf(stderr, "malloc failed: G[ant], M[ant], J[ant]\n"); //
-            exit(1); //
-        } //
-    } //
+    for (ant = 0; ant < NANT; ant++) {
+        G[ant] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double));
+        M[ant] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double));
+        Ji[ant] =(complex double *) malloc(NPOL * NPOL * sizeof(complex double));
+        Jm[ant] = (complex double **) malloc(NCHAN * sizeof(complex double *));
+        Jf[ant] = (complex double **) malloc(NCHAN * sizeof(complex double *));
+        for (ch = 0; ch < NCHAN; ch++) {
+            Jm[ant][ch] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double));
+            Jf[ant][ch] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double));
+        }
+    }
 
     // Choose a reference tile
     int refinp = 84; // Tile012
@@ -320,15 +326,15 @@ void get_delays(
 
         if  (cal->cal_type == RTS_BANDPASS) {
 
-            //read_bandpass_file(...);                       // Read in the RTS Bandpass file
-            //        complex double ***Jm, // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
-            //        complex double ***Jf, // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
-            //        int *chan_idxs,       // Output: Channel numbers (in units of chan_width) that are present
-            //        int chan_width,       // Input:  channel width of one column in file (in Hz)
-            //        int nchan,            // Input:  (max) number of channels in one file (=128/(chan_width/10000))
-            //        int nant,             // Input:  (max) number of antennas in one file (=128)
-            //        char *filename        // Input:  name of bandpass file
+            read_bandpass_file(              // Read in the RTS Bandpass file
+                    Jm,                      // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
+                    Jf,                      // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
+                    cal->chan_width,         // Input:  channel width of one column in file (in Hz)
+                    cal->nchan,              // Input:  (max) number of channels in one file (=128/(chan_width/10000))
+                    NANT,                    // Input:  (max) number of antennas in one file (=128)
+                    cal->bandpass_filename); // Input:  name of bandpass file
 
+            // 
         }
     }
     else if (cal->cal_type == OFFRINGA) {
@@ -415,8 +421,6 @@ void get_delays(
 
     /* for the tile <not the look direction> */
 
-    int ch = 0;
-    int p1, p2;    // Counters for polarisation
     for (row=0; row < (int)(mi->ninput); row++) {
 
         // Get the antenna and polarisation number from the row
@@ -448,7 +452,7 @@ void get_delays(
                 double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
                 double delay_samples = delay_time * samples_per_sec;
 
-                for (ch=0; ch < NCHAN;ch++) {
+                for (ch = 0; ch < NCHAN;ch++) {
                     long int freq_ch = frequency + ch*mi->chan_width;
 
                     // freq should be in cycles per sample and delay in samples
@@ -513,16 +517,24 @@ void get_delays(
 
     // Free up memory
 
-    for (ant = 0; ant < NANT; ant++) { //
+    for (ant = 0; ant < NANT; ant++) {
         free(G[ant]);
         free(M[ant]);
         free(Ji[ant]);
-    } //
+        for (ch = 0; ch < NCHAN; ch++) {
+            free(Jm[ant][ch]);
+            free(Jf[ant][ch]);
+        }
+        free(Jm[ant]);
+        free(Jf[ant]);
+    }
     free(Jref);
     free(E);
     free(G);
     free(M);
     free(Ji);
+    free(Jm);
+    free(Jf);
 
 }
 

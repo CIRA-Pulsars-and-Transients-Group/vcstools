@@ -760,7 +760,7 @@ int main(int argc, char **argv) {
                     break;
                 case 'f':
                     rec_channel = strdup(optarg);
-                    frequency = atoi(optarg) * 1.28e6 - 640e3; // The base frequency in Hz
+                    frequency = atoi(optarg) * 1.28e6 - 640e3; // The base frequency of the coarse channel in Hz
                     break;
                 case 'h':
                     usage();
