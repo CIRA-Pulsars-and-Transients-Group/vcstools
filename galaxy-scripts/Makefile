@@ -42,3 +42,5 @@ TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS)) $(addprefix database/, $(DATA
 install: $(TARGETS)
 	cp $^ $(INSTALL_DIR)
 
+clean: $(addprefix $(INSTALL_DIR), $(SCRIPT_TARGETS)) $(addprefix $(INSTALL_DIR), $(DATABASE_TARGETS)) $(addprefix $(INSTALL_DIR), $(UTILITY_TARGETS))
+	$(RM) $^
