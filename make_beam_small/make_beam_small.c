@@ -43,6 +43,7 @@ void usage() {
     fprintf(stderr, "make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|psrfits\n");
     fprintf(stderr, "-a <number of antennas>\n");
     fprintf(stderr, "-b Begin time [must be supplied]\n");
+    fprintf(stderr, "-B <Bandpass file from the RTS> Jones matrix input for fine channels\n");
     fprintf(stderr, "-C <position of channel solution in Offringa calibration file\n");
     fprintf(stderr, "-d <data directory root> -- where the recombined data is\n");
     fprintf(stderr, "-D dd:mm:ss -- the declination to get passed to get_delays\n");
@@ -58,9 +59,9 @@ void usage() {
     fprintf(stderr, "-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
     fprintf(stderr, "-V print version number and exit\n");
     fprintf(stderr, "-w use weights from metafits file [0]\n");
+    fprintf(stderr, "-X calibration channel bandwidth (Hz)\n");
     fprintf(stderr, "-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
     fprintf(stderr, "options: -t [1 or 2] sample size : 1 == 8 bit (INT); 2 == 32 bit (FLOAT)\n");
-
 }
 
 void populate_psrfits_header(
@@ -734,10 +735,11 @@ int main(int argc, char **argv) {
     long int frequency  = 0;
 
     struct calibration cal;
+    cal.chan_width = 0;
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:C:d:D:e:f:hJ:m:n:o:O:r:R:VwW:z:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:B:C:d:D:e:f:hJ:m:n:o:O:r:R:VwW:X:z:")) != -1) {
             switch(c) {
 
                 case 'a':
@@ -745,6 +747,10 @@ int main(int argc, char **argv) {
                     break;
                 case 'b':
                     begin = atol(optarg);
+                    break;
+                case 'B':
+                    cal.bandpass_filename = strdup(optarg);
+                    cal.cal_type = RTS_BANDPASS;
                     break;
                 case 'C':
                     cal.offr_chan_num = atoi(optarg);
@@ -796,6 +802,9 @@ int main(int argc, char **argv) {
                 case 'w':
                     weights = 1;
                     break;
+                case 'X':
+                    cal.chan_width = atoi(optarg);
+                    break;
                 case 'z':
                     time_utc = strdup(optarg);
                     break;
@@ -803,6 +812,15 @@ int main(int argc, char **argv) {
                     usage();
                     exit(EXIT_FAILURE);
             }
+        }
+    }
+
+    if (cal.cal_type == RTS_BANDPASS) { // If -B was supplied...
+        // ... user must also supply -X
+        if (cal.chan_width <= 0) {
+            fprintf(stderr, "Error: please supply a positive (>0) calibration channel bandwidth\n");
+            usage();
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -865,6 +883,10 @@ int main(int argc, char **argv) {
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, metafits);
     struct metafits_info mi;
     get_metafits_info( metafits, &mi );
+
+    // If using bandpass calibration solutions, calculate number of expected bandpass channels
+    if (cal.cal_type == RTS_BANDPASS)
+        cal.nchan = (nchan * mi.chan_width) / cal.chan_width;
 
     int i;
     if (!weights)
