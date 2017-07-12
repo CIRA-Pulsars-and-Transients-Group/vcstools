@@ -486,7 +486,7 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
     fp = fopen(gains_file,"r");
     if (fp == NULL) {
         fprintf(stderr,"Failed to open %s: quitting\n",gains_file);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // Read in the necessary information from the header
@@ -718,7 +718,7 @@ int read_rts_file(complex double **G, complex double *Jref, int nant, double *am
     if ((fp = fopen(fname, "r")) == NULL) {
         fprintf(stderr, "Error: cannot open gain Jones matrix file: %s\n",
                 fname);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
     
     char line[BUFSIZE];
@@ -765,6 +765,114 @@ int read_rts_file(complex double **G, complex double *Jref, int nant, double *am
     return 0;
     
 } /* read_cal_file */
+
+int read_bandpass_file(
+        complex double ***Jm, // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
+        complex double ***Jf, // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
+        int *chan_idxs,       // Output: Channel numbers (in units of chan_width) that are present
+        int chan_width,       // Input:  channel width of one column in file (in Hz)
+        int nchan,            // Input:  (max) number of channels in one file (=128/(chan_width/10000))
+        int nant,             // Input:  (max) number of antennas in one file (=128)
+        char *filename        // Input:  name of bandpass file
+        )
+{
+
+    // Open the file for reading
+    FILE *f = NULL;
+    if ((f = fopen(filename, "r")) == NULL) {
+        fprintf(stderr, "Error: cannot open Bandpass file: %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    // Read in top row = frequency offsets
+    int max_len = 4096; // Overkill
+    char freqline[max_len];
+    if (fgets( freqline, max_len, f ) == NULL) {
+        fprintf(stderr, "Error: could not read first line of %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    // Parse top row
+    // Find out which channels are actually in the Bandpass file
+    // (i.e. which channels have not been flagged)
+    char *freqline_ptr = freqline;
+    int pos;
+    float freq_offset;
+    int chan_count = 0;
+    int chan_idx;
+    while (sscanf(freqline_ptr, "%f,%n", &freq_offset, &pos) == 1) {
+
+        chan_count++;
+
+        // Make sure we haven't exceeded the total 
+        if (chan_count > nchan) {
+            fprintf(stderr, "Error: More than nchan = %d columns in Bandpass file %s\n", nchan, filename);
+            exit(EXIT_FAILURE);
+        }
+        chan_idx = (int)roundf( freq_offset*1e6 / (float)chan_width );
+        chan_idxs[chan_count-1] = chan_idx;
+
+        freqline_ptr += pos;
+    }
+
+    // Read in all the values
+    int ant, curr_ant = 0;     // The antenna number, read in from the file
+    int ant_row       = 0;     // Number between 0 and 7. Each antenna has 8 rows.
+    int ch;                    // A counter for channel numbers
+    int ci;                    // A counter for channel number indices
+    float re,im;               // For holding the read-in value pairs (real, imaginary)
+    int pol;                   // Number between 0 and 3. Corresponds to position in Jm/Jf matrices: [0,1]
+                               //                                                                    [2,3]
+    complex double ***J;       // Either points to Jm or Jf, according to which row we're on
+
+    while (1) {   // Will terminate when EOF is reached
+
+        if (fscanf(f, "%d, ", &ant) == EOF)    // Read in first number = antenna number
+            break;
+
+        if (ant > nant) {                      // Check that the antenna number is not bigger than expected
+            fprintf(stderr, "Error: More than nant = %d antennas in Bandpass file %s\n", nant, filename);
+            exit(EXIT_FAILURE);
+        }
+
+        ant--;                                 // Convert to 0-offset
+
+        if (ant == curr_ant) {                 // Ensure that there is not an unusual (!=8) number of rows for this antenna
+            ant_row++;
+            if (ant_row > 7) {
+                fprintf(stderr, "Error: More than 8 rows for antenna %d in Bandpass file %s\n",
+                        ant, filename);
+                exit(EXIT_FAILURE);
+            }
+        }
+        else {
+            if (ant_row != 7) {
+                fprintf(stderr, "Error: Fewer than 8 rows for antenna %d in Bandpass file %s\n",
+                        ant, filename);
+                exit(EXIT_FAILURE);
+            }
+            curr_ant = ant;
+            ant_row  = 0;
+        }
+
+        if (ant_row % 2 == 0)  J = Jm;          // Decide if the row corresponds to the Jm values (even rows)
+        else                   J = Jf;          // or Jf values (odd rows)
+
+        pol = ant_row / 2;                      // Get the polarisation index
+
+        for (ci = 0; ci < chan_count; ci++) {   // Loop over the row
+
+            ch = chan_idxs[ci];                 // Get the channel number
+            fscanf(f, "%f,%f,", &re, &im);      // Read in the re,im pairs in each row
+
+            J[ant][ch][pol] = re + im*I;        // Convert to complex number and store in output array
+        }
+
+        // (Assumes that the number of values in each row are correct)
+    }
+
+    return 1;
+}
 
 int default_read_pfb_call(int in_fd, int out_fd, char *heap) {
 
