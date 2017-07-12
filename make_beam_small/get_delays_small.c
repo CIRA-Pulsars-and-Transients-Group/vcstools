@@ -385,10 +385,9 @@ void get_delays(
     for (ch = 0; ch < NCHAN; ch++) {
 
         // Calculating direction-dependent matrices
-        long int freq_ch;
+        long int freq_ch = frequency + ch*mi->chan_width;    // The frequency of this fine channel
         int cal_chan = 0;
         if (cal->cal_type == RTS_BANDPASS) {
-            freq_ch = frequency + ch*mi->chan_width;    // The frequency of this fine channel
             cal_chan = ch*mi->chan_width / cal->chan_width;  // The corresponding "calibration channel number"
             if (cal_chan >= cal->nchan) {                        // Just check that the channel number is reasonable
                 fprintf(stderr, "Error: \"calibration channel\" %d cannot be ", cal_chan);
@@ -396,8 +395,6 @@ void get_delays(
                 exit(EXIT_FAILURE);
             }
         }
-        else
-            freq_ch = frequency;
 
         calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
                 freq_ch,                              // observing freq of fine channel (Hz)
