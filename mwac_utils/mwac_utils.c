@@ -810,7 +810,7 @@ int read_bandpass_file(
     int chan_count = 0;
     int chan_idxs[nchan];
     int chan_idx;
-    while (sscanf(freqline_ptr, "%f,%n", &freq_offset, &pos) == 1) {
+    while (sscanf(freqline_ptr, "%lf,%n", &freq_offset, &pos) == 1) {
 
         chan_count++;
 
@@ -837,7 +837,7 @@ int read_bandpass_file(
 
     while (1) {   // Will terminate when EOF is reached
 
-        if (fscanf(f, "%d, ", &ant) == EOF)    // Read in first number = antenna number
+        if (fscanf(f, "%d,", &ant) == EOF)     // Read in first number = antenna number
             break;
 
         if (ant > nant) {                      // Check that the antenna number is not bigger than expected
@@ -849,36 +849,36 @@ int read_bandpass_file(
 
         if (ant == curr_ant) {                 // Ensure that there is not an unusual (!=8) number of rows for this antenna
             ant_row++;
-            if (ant_row > 7) {
+            if (ant_row > 8) {
                 fprintf(stderr, "Error: More than 8 rows for antenna %d in Bandpass file %s\n",
                         ant, filename);
                 exit(EXIT_FAILURE);
             }
         }
         else {
-            if (ant_row != 7) {
+            if (ant_row < 7) {
                 fprintf(stderr, "Error: Fewer than 8 rows for antenna %d in Bandpass file %s\n",
                         ant, filename);
                 exit(EXIT_FAILURE);
             }
             curr_ant = ant;
-            ant_row  = 0;
+            ant_row  = 1;
         }
 
-        if (ant_row % 2 == 0)  J = Jm;          // Decide if the row corresponds to the Jm values (even rows)
-        else                   J = Jf;          // or Jf values (odd rows)
+        if ((ant_row-1) % 2 == 0)  J = Jm;      // Decide if the row corresponds to the Jm values (even rows)
+        else                       J = Jf;      // or Jf values (odd rows)
 
         if (J == NULL) {                        // If the caller doesn't care about this row
             fgets( freqline, max_len, f );      // Skip the rest of this line (freqline isn't needed any more)
             continue;                           // And start afresh on the next line
         }
 
-        pol = ant_row / 2;                      // Get the polarisation index
+        pol = (ant_row-1) / 2;                  // Get the polarisation index
 
         for (ci = 0; ci < chan_count; ci++) {   // Loop over the row
 
             ch = chan_idxs[ci];                 // Get the channel number
-            fscanf(f, "%f,%f,", &re, &im);      // Read in the re,im pairs in each row
+            fscanf(f, "%lf,%lf,", &re, &im);      // Read in the re,im pairs in each row
 
             J[ant][ch][pol] = re + im*I;        // Convert to complex number and store in output array
         }

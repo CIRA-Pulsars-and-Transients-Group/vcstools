@@ -774,7 +774,8 @@ int main(int argc, char **argv) {
                     break;
                 case 'J':
                     cal.filename = strdup(optarg);
-                    cal.cal_type = RTS;
+                    if (cal.cal_type != RTS_BANDPASS)
+                        cal.cal_type = RTS;
                     break;
                 case 'm':
                     metafits = strdup(optarg);

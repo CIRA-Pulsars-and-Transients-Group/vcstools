@@ -325,9 +325,8 @@ void get_delays(
                     NANT,                    // Input:  (max) number of antennas in one file (=128)
                     cal->bandpass_filename); // Input:  name of bandpass file
 
-            // Decide which calibration channels apply to which beamformer channels
-            // ...
         }
+
     }
     else if (cal->cal_type == OFFRINGA) {
 
@@ -386,13 +385,19 @@ void get_delays(
     for (ch = 0; ch < NCHAN; ch++) {
 
         // Calculating direction-dependent matrices
-        long int freq_ch = frequency + ch*mi->chan_width;    // The frequency of this fine channel
-        int cal_chan = ch*mi->chan_width / cal->chan_width;  // The corresponding "calibration channel number"
-        if (cal_chan >= cal->nchan) {                        // Just check that the channel number is reasonable
-            fprintf(stderr, "Error: \"calibration channel\" %d cannot be ", cal_chan);
-            fprintf(stderr, ">= than total number of channels %d\n", cal->nchan);
-            exit(EXIT_FAILURE);
+        long int freq_ch;
+        int cal_chan = 0;
+        if (cal->cal_type == RTS_BANDPASS) {
+            freq_ch = frequency + ch*mi->chan_width;    // The frequency of this fine channel
+            cal_chan = ch*mi->chan_width / cal->chan_width;  // The corresponding "calibration channel number"
+            if (cal_chan >= cal->nchan) {                        // Just check that the channel number is reasonable
+                fprintf(stderr, "Error: \"calibration channel\" %d cannot be ", cal_chan);
+                fprintf(stderr, ">= than total number of channels %d\n", cal->nchan);
+                exit(EXIT_FAILURE);
+            }
         }
+        else
+            freq_ch = frequency;
 
         calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
                 freq_ch,                              // observing freq of fine channel (Hz)
@@ -418,6 +423,17 @@ void get_delays(
                 cp2x2(G, Gf); //Set the fine channel DI gain equal to the coarse channel DI gain
 
             mult2x2d(Gf, E, Ji); // the gain in the desired look direction
+if (ch==20) {
+    printf("row = %3d,   Ji = %7lf,%7lf   %7lf,%7lf   %7lf,%7lf   %7lf,%7lf\n", row,
+        creal(Ji[0]), cimag(Ji[0]),
+        creal(Ji[1]), cimag(Ji[1]),
+        creal(Ji[2]), cimag(Ji[2]),
+        creal(Ji[3]), cimag(Ji[3]));
+}
+if (ch==21) {
+    fflush(stdout);
+    exit(0);
+}
 
             // this automatically spots an RTS flagged tile
             if (fabs(cimag(Ji[0])) < 0.0000001) {  // THIS TEST CAN PROBABLY BE IMPROVED
@@ -507,11 +523,10 @@ void get_delays(
 
     }
     
-
     // Free up dynamically allocated memory
 
     for (ant = 0; ant < NANT; ant++) {
-        for (ch = 0; ch < NCHAN; ch++)
+        for (ch = 0; ch < cal->nchan; ch++)
             free(Jf[ant][ch]);
         free(Jf[ant]);
     }
