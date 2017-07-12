@@ -245,8 +245,9 @@ void get_delays(
         complex double     ****invJi                   // output: invJi[ant][ch][pol][pol]
         ) {
     
-    int row;
-    int i, j;
+    int row; // For counting through nstation*npol rows in the metafits file
+    int ant; // Antenna number
+    int pol; // Polarisation number
 
     // some defaults for testing
     
@@ -280,12 +281,12 @@ void get_delays(
     complex double **M   = (complex double **) calloc(NANT, sizeof(complex double *)); // Gain in direction of Calibration
     complex double **Ji  = (complex double **) calloc(NANT, sizeof(complex double *)); // Gain in Desired Direction
 
-    for (i = 0; i < NANT; i++) { //
-        G[i] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
-        M[i] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
-        Ji[i] =(complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
-        if (G[i] == NULL || M[i] == NULL || Ji[i] == NULL) { //
-            fprintf(stderr, "malloc failed: G[i], M[i], J[i]\n"); //
+    for (ant = 0; ant < NANT; ant++) { //
+        G[ant] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
+        M[ant] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
+        Ji[ant] =(complex double *) malloc(NPOL * NPOL * sizeof(complex double)); //
+        if (G[ant] == NULL || M[ant] == NULL || Ji[ant] == NULL) { //
+            fprintf(stderr, "malloc failed: G[ant], M[ant], J[ant]\n"); //
             exit(1); //
         } //
     } //
@@ -312,9 +313,23 @@ void get_delays(
 
     // Read in the Jones matrices for this (coarse) channel, if requested
     complex double invJref[4];
-    if (cal->cal_type == RTS) {
-        read_rts_file(M, Jref, NANT, &amp, cal->filename);
+    if (cal->cal_type == RTS || cal->cal_type == RTS_BANDPASS) {
+
+        read_rts_file(M, Jref, NANT, &amp, cal->filename); // Read in the RTS DIJones file
         inv2x2(Jref, invJref);
+
+        if  (cal->cal_type == RTS_BANDPASS) {
+
+            //read_bandpass_file(...);                       // Read in the RTS Bandpass file
+            //        complex double ***Jm, // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
+            //        complex double ***Jf, // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
+            //        int *chan_idxs,       // Output: Channel numbers (in units of chan_width) that are present
+            //        int chan_width,       // Input:  channel width of one column in file (in Hz)
+            //        int nchan,            // Input:  (max) number of channels in one file (=128/(chan_width/10000))
+            //        int nant,             // Input:  (max) number of antennas in one file (=128)
+            //        char *filename        // Input:  name of bandpass file
+
+        }
     }
     else if (cal->cal_type == OFFRINGA) {
 
@@ -370,7 +385,6 @@ void get_delays(
     unit_H = sin(el);
     
     // Calculating direction-dependent matrices
-    double Fnorm;
     calcEjones(E,                                    // pointer to 4-element (2x2) voltage gain Jones matrix
                frequency,                            // observing freq (Hz)
                (MWA_LAT*DD2R),                       // observing latitude (radians)
@@ -379,26 +393,22 @@ void get_delays(
                az,                                   // azimuth & zenith angle to sample
                (DPIBY2-el));
 
-    for (i=0;i<NANT;i++){
+    for (ant = 0; ant < NANT; ant++){
 
-        mult2x2d(M[i],invJref,G[i]); // forms the DI gain
-        mult2x2d(G[i],E,Ji[i]); // the gain in the desired look direction
+        mult2x2d(M[ant],invJref,G[ant]); // forms the DI gain
+        mult2x2d(G[ant],E,Ji[ant]); // the gain in the desired look direction
         
         // this automatically spots an RTS flagged tile
-        Fnorm = 0;
-        for (j=0; j < 4;j++) {
-            Fnorm += (double) Ji[j][i] * conj(Ji[j][i]);
-        }
-        if (fabs(cimag(Ji[i][0])) < 0.0000001) {
-            Ji[i][0] = 0.0 + I*0;
-            Ji[i][1] = 0.0 + I*0;
-            Ji[i][2] = 0.0 + I*0;
-            Ji[i][3] = 0.0 + I*0;
+        if (fabs(cimag(Ji[ant][0])) < 0.0000001) {
+            Ji[ant][0] = 0.0 + I*0;
+            Ji[ant][1] = 0.0 + I*0;
+            Ji[ant][2] = 0.0 + I*0;
+            Ji[ant][3] = 0.0 + I*0;
 
-            G[i][0] = 0.0 + I*0;
-            G[i][1] = 0.0 + I*0;
-            G[i][2] = 0.0 + I*0;
-            G[i][3] = 0.0 + I*0;
+            G[ant][0] = 0.0 + I*0;
+            G[ant][1] = 0.0 + I*0;
+            G[ant][2] = 0.0 + I*0;
+            G[ant][3] = 0.0 + I*0;
 
         }
     }
@@ -406,7 +416,6 @@ void get_delays(
     /* for the tile <not the look direction> */
 
     int ch = 0;
-    int ant, pol;
     int p1, p2;    // Counters for polarisation
     for (row=0; row < (int)(mi->ninput); row++) {
 
@@ -504,10 +513,10 @@ void get_delays(
 
     // Free up memory
 
-    for (i = 0; i < NANT; i++) { //
-        free(G[i]);
-        free(M[i]);
-        free(Ji[i]);
+    for (ant = 0; ant < NANT; ant++) { //
+        free(G[ant]);
+        free(M[ant]);
+        free(Ji[ant]);
     } //
     free(Jref);
     free(E);

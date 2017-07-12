@@ -39,9 +39,10 @@ struct delays {
 };
 
 struct calibration {
-    char *filename;        // The file that houses the calibration solution
-    int   cal_type;        // Either RTS or OFFRINGA
-    int   offr_chan_num;   // The channel number in the Offringa calibration solution file
+    char *filename;           // The file that houses the calibration solution
+    char *bandpass_filename;  // The file that houses the RTS bandpass information
+    int   cal_type;           // Either RTS or OFFRINGA
+    int   offr_chan_num;      // The channel number in the Offringa calibration solution file
 };
 
 /* Running get_delays from within make_beam */
