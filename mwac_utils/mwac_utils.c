@@ -777,12 +777,12 @@ int read_rts_file(complex double **G, complex double *Jref, int nant, double *am
 } /* read_cal_file */
 
 int read_bandpass_file(
-        complex float ***Jm, // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
-        complex float ***Jf, // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
-        int chan_width,      // Input:  channel width of one column in file (in Hz)
-        int nchan,           // Input:  (max) number of channels in one file (=128/(chan_width/10000))
-        int nant,            // Input:  (max) number of antennas in one file (=128)
-        char *filename       // Input:  name of bandpass file
+        complex double ***Jm, // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
+        complex double ***Jf, // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
+        int chan_width,       // Input:  channel width of one column in file (in Hz)
+        int nchan,            // Input:  (max) number of channels in one file (=128/(chan_width/10000))
+        int nant,             // Input:  (max) number of antennas in one file (=128)
+        char *filename        // Input:  name of bandpass file
         )
 {
 
@@ -806,7 +806,7 @@ int read_bandpass_file(
     // (i.e. which channels have not been flagged)
     char *freqline_ptr = freqline;
     int pos;
-    float freq_offset;
+    double freq_offset;
     int chan_count = 0;
     int chan_idxs[nchan];
     int chan_idx;
@@ -819,7 +819,7 @@ int read_bandpass_file(
             fprintf(stderr, "Error: More than nchan = %d columns in Bandpass file %s\n", nchan, filename);
             exit(EXIT_FAILURE);
         }
-        chan_idx = (int)roundf( freq_offset*1e6 / (float)chan_width );
+        chan_idx = (int)roundf( freq_offset*1e6 / (double)chan_width );
         chan_idxs[chan_count-1] = chan_idx;
 
         freqline_ptr += pos;
@@ -830,10 +830,10 @@ int read_bandpass_file(
     int ant_row       = 0;     // Number between 0 and 7. Each antenna has 8 rows.
     int ch;                    // A counter for channel numbers
     int ci;                    // A counter for channel number indices
-    float re,im;               // For holding the read-in value pairs (real, imaginary)
+    double re,im;              // For holding the read-in value pairs (real, imaginary)
     int pol;                   // Number between 0 and 3. Corresponds to position in Jm/Jf matrices: [0,1]
                                //                                                                    [2,3]
-    complex float ***J;        // Either points to Jm or Jf, according to which row we're on
+    complex double ***J;       // Either points to Jm or Jf, according to which row we're on
 
     while (1) {   // Will terminate when EOF is reached
 

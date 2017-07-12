@@ -271,29 +271,20 @@ void get_delays(
 
     double amp = 0;
 
-    // Jref is the reference Jones direction - for which the calibration was generated
-    // Mref is measured Jones in Jref direction
-    // G = DI gain formed by inv(Jref).Mref
-    // E = model is desired direction
-    // Ji = Jones in desired direction (formed by G.E)
+    complex double Jref[NPOL*NPOL];            // Calibration Direction
+    complex double E[NPOL*NPOL];               // Model Jones in Desired Direction
+    complex double G[NPOL*NPOL];               // Coarse channel DI Gain
+    complex double Gf[NPOL*NPOL];              // Fine channel DI Gain
+    complex double Ji[NPOL*NPOL];              // Gain in Desired Direction
 
-    complex double *Jref = (complex double *) calloc(NPOL*NPOL, sizeof(complex double));   // Calibration Direction
-    complex double *E    = (complex double *) calloc(NPOL*NPOL, sizeof(complex double));   // Model Jones in Desired Direction
-    complex double **G   = (complex double **) calloc(NANT, sizeof(complex double *)); // Actual DI Gain
-    complex double **M   = (complex double **) calloc(NANT, sizeof(complex double *)); // Gain in direction of Calibration
-    complex double **Ji  = (complex double **) calloc(NANT, sizeof(complex double *)); // Gain in Desired Direction
-    complex float ***Jm  = (complex double ***) calloc(NANT, sizeof(complex double **)); // Bandpass solutions
-    complex float ***Jf  = (complex double ***) calloc(NANT, sizeof(complex double **)); // Fitted bandpass solutions
+    complex double  **M  = (complex double ** ) calloc(NANT, sizeof(complex double * )); // Gain in direction of Calibration
+    complex double ***Jf = (complex double ***) calloc(NANT, sizeof(complex double **)); // Fitted bandpass solutions
 
     for (ant = 0; ant < NANT; ant++) {
-        G[ant] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double));
-        M[ant] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double));
-        Ji[ant] =(complex double *) malloc(NPOL * NPOL * sizeof(complex double));
-        Jm[ant] = (complex double **) malloc(NCHAN * sizeof(complex double *));
-        Jf[ant] = (complex double **) malloc(NCHAN * sizeof(complex double *));
-        for (ch = 0; ch < NCHAN; ch++) {
-            Jm[ant][ch] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double));
-            Jf[ant][ch] = (complex double *) malloc(NPOL * NPOL * sizeof(complex double));
+        M[ant]  = (complex double * ) calloc(NPOL*NPOL,  sizeof(complex double));
+        Jf[ant] = (complex double **) calloc(cal->nchan, sizeof(complex double *));
+        for (ch = 0; ch < cal->nchan; ch++) { // Only need as many channels as used in calibration solution
+            Jf[ant][ch] = (complex double *) calloc(NPOL*NPOL, sizeof(complex double));
         }
     }
 
@@ -327,14 +318,15 @@ void get_delays(
         if  (cal->cal_type == RTS_BANDPASS) {
 
             read_bandpass_file(              // Read in the RTS Bandpass file
-                    Jm,                      // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
+                    NULL,                    // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
                     Jf,                      // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
                     cal->chan_width,         // Input:  channel width of one column in file (in Hz)
                     cal->nchan,              // Input:  (max) number of channels in one file (=128/(chan_width/10000))
                     NANT,                    // Input:  (max) number of antennas in one file (=128)
                     cal->bandpass_filename); // Input:  name of bandpass file
 
-            // 
+            // Decide which calibration channels apply to which beamformer channels
+            // ...
         }
     }
     else if (cal->cal_type == OFFRINGA) {
@@ -390,70 +382,75 @@ void get_delays(
     unit_E = cos(el) * sin(az);
     unit_H = sin(el);
     
-    // Calculating direction-dependent matrices
-    calcEjones(E,                                    // pointer to 4-element (2x2) voltage gain Jones matrix
-               frequency,                            // observing freq (Hz)
-               (MWA_LAT*DD2R),                       // observing latitude (radians)
-               mi->tile_pointing_az*DD2R,            // azimuth & zenith angle of tile pointing
-               (DPIBY2-(mi->tile_pointing_el*DD2R)), // zenith angle to sample
-               az,                                   // azimuth & zenith angle to sample
-               (DPIBY2-el));
+    // Everything from this point on is frequency-dependent
+    for (ch = 0; ch < NCHAN; ch++) {
 
-    for (ant = 0; ant < NANT; ant++){
-
-        mult2x2d(M[ant],invJref,G[ant]); // forms the DI gain
-        mult2x2d(G[ant],E,Ji[ant]); // the gain in the desired look direction
-        
-        // this automatically spots an RTS flagged tile
-        if (fabs(cimag(Ji[ant][0])) < 0.0000001) {
-            Ji[ant][0] = 0.0 + I*0;
-            Ji[ant][1] = 0.0 + I*0;
-            Ji[ant][2] = 0.0 + I*0;
-            Ji[ant][3] = 0.0 + I*0;
-
-            G[ant][0] = 0.0 + I*0;
-            G[ant][1] = 0.0 + I*0;
-            G[ant][2] = 0.0 + I*0;
-            G[ant][3] = 0.0 + I*0;
-
+        // Calculating direction-dependent matrices
+        long int freq_ch = frequency + ch*mi->chan_width;    // The frequency of this fine channel
+        int cal_chan = ch*mi->chan_width / cal->chan_width;  // The corresponding "calibration channel number"
+        if (cal_chan >= cal->nchan) {                        // Just check that the channel number is reasonable
+            fprintf(stderr, "Error: \"calibration channel\" %d cannot be ", cal_chan);
+            fprintf(stderr, ">= than total number of channels %d\n", cal->nchan);
+            exit(EXIT_FAILURE);
         }
-    }
 
-    /* for the tile <not the look direction> */
+        calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
+                freq_ch,                              // observing freq of fine channel (Hz)
+                (MWA_LAT*DD2R),                       // observing latitude (radians)
+                mi->tile_pointing_az*DD2R,            // azimuth & zenith angle of tile pointing
+                (DPIBY2-(mi->tile_pointing_el*DD2R)), // zenith angle to sample
+                az,                                   // azimuth & zenith angle to sample
+                (DPIBY2-el));
 
-    for (row=0; row < (int)(mi->ninput); row++) {
+        /* for the tile <not the look direction> */
 
-        // Get the antenna and polarisation number from the row
-        ant = row / NPOL;
-        pol = row % NPOL;
+        for (row=0; row < (int)(mi->ninput); row++) {
 
-        // Calculate the complex weights array
-        if (complex_weights_array != NULL) {
-            if (mi->weights_array[row] != 0.0) {
+            // Get the antenna and polarisation number from the row
+            ant = row / NPOL;
+            pol = row % NPOL;
 
-                double cable = mi->cable_array[row] - mi->cable_array[refinp];
-                double E = mi->E_array[row];
-                double N = mi->N_array[row];
-                double H = mi->H_array[row];
+            mult2x2d(M[ant], invJref, G); // forms the "coarse channel" DI gain
 
-                double integer_phase;
-                double X,Y,Z,u,v,w;
+            if (cal->cal_type == RTS_BANDPASS)
+                mult2x2d(G, Jf[ant][cal_chan], Gf); // forms the "fine channel" DI gain
+            else
+                cp2x2(G, Gf); //Set the fine channel DI gain equal to the coarse channel DI gain
 
-                ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
+            mult2x2d(Gf, E, Ji); // the gain in the desired look direction
 
-                calcUVW (app_ha_rad,app_dec_rad,X,Y,Z,&u,&v,&w);
+            // this automatically spots an RTS flagged tile
+            if (fabs(cimag(Ji[0])) < 0.0000001) {  // THIS TEST CAN PROBABLY BE IMPROVED
+                Ji[0] = 0.0 + I*0;
+                Ji[1] = 0.0 + I*0;
+                Ji[2] = 0.0 + I*0;
+                Ji[3] = 0.0 + I*0;
+            }
 
-                // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
+            // Calculate the complex weights array
+            if (complex_weights_array != NULL) {
+                if (mi->weights_array[row] != 0.0) {
 
-                double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
-                // double geometry = E*unit_E + N*unit_N + H*unit_H ;
-                // Above is just w as you should see from the check.
+                    double cable = mi->cable_array[row] - mi->cable_array[refinp];
+                    double E = mi->E_array[row];
+                    double N = mi->N_array[row];
+                    double H = mi->H_array[row];
 
-                double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
-                double delay_samples = delay_time * samples_per_sec;
+                    double integer_phase;
+                    double X,Y,Z,u,v,w;
 
-                for (ch = 0; ch < NCHAN;ch++) {
-                    long int freq_ch = frequency + ch*mi->chan_width;
+                    ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
+
+                    calcUVW (app_ha_rad,app_dec_rad,X,Y,Z,&u,&v,&w);
+
+                    // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
+
+                    double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
+                    // double geometry = E*unit_E + N*unit_N + H*unit_H ;
+                    // Above is just w as you should see from the check.
+
+                    double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
+                    double delay_samples = delay_time * samples_per_sec;
 
                     // freq should be in cycles per sample and delay in samples
                     // which essentially means that the samples_per_sec cancels
@@ -470,36 +467,32 @@ void get_delays(
                     complex_weights_array[ant][ch][pol] = mi->weights_array[row]*cexp(I*phase);
 
                 }
-            }
-            else {
-                for (ch = 0; ch < NCHAN; ch++)
-                    complex_weights_array[ant][ch][pol] = mi->weights_array[row]; // i.e. =0.0
-            }
-        }
-
-        // Now, calculate the inverse Jones matrix
-        if (invJi != NULL) {
-            if (pol == 0) {
-
-                double Fnorm;
-
-                conj2x2( Ji[ant], Ji[ant] ); // The RTS conjugates the sky so beware
-                Fnorm = norm2x2( Ji[ant], Ji[ant] );
-
-                if (Fnorm != 0.0)
-                    for (ch = 0; ch < NCHAN; ch++)
-                        inv2x2S( Ji[ant], invJi[ant][ch] );
                 else {
-                    for (ch = 0; ch < NCHAN; ch++)
-                    for (p1 = 0; p1 < NPOL;  p1++)
-                    for (p2 = 0; p2 < NPOL;  p2++)
-                        invJi[ant][ch][p1][p2] = 0.0 + I*0.0;
+                    complex_weights_array[ant][ch][pol] = mi->weights_array[row]; // i.e. =0.0
                 }
             }
-        }
-        
-        
-    }
+
+            // Now, calculate the inverse Jones matrix
+            if (invJi != NULL) {
+                if (pol == 0) {
+
+                    double Fnorm;
+
+                    conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
+                    Fnorm = norm2x2( Ji, Ji );
+
+                    if (Fnorm != 0.0)
+                        inv2x2S( Ji, invJi[ant][ch] );
+                    else {
+                        for (p1 = 0; p1 < NPOL;  p1++)
+                        for (p2 = 0; p2 < NPOL;  p2++)
+                            invJi[ant][ch][p1][p2] = 0.0 + I*0.0;
+                    }
+                }
+            }
+
+        } // end loop through antenna/pol (row)
+    } // end loop through fine channels (ch)
 
     // Populate a structure with some of the calculated values
     if (delay_vals != NULL) {
@@ -515,25 +508,13 @@ void get_delays(
     }
     
 
-    // Free up memory
+    // Free up dynamically allocated memory
 
     for (ant = 0; ant < NANT; ant++) {
-        free(G[ant]);
-        free(M[ant]);
-        free(Ji[ant]);
-        for (ch = 0; ch < NCHAN; ch++) {
-            free(Jm[ant][ch]);
+        for (ch = 0; ch < NCHAN; ch++)
             free(Jf[ant][ch]);
-        }
-        free(Jm[ant]);
         free(Jf[ant]);
     }
-    free(Jref);
-    free(E);
-    free(G);
-    free(M);
-    free(Ji);
-    free(Jm);
     free(Jf);
 
 }

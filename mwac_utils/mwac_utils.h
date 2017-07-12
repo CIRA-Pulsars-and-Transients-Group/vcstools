@@ -57,6 +57,7 @@ extern "C" {
     
     int read_cal_file(complex double **G, int ninp, double *amp);
     int read_rts_file(complex double **G, complex double *M, int nant, double *amp, char *fname);
+    int read_bandpass_file(complex double ***Jm, complex double ***Jf, int chan_width, int nchan, int nant, char *filename);
     int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse_chan, char *gains_file, int *order);
     int read_miriad_gains_file(char *fname, complex double **gains);
     int read_casa_gains_file(char *fname, complex double **gains,int nant, int chan_to_get);
