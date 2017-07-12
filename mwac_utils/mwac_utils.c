@@ -47,6 +47,16 @@ void inv2x2(complex double *Min, complex double *Mout) {
     Mout[3] = inv_det * Min[0];
 }
 
+void inv2x2S(complex double *Min, complex double **Mout) {
+// Same as inv2x2(), but the output is a 2x2 2D array, instead of a 4-element
+// 1D array
+    complex double inv_det = 1.0 / (Min[0] * Min[3] - Min[1] * Min[2]);
+    Mout[0][0] = inv_det * Min[3];
+    Mout[0][1] = -inv_det * Min[1];
+    Mout[1][0] = -inv_det * Min[2];
+    Mout[1][1] = inv_det * Min[0];
+}
+
 void mult2x2d(complex double *M1, complex double *M2, complex double *Mout) {
     Mout[0] = M1[0] * M2[0] + M1[1] * M2[2];
     Mout[1] = M1[0] * M2[1] + M1[1] * M2[3];

@@ -50,6 +50,7 @@ extern "C" {
     void multaccum2x2hd(complex double *M1, complex double *M2, complex double *Mout);
     void cp2x2(complex double *Min, complex double *Mout);
     void inv2x2(complex double *Min, complex double *Mout);
+    void inv2x2S(complex double *Min, complex double **Mout);
     void mult2x2tlum(complex double *M1, complex double *M2, complex double *M3, complex double *Mout);
     double norm2x2(complex double *M, complex double *Mout);
     void conj2x2(complex double *M, complex double *Mout);

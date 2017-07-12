@@ -241,8 +241,8 @@ void get_delays(
         double                 sec_offset,
         struct delays         *delay_vals,
         struct metafits_info  *mi,
-        complex double       **complex_weights_array,  // output
-        complex double       **invJi                   // output
+        complex double      ***complex_weights_array,  // output: cmplx[ant][ch][pol]
+        complex double     ****invJi                   // output: invJi[ant][ch][pol][pol]
         ) {
     
     int row;
@@ -406,7 +406,13 @@ void get_delays(
     /* for the tile <not the look direction> */
 
     int ch = 0;
+    int ant, pol;
+    int p1, p2;    // Counters for polarisation
     for (row=0; row < (int)(mi->ninput); row++) {
+
+        // Get the antenna and polarisation number from the row
+        ant = row / NPOL;
+        pol = row % NPOL;
 
         // Calculate the complex weights array
         if (complex_weights_array != NULL) {
@@ -448,31 +454,34 @@ void get_delays(
                     phase = phase*2*M_PI*conjugate;
 
                     // Store result for later use
-                    complex_weights_array[row][ch] = mi->weights_array[row]*cexp(I*phase);
+                    complex_weights_array[ant][ch][pol] = mi->weights_array[row]*cexp(I*phase);
 
                 }
             }
             else {
-                for (ch=0; ch < NCHAN; ch++)
-                    complex_weights_array[row][ch] = mi->weights_array[row]; // i.e. =0.0
+                for (ch = 0; ch < NCHAN; ch++)
+                    complex_weights_array[ant][ch][pol] = mi->weights_array[row]; // i.e. =0.0
             }
         }
 
         // Now, calculate the inverse Jones matrix
         if (invJi != NULL) {
-            if (row % NPOL == 0) {
+            if (pol == 0) {
 
-                int station = row / NPOL;
                 double Fnorm;
 
-                conj2x2( Ji[station], Ji[station] ); // The RTS conjugates the sky so beware
-                Fnorm = norm2x2( Ji[station], Ji[station] );
+                conj2x2( Ji[ant], Ji[ant] ); // The RTS conjugates the sky so beware
+                Fnorm = norm2x2( Ji[ant], Ji[ant] );
 
                 if (Fnorm != 0.0)
-                    inv2x2( Ji[station], invJi[station] );
-                else
-                    for (i = 0; i < 4; i++)
-                        invJi[station][i] = 0.0 + I*0.0;
+                    for (ch = 0; ch < NCHAN; ch++)
+                        inv2x2S( Ji[ant], invJi[ant][ch] );
+                else {
+                    for (ch = 0; ch < NCHAN; ch++)
+                    for (p1 = 0; p1 < NPOL;  p1++)
+                    for (p2 = 0; p2 < NPOL;  p2++)
+                        invJi[ant][ch][p1][p2] = 0.0 + I*0.0;
+                }
             }
         }
         

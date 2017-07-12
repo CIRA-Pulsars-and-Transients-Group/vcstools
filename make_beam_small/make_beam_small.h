@@ -55,8 +55,8 @@ void get_delays(
         double                 sec_offset,
         struct delays         *delay_vals,
         struct metafits_info  *mi,
-        complex double       **complex_weights_array,  // output
-        complex double       **invJi                   // output
+        complex double      ***complex_weights_array,  // output
+        complex double     ****invJi                   // output
 );
 
 

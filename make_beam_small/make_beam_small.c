@@ -831,28 +831,42 @@ int main(int argc, char **argv) {
 
     }
 
-    complex double **complex_weights_array = NULL;
-    complex double **invJi = NULL;
+    // Allocate memory for complex weights matrices
+    int ant, p, ch; // Loop variables
 
-    // Allocate memory for complex weights and jones matrices
-    int i;
-    complex_weights_array = (complex double **)malloc( nstation * npol * sizeof(complex double *) );
-    for (i = 0; i < nstation*npol; i++)
-        complex_weights_array[i] = (complex double *)malloc( nchan * sizeof(complex double) );
+    complex double  ***complex_weights_array = NULL; // [ant][ch][pol]
+    
+    complex_weights_array = (complex double ***)malloc( nstation * sizeof(complex double **) );
+    for (ant = 0; ant < nstation; ant++) {
+        complex_weights_array[ant] = (complex double **)malloc( nchan * sizeof(complex double *) );
+        for (ch = 0; ch < nchan; ch++) {
+            complex_weights_array[ant][ch] = (complex double *)malloc( npol * sizeof(complex double) );
+        }
+    }
 
-    invJi = (complex double **)malloc( nstation * sizeof(complex double *) );
-    for (i = 0; i < nstation; i++)
-        invJi[i] =(complex double *)malloc( npol * npol * sizeof(complex double) );
+    // Allocate memory for (inverse) Jones matrices
+    complex double ****invJi = NULL; // [ant][ch][pol][pol]
 
-    // these are only used if we are prepending the fitsheader
+    invJi = (complex double ****)malloc( nstation * sizeof(complex double ***) );
+    for (ant = 0; ant < nstation; ant++) {
+        invJi[ant] =(complex double ***)malloc( nchan * sizeof(complex double **) );
+        for (ch = 0; ch < nchan; ch++) {
+            invJi[ant][ch] = (complex double **)malloc( npol * sizeof(complex double *) );
+            for (p = 0; p < npol; p++) {
+                invJi[ant][ch][p] = (complex double *)malloc( npol * sizeof(complex double) );
+            }
+        }
+    }
+
+    // Structure for holding psrfits header information
     struct psrfits pf;
-
 
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, metafits);
     struct metafits_info mi;
     get_metafits_info( metafits, &mi );
 
+    int i;
     if (!weights)
         for (i = 0; i < nstation*npol; i++)
             mi.weights_array[i] = 1.0;
@@ -1010,7 +1024,7 @@ int main(int argc, char **argv) {
                         sDi = (uDi >= 0x8 ? (signed int)uDi - 0x10 : (signed int) uDi);
 
                         e_dash[pol]  = (float)sDr + (float)sDi * I;
-                        e_dash[pol] *= complex_weights_array[ant*npol+pol][ch];
+                        e_dash[pol] *= complex_weights_array[ant][ch][pol];
 
                     }
 
@@ -1025,7 +1039,7 @@ int main(int argc, char **argv) {
                         e_true[pol] = 0.0 + 0.0*I;
 
                         for (opol = 0; opol < npol; opol++)
-                            e_true[pol] += invJi[ant][npol*pol+opol] * e_dash[opol];
+                            e_true[pol] += invJi[ant][ch][pol][opol] * e_dash[opol];
 
                         for (opol = 0; opol < npol; opol++)
                             noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
