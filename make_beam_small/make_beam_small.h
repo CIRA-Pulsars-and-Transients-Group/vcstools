@@ -5,8 +5,9 @@
 #include "psrfits.h"
 
 // Calibration solution types
-#define RTS       0
-#define OFFRINGA  1
+#define RTS           0
+#define RTS_BANDPASS  1
+#define OFFRINGA      2
 
 // A structure to read in all the relevant info from the observation metafits
 // file.

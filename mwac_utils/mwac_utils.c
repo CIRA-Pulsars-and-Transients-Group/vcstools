@@ -858,6 +858,11 @@ int read_bandpass_file(
         if (ant_row % 2 == 0)  J = Jm;          // Decide if the row corresponds to the Jm values (even rows)
         else                   J = Jf;          // or Jf values (odd rows)
 
+        if (J == NULL) {                        // If the caller doesn't care about this row
+            fgets( freqline, max_len, f );      // Skip the rest of this line (freqline isn't needed any more)
+            continue;                           // And start afresh on the next line
+        }
+
         pol = ant_row / 2;                      // Get the polarisation index
 
         for (ci = 0; ci < chan_count; ci++) {   // Loop over the row
