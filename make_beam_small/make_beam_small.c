@@ -5,6 +5,7 @@
 #include <complex.h>
 #include <math.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <string.h>
 #include <errno.h>
 #include <time.h>
@@ -56,12 +57,10 @@ void usage() {
     fprintf(stderr, "-O <Offringa-style calibration solution file>\n");
     fprintf(stderr, "-r <sample rate in Hz>\n");
     fprintf(stderr, "-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
-    fprintf(stderr, "-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
     fprintf(stderr, "-V print version number and exit\n");
     fprintf(stderr, "-w use weights from metafits file [0]\n");
     fprintf(stderr, "-X calibration channel bandwidth (Hz)\n");
     fprintf(stderr, "-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
-    fprintf(stderr, "options: -t [1 or 2] sample size : 1 == 8 bit (INT); 2 == 32 bit (FLOAT)\n");
 }
 
 void populate_psrfits_header(
@@ -701,7 +700,7 @@ int main(int argc, char **argv) {
     double begintime = omp_get_wtime();
     printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
 
-    int c  = 0;
+    int c = 0;
 
     unsigned long int begin = 0;
     unsigned long int end   = 0;
