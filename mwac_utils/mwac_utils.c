@@ -830,7 +830,7 @@ int read_bandpass_file(
     int ant_row       = 0;     // Number between 0 and 7. Each antenna has 8 rows.
     int ch;                    // A counter for channel numbers
     int ci;                    // A counter for channel number indices
-    double re,im;              // For holding the read-in value pairs (real, imaginary)
+    double amp,ph;             // For holding the read-in value pairs (real, imaginary)
     int pol;                   // Number between 0 and 3. Corresponds to position in Jm/Jf matrices: [0,1]
                                //                                                                    [2,3]
     complex double ***J;       // Either points to Jm or Jf, according to which row we're on
@@ -878,9 +878,9 @@ int read_bandpass_file(
         for (ci = 0; ci < chan_count; ci++) {   // Loop over the row
 
             ch = chan_idxs[ci];                 // Get the channel number
-            fscanf(f, "%lf,%lf,", &re, &im);      // Read in the re,im pairs in each row
+            fscanf(f, "%lf,%lf,", &amp, &ph);   // Read in the re,im pairs in each row
 
-            J[ant][ch][pol] = re + im*I;        // Convert to complex number and store in output array
+            J[ant][ch][pol] = amp * cexp(I*ph); // Convert to complex number and store in output array
         }
 
         // (Assumes that the number of values in each row are correct)

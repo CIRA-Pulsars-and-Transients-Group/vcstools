@@ -956,32 +956,6 @@ int main(int argc, char **argv) {
                 &mi,           // Struct containing info from metafits file
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );       // invJi array           (answer will be output here)
-/* DEBUG */
-// Output contents of complex_weigths_array and invJi to file
-char fn[32];
-sprintf(fn, "debug_%d_bandpass.txt", file_no);
-FILE *fh = fopen(fn, "w");
-int p1, p2;
-fprintf(fh, "complex_weights_array\n");
-for (ant = 0; ant < nstation; ant++)
-for (ch = 0; ch < nstation; ch++) {
-    fprintf(fh, "%3d %3d  ", ant, ch);
-    for (p1 = 0; p1 < npol; p1++) {
-        fprintf(fh, "%8f,%8f  ", creal(complex_weights_array[ant][ch][p1]), cimag(complex_weights_array[ant][ch][p1]));
-    }
-    fprintf(fh, "\n");
-}
-fprintf(fh, "invJi\n");
-for (ant = 0; ant < nstation; ant++)
-for (ch = 0; ch < nstation; ch++) {
-    fprintf(fh, "%3d %3d  ", ant, ch);
-    for (p1 = 0; p1 < npol; p1++)
-    for (p2 = 0; p2 < npol; p2++) {
-        fprintf(fh, "%8f,%8f  ", creal(invJi[ant][ch][p1][p2]), cimag(invJi[ant][ch][p1][p2]));
-    }
-    fprintf(fh, "\n");
-}
-/* END DEBUG */
 
 #ifdef PROFILE
         printf("[%f]  Calculating beam --       ", omp_get_wtime()-begintime);
