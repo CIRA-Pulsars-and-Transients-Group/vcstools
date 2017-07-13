@@ -41,26 +41,38 @@
 //#define PROFILE
 
 void usage() {
-    fprintf(stderr, "make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|psrfits\n");
-    fprintf(stderr, "-a <number of antennas>\n");
-    fprintf(stderr, "-b Begin time [must be supplied]\n");
-    fprintf(stderr, "-B <Bandpass file from the RTS> Jones matrix input for fine channels\n");
-    fprintf(stderr, "-C <position of channel solution in Offringa calibration file\n");
-    fprintf(stderr, "-d <data directory root> -- where the recombined data is\n");
-    fprintf(stderr, "-D dd:mm:ss -- the declination to get passed to get_delays\n");
-    fprintf(stderr, "-e End time [must be supplied]\n");
-    fprintf(stderr, "-f <channel number>\n");
-    fprintf(stderr, "-J <DI Jones file from the RTS> Jones matrix input\n");
-    fprintf(stderr, "-m <metafits file> for this obsID\n");
-    fprintf(stderr, "-n <number of channels>\n");
-    fprintf(stderr, "-o obs id\n");
-    fprintf(stderr, "-O <Offringa-style calibration solution file>\n");
-    fprintf(stderr, "-r <sample rate in Hz>\n");
-    fprintf(stderr, "-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
-    fprintf(stderr, "-V print version number and exit\n");
-    fprintf(stderr, "-w use weights from metafits file [0]\n");
-    fprintf(stderr, "-X calibration channel bandwidth (Hz)\n");
-    fprintf(stderr, "-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
+    fprintf(stderr, "\nusage: make_beam_small [OPTIONS]\n\n");
+    fprintf(stderr, "\t********************\n");
+    fprintf(stderr, "\t| REQUIRED OPTIONS |\n");
+    fprintf(stderr, "\t********************\n\n");
+    fprintf(stderr, "\t-b, --begin=GPSTIME\n");
+    fprintf(stderr, "\t\tBegin time of observation, in GPS time.\n\n");
+    fprintf(stderr, "\t-e, --end=GPSTIME\n");
+    fprintf(stderr, "\t\tEnd time of observation, in GPS time.\n\n");
+    fprintf(stderr, "\t*********************\n");
+    fprintf(stderr, "\t| MWA ARRAY OPTIONS |\n");
+    fprintf(stderr, "\t*********************\n\n");
+    fprintf(stderr, "\t-a, --antennas=N\n");
+    fprintf(stderr, "\t\tThe number of antennas in the array. For MWA Phase 2, N=128.\n");
+    fprintf(stderr, "\t\t[default: 128]\n\n");
+    fprintf(stderr, "\t-n, --num-fine-chans=N\n");
+    fprintf(stderr, "\t\tThe number of fine channels per coarse channel.\n");
+    fprintf(stderr, "\t\t[default: 128]\n\n");
+    fprintf(stderr, "\t-B <Bandpass file from the RTS> Jones matrix input for fine channels\n");
+    fprintf(stderr, "\t-C <position of channel solution in Offringa calibration file\n");
+    fprintf(stderr, "\t-d <data directory root> -- where the recombined data is\n");
+    fprintf(stderr, "\t-D dd:mm:ss -- the declination to get passed to get_delays\n");
+    fprintf(stderr, "\t-f <channel number>\n");
+    fprintf(stderr, "\t-J <DI Jones file from the RTS> Jones matrix input\n");
+    fprintf(stderr, "\t-m <metafits file> for this obsID\n");
+    fprintf(stderr, "\t-o obs id\n");
+    fprintf(stderr, "\t-O <Offringa-style calibration solution file>\n");
+    fprintf(stderr, "\t-r <sample rate in Hz>\n");
+    fprintf(stderr, "\t-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
+    fprintf(stderr, "\t-V print version number and exit\n");
+    fprintf(stderr, "\t-w use weights from metafits file [0]\n");
+    fprintf(stderr, "\t-X calibration channel bandwidth (Hz)\n");
+    fprintf(stderr, "\t-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
 }
 
 void populate_psrfits_header(
@@ -698,7 +710,6 @@ int read_pfb_call(char *in_name, char *heap) {
 int main(int argc, char **argv) {
 
     double begintime = omp_get_wtime();
-    printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
 
     int c = 0;
 
@@ -848,6 +859,8 @@ int main(int argc, char **argv) {
         }
 
     }
+
+    printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
 
     // Allocate memory for complex weights matrices
     int ant, p, ch; // Loop variables
