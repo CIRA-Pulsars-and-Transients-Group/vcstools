@@ -146,9 +146,9 @@ void usage() {
     fprintf(stderr, "\n");
     fprintf(stderr, "OTHER OPTIONS\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "\t-h                        ");
+    fprintf(stderr, "\t-h, --help                ");
     fprintf(stderr, "Print this help and exit\n");
-    fprintf(stderr, "\t-V                        ");
+    fprintf(stderr, "\t-V, --version             ");
     fprintf(stderr, "Print version number and exit\n");
     fprintf(stderr, "\n");
 }
@@ -825,7 +825,33 @@ int main(int argc, char **argv) {
         int c;
         while (1) {
 
-            c = getopt(argc, argv, "a:b:B:C:d:D:e:f:FhJ:m:n:o:O:r:R:Vw:W:z:");
+            static struct option long_options[] = {
+                {"obsid",           required_argument, 0, 'o'},
+                {"begin",           required_argument, 0, 'b'},
+                {"end",             required_argument, 0, 'e'},
+                {"utc-time",        required_argument, 0, 'z'},
+                {"dec",             required_argument, 0, 'D'},
+                {"ra",              required_argument, 0, 'R'},
+                {"data-location",   required_argument, 0, 'd'},
+                {"metafits-file",   required_argument, 0, 'm'},
+                {"coarse-chan",     required_argument, 0, 'f'},
+                {"antennas",        required_argument, 0, 'a'},
+                {"num-fine-chans",  required_argument, 0, 'n'},
+                {"fine-chan-width", required_argument, 0, 'w'},
+                {"sample-rate",     required_argument, 0, 'r'},
+                {"use-ant-flags",   no_argument,       0, 'F'},
+                {"dijones-file",    required_argument, 0, 'J'},
+                {"bandpass-file",   required_argument, 0, 'B'},
+                {"rts-chan-width",  required_argument, 0, 'W'},
+                {"offringa-file",   required_argument, 0, 'O'},
+                {"offringa-chan",   required_argument, 0, 'C'},
+                {"help",            required_argument, 0, 'h'},
+                {"version",         required_argument, 0, 'V'}
+            };
+
+            int option_index = 0;
+            c = getopt_long( argc, argv, "a:b:B:C:d:D:e:f:FhJ:m:n:o:O:r:R:Vw:W:z:",
+                             long_options, &option_index);
             if (c == -1)
                 break;
 
@@ -902,6 +928,7 @@ int main(int argc, char **argv) {
                     time_utc = strdup(optarg);
                     break;
                 default:
+                    fprintf(stderr, "Error: unrecognised option '%s'\n", optarg);
                     usage();
                     exit(EXIT_FAILURE);
             }
