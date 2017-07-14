@@ -41,38 +41,116 @@
 //#define PROFILE
 
 void usage() {
-    fprintf(stderr, "\nusage: make_beam_small [OPTIONS]\n\n");
-    fprintf(stderr, "\t********************\n");
-    fprintf(stderr, "\t| REQUIRED OPTIONS |\n");
-    fprintf(stderr, "\t********************\n\n");
-    fprintf(stderr, "\t-b, --begin=GPSTIME\n");
-    fprintf(stderr, "\t\tBegin time of observation, in GPS time.\n\n");
-    fprintf(stderr, "\t-e, --end=GPSTIME\n");
-    fprintf(stderr, "\t\tEnd time of observation, in GPS time.\n\n");
-    fprintf(stderr, "\t*********************\n");
-    fprintf(stderr, "\t| MWA ARRAY OPTIONS |\n");
-    fprintf(stderr, "\t*********************\n\n");
-    fprintf(stderr, "\t-a, --antennas=N\n");
-    fprintf(stderr, "\t\tThe number of antennas in the array. For MWA Phase 2, N=128.\n");
-    fprintf(stderr, "\t\t[default: 128]\n\n");
-    fprintf(stderr, "\t-n, --num-fine-chans=N\n");
-    fprintf(stderr, "\t\tThe number of fine channels per coarse channel.\n");
-    fprintf(stderr, "\t\t[default: 128]\n\n");
-    fprintf(stderr, "\t-B <Bandpass file from the RTS> Jones matrix input for fine channels\n");
-    fprintf(stderr, "\t-C <position of channel solution in Offringa calibration file\n");
-    fprintf(stderr, "\t-d <data directory root> -- where the recombined data is\n");
-    fprintf(stderr, "\t-D dd:mm:ss -- the declination to get passed to get_delays\n");
-    fprintf(stderr, "\t-f <channel number>\n");
-    fprintf(stderr, "\t-J <DI Jones file from the RTS> Jones matrix input\n");
-    fprintf(stderr, "\t-m <metafits file> for this obsID\n");
-    fprintf(stderr, "\t-o obs id\n");
-    fprintf(stderr, "\t-O <Offringa-style calibration solution file>\n");
-    fprintf(stderr, "\t-r <sample rate in Hz>\n");
-    fprintf(stderr, "\t-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
-    fprintf(stderr, "\t-V print version number and exit\n");
-    fprintf(stderr, "\t-w use weights from metafits file [0]\n");
-    fprintf(stderr, "\t-X calibration channel bandwidth (Hz)\n");
-    fprintf(stderr, "\t-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "usage: make_beam_small [OPTIONS]\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "REQUIRED OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-o, --obsid=GPSTIME       ");
+    fprintf(stderr, "Observation ID (GPS seconds).\n");
+    fprintf(stderr, "\t-b, --begin=GPSTIME       ");
+    fprintf(stderr, "Begin time of observation, in GPS seconds\n");
+    fprintf(stderr, "\t-e, --end=GPSTIME         ");
+    fprintf(stderr, "End time of observation, in GPS seconds\n");
+    fprintf(stderr, "\t-z, --utc-time=UTCTIME    ");
+    fprintf(stderr, "The UTC time that corresponds to the GPS time given by the -b\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "option. UTCTIME must have the format: yyyy-mm-ddThh:mm:ss\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-D, --dec=dd:mm:ss.s      ");
+    fprintf(stderr, "Declination of pointing direction\n");
+    fprintf(stderr, "\t-R, --ra=hh:mm:ss.s       ");
+    fprintf(stderr, "Right ascension of pointing direction\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-d, --data-location=PATH  ");
+    fprintf(stderr, "PATH is the directory containing the recombined data\n");
+    fprintf(stderr, "\t-m, --metafits-file=FILE  ");
+    fprintf(stderr, "FILE is the metafits file pertaining to the OBSID given by the\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr,  "-o option\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-f, --coarse-chan=N       ");
+    fprintf(stderr, "Absolute coarse channel number (0-255)\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-a, --antennas=N          ");
+    fprintf(stderr, "The number of antennas in the array. For MWA Phase 2, N=128.     ");
+    fprintf(stderr, "[default: 128]\n");
+    fprintf(stderr, "\t-n, --num-fine-chans=N    ");
+    fprintf(stderr, "The number of fine channels per coarse channel.                  ");
+    fprintf(stderr, "[default: 128]\n");
+    fprintf(stderr, "\t-n, --fine-chan-width=N   ");
+    fprintf(stderr, "The bandwidth of an individual fine channel (Hz).                ");
+    fprintf(stderr, "[default: 10000]\n");
+    fprintf(stderr, "\t-r, --sample-rate=N       ");
+    fprintf(stderr, "The VCS sample rate, in Hz. (The sample rate given in the meta-  ");
+    fprintf(stderr, "[default: 10000]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "metafits file matches the correlator settings at the time of\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the observation, which is not necessarily the same as that of\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the VCS. Hence the necessity of this option.)\n");
+    fprintf(stderr, "\t-F, --use-ant-flags       ");
+    fprintf(stderr, "Only include those antennas in the beamformer that have not      ");
+    fprintf(stderr, "[default: off]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "been flagged in the metafits file given by the -m option.\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "CALIBRATION OPTIONS (RTS)\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-J, --dijones-file=PATH   ");
+    fprintf(stderr, "The direction-independent Jones matrix file that is output from\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the RTS. Using this option instructs the beamformer to use the\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "RTS-generated calibration solution. Either -J or -O must be\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "supplied. If both are supplied the one that comes last will\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "override the former.\n");
+    fprintf(stderr, "\t-B, --bandpass-file=PATH  ");
+    fprintf(stderr, "The bandpass file that is output from the RTS. If this option\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "is given, the RTS calibration solution will be applied to each\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "fine channel. If -J is supplied but -B is not, then the coarse\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "channel solution will be applied to ALL fine channels\n");
+    fprintf(stderr, "\t-W, --rts-chan-width      ");
+    fprintf(stderr, "RTS calibration channel bandwidth (Hz)                           ");
+    fprintf(stderr, "[default: 40000]\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "CALIBRATION OPTIONS (OFFRINGA)\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-O, --offringa-file=PATH  ");
+    fprintf(stderr, "The calibration solution file that is output from the tools\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "made by Andre Offringa. Using this option instructs the beam-\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "former to use the Offringa-style calibration solution. Either\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "-J or -O must be supplied. If both are supplied the one that\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "comes last will override the former.\n");
+    fprintf(stderr, "\t-C, --offringa-chan=N     ");
+    fprintf(stderr, "The zero-offset position of the coarse channel solution in the   ");
+    fprintf(stderr, "[default: 0]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "calibration file given by the -O option.\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "OTHER OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-h                        ");
+    fprintf(stderr, "Print this help and exit\n");
+    fprintf(stderr, "\t-V                        ");
+    fprintf(stderr, "Print version number and exit\n");
+    fprintf(stderr, "\n");
 }
 
 void populate_psrfits_header(
@@ -85,7 +163,6 @@ void populate_psrfits_header(
         int             nchan,
         long int        chan_width,
         int             outpol,
-        int             summed_polns,
         char           *rec_channel,
         struct delays  *delay_vals ) {
 
@@ -123,7 +200,6 @@ void populate_psrfits_header(
     pf->rows_per_file = 200;     // I assume this is a max subint issue
 
     pf->hdr.npol         = outpol;
-    pf->hdr.summed_polns = summed_polns;
     pf->hdr.nchan        = nchan;
     pf->hdr.onlyI        = 0;
 
@@ -221,7 +297,7 @@ void populate_psrfits_header(
 }
 
 
-void get_metafits_info( char *metafits, struct metafits_info *mi ) {
+void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width ) {
 /* Read in the relevant information from the metafits file.
  * This function allocates dynamic memory. Destroy it with
  *   destroy_metafits_info(...)
@@ -243,7 +319,7 @@ void get_metafits_info( char *metafits, struct metafits_info *mi ) {
     fits_read_key(fptr, TDOUBLE, "DEC",      &(mi->tile_pointing_dec), NULL, &status);
     fits_read_key(fptr, TDOUBLE, "AZIMUTH",  &(mi->tile_pointing_az),  NULL, &status);
     fits_read_key(fptr, TDOUBLE, "ALTITUDE", &(mi->tile_pointing_el),  NULL, &status);
-    mi->chan_width = 10000; // Always 10 kHz
+    mi->chan_width = chan_width;
 
     if (status != 0) {
         fprintf(stderr, "Fits status set: failed to read az/alt, ");
@@ -709,47 +785,45 @@ int read_pfb_call(char *in_name, char *heap) {
 
 int main(int argc, char **argv) {
 
-    double begintime = omp_get_wtime();
+    // Variables for required options
+    char              *obsid       = NULL; // The observation ID
+    unsigned long int  begin       = 0;    // GPS time -- when to start beamforming
+    unsigned long int  end         = 0;    // GPS time -- when to stop beamforming
+    char              *time_utc    = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
+    char              *dec_ddmmss  = NULL; // "dd:mm:ss"
+    char              *ra_hhmmss   = NULL; // "hh:mm:ss"
+    char              *datadir     = NULL; // The path to where the recombined data live
+    char              *metafits    = NULL; // filename of the metafits file
+    char              *rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
+    long int           frequency   = 0;    // = rec_channel expressed in Hz
 
-    int c = 0;
+    // Variables for MWA/VCS configuration
+    int                nstation      = 128;    // The number of antennas
+    int                nchan         = 128;    // The number of fine channels (per coarse channel)
+    unsigned int       chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
+    unsigned int       sample_rate   = 10000;  // The VCS sample rate (Hz)
+    int                use_ant_flags = 0;      // Use flags in metafits file?
+    const int          npol          = 2;      // X,Y
+    const int          outpol        = 4;      // I,Q,U,V
 
-    unsigned long int begin = 0;
-    unsigned long int end   = 0;
-
-    int weights = 0;
-    char *rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
-
-    char *obsid = NULL;
-    char *datadirroot = NULL;
-    char **filenames = NULL;
-    int nfiles = 0;
-
-    unsigned int sample_rate = 10000;
-
-    int nchan = 128;
-    nfrequency = nchan;
-    nstation = 128;
-    npol = 2;
-    int outpol = 4;
-    int summed_polns = 0;
-    // These are used to calculate how the input data are ordered
-    int npfb = 4;
-    int nrec = 16;
-    int ninc = 4;
-
-    char *dec_ddmmss    = NULL; // "dd:mm:ss"
-    char *ra_hhmmss     = NULL; // "hh:mm:ss"
-    char *metafits      = NULL; // filename of the metafits file
-    char *time_utc      = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
-
-    long int frequency  = 0;
-
+    // Variables for calibration settings
     struct calibration cal;
-    cal.chan_width = 0;
+    cal.filename          = NULL;
+    cal.bandpass_filename = NULL;
+    cal.chan_width        = 40000;
+    cal.nchan             = 0;
+    cal.cal_type          = NO_CALIBRATION;
+    cal.offr_chan_num     = 0;
+
+    // These are used to calculate how the input data are ordered
+    const int npfb = 4;
+    const int nrec = 16;
+    const int ninc = 4;
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:B:C:d:D:e:f:hJ:m:n:o:O:r:R:VwW:X:z:")) != -1) {
+        int c;
+        while ((c = getopt(argc, argv, "a:b:B:C:d:D:e:f:FhJ:m:n:o:O:r:R:VW:z:")) != -1) {
             switch(c) {
 
                 case 'a':
@@ -766,7 +840,7 @@ int main(int argc, char **argv) {
                     cal.offr_chan_num = atoi(optarg);
                     break;
                 case 'd':
-                    datadirroot = strdup(optarg);
+                    datadir = strdup(optarg);
                     break;
                 case 'D':
                     dec_ddmmss = strdup(optarg);
@@ -777,6 +851,9 @@ int main(int argc, char **argv) {
                 case 'f':
                     rec_channel = strdup(optarg);
                     frequency = atoi(optarg) * 1.28e6 - 640e3; // The base frequency of the coarse channel in Hz
+                    break;
+                case 'F':
+                    use_ant_flags = 1;
                     break;
                 case 'h':
                     usage();
@@ -811,9 +888,9 @@ int main(int argc, char **argv) {
                     exit(0);
                     break;
                 case 'w':
-                    weights = 1;
+                    chan_width = atoi(optarg);
                     break;
-                case 'X':
+                case 'W':
                     cal.chan_width = atoi(optarg);
                     break;
                 case 'z':
@@ -825,42 +902,52 @@ int main(int argc, char **argv) {
             }
         }
     }
-
-    if (cal.cal_type == RTS_BANDPASS) { // If -B was supplied...
-        // ... user must also supply -X
-        if (cal.chan_width <= 0) {
-            fprintf(stderr, "Error: please supply a positive (>0) calibration channel bandwidth\n");
-            usage();
-            exit(EXIT_FAILURE);
-        }
+    else {
+        usage();
+        exit(EXIT_FAILURE);
     }
 
-    if (datadirroot) {
-
-        // Generate list of files to work on
-
-        // Calculate the number of files
-        nfiles = end - begin + 1;
-        if (nfiles <= 0) {
-            fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
-            exit(EXIT_FAILURE);
-        }
-
-        // Allocate memory for the file name list
-        filenames = (char **)malloc( nfiles*sizeof(char *) );
-
-        // Allocate memory and write filenames
-        int second;
-        unsigned long int timestamp;
-        for (second = 0; second < nfiles; second++) {
-            timestamp = second + begin;
-            filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
-            sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadirroot, obsid, timestamp, rec_channel );
-        }
-
+    // Check that all the required options were supplied
+    if (obsid == NULL || begin == 0 || end  == 0 || time_utc == NULL ||
+        dec_ddmmss == NULL || ra_hhmmss == NULL || datadir == NULL ||
+        metafits == NULL || rec_channel == NULL)
+    {
+        fprintf(stderr, "Error: missing required options\n");
+        usage();
+        exit(EXIT_FAILURE);
     }
 
+    // Check that a calibration solution was supplied
+    if (cal.cal_type == NO_CALIBRATION)
+    {
+        fprintf(stderr, "Error: no calibration solution supplied\n");
+        usage();
+        exit(EXIT_FAILURE);
+    }
+
+    // Start counting time from here (i.e. after parsing the command line)
+    double begintime = omp_get_wtime();
     printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
+
+    // Calculate the number of files
+    int nfiles = end - begin + 1;
+    if (nfiles <= 0) {
+        fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate memory for the file name list
+    char **filenames = NULL;
+    filenames = (char **)malloc( nfiles*sizeof(char *) );
+
+    // Allocate memory and write filenames
+    int second;
+    unsigned long int timestamp;
+    for (second = 0; second < nfiles; second++) {
+        timestamp = second + begin;
+        filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
+        sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadir, obsid, timestamp, rec_channel );
+    }
 
     // Allocate memory for complex weights matrices
     int ant, p, ch; // Loop variables
@@ -895,14 +982,14 @@ int main(int argc, char **argv) {
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, metafits);
     struct metafits_info mi;
-    get_metafits_info( metafits, &mi );
+    get_metafits_info( metafits, &mi, chan_width );
 
     // If using bandpass calibration solutions, calculate number of expected bandpass channels
     if (cal.cal_type == RTS_BANDPASS)
-        cal.nchan = (nchan * mi.chan_width) / cal.chan_width;
+        cal.nchan = (nchan * chan_width) / cal.chan_width;
 
     int i;
-    if (!weights)
+    if (!use_ant_flags)
         for (i = 0; i < nstation*npol; i++)
             mi.weights_array[i] = 1.0;
 
@@ -930,8 +1017,7 @@ int main(int argc, char **argv) {
 
     // now we need to create a fits file and populate its header
     populate_psrfits_header( &pf, metafits, obsid, time_utc, sample_rate,
-            frequency, nchan, mi.chan_width, outpol, summed_polns,
-            rec_channel, &delay_vals );
+            frequency, nchan, chan_width, outpol, rec_channel, &delay_vals );
 
     // Create array for holding the raw data
     int bytes_per_file = sample_rate * nstation * npol * nchan;
@@ -1224,7 +1310,7 @@ int main(int argc, char **argv) {
     }
 
     // Free up memory for filenames
-    if (datadirroot) {
+    if (datadir) {
         int second;
         for (second = 0; second < nfiles; second++)
             free( filenames[second] );
