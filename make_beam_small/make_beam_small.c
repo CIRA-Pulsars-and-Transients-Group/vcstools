@@ -55,11 +55,9 @@ void usage() {
     fprintf(stderr, "-O <Offringa-style calibration solution file>\n");
     fprintf(stderr, "-r <sample rate in Hz>\n");
     fprintf(stderr, "-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
-    fprintf(stderr, "-S <bit mask> -- bit number 0 = swap pol, 1 == swap R and I, 2 conjugate sky\n");
     fprintf(stderr, "-V print version number and exit\n");
     fprintf(stderr, "-w use weights from metafits file [0]\n");
     fprintf(stderr, "-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
-    fprintf(stderr, "options: -t [1 or 2] sample size : 1 == 8 bit (INT); 2 == 32 bit (FLOAT)\n");
 
 }
 
@@ -737,7 +735,7 @@ int main(int argc, char **argv) {
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:C:d:D:e:f:hJ:m:n:o:O:r:R:VwW:z:")) != -1) {
+        while ((c = getopt(argc, argv, "a:b:C:d:D:e:f:hJ:m:n:o:O:r:R:Vwz:")) != -1) {
             switch(c) {
 
                 case 'a':
