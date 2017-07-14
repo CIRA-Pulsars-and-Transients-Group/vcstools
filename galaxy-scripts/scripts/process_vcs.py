@@ -494,24 +494,27 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
 				print "Couldn't find any recombine files. Aborting here."
 
 
-def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id):
+def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,count=0):
     import re
-
+    import numpy as np
     chan_file_dict = {} # used to keep track of which file needs how many nodes
     
-    count = 0
+    #count = 0
     for c in chan_groups:
         if len(c)==1:
             #single channel group, write its own rts_in file
-	    if chan_type == "low":
-                subid = str(count+1)
-	    elif chan_type == "high":
-		subid = str(24-count)
-	    else:
-		print "No channel group given, assuming low"
-		subid = str(count+1)
+	    subid = str(count+1)
 
-            basefreq = 1.28*(c[0]-count)-0.625
+	    # NOTE: we've already re-ordered the channels respectively, so no need to do any weird counting
+	    #if chan_type == "low":
+            #    subid = str(count+1)
+	    #elif chan_type == "high":
+	    #	subid = str(count+1)
+	    #else:
+	    #	print "No channel group given, assuming low"
+	    #	subid = str(count+1)
+
+            basefreq = 1.28*c[0]-0.625
 
             # use re.compile to make search expressions
             with open(rts_in_file,'rb') as f:
@@ -525,19 +528,24 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id):
             chan_file_dict[fname] = 1 # this particular rts_in file has only 1 channel
             with open(fname,'wb') as f:
                 f.write(string)
+	    
+	    print "Single channel:: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2})".format(subid,c[0],basefreq)
 
             count += 1
         elif len(c)>1:
             # multiple consecutive channels
-	    if chan_type == "low":
-                subids = [str(count+i+1) for i in range(len(c))]
-	    elif chan_type == "high":
-		subids = [str(24-count-i) for i in range(len(c))]
-	    else:
-		print "No channel group given, assuming low"
-                subid = [str(count+i+1) for i in range(len(c))]
+	    subids = [str(count+i+1) for i in range(len(c))]
+	    
+	    #if chan_type == "low":
+            #    subids = [str(count+i+1) for i in range(len(c))]
+	    #elif chan_type == "high":
+	    #	subids = [str(count+i+1) for i in range(len(c))]
+	    #else:
+	    #	print "No channel group given, assuming low"
+            #    subid = [str(count+i+1) for i in range(len(c))]
 
-            basefreq = 1.28*(min(c)-count)-0.625
+	    freqs = 1.28*np.array(c)-0.625
+            basefreq = min(freqs)
 
             # use re.compile to make search expressions
             with open(rts_in_file,'rb') as f:
@@ -546,6 +554,8 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id):
                 string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq),string)
                 # include the SubBandIDs tag
                 string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)),string)
+	    
+	    print "Multiple channels:: (subband ids, abs. chans, abs. freqs) = {0}".format(", ".join("({0}, {1}, {2})".format(i,j,k) for i,j,k in zip(subids,c,freqs)))
 
 	    if chan_type == "low":
                 fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,min(c),max(c))
@@ -565,7 +575,7 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id):
             sys.exit(1)
 
 
-    return chan_file_dict
+    return chan_file_dict,count
 
 
 def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=None):
@@ -647,16 +657,17 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
 	print "Low channels (grouped):",lochan_groups
 
 	# for each group of channels, we need to write 1 rts_in file
-	print "Writing subband rts_in files"
+	print "Mapping GPU box numbers to coarse channels..."
 	basepath = os.path.dirname(rts_in_file)
 
 	# write out the RTS in files and keep track of the number of nodes required for each
-	lodict = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low",cal_obs_id)
-	hidict = write_rts_in_files(hichan_groups,basepath,rts_in_file,"high",cal_obs_id)
+	count = 0
+	lodict,count = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low",cal_obs_id,count)
+	hidict,count = write_rts_in_files(hichan_groups,basepath,rts_in_file,"high",cal_obs_id,count)
 	chan_file_dict = lodict.copy()
 	chan_file_dict.update(hidict)
 
-        print "Editting run_rts.sh script for group sizes... (creating temporary copies)"	     
+        #print "Editting run_rts.sh script for group sizes... (creating temporary copies)"
         # the new, channel-based rts_in files should now be in the same location as the original rts_in file
         # we need to now adjust the run_rts.sh script to work for each of the groups
         lolengths = set([len(l) for l in lochan_groups]) # figure out the unique lengths 
@@ -664,7 +675,7 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
         lengths = lolengths.union(hilengths) # combine the sets
     
         # Now submit the RTS jobs
-        print "Submitting RTS jobs"
+        print "Writing and submitting RTS jobs"
         
         for k,v in chan_file_dict.iteritems():
        	    nnodes = v + 1
