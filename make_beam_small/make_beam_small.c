@@ -82,7 +82,7 @@ void usage() {
     fprintf(stderr, "\t-n, --num-fine-chans=N    ");
     fprintf(stderr, "The number of fine channels per coarse channel.                  ");
     fprintf(stderr, "[default: 128]\n");
-    fprintf(stderr, "\t-n, --fine-chan-width=N   ");
+    fprintf(stderr, "\t-w, --fine-chan-width=N   ");
     fprintf(stderr, "The bandwidth of an individual fine channel (Hz).                ");
     fprintf(stderr, "[default: 10000]\n");
     fprintf(stderr, "\t-r, --sample-rate=N       ");
@@ -823,7 +823,12 @@ int main(int argc, char **argv) {
     if (argc > 1) {
 
         int c;
-        while ((c = getopt(argc, argv, "a:b:B:C:d:D:e:f:FhJ:m:n:o:O:r:R:VW:z:")) != -1) {
+        while (1) {
+
+            c = getopt(argc, argv, "a:b:B:C:d:D:e:f:FhJ:m:n:o:O:r:R:Vw:W:z:");
+            if (c == -1)
+                break;
+
             switch(c) {
 
                 case 'a':
