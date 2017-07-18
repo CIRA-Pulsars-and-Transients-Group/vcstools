@@ -165,10 +165,10 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         os.remove('obscrt.crt')
         os.remove('obskey.key')
     # make a copy of the file in the product_dir if that directory exists
-    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /scratch2)
+    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
     # in case --work_dir was specified in process_vcs call product_dir and data_dir
     # are the same and thus we will not perform the copy
-    product_dir = data_dir.replace('/scratch2/mwaops/vcs/', '/group/mwaops/vcs/') # being pedantic
+    product_dir = data_dir.replace('/astro/mwaops/vcs/', '/group/mwaops/vcs/') # being pedantic
     if os.path.exists(product_dir) and not os.path.exists(metafits_file):
         print "Copying {0} to {1}".format(metafits_file, product_dir)
         from shutil import copy2
@@ -330,8 +330,8 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False):
     mdir(batch_dir, 'Batch')
     # obsdownload creates the folder cal_obs_id regardless where it runs
     # this deviates from our initially inteded naming conventions of 
-    # /scratch2/mwaopos/vcs/[cal_obs_id]/vis but the renaming and linking is a pain otherwise,
-    # hence we'll link vis agains /scratch2/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
+    # /astro/mwaopos/vcs/[cal_obs_id]/vis but the renaming and linking is a pain otherwise,
+    # hence we'll link vis agains /astro/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
     target_dir = '{0}'.format(cal_obs_id) 
     link = 'vis'
 
@@ -905,7 +905,7 @@ if __name__ == '__main__':
     parser.add_option("-i", "--increment", type="int", default=64, help="Increment in seconds (how much we process at once) [default=%default]")
     parser.add_option("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
     parser.add_option("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default " + \
-                          "raw data will will be downloaded into /scratch2/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."+ \
+                          "raw data will will be downloaded into /astro/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."+ \
                           " If set, this will create a folder for the Obs. ID if it doesn't exist [default=%default]")
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
@@ -958,7 +958,7 @@ if __name__ == '__main__':
         time.sleep(5)
         data_dir = product_dir = "{0}/{1}".format(opts.work_dir, opts.obs)
     else:
-        data_dir = '/scratch2/mwaops/vcs/{0}'.format(opts.obs)
+        data_dir = '/astro/mwaops/vcs/{0}'.format(opts.obs)
         product_dir = '/group/mwaops/vcs/{0}'.format(opts.obs)
     batch_dir = "{0}/batch".format(product_dir)
     mdir(data_dir, "Data")
