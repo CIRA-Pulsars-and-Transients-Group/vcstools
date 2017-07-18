@@ -17,10 +17,6 @@ parser = OptionParser(usage = "usage: %prog <options>" +
 """
 Print rows from the job database
 """)
-
-con = lite.connect(DB_FILE)
-#con = lite.connect(DB_FILE, detect_types=lite.PARSE_DECLTYPES|lite.PARSE_COLNAMES) # return datetime as datetime objects
-con.row_factory = dict_factory
 parser.add_option("-r", "--recent", dest="recent", metavar="HOURS", default=None, type=float, help="print only jobs started in the last N hours")
 parser.add_option("-n", "--number", dest="n", metavar="N", default=20, type=int, help="number of jobs to print [default=%default]")
 parser.add_option("-a", "--all", dest="all", action="store_true", help="print all lines of the database")
@@ -29,6 +25,10 @@ parser.add_option("-e", "--endrow", dest="endrow", default=None, type=int, help=
 parser.add_option("-u", "--user", dest="user", default=None, type=str, help="Only prints one user's jobs.")
 parser.add_option("-o", "--obsid", dest="obsid", default=None, type=str, help="Only prints one obsid's jobs.")
 opts, args = parser.parse_args()
+
+con = lite.connect(DB_FILE)
+#con = lite.connect(DB_FILE, detect_types=lite.PARSE_DECLTYPES|lite.PARSE_COLNAMES) # return datetime as datetime objects
+con.row_factory = dict_factory
 
 if len(args) != 0:
     parser.error("Incorrect number of arguments")
