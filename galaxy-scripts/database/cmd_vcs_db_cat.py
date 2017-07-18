@@ -12,6 +12,39 @@ def dict_factory(cursor, row):
     for idx, col in enumerate(cursor.description):
         d[col[0]] = row[idx]
     return d
+    
+def add_database_function():
+    batch_line ='function run\n' +\
+                '{\n' +\
+                '    # run command and add relevant data to the job database\n' +\
+                '    # 1st parameter is command to be run (e.g. wsclean)\n' +\
+                '    # 2nd parameter is parameters to that command (e.g. "-j $ncpus")\n' +\
+                '    # 3rd parameter is datadir\n' +\
+                '    # 4th parameter is project\n' +\
+                '    # 5th parameter is obsid\n' +\
+                '    # 6th parameter is chans [optional]\n' +\
+                '    if [ -z "$6" ]; then\n' +\
+                '        rownum=`cmd_start.py $1 -a "$2" -d $3 -p $4 -o $5`\n' +\
+                '    else\n' +\
+                '        rownum=`cmd_start.py $1 -a "$2" -d $3 -p $4 -o $5 -c $6`\n' +\
+                '    fi\n' +\
+                '    $1 $2\n' +\
+                '    errcode=$?\n' +\
+                '    cmd_stop.py $rownum -e $errcode\n' +\
+                '    echo "cmd_stop.py $rownum -e $errcode"\n' +\
+                '    if [ "$errcode" != "0" ]; then\n' +\
+                '        exit $errcode\n' +\
+                '    fi\n' +\
+                '}\n'
+    return batch_line
+
+"""
+batch_line = "run prepsubband '-ncpus 8 -lodm " + str(dm_start) +\
+                " -dmstep " + str(dm_line[2]) + " -numdms 500 -numout " + str(numout) +\
+                " -o " + str(obsid) + " /group/mwaops/vcs/" + str(obsid) + \
+                "/pointings/" + str(pointing) + "/" + str(obsid) + "*.fits' " +\
+                work_dir + ' blindsearch ' + obsid
+"""
 
 parser = OptionParser(usage = "usage: %prog <options>" +
 """
