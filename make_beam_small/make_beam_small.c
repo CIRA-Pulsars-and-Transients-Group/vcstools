@@ -218,10 +218,10 @@ void populate_psrfits_header(
     pf->hdr.ds_time_fact = 1;
 
     // some things that we are unlikely to change
-    pf->hdr.fd_hand  = 0;
-    pf->hdr.fd_sang  = 0.0;
+    pf->hdr.fd_hand  = 1;
+    pf->hdr.fd_sang  = 45.0;
     pf->hdr.fd_xyph  = 0.0;
-    pf->hdr.be_phase = 0.0;
+    pf->hdr.be_phase = 0;
     pf->hdr.chan_dm  = 0.0;
 
     // Now set values for our subint structure
