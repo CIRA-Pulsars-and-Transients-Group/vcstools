@@ -499,7 +499,7 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,cou
     import numpy as np
     chan_file_dict = {} # used to keep track of which file needs how many nodes
     
-    #count = 0
+    cc = 0
     for c in chan_groups:
         if len(c)==1:
             #single channel group, write its own rts_in file
@@ -513,8 +513,16 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,cou
             #else:
             #        print "No channel group given, assuming low"
             #        subid = str(count+1)
+         
+            if chan_type == "low":
+                offset = cc
+            elif chan_type == "high":
+                offset = 24-int(subid)
+            else:
+                print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
+                sys.exit(1)
 
-            basefreq = 1.28*c[0]-0.625
+            basefreq = 1.28*(c[0]-offset)-0.625
 
             # use re.compile to make search expressions
             with open(rts_in_file,'rb') as f:
@@ -529,9 +537,10 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,cou
             with open(fname,'wb') as f:
                 f.write(string)
             
-            print "Single channel:: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2})".format(subid,c[0],basefreq)
+            print "Single channel:: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2}) {3}".format(subid,c[0],basefreq,cc)
 
             count += 1
+            cc += 1
         elif len(c)>1:
             # multiple consecutive channels
             subids = [str(count+i+1) for i in range(len(c))]
@@ -543,8 +552,16 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,cou
             #else:
             #        print "No channel group given, assuming low"
             #    subid = [str(count+i+1) for i in range(len(c))]
-
-            freqs = 1.28*np.array(c)-0.625
+        
+            if chan_type == "low":
+                offset = cc
+            elif chan_type == "high":
+                offset = np.array([24-int(x) for x in subids])
+            else:
+                print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
+                sys.exit(1)
+  
+            freqs = 1.28*(np.array(c)-offset)-0.625
             basefreq = min(freqs)
 
             # use re.compile to make search expressions
@@ -570,6 +587,7 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,cou
                 f.write(string)
 
             count += len(c)
+            cc += len(c)
         else:
             print "Reached a channel group with no entries!? Aborting."
             sys.exit(1)
