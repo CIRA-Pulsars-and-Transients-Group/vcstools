@@ -75,6 +75,81 @@ def deg2sex( ra, dec):
     
     # return RA and DEC in "hh:mm:ss.ssss dd:mm:ss.ssss" form
     return coords
+
+    
+def grab_FRBalog():
+    """
+    Creates a catalogue csv file using data from http://www.astronomy.swin.edu.au/pulsar/frbcat/table.php?format=html
+    
+    grab_GCalog()
+    """
+    rratalog_website = 'http://www.astronomy.swin.edu.au/pulsar/frbcat/table.php?format=html'
+
+    print "Retrieveing base FRBalog from {0}".format(rratalog_website)
+    os.system( 'rm table.php?format=html')
+    os.system( 'wget {0}'.format( rratalog_website))
+
+    print "Converting to CSV format for easier use..."
+    txt_file = "table.php?format=html"
+    csv_file = "frbalog.csv"
+
+
+    with open(txt_file,"rb") as in_txt:
+        lines = in_txt.readlines()
+        
+        header = ['NAME','Raj','Decj']    
+        data = []
+        for l in lines[7:]:
+            ltemp = l.strip('<td>').split('</td>')
+            #print ltemp
+            if len(ltemp) > 2:
+                ratemp = ltemp[7].lstrip('<td>')
+                dectemp = ltemp[8].lstrip('<td>')
+                temp = [ltemp[0].lstrip('<td>')[:9],ratemp,dectemp]
+                print temp
+                data.append(temp)
+    
+    #loop to format ra and dec
+    for i in range(len(data)):
+        data[i][0] = data[i][0].replace('*','')
+
+        if data[i][1].endswith(":"):
+            data[i][1]=data[i][1]+'00'
+    
+        if len(data[i][1])==5:
+            data[i][1]=data[i][1]+':00'
+
+        if len(data[i][1])==7:
+            data[i][1]=data[i][1]+'0'
+    
+
+        if len(data[i][2])==2 or (len(data[i][2])==3 and \
+                          data[i][2].startswith('-')):
+            data[i][2]=data[i][2]+':00:00'
+    
+        if len(data[i][2])==5 or len(data[i][2])==6:
+            data[i][2]=data[i][2]+':00'
+
+        if len(data[i][2])==3 and data[i][2].endswith(':'):
+            data[i][2]=data[i][2]+'00:00'
+
+        if data[i][2].startswith('-') and data[i][2].endswith(':0'):
+            data[i][2]=data[i][2]+'0'
+            print data[i][2]
+
+        if len(data[i][2])==7 and data[i][2].endswith(':'):
+            data[i][2]=data[i][2]+'00'
+            
+        #error fix in the database
+        if '.' in data[i][2][:7]:
+            data[i][2] = data[i][2][:7].replace('.',':') + data[i][2][7:]
+    
+    with open(csv_file,"wb") as out_csv:
+        out_csv.write(','.join(header)+'\n')
+        for d in data:
+            out_csv.write(','.join(d)+'\n')
+    
+    return
     
 
 def grab_GCalog():
@@ -85,7 +160,7 @@ def grab_GCalog():
     """
     rratalog_website = 'http://physwww.physics.mcmaster.ca/~harris/mwgc.dat'
 
-    print "Retrieveing base RRATalog from {0}".format( rratalog_website)
+    print "Retrieveing base GCalog from {0}".format( rratalog_website)
     os.system( 'rm mwgc.dat')
     os.system( 'wget {0}'.format( rratalog_website))
 
@@ -96,7 +171,7 @@ def grab_GCalog():
 
     with open(txt_file,"rb") as in_txt:
         lines = in_txt.readlines()
-        lines = lines[71:229] #may have to check if this changes
+        lines = lines[71:229] #TODO may have to check if this changes
     
         header = ['ID','RA','DEC']    
         data = []
@@ -808,6 +883,7 @@ sourargs = parser.add_argument_group('Source options', 'The different options to
 sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"')
 sourargs.add_argument('--RRAT',action='store_true',help='Searches for all known RRATs.')
 sourargs.add_argument('--GC',action='store_true',help='Searches for all known Globular Clusters.')
+sourargs.add_argument('--FRB',action='store_true',help='Searches for all known FRBs.')
 #TODO Eventually impliment to search for FRBs and a search for all mode
 sourargs.add_argument('--dl_RRAT',action='store_true',help='Download the RRATalog from http://astro.phys.wvu.edu/rratalog/ and uses this as the source catalogue.')
 sourargs.add_argument('--dl_PSRCAT',action='store_true',help='Download the Puslar alog from http://www.atnf.csiro.au/research/pulsar/psrcat/ and uses this as the source catalogue.')
@@ -840,6 +916,8 @@ else:
         catDIR = 'rratalog.csv'
     elif args.GC:
         catDIR = 'gcalog.csv'
+    elif args.FRB:
+        catDIR = 'frbalog.ccsv'
     elif args.pulsar:
         if args.pulsar == None:
             catDIR = 'pulsaralog.csv'
@@ -871,7 +949,7 @@ else:
     if args.RRAT or args.GC:
         c1, c2 = ['RA','DEC']
     else:
-        c1, c2 = ['Raj', 'Decj']
+        c1, c2 = ['Raj', 'Decj'] 
 
 #defaults for the fits dirs
 if args.FITS_dir:
@@ -893,6 +971,8 @@ else:
         name_col = '-1'
     elif args.GC:
         name_col = 'ID'
+    elif args.FRB:
+        name_col = 'NAME'
     else:
         name_col = 'Jname'
 
@@ -918,6 +998,9 @@ else:
         elif args.GC:
             grab_GCalog()
             catalog = Table.read('gcalog.csv')
+        elif args.FRB:
+            grab_FRBalog()
+            catalog = Table.read('frbalog.csv')
         else:
             grab_pulsaralog()
             catalog = Table.read('pulsaralog.csv')
