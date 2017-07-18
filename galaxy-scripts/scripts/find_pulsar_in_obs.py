@@ -76,6 +76,75 @@ def deg2sex( ra, dec):
     # return RA and DEC in "hh:mm:ss.ssss dd:mm:ss.ssss" form
     return coords
     
+
+def grab_GCalog():
+    """
+    Creates a catalogue csv file using data from http://physwww.physics.mcmaster.ca/~harris/mwgc.dat
+    
+    grab_GCalog()
+    """
+    rratalog_website = 'http://physwww.physics.mcmaster.ca/~harris/mwgc.dat'
+
+    print "Retrieveing base RRATalog from {0}".format( rratalog_website)
+    os.system( 'rm mwgc.dat')
+    os.system( 'wget {0}'.format( rratalog_website))
+
+    print "Converting to CSV format for easier use..."
+    txt_file = "mwgc.dat"
+    csv_file = "gcalog.csv"
+
+
+    with open(txt_file,"rb") as in_txt:
+        lines = in_txt.readlines()
+        lines = lines[71:229] #may have to check if this changes
+    
+        header = ['ID','RA','DEC']    
+        data = []
+        for l in lines[1:]:
+            ratemp = l[25:37].rstrip().replace(' ',':')
+            dectemp = l[38:51].rstrip().replace(' ',':')
+            temp = [l[1:10].rstrip(),ratemp,dectemp]
+            print temp
+            data.append(temp)
+    
+    #loop to format ra and dec
+    for i in range(len(data)):
+        data[i][0] = data[i][0].replace('*','')
+
+        if data[i][1].endswith(":"):
+            data[i][1]=data[i][1]+'00'
+    
+        if len(data[i][1])==5:
+            data[i][1]=data[i][1]+':00'
+
+        if len(data[i][1])==7:
+            data[i][1]=data[i][1]+'0'
+    
+
+        if len(data[i][2])==2 or (len(data[i][2])==3 and \
+                          data[i][2].startswith('-')):
+            data[i][2]=data[i][2]+':00:00'
+    
+        if len(data[i][2])==5 or len(data[i][2])==6:
+            data[i][2]=data[i][2]+':00'
+
+        if len(data[i][2])==3 and data[i][2].endswith(':'):
+            data[i][2]=data[i][2]+'00:00'
+
+        if data[i][2].startswith('-') and data[i][2].endswith(':0'):
+            data[i][2]=data[i][2]+'0'
+            print data[i][2]
+
+        if len(data[i][2])==7 and data[i][2].endswith(':'):
+            data[i][2]=data[i][2]+'00'
+    
+    with open(csv_file,"wb") as out_csv:
+        out_csv.write(','.join(header)+'\n')
+        for d in data:
+            out_csv.write(','.join(d)+'\n')
+    
+    return
+
     
 def grab_RRATalog(jlist=None):
     """
@@ -738,6 +807,7 @@ parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation 
 sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
 sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"')
 sourargs.add_argument('--RRAT',action='store_true',help='Searches for all known RRATs.')
+sourargs.add_argument('--GC',action='store_true',help='Searches for all known Globular Clusters.')
 #TODO Eventually impliment to search for FRBs and a search for all mode
 sourargs.add_argument('--dl_RRAT',action='store_true',help='Download the RRATalog from http://astro.phys.wvu.edu/rratalog/ and uses this as the source catalogue.')
 sourargs.add_argument('--dl_PSRCAT',action='store_true',help='Download the Puslar alog from http://www.atnf.csiro.au/research/pulsar/psrcat/ and uses this as the source catalogue.')
@@ -768,7 +838,9 @@ if args.in_cat:
 else:
     if args.RRAT:
         catDIR = 'rratalog.csv'
-    if args.pulsar:
+    elif args.GC:
+        catDIR = 'gcalog.csv'
+    elif args.pulsar:
         if args.pulsar == None:
             catDIR = 'pulsaralog.csv'
         if (len(args.pulsar) ==1) and (not args.obs_for_source):
@@ -796,7 +868,7 @@ if args.coord_names:
 else:
     if args.pulsar:
         c1, c2 = ['Raj', 'Decj']
-    if args.RRAT:
+    if args.RRAT or args.GC:
         c1, c2 = ['RA','DEC']
     else:
         c1, c2 = ['Raj', 'Decj']
@@ -819,6 +891,8 @@ else:
         name_col = 'Jname'
     elif args.coords:
         name_col = '-1'
+    elif args.GC:
+        name_col = 'ID'
     else:
         name_col = 'Jname'
 
@@ -841,6 +915,9 @@ else:
         if args.RRAT:
             grab_RRATalog()
             catalog = Table.read('rratalog.csv')
+        elif args.GC:
+            grab_GCalog()
+            catalog = Table.read('gcalog.csv')
         else:
             grab_pulsaralog()
             catalog = Table.read('pulsaralog.csv')
