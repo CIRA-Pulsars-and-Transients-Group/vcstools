@@ -3,7 +3,7 @@ import os
 import sys
 import numpy as np
 import re
-from reorder_chans import *
+import argparse
 from process_vcs import submit_slurm, getmeta, mdir
 
 #################################
@@ -55,7 +55,7 @@ class Calibration(object):
             self.picket_fence = True
 
 
-    def construct_metafile(self):
+    def get_obs_channels(self):
         metafile = "{0}/{1}.meta".format(self.product_dir, self.cal_obsid)
         metafile_exists = False
         print metafile
@@ -90,7 +90,6 @@ class Calibration(object):
 ##################
 
 
-
 def compute_basefreq(offset, channels):
     if len(channels) == 1:
         return 1.28 *(channels[0] - offset) - 0.625
@@ -118,6 +117,7 @@ def write_rts_in_files(chan_groups, basepath, chan_type, calobj, count=0):
                 print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
                 sys.exit(1)
 
+            freq = 1.28*c[0]-0.625
             basefreq = compute_basefreq(offset, c)
 
             # use re.compile to make search expressions
@@ -134,7 +134,7 @@ def write_rts_in_files(chan_groups, basepath, chan_type, calobj, count=0):
             with open(fname,'wb') as f:
                 f.write(string)
     
-            print "Single channel:: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2}) {3}".format(subid, c[0], basefreq, cc)
+            print "Single channel:: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2})".format(subid, c[0], freq)
 
             count += 1
             cc += 1
@@ -151,7 +151,7 @@ def write_rts_in_files(chan_groups, basepath, chan_type, calobj, count=0):
                 print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
                 sys.exit(1)
 
-            freqs = 1.28*(np.array(c)-offset)-0.625
+            freqs = 1.28*(np.array(c))-0.625
             basefreq = compute_basefreq(offset, c)
 
             # use re.compile to make search expressions
@@ -182,9 +182,6 @@ def write_rts_in_files(chan_groups, basepath, chan_type, calobj, count=0):
 
 
     return chan_file_dict,count
-
-
-
 
 
 def construct_RTS_scripts(calobj):
@@ -253,10 +250,14 @@ def construct_RTS_scripts(calobj):
 
 
 
+#TODO: need to implement options and checks before going into main function to create RTS scripts
+
+
+
 a = Calibration(1099415632,1099415632,"/astro/mwaops/bmeyers/test2/rts/rts-chan15-20.in","/astro/mwaops/bmeyers/test2")
 #a = Calibration(1099414416,1099414416,"test_rts.in","/astro/mwaops/bmeyers/test2")
 a.summary()
-a.construct_metafile()
+a.get_obs_channels()
 a.is_picket_fence()
 a.summary()
 construct_RTS_scripts(a)
