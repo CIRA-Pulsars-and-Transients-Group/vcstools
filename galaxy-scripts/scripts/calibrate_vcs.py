@@ -56,9 +56,8 @@ class Calibration(object):
 
 
     def get_obs_channels(self):
-        metafile = "{0}/{1}.meta".format(self.product_dir, self.cal_obsid)
+        metafile = "{0}/{1}.meta".format(self.rts_out_dir, self.cal_obsid)
         metafile_exists = False
-        print metafile
 
         channels = None
         if os.path.isfile(metafile):
