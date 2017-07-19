@@ -696,9 +696,9 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
         print "Writing and submitting RTS jobs"
         
         for k,v in chan_file_dict.iteritems():
-                   nnodes = v + 1
+            nnodes = v + 1
             channels = k.split('_')[-1].split(".")[0]
-             rts_batch = "RTS_{0}_{1}".format(cal_obs_id,channels)
+            rts_batch = "RTS_{0}_{1}".format(cal_obs_id,channels)
             slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:45:00", "nodes":"{0}".format(nnodes)}
             commands = list(body) # make a copy of body to then extend
             commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes,k))
