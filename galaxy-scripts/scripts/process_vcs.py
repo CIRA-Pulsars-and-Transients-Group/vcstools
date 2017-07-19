@@ -155,7 +155,7 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         print "{0} does not exists".format(metafits_file)
         print "Will download it from the archive. This can take a while so please do not ctrl-C."
         obsdownload = distutils.spawn.find_executable("obsdownload.py")
-            get_metafits = "{0} -o {1} -d {2} -m".format(obsdownload, obs_id, data_dir.replace(str(obs_id), ''))
+        get_metafits = "{0} -o {1} -d {2} -m".format(obsdownload, obs_id, data_dir.replace(str(obs_id), ''))
         try:
             subprocess.call(get_metafits,shell=True)
         except:
@@ -215,7 +215,7 @@ def obs_max_min(obs_id):
     return obs_start, obs_end
 
 def get_frequencies(metafits,resort=False):
-        # TODO: for robustness, this should force the entries to be 3-digit numbers
+    # TODO: for robustness, this should force the entries to be 3-digit numbers
     hdulist    = pyfits.open(metafits)
     freq_str   = hdulist[0].header['CHANNELS']
     freq_array = [int(f) for f in freq_str.split(',')]
@@ -835,7 +835,7 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
         if startjobs:
             output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
             jobID = output.split(" ")[3].strip()
-                #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+            #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
             print "Submitted as job {0}".format(jobID)
         else:
             print "Not submitted. \n"
