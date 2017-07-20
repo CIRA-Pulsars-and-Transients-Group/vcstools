@@ -58,6 +58,7 @@ def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,ef
 
 
 
+
 parser = argparse.ArgumentParser(description="Simple script to help write the batch scripts required for running the tied-array beam simulations over multiple epochs")
 
 parser.add_argument("--tmin",type=int,help="GPS time for first evaluation")
@@ -71,13 +72,15 @@ parser.add_argument("--freq",type=float,help="Observing frequency in Hz")
 parser.add_argument("--eff",type=float,help="Radiation efficiency [default: 1.0]",default=1.0)
 parser.add_argument("--flagged",nargs='+',help="Flagged tiles (as in RTS flagged_tiles.txt)")
 
-parser.add_argument("--pointing",nargs=2,type=str,help="RAJ2000 and DECJ2000 of target")
+parser.add_argument("--ra",type=str,help="RAJ2000 of target")
+parser.add_argument("--dec",type=str,help="DECJ2000 of target (use = to assign option)") # only because of the old version of argparse Galaxy has...
+
 parser.add_argument("--write",type=bool,help="Write output (True) or just report statistics (False)  [default: True]",default=True)
 parser.add_argument("--odir",type=str,help="Output directory")
 
 args = parser.parse_args()
 
 
-ra = args.pointing[0]
-dec = args.pointing[1]
+ra = args.ra
+dec = args.dec
 write_batch_files(args.tmin,args.tmax,args.step,args.thetares,args.phires,args.nodes,ra,dec,args.obsid,args.freq,args.eff,args.flagged,args.write,args.odir)
