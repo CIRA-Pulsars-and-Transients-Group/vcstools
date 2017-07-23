@@ -36,12 +36,14 @@ def add_database_function():
                 '    # run command and add relevant data to the job database\n' +\
                 '    # 1st parameter is command to be run including aprun (e.g. wsclean)\n' +\
                 '    # 2nd parameter is parameters to that command (e.g. "-j $ncpus")\n' +\
-                '    command="${1##*/}"
-                '    rownum=`cmd_start.py $command -a "$2"\n' +\
+                '    # 3rd parameter is vcs row number\n' +\
+                '    command="${1##*/}"\n' +\
+                '    command="${command##* }"\n' +\
+                '    rownum=`database_vcs.py -m "s" -v "$3" -c $command -a "$2"\n' +\
                 '    $1 $2\n' +\
                 '    errcode=$?\n' +\
-                '    cmd_stop.py $rownum -e $errcode\n' +\
-                '    echo "cmd_stop.py $rownum -e $errcode"\n' +\
+                '    database_vcs.py -m "e" -r $rownum --errorcode $errcode\n' +\
+                '    echo "database_vcs.py -m "e" -r $rownum --errorcode $errcode"\n' +\
                 '    if [ "$errcode" != "0" ]; then\n' +\
                 '        exit $errcode\n' +\
                 '    fi\n' +\
@@ -49,40 +51,27 @@ def add_database_function():
     return batch_line
     
     
-def database_script_start():
+def database_script_start(vcs_id, command, arguments):
+    import datetime
     con = lite.connect(DB_FILE)
     with con:
         cur = con.cursor()
-        cur.execute("INSERT INTO Commands (Datadir, Project, Obsid, JobId, TaskId, Command, Channels, Arguments, UserId, Started) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (opts.datadir, opts.project, opts.obsid, JOB_ID, TASK_ID, args[0], opts.chans, opts.arguments, os.environ['USER'], datetime.datetime.now()))
+        #Commands(Rownum integer primary key autoincrement, trackvcs INT, JobId INT, Command TEXT, Channels TEXT, Arguments TEXT, Started date, Ended date, Exit INT, FOREIGN KEY(trackvcs) REFERENCES ProcessVCS(Rownum))
+        cur.execute("INSERT INTO Commands (trackvcs, Command, Arguments, Started) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (vcs_id, command, arguments, datetime.datetime.now()))
         row_id = cur.lastrowid
     return row_id
 
-def database_script_stop():
-    if len(args) != 1:
-        parser.error("incorrect number of arguments")
-    if opts.time and opts.errfile:
-        logging.warn("--time and --errfile both set. --time will be used")
-
-    if opts.time:
-        end_time = parse(opts.time)
-    elif opts.errfile:
-        opts.errfile = os.path.expanduser(os.path.expandvars(opts.errfile))
-        end_time = datetime.datetime.fromtimestamp(os.path.getmtime(opts.errfile))
-    else:
-        end_time = datetime.datetime.now()
+def database_script_stop(rownum, errorcode):    
+    end_time = datetime.datetime.now()
 
     con = lite.connect(DB_FILE)
     with con:
         cur = con.cursor()
-        if not opts.force:
-            cur.execute("SELECT Ended FROM Commands WHERE Rownum=?", (args[0],))
-            ended = cur.fetchone()[0]
-            if ended is not None:
-                if opts.no_overwrite:
-                    raise RuntimeError, "Ended is already set"
-                else:
-                    logging.warn("Overwriting existing completion time: %s" % ended)
-        cur.execute("UPDATE Commands SET Ended=?, Exit=? WHERE Rownum=?", (end_time, opts.exit, args[0]))
+        cur.execute("SELECT Ended FROM Commands WHERE Rownum=?", (rownum,))
+        ended = cur.fetchone()[0]
+        if ended is not None:
+            logging.warn("Overwriting existing completion time: %s" % ended)
+        cur.execute("UPDATE Commands SET Ended=?, Exit=? WHERE Rownum=?", (end_time, errorcode, rownum))
 
 
 
@@ -100,58 +89,77 @@ if __name__ == '__main__':
     """
     Script used to manage the VCS database by recording the scripts process_vcs.py uses and prints the databse
     """)
+    parser.add_option("-m", "--mode", dest="mode", metavar="mode", default='v', type=str, help='This script has three modes: "v" used to view the database, "s" used to start a record of a script on the database and "e" used to record the end time and error code of a script on the database. Default mode is v')
+    
     view_options = OptionGroup(parser, 'View Options')
-    view_options.add_option("-r", "--recent", dest="recent", metavar="HOURS", default=None, type=float, help="print only jobs started in the last N hours")
+    view_options.add_option("--recent", dest="recent", metavar="HOURS", default=None, type=float, help="print only jobs started in the last N hours")
     view_options.add_option("-n", "--number", dest="n", metavar="N", default=20, type=int, help="number of jobs to print [default=%default]")
-    view_options.add_option("-a", "--all", dest="all", action="store_true", help="print all lines of the database")
+    view_options.add_option("--all", dest="all", action="store_true", help="print all lines of the database")
     view_options.add_option("-s", "--startrow", dest="startrow", default=0, type=int, help="ignore any row earlier than this one")
     view_options.add_option("-e", "--endrow", dest="endrow", default=None, type=int, help="ignore any row later than this one")
     view_options.add_option("-u", "--user", dest="user", default=None, type=str, help="Only prints one user's jobs.")
     view_options.add_option("-o", "--obsid", dest="obsid", default=None, type=str, help="Only prints one obsid's jobs.")
+    
     start_options = OptionGroup(parser, 'Script Start Options')
+    start_options.add_option("-v", "--vcs_id", dest="vcs_id", default=None, type=str, help="The row number of the process vcs command of the databse")
+    start_options.add_option("-c", "--command", dest="command", default=None, type=str, help="The script name being run. eg volt_download.py.")
+    start_options.add_option("-a", "--argument", dest="argument", default=None, type=str, help="The arguments that script used.")
+    
     end_options = OptionGroup(parser, 'Script End Options')
+    end_options.add_option("--errorcode", dest="errorcode", default=None, type=str, help="Error code of scripts.")
+    end_options.add_option("-r", "--rownum", dest="rownum", default=None, type=str, help="The row number of the script.")
     opts, args = parser.parse_args()
+    
+    
+    if args.mode == "s":
+        if len(args) != 4:
+            parser.error("incorrect number of arguments")
+        database_script_start(args.vcs_id, args.command, args.arguments)
+    elif args.mode == "e":
+        if len(args) != 3:
+            parser.error("incorrect number of arguments")
+        database_script_stop(args.rownum, args.errorcode)
+    else:
+        con = lite.connect(DB_FILE)
+        #con = lite.connect(DB_FILE, detect_types=lite.PARSE_DECLTYPES|lite.PARSE_COLNAMES) # return datetime as datetime objects
+        con.row_factory = dict_factory
 
-    con = lite.connect(DB_FILE)
-    #con = lite.connect(DB_FILE, detect_types=lite.PARSE_DECLTYPES|lite.PARSE_COLNAMES) # return datetime as datetime objects
-    con.row_factory = dict_factory
+        if len(args) != 0:
+            parser.error("Incorrect number of arguments")
 
-    if len(args) != 0:
-        parser.error("Incorrect number of arguments")
+        query = "SELECT * FROM ProcessVCS"
+            
+        print opts.user
+        if opts.user:
+            query += " WHERE UserId='" + str(opts.user) + "'"
 
-    query = "SELECT * FROM ProcessVCS"
-        
-    print opts.user
-    if opts.user:
-        query += " WHERE UserId='" + str(opts.user) + "'"
+        if opts.obsid:
+            query += " WHERE Arguments LIKE '%" + str(opts.obsid) + "%'"
 
-    if opts.obsid:
-        query += " WHERE Arguments LIKE '%" + str(opts.obsid) + "%'"
+        if opts.recent is not None:
+            query += ''' WHERE Started > "%s"''' % str(datetime.datetime.now() - relativedelta(hours=opts.recent))
+            logging.debug(query)
 
-    if opts.recent is not None:
-        query += ''' WHERE Started > "%s"''' % str(datetime.datetime.now() - relativedelta(hours=opts.recent))
-        logging.debug(query)
+        with con:
+            cur = con.cursor()
+            print query
+            cur.execute(query)
+            rows = cur.fetchall()
 
-    with con:
-        cur = con.cursor()
-        print query
-        cur.execute(query)
-        rows = cur.fetchall()
+        if opts.startrow or opts.endrow:
+            rows = rows[opts.startrow:]
+            if opts.endrow is not None:
+                rows = rows[:opts.endrow+1]
+        elif not (opts.all or opts.recent):
+            rows = rows[-opts.n:]
 
-    if opts.startrow or opts.endrow:
-        rows = rows[opts.startrow:]
-        if opts.endrow is not None:
-            rows = rows[:opts.endrow+1]
-    elif not (opts.all or opts.recent):
-        rows = rows[-opts.n:]
+        print 'RowNum','Obsid','Started','UserID','Arguments'
 
-    print 'RowNum','Obsid','Started','UserID','Arguments'
-
-    for row in rows:
-        print str(row['Rownum']).rjust(4),
-        print row['Obsid'],
-        print row['Started'][:19],
-        print row['UserId'].ljust(10),
-        print row['Arguments']
-        print "\n"
+        for row in rows:
+            print str(row['Rownum']).rjust(4),
+            print row['Obsid'],
+            print row['Started'][:19],
+            print row['UserId'].ljust(10),
+            print row['Arguments']
+            print "\n"
 
