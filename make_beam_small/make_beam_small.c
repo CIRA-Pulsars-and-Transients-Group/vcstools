@@ -1244,7 +1244,7 @@ int main(int argc, char **argv) {
                 // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
                 // so for a single timestep we do not have to interleave - I could just stack these
                 spectrum[stokesIidx] = (beam00 + beam11 - noise0 - noise3) * invw;
-                spectrum[stokesQidx] = (beam00 - beam11 - noise0 - noise3) * invw;
+                spectrum[stokesQidx] = (beam00 - beam11 - noise0 + noise3) * invw;
                 spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise1)*invw;
                 spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
             }
