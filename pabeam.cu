@@ -5,6 +5,7 @@
 #include <math.h>
 #include <slalib.h>
 #include <fitsio.h>
+#include <complex.h>
 // CUDA specific includes
 #include <cuda.h>
 #include <cuda_runtime_api.h>
@@ -128,6 +129,27 @@ void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn)
     p_wn->ky = ast * sin(phi); 
     p_wn->kz = ast;   
 }
+
+double complex calcArrayFactor(int ntiles, float *xp, float *yp, float *zp, wavenums *p_wn)
+{
+    /* CPU version to calc array factor for a given wavevector */
+    double kx,ky,kz;
+    double ph;
+    double complex af = 0.0+0.0*I;
+
+    kx = p_wn->kx;
+    ky = p_wn->ky;
+    kz = p_wn->kz;
+    for (int j = 0; j < ntiles; j++)
+    {
+        ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
+        af = af + (cos(ph) + 1.0*I*sin(ph));
+    }
+    af = af/ntiles;
+
+    return af;
+} 
+
 
 void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza)
 {
@@ -343,40 +365,6 @@ void getDeviceDimensions(int *nDevices)
     }
 }
 
-
-//static const char *_cudaGetErrorEnum(cublasStatus_t error)
-//{
-//    /* Function to convert cublas error to string */
-//    switch (error)
-//    {
-//        case CUBLAS_STATUS_SUCCESS:
-//            return "CUBLAS_STATUS_SUCCESS";
-//
-//        case CUBLAS_STATUS_NOT_INITIALIZED:
-//            return "CUBLAS_STATUS_NOT_INITIALIZED";
-//
-//        case CUBLAS_STATUS_ALLOC_FAILED:
-//            return "CUBLAS_STATUS_ALLOC_FAILED";
-//
-//        case CUBLAS_STATUS_INVALID_VALUE:
-//            return "CUBLAS_STATUS_INVALID_VALUE";
-//
-//        case CUBLAS_STATUS_ARCH_MISMATCH:
-//            return "CUBLAS_STATUS_ARCH_MISMATCH";
-//
-//        case CUBLAS_STATUS_MAPPING_ERROR:
-//            return "CUBLAS_STATUS_MAPPING_ERROR";
-//
-//       case CUBLAS_STATUS_EXECUTION_FAILED:
-//            return "CUBLAS_STATUS_EXECUTION_FAILED";
-//
-//        case CUBLAS_STATUS_INTERNAL_ERROR:
-//            return "CUBLAS_STATUS_INTERNAL_ERROR";
-//    }
-//
-//    return "<unknown>";
-//}
-
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
     if (code != 0)
@@ -388,7 +376,6 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
         }
     }
 }
-
 // define a macro for accessing gpuAssert
 #define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
 
@@ -461,11 +448,111 @@ __global__ void getArrayFactor(int nel, int ntiles, float *xp, float *yp, float 
             af[i] = cuCadd(af[i], make_cuDoubleComplex(cos(ph), sin(ph)));         
         }
         af[i] = cuCdiv(af[i], n);
-        __syncthreads();
     }
     __syncthreads();
 }
 
+
+__global__ void calcArrayFactor(int nel, int ntiles, double a,
+                                double *za, double *az, 
+                                float *xp, float *yp, float *zp, 
+                                wavenums *p_twn, 
+                                cuDoubleComplex *af)
+{
+    /* Kernal which takes (az,za) coordinates and tile positions to 
+       compute the array factor. This minimises data transfer between 
+       host and device.
+   
+       #####################
+       # General variables #
+       #####################
+       nel = total number of elements in each array
+
+       ##########################
+       # Wavenumber computation #
+       ##########################
+       a     = amplitude factor (i.e. 2pi/lambda)
+       za    = array of zenith angles
+       az    = array of azimuths
+       p_twn = target wavenumber struct
+
+       NOTE: The standard equations are:
+             a = 2 * pi / lambda
+             kx = a * sin(theta) * cos(phi)
+             ky = a * sin(theta) * sin(phi)
+             kz = a * cos(theta)
+
+             where:
+             lambda is the observing wavelength, and
+             assuming that (theta,phi) are in the convention from Sutinjo et al. 2015:
+             phi = pi/2 - az   AND   theta = za
+
+             The azimuth is measured clockwise from East (standard for antenna theory, offset from astronomy)
+       
+       ############################
+       # Array factor computation #
+       ############################
+       nel    = total number of elements in final array
+       ntiles =  number of tiles used to form tied-array beam
+       xp     = array of tile x-positions (East)
+       yp     = array of tile y-positions (North)
+       zp     = array of tile z-positions (above array centre)
+       p_wn   = array of wavenumber structs for each pixel in af
+       af     = array containing the complex valued array factor
+
+       NOTE: The analytical form for this is:
+             
+                f(theta,phi;tza,taz) = (1/ntiles) * sum{n=1,n=ntiles}( conj(psi_n(tza,taz)) * psi_n(theta,phi) )
+
+             where:
+             (taz,tza) are the target source azimuth and zenith angle
+             (theta,phi) are the azimuth and zenith angle pixels over which we evalute, theta=[0,90], phi=[0,360)
+             
+             psi_n is the planar wave front as detected by the "nth" tile, defined as
+                
+                psi_n(theta,phi) = exp[ (2*pi*I/lambda) * (x_n*k_x + y_n*k_y + z_n*k_z) ]
+             
+             where x_n is the x-coordinate of tile n (similarly for y_n, z_n), with k_x, k_y, k_z and lambda as defined above.      
+    */
+
+    // set up CUDA thread indexing
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+    
+    // other intermediate variables
+    double ast=0, phi=0;
+    double ph=0;
+    double kx=0, ky=0, kz=0;
+    cuDoubleComplex n = make_cuDoubleComplex(ntiles,0);
+
+    
+    for (int i = index; i < nel; i += stride)
+    {
+        // pre-calculate coefficients/transforms
+        ast = a * sin(za[i]);
+        phi = PI/2 - az[i];
+
+        // calculate (k - k_target)
+        kx = ast * cos(phi) - p_twn->kx; 
+        ky = ast * sin(phi) - p_twn->ky;
+        kz = ast - p_twn->kz;
+
+        // initialise this pixel's array factor value
+        af[i] = make_cuDoubleComplex(0,0);
+        
+        // calculate array factor contribution from each tile and sum
+        for (int j = 0; j < ntiles; j++)
+        {
+            ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
+            af[i] = cuCadd(af[i], make_cuDoubleComplex(cos(ph), sin(ph)));         
+        }
+
+        // normalise the array factor
+        af[i] = cuCdiv(af[i], n);
+    }
+    __syncthreads();
+
+}
 
 
 
@@ -602,10 +689,10 @@ int main(int argc, char *argv[])
 
     // determine number of az/za elements from specified pixel size
     n_az = (int)(360.0/az_step);
-    n_za = (int)(90.0/za_step);
+    n_za = (int)(90.0/za_step)+1;
     size = n_az * n_za;
-    printf("Number of az steps: %d\n",n_az); // step from [0,360)
-    printf("Number of za steps: %d\n",n_za); // step from [0,90]
+    printf("Number of az steps [0,360): %d\n",n_az); // step from [0,360) - 360 will double count the 0 values
+    printf("Number of za steps [0,90] : %d\n",n_za); // step from [0,90]
     niter = 1; // how many times do I need to split the problem up?
 
 
@@ -642,9 +729,6 @@ int main(int argc, char *argv[])
   
     blockSize = prop.maxThreadsDim[0]; // number of threads available per block, in x-direction
 
-   // printf("%d %d\n",blockSize,numBlocks);
-
-
 
     /* We now have the relevant array configuration and target source information 
        needed to calculate the array factor. The best way is to use a matrix approach
@@ -659,14 +743,14 @@ int main(int argc, char *argv[])
     
     // allocate memory on host and check
     // azimuth vector
-    az_array = (double *)malloc(size * sizeof(double));
+    az_array = (double *)calloc(size, sizeof(double));
     if (!az_array)
     {
         fprintf(stderr,"Host memory allocation failed (allocate az_array)\n");
         return EXIT_FAILURE;
     }
     // zenith vector
-    za_array = (double *)malloc(size * sizeof(double));
+    za_array = (double *)calloc(size, sizeof(double));
     if (!za_array)
     {
         fprintf(stderr,"Host memory allocation failed (allocate za_array)\n");
@@ -683,27 +767,18 @@ int main(int argc, char *argv[])
     // az = [0 0 0 0 ... 1 1 1 1 ...]
     // za = [0 1 2 3 ... 0 1 2 3 ...]
     int cc=0;
+    int i=0;
     do
     {
         for (int j=0; j<n_za; j++)
         {
             za_array[cc+j] = j * za_step * DEG2RAD;
-        }
-        cc += n_za;
-    } while(cc < size);
-    
-    cc=0;
-    int i=0;
-    do
-    {
-        for (int j=0; j<n_az; j++)
-        {
             az_array[cc+j] = i * az_step * DEG2RAD;
         }
-        cc += n_az;
+        cc += n_za;
         i++;
     } while(cc < size);
-
+     
 
     // construct arrays for device computation
     double *d_az_array, *d_za_array;
@@ -741,11 +816,7 @@ int main(int argc, char *argv[])
         fprintf(stderr,"Host memory allocation failed (allocate af_array)\n");
         return EXIT_FAILURE;
     }
-    for (int i=0; i<itersize; i++)
-    {
-        af_array[i] = make_cuDoubleComplex(0,0);
-    }
-
+    
     // before we get to the real computation, better open a file ready for writing
     int obsid;
     char output[100];
@@ -753,12 +824,13 @@ int main(int argc, char *argv[])
     printf("Will output beam pattern to:\n");
     printf("    %d_%.2fMHz_%s.dat\n", obsid, freq/1.0e6, time);
     sprintf(output, "%d_%.2fMHz_%s.dat", obsid, freq/1.0e6, time);
+    
     FILE *fp;
-    fp = fopen(output,"w");
-  
+    fp = fopen(output,"w");  // open the file to write
+    fprintf(fp, "Az\tZA\tP\n"); // and write the header info
+
     /* This is the primary loop which does the calculations */
     printf("%d az , %d za per iteration\n", iter_n_az, iter_n_za);
-    int stride = 0;
     for (iter = 0; iter < niter; iter++)
     {  
         numBlocks = ((iter_n_az-1) * iter_n_za + blockSize - 1) / blockSize; // number of blocks required 
@@ -771,17 +843,20 @@ int main(int argc, char *argv[])
         printf("azimuth idx: %d - %d\n", az_idx1, az_idx2);
         printf("zentih  idx: %d - %d\n", za_idx1, za_idx2);
         printf("Number of GPU blocks used: %d\n", numBlocks);
-    
+        
+        printf("testing:: omega_A = %f\n",omega_A);
+        
         // place subset of az/za array into subAz/subZA
         for (int i=0; i<itersize; i++)
         {
-            subAz[i] = az_array[i+stride];
-            subZA[i] = za_array[i+stride];
+            subAz[i] = az_array[i+az_idx1];
+            subZA[i] = za_array[i+za_idx1];
             wn_array[i].kx = 0.0;
             wn_array[i].ky = 0.0;
             wn_array[i].kz = 0.0;
+            af_array[i] = make_cuDoubleComplex(0,0);
         }
-        stride += itersize;
+
 
         /* Calculate the wavenumbers for each pixel */
         // allocate memory on device
@@ -805,10 +880,10 @@ int main(int argc, char *argv[])
         gpuErrchk( cudaMemcpy(wn_array, d_wn_array, itersize * sizeof(*wn_array), cudaMemcpyDeviceToHost));
 
         // test the CPU equivalent to make sure we get the same numbers
-        //printf("    comparing GPU and CPU output\n");
-        //calcWaveNumber(lambda, subAz[12], subZA[12], tmpsubwn);
-        //printf("    %f %f %f\n", wn_array[12].kx, wn_array[12].ky, wn_array[12].kz);
-        //printf("    %f %f %f\n", tmpsubwn->kx-target_wn.kx, tmpsubwn->ky-target_wn.ky, tmpsubwn->kz-target_wn.kz);
+        printf("    comparing GPU and CPU output\n");
+        calcWaveNumber(lambda, subAz[12], subZA[12], tmpsubwn);
+        printf("    %f %f %f\n", wn_array[12].kx, wn_array[12].ky, wn_array[12].kz);
+        printf("    %f %f %f\n", tmpsubwn->kx-target_wn.kx, tmpsubwn->ky-target_wn.ky, tmpsubwn->kz-target_wn.kz);
 
         // done for now - free the memory on the device
         gpuErrchk( cudaFree(d_az_array));
@@ -840,7 +915,12 @@ int main(int argc, char *argv[])
         // copy relevant memory back to host
         gpuErrchk( cudaMemcpy(af_array, d_af_array, itersize * sizeof(*af_array), cudaMemcpyDeviceToHost));
 
-        //printf("real: %f imag: %f abs: %f\n", af_array[itersize/2].x, af_array[itersize/2].y, cuCabs(af_array[itersize/2]));
+        // test the CPU equivalent to make sure we get the same numbers
+        printf("    comparing CPU to GPU:\n");
+        printf("    real: %f imag: %f abs: %f\n", af_array[12].x, af_array[12].y, cuCabs(af_array[12]));
+        double complex aftmp = 0.0+0.0*I;
+        aftmp = calcArrayFactor(ntiles, xpos, ypos, zpos, &wn_array[12]);
+        printf("    real: %f imag: %f abs: %f\n", creal(aftmp), cimag(aftmp), cabs(aftmp));
 
         // cool, we're done with the GPU computation
         gpuErrchk( cudaFree(d_twn));
@@ -850,15 +930,25 @@ int main(int argc, char *argv[])
         gpuErrchk( cudaFree(d_zpos));
         gpuErrchk( cudaFree(d_af_array));
 
+        // test the CPU equivalent to make sure we get the same numbers
+        printf("Calculation array factor power (|af|^2)\n");
+        printf("    comparing CPU to GPU:\n");
+        double tmp1 = pow(cuCabs(af_array[12]), 2);
+        double tmp2 = pow(cabs(aftmp), 2);
+        printf("    gpu power: %f\n", tmp1);
+        printf("    cpu power: %f\n", tmp2);
+
         /* Write the output to a file */
         double af_power = 0.0;
-        fprintf(fp, "Az\tZA\tP\n");
+
         for (int i=0; i<itersize; i++)
         {
             af_power = pow(cuCabs(af_array[i]), 2);
+            //tmp_af_power = pow(cabs(calcArrayFactor(ntiles, xpos, ypos, zpos, &wn_array[i])),2);
             fprintf(fp, "%f\t%f\t%f\n", subAz[i], subZA[i], af_power);
             if (af_power > af_max) {af_max = af_power;}
-            omega_A += sin(subZA[i]) * af_power * (za_step*DEG2RAD) * (az_step*DEG2RAD);
+            //printf("omega_A=%f\t sin(ZA)=%f\t af_power=%f\t za_step=%f\t az_step=%f\n",omega_A, sin(subZA[i]), af_power, za_step*DEG2RAD, az_step*DEG2RAD);
+            omega_A = omega_A + sin(subZA[i]) * af_power * (za_step*DEG2RAD) * (az_step*DEG2RAD);
         }
     }
     fclose(fp);
@@ -876,12 +966,13 @@ int main(int argc, char *argv[])
     double eff_area = 0.0, gain = 0.0;
     printf("Finished -- now computing relevant parameters:\n");
     eff_area = eta * pow(lambda, 2) * (4 * PI / omega_A);
-    gain = (1e-26) * eff_area / (2 * KB);
+    gain = (1.0e-26) * eff_area / (2 * KB);
 
-    printf("   Array factor max:                 %f\n",af_max);
-    printf("   Beam solid angle (sr):            %f\n",omega_A);
-    printf("   Effective collecting area (m^2):  %.4f\n",eff_area);
-    printf("   Effective array gain (K/Jy):      %.4f\n",gain);
+    printf("    Array factor max:                 %f\n",af_max);
+    printf("    Beam solid angle (sr):            %f\n",omega_A);
+    printf("    Radiation efficiency:             %f\n",eta);
+    printf("    Effective collecting area (m^2):  %.4f\n",eff_area);
+    printf("    Effective array gain (K/Jy):      %.4f\n",gain);
    
 
     return 0;
