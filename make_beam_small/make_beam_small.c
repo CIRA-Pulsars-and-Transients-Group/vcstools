@@ -5,6 +5,7 @@
 #include <complex.h>
 #include <math.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <string.h>
 #include <errno.h>
 #include <time.h>
@@ -40,25 +41,116 @@
 //#define PROFILE
 
 void usage() {
-    fprintf(stderr, "make_beam -n <nchan> [128] -a <nant> \ntakes input from stdin and dumps to stdout|psrfits\n");
-    fprintf(stderr, "-a <number of antennas>\n");
-    fprintf(stderr, "-b Begin time [must be supplied]\n");
-    fprintf(stderr, "-C <position of channel solution in Offringa calibration file\n");
-    fprintf(stderr, "-d <data directory root> -- where the recombined data is\n");
-    fprintf(stderr, "-D dd:mm:ss -- the declination to get passed to get_delays\n");
-    fprintf(stderr, "-e End time [must be supplied]\n");
-    fprintf(stderr, "-f <channel number>\n");
-    fprintf(stderr, "-J <DI Jones file from the RTS> Jones matrix input\n");
-    fprintf(stderr, "-m <metafits file> for this obsID\n");
-    fprintf(stderr, "-n <number of channels>\n");
-    fprintf(stderr, "-o obs id\n");
-    fprintf(stderr, "-O <Offringa-style calibration solution file>\n");
-    fprintf(stderr, "-r <sample rate in Hz>\n");
-    fprintf(stderr, "-R hh:mm:ss -- the right ascension to get passed to get_delays\n");
-    fprintf(stderr, "-V print version number and exit\n");
-    fprintf(stderr, "-w use weights from metafits file [0]\n");
-    fprintf(stderr, "-z <utc time string> yyyy-mm-ddThh:mm:ss\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "usage: make_beam_small [OPTIONS]\n");
 
+    fprintf(stderr, "\n");
+    fprintf(stderr, "REQUIRED OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-o, --obsid=GPSTIME       ");
+    fprintf(stderr, "Observation ID (GPS seconds).\n");
+    fprintf(stderr, "\t-b, --begin=GPSTIME       ");
+    fprintf(stderr, "Begin time of observation, in GPS seconds\n");
+    fprintf(stderr, "\t-e, --end=GPSTIME         ");
+    fprintf(stderr, "End time of observation, in GPS seconds\n");
+    fprintf(stderr, "\t-z, --utc-time=UTCTIME    ");
+    fprintf(stderr, "The UTC time that corresponds to the GPS time given by the -b\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "option. UTCTIME must have the format: yyyy-mm-ddThh:mm:ss\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-D, --dec=dd:mm:ss.s      ");
+    fprintf(stderr, "Declination of pointing direction\n");
+    fprintf(stderr, "\t-R, --ra=hh:mm:ss.s       ");
+    fprintf(stderr, "Right ascension of pointing direction\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-d, --data-location=PATH  ");
+    fprintf(stderr, "PATH is the directory containing the recombined data\n");
+    fprintf(stderr, "\t-m, --metafits-file=FILE  ");
+    fprintf(stderr, "FILE is the metafits file pertaining to the OBSID given by the\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr,  "-o option\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-f, --coarse-chan=N       ");
+    fprintf(stderr, "Absolute coarse channel number (0-255)\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-a, --antennas=N          ");
+    fprintf(stderr, "The number of antennas in the array. For MWA Phase 2, N=128.     ");
+    fprintf(stderr, "[default: 128]\n");
+    fprintf(stderr, "\t-n, --num-fine-chans=N    ");
+    fprintf(stderr, "The number of fine channels per coarse channel.                  ");
+    fprintf(stderr, "[default: 128]\n");
+    fprintf(stderr, "\t-w, --fine-chan-width=N   ");
+    fprintf(stderr, "The bandwidth of an individual fine channel (Hz).                ");
+    fprintf(stderr, "[default: 10000]\n");
+    fprintf(stderr, "\t-r, --sample-rate=N       ");
+    fprintf(stderr, "The VCS sample rate, in Hz. (The sample rate given in the meta-  ");
+    fprintf(stderr, "[default: 10000]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "metafits file matches the correlator settings at the time of\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the observation, which is not necessarily the same as that of\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the VCS. Hence the necessity of this option.)\n");
+    fprintf(stderr, "\t-F, --use-ant-flags       ");
+    fprintf(stderr, "Only include those antennas in the beamformer that have not      ");
+    fprintf(stderr, "[default: off]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "been flagged in the metafits file given by the -m option.\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "CALIBRATION OPTIONS (RTS)\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-J, --dijones-file=PATH   ");
+    fprintf(stderr, "The direction-independent Jones matrix file that is output from\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the RTS. Using this option instructs the beamformer to use the\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "RTS-generated calibration solution. Either -J or -O must be\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "supplied. If both are supplied the one that comes last will\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "override the former.\n");
+    fprintf(stderr, "\t-B, --bandpass-file=PATH  ");
+    fprintf(stderr, "The bandpass file that is output from the RTS. If this option\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "is given, the RTS calibration solution will be applied to each\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "fine channel. If -J is supplied but -B is not, then the coarse\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "channel solution will be applied to ALL fine channels\n");
+    fprintf(stderr, "\t-W, --rts-chan-width      ");
+    fprintf(stderr, "RTS calibration channel bandwidth (Hz)                           ");
+    fprintf(stderr, "[default: 40000]\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "CALIBRATION OPTIONS (OFFRINGA)\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-O, --offringa-file=PATH  ");
+    fprintf(stderr, "The calibration solution file that is output from the tools\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "made by Andre Offringa. Using this option instructs the beam-\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "former to use the Offringa-style calibration solution. Either\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "-J or -O must be supplied. If both are supplied the one that\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "comes last will override the former.\n");
+    fprintf(stderr, "\t-C, --offringa-chan=N     ");
+    fprintf(stderr, "The zero-offset position of the coarse channel solution in the   ");
+    fprintf(stderr, "[default: 0]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "calibration file given by the -O option.\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "OTHER OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-h, --help                ");
+    fprintf(stderr, "Print this help and exit\n");
+    fprintf(stderr, "\t-V, --version             ");
+    fprintf(stderr, "Print version number and exit\n");
+    fprintf(stderr, "\n");
 }
 
 void populate_psrfits_header(
@@ -71,7 +163,6 @@ void populate_psrfits_header(
         int             nchan,
         long int        chan_width,
         int             outpol,
-        int             summed_polns,
         char           *rec_channel,
         struct delays  *delay_vals ) {
 
@@ -109,7 +200,6 @@ void populate_psrfits_header(
     pf->rows_per_file = 200;     // I assume this is a max subint issue
 
     pf->hdr.npol         = outpol;
-    pf->hdr.summed_polns = summed_polns;
     pf->hdr.nchan        = nchan;
     pf->hdr.onlyI        = 0;
 
@@ -128,10 +218,10 @@ void populate_psrfits_header(
     pf->hdr.ds_time_fact = 1;
 
     // some things that we are unlikely to change
-    pf->hdr.fd_hand  = 0;
-    pf->hdr.fd_sang  = 0.0;
+    pf->hdr.fd_hand  = 1;
+    pf->hdr.fd_sang  = 45.0;
     pf->hdr.fd_xyph  = 0.0;
-    pf->hdr.be_phase = 0.0;
+    pf->hdr.be_phase = 0;
     pf->hdr.chan_dm  = 0.0;
 
     // Now set values for our subint structure
@@ -207,7 +297,7 @@ void populate_psrfits_header(
 }
 
 
-void get_metafits_info( char *metafits, struct metafits_info *mi ) {
+void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width ) {
 /* Read in the relevant information from the metafits file.
  * This function allocates dynamic memory. Destroy it with
  *   destroy_metafits_info(...)
@@ -229,7 +319,7 @@ void get_metafits_info( char *metafits, struct metafits_info *mi ) {
     fits_read_key(fptr, TDOUBLE, "DEC",      &(mi->tile_pointing_dec), NULL, &status);
     fits_read_key(fptr, TDOUBLE, "AZIMUTH",  &(mi->tile_pointing_az),  NULL, &status);
     fits_read_key(fptr, TDOUBLE, "ALTITUDE", &(mi->tile_pointing_el),  NULL, &status);
-    mi->chan_width = 10000; // Always 10 kHz
+    mi->chan_width = chan_width;
 
     if (status != 0) {
         fprintf(stderr, "Fits status set: failed to read az/alt, ");
@@ -695,47 +785,76 @@ int read_pfb_call(char *in_name, char *heap) {
 
 int main(int argc, char **argv) {
 
-    double begintime = omp_get_wtime();
-    printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
+    // Variables for required options
+    char              *obsid       = NULL; // The observation ID
+    unsigned long int  begin       = 0;    // GPS time -- when to start beamforming
+    unsigned long int  end         = 0;    // GPS time -- when to stop beamforming
+    char              *time_utc    = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
+    char              *dec_ddmmss  = NULL; // "dd:mm:ss"
+    char              *ra_hhmmss   = NULL; // "hh:mm:ss"
+    char              *datadir     = NULL; // The path to where the recombined data live
+    char              *metafits    = NULL; // filename of the metafits file
+    char              *rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
+    long int           frequency   = 0;    // = rec_channel expressed in Hz
 
-    int c  = 0;
+    // Variables for MWA/VCS configuration
+    int                nstation      = 128;    // The number of antennas
+    int                nchan         = 128;    // The number of fine channels (per coarse channel)
+    unsigned int       chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
+    unsigned int       sample_rate   = 10000;  // The VCS sample rate (Hz)
+    int                use_ant_flags = 0;      // Use flags in metafits file?
+    const int          npol          = 2;      // X,Y
+    const int          outpol        = 4;      // I,Q,U,V
 
-    unsigned long int begin = 0;
-    unsigned long int end   = 0;
-
-    int weights = 0;
-    char *rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
-
-    char *obsid = NULL;
-    char *datadirroot = NULL;
-    char **filenames = NULL;
-    int nfiles = 0;
-
-    unsigned int sample_rate = 10000;
-
-    int nchan = 128;
-    nfrequency = nchan;
-    nstation = 128;
-    npol = 2;
-    int outpol = 4;
-    int summed_polns = 0;
-    // These are used to calculate how the input data are ordered
-    int npfb = 4;
-    int nrec = 16;
-    int ninc = 4;
-
-    char *dec_ddmmss    = NULL; // "dd:mm:ss"
-    char *ra_hhmmss     = NULL; // "hh:mm:ss"
-    char *metafits      = NULL; // filename of the metafits file
-    char *time_utc      = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
-
-    long int frequency  = 0;
-
+    // Variables for calibration settings
     struct calibration cal;
+    cal.filename          = NULL;
+    cal.bandpass_filename = NULL;
+    cal.chan_width        = 40000;
+    cal.nchan             = 0;
+    cal.cal_type          = NO_CALIBRATION;
+    cal.offr_chan_num     = 0;
+
+    // These are used to calculate how the input data are ordered
+    const int npfb = 4;
+    const int nrec = 16;
+    const int ninc = 4;
 
     if (argc > 1) {
 
-        while ((c = getopt(argc, argv, "a:b:C:d:D:e:f:hJ:m:n:o:O:r:R:Vwz:")) != -1) {
+        int c;
+        while (1) {
+
+            static struct option long_options[] = {
+                {"obsid",           required_argument, 0, 'o'},
+                {"begin",           required_argument, 0, 'b'},
+                {"end",             required_argument, 0, 'e'},
+                {"utc-time",        required_argument, 0, 'z'},
+                {"dec",             required_argument, 0, 'D'},
+                {"ra",              required_argument, 0, 'R'},
+                {"data-location",   required_argument, 0, 'd'},
+                {"metafits-file",   required_argument, 0, 'm'},
+                {"coarse-chan",     required_argument, 0, 'f'},
+                {"antennas",        required_argument, 0, 'a'},
+                {"num-fine-chans",  required_argument, 0, 'n'},
+                {"fine-chan-width", required_argument, 0, 'w'},
+                {"sample-rate",     required_argument, 0, 'r'},
+                {"use-ant-flags",   no_argument,       0, 'F'},
+                {"dijones-file",    required_argument, 0, 'J'},
+                {"bandpass-file",   required_argument, 0, 'B'},
+                {"rts-chan-width",  required_argument, 0, 'W'},
+                {"offringa-file",   required_argument, 0, 'O'},
+                {"offringa-chan",   required_argument, 0, 'C'},
+                {"help",            required_argument, 0, 'h'},
+                {"version",         required_argument, 0, 'V'}
+            };
+
+            int option_index = 0;
+            c = getopt_long( argc, argv, "a:b:B:C:d:D:e:f:FhJ:m:n:o:O:r:R:Vw:W:z:",
+                             long_options, &option_index);
+            if (c == -1)
+                break;
+
             switch(c) {
 
                 case 'a':
@@ -744,11 +863,15 @@ int main(int argc, char **argv) {
                 case 'b':
                     begin = atol(optarg);
                     break;
+                case 'B':
+                    cal.bandpass_filename = strdup(optarg);
+                    cal.cal_type = RTS_BANDPASS;
+                    break;
                 case 'C':
                     cal.offr_chan_num = atoi(optarg);
                     break;
                 case 'd':
-                    datadirroot = strdup(optarg);
+                    datadir = strdup(optarg);
                     break;
                 case 'D':
                     dec_ddmmss = strdup(optarg);
@@ -758,7 +881,10 @@ int main(int argc, char **argv) {
                     break;
                 case 'f':
                     rec_channel = strdup(optarg);
-                    frequency = atoi(optarg) * 1.28e6 - 640e3; // The base frequency in Hz
+                    frequency = atoi(optarg) * 1.28e6 - 640e3; // The base frequency of the coarse channel in Hz
+                    break;
+                case 'F':
+                    use_ant_flags = 1;
                     break;
                 case 'h':
                     usage();
@@ -766,7 +892,8 @@ int main(int argc, char **argv) {
                     break;
                 case 'J':
                     cal.filename = strdup(optarg);
-                    cal.cal_type = RTS;
+                    if (cal.cal_type != RTS_BANDPASS)
+                        cal.cal_type = RTS;
                     break;
                 case 'm':
                     metafits = strdup(optarg);
@@ -792,66 +919,109 @@ int main(int argc, char **argv) {
                     exit(0);
                     break;
                 case 'w':
-                    weights = 1;
+                    chan_width = atoi(optarg);
+                    break;
+                case 'W':
+                    cal.chan_width = atoi(optarg);
                     break;
                 case 'z':
                     time_utc = strdup(optarg);
                     break;
                 default:
+                    fprintf(stderr, "Error: unrecognised option '%s'\n", optarg);
                     usage();
                     exit(EXIT_FAILURE);
             }
         }
     }
-
-    if (datadirroot) {
-
-        // Generate list of files to work on
-
-        // Calculate the number of files
-        nfiles = end - begin + 1;
-        if (nfiles <= 0) {
-            fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
-            exit(EXIT_FAILURE);
-        }
-
-        // Allocate memory for the file name list
-        filenames = (char **)malloc( nfiles*sizeof(char *) );
-
-        // Allocate memory and write filenames
-        int second;
-        unsigned long int timestamp;
-        for (second = 0; second < nfiles; second++) {
-            timestamp = second + begin;
-            filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
-            sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadirroot, obsid, timestamp, rec_channel );
-        }
-
+    else {
+        usage();
+        exit(EXIT_FAILURE);
     }
 
-    complex double **complex_weights_array = NULL;
-    complex double **invJi = NULL;
+    // Check that all the required options were supplied
+    if (obsid == NULL || begin == 0 || end  == 0 || time_utc == NULL ||
+        dec_ddmmss == NULL || ra_hhmmss == NULL || datadir == NULL ||
+        metafits == NULL || rec_channel == NULL)
+    {
+        fprintf(stderr, "Error: missing required options\n");
+        usage();
+        exit(EXIT_FAILURE);
+    }
 
-    // Allocate memory for complex weights and jones matrices
-    int i;
-    complex_weights_array = (complex double **)malloc( nstation * npol * sizeof(complex double *) );
-    for (i = 0; i < nstation*npol; i++)
-        complex_weights_array[i] = (complex double *)malloc( nchan * sizeof(complex double) );
+    // Check that a calibration solution was supplied
+    if (cal.cal_type == NO_CALIBRATION)
+    {
+        fprintf(stderr, "Error: no calibration solution supplied\n");
+        usage();
+        exit(EXIT_FAILURE);
+    }
 
-    invJi = (complex double **)malloc( nstation * sizeof(complex double *) );
-    for (i = 0; i < nstation; i++)
-        invJi[i] =(complex double *)malloc( npol * npol * sizeof(complex double) );
+    // Start counting time from here (i.e. after parsing the command line)
+    double begintime = omp_get_wtime();
+    printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
 
-    // these are only used if we are prepending the fitsheader
+    // Calculate the number of files
+    int nfiles = end - begin + 1;
+    if (nfiles <= 0) {
+        fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate memory for the file name list
+    char **filenames = NULL;
+    filenames = (char **)malloc( nfiles*sizeof(char *) );
+
+    // Allocate memory and write filenames
+    int second;
+    unsigned long int timestamp;
+    for (second = 0; second < nfiles; second++) {
+        timestamp = second + begin;
+        filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
+        sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadir, obsid, timestamp, rec_channel );
+    }
+
+    // Allocate memory for complex weights matrices
+    int ant, p, ch; // Loop variables
+
+    complex double  ***complex_weights_array = NULL; // [ant][ch][pol]
+    
+    complex_weights_array = (complex double ***)malloc( nstation * sizeof(complex double **) );
+    for (ant = 0; ant < nstation; ant++) {
+        complex_weights_array[ant] = (complex double **)malloc( nchan * sizeof(complex double *) );
+        for (ch = 0; ch < nchan; ch++) {
+            complex_weights_array[ant][ch] = (complex double *)malloc( npol * sizeof(complex double) );
+        }
+    }
+
+    // Allocate memory for (inverse) Jones matrices
+    complex double ****invJi = NULL; // [ant][ch][pol][pol]
+
+    invJi = (complex double ****)malloc( nstation * sizeof(complex double ***) );
+    for (ant = 0; ant < nstation; ant++) {
+        invJi[ant] =(complex double ***)malloc( nchan * sizeof(complex double **) );
+        for (ch = 0; ch < nchan; ch++) {
+            invJi[ant][ch] = (complex double **)malloc( npol * sizeof(complex double *) );
+            for (p = 0; p < npol; p++) {
+                invJi[ant][ch][p] = (complex double *)malloc( npol * sizeof(complex double) );
+            }
+        }
+    }
+
+    // Structure for holding psrfits header information
     struct psrfits pf;
-
 
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, metafits);
     struct metafits_info mi;
-    get_metafits_info( metafits, &mi );
+    get_metafits_info( metafits, &mi, chan_width );
 
-    if (!weights)
+    // If using bandpass calibration solutions, calculate number of expected bandpass channels
+    if (cal.cal_type == RTS_BANDPASS)
+        cal.nchan = (nchan * chan_width) / cal.chan_width;
+
+    int i;
+    if (!use_ant_flags)
         for (i = 0; i < nstation*npol; i++)
             mi.weights_array[i] = 1.0;
 
@@ -860,7 +1030,7 @@ int main(int argc, char **argv) {
         wgt_sum += mi.weights_array[i];
     double invw = 1.0/wgt_sum;
 
-    // Get first second's worth of phases and Jones matrices
+    // Run get_delays to populate the delay_vals struct
     printf("[%f]  Setting up output header information\n", omp_get_wtime()-begintime);
     struct delays delay_vals;
     get_delays(
@@ -873,14 +1043,13 @@ int main(int argc, char **argv) {
             0.0,           // seconds offset from time_utc at which to calculate delays
             &delay_vals,   // Populate psrfits header info
             &mi,           // Struct containing info from metafits file
-            complex_weights_array,  // complex weights array (answer will be output here)
-            invJi          // invJi array           (answer will be output here)
+            NULL,          // complex weights array (ignore this time)
+            NULL           // invJi array           (ignore this time)
     );
 
     // now we need to create a fits file and populate its header
     populate_psrfits_header( &pf, metafits, obsid, time_utc, sample_rate,
-            frequency, nchan, mi.chan_width, outpol, summed_polns,
-            rec_channel, &delay_vals );
+            frequency, nchan, chan_width, outpol, rec_channel, &delay_vals );
 
     // Create array for holding the raw data
     int bytes_per_file = sample_rate * nstation * npol * nchan;
@@ -1008,7 +1177,7 @@ int main(int argc, char **argv) {
                         sDi = (uDi >= 0x8 ? (signed int)uDi - 0x10 : (signed int) uDi);
 
                         e_dash[pol]  = (float)sDr + (float)sDi * I;
-                        e_dash[pol] *= complex_weights_array[ant*npol+pol][ch];
+                        e_dash[pol] *= complex_weights_array[ant][ch][pol];
 
                     }
 
@@ -1023,7 +1192,7 @@ int main(int argc, char **argv) {
                         e_true[pol] = 0.0 + 0.0*I;
 
                         for (opol = 0; opol < npol; opol++)
-                            e_true[pol] += invJi[ant][npol*pol+opol] * e_dash[opol];
+                            e_true[pol] += invJi[ant][ch][pol][opol] * e_dash[opol];
 
                         for (opol = 0; opol < npol; opol++)
                             noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
@@ -1075,7 +1244,7 @@ int main(int argc, char **argv) {
                 // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
                 // so for a single timestep we do not have to interleave - I could just stack these
                 spectrum[stokesIidx] = (beam00 + beam11 - noise0 - noise3) * invw;
-                spectrum[stokesQidx] = (beam00 - beam11 - noise0 - noise3) * invw;
+                spectrum[stokesQidx] = (beam00 - beam11 - noise0 + noise3) * invw;
                 spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise1)*invw;
                 spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
             }
@@ -1173,7 +1342,7 @@ int main(int argc, char **argv) {
     }
 
     // Free up memory for filenames
-    if (datadirroot) {
+    if (datadir) {
         int second;
         for (second = 0; second < nfiles; second++)
             free( filenames[second] );
