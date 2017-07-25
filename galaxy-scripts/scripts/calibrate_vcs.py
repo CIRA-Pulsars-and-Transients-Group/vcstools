@@ -37,6 +37,7 @@ class RTScal(object):
     """
 
     def __init__(self, obsid=None, cal_obsid=None, rts_in_file=None, rts_out_dir=None):
+        # initilaise class attributes with user-specified options
         self.obsid     = obsid
         self.cal_obsid = cal_obsid
 
@@ -47,7 +48,7 @@ class RTScal(object):
             print "!!ERROR!! The base RTS configuration script you provided does not exist! Aborting."
             sys.exit(1)
             
-
+        # initilaise attributes to None and then assign values later
         self.channels     = None
         self.hichans      = None
         self.lochans      = None
@@ -55,15 +56,16 @@ class RTScal(object):
         
         # Set up the product directory according to options passed
         if rts_out_dir is not None:
+            # non-standard output path
             print "!!WARNING!! You are not using the standard directory structure. Be sure you know what you're doing..."
             self.rts_out_dir = rts_out_dir
-            self.batch_dir = "{0}/batch".format(self.rts_out_dir)
+            self.batch_dir   = "{0}/batch".format(self.rts_out_dir)
             mdir(self.batch_dir, "Batch")
         else:
-            # use the default: /group/mwaops/vcs/{obsid}/cal/{cal_obsid}/rts
+            # use the default locations:
             self.rts_out_dir = "/group/mwaops/vcs/{0}/cal/{1}".format(self.obsid, self.cal_obsid)
-            self.batch_dir = "/group/mwaops/vcs/{0}/batch".format(self.obsid)
-            mdir(self.batch_dir, "Batch") # in case it hasn't already been made
+            self.batch_dir   = "/group/mwaops/vcs/{0}/batch".format(self.obsid)
+            mdir(self.batch_dir, "Batch") # should have already been created, but just in case...
 
         # re-define the rts_out_dir attribute to be the directory where the solutions are written
         self.rts_out_dir = "{0}/rts".format(self.rts_out_dir)
@@ -71,9 +73,9 @@ class RTScal(object):
 
         # setup the basic body for all SLURM scripts
         self.script_body = []
-        self.script_body.append("module load cudatoolkit")
-        self.script_body.append("module load cfitsio")
-        self.script_body.append("cd {0}".format(self.rts_out_dir))
+        self.script_body.append("module load cudatoolkit") # need CUDA for RTS
+        self.script_body.append("module load cfitsio")     # need cfitsio for reading fits files
+        self.script_body.append("cd {0}".format(self.rts_out_dir)) # change to output directory and run RTS there
     
         # boolean to control batch job submission. True = submit to queue, False = just write the files
         self.submit = False
@@ -100,14 +102,16 @@ class RTScal(object):
 
 
     def submit_True(self):
+        # set the submit attribute to True (allow sbatch submission)
         self.submit = True
 
 
     def is_picket_fence(self):
         """
-        Check whether the observation channels imply picket-fence or not. Set attribute in either case.
+        Check whether the observed channels imply picket-fence or not. 
+        Set boolean attribute in either case.
         """
-        ch_offset = self.channels[-1] - self.channels[0]
+        ch_offset = self.channels[-1] - self.channels[0] 
         if ch_offset == len(self.channels)-1:
             print "The channels are consecutive: this is a normal observation"
             self.picket_fence = False
