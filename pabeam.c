@@ -450,11 +450,13 @@ int main(int argc, char *argv[])
   
      
 
-
+    FILE *fp;
     ph = 0.0;
     omega_A = 0.0;
     eff_area = 0.0;
     af_max = -1.0;
+
+    fp = fopen("test.dat","w");
     for (double az = 0.0; az < 360.0; az += az_step)
     {
         /* one loop is ok, but we'll want to vectorise the next parts... */ 
@@ -477,6 +479,7 @@ int main(int argc, char *argv[])
             
             // keep array factor maximum up-to-date (booking keeping)
             if (pow(cabs(af),2) > af_max) {af_max = pow(cabs(af),2);}
+            fprintf(fp, "%f\t%f\t%f\n", az*DEG2RAD, za*DEG2RAD, pow(cabs(af),2));
 
             // calculate this pixel's contribution to beam solid angle
             omega_A = omega_A + sin(za*DEG2RAD) * powl(cabs(af),2) * (az_step*DEG2RAD) * (za_step*DEG2RAD);
