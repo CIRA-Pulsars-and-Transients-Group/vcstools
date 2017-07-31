@@ -44,37 +44,51 @@ typedef struct tazza_t
 
 /* Define all the function prototypes */
 void usage();
+
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd);
 void mjd2lst(double mjd, double *lst);
 void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn);
 void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza);
 int getNumTiles(const char *metafits);
-void getTilePositions(const char *metafits, int ninput,\
-                        float *n_pols, float *e_pols, float *h_pols,\
+void getTilePositions(const char *metafits, int ninput, 
+                        float *n_pols, float *e_pols, float *h_pols,
                         float *n_tile, float *e_tile, float *h_tile);
 int getFlaggedTiles(const char *badfile, int *badtiles);
-void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
-                            int *badtiles, int nbad, int nelements);
-void requiredMemory(int size, int ntiles, cudaDeviceProp *dprop, int *niter);
+void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile, 
+                        int *badtiles, int nbad, int nelements);
 void getDeviceDimensions(int *nDevices);
+void requiredMemory(int size, int ntiles, int *niter, int *blockSize);
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort);
+
+// GPU kernal for calculation
+__global__ void calcArrayFactor(int nel, int ntiles, double a,
+                                double *za, double *az,
+                                float *xp, float *yp, float *zp,
+                                wavenums *p_twn,
+                                cuDoubleComplex *af);
+void calcArrayFactorCPU(int nel, int ntiles, double a,
+                        double *za, double *az,
+                        float *xp, float *yp, float *zp,
+                        wavenums *p_twn,
+                        double complex *af);
 
 
 
 void usage()
 {
-    printf("pabeam -- computes the array factor that represents the MWA tied-array beam for a given observation and pointing\n");
-    printf("syntax:\n\
-            pabeam -f <frequency (Hz)> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <utc time string> -m <metafits file> -b <RTS flagged_tiles.txt file>\n\n");
-    printf("Options:\n\
-            -f observing frequncy, in Hz\n\
-            -e radiation efficiency (default: 1.0)\n\
-            -r target RA (J2000), in hh:mm:ss.ss format\n\
-            -d target DEC (J2000), in dd:mm:ss.ss format\n\
-            -t UTC time to evaluate, in format YYYY-MM-DDThh:mm:ss\n\
-            -m metafits files for the observation\n\
-            -b RTS flagged_tiles.txt file from calibration\n\
-            -x Azimuth grid resolution element (default: 1.0)\n\
-            -y Zenith angle grid resolution element (default: 1.0)\n");
+    printf("pabeam_gpu --- computes the array factor that represents the naturally weighted synthesised MWA beam (tied-array/coherent beam) for a given configuration\n");
+    printf("syntax:\n");
+    printf("    pabeam -f <frequency in Hz> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <utc time string> -m <metafits file> -b <RTS flagged_tiles.txt file> [-e] [-x] [-y]\n\n");
+    printf("Options:\n");
+    printf("    -f observing frequncy, in Hz\n");
+    printf("    -e radiation efficiency (default: 1.0)\n");
+    printf("    -r target RA (J2000), in hh:mm:ss.ss format\n");
+    printf("    -d target DEC (J2000), in dd:mm:ss.ss format\n");
+    printf("    -t UTC time to evaluate, in format YYYY-MM-DDThh:mm:ss\n");
+    printf("    -m metafits files for the observation\n");
+    printf("    -b RTS flagged_tiles.txt file from calibration\n");
+    printf("    -x Azimuth grid resolution element (default: 1.0)\n");
+    printf("    -y Zenith angle grid resolution element (default: 1.0)\n");
 }
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
@@ -130,27 +144,6 @@ void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn)
     p_wn->ky = ast * sin(phi); 
     p_wn->kz = ast;   
 }
-
-double complex calcArrayFactor(int ntiles, float *xp, float *yp, float *zp, wavenums *p_wn)
-{
-    /* CPU version to calc array factor for a given wavevector */
-    double kx,ky,kz;
-    double ph;
-    double complex af = 0.0+0.0*I;
-
-    kx = p_wn->kx;
-    ky = p_wn->ky;
-    kz = p_wn->kz;
-    for (int j = 0; j < ntiles; j++)
-    {
-        ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
-        af = af + (cos(ph) + 1.0*I*sin(ph));
-    }
-    af = af/ntiles;
-
-    return af;
-} 
-
 
 void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza)
 {
@@ -365,7 +358,6 @@ void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
     }
 }
 
-
 void getDeviceDimensions(int *nDevices)
 {
     /* We need to know how many devices are available and its functionality. */
@@ -384,7 +376,6 @@ void getDeviceDimensions(int *nDevices)
         printf("    Max number of threads per block:    (%d, %d, %d)\n", prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
     }
 }
-
 
 void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
 {
@@ -420,8 +411,9 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
     getDeviceDimensions(&nDevices);
     printf("Number of devices on system: %d\n", nDevices);
     printf("Using device: %d\n", nDevices-1);
-    cudaGetDeviceProperties(&prop, 0); // populate prop for this device
-    
+    cudaGetDeviceProperties(&prop, 0); 
+
+    // check how much FREE memory is available
     res = cudaMemGetInfo(&freeMem, &totMem);
     if (res == cudaSuccess)
     {
@@ -431,16 +423,19 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
     {
         printf("%s\n", cudaGetErrorString(res));
     }
-
+    
+    // get device max. threads per block
     *blockSize = prop.maxThreadsDim[0];
 
-    azzaMem = 2 * (size/1.0e6) * sizeof(double);
-    tileposMem = 3 * (ntiles/1.0e6) * sizeof(float);
-    afMem = (size/1.0e6) * sizeof(cuDoubleComplex);
+    // define the array sizes that will go onto the device
+    azzaMem = 2 * (size/1.0e6) * sizeof(double); // az and za arrays
+    tileposMem = 3 * (ntiles/1.0e6) * sizeof(float); // x,y,z positions of all tiles
+    afMem = (size/1.0e6) * sizeof(cuDoubleComplex); // "array factor" array
+    // misc. memory requirments (likely inconsequential)
     otherMem = (7 * sizeof(double) + 4 * sizeof(int) + sizeof(cuDoubleComplex) + sizeof(wavenums))/1.0e6;
     
-    reqMem = azzaMem + tileposMem + afMem + otherMem;
-    devMem = (double)freeMem/1.0e6;
+    reqMem = azzaMem + tileposMem + afMem + otherMem; // total required memory in MB
+    devMem = (double)freeMem/1.0e6; // available memory in MB
 
     printf("Memory required for:\n");
     printf("    Az,ZA arrays: %Lf MB\n",azzaMem);
@@ -451,7 +446,7 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
 
     if (reqMem < 0)
     {
-        fprintf(stderr, "Negative required memory - integer overflow? Probably requesting resolution elements that are too small!!\n");
+        fprintf(stderr, "Negative required memory (%Lf)!! Aborting.\n", reqMem);
         exit(1);
     }
     else if ((tfrac*devMem) <= reqMem)
@@ -468,7 +463,6 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
 
     *niter = iters;
 }
-
 
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -487,80 +481,6 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 }
 // define a macro for accessing gpuAssert
 #define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
-
-
-//__global__ void getWavevectors(int nel, double a, double *za, double *az, wavenums *p_twn, wavenums *p_wn)
-//{
-//    /* Kernal to compute the wavevectors for a list of theta/phi.
-//       nel   = total number of elements in each array
-//       a     = amplitude factor (i.e. 2pi/lambda)
-//       za    = array of zenith angles
-//       az    = array of azimuths
-//       p_twn = target wavenumber struct
-//       p_wn  = array of structs to contain kx, ky and kz
-//
-//       The standard equations are:
-//       a = 2 * pi / lambda
-//       kx = a * sin(theta) * cos(phi)
-//       ky = a * sin(theta) * sin(phi)
-//       kz = a * cos(theta)
-//
-//       Assuming that (theta,phi) are in the convention from Sutinjo et al. 2015:
-//       i.e. phi = pi/2 - az   AND   theta = za
-//
-//       The azimuth is measured clockwise from East (standard for antenna theory, offset from astronomy)
-//
-//       Will produce (k - k_target) which is the wavenumber required for the array factor calculation.
-//    */
-//    int index = blockIdx.x * blockDim.x + threadIdx.x;
-//    int stride = blockDim.x * gridDim.x;
-//    double ast, phi;
-//
-//    for (int i = index; i < nel; i+= stride)
-//    {
-//        ast = a * sin(za[i]);
-//        phi = PI/2 - az[i];
-//        p_wn[i].kx = ast * cos(phi) - p_twn->kx; 
-//        p_wn[i].ky = ast * sin(phi) - p_twn->ky;
-//        p_wn[i].kz = ast - p_twn->kz;
-//    } 
-//    __syncthreads();
-//}
-//
-//
-//__global__ void getArrayFactor(int nel, int ntiles, float *xp, float *yp, float *zp, wavenums *p_wn, cuDoubleComplex *af)
-//{
-//    /* Kernal to compute the array factor from the tiles positions and wave numbers.
-//       nel    = total number of elements in final array
-//       ntiles =  number of tiles used to form tied-array beam
-//       xp     = array of tile x-positions (East)
-//       yp     = array of tile y-positions (North)
-//       zp     = array of tile z-positions (above array centre)
-//       p_wn   = array of wavenumber structs for each pixel in af
-//       af     = array containing the complex valued array factor
-//    */
-//    int index = blockIdx.x * blockDim.x + threadIdx.x;
-//    int stride = blockDim.x * gridDim.x;
-//    double ph;
-//    double kx, ky, kz;
-//    cuDoubleComplex n = make_cuDoubleComplex(ntiles,0);
-//
-//    for (int i = index; i < nel; i+=stride)
-//    {
-//        kx = p_wn[i].kx;
-//        ky = p_wn[i].ky;
-//        kz = p_wn[i].kz;
-//        af[i] = make_cuDoubleComplex(0,0);
-//        for (int j = 0; j < ntiles; j++)
-//        {
-//            ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
-//            af[i] = cuCadd(af[i], make_cuDoubleComplex(cos(ph), sin(ph)));         
-//        }
-//        af[i] = cuCdiv(af[i], n);
-//    }
-//    __syncthreads();
-//}
-//
 
 __global__ void calcArrayFactor(int nel, int ntiles, double a,
                                 double *za, double *az, 
