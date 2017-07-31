@@ -11,18 +11,18 @@
 #include <cuda_runtime_api.h>
 #include <cuComplex.h>
 
-#define PI (acos(-1.0))         //Ensures PI is defined on all systems
+#define PI (acos(-1.0))         // Ensures PI is defined on all systems
 #define RAD2DEG (180.0 / PI)
 #define DEG2RAD (PI / 180.0)
-#define SOL (299792458.0)       //Speed of light
-#define KB (1.38064852e-23)     //Boltzmann's constant
+#define SOL (299792458.0)       // Speed of light
+#define KB (1.38064852e-23)     // Boltzmann's constant
 
-#define MWA_LAT (-26.703319)    //Array latitude, degrees North
-#define MWA_LON (116.67081)     //Array longitude, degrees East
-#define MWA_HGT (377.827)       //Array elevation above sea level, in meters
+#define MWA_LAT (-26.703319)    // Array latitude, degrees North
+#define MWA_LON (116.67081)     // Array longitude, degrees East
+#define MWA_HGT (377.827)       // Array elevation above sea level, in meters
 
 // in column major format, a matrix is indexed to an array by
-#define IDX2C(i,j,ld) (((j) * (ld)) + (i))
+//#define IDX2C(i,j,ld) (((j) * (ld)) + (i))
 // here ld is leading dimension of the matrix 
 // (in this case, should be number of rows)
 
@@ -142,7 +142,7 @@ void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn)
 
     p_wn->kx = ast * cos(phi); 
     p_wn->ky = ast * sin(phi); 
-    p_wn->kz = ast;   
+    p_wn->kz = a * cos(za);   
 }
 
 void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza)
@@ -500,13 +500,12 @@ __global__ void calcArrayFactor(int nel, int ntiles, double a,
        ##########################
        # Wavenumber computation #
        ##########################
-       a     = amplitude factor (i.e. 2pi/lambda)
+       a     = amplitude factor (2*pi/lambda)
        za    = array of zenith angles
        az    = array of azimuths
        p_twn = target wavenumber struct
 
        NOTE: The standard equations are:
-             a = 2 * pi / lambda
              kx = a * sin(theta) * cos(phi)
              ky = a * sin(theta) * sin(phi)
              kz = a * cos(theta)
@@ -521,8 +520,7 @@ __global__ void calcArrayFactor(int nel, int ntiles, double a,
        ############################
        # Array factor computation #
        ############################
-       nel    = total number of elements in final array
-       ntiles =  number of tiles used to form tied-array beam
+       ntiles = number of tiles used to form tied-array beam
        xp     = array of tile x-positions (East)
        yp     = array of tile y-positions (North)
        zp     = array of tile z-positions (above array centre)
@@ -564,7 +562,7 @@ __global__ void calcArrayFactor(int nel, int ntiles, double a,
         // calculate (k - k_target)
         kx = ast * cos(phi) - p_twn->kx; 
         ky = ast * sin(phi) - p_twn->ky;
-        kz = ast - p_twn->kz;
+        kz = a * cos(za[i]) - p_twn->kz;
 
         // initialise this pixel's array factor value
         af[i] = make_cuDoubleComplex(0,0);
@@ -580,7 +578,6 @@ __global__ void calcArrayFactor(int nel, int ntiles, double a,
         af[i] = cuCdiv(af[i], n);
     }
     __syncthreads();
-
 }
 
 void calcArrayFactorCPU(int nel, int ntiles, double a,
@@ -597,16 +594,13 @@ void calcArrayFactorCPU(int nel, int ntiles, double a,
     double kx=0, ky=0, kz=0;
     double complex n = ntiles+I*0;
 
-    //printf("    entering outer loop\n");
     for (int i = 0; i < nel; i ++)
     {
         // pre-calculate coefficients/transforms
-        //printf("    precompute\n");
         ast = a * sin(za[i]);
         phi = PI/2 - az[i];
 
         // calculate (k - k_target)
-        //printf("    calc k-ktarg\n");
         kx = ast * cos(phi) - p_twn->kx; 
         ky = ast * sin(phi) - p_twn->ky;
         kz = ast - p_twn->kz;
@@ -615,21 +609,15 @@ void calcArrayFactorCPU(int nel, int ntiles, double a,
         af[i] = 0.0 + I*0.0;
         
         // calculate array factor contribution from each tile and sum
-        //printf("    entering tile sum loop\n");
         for (int j = 0; j < ntiles; j++)
         {
             ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
             af[i] += cos(ph) + I*sin(ph);         
         }
-
-        // normalise the array factor
-        //printf("    normalising\n");
+        // normalise the result
         af[i] /= n;
     }
 }
-
-
-
 
 
 
@@ -641,16 +629,9 @@ int main(int argc, char *argv[])
     char *metafits=NULL;
     char *flagfile=NULL;
     int c=0;
-    int ntiles=0;
-    int blockSize,numBlocks;
-    int niter=1, iter=0;
-    int n_az, n_za;
-    long int size;
     double freq=0, lambda=0;
     double az_step=1.0, za_step=1.0, eta=1.0;
-    //double ph=0.0, omega_A=0.0, af_max=-1.0, eff_area=0.0, gain=0.0;
-    tazza target;
-    wavenums target_wn;
+    int blockSize, numBlocks;
 
     /* Parse options */
     if (argc > 1)
@@ -701,7 +682,10 @@ int main(int argc, char *argv[])
     }
 
 
-    // calculate target az,za and wavevector 
+    // calculate target az,za and wavevector
+    tazza target;
+    wavenums target_wn;
+
     printf("Getting target (Az,ZA)\n");
     calcTargetAZZA(ra, dec, time, &target);
     printf("Computing wavenumbers towards target\n");
@@ -710,6 +694,8 @@ int main(int argc, char *argv[])
     printf("\n");
 
     // get the number of tiles in array
+    int ntiles=0;
+
     printf("Determining number of tiles from metafits\n");
     ntiles = getNumTiles(metafits); // returns 2x the number of tiles, 1 per pol.
     ntiles = ntiles / 2;
@@ -768,6 +754,10 @@ int main(int argc, char *argv[])
 
 
     // determine number of az/za elements from specified pixel size
+    int niter=1;
+    int n_az, n_za;
+    long int size;
+
     n_az = (int)(360.0/az_step);
     n_za = (int)(90.0/za_step)+1; // +1 because we want to evalute at 90deg too!
     size = n_az * n_za;
@@ -804,17 +794,16 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // populate the host vectors::
-    // TODO: this is currently the most memory intensive part: ~20GB at 0.01x0.01 resolution
+    // populate the host vectors:
+    // TODO: this is currently the most memory intensive part on host.
     //       maybe we want to move this initilisation part into the iteration loop
-    //       which will then make the arrays MUCH smaller - need to figure out how to 
-    //       populate correctly then...
+    //       which will then make the arrays smaller --
+    //           need to figure out how to populate correctly then...
     printf("Initialising az, za and result matrix\n");
     // want arrays to be something like:
     // az = [0 0 0 0 ... 1 1 1 1 ...]
     // za = [0 1 2 3 ... 0 1 2 3 ...]
-    int cc=0;
-    int i=0;
+    int cc=0, i=0;
     do
     {
         for (int j=0; j<n_za; j++)
@@ -825,60 +814,19 @@ int main(int argc, char *argv[])
         cc += n_za;
         i++;
     } while(cc < size);
-     
-//    FILE *fptest;
-//    fptest = fopen("azza.dat","w");
-//    for (int i=0; i<size; i++)
-//    {
-//        fprintf(fptest, "%f %f\n", az_array[i]*RAD2DEG, za_array[i]*RAD2DEG);
-//    }
-//    fclose(fptest);
+    printf("Done\n");
 
     // construct arrays for device computation
     double *d_az_array, *d_za_array;
-    float *d_xpos, *d_ypos, *d_zpos;
-    //wavenums *wn_array, *d_wn_array, *d_twn;
-    wavenums *d_twn;
-    int itersize;
-    double af_max = -1, omega_A = 0.0;
     double *subAz, *subZA;
-    //wavenums *tmpsubwn; 
-    cuDoubleComplex *af_array, *d_af_array; // these will be used within the iteration loop
-    
+    cuDoubleComplex *af_array, *d_af_array;
+    float *d_xpos, *d_ypos, *d_zpos;
+    wavenums *d_twn;
+    int itersize, az_idx1, az_idx2, za_idx1, za_idx2; 
     int iter_n_az = (int)floor(size / niter);
     int iter_n_za = (int)floor(size / niter);
-    int az_idx1, az_idx2, za_idx1, za_idx2; 
+    double af_max = -1, omega_A = 0.0;
 
-    printf("iter n_az, n_za = %d %d\n", iter_n_az, iter_n_za);
-
-
-//    subAz = (double *)malloc(itersize * sizeof(double));
-//    if (!subAz)
-//    {
-//        fprintf(stderr,"Host memory allocation failed (allocate subAz)\n");
-//        return EXIT_FAILURE;
-//    }
-//    subZA = (double *)malloc(itersize * sizeof(double));
-//    if (!subZA)
-//    {
-//        fprintf(stderr,"Host memory allocation failed (allocate subZA)\n");
-//        return EXIT_FAILURE;
-//    }
-//    wn_array = (wavenums *)malloc(itersize * sizeof(wavenums));
-//    if (!wn_array)
-//    {
-//        fprintf(stderr,"Host memory allocation failed (allocate wn_array)\n");
-//        return EXIT_FAILURE;
-//    }
-//    tmpsubwn = (wavenums *)malloc(sizeof(wavenums));
-//
-//    af_array = (cuDoubleComplex *)malloc(itersize * sizeof(cuDoubleComplex));
-//    if (!af_array)
-//    {
-//        fprintf(stderr,"Host memory allocation failed (allocate af_array)\n");
-//        return EXIT_FAILURE;
-//    }
-    
     // before we get to the real computation, better open a file ready for writing
     int obsid;
     char output[100];
@@ -893,7 +841,7 @@ int main(int argc, char *argv[])
 
     /* This is the primary loop which does the calculations */
     printf("%d az , %d za per iteration\n", iter_n_az, iter_n_za);
-    for (iter = 0; iter < niter; iter++)
+    for (int iter = 0; iter < niter; iter++)
     {  
         printf("==== Iteration %d ====\n", iter);
         // figure out this iteration size, then allocate memory
@@ -928,8 +876,7 @@ int main(int argc, char *argv[])
             za_idx2 = za_idx1 + itersize - 1;
         }
 
-        printf("iteration size = %d\n", itersize);
-        printf("n az: %d  n za: %d\n",iter_n_az,iter_n_za); 
+        printf("# az: %d  # za: %d\n", iter_n_az, iter_n_za); 
         
         subAz = (double *)malloc(iter_n_az * sizeof(double));
         if (!subAz)
@@ -963,24 +910,17 @@ int main(int argc, char *argv[])
         {
             subAz[i] = az_array[i+az_idx1];
             subZA[i] = za_array[i+za_idx1];
-            //wn_array[i].kx = 0.0;
-            //wn_array[i].ky = 0.0;
-            //wn_array[i].kz = 0.0;
             af_array[i] = make_cuDoubleComplex(0,0);
-
         }
 
-        //printf("First/Last Az element for this iteration: %f %f\n", subAz[0]*RAD2DEG, subAz[itersize-1]*RAD2DEG);
-        //printf("First/Last ZA element for this iteration: %f %f\n", subZA[0]*RAD2DEG, subZA[itersize-1]*RAD2DEG);
-
         // allocate memory on device
-        gpuErrchk( cudaMalloc((void**)&d_az_array, itersize * sizeof(*az_array)));
-        gpuErrchk( cudaMalloc((void**)&d_za_array, itersize * sizeof(*za_array)));
-        gpuErrchk( cudaMalloc((void**)&d_twn, sizeof(wavenums)));
-        gpuErrchk( cudaMalloc((void**)&d_xpos, ntiles * sizeof(*xpos)));
-        gpuErrchk( cudaMalloc((void**)&d_ypos, ntiles * sizeof(*ypos)));
-        gpuErrchk( cudaMalloc((void**)&d_zpos, ntiles * sizeof(*zpos)));
-        gpuErrchk( cudaMalloc((void**)&d_af_array, itersize * sizeof(*af_array)));
+        gpuErrchk( cudaMalloc((void **)&d_az_array, itersize * sizeof(*az_array)));
+        gpuErrchk( cudaMalloc((void **)&d_za_array, itersize * sizeof(*za_array)));
+        gpuErrchk( cudaMalloc((void **)&d_twn, sizeof(wavenums)));
+        gpuErrchk( cudaMalloc((void **)&d_xpos, ntiles * sizeof(*xpos)));
+        gpuErrchk( cudaMalloc((void **)&d_ypos, ntiles * sizeof(*ypos)));
+        gpuErrchk( cudaMalloc((void **)&d_zpos, ntiles * sizeof(*zpos)));
+        gpuErrchk( cudaMalloc((void **)&d_af_array, itersize * sizeof(*af_array)));
 
 
         // copy arrays onto device
