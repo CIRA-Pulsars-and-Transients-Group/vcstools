@@ -29,7 +29,7 @@ SCRIPT_TARGETS = bf_adjust_flags.py \
           write_rts_in_file.py
 
 DATABASE_TARGETS = submit_to_database.py\
-         cmd_vcs_db_cat.py
+         database_vcs.py
 
 UTILITY_TARGETS = zapchan.py\
 	calc_ephem.py \
