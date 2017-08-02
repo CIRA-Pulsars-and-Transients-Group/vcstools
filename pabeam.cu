@@ -897,13 +897,13 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
 
-        numBlocks = (itersize + blockSize - 1) / blockSize; // number of blocks required 
+        // number of blocks required 
+        numBlocks = (itersize + blockSize - 1) / blockSize; 
+
 
         printf("azimuth idx: %d - %d\n", az_idx1, az_idx2);
         printf("zenith  idx: %d - %d\n", za_idx1, za_idx2);
         printf("Number of GPU blocks used: %d\n", numBlocks);
-        
-        //printf("testing:: omega_A = %f\n",omega_A);
         
         // place subset of az/za array into subAz/subZA
         for (int i=0; i<itersize; i++)
@@ -979,7 +979,6 @@ int main(int argc, char *argv[])
 
 
         /* Write the output to a file */
-        //fprintf(fp, "iteration %d\n",iter);
         double af_power = 0.0;
         //double cpu_power = 0.0;
         printf("Writing to file...\n");
