@@ -340,7 +340,8 @@ if args.pulsar or args.bestprof:
         #gets Ra and DEC from PSRCAT
         pul_ra , pul_dec = get_pulsar_ra_dec(pulsar)
         #then adds it to the database
-        client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)    
+        client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)  
+    
 
 
     
@@ -356,13 +357,11 @@ bandwidth = 30720000.
 if args.bestprof:
     #check if the obs time is entire obs. The meta data will round down to the nearest 200 seconds
     #(someitmmes 100 depending on the obs type) 
-    entire_obs = False
     if 0. < (time_detection - time_obs) < 199.:
-        entire_obs = True
+        #all available fits files used
         enter = 0.
         exit = time_detection
-
-    if not entire_obs:
+    else:
         #check if there is an input start and stop time
         if time_detection > (time_obs *5.):
             #some of the comissioning data has terrible metadata 
@@ -428,13 +427,40 @@ if args.bestprof:
     #Gain calc
     import math
     from astropy.time import Time
-    sys_temp, gain_table, avg_power = get_Tsys.main(obsid,[pul_ra, pul_dec],enter,exit,incoh)
-    gain = np.mean(gain_table)
-    t_sys = np.mean(sys_temp)
+    from astropy.table import Table
+    from scipy.interpolate import InterpolatedUnivariateSpline
+    import mwapy.pb.primarybeammap_local as pbl
+    
+    trec_table = Table.read("/group/mwaops/PULSAR/src/MWA_Tools/mwapy/pb/MWA_Trcvr_tile_56.csv",format="csv")
+
+    print "Grabbing obs parameters..."
+    params = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
+    
+    obsdur = enter - exit
+    ntiles = 128#actually we excluded some tiles during beamforming, so we'll need to account for that here
+    tdt=100
+    
+    print "Calculating beam power..."
+    bandpowers = get_Tsys.get_beam_power(params,[[pul_ra, pul_dec]],enter,exit,
+                                centeronly=True,dt=tdt,option="e") #TODO CHANGE TRUE TO FALSE
+    print "Converting to gain from power..."
+    gains = get_Tsys.from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,incoh)
+    print 'Frequency',centrefreq*1e6,'Hz'
+    tant = pbl.make_primarybeammap(float(obsid),delays,frequency=centrefreq*1e6,model='full_EE')
+    t_sys_table = tant + get_Tsys.get_Trec(trec_table,centrefreq)
+    
+    gain_interpolator = InterpolatedUnivariateSpline(np.arange(len(gains))*tdt, gains)
+    time = np.arange(0,obsdur,100e-6)
+    gmodel = gain_interpolator(time)
+    
+    gain = np.mean(gmodel)
+    t_sys = np.mean(t_sys_table)
+    avg_power = np.mean(bandpowers)
+    
     
     #remove unwanted files from get_Tsys and scripts within
     from glob import glob
-    os.remove("{0}_gains_{1:.2f}.png".format(obsid,centrefreq))
+    #os.remove("{0}_gains_{1:.2f}.png".format(obsid,centrefreq))
     files_to_remove = glob("{0}.0_{1:.2f}MHz_*_full_EE.*".format(obsid,centrefreq))
     for f in files_to_remove:
         os.remove(f)
@@ -562,52 +588,88 @@ if args.bestprof:
             subbands = subbands + 1
     
     #get cal id
-    cal_list = client.calibrator_list(web_address, auth)
-    cal_already_created = False
-    for c in cal_list:
-        if ( c[u'observationid'] == int(args.cal_id) ) and ( c[u'caltype'] == calibrator_type ):
-            cal_already_created = True
-            cal_db_id = c[u'id']
-    if not cal_already_created:
-        cal_db_id = client.calibrator_create(web_address, auth,
-                                              observationid = str(args.cal_id),
-                                              caltype = calibrator_type)[u'id']
+    if not incoh:
+        cal_list = client.calibrator_list(web_address, auth)
+        cal_already_created = False
+        for c in cal_list:
+            if ( c[u'observationid'] == int(args.cal_id) ) and ( c[u'caltype'] == calibrator_type ):
+                cal_already_created = True
+                cal_db_id = c[u'id']
+        if not cal_already_created:
+            cal_db_id = client.calibrator_create(web_address, auth,
+                                                  observationid = str(args.cal_id),
+                                                  caltype = calibrator_type)[u'id']
     
-    try:
-        client.detection_create(web_address, auth, 
-                               observationid = int(obsid),
-                               pulsar = str(pulsar), 
-                               subband = str(subbands), 
-                               incoherent = incoh,
-                               observation_type = int(obstype),
-                               calibrator = int(cal_db_id),
-                               startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                               flux = float("{0:.2f}".format(S_mean)),
-                               flux_error = float("{0:.2f}".format(u_S_mean)),
-                               width = float("{0:.2f}".format(w_equiv_ms)),
-                               width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                               scattering = float("{0:.5f}".format(scattering)), 
-                               scattering_error = float("{0:.5f}".format(u_scattering)),
-                               dm = float(dm))
-    except:
-        print "Detection already on database so updating the values"
-        client.detection_update(web_address, auth, 
-                               observationid = int(obsid),
-                               pulsar = str(pulsar), 
-                               subband = str(subbands), 
-                               incoherent = incoh,
-                               observation_type = int(obstype),
-                               calibrator = int(cal_db_id),
-                               startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                               flux = float("{0:.2f}".format(S_mean)),
-                               flux_error = float("{0:.2f}".format(u_S_mean)),
-                               width = float("{0:.2f}".format(w_equiv_ms)),
-                               width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                               scattering = float("{0:.5f}".format(scattering)), 
-                               scattering_error = float("{0:.5f}".format(u_scattering)),
-                               dm = float(dm))
-                           
-    print "Observation submitted to database"
+        try:
+            client.detection_create(web_address, auth, 
+                                   observationid = int(obsid),
+                                   pulsar = str(pulsar), 
+                                   subband = str(subbands), 
+                                   incoherent = incoh,
+                                   observation_type = int(obstype),
+                                   calibrator = int(cal_db_id),
+                                   startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                                   flux = float("{0:.2f}".format(S_mean)),
+                                   flux_error = float("{0:.2f}".format(u_S_mean)),
+                                   width = float("{0:.2f}".format(w_equiv_ms)),
+                                   width_error = float("{0:.2f}".format(u_w_equiv_ms)),
+                                   scattering = float("{0:.5f}".format(scattering)), 
+                                   scattering_error = float("{0:.5f}".format(u_scattering)),
+                                   dm = float(dm))
+        except:
+            print "Detection already on database so updating the values"
+            client.detection_update(web_address, auth, 
+                                   observationid = int(obsid),
+                                   pulsar = str(pulsar), 
+                                   subband = str(subbands), 
+                                   incoherent = incoh,
+                                   observation_type = int(obstype),
+                                   calibrator = int(cal_db_id),
+                                   startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                                   flux = float("{0:.2f}".format(S_mean)),
+                                   flux_error = float("{0:.2f}".format(u_S_mean)),
+                                   width = float("{0:.2f}".format(w_equiv_ms)),
+                                   width_error = float("{0:.2f}".format(u_w_equiv_ms)),
+                                   scattering = float("{0:.5f}".format(scattering)), 
+                                   scattering_error = float("{0:.5f}".format(u_scattering)),
+                                   dm = float(dm))
+                               
+        print "Observation submitted to database"
+    else:
+        #submits without the cal_id
+        try:
+            client.detection_create(web_address, auth, 
+                                   observationid = int(obsid),
+                                   pulsar = str(pulsar), 
+                                   subband = str(subbands), 
+                                   incoherent = incoh,
+                                   observation_type = int(obstype),
+                                   startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                                   flux = float("{0:.2f}".format(S_mean)),
+                                   flux_error = float("{0:.2f}".format(u_S_mean)),
+                                   width = float("{0:.2f}".format(w_equiv_ms)),
+                                   width_error = float("{0:.2f}".format(u_w_equiv_ms)),
+                                   scattering = float("{0:.5f}".format(scattering)), 
+                                   scattering_error = float("{0:.5f}".format(u_scattering)),
+                                   dm = float(dm))
+        except:
+            print "Detection already on database so updating the values"
+            client.detection_update(web_address, auth, 
+                                   observationid = int(obsid),
+                                   pulsar = str(pulsar), 
+                                   subband = str(subbands), 
+                                   incoherent = incoh,
+                                   observation_type = int(obstype),
+                                   startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                                   flux = float("{0:.2f}".format(S_mean)),
+                                   flux_error = float("{0:.2f}".format(u_S_mean)),
+                                   width = float("{0:.2f}".format(w_equiv_ms)),
+                                   width_error = float("{0:.2f}".format(u_w_equiv_ms)),
+                                   scattering = float("{0:.5f}".format(scattering)), 
+                                   scattering_error = float("{0:.5f}".format(u_scattering)),
+                                   dm = float(dm))
+                               
+        print "Observation submitted to database"
 
 
 
