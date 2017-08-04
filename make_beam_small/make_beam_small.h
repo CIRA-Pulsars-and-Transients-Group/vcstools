@@ -5,8 +5,10 @@
 #include "psrfits.h"
 
 // Calibration solution types
-#define RTS       0
-#define OFFRINGA  1
+#define NO_CALIBRATION  0
+#define RTS             1
+#define RTS_BANDPASS    2
+#define OFFRINGA        3
 
 // A structure to read in all the relevant info from the observation metafits
 // file.
@@ -38,9 +40,12 @@ struct delays {
 };
 
 struct calibration {
-    char *filename;        // The file that houses the calibration solution
-    int   cal_type;        // Either RTS or OFFRINGA
-    int   offr_chan_num;   // The channel number in the Offringa calibration solution file
+    char *filename;           // The file that houses the calibration solution
+    char *bandpass_filename;  // The file that houses the RTS bandpass information
+    int   chan_width;         // Channel width used in RTS bandpass solutions (in Hz)
+    int   nchan;              // The number of channels in the RTS bandpass solutions
+    int   cal_type;           // Either RTS or OFFRINGA
+    int   offr_chan_num;      // The channel number in the Offringa calibration solution file
 };
 
 /* Running get_delays from within make_beam */
@@ -54,8 +59,8 @@ void get_delays(
         double                 sec_offset,
         struct delays         *delay_vals,
         struct metafits_info  *mi,
-        complex double       **complex_weights_array,  // output
-        complex double       **invJi                   // output
+        complex double      ***complex_weights_array,  // output
+        complex double     ****invJi                   // output
 );
 
 
