@@ -1071,7 +1071,7 @@ except:#incase of file finding or permission errors use webservice
         dec = beam_meta_data[u'metadata'][u'dec_pointing']
         time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time 
         skytemp = beam_meta_data[u'metadata'][u'sky_temp']
-        delays = beam_meta_data[u'rfstreams'][u'0'][u'delays']
+        delays = beam_meta_data[u'rfstreams'][u'0'][u'xdelays']
 
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
         minfreq = float(min(channels))
@@ -1168,18 +1168,5 @@ if args.obs_for_source:
 
 print "The code is complete and all results have been output to text files"   
 
-                 
-"""
-Program tests
-python find_pulsar_in_obs.py -p --obsid 1099414416
-python find_pulsar_in_obs.py -p J0534+2200 J0538+2817 --obsid 1099414416
-python find_pulsar_in_obs.py -p J0630-2834 --obsid 1067285064 10689221844 1101491208 1102270216
-python find_pulsar_in_obs.py -p J0534+2200 J0538+2817 --obsid 1099414416 --obs_for_source
-python find_pulsar_in_obs.py -p J1921+2153 J1932+1056 J1935+1616 --obsid 1095506112 --obs_for_source
-python find_pulsar_in_obs.py -p J0630-2834 J0742-2822 --obsid 1067285064 --obs_for_source
-
-python find_pulsar_in_obs.py -c 05:34:31.973,+22:00:52.06 --obsid 1099414416 --obs_for_source               
-
-Found in my third year project
-J0437-4715 J0534+2200 J0630-2834 J0742-2822 J0835-4510 J0953+0755 J1731-4744 J1752-2806 J1900-2600 J1921+2153 J1932+1059 J1935+1616 J2048-1616 J2145-0750                 
-"""
+#remove csv file
+os.system( 'rm ' + catDIR)

@@ -13,6 +13,7 @@ import distutils.spawn
 import sqlite3 as lite
 from astropy.io import fits as pyfits
 from reorder_chans import *
+import database_vcs
 
 
 TMPL = """#!/bin/bash
@@ -35,52 +36,52 @@ def tmp(suffix=".sh"):
     return t
 
 def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", depend=0, submit=True, outfile=None, cluster="galaxy"):
-	"""
-	Making this function to cleanly submit slurm jobs using a simple template.
-	This will use the <name> to setup both the .batch and .out files into <batch_dir>
-	<slurm_kwargs> should be a dictionary of keyword, value pairs of anything the template header is missing
-	<commands> is the actual batch script you want to run, and is expecting a list with one entry per line
-	"""
-	
-	header = []
-	if batch_dir[-1] is not "/":
-		batch_dir += "/"
+        """
+        Making this function to cleanly submit slurm jobs using a simple template.
+        This will use the <name> to setup both the .batch and .out files into <batch_dir>
+        <slurm_kwargs> should be a dictionary of keyword, value pairs of anything the template header is missing
+        <commands> is the actual batch script you want to run, and is expecting a list with one entry per line
+        """
+        
+        header = []
+        if batch_dir[-1] is not "/":
+                batch_dir += "/"
 
-	if not outfile:
-		outfile=batch_dir+name+".out"
-	for k, v in slurm_kwargs.iteritems():
-		if len(k) > 1:
-			k = "--" + k + "="
-		else:
-			k = "-" + k + " "
-		header.append("#SBATCH {0}{1}".format(k, v))
-	header = "\n".join(header)
-	
-	commands = "\n".join(commands)
-	
-	tmpl = tmpl.format(script=commands,outfile=outfile, header=header, cluster=cluster)
-	
+        if not outfile:
+                outfile=batch_dir+name+".out"
+        for k, v in slurm_kwargs.iteritems():
+                if len(k) > 1:
+                        k = "--" + k + "="
+                else:
+                        k = "-" + k + " "
+                header.append("#SBATCH {0}{1}".format(k, v))
+        header = "\n".join(header)
+        
+        commands = "\n".join(commands)
+        
+        tmpl = tmpl.format(script=commands,outfile=outfile, header=header, cluster=cluster)
+        
 
-	fh = open(batch_dir+name+".batch","w")
-	fh.write(tmpl)
-	fh.close()
-	
-	if depend:
-		batch_submit_line = "sbatch --dependency=afterok:{0} {1}".format(depend,batch_dir+name+".batch") # should this just be in the header?
-	else:
-		batch_submit_line = "sbatch {0}".format(batch_dir+name+".batch")
-	
-	if submit:
-		submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
-	# submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
-	# 
-	# jobid=""
-	# for line in submit_cmd.stdout:
-	# 	if "Submitted" in line:
-	# 		(word1,word2,word3,jobid) = line.split()
-	# return jobid
+        fh = open(batch_dir+name+".batch","w")
+        fh.write(tmpl)
+        fh.close()
+        
+        if depend:
+                batch_submit_line = "sbatch --dependency=afterok:{0} {1}".format(depend,batch_dir+name+".batch") # should this just be in the header?
+        else:
+                batch_submit_line = "sbatch {0}".format(batch_dir+name+".batch")
+        
+        if submit:
+                submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+        # submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+        # 
+        # jobid=""
+        # for line in submit_cmd.stdout:
+        #         if "Submitted" in line:
+        #                 (word1,word2,word3,jobid) = line.split()
+        # return jobid
 
-	
+        
 
 
 def getmeta(service='obs', params=None):
@@ -152,10 +153,10 @@ def get_user_email():
 def ensure_metafits(data_dir, obs_id, metafits_file):
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
     if not os.path.exists(metafits_file):
-	print "{0} does not exists".format(metafits_file)
-	print "Will download it from the archive. This can take a while so please do not ctrl-C."
-	obsdownload = distutils.spawn.find_executable("obsdownload.py")
-    	get_metafits = "{0} -o {1} -d {2} -m".format(obsdownload, obs_id, data_dir.replace(str(obs_id), ''))
+        print "{0} does not exists".format(metafits_file)
+        print "Will download it from the archive. This can take a while so please do not ctrl-C."
+        obsdownload = distutils.spawn.find_executable("obsdownload.py")
+        get_metafits = "{0} -o {1} -d {2} -m".format(obsdownload, obs_id, data_dir.replace(str(obs_id), ''))
         try:
             subprocess.call(get_metafits,shell=True)
         except:
@@ -165,10 +166,10 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         os.remove('obscrt.crt')
         os.remove('obskey.key')
     # make a copy of the file in the product_dir if that directory exists
-    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /scratch2)
+    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
     # in case --work_dir was specified in process_vcs call product_dir and data_dir
     # are the same and thus we will not perform the copy
-    product_dir = data_dir.replace('/scratch2/mwaops/vcs/', '/group/mwaops/vcs/') # being pedantic
+    product_dir = data_dir.replace('/astro/mwaops/vcs/', '/group/mwaops/vcs/') # being pedantic
     if os.path.exists(product_dir) and not os.path.exists(metafits_file):
         print "Copying {0} to {1}".format(metafits_file, product_dir)
         from shutil import copy2
@@ -215,7 +216,7 @@ def obs_max_min(obs_id):
     return obs_start, obs_end
 
 def get_frequencies(metafits,resort=False):
-	# TODO: for robustness, this should force the entries to be 3-digit numbers
+    # TODO: for robustness, this should force the entries to be 3-digit numbers
     hdulist    = pyfits.open(metafits)
     freq_str   = hdulist[0].header['CHANNELS']
     freq_array = [int(f) for f in freq_str.split(',')]
@@ -225,120 +226,123 @@ def get_frequencies(metafits,resort=False):
         return freq_array
 
 def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, args, ics=False, n_untar=2, keep=""):
-	vcs_database_id = database_command(args, obsid)
-	print "Downloading files from archive"
-	voltdownload = distutils.spawn.find_executable("voltdownload.py")
-	obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
-	data_format = obsinfo['dataquality']
-	if data_format == 1:
+        vcs_database_id = database_vcs.database_command(args, obsid)
+        print "Downloading files from archive"
+        voltdownload = distutils.spawn.find_executable("voltdownload.py")
+        obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
+        data_format = obsinfo['dataquality']
+        if data_format == 1:
                 target_dir = link = '/raw'
-		if ics:
-			print "Data have not been recombined in the archive yet. Exiting"
-			quit()
-		data_type = 11
-		dl_dir = "{0}/{1}".format(data_dir, target_dir)
-		dir_description = "Raw"
-	elif data_format == 6:
+                if ics:
+                        print "Data have not been recombined in the archive yet. Exiting"
+                        quit()
+                data_type = 11
+                dl_dir = "{0}/{1}".format(data_dir, target_dir)
+                dir_description = "Raw"
+        elif data_format == 6:
                 target_dir = link = '/combined'
-		if ics:
-			data_type = 15
-		else:
-			data_type = 16
-		dl_dir = "{0}/{1}".format(data_dir, target_dir)
-		dir_description = "Combined"
-	else:
-		print "Unable to determine data format from archive. Exiting"
-		quit()
-	mdir(dl_dir, dir_description)
+                if ics:
+                        data_type = 15
+                else:
+                        data_type = 16
+                dl_dir = "{0}/{1}".format(data_dir, target_dir)
+                dir_description = "Combined"
+        else:
+                print "Unable to determine data format from archive. Exiting"
+                quit()
+        mdir(dl_dir, dir_description)
         create_link(data_dir, target_dir, product_dir, link)
-	batch_dir = product_dir+"/batch/"
+        batch_dir = product_dir+"/batch/"
 
-	for time_to_get in range(start_time,stop_time,increment):
-		get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
-		if head:
-			log_name="{0}/voltdownload_{1}.log".format(product_dir,time_to_get)
-			with open(log_name, 'w') as log:
-				subprocess.call(get_data, shell=True, stdout=log, stderr=log)
-		else:
-			voltdownload_batch = "volt_{0}".format(time_to_get)
-			check_batch = "check_volt_{0}".format(time_to_get)
-			volt_secs_to_run = datetime.timedelta(seconds=300*increment)
-			check_secs_to_run = "15:00"
-			check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+        for time_to_get in range(start_time,stop_time,increment):
+                get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
+                if head:
+                        log_name="{0}/voltdownload_{1}.log".format(product_dir,time_to_get)
+                        with open(log_name, 'w') as log:
+                                subprocess.call(get_data, shell=True, stdout=log, stderr=log)
+                else:
+                        voltdownload_batch = "volt_{0}".format(time_to_get)
+                        check_batch = "check_volt_{0}".format(time_to_get)
+                        volt_secs_to_run = datetime.timedelta(seconds=300*increment)
+                        check_secs_to_run = "15:00"
+                        check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
                         if data_type == 16:
                             tar_batch = "untar_{0}".format(time_to_get)
                             tar_secs_to_run = "10:00:00"
                             body = []
                             untar = distutils.spawn.find_executable('untar.sh')
-                            body.append("aprun -n 1 {0} -w {1} -o {2} -b {3} -e {4} -j {5} {6}".format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep))
+                            body.append(database_vcs.add_database_function())
+                            body.append('run "aprun -n 1 {0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep, vcs_database_id))
                             submit_slurm(tar_batch,body,batch_dir=batch_dir, slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
                                              submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
                         checks = distutils.spawn.find_executable("checks.py")
-			# Write out the checks batch file but don't submit it
-			commands = []
-			commands.append("newcount=0")
-			commands.append("let oldcount=$newcount-1")
-			commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
-			commands.append("oldcount=$newcount; let newcount=$newcount+1")
-			commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
-			commands.append("{0} -m download -o {1} -w {2} -b {3} -i {4} --data_type {5}".format(checks, obsid, dl_dir, time_to_get, check_nsecs, str(data_type)))
-			commands.append("if [ $? -eq 1 ];then")
-			commands.append("sbatch {0}".format(batch_dir+voltdownload_batch+".batch"))
+                        # Write out the checks batch file but don't submit it
+                        commands = []
+                        commands.append(database_vcs.add_database_function())
+                        commands.append("newcount=0")
+                        commands.append("let oldcount=$newcount-1")
+                        commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
+                        commands.append("oldcount=$newcount; let newcount=$newcount+1")
+                        commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
+                        commands.append('run "{0}" "-m download -o {1} -w {2} -b {3} -i {4} --data_type {5}" "{6}"'.format(checks, obsid, dl_dir, time_to_get, check_nsecs, str(data_type),vcs_database_id))
+                        commands.append("if [ $? -eq 1 ];then")
+                        commands.append("sbatch {0}".format(batch_dir+voltdownload_batch+".batch"))
                         # if we have tarballs we send the untar jobs to the workq
                         if data_type == 16:
                             commands.append("else")
                             commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
-			commands.append("fi")
-			submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
-			
-			# Write out the tar batch file if in mode 15
-			#if format == 16:
-			#	body = []
-			#	for t in range(time_to_get, time_to_get+increment):
-			#		body.append("aprun tar -xf {0}/1149620392_{1}_combined.tar".format(dl_dir,t))
-			#	submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" })
-				
-			
-			
-			body = []
-			body.append("oldcount=0")
-			body.append("let newcount=$oldcount+1")
-			body.append("if [ ${newcount} -gt 10 ]; then")
-			body.append("echo \"Tried ten times, this is silly. Aborting here.\";exit")
-			body.append("fi")
-			body.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(batch_dir+check_batch+".batch"))
-			body.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
-			body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch"))
-			body.append(get_data)
-			submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
-			
-			# submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
-			continue
-		# TODO: what is the below doing here???
-		try:
-			os.chdir(product_dir)
-		except:
-			print "cannot open working dir:{0}".format(product_dir)
-			sys.exit()
+                        commands.append("fi")
+                        submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "copyq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
+                        
+                        # Write out the tar batch file if in mode 15
+                        #if format == 16:
+                        #        body = []
+                        #        for t in range(time_to_get, time_to_get+increment):
+                        #                body.append("aprun tar -xf {0}/1149620392_{1}_combined.tar".format(dl_dir,t))
+                        #        submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" })
+                                
+                        
+                        
+                        body = []
+                        body.append(database_vcs.add_database_function())
+                        body.append("oldcount=0")
+                        body.append("let newcount=$oldcount+1")
+                        body.append("if [ ${newcount} -gt 10 ]; then")
+                        body.append("echo \"Tried ten times, this is silly. Aborting here.\";exit")
+                        body.append("fi")
+                        body.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}\n".format(batch_dir+check_batch+".batch"))
+                        body.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
+                        body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch"))
+                        body.append('run "{0}" "--obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}" "{7}"'.format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir, vcs_database_id))
+                        submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
+                        
+                        # submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
+                        continue
+                # TODO: what is the below doing here???
+                try:
+                        os.chdir(product_dir)
+                except:
+                        print "cannot open working dir:{0}".format(product_dir)
+                        sys.exit()
 
 
 def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False):
-    vcs_database_id = database_command(args, obs_id)
+    vcs_database_id = database_vcs.database_command(args, obs_id)
     batch_dir = product_dir + '/batch/'
     product_dir = '{0}/cal/{1}'.format(product_dir,cal_obs_id)
     mdir(product_dir, 'Calibrator product')
     mdir(batch_dir, 'Batch')
     # obsdownload creates the folder cal_obs_id regardless where it runs
     # this deviates from our initially inteded naming conventions of 
-    # /scratch2/mwaopos/vcs/[cal_obs_id]/vis but the renaming and linking is a pain otherwise,
-    # hence we'll link vis agains /scratch2/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
+    # /astro/mwaopos/vcs/[cal_obs_id]/vis but the renaming and linking is a pain otherwise,
+    # hence we'll link vis agains /astro/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
     target_dir = '{0}'.format(cal_obs_id) 
     link = 'vis'
 
     obsdownload = distutils.spawn.find_executable("obsdownload.py")
     get_data = "{0} -o {1} -d {2}".format(obsdownload,cal_obs_id, data_dir)
     if head:
-	print "Will download the data from the archive. This can take a while so please do not ctrl-C."
+        print "Will download the data from the archive. This can take a while so please do not ctrl-C."
         log_name="{0}/caldownload_{1}.log".format(batch_dir,cal_obs_id)
         with open(log_name, 'w') as log:
             subprocess.call(get_data, shell=True, stdout=log, stderr=log)
@@ -357,141 +361,145 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False):
         obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
         secs_to_run = "02:00:00" # sometimes the staging can take a while... 
         commands = []
+        commands.append(database_vcs.add_database_function())
         commands.append('source /group/mwaops/PULSAR/psrBash.profile')
         commands.append('module load setuptools')
         commands.append('cd {0}'.format(data_dir))
-        commands.append(get_data)
+        commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
         commands.append(make_link)
         commands.append('rm obscrt.crt obskey.key')
         submit_slurm(obsdownload_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : secs_to_run, "partition" : "copyq"}, cluster="zeus")
 
 
 def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args):
-	vcs_database_id = database_command(args, obsid)
-	print "Running recombine on files"
-	jobs_per_node = 8
+        vcs_database_id = database_vcs.database_command(args, obsid)
+        print "Running recombine on files"
+        jobs_per_node = 8
         target_dir = link = 'combined'
-	mdir(data_dir + '/' + target_dir, 'Combined')
+        mdir(data_dir + '/' + target_dir, 'Combined')
         create_link(data_dir, target_dir, product_dir, link)
-	batch_dir = product_dir+"/batch/"
-	recombine = distutils.spawn.find_executable("recombine.py")
-	#recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
-	checks = distutils.spawn.find_executable("checks.py")
-	recombine_binary = distutils.spawn.find_executable("recombine")
-	for time_to_get in range(start_time,stop_time,increment):
-	
-		process_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
-		if (jobs_per_node > process_nsecs):
-			jobs_per_node = process_nsecs
-		nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
-		recombine_batch = "recombine_{0}".format(time_to_get)
-		check_batch = "check_recombine_{0}".format(time_to_get)
-		commands = []
-		commands.append("newcount=0")
-		commands.append("let oldcount=$newcount-1")
-		commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+recombine_batch+".batch"))
-		commands.append("oldcount=$newcount; let newcount=$newcount+1")
-		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+recombine_batch+".batch"))
-		commands.append("{0} -m recombine -o {1} -w {2}/combined/ -b {3} -i {4}".format(checks, obsid, data_dir, time_to_get, process_nsecs))
-		commands.append("if [ $? -eq 1 ];then")
-		commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))  
-		commands.append("fi")
-		submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "15:00", "partition" : "gpuq"}, submit=False, outfile=batch_dir+check_batch+"_0.out")
-		
-		commands = []
-		commands.append("module switch PrgEnv-cray PrgEnv-gnu")
-		commands.append("module load mpi4py")
-		commands.append("module load cfitsio")
-		commands.append("oldcount=0")
-		commands.append("let newcount=$oldcount+1")
-		commands.append("if [ ${newcount} -gt 10 ]; then")
-		commands.append("echo \"Tried ten times, this is silly. Aborting here.\";exit")
-		commands.append("fi")
-		commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
-		commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
-		commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
-		commands.append("aprun -n {0} -N {1} python {2} -o {3} -s {4} -w {5} -e {6}".format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,data_dir,recombine_binary))
-		
-		submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
+        batch_dir = product_dir+"/batch/"
+        recombine = distutils.spawn.find_executable("recombine.py")
+        #recombine = "/group/mwaops/stremblay/galaxy-scripts/scripts/recombine.py"
+        checks = distutils.spawn.find_executable("checks.py")
+        recombine_binary = distutils.spawn.find_executable("recombine")
+        for time_to_get in range(start_time,stop_time,increment):
+        
+                process_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
+                if (jobs_per_node > process_nsecs):
+                        jobs_per_node = process_nsecs
+                nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
+                recombine_batch = "recombine_{0}".format(time_to_get)
+                check_batch = "check_recombine_{0}".format(time_to_get)
+                commands = []
+                commands.append(database_vcs.add_database_function())
+                commands.append("newcount=0")
+                commands.append("let oldcount=$newcount-1")
+                commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+recombine_batch+".batch"))
+                commands.append("oldcount=$newcount; let newcount=$newcount+1")
+                commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+recombine_batch+".batch"))
+                commands.append('run "{0}" "-m recombine -o {1} -w {2}/combined/ -b {3} -i {4}" "{5}"'.format(checks, obsid, data_dir, time_to_get, process_nsecs, vcs_database_id))
+                commands.append("if [ $? -eq 1 ];then")
+                commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))  
+                commands.append("fi")
+                submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "15:00", "partition" : "gpuq"}, submit=False, outfile=batch_dir+check_batch+"_0.out")
+                
+                commands = []
+                commands.append(database_vcs.add_database_function())
+                commands.append("module switch PrgEnv-cray PrgEnv-gnu")
+                commands.append("module load mpi4py")
+                commands.append("module load cfitsio")
+                commands.append("oldcount=0")
+                commands.append("let newcount=$oldcount+1")
+                commands.append("if [ ${newcount} -gt 10 ]; then")
+                commands.append("echo \"Tried ten times, this is silly. Aborting here.\";exit")
+                commands.append("fi")
+                commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
+                commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
+                commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
+                commands.append('run "aprun -n {0} -N {1} python {2}" "-o {3} -s {4} -w {5} -e {6}" "{7}"'.format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,data_dir,recombine_binary, vcs_database_id))
+                
+                submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
 
 def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args, metafits):
-	vcs_database_id = database_command(args, obsid)
-	print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
-	from astropy.time import Time
-	import calendar
+        vcs_database_id = database_vcs.database_command(args, obsid)
+        print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
+        from astropy.time import Time
+        import calendar
 
-	batch_dir = product_dir+"/batch/"
+        batch_dir = product_dir+"/batch/"
         target_dir = link = 'vis'
 
-	if data_dir == product_dir:
+        if data_dir == product_dir:
             corr_dir = "{0}/cal/{1}/{2}".format(product_dir, obsid, target_dir)
         else:
             corr_dir = "{0}/{1}".format(data_dir, target_dir)
             product_dir = "{0}/cal/{1}/".format(product_dir, obsid)
             mdir(product_dir, "Correlator")
-	mdir(corr_dir, "Correlator Product")
+        mdir(corr_dir, "Correlator Product")
         create_link(data_dir, target_dir, product_dir, link)
-	
-	chan_list = get_frequencies(metafits_file, resort=True)
-	#gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
-	gpu_int = 10 # Code was compiled with a hard-coded 100 sample minimum integration. For 'normal' data this means 10 milliseconds.
-	integrations=int(ft_res[1]/gpu_int)
-	#num_frames=int(1.0/ft_res[1])
-	num_frames=int(1000/ft_res[1])
-	
-	print "Input chan list is" , chan_list
-	
-	for time_to_get in range(start,stop,increment):
-		inc_start = time_to_get
-		inc_stop = time_to_get+increment
-		for index,channel in enumerate(chan_list):
-			gpubox_label = (index+1)
-			f=[]
-			for time_to_corr in range(inc_start,inc_stop,1):
-				file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(data_dir,obsid,time_to_corr,channel)
-				#check the file exists
-				if (os.path.isfile(file_to_process) == True):
-					f.append(file_to_process)
-	
-			#now have a full list of files
-			#for this increment 
-			#and this channel
-			if (len(f) > 0):
-				corr_batch = "correlator_{0}_gpubox{1:0>2}".format(inc_start,gpubox_label)
-				body = []
-				body.append("source /group/mwaops/PULSAR/psrBash.profile")
-				body.append("module swap craype-ivybridge craype-sandybridge")
-	
-				# with open(corr_batch, 'w') as batch_file:
-				#     batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --account=mwaops\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
-				#     batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
-				#     batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
-				to_corr = 0
-				for file in f:
-					corr_line = ""
-					(current_time,ext) = os.path.splitext(os.path.basename(file))
-					(obsid,gpstime,chan) = current_time.split('_')
-					t = Time(int(gpstime), format='gps', scale='utc')
-					unix_time = int(t.unix)
-	
-					body.append(" aprun -n 1 -N 1 {0} -o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}".format("mwac_offline",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file))
-					to_corr += 1
-					# with open(corr_batch, 'a') as batch_file:
-					#     batch_file.write(corr_line)
-					#     to_corr = to_corr+1
-	
-				secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr)) # added factor two on 10 April 2017 as galaxy seemed really slow...
-				submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq"}, batch_dir=batch_dir)
-				# batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
-				# submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
-				# jobid=""
-				# for line in submit_cmd.stdout:
-				#     if "Submitted" in line:
-				#         (word1,word2,word3,jobid) = line.split()
-			else:
-				print "Couldn't find any recombine files. Aborting here."
+        
+        chan_list = get_frequencies(metafits_file, resort=True)
+        #gpu_int = 0.01 # Code was compiled with a hard-coded 100 sample minimum intigration. For 'normal' data this means 0.01 seconds
+        gpu_int = 10 # Code was compiled with a hard-coded 100 sample minimum integration. For 'normal' data this means 10 milliseconds.
+        integrations=int(ft_res[1]/gpu_int)
+        #num_frames=int(1.0/ft_res[1])
+        num_frames=int(1000/ft_res[1])
+        
+        print "Input chan list is" , chan_list
+        
+        for time_to_get in range(start,stop,increment):
+                inc_start = time_to_get
+                inc_stop = time_to_get+increment
+                for index,channel in enumerate(chan_list):
+                        gpubox_label = (index+1)
+                        f=[]
+                        for time_to_corr in range(inc_start,inc_stop,1):
+                                file_to_process = "{0}/combined/{1}_{2}_ch{3:0>2}.dat".format(data_dir,obsid,time_to_corr,channel)
+                                #check the file exists
+                                if (os.path.isfile(file_to_process) == True):
+                                        f.append(file_to_process)
+        
+                        #now have a full list of files
+                        #for this increment 
+                        #and this channel
+                        if (len(f) > 0):
+                                corr_batch = "correlator_{0}_gpubox{1:0>2}".format(inc_start,gpubox_label)
+                                body = []
+                                body.append(database_vcs.add_database_function())
+                                body.append("source /group/mwaops/PULSAR/psrBash.profile")
+                                body.append("module swap craype-ivybridge craype-sandybridge")
+        
+                                # with open(corr_batch, 'w') as batch_file:
+                                #     batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --account=mwaops\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
+                                #     batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
+                                #     batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
+                                to_corr = 0
+                                for file in f:
+                                        corr_line = ""
+                                        (current_time,ext) = os.path.splitext(os.path.basename(file))
+                                        (obsid,gpstime,chan) = current_time.split('_')
+                                        t = Time(int(gpstime), format='gps', scale='utc')
+                                        unix_time = int(t.unix)
+        
+                                        body.append('run "aprun -n 1 -N 1 {0}" "-o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}" "{9}"'.format("mwac_offline",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file,vcs_database_id))
+                                        to_corr += 1
+                                        # with open(corr_batch, 'a') as batch_file:
+                                        #     batch_file.write(corr_line)
+                                        #     to_corr = to_corr+1
+        
+                                secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr)) # added factor two on 10 April 2017 as galaxy seemed really slow...
+                                submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq"}, batch_dir=batch_dir)
+                                # batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
+                                # submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
+                                # jobid=""
+                                # for line in submit_cmd.stdout:
+                                #     if "Submitted" in line:
+                                #         (word1,word2,word3,jobid) = line.split()
+                        else:
+                                print "Couldn't find any recombine files. Aborting here."
 
 
 def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,count=0):
@@ -499,22 +507,30 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,cou
     import numpy as np
     chan_file_dict = {} # used to keep track of which file needs how many nodes
     
-    #count = 0
+    cc = 0
     for c in chan_groups:
         if len(c)==1:
             #single channel group, write its own rts_in file
-	    subid = str(count+1)
+            subid = str(count+1)
 
-	    # NOTE: we've already re-ordered the channels respectively, so no need to do any weird counting
-	    #if chan_type == "low":
+            # NOTE: we've already re-ordered the channels respectively, so no need to do any weird counting
+            #if chan_type == "low":
             #    subid = str(count+1)
-	    #elif chan_type == "high":
-	    #	subid = str(count+1)
-	    #else:
-	    #	print "No channel group given, assuming low"
-	    #	subid = str(count+1)
+            #elif chan_type == "high":
+            #        subid = str(count+1)
+            #else:
+            #        print "No channel group given, assuming low"
+            #        subid = str(count+1)
+         
+            if chan_type == "low":
+                offset = cc
+            elif chan_type == "high":
+                offset = 24-int(subid)
+            else:
+                print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
+                sys.exit(1)
 
-            basefreq = 1.28*c[0]-0.625
+            basefreq = 1.28*(c[0]-offset)-0.625
 
             # use re.compile to make search expressions
             with open(rts_in_file,'rb') as f:
@@ -528,23 +544,32 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,cou
             chan_file_dict[fname] = 1 # this particular rts_in file has only 1 channel
             with open(fname,'wb') as f:
                 f.write(string)
-	    
-	    print "Single channel:: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2})".format(subid,c[0],basefreq)
+            
+            print "Single channel:: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2}) {3}".format(subid,c[0],basefreq,cc)
 
             count += 1
+            cc += 1
         elif len(c)>1:
             # multiple consecutive channels
-	    subids = [str(count+i+1) for i in range(len(c))]
-	    
-	    #if chan_type == "low":
+            subids = [str(count+i+1) for i in range(len(c))]
+            
+            #if chan_type == "low":
             #    subids = [str(count+i+1) for i in range(len(c))]
-	    #elif chan_type == "high":
-	    #	subids = [str(count+i+1) for i in range(len(c))]
-	    #else:
-	    #	print "No channel group given, assuming low"
+            #elif chan_type == "high":
+            #        subids = [str(count+i+1) for i in range(len(c))]
+            #else:
+            #        print "No channel group given, assuming low"
             #    subid = [str(count+i+1) for i in range(len(c))]
-
-	    freqs = 1.28*np.array(c)-0.625
+        
+            if chan_type == "low":
+                offset = cc
+            elif chan_type == "high":
+                offset = np.array([24-int(x) for x in subids])
+            else:
+                print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
+                sys.exit(1)
+  
+            freqs = 1.28*(np.array(c)-offset)-0.625
             basefreq = min(freqs)
 
             # use re.compile to make search expressions
@@ -554,22 +579,23 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,cou
                 string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq),string)
                 # include the SubBandIDs tag
                 string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)),string)
-	    
-	    print "Multiple channels:: (subband ids, abs. chans, abs. freqs) = {0}".format(", ".join("({0}, {1}, {2})".format(i,j,k) for i,j,k in zip(subids,c,freqs)))
+            
+            print "Multiple channels:: (subband ids, abs. chans, abs. freqs) = {0}".format(", ".join("({0}, {1}, {2})".format(i,j,k) for i,j,k in zip(subids,c,freqs)))
 
-	    if chan_type == "low":
+            if chan_type == "low":
                 fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,min(c),max(c))
-	    elif chan_type == "high":
-		fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,max(c),min(c))
-	    else:
-		print "No channel group given, assuming low"
-		fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,min(c),max(c))
+            elif chan_type == "high":
+                fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,max(c),min(c))
+            else:
+                print "No channel group given, assuming low"
+                fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,min(c),max(c))
 
             chan_file_dict[fname] = len(c)
             with open(fname,'wb') as f:
                 f.write(string)
 
             count += len(c)
+            cc += len(c)
         else:
             print "Reached a channel group with no entries!? Aborting."
             sys.exit(1)
@@ -580,7 +606,7 @@ def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,cou
 
 def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=None):
     rts_run_file = distutils.spawn.find_executable('run_rts.sh')
-    vcs_database_id = database_command(args, obs_id)
+    vcs_database_id = database_vcs.database_command(args, obs_id)
     #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
     
     batch_dir = product_dir+"/batch"
@@ -595,29 +621,30 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
     metafile = "{0}/{1}.meta".format(product_dir,cal_obs_id)
     metafile_exists = False
     if os.path.isfile(metafile):
-	print "Found observation metafile: {0}".format(metafile)
-	channels = None
-	with open(metafile,'rb') as m:
-	    for line in m.readlines():
-		if line.startswith("channels"):
-		    channels = line.strip().split(",")[1:]
-	if channels == None :
-	    print "Channels keyword not found in metafile. Re-querying the database."
-	else:
-	    metafile_exists = True
-	    channels = [int(c) for c in channels]
+        print "Found observation metafile: {0}".format(metafile)
+        channels = None
+        with open(metafile,'rb') as m:
+            for line in m.readlines():
+                if line.startswith("channels"):
+                    channels = line.strip().split(",")[1:]
+        if channels == None :
+            print "Channels keyword not found in metafile. Re-querying the database."
+        else:
+            metafile_exists = True
+            channels = [int(c) for c in channels]
     
     if metafile_exists == False:
         print "Querying the database for calibrator obs ID {0}...".format(cal_obs_id)
         obs_info = getmeta(service='obs', params={'obs_id':str(cal_obs_id)})
         channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
-	with open(metafile,"wb") as m:
-	    m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(cal_obs_id))
-	    m.write("channels,{0}".format(",".join([str(c) for c in channels])))
+        with open(metafile,"wb") as m:
+            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(cal_obs_id))
+            m.write("channels,{0}".format(",".join([str(c) for c in channels])))
 
 
     #define some of the header/body text to go into the slurm submission script
     body = []
+    body.append(database_vcs.add_database_function())
     body.append("module load cudatoolkit")
     body.append("module load cfitsio")
 
@@ -625,47 +652,47 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
 
     # from the channels, first figure out if they are all consecutive
     if channels[-1]-channels[0] == len(channels)-1: #TODO: this assumes also ascending order: is that always true??
-	# the channels are consecutive and this is a normal observation
-	# submit the jobs as normal
-	print "The channels are consecutive: this is a normal observation"
-	nnodes = 25 
-	rts_batch = "RTS_{0}".format(cal_obs_id)
-	slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:20:00", "nodes":"{0}".format(nnodes)}
-	commands = list(body) # make a copy of body to then extend
-	commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes,rts_in_file))
-	submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
+        # the channels are consecutive and this is a normal observation
+        # submit the jobs as normal
+        print "The channels are consecutive: this is a normal observation"
+        nnodes = 25 
+        rts_batch = "RTS_{0}".format(cal_obs_id)
+        slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:20:00", "nodes":"{0}".format(nnodes)}
+        commands = list(body) # make a copy of body to then extend
+        commands.append('run "aprun -n {0} -N 1  rts_gpu" "{1}" "{2}"'.format(nnodes,rts_in_file,vcs_database_id))
+        submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
     else:
-	# it is a picket fence observation, we need to do some magic
-	# will use the given rts_in file as a base format
-	# ** THIS ASSUMES THAT THE ORIGINAL RTS_IN FILE HAS BEEN EDITTED TO APPROPRIATELY REPRESENT THE CORRELATOR SETUP **
-	#    e.g. the channel width, number of channels, correlator dump times, etc.
-	print "The channels are NOT consecutive: this is a picket-fence observation"
-	# figure out whether channels are "high" or "low"
-	hichans = [c for c in channels if c>128]
-	lochans = [c for c in channels if c<=128]
-	print "High channels:",hichans
-	print "Low channels:",lochans
+        # it is a picket fence observation, we need to do some magic
+        # will use the given rts_in file as a base format
+        # ** THIS ASSUMES THAT THE ORIGINAL RTS_IN FILE HAS BEEN EDITTED TO APPROPRIATELY REPRESENT THE CORRELATOR SETUP **
+        #    e.g. the channel width, number of channels, correlator dump times, etc.
+        print "The channels are NOT consecutive: this is a picket-fence observation"
+        # figure out whether channels are "high" or "low"
+        hichans = [c for c in channels if c>128]
+        lochans = [c for c in channels if c<=128]
+        print "High channels:",hichans
+        print "Low channels:",lochans
 
-	# get the consecutive chunks within each channel subselection
-	print "Grouping individual channels into consecutive chunks (if possible)"
-	from itertools import groupby
-	from operator import itemgetter
-	# create a list of lists with consecutive channels grouped wihtin a list
-	hichan_groups = [map(itemgetter(1),g)[::-1] for k,g in groupby(enumerate(hichans), lambda (i, x): i-x)][::-1] # reversed order (both of internal lists and globally)
-	lochan_groups = [map(itemgetter(1),g) for k,g in groupby(enumerate(lochans), lambda (i, x): i-x)]
-	print "High channels (grouped):",hichan_groups
-	print "Low channels (grouped):",lochan_groups
+        # get the consecutive chunks within each channel subselection
+        print "Grouping individual channels into consecutive chunks (if possible)"
+        from itertools import groupby
+        from operator import itemgetter
+        # create a list of lists with consecutive channels grouped wihtin a list
+        hichan_groups = [map(itemgetter(1),g)[::-1] for k,g in groupby(enumerate(hichans), lambda (i, x): i-x)][::-1] # reversed order (both of internal lists and globally)
+        lochan_groups = [map(itemgetter(1),g) for k,g in groupby(enumerate(lochans), lambda (i, x): i-x)]
+        print "High channels (grouped):",hichan_groups
+        print "Low channels (grouped):",lochan_groups
 
-	# for each group of channels, we need to write 1 rts_in file
-	print "Mapping GPU box numbers to coarse channels..."
-	basepath = os.path.dirname(rts_in_file)
+        # for each group of channels, we need to write 1 rts_in file
+        print "Mapping GPU box numbers to coarse channels..."
+        basepath = os.path.dirname(rts_in_file)
 
-	# write out the RTS in files and keep track of the number of nodes required for each
-	count = 0
-	lodict,count = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low",cal_obs_id,count)
-	hidict,count = write_rts_in_files(hichan_groups,basepath,rts_in_file,"high",cal_obs_id,count)
-	chan_file_dict = lodict.copy()
-	chan_file_dict.update(hidict)
+        # write out the RTS in files and keep track of the number of nodes required for each
+        count = 0
+        lodict,count = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low",cal_obs_id,count)
+        hidict,count = write_rts_in_files(hichan_groups,basepath,rts_in_file,"high",cal_obs_id,count)
+        chan_file_dict = lodict.copy()
+        chan_file_dict.update(hidict)
 
         #print "Editting run_rts.sh script for group sizes... (creating temporary copies)"
         # the new, channel-based rts_in files should now be in the same location as the original rts_in file
@@ -678,19 +705,19 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
         print "Writing and submitting RTS jobs"
         
         for k,v in chan_file_dict.iteritems():
-       	    nnodes = v + 1
-	    channels = k.split('_')[-1].split(".")[0]
- 	    rts_batch = "RTS_{0}_{1}".format(cal_obs_id,channels)
+            nnodes = v + 1
+            channels = k.split('_')[-1].split(".")[0]
+            rts_batch = "RTS_{0}_{1}".format(cal_obs_id,channels)
             slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:45:00", "nodes":"{0}".format(nnodes)}
             commands = list(body) # make a copy of body to then extend
-            commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes,k))
+            commands.append('run "aprun -n {0} -N 1  rts_gpu" "{1}" "{2}"'.format(nnodes,k,vcs_database_id))
             submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
-	   
-			
+           
+                        
 
 def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing,
                  args, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
-    vcs_database_id = database_command(args, obs_id)
+    vcs_database_id = database_vcs.database_command(args, obs_id)
     # Print relevant version numbers to screen
     mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
     mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -724,6 +751,7 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
     with open(get_delays_batch,'w') as batch_file:
         batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n#SBATCH --mail-type=ALL\n".format(product_dir,start,stop)
         batch_file.write(batch_line)
+        batch_file.write(database_vcs.add_database_function())
         batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
         batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
         for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
@@ -751,11 +779,11 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
             if (os.path.isfile(DI_file)):
                 ch_dir_line = "cd {0}\n".format(pointing_chan_dir)
                 batch_file.write(ch_dir_line)
-                delays_line = "{0}/get_delays -a {1} -b {2} {3} -m {4} -c -i -p -z {5} -o {6} -f {7} -n {8} -w 10000 -r {9} -d {10}\n".format(execpath, pointing_chan_dir, stop-start+1, jones_option, metafile, utctime, obs_id, basefreq, nfine_chan, RA, Dec) 
+                delays_line = 'run "{0}/get_delays" "-a {1} -b {2} {3} -m {4} -c -i -p -z {5} -o {6} -f {7} -n {8} -w 10000 -r {9} -d {10}" "{11}"\n'.format(execpath, pointing_chan_dir, stop-start+1, jones_option, metafile, utctime, obs_id, basefreq, nfine_chan, RA, Dec, vcs_database_id) 
                 batch_file.write(delays_line)
                 if rts_flag_file:
                     flags_file = "{0}/flags.txt".format(pointing_chan_dir)
-                    flag_line="{0} {1} {2}\n".format(bf_adjust_flags, rts_flag_file, flags_file)
+                    flag_line='run "{0}" "{1} {2}" "{3}"\n'.format(bf_adjust_flags, rts_flag_file, flags_file, vcs_database_id)
                     batch_file.write(flag_line)
             else:
                 print "WARNING: No Calibration Found for Channel {0}! Could not find file {1}".format(gpubox, DI_file)
@@ -803,13 +831,14 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
             output_line = "#SBATCH --output={0}\n".format(make_beam_batch_out)
             batch_file.write(output_line)
             time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
+            batch_file.write(database_vcs.add_database_function())
             batch_file.write(time_line)
             batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
             batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
             batch_file.write(openmp_line)
-            aprun_line = "aprun -n 1 -d {0} {1}/make_beam -o {2} -b {3} -e {4} -a 128 -n 128 -N {5} -t 1 {6} -c phases.txt -w flags.txt -d {7}/combined -D {8}/ {9} \n".format(n_omp_threads, execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format)
+            aprun_line = 'run "aprun -n 1 -d {0} {1}/make_beam" "-o {2} -b {3} -e {4} -a 128 -n 128 -N {5} -t 1 {6} -c phases.txt -w flags.txt -d {7}/combined -D {8}/ {9}" "{10}" \n'.format(n_omp_threads, execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format, vcs_database_id)
             batch_file.write(aprun_line)
         
         submit_line = "sbatch --workdir={0} --partition={1} -d afterok:{2} --gid=mwaops --mail-user={3} {4} \n".format(pointing_dir, partition, dependsOn, e_mail, make_beam_batch)
@@ -817,27 +846,11 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
         if startjobs:
             output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
             jobID = output.split(" ")[3].strip()
-        	#submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
+            #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
             print "Submitted as job {0}".format(jobID)
         else:
             print "Not submitted. \n"
             
-def database_command(args, obsid):
-	DB_FILE = os.environ['CMD_VCS_DB_FILE']
-	args_string = ""
-	for a in args:
-		if not a == args[0]:
-			args_string = args_string + str(a) + " "
-			
-	con = lite.connect(DB_FILE)
-	con.isolation_level = 'EXCLUSIVE'
-	con.execute('BEGIN EXCLUSIVE')
-	with con:
-		cur = con.cursor()
-		
-		cur.execute("INSERT INTO ProcessVCS(Arguments, Obsid, UserId, Started) VALUES(?, ?, ?, ?)", (args_string, obsid, os.environ['USER'], datetime.datetime.now()))
-		vcs_command_id = cur.lastrowid
-	return vcs_command_id
 
 if __name__ == '__main__':
 
@@ -887,7 +900,7 @@ if __name__ == '__main__':
     parser.add_option("-i", "--increment", type="int", default=64, help="Increment in seconds (how much we process at once) [default=%default]")
     parser.add_option("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
     parser.add_option("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default " + \
-                          "raw data will will be downloaded into /scratch2/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."+ \
+                          "raw data will will be downloaded into /astro/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."+ \
                           " If set, this will create a folder for the Obs. ID if it doesn't exist [default=%default]")
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
@@ -940,7 +953,7 @@ if __name__ == '__main__':
         time.sleep(5)
         data_dir = product_dir = "{0}/{1}".format(opts.work_dir, opts.obs)
     else:
-        data_dir = '/scratch2/mwaops/vcs/{0}'.format(opts.obs)
+        data_dir = '/astro/mwaops/vcs/{0}'.format(opts.obs)
         product_dir = '/group/mwaops/vcs/{0}'.format(opts.obs)
     batch_dir = "{0}/batch".format(product_dir)
     mdir(data_dir, "Data")
@@ -968,8 +981,8 @@ if __name__ == '__main__':
     elif opts.mode == 'download_cal':
         print opts.mode
         if not opts.cal_obs:
-	    print "You need to also pass the calibrator observation ID. Aborting here."
-	    quit()
+            print "You need to also pass the calibrator observation ID. Aborting here."
+            quit()
         if opts.cal_obs == opts.obs:
             print "The calibrator obsID cannot be the same as the target obsID -- there are not gpubox files for VCS data on the archive." 
             quit()
@@ -984,9 +997,9 @@ if __name__ == '__main__':
         if not os.path.isfile(opts.rts_in_file):
             print "Your are not pointing at a file with your input to --rts_in_file. Aboring here as the RTS will not run..."
             quit()
-	if not opts.cal_obs:
-	    print "You need to also pass the calibrator observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
-	    quit()
+        if not opts.cal_obs:
+            print "You need to also pass the calibrator observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
+            quit()
         # turn whatever path we got into an absolute path 
         rts_in_file = os.path.abspath(opts.rts_in_file)
         if opts.rts_output_dir:
