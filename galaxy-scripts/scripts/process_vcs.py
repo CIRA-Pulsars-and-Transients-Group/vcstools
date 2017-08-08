@@ -712,7 +712,7 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
             commands = list(body) # make a copy of body to then extend
             commands.append('run "aprun -n {0} -N 1  rts_gpu" "{1}" "{2}"'.format(nnodes,k,vcs_database_id))
             submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
-           
+
                         
 
 def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing,
@@ -850,7 +850,130 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
             print "Submitted as job {0}".format(jobID)
         else:
             print "Not submitted. \n"
-            
+
+
+def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batch_dir, metafits_file, nfine_chan, pointing,
+                      args, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None,
+                      calibration_type='rts'):
+    """
+    This function runs the new version of the beamformer. It is modelled after the old function above and will likely
+    be able to be streamlined after working implementation (SET)
+    """
+    vcs_database_id = database_command(args, obs_id)  # why is this being calculated here? (SET)
+    # Print relevant version numbers to screen
+    make_beam_version_cmd = "{0}/make_beam_small -V".format(execpath)
+    make_beam_version = subprocess.Popen(make_beam_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
+    tested_version = "?.?.?"
+    print "Current version of make_beam_small = {0}".format(make_beam_version.strip())
+    print "Tested version of make_beam_small = {0}".format(tested_version.strip())
+
+    metafile = "{0}/{1}.meta".format(product_dir, obs_id)
+    metafile_exists = False
+    if os.path.isfile(metafile):
+        print "Found observation metafile: {0}".format(metafile)
+        channels = None
+        with open(metafile, 'rb') as m:
+            for line in m.readlines():
+                if line.startswith("channels"):
+                    channels = line.strip().split(",")[1:]
+        if channels == None:
+            print "Channels keyword not found in metafile. Re-querying the database."
+        else:
+            metafile_exists = True
+            channels = [int(c) for c in channels]
+    # Grabbing this from the calibrate section for now. This should be streamlined to call an external function (SET)
+    if metafile_exists == False:
+        print "Querying the database for calibrator obs ID {0}...".format(obs_id)
+        obs_info = getmeta(service='obs', params={'obs_id': str(obs_id)})
+        channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
+        with open(metafile, "wb") as m:
+            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(obs_id))
+            m.write("channels,{0}".format(",".join([str(c) for c in channels])))
+    hichans = [c for c in channels if c>128]
+    lochans = [c for c in channels if c<=128]
+    lochans.extend(list(reversed(hichans)))
+    ordered_channels = lochans
+
+    # Run for each coarse channel. Calculates delays and makes beam
+
+    if not DI_dir:
+        print "You need to specify the path to the calibrator files, either where the DIJs are or where the\
+        Offringa calibration_solutions.bin file is. Aborting here"
+        quit()
+    DI_dir = os.path.abspath(DI_dir)
+    RA = pointing[0]
+    Dec = pointing[1]
+
+    # make_beam_small requires the start time in UTC, get it from the start
+    # GPS time as is done in timeconvert.py
+    t = ephem_utils.MWATime(gpstime=float(start))
+    utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
+
+    print "Running make_beam_small"
+    P_dir = product_dir+"/pointings"
+    mdir(P_dir, "Pointings")
+    pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
+    mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
+    # startjobs = True
+
+
+    # set up SLURM requirements
+    seconds_to_run = 60 * (stop - start + 1)  # This should be able to be reduced after functional testing
+    if seconds_to_run > 86399.:
+        secs_to_run = datetime.timedelta(seconds=86399)
+    else:
+        secs_to_run = datetime.timedelta(seconds=seconds_to_run)
+
+    # VDIF will need gpuq if inverting pfb with '-m' option, otherwise cpuq is fine
+    # In general this needs to be cleaned up, prefferably to be able to intelligently select a
+    # queue and a maximum wall time (SET)
+    partition = "gpuq"
+    n_omp_threads = 8
+    openmp_line = "export OMP_NUM_THREADS={0}".format(n_omp_threads)
+
+    # Run one coarse channel per node
+    #for coarse_chan in range(24):
+    for gpubox, coarse_chan in enumerate(ordered_channels, 1):
+        if calibration_type == 'rts':
+            #chan_list = get_frequencies(metafits_file, resort=True)
+            DI_file = "{0}/DI_JonesMatrices_node{1:0>3}.dat".format(DI_dir, gpubox)
+            jones_option = "-J {0}".format(DI_file)
+        elif calibration_type == 'offringa':
+            #chan_list = get_frequencies(metafits_file, resort=False)
+            DI_file = "{0}/calibration_solution.bin".format(DI_dir)
+            jones_option = "-O {0} -C {1}".format(DI_file, int(gpubox) - 1)
+        else:
+            print "Please an accepted calibratin type. Aborting here."
+            quit()
+
+        make_beam_small_batch = "mbs_{0}_{1}_ch{2}".format(RA, Dec, coarse_chan)
+        commands = []
+        commands.append("source /group/mwaops/PULSAR/psrBash.profile")
+        commands.append("module swap craype-ivybridge craype-sandybridge")
+        commands.append(openmp_line)
+        commands.append("cd {0}".format(pointing_dir))
+        commands.append("aprun -n 1 -d {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
+                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
+        submit_slurm(make_beam_small_batch, commands, batch_dir=batch_dir,
+                     slurm_kwargs={"time": secs_to_run, "partition": partition}, submit=True)
+
+def database_command(args, obsid):
+    DB_FILE = os.environ['CMD_VCS_DB_FILE']
+    args_string = ""
+    for a in args:
+            if not a == args[0]:
+                    args_string = args_string + str(a) + " "
+
+    con = lite.connect(DB_FILE)
+    con.isolation_level = 'EXCLUSIVE'
+    con.execute('BEGIN EXCLUSIVE')
+    with con:
+        cur = con.cursor()
+
+        cur.execute("INSERT INTO ProcessVCS(Arguments, Obsid, UserId, Started) VALUES(?, ?, ?, ?)", (args_string, obsid, os.environ['USER'], datetime.datetime.now()))
+        vcs_command_id = cur.lastrowid
+    return vcs_command_id
 
 if __name__ == '__main__':
 
@@ -884,6 +1007,7 @@ if __name__ == '__main__':
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
     group_beamform.add_option("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) " +\
                                   "or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
+    group_beamform.add_option("--bf_new", action="store_true", default=False, help="Run the new beamformer (make_beam_small). [default=%default]")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
     group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
@@ -1019,7 +1143,11 @@ if __name__ == '__main__':
             flagged_tiles_file = None
         ensure_metafits(data_dir, opts.obs, metafits_file)
         from mwapy import ephem_utils
-        coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, metafits_file, 
+        if opts.bf_new:
+            coherent_beam_new(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, batch_dir, metafits_file,
+                      opts.nfine_chan, opts.pointing, sys.argv, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
+        else:
+            coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, metafits_file,
                       opts.nfine_chan, opts.pointing, sys.argv, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
