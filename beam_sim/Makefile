@@ -52,5 +52,7 @@ profile: pabeam_gpu
 pabeam_cpu: pabeam.c
 	$(CC) -Wall -o $@ $^ $(LIB_DIRS) $(INC_DIRS) $(FLAGS)
 
-
+clean:
+	rm -f pabeam_gpu
+	rm -f pabeam_cpu
 
