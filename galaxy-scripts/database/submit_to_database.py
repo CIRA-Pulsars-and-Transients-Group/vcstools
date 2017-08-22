@@ -674,6 +674,20 @@ if args.bestprof:
 
 
 if args.pulsar and not args.bestprof:  
+    if not incoh:
+        cal_list = client.calibrator_list(web_address, auth)
+        cal_already_created = False
+        for c in cal_list:
+            if ( c[u'observationid'] == int(args.cal_id) ) and ( c[u'caltype'] == calibrator_type ):
+                cal_already_created = True
+                cal_db_id = c[u'id']
+        if not cal_already_created:
+            cal_db_id = client.calibrator_create(web_address, auth,
+                                                  observationid = str(args.cal_id),
+                                                  caltype = calibrator_type)[u'id']
+    elif not args.cal_id:
+        cal_db_id = None
+        
     #uploads files to database if there's the no calc option
     #checks if the observation is on the database
     try:
@@ -683,6 +697,7 @@ if args.pulsar and not args.bestprof:
         client.detection_create(web_address, auth, 
                                 observationid = str(obsid),
                                 pulsar = str(pulsar),
+                                calibrator = int(cal_db_id),
                                 subband = 1,
                                 incoherent = incoh,
                                 observation_type = '1')  
@@ -694,16 +709,29 @@ if args.pulsar and not args.bestprof:
         client.detection_create(web_address, auth, 
                                 observationid = str(obsid),
                                 pulsar = str(pulsar),
+                                calibrator = int(cal_db_id),
                                 subband = 1,
                                 incoherent = incoh,
                                 observation_type = '1')  
         temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))  
         subbands=1
     
-    
+    pulsar_dict_check = False
     for t in range(len(temp_dict)):
         if pulsar == temp_dict[t][u'pulsar']:
             subbands = temp_dict[t][u'subband']
+            pulsar_dict_check = True
+    
+    if not pulsar_dict_check:
+        client.detection_create(web_address, auth, 
+                                observationid = str(obsid),
+                                pulsar = str(pulsar),
+                                calibrator = int(cal_db_id),
+                                subband = 1,
+                                incoherent = incoh,
+                                observation_type = '1')  
+        temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))  
+        subbands=1
 
 #Archive files
 if args.archive:
