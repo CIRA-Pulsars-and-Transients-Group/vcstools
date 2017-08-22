@@ -53,7 +53,7 @@ from process_vcs import getmeta,mdir
 #	return result
 
 
-def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fname,chan_bw,nchan,dumptime,ndumps):
+def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fname,chan_bw,nchan,dumptime,ndumps,offline):
     """
     Gather the respective information and write the input conifiguration file for the RTS
     """
@@ -222,7 +222,7 @@ parser.add_argument("--fine_chan_bw",type=float,help="Fine channel bandwidth for
 parser.add_argument("--corr_dump_time",type=float,help="Correlator dump time in seconds (default: 2.0)",default=2.0)
 parser.add_argument("--ndumps_to_average",type=int,help="Number of correlator dumps to average together (default: 16)",default=16)
 parser.add_argument("--gpubox_dir",type=str,help="Where the *_gpubox files are located (default: `pwd`)",default='`pwd`')
-parser.add_argument("--offline",actions='store_true')
+parser.add_argument("--offline_corr",actions='store_true',help="Tell the RTS to read calibrator data in the offline correlated data format.")
 parser.add_argument("--output_dir",type=str,help="Where you want the RTS configuration file to be written (default: `pwd`)",default='`pwd`')
 
 if len(sys.argv)==1:
@@ -336,6 +336,6 @@ srclist = "{0}/rts/{1}".format(os.path.dirname(srclist),os.path.basename(srclist
 print "Found source list at {0}".format(srclist)
 
 # now write the configuration file
-write_rts_in_file(args.o,utctime,gpubox_dir,metafits,srclist,fname,args.fine_chan_bw,nfine_per_coarse,args.corr_dump_time,args.ndumps_to_average)
+write_rts_in_file(args.o,utctime,gpubox_dir,metafits,srclist,fname,args.fine_chan_bw,nfine_per_coarse,args.corr_dump_time,args.ndumps_to_average,args.offline_corr)
 # now write the initial flagged_tiles.txt and flagged_channels.txt files
 write_flag_files(write_dir,metafits,nfine_per_coarse)
