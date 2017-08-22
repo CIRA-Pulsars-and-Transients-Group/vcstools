@@ -222,7 +222,7 @@ parser.add_argument("--fine_chan_bw",type=float,help="Fine channel bandwidth for
 parser.add_argument("--corr_dump_time",type=float,help="Correlator dump time in seconds (default: 2.0)",default=2.0)
 parser.add_argument("--ndumps_to_average",type=int,help="Number of correlator dumps to average together (default: 16)",default=16)
 parser.add_argument("--gpubox_dir",type=str,help="Where the *_gpubox files are located (default: `pwd`)",default='`pwd`')
-parser.add_argument("--offline_corr",actions='store_true',help="Tell the RTS to read calibrator data in the offline correlated data format.")
+parser.add_argument("--offline_corr",action='store_true',help="Tell the RTS to read calibrator data in the offline correlated data format.")
 parser.add_argument("--output_dir",type=str,help="Where you want the RTS configuration file to be written (default: `pwd`)",default='`pwd`')
 
 if len(sys.argv)==1:
