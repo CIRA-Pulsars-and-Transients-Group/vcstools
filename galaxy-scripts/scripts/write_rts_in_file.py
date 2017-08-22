@@ -116,11 +116,16 @@ def write_rts_in_file(obsid,utc_time,data_dir,metafits_file,srclist_file,rts_fna
     fid.write("\n")
     fid.write("ReadAllFromSingleFile=\n")
     fid.write("BaseFilename={0}/*_gpubox\n".format(os.path.realpath(data_dir))) # there are symlinks here, so expand those
-    # reading gpubox files from offline correlator (as of 23 March 2017) actually requires
-    fid.write("ReadGpuboxDirect=0\n")
-    fid.write("UseCorrelatorInput=1\n") # this can handle BOTH online and offline correaltor products (though it throughs errors which are seemingly harmless)
-    #fid.write("ReadGpuboxDirect=1\n") # read gpubox files directly from disk
-    #fid.write("UseCorrelatorInput=0\n") # don't expect an input stream from the correlator
+    
+    # determine how the RTS should read the calibrator data
+    if offline:
+        # read the data as a correlator stream - tricks the RTS into being able to parse the data format...
+        fid.write("ReadGpuboxDirect=0\n")
+        fid.write("UseCorrelatorInput=1\n")
+    else:
+        # read the data from the fits files directly
+        fid.write("ReadGpuboxDirect=1\n")
+        fid.write("UseCorrelatorInput=0\n")
     fid.write("\n") 
 
     # read the metafits file
@@ -217,6 +222,7 @@ parser.add_argument("--fine_chan_bw",type=float,help="Fine channel bandwidth for
 parser.add_argument("--corr_dump_time",type=float,help="Correlator dump time in seconds (default: 2.0)",default=2.0)
 parser.add_argument("--ndumps_to_average",type=int,help="Number of correlator dumps to average together (default: 16)",default=16)
 parser.add_argument("--gpubox_dir",type=str,help="Where the *_gpubox files are located (default: `pwd`)",default='`pwd`')
+parser.add_argument("--offline",actions='store_true')
 parser.add_argument("--output_dir",type=str,help="Where you want the RTS configuration file to be written (default: `pwd`)",default='`pwd`')
 
 if len(sys.argv)==1:
