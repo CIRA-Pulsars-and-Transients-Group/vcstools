@@ -6,29 +6,28 @@ import urllib2
 import json
 import argparse
 import numpy as np
+import traceback
 
-def check_download(obsID, directory=None, required_size=None, required_size_ics=30720000, startsec=None, n_secs=None, data_type='raw'):
+def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type='raw'):
     '''
     Checks that the number of files in directory (default is /scratch2/mwaops/vcs/[obsID]/raw/) is the same
     as that found on the archive and also checks that all files have the same size (253440000 for raw, 7864340480 for recombined tarballs by default).
     '''
-    if not data_type == 'raw' and not data_type == 'tar_ics':
+    if not data_type in ['raw', 'tar_ics', 'ics']:
         print "Wrong data type given to download check."
         return True
     if not directory:
-        directory = "/scratch2/mwaops/vcs/{0}/raw/".format(obsID)
+        directory = "/scratch2/mwaops/vcs/{0}/raw/".format(obsID) if data_type == 'raw' else "/scratch2/mwaops/vcs/{0}/combined/".format(obsID)
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
     print base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range."
-    files = np.array(getmeta(service='obs', params={'obs_id':obsID})['files'].keys())
-    if not required_size:
-        required_size = 253440000 if data_type == 'raw' else 7865368576
-#        required_size = 253440000 if data_type == 'raw' else 7864340480
-    else:
-        required_size = required_size
-    suffix = '.dat' if data_type == 'raw' else '.tar'
-    mask = np.array([suffix in file for file in files])
-    files = list(files[mask])
+
+    # put files in
+    try:
+        files, suffix, required_size = get_files_and_sizes(obsID, data_type)
+    except:
+        return True
+    
     if not startsec:
         n_files_expected = len(files)
         command = "ls -l %s/*%s | ((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | " %(directory, suffix) + \
@@ -52,8 +51,9 @@ def check_download(obsID, directory=None, required_size=None, required_size_ics=
 
     # in case we're checking for downloaded tarballs also need to check ics-files.
     if data_type == 'tar_ics':
+        print "Now checking ICS files"
         error, n_ics = check_recombine_ics(directory=directory, \
-                                               required_size=required_size_ics, startsec=startsec, n_secs=n_files_expected)
+                                               startsec=startsec, n_secs=n_files_expected, obsID=obsID)
         n_files_expected *= 2
         files_in_dir += n_ics
         
@@ -66,7 +66,7 @@ def check_download(obsID, directory=None, required_size=None, required_size_ics=
             print line
             error = True
     if not error:
-        print "We have all {0} files as expected.".format(files_in_dir)
+        print "We have all {0} {1} files as expected.".format(files_in_dir, data_type)
     return error
 
 def check_recombine(obsID, directory=None, required_size=327680000, \
@@ -104,7 +104,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
     expected_files = n_secs * 25
     error = False
     error, n_ics = check_recombine_ics(directory=directory, \
-                                           required_size=required_size_ics, startsec=startsec, n_secs=n_secs)
+                                           startsec=startsec, n_secs=n_secs, required_size=required_size_ics)
     files_in_dir += n_ics
     if not files_in_dir == expected_files:
         print "We have {0} files but expected {1}".format(files_in_dir, expected_files)
@@ -117,8 +117,14 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
         print "We have all {0} files as expected.".format(files_in_dir)
     return error
 
-def check_recombine_ics(directory=None, required_size=30720000, startsec=None, n_secs=None):
-    required_size = required_size
+def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_size=None, obsID=None):
+    if not required_size:
+        try:
+            files, suffix, required_size = get_files_and_sizes(obsID, 'ics')
+        except:
+            traceback.print_exc()
+            return True, 0
+
     if not startsec:
         output = subprocess.Popen(["ls -ltr %s/*ics.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5 \" (expected %s)\"}'" %(directory, required_size, required_size)],
                                   stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -150,7 +156,7 @@ def check_recombine_ics(directory=None, required_size=30720000, startsec=None, n
             print "Also running {0} to make sure ics files are rebuilt.".format(rm_cmd)
             rm = subprocess.Popen(rm_cmd, stdout=subprocess.PIPE, shell=True)
     if error == False:
-        print "We have all {0} files as expected.".format(files_in_dir)
+        print "We have all {0} ICS files as expected.".format(files_in_dir)
     return error, files_in_dir
 
 # Append the service name to this base URL, eg 'con', 'obs', etc.
@@ -187,6 +193,31 @@ def getmeta(service='obs', params=None):
 
   return result
 
+def get_files_and_sizes(obsID, mode):
+    if mode == 'raw':
+        suffix = '.dat'
+    elif mode == 'tar_ics':
+        suffix = '.tar'
+    elif mode == 'ics':
+        suffix = '_ics.dat'
+    else:
+        print "Wrong mode supplied. Options are raw, tar_ics, and ics"
+        return
+    print "Retrieving file info from MWA database for all {0} files...".format(suffix)
+    meta = getmeta(service='obs', params={'obs_id':obsID})
+    files = np.array(meta['files'].keys())
+    mask = np.array([suffix in file for file in files])
+    files = files[mask]
+    sizes=np.array([meta['files'][f]['size'] for f in files])
+    print "...Done. Expect all on database to be {0} bytes in size...".format(sizes[0])
+    if np.all(sizes == sizes[0]):
+        print "...yep they are. Now checking on disk."
+        return list(files), suffix, sizes[0]
+    else:
+        print "Not all files have the same size. Check your data!"
+        print "{0}".format(np.vstack((files,sizes)).T)
+        return
+
 def opt_parser():
     parser=argparse.ArgumentParser(description="scripts to check sanity of downloads and recombine.")
     parser.add_argument("-m", "--mode", type=str, choices=['download','recombine'],\
@@ -213,10 +244,11 @@ def opt_parser():
                             required=False, default=None)
     parser.add_argument("-s", "--size", type=int, dest='size',\
                           help="The files size in bytes that you expect all files" +\
-                          " to have. Defaults are 253440000 (download), 327680000" +\
+                          " to have. Per default will figure this out from files on he archive" +\
+                            "We expect 253440000 (download raw), 327680000" +\
                           " (recombined, not ics), 7865368576 (tarballs)", default=None)
     parser.add_argument("-S", "--size_ics", type=int, help='Size in bytes that' +\
-                            "you expect the ics files to have. Default = %(default)s",\
+                            "you expect the ics files to have. Default = %(default)s", \
                             dest='size_ics', default=30720000)
     parser.add_argument('-w', '--work_dir', type=str, dest='work_dir',\
                             help="Directory " + \
@@ -262,12 +294,9 @@ if __name__ == '__main__':
             work_dir = work_dir_base + '/combined/'
         if args.work_dir:
             work_dir = args.work_dir
-        if data_type == 'raw' or data_type == 'tar_ics':
-            sys.exit(check_download(args.obsID, directory=work_dir, required_size=args.size, required_size_ics=args.size_ics,
+        if data_type == 'raw' or data_type == 'tar_ics' or data_type == 'ics':
+            sys.exit(check_download(args.obsID, directory=work_dir,
                                     startsec=args.begin, n_secs=args.increment, data_type=data_type))
-        else: # hence 'ics'
-            sys.exit(check_recombine_ics(directory=work_dir, required_size=args.size_ics, startsec=args.begin, n_secs=args.increment)[0])
-
     elif args.mode == 'recombine':
         required_size = 327680000
         if args.size:
