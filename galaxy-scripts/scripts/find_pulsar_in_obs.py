@@ -75,7 +75,151 @@ def deg2sex( ra, dec):
     
     # return RA and DEC in "hh:mm:ss.ssss dd:mm:ss.ssss" form
     return coords
+
     
+def grab_FRBalog():
+    """
+    Creates a catalogue csv file using data from http://www.astronomy.swin.edu.au/pulsar/frbcat/table.php?format=html
+    
+    grab_GCalog()
+    """
+    rratalog_website = 'http://www.astronomy.swin.edu.au/pulsar/frbcat/table.php?format=html'
+
+    print "Retrieveing base FRBalog from {0}".format(rratalog_website)
+    os.system( 'rm table.php?format=html')
+    os.system( 'wget {0}'.format( rratalog_website))
+
+    print "Converting to CSV format for easier use..."
+    txt_file = "table.php?format=html"
+    csv_file = "frbalog.csv"
+
+
+    with open(txt_file,"rb") as in_txt:
+        lines = in_txt.readlines()
+        
+        header = ['NAME','Raj','Decj']    
+        data = []
+        for l in lines[7:]:
+            ltemp = l.strip('<td>').split('</td>')
+            #print ltemp
+            if len(ltemp) > 2:
+                ratemp = ltemp[7].lstrip('<td>')
+                dectemp = ltemp[8].lstrip('<td>')
+                temp = [ltemp[0].lstrip('<td>')[:9],ratemp,dectemp]
+                print temp
+                data.append(temp)
+    
+    #loop to format ra and dec
+    for i in range(len(data)):
+        data[i][0] = data[i][0].replace('*','')
+
+        if data[i][1].endswith(":"):
+            data[i][1]=data[i][1]+'00'
+    
+        if len(data[i][1])==5:
+            data[i][1]=data[i][1]+':00'
+
+        if len(data[i][1])==7:
+            data[i][1]=data[i][1]+'0'
+    
+
+        if len(data[i][2])==2 or (len(data[i][2])==3 and \
+                          data[i][2].startswith('-')):
+            data[i][2]=data[i][2]+':00:00'
+    
+        if len(data[i][2])==5 or len(data[i][2])==6:
+            data[i][2]=data[i][2]+':00'
+
+        if len(data[i][2])==3 and data[i][2].endswith(':'):
+            data[i][2]=data[i][2]+'00:00'
+
+        if data[i][2].startswith('-') and data[i][2].endswith(':0'):
+            data[i][2]=data[i][2]+'0'
+            print data[i][2]
+
+        if len(data[i][2])==7 and data[i][2].endswith(':'):
+            data[i][2]=data[i][2]+'00'
+            
+        #error fix in the database
+        if '.' in data[i][2][:7]:
+            data[i][2] = data[i][2][:7].replace('.',':') + data[i][2][7:]
+    
+    with open(csv_file,"wb") as out_csv:
+        out_csv.write(','.join(header)+'\n')
+        for d in data:
+            out_csv.write(','.join(d)+'\n')
+    
+    return
+    
+
+def grab_GCalog():
+    """
+    Creates a catalogue csv file using data from http://physwww.physics.mcmaster.ca/~harris/mwgc.dat
+    
+    grab_GCalog()
+    """
+    rratalog_website = 'http://physwww.physics.mcmaster.ca/~harris/mwgc.dat'
+
+    print "Retrieveing base GCalog from {0}".format( rratalog_website)
+    os.system( 'rm mwgc.dat')
+    os.system( 'wget {0}'.format( rratalog_website))
+
+    print "Converting to CSV format for easier use..."
+    txt_file = "mwgc.dat"
+    csv_file = "gcalog.csv"
+
+
+    with open(txt_file,"rb") as in_txt:
+        lines = in_txt.readlines()
+        lines = lines[71:229] #TODO may have to check if this changes
+    
+        header = ['ID','RA','DEC']    
+        data = []
+        for l in lines[1:]:
+            ratemp = l[25:37].rstrip().replace(' ',':')
+            dectemp = l[38:51].rstrip().replace(' ',':')
+            temp = [l[1:10].rstrip(),ratemp,dectemp]
+            print temp
+            data.append(temp)
+    
+    #loop to format ra and dec
+    for i in range(len(data)):
+        data[i][0] = data[i][0].replace('*','')
+
+        if data[i][1].endswith(":"):
+            data[i][1]=data[i][1]+'00'
+    
+        if len(data[i][1])==5:
+            data[i][1]=data[i][1]+':00'
+
+        if len(data[i][1])==7:
+            data[i][1]=data[i][1]+'0'
+    
+
+        if len(data[i][2])==2 or (len(data[i][2])==3 and \
+                          data[i][2].startswith('-')):
+            data[i][2]=data[i][2]+':00:00'
+    
+        if len(data[i][2])==5 or len(data[i][2])==6:
+            data[i][2]=data[i][2]+':00'
+
+        if len(data[i][2])==3 and data[i][2].endswith(':'):
+            data[i][2]=data[i][2]+'00:00'
+
+        if data[i][2].startswith('-') and data[i][2].endswith(':0'):
+            data[i][2]=data[i][2]+'0'
+            print data[i][2]
+
+        if len(data[i][2])==7 and data[i][2].endswith(':'):
+            data[i][2]=data[i][2]+'00'
+    
+    with open(csv_file,"wb") as out_csv:
+        out_csv.write(','.join(header)+'\n')
+        for d in data:
+            out_csv.write(','.join(d)+'\n')
+    
+    return
+
     
 def grab_RRATalog(jlist=None):
     """
@@ -558,8 +702,8 @@ def get_beam_power(obsid_data,
                        + str(min_power) + ' or greater for observation ID: ' + str(obsid) + '\n' +\
                        'Observation data :RA(deg): ' + str(ra) + ' DEC(deg): ' + str(dec)+' Duration(s): ' \
                        + str(time) + '\n' + \
-                       'Source      Time of max power in observation    File number source entered the '\
-                       + 'beam    File number source exited the beam\n')
+                       'Source  Time of max power in observation    File number source entered the '\
+                       + 'beam    File number source exited the beam       Max Power \n')
         counter=0
         for sourc in Powers:
             counter = counter + 1
@@ -568,8 +712,9 @@ def get_beam_power(obsid_data,
                     if sourc[imax] == max(sourc):
                         max_time = midtimes[imax]
                         enter, exit = beam_enter_exit(min_power, sourc, imax, dt, time)
-                        out_list.write(str(sources[names][counter - 1]) + ' ' + \
-                                str(int(max_time) - int(obsid)) + ' ' + str(enter) + ' ' + str(exit) + "\n") 
+                        out_list.write(str(sources[names][counter - 1])  + ' ' + \
+                                str(int(max_time) - int(obsid)) + ' ' + str(enter) + ' ' + str(exit) +\
+                                ' ' + str(max(sourc)[0]) + "\n") 
         print "A list of sources for the observation ID: " + str(obsid) + \
               " has been output to the text file: " + str(obsid) + '_' + beam_string + '_beam.txt'             
     return 
@@ -705,7 +850,7 @@ def get_beam_power_obsforsource(obsid_data,
                 for imax in range(len(sourc)):
                     if sourc[imax] == max(sourc):
                         max_time = float(midtimes[imax]) - float(obsid)
-                        Powers.append([sources[names][counter-1], obsid, time, max_time, sourc, imax])
+                        Powers.append([sources[names][counter-1], obsid, time, max_time, sourc, imax, max(sourc)])
     
     for sourc in sources:    
         outputfile = str(args.output)
@@ -713,13 +858,13 @@ def get_beam_power_obsforsource(obsid_data,
         with open(outputfile + str(sourc[names]) + beam_string + '_beam.txt',"wb") as out_list:
             out_list.write('All of the observation IDs that the ' + beam_string + ' beam model calculated a power of '\
                            + str(min_power) + ' or greater for the source: ' + str(sourc[names]) + '\n' +\
-                           'Obs ID     Duration  Time during observation that the power was at a'+\
-                           ' maximum    File number source entered    File number source exited\n')
+                           'Obs ID   Duration  Time during observation that the power was at a'+\
+                           ' maximum    File number source entered    File number source exited  Max power\n')
             for p in Powers:
                 if str(p[0]) == str(sourc[names]):
                     enter, exit = beam_enter_exit(min_power, p[4], p[5], dt, time)
                     out_list.write(str(p[1]) + ' ' + str(p[2]) + ' ' + str(p[3]) + ' ' + str(enter) +\
-                                   ' ' + str(exit) + "\n")
+                                   ' ' + str(exit) + ' ' + str(p[6][0]) +"\n")
            
     print "A list of observation IDs that containt: " + str(sourc[names]) + \
               " has been output to the text file: " + str(sourc[names]) + beam_string + '_beam.txt'             
@@ -732,12 +877,16 @@ This code is used to list the sources within the beam of observations IDs or usi
 parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source. For increased efficiency it will only search OBSIDs within the primary beam.')
 parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
 parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation that will be used. Options: "a" the analytic beam model (2012 model, fast and reasonably accurate), "d" the advanced beam model (2014 model, fast and slighty more accurate) or "e" the full EE model (2016 model, slow but accurate). " Default: "a"')
+parser.add_argument('-m','--min_power',type=float,help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3', default=0.3)
+
 #impliment an option for the accurate beam later on and maybe the old elipse approximation if I can make it accurate
 
 #source options
 sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
 sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"')
 sourargs.add_argument('--RRAT',action='store_true',help='Searches for all known RRATs.')
+sourargs.add_argument('--GC',action='store_true',help='Searches for all known Globular Clusters.')
+sourargs.add_argument('--FRB',action='store_true',help='Searches for all known FRBs.')
 #TODO Eventually impliment to search for FRBs and a search for all mode
 sourargs.add_argument('--dl_RRAT',action='store_true',help='Download the RRATalog from http://astro.phys.wvu.edu/rratalog/ and uses this as the source catalogue.')
 sourargs.add_argument('--dl_PSRCAT',action='store_true',help='Download the Puslar alog from http://www.atnf.csiro.au/research/pulsar/psrcat/ and uses this as the source catalogue.')
@@ -768,7 +917,11 @@ if args.in_cat:
 else:
     if args.RRAT:
         catDIR = 'rratalog.csv'
-    if args.pulsar:
+    elif args.GC:
+        catDIR = 'gcalog.csv'
+    elif args.FRB:
+        catDIR = 'frbalog.ccsv'
+    elif args.pulsar:
         if args.pulsar == None:
             catDIR = 'pulsaralog.csv'
         if (len(args.pulsar) ==1) and (not args.obs_for_source):
@@ -796,10 +949,10 @@ if args.coord_names:
 else:
     if args.pulsar:
         c1, c2 = ['Raj', 'Decj']
-    if args.RRAT:
+    if args.RRAT or args.GC:
         c1, c2 = ['RA','DEC']
     else:
-        c1, c2 = ['Raj', 'Decj']
+        c1, c2 = ['Raj', 'Decj'] 
 
 #defaults for the fits dirs
 if args.FITS_dir:
@@ -819,6 +972,10 @@ else:
         name_col = 'Jname'
     elif args.coords:
         name_col = '-1'
+    elif args.GC:
+        name_col = 'ID'
+    elif args.FRB:
+        name_col = 'NAME'
     else:
         name_col = 'Jname'
 
@@ -841,13 +998,17 @@ else:
         if args.RRAT:
             grab_RRATalog()
             catalog = Table.read('rratalog.csv')
+        elif args.GC:
+            grab_GCalog()
+            catalog = Table.read('gcalog.csv')
+        elif args.FRB:
+            grab_FRBalog()
+            catalog = Table.read('frbalog.csv')
         else:
             grab_pulsaralog()
             catalog = Table.read('pulsaralog.csv')
         
 header = catalog.colnames
-if args.pulsar != None:
-    os.system('rm -f temp.csv')
     
 
 #get obs IDs
@@ -911,7 +1072,7 @@ except:#incase of file finding or permission errors use webservice
         dec = beam_meta_data[u'metadata'][u'dec_pointing']
         time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time 
         skytemp = beam_meta_data[u'metadata'][u'sky_temp']
-        delays = beam_meta_data[u'rfstreams'][u'0'][u'delays']
+        delays = beam_meta_data[u'rfstreams'][u'0'][u'xdelays']
 
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
         minfreq = float(min(channels))
@@ -935,14 +1096,16 @@ except:#incase of file finding or permission errors use webservice
                 cord = [ob, ra, dec, time, delays,centrefreq, channels]
                 if args.beam == 'e':
                     get_beam_power(cord, catalog, c1, c2, name_col, dt=300, 
-                                    centeronly=True, verbose=False, option = 'e')
+                                    centeronly=True, verbose=False, min_power=args.min_power, option = 'e')
                 elif args.beam == 'd':
                     get_beam_power(cord, catalog, c1, c2, name_col, dt=100, 
-                                    centeronly=True, verbose=False, option = 'd')
+                                    centeronly=True, verbose=False, min_power=args.min_power, option = 'd')
                 elif args.beam == 'a':    #center only means it isn't in picket fence mode
-                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
+                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
+                                    min_power=args.min_power, verbose=False)
                 elif not args.beam: #TODO impliment a picket fence mode
-                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
+                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
+                                    min_power=args.min_power, verbose=False)
         else:
             print('No raw voltage files for %s' % ob) 
             
@@ -990,36 +1153,30 @@ else:
                     #print catalog
                     if args.beam:
                         get_beam_power(cord, catalog, c1, c2, name_col, dt=300,
-                                        centeronly=True, verbose=False, option = args.beam)
+                                        centeronly=True, verbose=False, min_power=args.min_power,
+                                        option = args.beam)
                     else: #TODO impliment a picket fence mode
                         get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
-                                        centeronly=True, verbose=False)
+                                        centeronly=True, min_power=args.min_power, verbose=False)
 
 #chooses the beam type and whether to list the source in each obs or the obs for each source
 #more options will be included later
 if args.obs_for_source:
     if args.beam:
         get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=300,
-                                        centeronly=True, verbose=False, option=args.beam)
+                                        centeronly=True, verbose=False, min_power=args.min_power,
+                                        option=args.beam)
     else:
-        get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,centeronly=True, verbose=False)
+        get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
+                                        min_power=args.min_power, verbose=False)
 
 
 
 print "The code is complete and all results have been output to text files"   
 
-                 
-"""
-Program tests
-python find_pulsar_in_obs.py -p --obsid 1099414416
-python find_pulsar_in_obs.py -p J0534+2200 J0538+2817 --obsid 1099414416
-python find_pulsar_in_obs.py -p J0630-2834 --obsid 1067285064 10689221844 1101491208 1102270216
-python find_pulsar_in_obs.py -p J0534+2200 J0538+2817 --obsid 1099414416 --obs_for_source
-python find_pulsar_in_obs.py -p J1921+2153 J1932+1056 J1935+1616 --obsid 1095506112 --obs_for_source
-python find_pulsar_in_obs.py -p J0630-2834 J0742-2822 --obsid 1067285064 --obs_for_source
+#remove csv file
 
-python find_pulsar_in_obs.py -c 05:34:31.973,+22:00:52.06 --obsid 1099414416 --obs_for_source               
-
-Found in my third year project
-J0437-4715 J0534+2200 J0630-2834 J0742-2822 J0835-4510 J0953+0755 J1731-4744 J1752-2806 J1900-2600 J1921+2153 J1932+1059 J1935+1616 J2048-1616 J2145-0750                 
-"""
+if args.pulsar != None:
+    os.system('rm -f temp.csv')
+else:
+    os.system( 'rm ' + catDIR)
