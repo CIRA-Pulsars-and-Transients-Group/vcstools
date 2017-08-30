@@ -10,14 +10,14 @@ import traceback
 
 def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type='raw'):
     '''
-    Checks that the number of files in directory (default is /scratch2/mwaops/vcs/[obsID]/raw/) is the same
+    Checks that the number of files in directory (default is /astro/mwaops/vcs/[obsID]/raw/) is the same
     as that found on the archive and also checks that all files have the same size (253440000 for raw, 7864340480 for recombined tarballs by default).
     '''
     if not data_type in ['raw', 'tar_ics', 'ics']:
         print "Wrong data type given to download check."
         return True
     if not directory:
-        directory = "/scratch2/mwaops/vcs/{0}/raw/".format(obsID) if data_type == 'raw' else "/scratch2/mwaops/vcs/{0}/combined/".format(obsID)
+        directory = "/astro/mwaops/vcs/{0}/raw/".format(obsID) if data_type == 'raw' else "/astro/mwaops/vcs/{0}/combined/".format(obsID)
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
     print base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range."
@@ -72,11 +72,11 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
 def check_recombine(obsID, directory=None, required_size=327680000, \
                         required_size_ics=30720000, startsec=None, n_secs=None):
     '''
-    Checks that the number of files in directory (/scratch2/mwaops/vcs/[obsID]/combined/) is ....
+    Checks that the number of files in directory (/astro/mwaops/vcs/[obsID]/combined/) is ....
     as that found on the archive and also checks that all files have the same size (327680000 by default).
     '''
     if not directory:
-        directory = "/scratch2/mwaops/vcs/{0}/combined/".format(obsID)
+        directory = "/astro/mwaops/vcs/{0}/combined/".format(obsID)
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
     print base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range."
@@ -252,13 +252,13 @@ def opt_parser():
                             dest='size_ics', default=30720000)
     parser.add_argument('-w', '--work_dir', type=str, dest='work_dir',\
                             help="Directory " + \
-                            "to check the files in. Default is /scratch2/mwaops/vcs/" + \
+                            "to check the files in. Default is /astro/mwaops/vcs/" + \
                             "[obsID]/[raw,combined]")
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = opt_parser()
-    work_dir_base = '/scratch2/mwaops/vcs/' + str(args.obsID)
+    work_dir_base = '/astro/mwaops/vcs/' + str(args.obsID)
 
     if args.all:
         from process_vcs import obs_max_min
