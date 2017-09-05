@@ -1,4 +1,4 @@
 #!/bin/bash
 
-module load pawseytools/1.11
+module load pawseytools
 pawseyAccountBalance -storage
