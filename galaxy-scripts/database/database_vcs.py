@@ -43,7 +43,7 @@ def add_database_function():
                 '    database_vcs.py -m "e" -r $rownum --errorcode $errcode\n' +\
                 '    echo "database_vcs.py -m "e" -r $rownum --errorcode $errcode"\n' +\
                 '    if [ "$errcode" != "0" ]; then\n' +\
-                '        exit $errcode\n' +\
+                '        return $errcode\n' +\
                 '    fi\n' +\
                 '}\n'
     return batch_line
