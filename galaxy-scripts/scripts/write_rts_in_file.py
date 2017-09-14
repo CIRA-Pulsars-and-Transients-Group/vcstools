@@ -332,7 +332,10 @@ else:
     # move the srclist file into the rts directory
     os.system("mv {0} {1}".format(srclist,write_dir))
 	
-srclist = "{0}/rts/{1}".format(os.path.dirname(srclist),os.path.basename(srclist))
+if "/rts" in os.path.dirname(srclist):
+    srclist = "{0}/{1}".format(os.path.dirname(srclist),os.path.basename(srclist))
+else:
+    srclist = "{0}/rts/{1}".format(os.path.dirname(srclist),os.path.basename(srclist))
 print "Found source list at {0}".format(srclist)
 
 # now write the configuration file
