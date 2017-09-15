@@ -255,6 +255,8 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
         batch_dir = product_dir+"/batch/"
 
         for time_to_get in range(start_time,stop_time,increment):
+                if time_to_get + increment > stop_time:
+                    increment = stop_time - time_to_get + 1
                 get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir) #need to subtract 1 from increment since voltdownload wants how many seconds PAST the first one
                 if head:
                         log_name="{0}/voltdownload_{1}.log".format(product_dir,time_to_get)
@@ -265,14 +267,13 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         check_batch = "check_volt_{0}".format(time_to_get)
                         volt_secs_to_run = datetime.timedelta(seconds=300*increment)
                         check_secs_to_run = "15:00"
-                        check_nsecs = increment if (time_to_get + increment <= stop_time) else (stop_time - time_to_get + 1)
                         if data_type == 16:
                             tar_batch = "untar_{0}".format(time_to_get)
                             tar_secs_to_run = "10:00:00"
                             body = []
                             untar = distutils.spawn.find_executable('untar.sh')
                             body.append(database_vcs.add_database_function())
-                            body.append('run "aprun -n 1 {0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir, obsid, time_to_get, time_to_get+check_nsecs-1, n_untar, keep, vcs_database_id))
+                            body.append('run "aprun -n 1 {0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
                             submit_slurm(tar_batch,body,batch_dir=batch_dir, slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
                                              submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
                         checks = distutils.spawn.find_executable("checks.py")
@@ -284,7 +285,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
                         commands.append("oldcount=$newcount; let newcount=$newcount+1")
                         commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+voltdownload_batch+".batch"))
-                        commands.append('run "{0}" "-m download -o {1} -w {2} -b {3} -i {4} --data_type {5}" "{6}"'.format(checks, obsid, dl_dir, time_to_get, check_nsecs, str(data_type),vcs_database_id))
+                        commands.append('run "{0}" "-m download -o {1} -w {2} -b {3} -i {4} --data_type {5}" "{6}"'.format(checks, obsid, dl_dir, time_to_get, increment, str(data_type),vcs_database_id))
                         commands.append("if [ $? -eq 1 ];then")
                         commands.append("sbatch {0}".format(batch_dir+voltdownload_batch+".batch"))
                         # if we have tarballs we send the untar jobs to the workq
