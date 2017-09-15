@@ -681,7 +681,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-
     // calculate target az,za and wavevector
     tazza target;
     wavenums target_wn;
@@ -690,8 +689,7 @@ int main(int argc, char *argv[])
     calcTargetAZZA(ra, dec, time, &target);
     printf("Computing wavenumbers towards target\n");
     calcWaveNumber(lambda, target.az, target.za, &target_wn);
-    printf("    kx = %f    ky = %f    kz = %f\n", target_wn.kx, target_wn.ky, target_wn.kz);
-    printf("\n");
+    printf("    kx = %f    ky = %f    kz = %f\n", target_wn.kx, target_wn.ky, target_wn.kz); 
 
     // get the number of tiles in array
     int ntiles=0;
@@ -771,6 +769,7 @@ int main(int argc, char *argv[])
     // and the device properties (as a consequence)
     requiredMemory(size, ntiles, &niter, &blockSize);
 
+
     /* We now have the relevant array configuration and target source information 
        needed to calculate the array factor. The best way is to split it up into 
        managable chunks (depending on the device capabilities). */
@@ -816,6 +815,7 @@ int main(int argc, char *argv[])
     } while(cc < size);
     printf("Done\n");
 
+
     // construct arrays for device computation
     double *d_az_array, *d_za_array;
     double *subAz, *subZA;
@@ -837,13 +837,14 @@ int main(int argc, char *argv[])
     
     FILE *fp;
     fp = fopen(output,"w");  // open the file to write
-    fprintf(fp, "Az\tZA\tP\n"); // and write the header info
+    //fprintf(fp, "Az\tZA\tP\n"); // and write the header info
 
     /* This is the primary loop which does the calculations */
     printf("%d az , %d za per iteration\n", iter_n_az, iter_n_za);
     for (int iter = 0; iter < niter; iter++)
     {  
         printf("==== Iteration %d ====\n", iter);
+        //fprintf(fp, "Iteration %d\n", iter);
         // figure out this iteration size, then allocate memory
         if (iter != niter-1)
         {
@@ -938,6 +939,7 @@ int main(int argc, char *argv[])
 
         printf("Launching kernal to compute array factor\n");
         calcArrayFactor<<<numBlocks, blockSize>>>(itersize, ntiles, 2*PI/lambda, d_za_array, d_az_array, d_xpos, d_ypos, d_zpos, d_twn, d_af_array);
+        cudaDeviceSynchronize();
 
         // copy relevant memory back to host
         gpuErrchk( cudaMemcpy(af_array, d_af_array, itersize * sizeof(*af_array), cudaMemcpyDeviceToHost));
@@ -977,7 +979,7 @@ int main(int argc, char *argv[])
         //printf("    gpu power: %f\n", tmp1);
         //printf("    cpu power: %f\n", tmp2);
 
-
+        
         /* Write the output to a file */
         double af_power = 0.0;
         //double cpu_power = 0.0;
@@ -1017,7 +1019,6 @@ int main(int argc, char *argv[])
     printf("    Radiation efficiency:             %f\n", eta);
     printf("    Effective collecting area (m^2):  %.4f\n", eff_area);
     printf("    Effective array gain (K/Jy):      %.4f\n", gain);
-   
 
     return 0;
 }
