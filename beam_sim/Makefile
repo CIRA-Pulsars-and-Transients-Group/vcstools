@@ -75,5 +75,6 @@ FEE2016/%.o:
 #	nvprof ./$^ -f 184.96e6 -r "05:34:31.97" -d "+22:00:52.06" -t "2014-11-07T16:53:20" -m 1099414416_metafits_ppds.fits -b flagged_tiles.txt -x 0.01 -y 0.01
 
 clean:
+	$(RM) pabeam_gpu_notile
 	$(RM) pabeam_gpu
 	$(RM) pabeam_cpu
