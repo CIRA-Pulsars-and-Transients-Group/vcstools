@@ -1,5 +1,4 @@
-# C compiler
-CC=cc
+# C++ compiler
 CXX=cc
 
 # HDF5 directories
