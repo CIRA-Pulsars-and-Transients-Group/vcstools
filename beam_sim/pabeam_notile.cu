@@ -5,7 +5,15 @@
 #include <math.h>
 #include <slalib.h>
 #include <fitsio.h>
+//#include <H5Cpp.h>
 #include <complex.h>
+
+// MWA tile beam
+//#include "FEE2016/beam2016implementation.h"
+//#include "FEE2016/mwa_beam_interface.h"
+//#include "FEE2016/system.h"
+
+
 // CUDA specific includes
 #include <cuda.h>
 #include <cuda_runtime_api.h>
@@ -20,11 +28,6 @@
 #define MWA_LAT (-26.703319)    // Array latitude, degrees North
 #define MWA_LON (116.67081)     // Array longitude, degrees East
 #define MWA_HGT (377.827)       // Array elevation above sea level, in meters
-
-// in column major format, a matrix is indexed to an array by
-//#define IDX2C(i,j,ld) (((j) * (ld)) + (i))
-// here ld is leading dimension of the matrix 
-// (in this case, should be number of rows)
 
 /* struct to hold all the wavenumbers for each (Az,ZA) */
 typedef struct wavenums_t
@@ -66,12 +69,11 @@ __global__ void calcArrayFactor(int nel, int ntiles, double a,
                                 float *xp, float *yp, float *zp,
                                 wavenums *p_twn,
                                 cuDoubleComplex *af);
-void calcArrayFactorCPU(int nel, int ntiles, double a,
-                        double *za, double *az,
-                        float *xp, float *yp, float *zp,
-                        wavenums *p_twn,
-                        double complex *af);
-
+//void calcArrayFactorCPU(int nel, int ntiles, double a,
+//                        double *za, double *az,
+//                        float *xp, float *yp, float *zp,
+//                        wavenums *p_twn,
+//                        double complex *af);
 
 
 void usage()
@@ -580,44 +582,44 @@ __global__ void calcArrayFactor(int nel, int ntiles, double a,
     __syncthreads();
 }
 
-void calcArrayFactorCPU(int nel, int ntiles, double a,
-                                double *za, double *az, 
-                                float *xp, float *yp, float *zp, 
-                                wavenums *p_twn, 
-                                double complex *af)
-{
-    /* CPU, serial version of the kernal */ 
-    
-    // other intermediate variables
-    double ast=0, phi=0;
-    double ph=0;
-    double kx=0, ky=0, kz=0;
-    double complex n = ntiles+I*0;
-
-    for (int i = 0; i < nel; i ++)
-    {
-        // pre-calculate coefficients/transforms
-        ast = a * sin(za[i]);
-        phi = PI/2 - az[i];
-
-        // calculate (k - k_target)
-        kx = ast * cos(phi) - p_twn->kx; 
-        ky = ast * sin(phi) - p_twn->ky;
-        kz = ast - p_twn->kz;
-
-        // initialise this pixel's array factor value
-        af[i] = 0.0 + I*0.0;
-        
-        // calculate array factor contribution from each tile and sum
-        for (int j = 0; j < ntiles; j++)
-        {
-            ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
-            af[i] += cos(ph) + I*sin(ph);         
-        }
-        // normalise the result
-        af[i] /= n;
-    }
-}
+//void calcArrayFactorCPU(int nel, int ntiles, double a,
+//                                double *za, double *az, 
+//                                float *xp, float *yp, float *zp, 
+//                                wavenums *p_twn, 
+//                                double complex *af)
+//{
+//    /* CPU, serial version of the kernal */ 
+//    
+//    // other intermediate variables
+//    double ast=0, phi=0;
+//    double ph=0;
+//    double kx=0, ky=0, kz=0;
+//    double complex n = ntiles+I*0;
+//
+//    for (int i = 0; i < nel; i ++)
+//    {
+//        // pre-calculate coefficients/transforms
+//        ast = a * sin(za[i]);
+//        phi = PI/2 - az[i];
+//
+//        // calculate (k - k_target)
+//        kx = ast * cos(phi) - p_twn->kx; 
+//        ky = ast * sin(phi) - p_twn->ky;
+//        kz = ast - p_twn->kz;
+//
+//        // initialise this pixel's array factor value
+//        af[i] = 0.0 + I*0.0;
+//        
+//        // calculate array factor contribution from each tile and sum
+//        for (int j = 0; j < ntiles; j++)
+//        {
+//            ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
+//            af[i] += cos(ph) + I*sin(ph);         
+//        }
+//        // normalise the result
+//        af[i] /= n;
+//    }
+//}
 
 
 
