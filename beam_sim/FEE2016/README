@@ -1,0 +1,1 @@
+g++   beam2016implementation.cpp mwa_beam_interface.cpp system.cpp -o beam2016test -lhdf5_cpp -lhdf5 -lboost_system -lboost_filesystem -g -D_GET_JONES_2016_TEST -std=gnu++11
