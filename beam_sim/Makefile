@@ -57,14 +57,13 @@ FEE2016_TARGETS = FEE2016/beam2016implementation.o  FEE2016/mwa_beam_interface.o
 
 
 
-all: pabeam_gpu pabeam_gpu_notile
-
-pabeam_gpu: pabeam.cu $(FEE2016_TARGETS)
-	$(NVCC) -o $@ $^ $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS)
+all: pabeam_gpu_notile pabeam_gpu
 
 pabeam_gpu_notile: pabeam_notile.cu
 	$(NVCC) -o $@ $^ $(NVCC_FLAGS) $(LIB_DIRS_NOTILE) $(INC_DIRS_NOTILE) $(FLAGS_NOTILE)
 
+pabeam_gpu: pabeam.cu $(FEE2016_TARGETS)
+	$(NVCC) -o $@ $^ $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS)
 
 #pabeam_cpu: pabeam.c
 #	$(CC) -Wall -o $@ $^ $(LIB_DIRS) $(INC_DIRS) $(FLAGS)
