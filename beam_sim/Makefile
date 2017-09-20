@@ -44,7 +44,7 @@ LIB_DIRS = $(addprefix -L,$(CFITSIO_LIB) $(SLA_LIB) $(HDF5_LIB) $(BOOST_LIB))
 LIB_DIRS_NOTILE = $(addprefix -L,$(CFITSIO_LIB) $(SLA_LIB))
 
 # compiler flags
-CFLAGS = -O3 -lm -lsla -lcfitsio
+CFLAGS = -O3 -lm -lsla -lcfitsio #-lcuda
 CXXFLAGS = -lhdf5_cpp -lhdf5 -lboost_system -lboost_filesystem -g -D_GET_JONES_2016_TEST #-std=gnu++11 
 FLAGS = $(CFLAGS) $(CXXFLAGS)
 FLAGS_NOTILE = $(CFLAGS)

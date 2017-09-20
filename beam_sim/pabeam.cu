@@ -5,14 +5,13 @@
 #include <math.h>
 #include <slalib.h>
 #include <fitsio.h>
-#include <H5Cpp.h>
 #include <complex.h>
 
 // MWA tile beam
 #include "FEE2016/beam2016implementation.h"
 #include "FEE2016/mwa_beam_interface.h"
 #include "FEE2016/system.h"
-
+#include <H5Cpp.h>
 
 // CUDA specific includes
 #include <cuda.h>
@@ -990,7 +989,10 @@ int main(int argc, char *argv[])
         {
             af_power = pow(cuCabs(af_array[i]), 2); // need to use cuCabs given af_array is of cuComplexDouble type
             //cpu_power = pow(cabs(aftmp[i]), 2);
-            fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power);
+
+            // compute the tile beam power and multiply
+            tile_power = CalcMWABeam(subAz[i]-PI/2, subZA[i], freq, 'X', gridpoint, 1);
+            fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power*tile_power);
             if (af_power > af_max) {af_max = af_power;}
             
             // integrate over sky
