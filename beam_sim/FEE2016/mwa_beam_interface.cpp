@@ -75,8 +75,7 @@ double CalcMWABeam( double az, double za, double freq_hz, char beam, int gridpoi
    double beam_xx = std::abs( jones_matrix.j00 )*std::abs( jones_matrix.j00 ) + std::abs( jones_matrix.j01 )*std::abs( jones_matrix.j01 ); 
    double beam_yy = std::abs( jones_matrix.j10 )*std::abs( jones_matrix.j10 ) + std::abs( jones_matrix.j11 )*std::abs( jones_matrix.j11 );
    
-   beam_out = beam_xx + beam_yy; 
-   // double beam_out = sqrt( beam_xx + beam_yy );
+   beam_out = (beam_xx + beam_yy)/2.0; 
 #else
    printf("ERROR : MWA 2016 beam model not implemented in this version, use -D_MWA_2016_BEAM_MODEL_ in the compilation process\n");
    exit(-1);   
