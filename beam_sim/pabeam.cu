@@ -8,15 +8,16 @@
 #include <complex.h>
 
 // MWA tile beam
-#include "FEE2016/beam2016implementation.h"
-#include "FEE2016/mwa_beam_interface.h"
-#include "FEE2016/system.h"
-#include <H5Cpp.h>
+//#include "FEE2016/beam2016implementation.h"
+//#include "FEE2016/mwa_beam_interface.h"
+//#include "FEE2016/system.h"
+//#include <H5Cpp.h>
 
 // CUDA specific includes
-#include <cuda.h>
-#include <cuda_runtime_api.h>
-#include <cuComplex.h>
+//#include <cuda.h>
+//#include <cuda_runtime_api.h>
+//#include <cuComplex.h>
+#include "pabeam_kernal.h"
 
 #define PI (acos(-1.0))         // Ensures PI is defined on all systems
 #define RAD2DEG (180.0 / PI)
@@ -63,11 +64,11 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize);
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort);
 
 // GPU kernal for calculation
-__global__ void calcArrayFactor(int nel, int ntiles, double a,
-                                double *za, double *az,
-                                float *xp, float *yp, float *zp,
-                                wavenums *p_twn,
-                                cuDoubleComplex *af);
+//__global__ void calcArrayFactor(int nel, int ntiles, double a,
+//                                double *za, double *az,
+//                                float *xp, float *yp, float *zp,
+//                                wavenums *p_twn,
+//                                cuDoubleComplex *af);
 //void calcArrayFactorCPU(int nel, int ntiles, double a,
 //                        double *za, double *az,
 //                        float *xp, float *yp, float *zp,
@@ -483,103 +484,103 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 // define a macro for accessing gpuAssert
 #define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
 
-__global__ void calcArrayFactor(int nel, int ntiles, double a,
-                                double *za, double *az, 
-                                float *xp, float *yp, float *zp, 
-                                wavenums *p_twn, 
-                                cuDoubleComplex *af)
-{
-    /* Kernal which takes (az,za) coordinates and tile positions to 
-       compute the array factor. This minimises data transfer between 
-       host and device.
-   
-       #####################
-       # General variables #
-       #####################
-       nel = total number of elements in each array
-
-       ##########################
-       # Wavenumber computation #
-       ##########################
-       a     = amplitude factor (2*pi/lambda)
-       za    = array of zenith angles
-       az    = array of azimuths
-       p_twn = target wavenumber struct
-
-       NOTE: The standard equations are:
-             kx = a * sin(theta) * cos(phi)
-             ky = a * sin(theta) * sin(phi)
-             kz = a * cos(theta)
-
-             where:
-             lambda is the observing wavelength, and
-             assuming that (theta,phi) are in the convention from Sutinjo et al. 2015:
-             phi = pi/2 - az   AND   theta = za
-
-             The azimuth is measured clockwise from East (standard for antenna theory, offset from astronomy)
-       
-       ############################
-       # Array factor computation #
-       ############################
-       ntiles = number of tiles used to form tied-array beam
-       xp     = array of tile x-positions (East)
-       yp     = array of tile y-positions (North)
-       zp     = array of tile z-positions (above array centre)
-       p_wn   = array of wavenumber structs for each pixel in af
-       af     = array containing the complex valued array factor
-
-       NOTE: The analytical form for this is:
-             
-                f(theta,phi;tza,taz) = (1/ntiles) * sum{n=1,n=ntiles}( conj(psi_n(tza,taz)) * psi_n(theta,phi) )
-
-             where:
-             (taz,tza) are the target source azimuth and zenith angle
-             (theta,phi) are the azimuth and zenith angle pixels over which we evalute, theta=[0,90], phi=[0,360)
-             
-             psi_n is the planar wave front as detected by the "nth" tile, defined as
-                
-                psi_n(theta,phi) = exp[ (2*pi*I/lambda) * (x_n*k_x + y_n*k_y + z_n*k_z) ]
-             
-             where x_n is the x-coordinate of tile n (similarly for y_n, z_n), with k_x, k_y, k_z and lambda as defined above.      
-    */
-
-    // set up CUDA thread indexing
-    int index = blockIdx.x * blockDim.x + threadIdx.x;
-    int stride = blockDim.x * gridDim.x;
-    
-    // other intermediate variables
-    double ast=0, phi=0;
-    double ph=0;
-    double kx=0, ky=0, kz=0;
-    cuDoubleComplex n = make_cuDoubleComplex(ntiles,0);
-
-    
-    for (int i = index; i < nel; i += stride)
-    {
-        // pre-calculate coefficients/transforms
-        ast = a * sin(za[i]);
-        phi = PI/2 - az[i];
-
-        // calculate (k - k_target)
-        kx = ast * cos(phi) - p_twn->kx; 
-        ky = ast * sin(phi) - p_twn->ky;
-        kz = a * cos(za[i]) - p_twn->kz;
-
-        // initialise this pixel's array factor value
-        af[i] = make_cuDoubleComplex(0,0);
-        
-        // calculate array factor contribution from each tile and sum
-        for (int j = 0; j < ntiles; j++)
-        {
-            ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
-            af[i] = cuCadd(af[i], make_cuDoubleComplex(cos(ph), sin(ph)));         
-        }
-
-        // normalise the array factor
-        af[i] = cuCdiv(af[i], n);
-    }
-    __syncthreads();
-}
+//__global__ void calcArrayFactor(int nel, int ntiles, double a,
+//                                double *za, double *az, 
+//                                float *xp, float *yp, float *zp, 
+//                                wavenums *p_twn, 
+//                                cuDoubleComplex *af)
+//{
+//    /* Kernal which takes (az,za) coordinates and tile positions to 
+//       compute the array factor. This minimises data transfer between 
+//       host and device.
+//   
+//       #####################
+//       # General variables #
+//       #####################
+//       nel = total number of elements in each array
+//
+//       ##########################
+//       # Wavenumber computation #
+//       ##########################
+//       a     = amplitude factor (2*pi/lambda)
+//       za    = array of zenith angles
+//       az    = array of azimuths
+//       p_twn = target wavenumber struct
+//
+//       NOTE: The standard equations are:
+//             kx = a * sin(theta) * cos(phi)
+//             ky = a * sin(theta) * sin(phi)
+//             kz = a * cos(theta)
+//
+//             where:
+//             lambda is the observing wavelength, and
+//             assuming that (theta,phi) are in the convention from Sutinjo et al. 2015:
+//             phi = pi/2 - az   AND   theta = za
+//
+//             The azimuth is measured clockwise from East (standard for antenna theory, offset from astronomy)
+//       
+//       ############################
+//       # Array factor computation #
+//       ############################
+//       ntiles = number of tiles used to form tied-array beam
+//       xp     = array of tile x-positions (East)
+//       yp     = array of tile y-positions (North)
+//       zp     = array of tile z-positions (above array centre)
+//       p_wn   = array of wavenumber structs for each pixel in af
+//       af     = array containing the complex valued array factor
+//
+//       NOTE: The analytical form for this is:
+//             
+//                f(theta,phi;tza,taz) = (1/ntiles) * sum{n=1,n=ntiles}( conj(psi_n(tza,taz)) * psi_n(theta,phi) )
+//
+//             where:
+//             (taz,tza) are the target source azimuth and zenith angle
+//             (theta,phi) are the azimuth and zenith angle pixels over which we evalute, theta=[0,90], phi=[0,360)
+//             
+//             psi_n is the planar wave front as detected by the "nth" tile, defined as
+//                
+//                psi_n(theta,phi) = exp[ (2*pi*I/lambda) * (x_n*k_x + y_n*k_y + z_n*k_z) ]
+//             
+//             where x_n is the x-coordinate of tile n (similarly for y_n, z_n), with k_x, k_y, k_z and lambda as defined above.      
+//    */
+//
+//    // set up CUDA thread indexing
+//    int index = blockIdx.x * blockDim.x + threadIdx.x;
+//    int stride = blockDim.x * gridDim.x;
+//    
+//    // other intermediate variables
+//    double ast=0, phi=0;
+//    double ph=0;
+//    double kx=0, ky=0, kz=0;
+//    cuDoubleComplex n = make_cuDoubleComplex(ntiles,0);
+//
+//    
+//    for (int i = index; i < nel; i += stride)
+//    {
+//        // pre-calculate coefficients/transforms
+//        ast = a * sin(za[i]);
+//        phi = PI/2 - az[i];
+//
+//        // calculate (k - k_target)
+//        kx = ast * cos(phi) - p_twn->kx; 
+//        ky = ast * sin(phi) - p_twn->ky;
+//        kz = a * cos(za[i]) - p_twn->kz;
+//
+//        // initialise this pixel's array factor value
+//        af[i] = make_cuDoubleComplex(0,0);
+//        
+//        // calculate array factor contribution from each tile and sum
+//        for (int j = 0; j < ntiles; j++)
+//        {
+//            ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
+//            af[i] = cuCadd(af[i], make_cuDoubleComplex(cos(ph), sin(ph)));         
+//        }
+//
+//        // normalise the array factor
+//        af[i] = cuCdiv(af[i], n);
+//    }
+//    __syncthreads();
+//}
 
 //void calcArrayFactorCPU(int nel, int ntiles, double a,
 //                                double *za, double *az, 
@@ -822,7 +823,7 @@ int main(int argc, char *argv[])
     double *subAz, *subZA;
     cuDoubleComplex *af_array, *d_af_array;
     float *d_xpos, *d_ypos, *d_zpos;
-    wavenums *d_twn;
+    //wavenums *d_twn;
     int itersize, az_idx1, az_idx2, za_idx1, za_idx2; 
     int iter_n_az = (int)floor(size / niter);
     int iter_n_za = (int)floor(size / niter);
@@ -918,7 +919,7 @@ int main(int argc, char *argv[])
         // allocate memory on device
         gpuErrchk( cudaMalloc((void **)&d_az_array, itersize * sizeof(*az_array)));
         gpuErrchk( cudaMalloc((void **)&d_za_array, itersize * sizeof(*za_array)));
-        gpuErrchk( cudaMalloc((void **)&d_twn, sizeof(wavenums)));
+        //gpuErrchk( cudaMalloc((void **)&d_twn, sizeof(wavenums)));
         gpuErrchk( cudaMalloc((void **)&d_xpos, ntiles * sizeof(*xpos)));
         gpuErrchk( cudaMalloc((void **)&d_ypos, ntiles * sizeof(*ypos)));
         gpuErrchk( cudaMalloc((void **)&d_zpos, ntiles * sizeof(*zpos)));
@@ -928,7 +929,8 @@ int main(int argc, char *argv[])
         // copy arrays onto device
         gpuErrchk( cudaMemcpy(d_az_array, subAz, itersize * sizeof(*subAz), cudaMemcpyHostToDevice));
         gpuErrchk( cudaMemcpy(d_za_array, subZA, itersize * sizeof(*subZA), cudaMemcpyHostToDevice));
-        gpuErrchk( cudaMemcpy(d_twn, &target_wn, sizeof(wavenums), cudaMemcpyHostToDevice));
+        //gpuErrchk( cudaMemcpy(d_twn, &target_wn, sizeof(wavenums), cudaMemcpyHostToDevice));
+        
 
         // copy the array factor vector to device
         gpuErrchk( cudaMemcpy(d_af_array, af_array, itersize * sizeof(*af_array), cudaMemcpyHostToDevice));
@@ -939,7 +941,7 @@ int main(int argc, char *argv[])
         gpuErrchk( cudaMemcpy(d_zpos, zpos, ntiles * sizeof(*zpos), cudaMemcpyHostToDevice));
 
         printf("Launching kernal to compute array factor\n");
-        calcArrayFactor<<<numBlocks, blockSize>>>(itersize, ntiles, 2*PI/lambda, d_za_array, d_az_array, d_xpos, d_ypos, d_zpos, d_twn, d_af_array);
+        calcArrayFactor<<<numBlocks, blockSize>>>(itersize, ntiles, 2*PI/lambda, d_za_array, d_az_array, d_xpos, d_ypos, d_zpos, target_wn.kx, target_wn.ky, target_wn.kz, d_af_array);
         cudaDeviceSynchronize();
 
         // copy relevant memory back to host
@@ -964,7 +966,7 @@ int main(int argc, char *argv[])
 
         // cool, we're done with the GPU computation
         printf("Freeing device memory\n");
-        gpuErrchk( cudaFree(d_twn));
+        //gpuErrchk( cudaFree(d_twn));
         gpuErrchk( cudaFree(d_xpos));
         gpuErrchk( cudaFree(d_ypos));
         gpuErrchk( cudaFree(d_zpos));
@@ -991,8 +993,9 @@ int main(int argc, char *argv[])
             //cpu_power = pow(cabs(aftmp[i]), 2);
 
             // compute the tile beam power and multiply
-            tile_power = CalcMWABeam(subAz[i]-PI/2, subZA[i], freq, 'X', gridpoint, 1);
-            fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power*tile_power);
+            //tile_power = CalcMWABeam(subAz[i]-PI/2, subZA[i], freq, 'X', gridpoint, 1);
+            //fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power*tile_power);
+            fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power);
             if (af_power > af_max) {af_max = af_power;}
             
             // integrate over sky

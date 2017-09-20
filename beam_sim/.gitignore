@@ -1,3 +1,4 @@
 pabeam_gpu*
 pabeam_cpu
+*.o
 *~
