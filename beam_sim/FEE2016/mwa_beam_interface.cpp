@@ -12,7 +12,9 @@
    #define N_ANT_COUNT 16
 #endif 
 
-extern int gPrintfLevel;
+#include "mwa_beam_interface.h"
+
+extern int gPrintfLevel=1;
 
 struct cGridPoint
 {
