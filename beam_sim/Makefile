@@ -1,9 +1,5 @@
-# C and C++ compiler
-CC = cc
-CXX = cc
-
 # CUDA compiler
-NVCC = nvcc
+CC = nvcc
 
 # CUDA architecture (i.e. compute capability) to compile for
 NVCC_ARCH = sm_35
@@ -37,33 +33,59 @@ LIB_DIRS_NOTILE = $(addprefix -L,$(CFITSIO_LIB) $(SLA_LIB))
 LIB_DIRS = $(addprefix -L,$(CFITSIO_LIB) $(SLA_LIB) $(HDF5_LIB) $(BOOST_LIB))
 
 # compiler flags
-FLAGS_NOTILE = -O3 -lm -lsla -lcfitsio #-lcuda
-FLAGS = $(FLAGS_NOTILE) -lhdf5_cpp -lhdf5 -lboost_system -lboost_filesystem #-g -D_GET_JONES_2016_TEST -std=gnu++11 
+FLAGS = -O3 # -D_GET_JONES_2016_TEST
 
-# nvcc compile flags
-NVCC_FLAGS = -arch=$(NVCC_ARCH)
+# nvcc compiler flags
+NVCC_FLAGS = -arch=$(NVCC_ARCH) -Xcompiler
+
+# All compile flags
+CFLAGS = $(NVCC_FLAGS) $(FLAGS) $(INC_DIRS)
+LDFLAGS = $(LIB_DIRS) -lm -lsla -lcfitsio -lhdf5_cpp -lhdf5 -lboost_system -lboost_filesystem # -lcuda
 
 # targets
-FEE2016_TARGETS = FEE2016/beam2016implementation.o FEE2016/mwa_beam_interface.o FEE2016/system.o
-PABEAM_TARGETS = pabeam_kernal.o pabeam.o
+FEE2016_OBJECTS = FEE2016/beam2016implementation.o FEE2016/mwa_beam_interface.o FEE2016/system.o
+PABEAM_OBJECTS = pabeam_kernal.o pabeam.o
 
-TARGETS = $(PABEAM_TARGETS) #$(FEE2016_TARGETS)
+OBJECTS = $(FEE2016_OBJECTS) $(PABEAM_OBJECTS) 
 
-all: pabeam_gpu_notile pabeam_gpu
+TARGETS = pabeam_gpu_notile pabeam_gpu
 
-pabeam_gpu_notile: pabeam_notile.cu
-	$(NVCC) -o $@ $^ $(NVCC_FLAGS) $(LIB_DIRS_NOTILE) $(INC_DIRS_NOTILE) $(FLAGS_NOTILE)
+all: $(TARGETS)
 
-pabeam_gpu: pabeam_kernal.cu pabeam.cu 
-	$(NVCC) -c $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS) pabeam_kernal.cu
-	$(NVCC) -c $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS) pabeam.cu
-	$(NVCC) -o $@ $(TARGETS) $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS)
+
+pabeam_gpu_notile: pabeam_notile.o
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+
+#$(NVCC) -o $@ $^ $(NVCC_FLAGS) $(LIB_DIRS_NOTILE) $(INC_DIRS_NOTILE) $(FLAGS_NOTILE)
+
+pabeam_gpu: $(OBJECTS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+#$(NVCC) -o $@ $(OBJECTS) $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS)
+
+
+
+%.o: %.cu
+	$(CC) -c $@ $(CFLAGS) $<
+
+#pabeam_kernal.o: pabeam_kernal.cu
+#	$(NVCC) -c $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS) $<
+
+#p%.o: p%.cu
+#	$(NVCC) -c $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS) $<
 
 FEE2016/%.o:
-	@$(MAKE) --no-print-directory -C $(@D) $(@F)
+	@$(MAKE) -C $(@D) $(@F)
 
 clean:
 	$(RM) *.o
 	$(RM) pabeam_gpu_notile
 	$(RM) pabeam_gpu
 	$(RM) pabeam_cpu
+
+# clean this directory and the FEE2016 model directory
+dist-clean:
+	$(RM) *.o
+	$(RM) pabeam_gpu_notile
+	$(RM) pabeam_gpu
+	$(RM) pabeam_cpu
+	@$(MAKE) -C FEE2016/ clean
