@@ -5,18 +5,15 @@
 #include <math.h>
 #include <slalib.h>
 #include <fitsio.h>
-#include <complex.h>
+//#include <complex.h>
 
 // MWA tile beam
-//#include "FEE2016/beam2016implementation.h"
-//#include "FEE2016/mwa_beam_interface.h"
-//#include "FEE2016/system.h"
-//#include <H5Cpp.h>
+#include "FEE2016/beam2016implementation.h"
+#include "FEE2016/mwa_beam_interface.h"
+#include "FEE2016/system.h"
+#include <H5Cpp.h>
 
-// CUDA specific includes
-//#include <cuda.h>
-//#include <cuda_runtime_api.h>
-//#include <cuComplex.h>
+// CUDA kernal
 #include "pabeam_kernal.h"
 
 #define PI (acos(-1.0))         // Ensures PI is defined on all systems
@@ -80,17 +77,18 @@ void usage()
 {
     printf("pabeam_gpu --- computes the array factor that represents the naturally weighted synthesised MWA beam (tied-array/coherent beam) for a given configuration\n");
     printf("syntax:\n");
-    printf("    pabeam -f <frequency in Hz> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <utc time string> -m <metafits file> -b <RTS flagged_tiles.txt file> [-e] [-x] [-y]\n\n");
+    printf("    pabeam -f <frequency in Hz> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <UTC in ISOT format> -m <metafits file> -b <RTS flagged_tiles.txt file> [-e] [-x] [-y] [-g]\n\n");
     printf("Options:\n");
-    printf("    -f observing frequncy, in Hz\n");
-    printf("    -e radiation efficiency (default: 1.0)\n");
+    printf("    -f observing frequency, in Hz\n");
     printf("    -r target RA (J2000), in hh:mm:ss.ss format\n");
     printf("    -d target DEC (J2000), in dd:mm:ss.ss format\n");
     printf("    -t UTC time to evaluate, in format YYYY-MM-DDThh:mm:ss\n");
-    printf("    -m metafits files for the observation\n");
+    printf("    -m metafits file for the observation\n");
     printf("    -b RTS flagged_tiles.txt file from calibration\n");
-    printf("    -x Azimuth grid resolution element (default: 1.0)\n");
-    printf("    -y Zenith angle grid resolution element (default: 1.0)\n");
+    printf("    -e radiation efficiency (if unsure, use 1.0)\n");
+    printf("    -x Azimuth grid resolution element (>= 0.01)\n");
+    printf("    -y Zenith angle grid resolution element (>=0.01)\n");
+    printf("    -g Calculate and apply the FEE2016 tile beam with the given \"gridpoint\" number\n");
 }
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
@@ -484,144 +482,6 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 // define a macro for accessing gpuAssert
 #define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
 
-//__global__ void calcArrayFactor(int nel, int ntiles, double a,
-//                                double *za, double *az, 
-//                                float *xp, float *yp, float *zp, 
-//                                wavenums *p_twn, 
-//                                cuDoubleComplex *af)
-//{
-//    /* Kernal which takes (az,za) coordinates and tile positions to 
-//       compute the array factor. This minimises data transfer between 
-//       host and device.
-//   
-//       #####################
-//       # General variables #
-//       #####################
-//       nel = total number of elements in each array
-//
-//       ##########################
-//       # Wavenumber computation #
-//       ##########################
-//       a     = amplitude factor (2*pi/lambda)
-//       za    = array of zenith angles
-//       az    = array of azimuths
-//       p_twn = target wavenumber struct
-//
-//       NOTE: The standard equations are:
-//             kx = a * sin(theta) * cos(phi)
-//             ky = a * sin(theta) * sin(phi)
-//             kz = a * cos(theta)
-//
-//             where:
-//             lambda is the observing wavelength, and
-//             assuming that (theta,phi) are in the convention from Sutinjo et al. 2015:
-//             phi = pi/2 - az   AND   theta = za
-//
-//             The azimuth is measured clockwise from East (standard for antenna theory, offset from astronomy)
-//       
-//       ############################
-//       # Array factor computation #
-//       ############################
-//       ntiles = number of tiles used to form tied-array beam
-//       xp     = array of tile x-positions (East)
-//       yp     = array of tile y-positions (North)
-//       zp     = array of tile z-positions (above array centre)
-//       p_wn   = array of wavenumber structs for each pixel in af
-//       af     = array containing the complex valued array factor
-//
-//       NOTE: The analytical form for this is:
-//             
-//                f(theta,phi;tza,taz) = (1/ntiles) * sum{n=1,n=ntiles}( conj(psi_n(tza,taz)) * psi_n(theta,phi) )
-//
-//             where:
-//             (taz,tza) are the target source azimuth and zenith angle
-//             (theta,phi) are the azimuth and zenith angle pixels over which we evalute, theta=[0,90], phi=[0,360)
-//             
-//             psi_n is the planar wave front as detected by the "nth" tile, defined as
-//                
-//                psi_n(theta,phi) = exp[ (2*pi*I/lambda) * (x_n*k_x + y_n*k_y + z_n*k_z) ]
-//             
-//             where x_n is the x-coordinate of tile n (similarly for y_n, z_n), with k_x, k_y, k_z and lambda as defined above.      
-//    */
-//
-//    // set up CUDA thread indexing
-//    int index = blockIdx.x * blockDim.x + threadIdx.x;
-//    int stride = blockDim.x * gridDim.x;
-//    
-//    // other intermediate variables
-//    double ast=0, phi=0;
-//    double ph=0;
-//    double kx=0, ky=0, kz=0;
-//    cuDoubleComplex n = make_cuDoubleComplex(ntiles,0);
-//
-//    
-//    for (int i = index; i < nel; i += stride)
-//    {
-//        // pre-calculate coefficients/transforms
-//        ast = a * sin(za[i]);
-//        phi = PI/2 - az[i];
-//
-//        // calculate (k - k_target)
-//        kx = ast * cos(phi) - p_twn->kx; 
-//        ky = ast * sin(phi) - p_twn->ky;
-//        kz = a * cos(za[i]) - p_twn->kz;
-//
-//        // initialise this pixel's array factor value
-//        af[i] = make_cuDoubleComplex(0,0);
-//        
-//        // calculate array factor contribution from each tile and sum
-//        for (int j = 0; j < ntiles; j++)
-//        {
-//            ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
-//            af[i] = cuCadd(af[i], make_cuDoubleComplex(cos(ph), sin(ph)));         
-//        }
-//
-//        // normalise the array factor
-//        af[i] = cuCdiv(af[i], n);
-//    }
-//    __syncthreads();
-//}
-
-//void calcArrayFactorCPU(int nel, int ntiles, double a,
-//                                double *za, double *az, 
-//                                float *xp, float *yp, float *zp, 
-//                                wavenums *p_twn, 
-//                                double complex *af)
-//{
-//    /* CPU, serial version of the kernal */ 
-//    
-//    // other intermediate variables
-//    double ast=0, phi=0;
-//    double ph=0;
-//    double kx=0, ky=0, kz=0;
-//    double complex n = ntiles+I*0;
-//
-//    for (int i = 0; i < nel; i ++)
-//    {
-//        // pre-calculate coefficients/transforms
-//        ast = a * sin(za[i]);
-//        phi = PI/2 - az[i];
-//
-//        // calculate (k - k_target)
-//        kx = ast * cos(phi) - p_twn->kx; 
-//        ky = ast * sin(phi) - p_twn->ky;
-//        kz = ast - p_twn->kz;
-//
-//        // initialise this pixel's array factor value
-//        af[i] = 0.0 + I*0.0;
-//        
-//        // calculate array factor contribution from each tile and sum
-//        for (int j = 0; j < ntiles; j++)
-//        {
-//            ph = (kx * xp[j]) + (ky * yp[j]) + (kz * zp[j]);
-//            af[i] += cos(ph) + I*sin(ph);         
-//        }
-//        // normalise the result
-//        af[i] /= n;
-//    }
-//}
-
-
 
 int main(int argc, char *argv[])
 {
@@ -631,14 +491,15 @@ int main(int argc, char *argv[])
     char *metafits=NULL;
     char *flagfile=NULL;
     int c=0;
-    double freq=0, lambda=0;
+    double freq=0.0, lambda=0.0;
     double az_step=1.0, za_step=1.0, eta=1.0;
-    int blockSize, numBlocks;
+    int blockSize=1024, numBlocks=1024;
+    int use_tile_beam=0, gridpoint=0;
 
     /* Parse options */
     if (argc > 1)
     {
-        while ((c = getopt(argc, argv, "f:e:r:d:t:m:b:x:y:")) != -1)
+        while ((c = getopt(argc, argv, "f:e:r:d:t:m:b:x:y:g:")) != -1)
         {
             switch(c)
             {
@@ -666,9 +527,25 @@ int main(int argc, char *argv[])
                     break;
                 case 'x':
                     az_step = atof(optarg);
+                    if (az_step < 0.01)
+                    {
+                        printf("error (option -x): can't use smaller than 0.01 deg resolution (hasn't been tested for that case)\n");
+                        usage();
+                        exit(1);
+                    }
                     break;
                 case 'y':
                     za_step = atof(optarg);
+                    if (az_step < 0.01)
+                    {
+                        printf("error (option -y): can't use smaller than 0.01 deg resolution (hasn't been tested for that case)\n");
+                        usage();
+                        exit(1);
+                    }
+                    break;
+                case 'g':
+                    use_tile_beam = 1;
+                    gridpoint = atoi(optarg);
                     break;
                 default:
                     usage();
@@ -681,6 +558,17 @@ int main(int argc, char *argv[])
     {
         usage();
         exit(1);
+    }
+    
+    // let user know that using the FEE2016 tile beam model will slow down the simulation
+    if (use_tile_beam == 1)
+    {
+        printf("Using FEE2016 tile beam model - this will slow down the computation significantly, but you can get antenna temperatures...\n");
+        printf("    grid point number provided: %d\n", gridpoint);
+    }
+    else
+    {
+        printf("Not using tile beam model - only computing array factor, but you cannot get antenna temperatures from this...\n");
     }
 
     // calculate target az,za and wavevector
@@ -985,23 +873,28 @@ int main(int argc, char *argv[])
         
         /* Write the output to a file */
         double af_power = 0.0;
-        //double cpu_power = 0.0;
+        double tile_power = 1.0;
         printf("Writing to file...\n");
         for (int i=0; i<itersize; i++)
         {
             af_power = pow(cuCabs(af_array[i]), 2); // need to use cuCabs given af_array is of cuComplexDouble type
             //cpu_power = pow(cabs(aftmp[i]), 2);
 
-            // compute the tile beam power and multiply
-            //tile_power = CalcMWABeam(subAz[i]-PI/2, subZA[i], freq, 'X', gridpoint, 1);
-            //fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power*tile_power);
-            fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power);
+            if (use_tile_beam == 1)
+            {
+                // calcaulte the tile beam power at (az,za) for a given frequency and sweet-spot
+                tile_power = CalcMWABeam(subAz[i]-PI/2, subZA[i], freq, 'X', gridpoint, 1);
+            }
+ 
+            if (i % 10000 == 0) {printf("\rWriting element %d/%d", i, itersize); fflush(stdout);}
+
+            fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power*tile_power);
             if (af_power > af_max) {af_max = af_power;}
             
             // integrate over sky
             omega_A = omega_A + sin(subZA[i]) * af_power * (za_step*DEG2RAD) * (az_step*DEG2RAD);
         }
-        printf("Done -- freeing intermediate host memory\n");
+        printf("\nDone -- freeing intermediate host memory\n");
         //free(aftmp);
         free(subAz);
         free(subZA);
