@@ -9,8 +9,7 @@ HDF5_INC=${HDF5_ROOT}/include
 BOOST_INC=${BOOST_ROOT}/include
 
 
-CXXFLAGS=-O3 -g -D_GET_JONES_2016_TEST -std=gnu++11 -lhdf5_cpp -lhdf5 -lboost_system -lboost_filesystem $(addprefix -I,$(HDF5_INC) $(BOOST_INC))
-LDFLAGS=$(addprefix -L,$(HDF5_LIB) $(BOOST_LIB))
+CXXFLAGS=-O3 -D_MWA_2016_BEAM_MODEL_ -std=gnu++11 $(addprefix -I,$(HDF5_INC) $(BOOST_INC))
 
 TARGETS = beam2016implementation.o mwa_beam_interface.o system.o
 
