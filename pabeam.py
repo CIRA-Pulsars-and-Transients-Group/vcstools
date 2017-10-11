@@ -17,6 +17,8 @@ from astropy.time import Time
 from astropy.io import fits
 import astropy.units as u
 from astropy.constants import c,k_B
+# use updated astropy ephemerides
+from astropy.utils import iers
 
 #utility and processing modules
 import os,sys
@@ -231,7 +233,7 @@ def genAZZA(start,stop,step,end=False):
 	return
     
 
-def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_tiles,theta_res,phi_res,coplanar,zenith,start,end,write):
+def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_tiles,theta_res,phi_res,coplanar,zenith,za_chunk,write):
 	"""
 	Primary function to calcaulte the array factor with the given information.
 
@@ -247,9 +249,7 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 	  phi_res - the azimuth resolution in degrees
 	  coplanar - whether or not to assume that the z-components of antenna locations is 0m
 	  zenith - force the pointing to be zenith (i.e. ZA = 0deg, Az = 0deg)
-	  start - the starting angle for the ZA band to calcualted across
-	  end - the end angle for the ZA band to be calculated across
-
+      za_chunk = list of ZA to compute array factor for
 	Return:
 	  results -  a list of lists cotaining [ZA, Az, beam power], for all ZA and Az in the given band
 	"""	
@@ -277,7 +277,7 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 	array_factor_max = -1
 
 	# for each ZA "pixel", 90deg inclusive
-	for za in genAZZA(start,end,np.radians(theta_res),end=lastrank):
+	for za in za_chunk:
 		# for each Az "pixel", 360deg not included
 		for az in genAZZA(0,2*np.pi,np.radians(phi_res)):
 			
@@ -407,42 +407,67 @@ else:
 
 # if the observation ID metafits file doesn't exist, get the master node to download it
 if rank == 0:
-	print "will use {0} processes".format(size)
-	print "gathering required data"
-	os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir,args.obsid))
+    print "will use {0} processes".format(size)
+    print "gathering required data"
+    os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir,args.obsid))
 
-	# for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
-	if args.zenith:
-		delays = [0]*16
-	else:
-		delays = get_delay_steps(args.obsid)[4]
+    # for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
+    if args.zenith:
+        delays = [0]*16
+    else:
+        delays = get_delay_steps(args.obsid)[4]
 
-	# same for obs time, master reads and then distributes
-	if args.time is None:
-		time = Time(get_obstime_duration(args.obsid)[0],format='gps',fdir=args.out_dir)
-	else:
-		time = Time(args.time,format='gps')
+    # same for obs time, master reads and then distributes
+    if args.time is None:
+        time = Time(get_obstime_duration(args.obsid)[0],format='gps',fdir=args.out_dir)
+    else:
+        time = Time(args.time,format='gps')
 
-	# get the tile locations from the metafits
-	xpos,ypos,zpos = getTileLocations(args.obsid,flags,fdir=args.out_dir)	
-	if args.coplanar:
-		zpos = np.zeros(len(xpos))
-	
+    # get the tile locations from the metafits
+    xpos,ypos,zpos = getTileLocations(args.obsid,flags,fdir=args.out_dir)	
+    if args.coplanar:
+        zpos = np.zeros(len(xpos))
+
+    # use updated astropy ephemerides
+    iers.IERS.iers_table = iers.IERS_A.open(iers.IERS_A_URL)
+
 # wait for the master node to gather the data
 comm.barrier()
 
+
+# figure out how many chunks to split up ZA into
+totalZAevals = (np.pi/2)/np.radians(tres)+1 #total number of ZA evaluations required
+assert totalZAevals >= size, "Total number of ZA evalutions must be >= the number of processors available"
+
+# iterate through the ZA range given the process rank
+#start = rank * np.radians(tres) * (totalZAevals//size)
+#end = (rank+1) * np.radians(tres) * (totalZAevals//size)
+#if rank == (size-1):
+#	end = np.pi/2 # give the last process anything that's left
+
+# calculate how many calculations this worker will do
+#numZA_calcs = (end-start)/np.radians(tres)
+#numAZ_calcs = 2*np.pi/np.radians(pres)
+#numWorker_calcs = numZA_calcs * numAZ_calcs
+#print "worker:",rank,"total calcs:",numWorker_calcs,"start ZA:",start,"/",np.degrees(start),"end ZA:"end,"/",np.degrees(end),
+
+
 if rank == 0:
+    # split the sky into ZA chunks based on the number of available processes 
+    za_array = np.array_split(np.radians(np.linspace(0,90,ntheta+1)), size)
+
 	# create the object that contains all the data from master
-	data = (delays,time,xpos,ypos,zpos)
+    data = (delays,time,xpos,ypos,zpos,za_array)
 elif rank != 0:
-	# create the data object, but leave it empty (will be filled by bcast call)
-	data = None
+    # create the data object, but leave it empty (will be filled by bcast call)
+    data = None
 
 # now broadcast the data from the master to the slaves
 data = comm.bcast(data,root=0)
 if data:
-	print "broadcast received by worker {0} successfully".format(rank)
-	delays,time,xpos,ypos,zpos = data
+    print "broadcast received by worker {0} successfully".format(rank)
+    delays,time,xpos,ypos,zpos,za = data
+    za_chunk = za[rank]
 else:
 	print "broadcast failed to worker {0}".format(rank)
 	print "!!! ABORTING !!!"
@@ -456,24 +481,8 @@ comm.barrier()
 oname = "{0}/{1}_{2}_{3:.2f}MHz_{4}_{5}.dat".format(args.out_dir,args.obsid,time.gps,args.freq/1e6,ra,dec)
 	
 
-# figure out how many chunks to split up ZA into
-totalZAevals = (np.pi/2)/np.radians(tres) #total number of ZA evaluations required
-assert totalZAevals >= size, "Total number of ZA evalutions must be >= the number of processors available"
-
-# iterate through the ZA range given the process rank
-start = rank * np.radians(tres) * (totalZAevals//size)
-end = (rank+1) * np.radians(tres) * (totalZAevals//size)
-if rank == (size-1):
-	end = np.pi/2 # give the last process anything that's left
-
-# calculate how many calculations this worker will do
-numZA_calcs = (end-start)/np.radians(tres)
-numAZ_calcs = 2*np.pi/np.radians(pres)
-numWorker_calcs = numZA_calcs * numAZ_calcs
-print "worker:",rank,"total calcs:",numWorker_calcs,"start ZA:",np.degrees(start),"end ZA",np.degrees(end)
-
 # create array factor for given ZA band and write to file
-beam_area = createArrayFactor(ra,dec,args.obsid,delays,time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,start,end,args.write)
+beam_area = createArrayFactor(ra,dec,args.obsid,delays,time,args.freq,args.efficiency,flags,tres,pres,args.coplanar,args.zenith,za_chunk,args.write)
 
 # collect results for the beam area calculation
 if rank != 0:
