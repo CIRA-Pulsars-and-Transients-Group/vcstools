@@ -14,7 +14,10 @@ if [ $n -eq 0 ]; then
 	echo "mv ${BASENAME}.0.dat ${FNAME}"
 	mv ${BASENAME}.0.dat ${FNAME}
 else
-	echo "concatenating ${n} files together..."
-	for i in $(eval echo "{0..$n}");do echo "concatenating file $i"; cat ${BASENAME}.${i}.dat >> $FNAME;done
+	echo "concatenating ${NPROCESSES} files together..."
+	for i in $(eval echo "{0..$n}");do 
+        echo "concatenating file $i" 
+        cat ${BASENAME}.${i}.dat >> $FNAME
+    done
 fi
 
