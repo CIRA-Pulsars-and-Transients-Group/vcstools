@@ -168,6 +168,8 @@ $showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q sav
 
 
 
+# Argument parsing
+
 parser = argparse.ArgumentParser(description="Simple script to help write the batch scripts required for running the tied-array beam simulations over multiple epochs")
 
 parser.add_argument("--tmin",type=int,help="GPS time for first evaluation")
@@ -184,7 +186,7 @@ parser.add_argument("--flagged",nargs='+',help="Flagged tiles (as in RTS flagged
 parser.add_argument("--ra",type=str,help="RAJ2000 of target")
 parser.add_argument("--dec",type=str,help="DECJ2000 of target (use = to assign option)") # only because of the old version of argparse Galaxy has can't handle negative arguments...
 
-parser.add_argument("--write",type=bool,help="Write output (True) or just report statistics (False)  [default: True]",default=True)
+parser.add_argument("--write",action='store_true',help="Write output files to disk")
 parser.add_argument("--odir",type=str,help="Output directory")
 
 args = parser.parse_args()
