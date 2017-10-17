@@ -339,52 +339,6 @@ def createArrayFactor(targetRA,targetDEC,obsid,delays,time,obsfreq,eff,flagged_t
 
 	
 
-#####################
-##  OPTION PARSING ##
-#####################
-
-parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA. 
-						This is an MPI-based simulation code and will use all available processes when run 
-						(i.e. there is no user choice in how many to use)""",\
-					formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-parser.add_argument("-o","--obsid",type=str,action='store',metavar="obsID",\
-			help="""Observation ID (used to figure out spatial configuration of array). 
-				Also used to retrieve observation start-time and duration.""",default=None)
-
-parser.add_argument("--flagged_tiles",type=str,nargs='+',action='store',metavar="tile",\
-			help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5",default=None)
-
-parser.add_argument("-p","--target",nargs=2,metavar=("ra","dec"),\
-			help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.sss dd\"mm\'ss.ssss",\
-			default=("00:00:00.0000","00:00:00.0000"))
-
-parser.add_argument("-t","--time",type=float,action='store',metavar="time",\
-			help="""The GPS time desired for beam evaluation. This will override whatever is read from the metafits.""",default=None)
-
-parser.add_argument("-f","--freq",type=float,action='store',metavar="frequency",help="The centre observing frequency for the observation (in Hz!)",default=184.96e6)
-
-parser.add_argument("-e","--efficiency",type=float,action='store',metavar="eta",help="Frequency and pointing dependent array efficiency",default=1)
-
-parser.add_argument("--grid_res",type=float,action='store',nargs=2,metavar=("theta_res","phi_res"),
-			help="""Resolution of the Azimuth (Az) and Zenith Angle (ZA) grid to be created in degrees. 
-				Be warned: setting these too small will result in a MemoryError and the job will die.""",default=(0.1,0.1))
-
-parser.add_argument("--coplanar",action='store_true',help="Assume the array is co-planar (i.e. height above array centre is 0 for all tiles)")
-
-parser.add_argument("--zenith",action='store_true',help="Assume zenith pointing (i.e  delays are 0), ZA = 0 and AZ = 0")
-
-parser.add_argument("--out_dir",type=str,action='store',help="Location (full path) to write the output data files",default=".")
-
-parser.add_argument("--write",action='store_true',
-			help="""Write the beam pattern to disk when done calculating. 
-				If this option is not passed, you will just get a '.stats' files containing basic information about simulation parameters and the calculated gain.""")
-
-# parse the arguments
-args = parser.parse_args()
-
-print args.target
-
 ###############
 ## Setup MPI ##
 ###############
@@ -392,13 +346,74 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-# small calculations and data gethering from arguments is fine and won't run into trouble by having multiple processes do it simultaneously
+
+def parse_options(comm):
+    #####################
+    ##  OPTION PARSING ##
+    #####################
+    parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA. 
+                            This is an MPI-based simulation code and will use all available processes when run 
+                            (i.e. there is no user choice in how many to use)""",\
+                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument("-o","--obsid",type=str,action='store',metavar="obsID",\
+                help="""Observation ID (used to figure out spatial configuration of array). 
+                    Also used to retrieve observation start-time and duration.""",default=None)
+
+    parser.add_argument("--flagged_tiles",type=str,nargs='+',action='store',metavar="tile",\
+                help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5",default=None)
+
+    parser.add_argument("-p","--target",nargs=2,metavar=("ra","dec"),\
+                help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.sss dd\"mm\'ss.ssss",\
+                default=("00:00:00.0000","00:00:00.0000"))
+
+    parser.add_argument("-t","--time",type=float,action='store',metavar="time",\
+                help="""The GPS time desired for beam evaluation. This will override whatever is read from the metafits.""",default=None)
+
+    parser.add_argument("-f","--freq",type=float,action='store',metavar="frequency",help="The centre observing frequency for the observation (in Hz!)",default=184.96e6)
+
+    parser.add_argument("-e","--efficiency",type=float,action='store',metavar="eta",help="Frequency and pointing dependent array efficiency",default=1)
+
+    parser.add_argument("--grid_res",type=float,action='store',nargs=2,metavar=("theta_res","phi_res"),
+                help="""Resolution of the Azimuth (Az) and Zenith Angle (ZA) grid to be created in degrees. 
+                    Be warned: setting these too small will result in a MemoryError and the job will die.""",default=(0.1,0.1))
+
+    parser.add_argument("--coplanar",action='store_true',help="Assume the array is co-planar (i.e. height above array centre is 0 for all tiles)")
+
+    parser.add_argument("--zenith",action='store_true',help="Assume zenith pointing (i.e  delays are 0), ZA = 0 and AZ = 0")
+
+    parser.add_argument("--out_dir",type=str,action='store',help="Location (full path) to write the output data files",default=".")
+
+    parser.add_argument("--write",action='store_true',
+                help="""Write the beam pattern to disk when done calculating. 
+                    If this option is not passed, you will just get a '.stats' files containing basic information about simulation parameters and the calculated gain.""")
+
+    args = None
+    try:
+        if comm.Get_rank() == 0:
+            # parse the arguments
+            args = parser.parse_args()
+    finally:
+        args = comm.bcast(args, root=0)
+
+    if args is None:
+        comm.Abort()
+
+    return args
+
+args = parse_options(comm)
+
+if rank == 0:
+    print args.target
+
+
+# small calculations and data gathering from arguments is fine and won't run into trouble by having multiple processes do it simultaneously
 ra = str(args.target[0]).replace('"','').replace("'","")
 dec = args.target[1].replace('"','').replace("'","")
 tres,pres = args.grid_res
 ntheta,nphi = 90/tres,360/pres
 
-if args.flagged_tiles == None:
+if args.flagged_tiles is None:
 	flags = []
 else:
 	flags = args.flagged_tiles
@@ -412,24 +427,28 @@ if rank == 0:
     os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir,args.obsid))
 
     # for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
+    print "getting delay steps from database"
     if args.zenith:
         delays = [0]*16
     else:
         delays = get_delay_steps(args.obsid)[4]
 
+    # download most recent IERS table if necessary
+    #print "updating astropy IERS table"
+    #iers_table = iers.IERS_A.open(iers.IERS_A_URL, cache=True)
+
     # same for obs time, master reads and then distributes
+    print "getting times"
     if args.time is None:
         time = Time(get_obstime_duration(args.obsid)[0],format='gps',fdir=args.out_dir)
     else:
         time = Time(args.time,format='gps')
 
     # get the tile locations from the metafits
+    print "getting tile locations from metafits file"
     xpos,ypos,zpos = getTileLocations(args.obsid,flags,fdir=args.out_dir)	
     if args.coplanar:
         zpos = np.zeros(len(xpos))
-
-    # use updated astropy ephemerides
-    iers.IERS.iers_table = iers.IERS_A.open(iers.IERS_A_URL)
 
 # wait for the master node to gather the data
 comm.barrier()
@@ -455,10 +474,11 @@ assert totalZAevals >= size, "Total number of ZA evalutions must be >= the numbe
 if rank == 0:
     # split the sky into ZA chunks based on the number of available processes 
     za_array = np.array_split(np.radians(np.linspace(0,90,ntheta+1)), size)
-
+    
 	# create the object that contains all the data from master
-    data = (delays,time,xpos,ypos,zpos,za_array)
-elif rank != 0:
+    #data = {'delays':delays, 'times':time, 'x':xpos, 'y':ypos, 'z':zpos, 'za_arr':za_array, 'ierstab':iers_table}
+    data = {'delays':delays, 'times':time, 'x':xpos, 'y':ypos, 'z':zpos, 'za_arr':za_array}
+else:
     # create the data object, but leave it empty (will be filled by bcast call)
     data = None
 
@@ -466,8 +486,13 @@ elif rank != 0:
 data = comm.bcast(data,root=0)
 if data:
     print "broadcast received by worker {0} successfully".format(rank)
-    delays,time,xpos,ypos,zpos,za = data
-    za_chunk = za[rank]
+    delays = data['delays']
+    time = data['times']
+    xpos = data['x']
+    ypos = data['y']
+    zpos = data['z']
+    za_chunk = data['za_arr'][rank]
+    #iers.IERS.iers_table = data['ierstab']
 else:
 	print "broadcast failed to worker {0}".format(rank)
 	print "!!! ABORTING !!!"
