@@ -10,11 +10,9 @@ def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,ef
     times = np.arange(tmin,tmax,step=step)
     times = np.append(times,tmax)
 
-    #thetares,phires = 0.01,0.01
-    #nnodes = 10
     nprocesses = 20*nnodes
-    #ra,dec = "05:34:31.973","+22:00:52.06"
     flags = " ".join(flaggedtiles)
+
 
     for i in range(len(times)-1):
         fname = "make_pabeam_{0}_{1:.2f}MHz.batch".format(times[i],freq/1e6)
@@ -34,7 +32,35 @@ def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,ef
             else:
                 f.write('echo "aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
                 f.write("aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
-            f.write("bash /group/mwaops/bmeyers/code/pabeam/concat.sh {0} {1} {2}\n".format(onamebase,onamebase+".dat",nprocesses))
+
+            # write the concatenation bash commands
+            concatstr= """
+BASENAME={0} # base name of the output files (everything before the .[rank].dat)
+FNAME={1} # name of output file
+
+if [ -f $FNAME ]; then
+    echo "found existing file ${{FNAME}}. Removing..."
+    rm -f $FNAME
+fi
+
+# cat the data from each file into 1 beam patten file
+n=$((nprocesses-1))
+if [ $n -eq 0 ]; then
+    echo "only 1 file created - just renaming..."
+    echo "mv ${{BASENAME}}.0.dat ${{FNAME}}"
+    mv ${{BASENAME}}.0.dat ${{FNAME}}
+else
+    echo "concatenating $nprocesses files together..."
+    for i in $(eval echo "{{0..$n}}");do 
+        echo "concatenating file $i" 
+        cat ${{BASENAME}}.${{i}}.dat >> $FNAME
+    done
+fi\n""".format(onamebase, onamebase+".dat")
+
+            #f.write("bash /group/mwaops/bmeyers/code/pabeam/concat.sh {0} {1} {2}\n".format(onamebase,onamebase+".dat",nprocesses))
+            f.write(concatstr)
+            
+            # remove the partial beam pattern files written by processes
             f.write("rm {0}\n".format(onamebase+".*.dat"))
 
 
@@ -54,8 +80,35 @@ def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,ef
         else:
             f.write('echo "aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
             f.write("aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
-        f.write("bash /group/mwaops/bmeyers/code/pabeam/concat.sh {0} {1} {2}\n".format(onamebase,onamebase+".dat",nprocesses))
+        
+        # write the concatenation bash commands
+        concatstr= """
+BASENAME={0} # base name of the output files (everything before the .[rank].dat)
+FNAME={1} # name of output file
+
+if [ -f $FNAME ]; then
+    echo "found existing file ${{FNAME}}. Removing..."
+    rm -f $FNAME
+fi
+
+# cat the data from each file into 1 beam patten file
+n=$((nprocesses-1))
+if [ $n -eq 0 ]; then
+    echo "only 1 file created - just renaming..."
+    echo "mv ${{BASENAME}}.0.dat ${{FNAME}}"
+    mv ${{BASENAME}}.0.dat ${{FNAME}}
+else
+    echo "concatenating $nprocesses files together..."
+    for i in $(eval echo "{{0..$n}}");do 
+        echo "concatenating file $i" 
+        cat ${{BASENAME}}.${{i}}.dat >> $FNAME
+    done
+fi\n""".format(onamebase, onamebase+".dat")
+        f.write(concatstr)
+        
+        # remove the partial beam pattern files written by processes
         f.write("rm {0}\n".format(onamebase+".*.dat"))
+
 
 
 
