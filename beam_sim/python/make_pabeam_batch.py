@@ -27,11 +27,11 @@ def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,ef
             # submit the next script with a dependency on this one
             f.write("sbatch --depend=afterany:{0} {1}\n".format("${SLURM_JOB_ID}","make_pabeam_{0}_{1}MHz.batch".format(times[i+1],freq/1e6)))  
             if write:
-                f.write('echo "aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write"\n')
-                f.write("aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write\n\n")
+                f.write('echo "aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write"\n')
+                f.write("aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write\n\n")
             else:
-                f.write('echo "aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
-                f.write("aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
+                f.write('echo "aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
+                f.write("aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
 
             # write the concatenation bash commands
             concatstr= """
@@ -75,11 +75,11 @@ fi\n""".format(onamebase, onamebase+".dat")
         f.write('ra=\'"{0}"\'\ndec=\'"{1}"\'\nflags="{2}"\ntres={3}\npres={4}\n'.format(ra,dec,flags,thetares,phires))
         f.write('obstime={0}\nodir="{1}"\n\n'.format(times[-1],odir))
         if write:
-            f.write('echo "aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write"\n')
-            f.write("aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write\n\n")
+            f.write('echo "aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write"\n')
+            f.write("aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write\n\n")
         else:
-            f.write('echo "aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
-            f.write("aprun -n ${nprocesses} python /group/mwaops/bmeyers/code/pabeam/pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
+            f.write('echo "aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
+            f.write("aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
         
         # write the concatenation bash commands
         concatstr= """
