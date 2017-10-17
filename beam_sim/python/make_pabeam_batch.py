@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 import numpy as np
+from astropy.time import Time
 import argparse
 import sys
-
+import os
 
 def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,eff,flaggedtiles,write,odir):
 
@@ -63,6 +64,9 @@ fi\n""".format(onamebase, onamebase+".dat")
             # remove the partial beam pattern files written by processes
             f.write("rm {0}\n".format(onamebase+".*.dat"))
 
+            
+            # Now write the showspec batch for this time
+            write_showspec_batch(times[i],obsid,ra,dec,freq,(90/thetares)+1,360/phires,onamebase+".dat")
 
     #write the last file without submitting the next one
     fname = "make_pabeam_{0}_{1:.2f}MHz.batch".format(times[-1],freq/1e6)
@@ -108,6 +112,57 @@ fi\n""".format(onamebase, onamebase+".dat")
         
         # remove the partial beam pattern files written by processes
         f.write("rm {0}\n".format(onamebase+".*.dat"))
+
+        # Now write the showspec batch for this time
+        write_showspec_batch(times[-1],obsid,ra,dec,freq,(90/thetares)+1,360/phires,onamebase+".dat")
+
+
+def write_showspec_batch(time,obsid,ra,dec,freq,ntheta,nphi,out):
+    fname = "showspec_{0}_{1:.2f}MHz.batch".format(time,freq/1e6)
+    oname = fname.replace(".batch",".out")
+    
+    unix = int(Time(int(time), format='gps').unix)
+    fstart = int(np.floor(freq/1e6))
+    fend = int(np.ceil(freq/1e6))
+
+    azcol = 0
+    zacol = 1
+    gaincol = 8
+
+    with open(fname,'w') as f:
+        f.write("#!/bin/bash -l\n\n#SBATCH --account=mwaops\n#SBATCH --cluster=galaxy\n#SBATCH --partition=workq\n#SBATCH --nodes=1\n#SBATCH --time=3:00:00\n")
+        f.write("#SBATCH --output={0}\n\n".format(oname))
+        f.write("maploc=/group/mwaops/PULSAR/src/gsm/skymaps\nshowspec=/group/mwaops/PULSAR/src/showspec/showspec\ncreatemap=/group/mwaops/PULSAR/src/gsm/create_skymap.sh\n\n")
+        
+        infostr = """
+obsid={0}    # observation ID
+ux={1}       # unix time for actual beam evalutation 
+gps={2}      # GPS time for the actual beam evaluation
+ra="{3}"   # RA of source
+dec="{4}"  # DEC of source
+
+freq={5:.2f}        # actual frequency (in MHz)
+freq_start={6}      # floor of $freq
+freq_end={7}        # ceiling of $freq
+file={8}            # output beam pattern file name\n\n""".format(obsid, unix, time, ra, dec, freq/1e6, fstart, fend, out)
+        
+        f.write(infostr)
+
+        checkstr = """
+# if the skymap doesn't already exist for the required frequency, make it...
+if [ ! -f ${maploc}/gsm_${freq}MHz_ni${freq}.out ]; then
+    $createmap $freq
+fi\n\n"""
+
+        f.write(checkstr)
+
+        runstr = """
+# now run showspec
+echo "$showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q save_map_fits=0 -q map_file_base=${{ux}}_ -q save_map_at_freq=${{freq}} -q freq_start=${{freq_start}} -q freq_end=${{freq_end}} -q cache_on=0 -q ant_cache_on=1 -q site=mwa -q ant_eff=0 -q binary_input=1 -q ant_rotation_deg=0.00 -q save_pattern_map_db=0 -p $maploc -q max_feko_theta=90 -q bradley=1 -q sources=1 -q MAX_THETA_COUNT={0} -q MAX_PHI_COUNT={1} -q phi_column_index={2} -q theta_column_index={3} -q gain_column_index={4}"
+
+$showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q save_map_fits=0 -q map_file_base=${{ux}}_ -q save_map_at_freq=${{freq}} -q freq_start=${{freq_start}} -q freq_end=${{freq_end}} -q cache_on=0 -q ant_cache_on=1 -q site=mwa -q ant_eff=0 -q binary_input=1 -q ant_rotation_deg=0.00 -q save_pattern_map_db=0 -p $maploc -q max_feko_theta=90 -q bradley=1 -q sources=1 -q MAX_THETA_COUNT={0} -q MAX_PHI_COUNT={1} -q phi_column_index={2} -q theta_column_index={3} -q gain_column_index={4}""".format(int(ntheta), int(nphi), azcol, zacol, gaincol)
+
+        f.write(runstr)
 
 
 
