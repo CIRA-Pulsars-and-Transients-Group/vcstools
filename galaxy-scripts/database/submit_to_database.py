@@ -353,6 +353,12 @@ maxfreq = float(max(channels))
 
 bandwidth = 30720000.
 
+#calc obstype
+if (maxfreq - minfreq) == 23:
+    obstype = 1
+else:
+    obstype = 2
+
 
 if args.bestprof:
     #check if the obs time is entire obs. The meta data will round down to the nearest 200 seconds
@@ -674,6 +680,14 @@ if args.bestprof:
 
 
 if args.pulsar and not args.bestprof:  
+    #calc sub-bands
+    subbands = 1
+    for b in range(len(channels)):
+        if b == 0:
+            continue
+        if not (channels[b] - channels[b-1]) == 1:
+            subbands = subbands + 1
+            
     if not incoh:
         cal_list = client.calibrator_list(web_address, auth)
         cal_already_created = False
@@ -693,16 +707,15 @@ if args.pulsar and not args.bestprof:
     try:
         temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))
     except:
-        #no obsid so creats a blank one and assumes the subbands are continuous
         client.detection_create(web_address, auth, 
                                 observationid = str(obsid),
                                 pulsar = str(pulsar),
                                 calibrator = int(cal_db_id),
-                                subband = 1,
+                                subband = int(subbands),
                                 incoherent = incoh,
-                                observation_type = '1')  
+                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                                observation_type = int(obstype))  
         temp_dict = client.detection_get(web_address, auth, observationid =str(obsid))  
-        subbands=1
     
     if not temp_dict:
         #no obsid so creats a blank one and assumes the subbands are continuous
@@ -710,11 +723,11 @@ if args.pulsar and not args.bestprof:
                                 observationid = str(obsid),
                                 pulsar = str(pulsar),
                                 calibrator = int(cal_db_id),
-                                subband = 1,
+                                subband = int(subbands),
                                 incoherent = incoh,
-                                observation_type = '1')  
-        temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))  
-        subbands=1
+                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                                observation_type = int(obstype))  
+        temp_dict = client.detection_get(web_address, auth, observationid = str(obsid)) 
     
     pulsar_dict_check = False
     for t in range(len(temp_dict)):
@@ -727,11 +740,11 @@ if args.pulsar and not args.bestprof:
                                 observationid = str(obsid),
                                 pulsar = str(pulsar),
                                 calibrator = int(cal_db_id),
-                                subband = 1,
+                                subband = int(subbands),
                                 incoherent = incoh,
-                                observation_type = '1')  
+                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                                observation_type = int(obstype))  
         temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))  
-        subbands=1
 
 #Archive files
 if args.archive:
