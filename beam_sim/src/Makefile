@@ -50,6 +50,8 @@ OBJECTS = $(FEE2016_OBJECTS) $(PABEAM_OBJECTS)
 
 TARGETS = pabeam_gpu_notile pabeam_gpu
 
+BIN_DIR = ../bin
+
 all: $(TARGETS)
 
 
@@ -89,3 +91,7 @@ dist-clean:
 	$(RM) pabeam_gpu
 	$(RM) pabeam_cpu
 	@$(MAKE) -C FEE2016/ clean
+
+install:
+	mkdir -p $(BIN_DIR)
+	cp $(TARGETS) $(BIN_DIR)
