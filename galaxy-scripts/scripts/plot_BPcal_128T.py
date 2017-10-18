@@ -124,8 +124,12 @@ if plot_raw:
     ch = range(0,N_ch)
 else:
     ch = zeros(N_ch)
+    # RTS now lists channels with correct frequency spacing, so we have to dynamically find what the channel widths are (BWM: 18 Oct 2017)
+    cw = abs(freq[0]-freq[1])
     for k in range(0,N_ch):
-        ch[k] = freq[k]/0.04
+        #ch[k] = freq[k]/0.04
+        ch[k] = freq[k]/cw
+        print ch[k]
 
 freq_idx = argsort(freq)
 
