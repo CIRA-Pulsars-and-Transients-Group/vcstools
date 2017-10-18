@@ -129,7 +129,7 @@ else:
     for k in range(0,N_ch):
         #ch[k] = freq[k]/0.04
         ch[k] = freq[k]/cw
-        print ch[k]
+        # print ch[k]
 
 freq_idx = argsort(freq)
 
