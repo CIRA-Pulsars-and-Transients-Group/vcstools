@@ -1,0 +1,60 @@
+MWA tied-array beam simulation code, for estimating the Gain and System Temperature for a given observation
+
+Note: it is currently designed to work on the Pawsey Galaxy cluster, which uses a SLURM based queuing system.
+
+
+-------
+PYTHON
+-------
+There is a MPI-enabled Python version of the beam simulation code which I advise you to use first (at the moment).
+It is located in the python/ subdirectory. There are template/helper scripts also included.
+
+To create the batch scripts which will call the simulation code, use:
+    
+    make_pabeam_batch.py
+
+which will create however many dependant batch jobs that the user's input requires. See the help for more details.
+
+For example, if you wanted to simulate the beam for Observation ID 1188439520 at GPS time 1188439827, 
+using 1 node (= 20 processes) at a frequency of 154.24MHz with the tied-array beam pointed at (11:07:34.46, -59:07:18.7), 
+the the following would be the command to create that batch scrpt:
+
+    make_pabeam_batch.py --tmin 1188439827 --tmax 1188439827 --step 1 --nodes 1 \
+         --obsid 1188439520 --freq 154.24e6 \
+         --flagged 1 2 4 3 5 8 11 13 18 21 22 23 24 26 31 42 46 53 69 76 75 77 81 82 83 84 89 90 92 95 110 120 121 122 123 124 125 126 127 \
+         --ra="11:07:34.46" --dec="-59:07:18.7" --write \
+         --odir /astro/mwaops/bmeyers/test
+
+where the --flagged option lists the tiles flagged as invalid in the RTS solution, --step tells the program how many iterations of the beam
+you want simulated between --tmin and --tmax, --write instructs the script to save the beam pattern to disk, 
+and --odir is the directory where you want the beam pattern to be written. 
+
+This command creates two batch scripts: 
+
+    make_pabeam_1188439827_154.24MHz.batch
+    showspec_1188439827_154.24MHz.batch
+
+which will compute the tied-array beam pattern and then integrate it w.r.t. a sky tempearture map. 
+
+
+If multiple make_pabeam*.batch scripts are written (because you asked for multiple iterations), then they know about each other 
+(in terms of dependencies), so you just submit the first one and the others will follow.
+
+The showpsec*.batch scripts are not implemented in this way, so you need to wait for each of the beam simulations to complete 
+before submitting the relevant showspec job.
+
+
+
+
+-------
+C/CUDA
+-------
+There is also a C/CUDA version, located in the src/ subdirectory. It is currently too slow due to how the tile-beam C++ code is implemented.
+To compile and install:
+
+    cd src
+    make
+    make install
+
+Use case is still a work in progress...
+
