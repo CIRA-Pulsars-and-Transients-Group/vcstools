@@ -190,6 +190,9 @@ parser.add_argument("-Z","--zapedges",action='store_true',help="Zap the fine cha
 # if so, how many?
 parser.add_argument("-n","--nzap",type=int,action='store',metavar="Nedge",help="Number of edge channels to remove from each side of a coarse channel. If given, but --zapedges is not then this argument is ignored.",default=20)
 
+# zap the middle channels?
+parser.add_argument("-m","--middle",action='store_true',help="Flag the center fine channels for each coarse channel?")
+
 # user-defined channels to zap (will be prioritised over edge channel zapping)
 parser.add_argument("-z",type=str,action='store',metavar="chan",nargs="+",help="Individual channels to zap")
 
