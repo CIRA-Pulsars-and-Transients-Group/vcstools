@@ -3,9 +3,9 @@
 """
 Script to work out flagging of channels in PRESTO and PSRCHIVE formats.
 
-Created: Bradley Meyers
-Version: 0.2
-Date: 9 Nov 2017
+Written by: Bradley Meyers
+Originally created: 6 Nov 2016
+Updated: 10 Nov 2017 (BWM)
 """
 
 
@@ -18,20 +18,23 @@ from operator import itemgetter
 
 
 def write_paz_file(ctf, fname):
+    # small function to handle the file-writing side of things
+    # checks if we can actually write, otherwise raises an error
     try:
         with open(fname, "w") as fileobj:
             for chan in ctf:
                 if chan is not None:
                    fileobj.write("{0}\n".format(chan))
     except IOError as err:
-        print "Couldn't open a file to write too"
+        print "Couldn't open a file to write to"
         raise
 
 
 
 def zap(r, p, channels, zapedges=False, nzap=20, zapmid=False, zaps=None, debug=False):
     """
-    Main function to handle zap formatting and output
+    Main function to take in the user's requested masking information and create a 
+    usable string and/or file containing the channels that need to be flagged.
     """
 	
     if channels[1] is not None:
@@ -64,6 +67,7 @@ def zap(r, p, channels, zapedges=False, nzap=20, zapmid=False, zaps=None, debug=
 
     # now figure out which channels we want to flag and discard the rest
     chans_to_flag = []
+    nzapped = 0
     for coarse_channel in splitchans:
         center_chan = coarse_channel[fine/2]
         left_edge_chans = coarse_channel[:nzap]
@@ -87,12 +91,12 @@ def zap(r, p, channels, zapedges=False, nzap=20, zapmid=False, zaps=None, debug=
         # the only other option is you asked for no edge of center channels to flagged,
         # so chans_to_flag should be empty
 
-   
 
     # For the paz file: need to just flatten everything out into one list 
     cchan_flags = []
-    for c in range(coarse):
-        cchan_flags.append(np.concatenate([x.flatten() for x in chans_to_flag[c]]))
+    if chans_to_flag != []: 
+        for c in range(coarse):
+            cchan_flags.append(np.concatenate([x.flatten() for x in chans_to_flag[c]]))
 
     # collapse it all into 1D
     p_ctf = np.array(cchan_flags).flatten()
@@ -198,12 +202,26 @@ if args.nchans and not args.n_coarse_fine:
     if args.debug:
         print "assuming 128 fine channels per coarse channel"
 else:
+    if args.debug:
+        print "assuming values from -C argument and ignoring -N value"
     channels = args.n_coarse_fine
+
+# check to make sure we can actually figure out how many channels we have and
+# how they are split up
+if channels is None:
+    if args.debug:
+        print "!! WARNING !! :: You didn't provide any way to compute the number of channels. Please use either the -N or -C options"
+        sys.exit(0)
 
 # check to make sure that if nzap is given but user has not elected 
 # to zap edges, we zap 0 edge channels
 if args.nzap and not args.zapedges:
     args.nzap = 0
+
+if args.zapedges is False and args.middle is False and args.z is None:
+    if args.debug:
+        print "!! WARNING !! :: No flagging requested (i.e. none of -Z, -z or -m were given). Aborting."
+        sys.exit(0)
 
 ## DO THE THING! ##
 zap(args.rfifind, args.paz, channels, args.zapedges, args.nzap, args.middle, args.z, args.debug)
