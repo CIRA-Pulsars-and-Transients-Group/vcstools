@@ -158,70 +158,70 @@ def zap(r, p, channels, zapedges=False, nzap=20, zapmid=False, zaps=None, debug=
 
 
 
+if __name__ == '__main__':
+    ## SETUP OPTIONS ##
+    parser = argparse.ArgumentParser(description="""Output the correctly formated MWA band edge channels and user-defined channels to remove for aliasing/RFI excision.\
+                             If no options are given, returns an empty string.""",\
+                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-## SETUP OPTIONS ##
-parser = argparse.ArgumentParser(description="""Output the correctly formated MWA band edge channels and user-defined channels to remove for aliasing/RFI excision.\
-						 If no options are given, returns an empty string.""",\
-					formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    # there should be two options for the channels, either:
+    # give me the total number of fine channels (and I'll assume there's 128 fine channels per coarse channel)
+    # OR 
+    # give me the number of coarse channels and the number of fine channels and I'll use that information to then calculate the intervals appropriate.
+    parser.add_argument("-N", "--nchans", action='store', type=int, metavar='Nchan', help="TOTAL number of frequency channels in data set. Assumes 128 fine channels  per coarse channel.", default=None)
+    parser.add_argument("-C", "--n_coarse_fine", action='store', type=int, nargs=2, metavar="Nchan", help="Number of coarse channels followed by the number of fine channels per coarse channel. This options overrides --nchans.", default=None)
 
-# there should be two options for the channels, either:
-# give me the total number of fine channels (and I'll assume there's 128 fine channels per coarse channel)
-# OR 
-# give me the number of coarse channels and the number of fine channels and I'll use that information to then calculate the intervals appropriate.
-parser.add_argument("-N", "--nchans", action='store', type=int, metavar='Nchan', help="TOTAL number of frequency channels in data set. Assumes 128 fine channels  per coarse channel.", default=None)
-parser.add_argument("-C", "--n_coarse_fine", action='store', type=int, nargs=2, metavar="Nchan", help="Number of coarse channels followed by the number of fine channels per coarse channel. This options overrides --nchans.", default=None)
+    # zap the edge fine channels?
+    parser.add_argument("-Z", "--zapedges", action='store_true', help="Zap the fine channel edges of the coarse channels.")
 
-# zap the edge fine channels?
-parser.add_argument("-Z", "--zapedges", action='store_true', help="Zap the fine channel edges of the coarse channels.")
+    # if so, how many?
+    parser.add_argument("-n", "--nzap", type=int, action='store', metavar="Nedge", help="Number of edge channels to remove from each side of a coarse channel. If given, but --zapedges is not then this argument is ignored.", default=20)
 
-# if so, how many?
-parser.add_argument("-n", "--nzap", type=int, action='store', metavar="Nedge", help="Number of edge channels to remove from each side of a coarse channel. If given, but --zapedges is not then this argument is ignored.", default=20)
+    # zap the middle channels?
+    parser.add_argument("-m", "--middle", action='store_true', help="Flag the center fine channels for each coarse channel?")
 
-# zap the middle channels?
-parser.add_argument("-m", "--middle", action='store_true', help="Flag the center fine channels for each coarse channel?")
+    # user-defined channels to zap (will be prioritised over edge channel zapping)
+    parser.add_argument("-z", type=str, action='store', metavar="chan", nargs="+", help="Individual channels to zap")
 
-# user-defined channels to zap (will be prioritised over edge channel zapping)
-parser.add_argument("-z", type=str, action='store', metavar="chan", nargs="+", help="Individual channels to zap")
+    # what version of output do you want? PRESTO and/or PSRCHIVE
+    parser.add_argument("-r", "--rfifind", action='store_true', help="Output to screen the edge channels in a format readable by the PRESTO rfifind routine", default=False)
+    parser.add_argument("-p", "--paz", action='store', metavar="filename", type=str, help="Output channels for PSRCHIVE paz routine into the given file, using paz's '-k filename' option")
 
-# what version of output do you want? PRESTO and/or PSRCHIVE
-parser.add_argument("-r", "--rfifind", action='store_true', help="Output to screen the edge channels in a format readable by the PRESTO rfifind routine", default=False)
-parser.add_argument("-p", "--paz", action='store', metavar="filename", type=str, help="Output channels for PSRCHIVE paz routine into the given file, using paz's '-k filename' option")
+    # be verbose about the actions takens
+    #parser.add_argument("-v", "--verbose", action='store_true', help="Use verbose mode: will tell you each step what I'm doing, but this will mean you can't easily just pipe the ouput with back-ticks")
+    parser.add_argument("--debug", action='store_true', help="Debug mode. Provides additional information on top of normal output (mainly for hunting down errors).")
 
-# be verbose about the actions takens
-#parser.add_argument("-v", "--verbose", action='store_true', help="Use verbose mode: will tell you each step what I'm doing, but this will mean you can't easily just pipe the ouput with back-ticks")
-parser.add_argument("--debug", action='store_true', help="Debug mode. Provides additional information on top of normal output (mainly for hunting down errors).")
-
-args = parser.parse_args()
+    args = parser.parse_args()
 
 
-   
-# check to make sure that the channels variable is formatted correctly, 
-# no matter the input (should be a tuple/iterable)
-if args.nchans and not args.n_coarse_fine:
-    channels = (args.nchans, None)
-    if args.debug:
-        print "assuming 128 fine channels per coarse channel"
-else:
-    if args.debug:
-        print "assuming values from -C argument and ignoring -N value"
-    channels = args.n_coarse_fine
+       
+    # check to make sure that the channels variable is formatted correctly, 
+    # no matter the input (should be a tuple/iterable)
+    if args.nchans and not args.n_coarse_fine:
+        channels = (args.nchans, None)
+        if args.debug:
+            print "assuming 128 fine channels per coarse channel"
+    else:
+        if args.debug:
+            print "assuming values from -C argument and ignoring -N value"
+        channels = args.n_coarse_fine
 
-# check to make sure we can actually figure out how many channels we have and
-# how they are split up
-if channels is None:
-    if args.debug:
-        print "!! WARNING !! :: You didn't provide any way to compute the number of channels. Please use either the -N or -C options"
-        sys.exit(0)
+    # check to make sure we can actually figure out how many channels we have and
+    # how they are split up
+    if channels is None:
+        if args.debug:
+            print "!! WARNING !! :: You didn't provide any way to compute the number of channels. Please use either the -N or -C options"
+            sys.exit(0)
 
-# check to make sure that if nzap is given but user has not elected 
-# to zap edges, we zap 0 edge channels
-if args.nzap and not args.zapedges:
-    args.nzap = 0
+    # check to make sure that if nzap is given but user has not elected 
+    # to zap edges, we zap 0 edge channels
+    if args.nzap and not args.zapedges:
+        args.nzap = 0
 
-if args.zapedges is False and args.middle is False and args.z is None:
-    if args.debug:
-        print "!! WARNING !! :: No flagging requested (i.e. none of -Z, -z or -m were given). Aborting."
-        sys.exit(0)
+    if args.zapedges is False and args.middle is False and args.z is None:
+        if args.debug:
+            print "!! WARNING !! :: No flagging requested (i.e. none of -Z, -z or -m were given). Aborting."
+            sys.exit(0)
 
-## DO THE THING! ##
-zap(args.rfifind, args.paz, channels, args.zapedges, args.nzap, args.middle, args.z, args.debug)
+    ## DO THE THING! ##
+    zap(args.rfifind, args.paz, channels, args.zapedges, args.nzap, args.middle, args.z, args.debug)
