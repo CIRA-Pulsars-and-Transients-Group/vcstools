@@ -359,26 +359,20 @@ class RTScal(object):
 ##################
 ## END OF CLASS ##
 ##################
+if __name__ == '__main__':
+    ####################
+    ## OPTION PARSING ##
+    ####################
+    parser = argparse.ArgumentParser(description="Calibration script for creating RTS configuration files in the VCS pulsar pipeline")
 
-####################
-## OPTION PARSING ##
-####################
-parser = argparse.ArgumentParser(description="Calibration script for creating RTS configuration files in the VCS pulsar pipeline")
+    parser.add_argument("-o", "--obs", type=int, metavar="OBSID", help="Observation ID of target.", required=True)
+    parser.add_argument("-O", "--cal_obs", type=int, metavar="CAL_OBSID", help="Calibrator observation ID for the target observation. \
+                                                                        Can be the same as -o/--obs if using in-beam vsibilities.", required=True)
+    parser.add_argument("--rts_in_file", type=str, help="Path to the base RTS configuration file - created by write_rts_in_file.py", required=True)
+    parser.add_argument("--rts_output_dir", type=str, help="Parent directory where you want the /rts directory and /batch directory to be created. \
+                                                    ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.", default=None)
+    parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
+    args = parser.parse_args()
 
-parser.add_argument("-o", "--obs", type=int, metavar="OBSID", help="Observation ID of target.", required=True)
-parser.add_argument("-O", "--cal_obs", type=int, metavar="CAL_OBSID", help="Calibrator observation ID for the target observation. \
-                                                                    Can be the same as -o/--obs if using in-beam vsibilities.", required=True)
-parser.add_argument("--rts_in_file", type=str, help="Path to the base RTS configuration file - created by write_rts_in_file.py", required=True)
-parser.add_argument("--rts_output_dir", type=str, help="Parent directory where you want the /rts directory and /batch directory to be created. \
-                                                ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.", default=None)
-parser.add_argument("--no_submit", action='store_true', help="Switch to make the program only write the RTS config scripts and not submit them")
-args = parser.parse_args()
-
-# check whether to submit jobs to queue
-if args.no_submit:
-    submit = False
-else:
-    submit = True
-
-calobj = RTScal(args.obs, args.cal_obs, args.rts_in_file, args.rts_output_dir, submit)
-calobj.run()
+    calobj = RTScal(args.obs, args.cal_obs, args.rts_in_file, args.rts_output_dir, submit)
+    calobj.run()
