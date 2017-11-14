@@ -17,16 +17,16 @@ import sys
 import numpy as np
 import re
 import argparse
+from astropy.io import fits
 from process_vcs import submit_slurm
 from mdir import mdir
 from mwa_metadb_utils import getmeta
 from itertools import groupby
 from operator import itemgetter
+import distutils.spawn
+import subprocess
+import glob
 
-
-#################################
-## CALIBRATION CONTAINER CLASS ##
-#################################
 class RTScal(object):
     """ 
     Class to contain calibration information, create and submit RTS calibration jobs.
@@ -357,24 +357,279 @@ class RTScal(object):
         print "Done!"
 
 
+class BaseRTSconfig(object):
+    """
+    A class to hold the base information for a given RTS configuration file.
+    """
 
-##################
-## END OF CLASS ##
-##################
+    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir, outdir, offline=False):
+        self.obsid = obsid # target observation ID
+        self.cal_obsid = cal_obsid # calibrator observation ID
+        self.offline = offline # switch to decide if offline correlated data or not
+        self.utctime = None # start UTC time
+        self.nfine_chan = None # number of fine channels
+        self.fine_cbw = None # fine channel bandwidth
+        self.corr_dump_time = None # correaltor dump times (i.e. integration time)
+        self.n_corr_dumps_to_average = None # number of integration times to use for calibration
+        self.PB_HA = None # primary beam HA
+        self.PB_DEC = None # primary beam Dec
+        self.freq_base = None # frequency base for RTS
+        self.JD = None # time base for RTS
+        self.metafits_RTSform = None # modified metafits file name for RTS
+        self.ArrayPositionLat = -26.70331940 # MWA latitude
+        self.ArrayPositionLong = 116.6708152 # MWA longitude
+        self.base_str = None # base string to be written to file, will be editted by RTScal
+
+        # Check to make sure paths and files exist:
+        # First, check that the actual data directory exists
+        if os.path.isdir(datadir):
+            self.data_dir = os.path.abspath(datadir)
+        else:
+            print "Given data directory doesn't exist. Aborting."
+            sys.exit(1)
+        
+        # Then check if the specified output directory exists
+        if outdir is None:
+            # this is the default
+            self.output_dir = "/group/mwaops/vcs/{0}/cal/{1}/rts".format(self.obsid, self.cal_obsid)
+            mdir(self.output_dir, "RTS")
+        else:
+            # mdir handles if the directory already exists
+            self.output_dir = os.path.abspath(outdir + "/rts")
+            print "non standard RTS output path", self.output_dir
+            mdir(self.output_dir, "RTS")
+        
+        # Then check that the metafits file exists
+        if os.path.isfile(metafits) is False:
+            # file doesn't exist
+            print "Given metafits file does not exist. Aborting."
+            sys.exit(1)
+        elif "_ppds" not in metafits:
+            # file doesn't have the correct naming convention
+            print "Looks like you have an old-style metafits. You'll need to download the new version, which is named like: {0}_metafits_ppds.fits. Aborting.".format(obsid)
+            sys.exit(1)
+        else:
+            self.metafits = os.path.abspath(metafits)
+
+        # the check that the source list exists
+        if os.path.isfile(srclist) is False:
+            # file doesn't exist
+            print "Given source list file does not exist. Aborting."
+            sys.exit(1)
+        else:
+            self.source_list = os.path.abspath(srclist)
+
+
+
+        # set some RTS flags based on if we have offline correlated data or not
+        if self.offline:
+            self.useCorrInput = 1
+            self.readDirect = 0
+        else:
+            self.useCorrInput = 0
+            self.readDirect = 1
+
+
+    def get_info_from_data_header(self):
+        # first determine the UTC time from the file name
+        file_glob = "{0}/*_gpubox*.fits".format(self.data_dir)
+        files = sorted(glob.glob(file_glob))
+        len_files = len(files)
+        if len_files == 0:
+            print "No *_gpubox*.fits files found in {0}. Aborting.".format(self.data_dir)
+            sys.exit(1)
+        elif len_files % 24 != 0:
+            print "Number of *_gpubox*.fits files is not divisible by 24!?. Aborting."
+            sys.exit(1)
+
+        first_file = files[0]
+        self.utctime = os.path.splitext(os.path.basename(first_file))[0].split("_")[1]
+
+
+        if self.offline is False:
+            # now figure out how much data we have in total by counting the number of data HDUs
+            # then open the header to access the frequency spacing and inetgration times
+            hdulist = fits.open(first_file)
+            nfine_chan = int(hdulist[1].header['NAXIS2'])
+            inttime = float(hdulist[1].header['INTTIME'])
+
+            # coarse channel BW is 1.28 MHz
+            self.fine_cbw = 1.28/nfine_chan 
+            self.nfine_chan = nfine_chan
+
+            # the correlator dump time is whatever is in the header
+            self.corr_dump_time = inttime
+
+            ngroups = len_files/24
+            fgrouped = np.array(np.array_split(files, ngroups))
+            ndumps = 0
+            for item in fgrouped[:,0]:
+                # count how many units are present, subtract one (primary HDU)
+                ndumps += len(fits.open(item)) - 1
+
+            # use all of the data to calibrate
+            # TODO: the RTS currently (14 Nov 2017) dies when using more than 1 set of visibilities
+            self.n_dumps_to_average = ndumps
+
+        else:
+            # we have to figure out how much data has been correlated and what the frequency/time resolution is
+            # offline correlated data don't have a primary HDU, so we get the info from the first header
+            hdulist = fits.open(first_file)
+            nfine_chan = int(hdulist[0].header['NAXIS2'])
+            inttime = float(hdulist[0].header['INTTIME'])
+
+            self.fine_cbw = 1.28/nfine_chan
+            self.nfine_chan = nfine_chan
+            self.corr_dump_time = inttime
+            
+            # for offline correlation, each file is one integration time - there has been no concatenation
+            # TODO: this assumes that the offline correlator ALWAYS produces 1 second FITS files
+            ndumps = len(fits.open(first_file)) * len_files/24
+            self.n_dumps_to_average = ndumps
+
+
+    def construct_base_string(self):
+        # get observation information from database
+        obsinfo = getmeta(service='obs', params={'obs_id':str(self.obsid)})
+        
+        # get the RA/Dec pointing for the primary beam
+        ra_pointing_degs = obsinfo['metadata']['ra_pointing']
+        dec_pointing_degs = obsinfo['metadata']['dec_pointing']
+
+        # convert times using our timeconvert and get LST and JD 
+        # TODO: need to make this not have to call an external script
+        timeconvert = distutils.spawn.find_executable("timeconvert.py")
+        cmd = "{0} --datetime={1}".format(timeconvert, self.utctime)
+        print cmd
+        time_cmd = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+
+        for line in time_cmd.stdout:
+            if "LST" in line:
+                lststring,lstflag = line.split()
+                hh,mm,ss = lststring.split(":")
+
+            if "JD" in line:
+                jdflag,jd = line.split()
+
+        lst_in_hours = float(hh) + float(mm) / 60.0 + float(ss) / 60.0**2
+
+        # set the HA of the image centre to the primary beam HA
+        self.JD = jd
+        PB_HA_HOURS = (ra_pointing_degs / 360.0) * 24.0
+        self.PB_HA = lst_in_hours - PB_HA_HOURS
+        self.PB_DEC = dec_pointing_degs
+
+        print " * Primary beam: HA = {0} hrs, Dec = {1} deg".format(self.PB_HA, self.PB_DEC)
+        print " * JD = {0}".format(self.JD)
+        print " * LST = {0}:{1}:{2} = {3} hrs".format(hh, mm, ss, lst_in_hours)
+
+        # get the lowest frequency channel
+        freqs = obsinfo['rfstreams']['0']['frequencies']
+        start_channel = freqs[0]
+
+        self.freq_base = start_channel * 1.28e6 - 0.64e6 + 15e3 # frequency base in Hz
+        self.freq_base /= 1e6 # convert to MHz
+
+        print " * Frequency lower edge = {0} MHz".format(self.freq_base)
+
+        # make metafits file formatted for RTS
+        self.metafits_RTSform = self.metafits.split("_metafits_ppds.fits")[0]
+
+
+        file_str = """
+        ReadAllFromSingleFile=
+        BaseFilename={0}/*_gpubox
+        ReadGpuboxDirect={1}
+        UseCorrelatorInput={2}
+
+        ReadMetafitsFile=1
+        MetafitsFilename={3}
+
+        DoCalibration=
+        doMWArxCorrections=1
+        doRawDataCorrections=1
+        doRFIflagging=0
+        useFastPrimaryBeamModels=1
+        generateDIjones=1
+        applyDIcalibration=1
+        UsePacketInput=0
+        UseThreadedVI=1
+
+        ObservationFrequencyBase={4}
+        ObservationTimeBase={5}
+        ObservationPointCentreHA={6}
+        ObservationPointCentreDec={7}
+        ChannelBandwidth={8}
+        NumberOfChannels={9}
+
+        CorrDumpsPerCadence={10}
+        CorrDumpTime={11}
+        NumberOfIntegrationBins=3
+        NumberOfIterations=1
+
+        StartProcessingAt=0
+
+        ArrayPositionLat={12}
+        ArrayPositionLong={13}
+        ArrayNumberOfStations=128
+
+        ArrayFile=
+
+        SourceCatalogueFile={14}
+        NumberOfCalibrators=1
+        NumberOfSourcesToPeel=0
+        calBaselineMin=20.0
+        calShortBaselineTaper=40.0
+        FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir), \
+                                        self.readDirect, \
+                                        self.useCorrInput, \
+                                        self.metafits_RTSform, \
+                                        self.freq_base, \
+                                        self.JD, \
+                                        self.PB_HA, \
+                                        self.PB_DEC, \
+                                        self.fine_cbw, \
+                                        self.nfine_chan, \
+                                        self.n_dumps_to_average, \
+                                        self.corr_dump_time, \
+                                        self.ArrayPositionLat, \
+                                        self.ArrayPositionLong, \
+                                        self.source_list)
+
+
+
+        return file_str
+
+
+    def run(self):
+        self.get_info_from_data_header()
+        self.base_str = self.construct_base_string()
+
+
+
 if __name__ == '__main__':
     ####################
     ## OPTION PARSING ##
     ####################
     parser = argparse.ArgumentParser(description="Calibration script for creating RTS configuration files in the VCS pulsar pipeline")
 
-    parser.add_argument("-o", "--obs", type=int, metavar="OBSID", help="Observation ID of target.", required=True)
-    parser.add_argument("-O", "--cal_obs", type=int, metavar="CAL_OBSID", help="Calibrator observation ID for the target observation. \
-                                                                        Can be the same as -o/--obs if using in-beam vsibilities.", required=True)
-    parser.add_argument("--rts_in_file", type=str, help="Path to the base RTS configuration file - created by write_rts_in_file.py", required=True)
+    parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target.", required=True)
+    parser.add_argument("-O", "--cal_obsid", type=int, help="Calibrator observation ID for the target observation. \
+                                                                        Can be the same as -o/--obs if using in-beam visibilities.", required=True)
+    parser.add_argument("-m", "--metafits", type=str, help="Path to the relevant calibration observation metafits file.", required=True)
+    parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list.", required=True)
+    
+    #parser.add_argument("--rts_in_file", type=str, help="Path to the base RTS configuration file - created by write_rts_in_file.py", required=True)
+    parser.add_argument("--gpubox_dir", type=str, help="Where the *_gpubox*.fits files are located")
+
     parser.add_argument("--rts_output_dir", type=str, help="Parent directory where you want the /rts directory and /batch directory to be created. \
                                                     ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.", default=None)
+    parser.add_argument("--offline", action='store_true', help="Tell the RTS to read calibrator data in the offline correlated data format.")
     parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
     args = parser.parse_args()
 
-    calobj = RTScal(args.obs, args.cal_obs, args.rts_in_file, args.rts_output_dir, submit)
-    calobj.run()
+    baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist, args.gpubox_dir, args.rts_output_dir, args.offline)
+    baseRTSconfig.run()
+
+    #calobj = RTScal(args.obs, args.cal_obsid, args.rts_in_file, args.rts_output_dir, args.submit)
+    #calobj.run()
