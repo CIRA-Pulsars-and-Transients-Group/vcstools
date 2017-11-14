@@ -35,7 +35,9 @@ UTILITY_TARGETS = zapchan.py\
 	calc_ephem.py \
 	check_disk_usage.sh \
 	check_quota.sh \
-	plot_tilebeams.py
+	plot_tilebeams.py \
+	mdir.py \
+	mwa_metadb_utils.py
 
 TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS)) $(addprefix database/, $(DATABASE_TARGETS)) $(addprefix utils/, $(UTILITY_TARGETS))
 
