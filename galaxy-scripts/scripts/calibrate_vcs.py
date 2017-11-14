@@ -17,7 +17,9 @@ import sys
 import numpy as np
 import re
 import argparse
-from process_vcs import submit_slurm, getmeta, mdir
+from process_vcs import submit_slurm
+from mdir import mdir
+from mwa_metadb_utils import getmeta
 from itertools import groupby
 from operator import itemgetter
 
