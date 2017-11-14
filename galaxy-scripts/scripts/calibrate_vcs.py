@@ -457,7 +457,6 @@ class BaseRTSconfig(object):
             self.fine_cbw = 1.28/nfine_chan 
             self.nfine_chan = nfine_chan
 
-<<<<<<< HEAD
             # the correlator dump time is whatever is in the header
             self.corr_dump_time = inttime
 
@@ -597,8 +596,6 @@ class BaseRTSconfig(object):
                                         self.ArrayPositionLong, \
                                         self.source_list)
 
-
-
         return file_str
 
 
@@ -608,18 +605,13 @@ class BaseRTSconfig(object):
 
 
 
-=======
-##################
-## END OF CLASS ##
-##################
->>>>>>> ed65b95009a550e892ca34f417763e42866e3a06
+
 if __name__ == '__main__':
     ####################
     ## OPTION PARSING ##
     ####################
     parser = argparse.ArgumentParser(description="Calibration script for creating RTS configuration files in the VCS pulsar pipeline")
 
-<<<<<<< HEAD
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target.", required=True)
     parser.add_argument("-O", "--cal_obsid", type=int, help="Calibrator observation ID for the target observation. \
                                                                         Can be the same as -o/--obs if using in-beam visibilities.", required=True)
@@ -640,16 +632,4 @@ if __name__ == '__main__':
 
     #calobj = RTScal(args.obs, args.cal_obsid, args.rts_in_file, args.rts_output_dir, args.submit)
     #calobj.run()
-=======
-    parser.add_argument("-o", "--obs", type=int, metavar="OBSID", help="Observation ID of target.", required=True)
-    parser.add_argument("-O", "--cal_obs", type=int, metavar="CAL_OBSID", help="Calibrator observation ID for the target observation. \
-                                                                        Can be the same as -o/--obs if using in-beam vsibilities.", required=True)
-    parser.add_argument("--rts_in_file", type=str, help="Path to the base RTS configuration file - created by write_rts_in_file.py", required=True)
-    parser.add_argument("--rts_output_dir", type=str, help="Parent directory where you want the /rts directory and /batch directory to be created. \
-                                                    ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.", default=None)
-    parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
-    args = parser.parse_args()
 
-    calobj = RTScal(args.obs, args.cal_obs, args.rts_in_file, args.rts_output_dir, submit)
-    calobj.run()
->>>>>>> ed65b95009a550e892ca34f417763e42866e3a06
