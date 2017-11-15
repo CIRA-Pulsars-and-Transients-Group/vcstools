@@ -38,17 +38,17 @@ class RTScal(object):
     call after initialising a RTScal object.
     """
 
-    def __init__(self, obsid=None, cal_obsid=None, rts_in_file=None, rts_out_dir=None, submit=True):
+    def __init__(self, RTSbase, submit=False):
         # initilaise class attributes with user-specified options
-        self.obsid     = obsid
-        self.cal_obsid = cal_obsid
+        self.obsid     = RTSbase.obsid
+        self.cal_obsid = RTSbase.cal_obsid
 
-        # check that provided RTS config script exists, else abort
-        if os.path.isfile(rts_in_file):
-            self.rts_in_file = rts_in_file
-        else:
-            print "!!ERROR!! The base RTS configuration script you provided does not exist! Aborting."
-            sys.exit(1)
+#        # check that provided RTS config script exists, else abort
+#        if os.path.isfile(rts_in_file):
+#            self.rts_in_file = rts_in_file
+#        else:
+#            print "!!ERROR!! The base RTS configuration script you provided does not exist! Aborting."
+#            sys.exit(1)
             
         # initilaise attributes to None and then assign values later
         self.channels     = None
@@ -57,22 +57,30 @@ class RTScal(object):
         self.picket_fence = None
         
         # Set up the product directory according to options passed
-        if rts_out_dir is not None:
-            # non-standard output path
-            print "!!WARNING!! You are not using the standard directory structure. Be sure you know what you're doing..."
-            self.rts_out_dir = rts_out_dir
-            self.batch_dir   = "{0}/batch".format(self.rts_out_dir)
-            mdir(self.batch_dir, "Batch")
-        else:
-            # use the default locations:
-            self.rts_out_dir = "/group/mwaops/vcs/{0}/cal/{1}".format(self.obsid, self.cal_obsid)
-            self.batch_dir   = "/group/mwaops/vcs/{0}/batch".format(self.obsid)
-            mdir(self.batch_dir, "Batch") # should have already been created, but just in case...
+        self.rts_out_dir = RTSbase.output_dir
+        self.batch_dir = RTSbase.batch_dir
+#       if rts_out_dir is not None:
+#           # non-standard output path
+#           print "!!WARNING!! You are not using the standard directory structure. Be sure you know what you're doing..."
+#           self.rts_out_dir = rts_out_dir
+#           self.batch_dir   = "{0}/batch".format(self.rts_out_dir)
+#           mdir(self.batch_dir, "Batch")
+#       else:
+#           # use the default locations:
+#           self.rts_out_dir = "/group/mwaops/vcs/{0}/cal/{1}".format(self.obsid, self.cal_obsid)
+#           self.batch_dir   = "/group/mwaops/vcs/{0}/batch".format(self.obsid)
+#           mdir(self.batch_dir, "Batch") # should have already been created, but just in case...
+#
+#        # re-define the rts_out_dir attribute to be the directory where the solutions are written
+#        self.rts_out_dir = "{0}/rts".format(self.rts_out_dir)
+#        mdir(self.rts_out_dir, "RTS") 
 
-        # re-define the rts_out_dir attribute to be the directory where the solutions are written
-        self.rts_out_dir = "{0}/rts".format(self.rts_out_dir)
-        mdir(self.rts_out_dir, "RTS") 
+        # use the channels from RTSbase rather than re-query the database
+        self.channels = RTSbase.channels
 
+        # use the base string from RTS base as a template
+        self.base_str = RTSbase.base_str
+        
         # setup the basic body for all SLURM scripts
         self.script_body = []
         self.script_body.append("module load cudatoolkit") # need CUDA for RTS
@@ -91,7 +99,7 @@ class RTScal(object):
         print "Summary of Calibration object contents:"
         print "\tObservation ID:             ",self.obsid
         print "\tCalibrator Observation ID:  ",self.cal_obsid
-        print "\tBase RTS configuration file:",self.rts_in_file
+        #print "\tBase RTS configuration file:",self.rts_in_file
         print "\tRTS output directory:       ",self.rts_out_dir
         print "\tBatch directory:            ",self.batch_dir
         print "\tObserved absolute channels: ",self.channels
@@ -123,49 +131,49 @@ class RTScal(object):
             self.picket_fence = True
 
 
-    def get_obs_channels(self):
-        """
-        For this observation ID, fetch the channels from the database or the metafile.
-        If the metafile does not exist in the output directory, then a database query 
-        is sent and a metafile is written for easier/faster access in future.
-        """
-        metafile = "{0}/{1}.meta".format(self.rts_out_dir, self.cal_obsid)
-        metafile_exists = False
+#    def get_obs_channels(self):
+#        """
+#        For this observation ID, fetch the channels from the database or the metafile.
+#        If the metafile does not exist in the output directory, then a database query 
+#        is sent and a metafile is written for easier/faster access in future.
+#        """
+#        metafile = "{0}/{1}.meta".format(self.rts_out_dir, self.cal_obsid)
+#        metafile_exists = False
+#
+#        channels = None
+#        if os.path.isfile(metafile):
+#            print "Found observation metafile: {0}".format(metafile)
+#            with open(metafile,'rb') as m:
+#                for line in m.readlines():
+#                    if line.startswith("channels"):
+#                        channels = line.strip().split(",")[1:]
+#
+#        if channels == None:
+#            print "Channels keyword not found in metafile or metafile doesn't exits."
+#        else:
+#            metafile_exists = True
+#            channels = [int(c) for c in channels]
+#
+#        if metafile_exists == False:
+#            print "Querying the database for calibrator obs ID {0}...".format(self.cal_obsid)
+#            obsinfo = getmeta(service='obs', params={'obs_id':str(self.cal_obsid)})
+#            channels = obsinfo[u'rfstreams'][u"0"][u'frequencies']
+#        
+#        with open(metafile,"wb") as m:
+#            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(self.cal_obsid))
+#            m.write("channels,{0}".format(",".join([str(c) for c in channels])))
+#
+#        self.channels = channels
+   
 
-        channels = None
-        if os.path.isfile(metafile):
-            print "Found observation metafile: {0}".format(metafile)
-            with open(metafile,'rb') as m:
-                for line in m.readlines():
-                    if line.startswith("channels"):
-                        channels = line.strip().split(",")[1:]
-
-        if channels == None:
-            print "Channels keyword not found in metafile or metafile doesn't exits."
-        else:
-            metafile_exists = True
-            channels = [int(c) for c in channels]
-
-        if metafile_exists == False:
-            print "Querying the database for calibrator obs ID {0}...".format(self.cal_obsid)
-            obs_info = getmeta(service='obs', params={'obs_id':str(self.cal_obsid)})
-            channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
-        
-        with open(metafile,"wb") as m:
-            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(self.cal_obsid))
-            m.write("channels,{0}".format(",".join([str(c) for c in channels])))
-
-        self.channels = channels
-
-    
     def sort_obs_channels(self):
         """
         Just sort the channels and split them into "high" and "low" channel lists
         """
         self.hichans = [c for c in self.channels if c>128]
         self.lochans = [c for c in self.channels if c<=128]
-        print "High channels:",self.hichans
-        print "Low channels:",self.lochans
+        print "High channels:", self.hichans
+        print "Low channels:", self.lochans
 
 
     def construct_subbands(self):
@@ -182,10 +190,10 @@ class RTScal(object):
         # create a list of lists with consecutive channels grouped within a list
         hichan_groups = [map(itemgetter(1),g)[::-1] for k,g in groupby(enumerate(self.hichans), lambda (i, x): i-x)][::-1] # reversed order (both of internal lists and globally)
         lochan_groups = [map(itemgetter(1),g) for k,g in groupby(enumerate(self.lochans), lambda (i, x): i-x)]
-        print "High channels (grouped):",hichan_groups
-        print "Low channels (grouped):",lochan_groups
+        print "High channels (grouped):", hichan_groups
+        print "Low channels (grouped):", lochan_groups
 
-        return hichan_groups,lochan_groups
+        return hichan_groups, lochan_groups
 
     
     def write_cont_scripts(self):
@@ -194,19 +202,27 @@ class RTScal(object):
         contiguous bandwidth observation. This is relatively simple and just
         requires us to use the standard format RTS configuration file.
         """
+        fname = "{0}/rts_{1}.in".format(self.rts_out_dir, self.cal_obsid) # output file name to write
+        with open(fname,'wb') as f:
+            f.write(self.base_str)
+
+        jobids = []
         nnodes = 25 # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
         slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(self.rts_out_dir), "time":"00:20:00", "nodes":"{0}".format(nnodes)}
-        commands = list(self.body) # make a copy of body to then extend
-        commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes, self.rts_in_file))
-        submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir, submit=self.submit)
+        commands = list(self.script_body) # make a copy of body to then extend
+        commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes, fname))
+        jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir, submit=self.submit)
+        jobids.append(jobid)
+
+        return jobids
  
 
     def get_subband_config(self, chan_groups, basepath, chan_type, count):
         """
-        Function to make the approriate changes to a base copy of the RTS configuration scripts.
+        Function to make the appropriate changes to a base copy of the RTS configuration scripts.
         This will interrogate the channels and decide on the "subbandIDs" and 
-        "ObservationBaseFrequency" that are appropraite for each subband.
+        "ObservationBaseFrequency" that are appropriate for each subband.
         """
         chan_file_dict = {} # used to keep track of which file needs how many nodes
 
@@ -221,7 +237,7 @@ class RTScal(object):
                     offset = cc
                 elif chan_type == "high":
                     # offset is now how many subbandsIDs away from 24 we are
-                    offset = 24-int(subid)
+                    offset = 24 - int(subid)
                 else:
                     print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
                     sys.exit(1)
@@ -230,14 +246,20 @@ class RTScal(object):
                 basefreq = 1.28 *(c[0] - offset) - 0.625
     
                 # and the coarse channel centre frequency is
-                cfreq = 1.28*c[0]-0.625
+                cfreq = 1.28 * c[0] - 0.625
 
-                with open(self.rts_in_file,'rb') as f:
-                    string = f.read()
-                    # find the pattern and select the entire line for replacement
-                    string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq), string)
-                    # include the SubBandIDs tag 
-                    string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(subid), string)
+#                with open(self.rts_in_file,'rb') as f:
+#                    string = f.read()
+#                    # find the pattern and select the entire line for replacement
+#                    string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq), string)
+#                    # include the SubBandIDs tag 
+#                    string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(subid), string)
+
+                string = self.base_str
+                # find the pattern and select the entire line for replacement
+                string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq), string)
+                # include the SubBandIDs tag 
+                string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(subid), string)
 
                 fname = "{0}/rts_{1}_chan{2}.in".format(basepath, self.cal_obsid, c[0])
                 chan_file_dict[fname] = 1 # this particular subband consists of only 1 channel
@@ -259,7 +281,7 @@ class RTScal(object):
                     offset = cc
                 elif chan_type == "high":
                     # for high channels, there is now multiple offsets
-                    offset = np.array([24-int(x) for x in subids])
+                    offset = np.array([24 - int(x) for x in subids])
                 else:
                     print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
                     sys.exit(1)
@@ -268,16 +290,23 @@ class RTScal(object):
                 basefreq = min(1.28 *(np.array(c) - offset) - 0.625)
 
                 # multiple coarse channel centre frequencies
-                cfreqs = 1.28*(np.array(c))-0.625
+                cfreqs = 1.28 * np.array(c) - 0.625
 
-                with open(self.rts_in_file,'rb') as f:
-                    string = f.read()
-                    # find the pattern and select the entire line for replacement
-                    string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq), string)
-                    # include the SubBandIDs tag
-                    string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)), string)
-        
-                print "Multiple channels :: (subband ids, abs. chans, abs. freqs) = {0}".format(", ".join("({0}, {1}, {2})".format(i,j,k) for i,j,k in zip(subids,c,cfreqs)))
+#                with open(self.rts_in_file,'rb') as f:
+#                    string = f.read()
+#                    # find the pattern and select the entire line for replacement
+#                    string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq), string)
+#                    # include the SubBandIDs tag
+#                    string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)), string)
+
+                string = self.base_str
+                # find the pattern and select the entire line for replacement
+                string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq), string)
+                # include the SubBandIDs tag 
+                string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)), string)
+
+
+                print "Multiple channels :: (subband ids, abs. chans, abs. freqs) = {0}".format(", ".join("({0}, {1}, {2})".format(i,j,k) for i,j,k in zip(subids, c, cfreqs)))
 
                 if chan_type == "low":
                     fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath, self.cal_obsid, min(c), max(c))
@@ -296,7 +325,7 @@ class RTScal(object):
                 sys.exit(1)
 
 
-        return chan_file_dict,count
+        return chan_file_dict, count
 
        
             
@@ -316,8 +345,8 @@ class RTScal(object):
 
         # write out the RTS config files and keep track of the number of nodes required for each
         count = 0
-        lodict,count = self.get_subband_config(lochan_groups,self.rts_out_dir,"low",count)
-        hidict,count = self.get_subband_config(hichan_groups,self.rts_out_dir,"high",count)
+        lodict,count = self.get_subband_config(lochan_groups, self.rts_out_dir, "low", count)
+        hidict,count = self.get_subband_config(hichan_groups, self.rts_out_dir, "high", count)
         chan_file_dict = lodict.copy()
         chan_file_dict.update(hidict)
 
@@ -328,6 +357,7 @@ class RTScal(object):
         # Now submit the RTS jobs
         print "Writing and submitting RTS jobs"
         
+        jobids = []
         for k,v in chan_file_dict.iteritems():
             nnodes = v + 1
             chans = k.split('_')[-1].split(".")[0]
@@ -335,8 +365,10 @@ class RTScal(object):
             slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(self.rts_out_dir), "time":"00:45:00", "nodes":"{0}".format(nnodes)}
             commands = list(self.script_body) # make a copy of body to then extend
             commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes, k))
-            submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir, submit=self.submit)
+            jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir, submit=self.submit)
+            jobids.append(jobid)
 
+        return jobids
 
 
     def run(self):
@@ -345,16 +377,17 @@ class RTScal(object):
         Ensures functions are called in correct order to update/evalute attributes and 
         produce the RTS channel-specific files if required.
         """
-        self.get_obs_channels() # fetch channels
+        #self.get_obs_channels() # fetch channels
         self.is_picket_fence()  # determine if picket-fence obs or not
         self.summary()
 
         if self.picket_fence:
-            self.write_picket_fence_scripts()
+            jobids = self.write_picket_fence_scripts()
         else:
-            self.write_cont_scripts()
+            jobids = self.write_cont_scripts()
 
         print "Done!"
+        return jobids
 
 
 class BaseRTSconfig(object):
@@ -362,12 +395,13 @@ class BaseRTSconfig(object):
     A class to hold the base information for a given RTS configuration file.
     """
 
-    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir, outdir, offline=False):
+    def __init__(self, obsid=None, cal_obsid=None, metafits=None, srclist=None, datadir=None, outdir=None, offline=False):
         self.obsid = obsid # target observation ID
         self.cal_obsid = cal_obsid # calibrator observation ID
         self.offline = offline # switch to decide if offline correlated data or not
         self.utctime = None # start UTC time
         self.nfine_chan = None # number of fine channels
+        self.channels = None # actual channel numbers
         self.fine_cbw = None # fine channel bandwidth
         self.corr_dump_time = None # correaltor dump times (i.e. integration time)
         self.n_corr_dumps_to_average = None # number of integration times to use for calibration
@@ -388,16 +422,21 @@ class BaseRTSconfig(object):
             print "Given data directory doesn't exist. Aborting."
             sys.exit(1)
         
-        # Then check if the specified output directory exists
+        # Then check if the specified output and batch directories exists
         if outdir is None:
             # this is the default
             self.output_dir = "/group/mwaops/vcs/{0}/cal/{1}/rts".format(self.obsid, self.cal_obsid)
+            self.batch_dir = "/group/mwaops/vcs/{0}/batch".format(self.obsid)
             mdir(self.output_dir, "RTS")
+            mdir(self.batch_dir, "Batch")
         else:
             # mdir handles if the directory already exists
             self.output_dir = os.path.abspath(outdir + "/rts")
-            print "non standard RTS output path", self.output_dir
+            self.batch_dir = os.path.abspath(outdir + "/batch")
+            print "non standard RTS output path:", self.output_dir
+            print "non standard batch directory path:", self.batch_dir 
             mdir(self.output_dir, "RTS")
+            mdir(self.batch_dir, "Batch")
         
         # Then check that the metafits file exists
         if os.path.isfile(metafits) is False:
@@ -490,11 +529,16 @@ class BaseRTSconfig(object):
 
     def construct_base_string(self):
         # get observation information from database
+        # TODO: need to make this write a metafile so that we don't have to keep querying the database on every run
+        print "Querying metdata database for obsevation information"
         obsinfo = getmeta(service='obs', params={'obs_id':str(self.obsid)})
         
         # get the RA/Dec pointing for the primary beam
         ra_pointing_degs = obsinfo['metadata']['ra_pointing']
         dec_pointing_degs = obsinfo['metadata']['dec_pointing']
+
+        # now get teh absolute channels
+        self.channels = obsinfo[u'rfstreams'][u"0"][u'frequencies']
 
         # convert times using our timeconvert and get LST and JD 
         # TODO: need to make this not have to call an external script
@@ -537,64 +581,64 @@ class BaseRTSconfig(object):
 
 
         file_str = """
-        ReadAllFromSingleFile=
-        BaseFilename={0}/*_gpubox
-        ReadGpuboxDirect={1}
-        UseCorrelatorInput={2}
+ReadAllFromSingleFile=
+BaseFilename={0}/*_gpubox
+ReadGpuboxDirect={1}
+UseCorrelatorInput={2}
 
-        ReadMetafitsFile=1
-        MetafitsFilename={3}
+ReadMetafitsFile=1
+MetafitsFilename={3}
 
-        DoCalibration=
-        doMWArxCorrections=1
-        doRawDataCorrections=1
-        doRFIflagging=0
-        useFastPrimaryBeamModels=1
-        generateDIjones=1
-        applyDIcalibration=1
-        UsePacketInput=0
-        UseThreadedVI=1
+DoCalibration=
+doMWArxCorrections=1
+doRawDataCorrections=1
+doRFIflagging=0
+useFastPrimaryBeamModels=1
+generateDIjones=1
+applyDIcalibration=1
+UsePacketInput=0
+UseThreadedVI=1
 
-        ObservationFrequencyBase={4}
-        ObservationTimeBase={5}
-        ObservationPointCentreHA={6}
-        ObservationPointCentreDec={7}
-        ChannelBandwidth={8}
-        NumberOfChannels={9}
+ObservationFrequencyBase={4}
+ObservationTimeBase={5}
+ObservationPointCentreHA={6}
+ObservationPointCentreDec={7}
+ChannelBandwidth={8}
+NumberOfChannels={9}
 
-        CorrDumpsPerCadence={10}
-        CorrDumpTime={11}
-        NumberOfIntegrationBins=3
-        NumberOfIterations=1
+CorrDumpsPerCadence={10}
+CorrDumpTime={11}
+NumberOfIntegrationBins=3
+NumberOfIterations=1
 
-        StartProcessingAt=0
+StartProcessingAt=0
 
-        ArrayPositionLat={12}
-        ArrayPositionLong={13}
-        ArrayNumberOfStations=128
+ArrayPositionLat={12}
+ArrayPositionLong={13}
+ArrayNumberOfStations=128
 
-        ArrayFile=
+ArrayFile=
 
-        SourceCatalogueFile={14}
-        NumberOfCalibrators=1
-        NumberOfSourcesToPeel=0
-        calBaselineMin=20.0
-        calShortBaselineTaper=40.0
-        FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir), \
-                                        self.readDirect, \
-                                        self.useCorrInput, \
-                                        self.metafits_RTSform, \
-                                        self.freq_base, \
-                                        self.JD, \
-                                        self.PB_HA, \
-                                        self.PB_DEC, \
-                                        self.fine_cbw, \
-                                        self.nfine_chan, \
-                                        self.n_dumps_to_average, \
-                                        self.corr_dump_time, \
-                                        self.ArrayPositionLat, \
-                                        self.ArrayPositionLong, \
-                                        self.source_list)
+SourceCatalogueFile={14}
+NumberOfCalibrators=1
+NumberOfSourcesToPeel=0
+calBaselineMin=20.0
+calShortBaselineTaper=40.0
+FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir), \
+                                self.readDirect, \
+                                self.useCorrInput, \
+                                self.metafits_RTSform, \
+                                self.freq_base, \
+                                self.JD, \
+                                self.PB_HA, \
+                                self.PB_DEC, \
+                                self.fine_cbw, \
+                                self.nfine_chan, \
+                                self.n_dumps_to_average, \
+                                self.corr_dump_time, \
+                                self.ArrayPositionLat, \
+                                self.ArrayPositionLong, \
+                                self.source_list)
 
         return file_str
 
@@ -631,5 +675,7 @@ if __name__ == '__main__':
     baseRTSconfig.run()
 
     #calobj = RTScal(args.obs, args.cal_obsid, args.rts_in_file, args.rts_output_dir, args.submit)
-    #calobj.run()
+    calobj = RTScal(baseRTSconfig, args.submit)
+    jobs = calobj.run()
+    print "Job IDs:",jobs
 
