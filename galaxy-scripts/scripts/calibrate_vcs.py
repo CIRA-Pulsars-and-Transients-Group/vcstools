@@ -29,7 +29,6 @@ import glob
 import logging
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 class RTScal(object):
     """ 
@@ -100,13 +99,13 @@ class RTScal(object):
         Print a nice looking summary of relevant attributes
         """
         logger.debug("Summary of Calibration object contents:")
-        logger.debug("\tObservation ID:             ".format(self.obsid))
-        logger.debug("\tCalibrator Observation ID:  ".format(self.cal_obsid))
-        logger.debug("\tRTS output directory:       ".format(self.rts_out_dir))
-        logger.debug("\tBatch directory:            ".format(self.batch_dir))
-        logger.debug("\tObserved absolute channels: ".format(self.channels))
-        logger.debug("\tIs picket fence?            ".format(self.picket_fence))
-        logger.debug("\tSubmit jobs?                ".format(self.submit))
+        logger.debug("Observation ID:             {0}".format(self.obsid))
+        logger.debug("Calibrator Observation ID:  {0}".format(self.cal_obsid))
+        logger.debug("RTS output directory:       {0}".format(self.rts_out_dir))
+        logger.debug("Batch directory:            {0}".format(self.batch_dir))
+        logger.debug("Observed absolute channels: {0}".format(self.channels))
+        logger.debug("Is picket fence?            {0}".format(self.picket_fence))
+        logger.debug("Submit jobs?                {0}".format(self.submit))
 
 
     def __summary(self):
@@ -175,8 +174,8 @@ class RTScal(object):
         """
         self.hichans = [c for c in self.channels if c>128]
         self.lochans = [c for c in self.channels if c<=128]
-        logger.debug("High channels:".format(self.hichans))
-        logger.debug("Low channels:".format(self.lochans))
+        logger.debug("High channels: {0}".format(self.hichans))
+        logger.debug("Low channels:  {0}".format(self.lochans))
 
 
     def construct_subbands(self):
@@ -193,8 +192,8 @@ class RTScal(object):
         # create a list of lists with consecutive channels grouped within a list
         hichan_groups = [map(itemgetter(1),g)[::-1] for k,g in groupby(enumerate(self.hichans), lambda (i, x): i-x)][::-1] # reversed order (both of internal lists and globally)
         lochan_groups = [map(itemgetter(1),g) for k,g in groupby(enumerate(self.lochans), lambda (i, x): i-x)]
-        logger.debug("High channels (grouped):".format(hichan_groups))
-        logger.debug("Low channels (grouped):".format(lochan_groups))
+        logger.debug("High channels (grouped): {0}".format(hichan_groups))
+        logger.debug("Low channels  (grouped): {0}".format(lochan_groups))
 
         return hichan_groups, lochan_groups
 
@@ -231,7 +230,7 @@ class RTScal(object):
         chan_file_dict = {} # used to keep track of which file needs how many nodes
 
         cc = 0
-        logger.info("Looping over channel groups...")
+        logger.info("Looping over {0} channel groups...".format(chan_type))
         for c in chan_groups:
             if len(c) == 1:
                 # single channel group, write its own RTS config file
@@ -695,12 +694,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # set up the logger for stand-alone execution
+    logger.setLevel(logging.DEBUG)
     ch = logging.StreamHandler()
     ch.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s %(thread)d  %(name)s  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
-
+    
     logger.info("Creating BaseRTSconfig instance - setting up basic information for RTS configuration scripts")
     baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist, args.gpubox_dir, args.rts_output_dir, args.offline)
     baseRTSconfig.run()
