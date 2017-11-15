@@ -18,7 +18,7 @@ import numpy as np
 import re
 import argparse
 from astropy.io import fits
-from process_vcs import submit_slurm
+from process_vcs import submit_slurm # need to get this moved out of process_vcs.py
 from mdir import mdir
 from mwa_metadb_utils import getmeta
 from itertools import groupby
@@ -26,6 +26,10 @@ from operator import itemgetter
 import distutils.spawn
 import subprocess
 import glob
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class RTScal(object):
     """ 
@@ -95,17 +99,15 @@ class RTScal(object):
         """
         Print a nice looking summary of relevant attributes
         """
-        print
-        print "Summary of Calibration object contents:"
-        print "\tObservation ID:             ",self.obsid
-        print "\tCalibrator Observation ID:  ",self.cal_obsid
-        #print "\tBase RTS configuration file:",self.rts_in_file
-        print "\tRTS output directory:       ",self.rts_out_dir
-        print "\tBatch directory:            ",self.batch_dir
-        print "\tObserved absolute channels: ",self.channels
-        print "\tIs picket fence?            ",self.picket_fence
-        print "\tSubmit jobs?                ",self.submit
-        print
+        logger.debug("Summary of Calibration object contents:")
+        logger.debug("\tObservation ID:             ".format(self.obsid))
+        logger.debug("\tCalibrator Observation ID:  ".format(self.cal_obsid))
+        logger.debug("\tRTS output directory:       ".format(self.rts_out_dir))
+        logger.debug("\tBatch directory:            ".format(self.batch_dir))
+        logger.debug("\tObserved absolute channels: ".format(self.channels))
+        logger.debug("\tIs picket fence?            ".format(self.picket_fence))
+        logger.debug("\tSubmit jobs?                ".format(self.submit))
+
 
     def __summary(self):
         # debugging use only
@@ -114,6 +116,7 @@ class RTScal(object):
 
     def submit_True(self):
         # set the submit attribute to True (allow sbatch submission)
+        logger.info("Setting submit attribute to True")
         self.submit = True
 
 
@@ -124,10 +127,10 @@ class RTScal(object):
         """
         ch_offset = self.channels[-1] - self.channels[0] 
         if ch_offset == len(self.channels)-1:
-            print "The channels are consecutive: this is a normal observation"
+            logger.info("This observation's channels are consecutive: this is a normal observation")
             self.picket_fence = False
         else:
-            print "The channels are NOT consecutive: this is a picket-fence observation"
+            logger.info("This observation's channels are NOT consecutive: this is a picket-fence observation")
             self.picket_fence = True
 
 
@@ -172,8 +175,8 @@ class RTScal(object):
         """
         self.hichans = [c for c in self.channels if c>128]
         self.lochans = [c for c in self.channels if c<=128]
-        print "High channels:", self.hichans
-        print "Low channels:", self.lochans
+        logger.debug("High channels:".format(self.hichans))
+        logger.debug("Low channels:".format(self.lochans))
 
 
     def construct_subbands(self):
@@ -181,17 +184,17 @@ class RTScal(object):
         Group the channels into consecutive subbands, being aware of the high channel ordering reversal.
         If a subband is split across the channel 129 boundary, it is split into a "low" and "high" sub-subband.
         """
-        print "Grouping individual channels into consecutive chunks (if possible)"
+        logger.info("Grouping individual channels into consecutive chunks (if possible)")
 
         # check if the 128,129 channel pair exists and note to user that the subband will be divided on that boundary
         if any([128,129] == self.channels[i:i+2] for i in xrange(len(self.channels)-1)):
-            print "\tNOTE: a subband crosses the channel 129 boundary. This subband will be split on that boundary."
+            logger.info("A subband crosses the channel 129 boundary. This subband will be split on that boundary.")
 
         # create a list of lists with consecutive channels grouped within a list
         hichan_groups = [map(itemgetter(1),g)[::-1] for k,g in groupby(enumerate(self.hichans), lambda (i, x): i-x)][::-1] # reversed order (both of internal lists and globally)
         lochan_groups = [map(itemgetter(1),g) for k,g in groupby(enumerate(self.lochans), lambda (i, x): i-x)]
-        print "High channels (grouped):", hichan_groups
-        print "Low channels (grouped):", lochan_groups
+        logger.debug("High channels (grouped):".format(hichan_groups))
+        logger.debug("Low channels (grouped):".format(lochan_groups))
 
         return hichan_groups, lochan_groups
 
@@ -202,6 +205,7 @@ class RTScal(object):
         contiguous bandwidth observation. This is relatively simple and just
         requires us to use the standard format RTS configuration file.
         """
+        logger.info("Writing RTS configuration script for contiguous bandwith observation")
         fname = "{0}/rts_{1}.in".format(self.rts_out_dir, self.cal_obsid) # output file name to write
         with open(fname,'wb') as f:
             f.write(self.base_str)
@@ -227,6 +231,7 @@ class RTScal(object):
         chan_file_dict = {} # used to keep track of which file needs how many nodes
 
         cc = 0
+        logger.info("Looping over channel groups...")
         for c in chan_groups:
             if len(c) == 1:
                 # single channel group, write its own RTS config file
@@ -239,7 +244,7 @@ class RTScal(object):
                     # offset is now how many subbandsIDs away from 24 we are
                     offset = 24 - int(subid)
                 else:
-                    print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
+                    logger.critical("Invalid channel group type: must be \"low\" or \"high\".")
                     sys.exit(1)
                 
                 # the base frequency is then
@@ -267,7 +272,7 @@ class RTScal(object):
                 with open(fname,'wb') as f:
                     f.write(string)
         
-                print "Single channel :: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2})".format(subid, c[0], cfreq)
+                logger.debug("Single channel :: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2})".format(subid, c[0], cfreq))
 
                 count += 1
                 cc += 1
@@ -283,7 +288,7 @@ class RTScal(object):
                     # for high channels, there is now multiple offsets
                     offset = np.array([24 - int(x) for x in subids])
                 else:
-                    print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
+                    logger.critical("Invalid channel group type: must be \"low\" or \"high\".")
                     sys.exit(1)
 
                 # basefreq is then the minmium of the calculated quantities
@@ -306,7 +311,7 @@ class RTScal(object):
                 string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)), string)
 
 
-                print "Multiple channels :: (subband ids, abs. chans, abs. freqs) = {0}".format(", ".join("({0}, {1}, {2})".format(i,j,k) for i,j,k in zip(subids, c, cfreqs)))
+                logger.debug("Multiple channels :: (subband ids, abs. chans, abs. freqs) = {0}".format(", ".join("({0}, {1}, {2})".format(i,j,k) for i,j,k in zip(subids, c, cfreqs))))
 
                 if chan_type == "low":
                     fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath, self.cal_obsid, min(c), max(c))
@@ -321,7 +326,7 @@ class RTScal(object):
                 cc += len(c)
 
             else:
-                print "Reached a channel group with no entries!? Aborting."
+                logger.critical("Reached a channel group with no entries!?")
                 sys.exit(1)
 
 
@@ -340,6 +345,7 @@ class RTScal(object):
         The only exception to that rule is where the 129 boundary is crossed, 
         in which case that subband will be split in two.
         """
+        logger.info("Sorting picket-fence channels and determining subband info...")
         self.sort_obs_channels()
         hichan_groups, lochan_groups = self.construct_subbands()
 
@@ -355,7 +361,7 @@ class RTScal(object):
         lengths = lolengths.union(hilengths) # combine the sets
                             
         # Now submit the RTS jobs
-        print "Writing and submitting RTS jobs"
+        logger.info("Writing individual subband RTS config scripts")
         
         jobids = []
         for k,v in chan_file_dict.iteritems():
@@ -386,7 +392,7 @@ class RTScal(object):
         else:
             jobids = self.write_cont_scripts()
 
-        print "Done!"
+        logger.info("Done!")
         return jobids
 
 
@@ -418,72 +424,82 @@ class BaseRTSconfig(object):
         # First, check that the actual data directory exists
         if os.path.isdir(datadir):
             self.data_dir = os.path.abspath(datadir)
+            logger.info("Checking data directory exists... Ok")
         else:
-            print "Given data directory doesn't exist. Aborting."
+            logger.critical("Data directory ({0}) does not exists. Aborting.".format(datadir))
             sys.exit(1)
         
         # Then check if the specified output and batch directories exists
         if outdir is None:
             # this is the default
+            logger.info("Assuming default directory structure...")
             self.output_dir = "/group/mwaops/vcs/{0}/cal/{1}/rts".format(self.obsid, self.cal_obsid)
             self.batch_dir = "/group/mwaops/vcs/{0}/batch".format(self.obsid)
+            logger.debug("RTS output directory is {0}".format(self.output_dir))
+            logger.debug("Batch directory is {0}".format(self.batch_dir))
             mdir(self.output_dir, "RTS")
             mdir(self.batch_dir, "Batch")
         else:
             # mdir handles if the directory already exists
             self.output_dir = os.path.abspath(outdir + "/rts")
             self.batch_dir = os.path.abspath(outdir + "/batch")
-            print "non standard RTS output path:", self.output_dir
-            print "non standard batch directory path:", self.batch_dir 
+            logger.warning("Non-standard RTS output path: {0}".format(self.output_dir))
+            logger.warning("Non-standard batch directory path: {0}".format(self.batch_dir))
             mdir(self.output_dir, "RTS")
             mdir(self.batch_dir, "Batch")
         
         # Then check that the metafits file exists
         if os.path.isfile(metafits) is False:
             # file doesn't exist
-            print "Given metafits file does not exist. Aborting."
+            logger.critical("Given metafits file ({0}) does not exist.".format(metafits))
             sys.exit(1)
         elif "_ppds" not in metafits:
             # file doesn't have the correct naming convention
-            print "Looks like you have an old-style metafits. You'll need to download the new version, which is named like: {0}_metafits_ppds.fits. Aborting.".format(obsid)
+            logger.critical("Looks like you have an old-style metafits.")
+            logger.critical("You'll need to download the new version, which is named like: {0}_metafits_ppds.fits.".format(obsid))
             sys.exit(1)
         else:
+            logger.info("Checking metafits file exists and is named correctly... Ok")
             self.metafits = os.path.abspath(metafits)
 
         # the check that the source list exists
         if os.path.isfile(srclist) is False:
             # file doesn't exist
-            print "Given source list file does not exist. Aborting."
+            logger.critical("Given source list file ({0}) does not exist.".format(srclist))
             sys.exit(1)
         else:
+            logger.info("Checking source list file exists... Ok")
             self.source_list = os.path.abspath(srclist)
 
 
 
         # set some RTS flags based on if we have offline correlated data or not
+        logger.info("Setting RTS data input flags...")
         if self.offline:
             self.useCorrInput = 1
             self.readDirect = 0
+            logger.debug("Offline correlation")
         else:
             self.useCorrInput = 0
             self.readDirect = 1
+            logger.debug("Online correlation")
 
 
     def get_info_from_data_header(self):
         # first determine the UTC time from the file name
+        logger.info("Gathering information from data headers...")
         file_glob = "{0}/*_gpubox*.fits".format(self.data_dir)
         files = sorted(glob.glob(file_glob))
         len_files = len(files)
         if len_files == 0:
-            print "No *_gpubox*.fits files found in {0}. Aborting.".format(self.data_dir)
+            logger.critical("No *_gpubox*.fits files found in {0}.".format(self.data_dir))
             sys.exit(1)
         elif len_files % 24 != 0:
-            print "Number of *_gpubox*.fits files is not divisible by 24!?. Aborting."
+            logger.critical("Number of *_gpubox*.fits files is not divisible by 24!?")
             sys.exit(1)
 
         first_file = files[0]
         self.utctime = os.path.splitext(os.path.basename(first_file))[0].split("_")[1]
-
 
         if self.offline is False:
             # now figure out how much data we have in total by counting the number of data HDUs
@@ -526,11 +542,17 @@ class BaseRTSconfig(object):
             ndumps = len(fits.open(first_file)) * len_files/24
             self.n_dumps_to_average = ndumps
 
+        logger.info("Number of fine channels: {0}".format(self.nfine_chan))
+        logger.info("Fine channel bandwidth (MHz): {0}".format(self.fine_cbw))
+        logger.info("Integration time (s): {0}".format(self.corr_dump_time))
+        logger.info("Number of correlator dumps to average: {0}".format(self.n_dumps_to_average))
+
+
 
     def construct_base_string(self):
         # get observation information from database
         # TODO: need to make this write a metafile so that we don't have to keep querying the database on every run
-        print "Querying metdata database for obsevation information"
+        logger.info("Querying metadata database for obsevation information...")
         obsinfo = getmeta(service='obs', params={'obs_id':str(self.obsid)})
         
         # get the RA/Dec pointing for the primary beam
@@ -544,7 +566,7 @@ class BaseRTSconfig(object):
         # TODO: need to make this not have to call an external script
         timeconvert = distutils.spawn.find_executable("timeconvert.py")
         cmd = "{0} --datetime={1}".format(timeconvert, self.utctime)
-        print cmd
+        logger.debug(cmd)
         time_cmd = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
 
         for line in time_cmd.stdout:
@@ -558,14 +580,15 @@ class BaseRTSconfig(object):
         lst_in_hours = float(hh) + float(mm) / 60.0 + float(ss) / 60.0**2
 
         # set the HA of the image centre to the primary beam HA
+        logger.debug("Determining HA and DEC for primary beam")
         self.JD = jd
         PB_HA_HOURS = (ra_pointing_degs / 360.0) * 24.0
         self.PB_HA = lst_in_hours - PB_HA_HOURS
         self.PB_DEC = dec_pointing_degs
 
-        print " * Primary beam: HA = {0} hrs, Dec = {1} deg".format(self.PB_HA, self.PB_DEC)
-        print " * JD = {0}".format(self.JD)
-        print " * LST = {0}:{1}:{2} = {3} hrs".format(hh, mm, ss, lst_in_hours)
+        logger.debug("Primary beam: HA = {0} hrs, Dec = {1} deg".format(self.PB_HA, self.PB_DEC))
+        logger.debug("JD = {0}".format(self.JD))
+        logger.debug("LST = {0}:{1}:{2} = {3} hrs".format(hh, mm, ss, lst_in_hours))
 
         # get the lowest frequency channel
         freqs = obsinfo['rfstreams']['0']['frequencies']
@@ -574,12 +597,12 @@ class BaseRTSconfig(object):
         self.freq_base = start_channel * 1.28e6 - 0.64e6 + 15e3 # frequency base in Hz
         self.freq_base /= 1e6 # convert to MHz
 
-        print " * Frequency lower edge = {0} MHz".format(self.freq_base)
+        logger.debug("Frequency lower edge = {0} MHz".format(self.freq_base))
 
         # make metafits file formatted for RTS
         self.metafits_RTSform = self.metafits.split("_metafits_ppds.fits")[0]
 
-
+        logger.info("Constructing base RTS configuration script content")
         file_str = """
 ReadAllFromSingleFile=
 BaseFilename={0}/*_gpubox
@@ -671,11 +694,20 @@ if __name__ == '__main__':
     parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
     args = parser.parse_args()
 
+    # set up the logger for stand-alone execution
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s %(thread)d  %(name)s  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+    logger.info("Creating BaseRTSconfig instance - setting up basic information for RTS configuration scripts")
     baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist, args.gpubox_dir, args.rts_output_dir, args.offline)
     baseRTSconfig.run()
 
     #calobj = RTScal(args.obs, args.cal_obsid, args.rts_in_file, args.rts_output_dir, args.submit)
+    logger.info("Creating RTScal instance - determining specific config requirements for this observation")
     calobj = RTScal(baseRTSconfig, args.submit)
     jobs = calobj.run()
-    print "Job IDs:",jobs
+    logger.info("Job IDs: {0}".format(jobs))
 
