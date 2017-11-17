@@ -693,24 +693,29 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir), \
         bad_tiles = metafits[1].data['Flag'][::2] # both polarisation recorded, so we just want every second value 
         bad_tiles = np.where(bad_tiles == 1)[0]
         flagged_tiles = "{0}/flagged_tiles.txt".format(self.output_dir)
-        
-        with open(flagged_tiles, 'w') as fid:
-            for b in bad_tiles:
-                fid.write("{0}\n".format(b))
+
+        if os.path.isfile(flagged_tiles):
+            logger.warning("{0} already exists. Not overwriting.".format(flagged_tiles))
+        else:
+            with open(flagged_tiles, 'w') as fid:
+                for b in bad_tiles:
+                    fid.write("{0}\n".format(b))
 
         # figure out how many edge channels to flag based on the fact that with 128, we flag the edge 8
         ntoflag = int(8 * self.nfine_chan / 128.)
-        print "nchan = {0}, flagging {1} edge channels".format(self.nfine_chan, ntoflag)
+        logger.debug("Flagging {0} edge channels".format(ntoflag))
         chans = np.arange(self.nfine_chan)
         start_chans = chans[:ntoflag]
         end_chans = chans[-ntoflag:]
         center_chan = [self.nfine_chan/2]
         bad_chans = np.hstack((start_chans, center_chan, end_chans))
         flagged_channels = "{0}/flagged_channels.txt".format(self.output_dir)
-
-        with open(flagged_channels, 'w') as fid:
-            for b in bad_chans:
-                fid.write("{0}\n".format(b))
+        if os.path.isfile(flagged_channels):
+            logger.warning("{0} already exists. Not overwriting.".format(flagged_channels))
+        else:
+            with open(flagged_channels, 'w') as fid:
+                for b in bad_chans:
+                    fid.write("{0}\n".format(b))
 
 
     def run(self):
