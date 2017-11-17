@@ -247,8 +247,9 @@ class RTScal(object):
                     # offset is now how many subbandsIDs away from 24 we are
                     offset = 24 - int(subid)
                 else:
-                    logger.critical("Invalid channel group type: must be \"low\" or \"high\".")
-                    sys.exit(1)
+                    errmsg = "Invalid channel group type: must be \"low\" or \"high\"."
+                    logger.error(errmsg)
+                    raise CalibrationError(errmsg)
                 
                 # the base frequency is then
                 basefreq = 1.28 *(c[0] - offset) - 0.625
@@ -291,8 +292,9 @@ class RTScal(object):
                     # for high channels, there is now multiple offsets
                     offset = np.array([24 - int(x) for x in subids])
                 else:
-                    logger.critical("Invalid channel group type: must be \"low\" or \"high\".")
-                    sys.exit(1)
+                    errmsg = "Invalid channel group type: must be \"low\" or \"high\"."
+                    logger.error(errmsg)
+                    raise CalibrationError(errmsg)
 
                 # basefreq is then the minmium of the calculated quantities
                 basefreq = min(1.28 *(np.array(c) - offset) - 0.625)
@@ -329,8 +331,9 @@ class RTScal(object):
                 cc += len(c)
 
             else:
-                logger.critical("Reached a channel group with no entries!?")
-                sys.exit(1)
+                errmsg = "Reached a channel group with no entries!?"
+                logger.error(errmsg)
+                raise CalibrationError(errmsg)
 
 
         return chan_file_dict, count
@@ -429,8 +432,9 @@ class BaseRTSconfig(object):
             self.data_dir = os.path.abspath(datadir)
             logger.info("Checking data directory exists... Ok")
         else:
-            logger.critical("Data directory ({0}) does not exists. Aborting.".format(datadir))
-            sys.exit(1)
+            errmsg = "Data directory ({0}) does not exists. Aborting.".format(datadir)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
         
         # Then check if the specified output and batch directories exists
         if outdir is None:
@@ -454,13 +458,14 @@ class BaseRTSconfig(object):
         # Then check that the metafits file exists
         if os.path.isfile(metafits) is False:
             # file doesn't exist
-            logger.critical("Given metafits file ({0}) does not exist.".format(metafits))
-            sys.exit(1)
+            errmsg = "Given metafits file ({0}) does not exist.".format(metafits)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
         elif "_ppds" not in metafits:
             # file doesn't have the correct naming convention
-            logger.critical("Looks like you have an old-style metafits.")
-            logger.critical("You'll need to download the new version, which is named like: {0}_metafits_ppds.fits.".format(obsid))
-            sys.exit(1)
+            errmsg = "Looks like you have an old-style metafits. You'll need to download the new version, which is named like: {0}_metafits_ppds.fits.".format(obsid)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
         else:
             logger.info("Checking metafits file exists and is named correctly... Ok")
             self.metafits = os.path.abspath(metafits)
@@ -468,12 +473,12 @@ class BaseRTSconfig(object):
         # the check that the source list exists
         if os.path.isfile(srclist) is False:
             # file doesn't exist
-            logger.critical("Given source list file ({0}) does not exist.".format(srclist))
-            sys.exit(1)
+            errmsg = "Given source list file ({0}) does not exist.".format(srclist)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
         else:
             logger.info("Checking source list file exists... Ok")
             self.source_list = os.path.abspath(srclist)
-
 
 
         # set some RTS flags based on if we have offline correlated data or not
@@ -496,11 +501,12 @@ class BaseRTSconfig(object):
         len_files = len(files)
         if len_files == 0:
             errmsg = "No *_gpubox*.fits files found in {0}.".format(self.data_dir)
-            logger.critical(errmsg)
+            logger.error(errmsg)
             raise CalibrationError(errmsg)
         elif len_files % 24 != 0:
-            logger.critical("Number of *_gpubox*.fits files is not divisible by 24!?")
-            sys.exit(1)
+            errmsg = "Number of *_gpubox*.fits files is not divisible by 24!?"
+            logger.critical(errmsg)
+            raise CalibrationError(errmsg)
 
         first_file = files[0]
         self.utctime = os.path.splitext(os.path.basename(first_file))[0].split("_")[1]
@@ -554,12 +560,18 @@ class BaseRTSconfig(object):
 
 
     def construct_base_string(self):
-        # get observation information from database
+        # get calibrator observation information from database
         # TODO: need to make this write a metafile so that we don't have to keep querying the database on every run
         logger.info("Querying metadata database for obsevation information...")
-        obsinfo = getmeta(service='obs', params={'obs_id':str(self.obsid)})
-        
-        # get the RA/Dec pointing for the primary beam
+        obsinfo = getmeta(service='obs', params={'obs_id':str(self.cal_obsid)})
+
+        # quick check to make sure what's returned is actually real data
+        if len(obsinfo[u'logs']) == 0:
+            errmsg = "Metadata database error (logs empty). Maybe an invalid obs ID?"
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+       
+       # get the RA/Dec pointing for the primary beam
         ra_pointing_degs = obsinfo['metadata']['ra_pointing']
         dec_pointing_degs = obsinfo['metadata']['dec_pointing']
 
@@ -568,7 +580,10 @@ class BaseRTSconfig(object):
 
         # convert times using our timeconvert and get LST and JD 
         # TODO: need to make this not have to call an external script
-        timeconvert = distutils.spawn.find_executable("timeconvert.py")
+        try:
+            timeconvert = distutils.spawn.find_executable("timeconvert.py")
+        except Exception as e:
+            raise e
         cmd = "{0} --datetime={1}".format(timeconvert, self.utctime)
         logger.debug(cmd)
         time_cmd = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
@@ -678,6 +693,7 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir), \
         bad_tiles = metafits[1].data['Flag'][::2] # both polarisation recorded, so we just want every second value 
         bad_tiles = np.where(bad_tiles == 1)[0]
         flagged_tiles = "{0}/flagged_tiles.txt".format(self.output_dir)
+        
         with open(flagged_tiles, 'w') as fid:
             for b in bad_tiles:
                 fid.write("{0}\n".format(b))
@@ -691,6 +707,7 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir), \
         center_chan = [self.nfine_chan/2]
         bad_chans = np.hstack((start_chans, center_chan, end_chans))
         flagged_channels = "{0}/flagged_channels.txt".format(self.output_dir)
+
         with open(flagged_channels, 'w') as fid:
             for b in bad_chans:
                 fid.write("{0}\n".format(b))
@@ -738,11 +755,15 @@ if __name__ == '__main__':
         baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist, args.gpubox_dir, args.rts_output_dir, args.offline)
         baseRTSconfig.run()
     except CalibrationError as e:
-        logger.critical("Caught CalibrationError:", str(e))
+        logger.critical("Caught CalibrationError: {0}".format(e))
+        sys.exit(1)
 
     #calobj = RTScal(args.obs, args.cal_obsid, args.rts_in_file, args.rts_output_dir, args.submit)
     logger.info("Creating RTScal instance - determining specific config requirements for this observation")
-    calobj = RTScal(baseRTSconfig, args.submit)
-    jobs = calobj.run()
-    logger.info("Job IDs: {0}".format(jobs))
-
+    try:
+        calobj = RTScal(baseRTSconfig, args.submit)
+        jobs = calobj.run()
+        logger.info("Job IDs: {0}".format(jobs))
+    except CalibrationError as e:
+        logger.critical("Caught CalibrationError: {0}".format(e))
+        sys.exit(1)
