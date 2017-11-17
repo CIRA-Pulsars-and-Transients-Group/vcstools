@@ -30,6 +30,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+class CalibrationError(Exception):
+    pass
+
 class RTScal(object):
     """ 
     Class to contain calibration information, create and submit RTS calibration jobs.
@@ -400,7 +404,7 @@ class BaseRTSconfig(object):
     A class to hold the base information for a given RTS configuration file.
     """
 
-    def __init__(self, obsid=None, cal_obsid=None, metafits=None, srclist=None, datadir=None, outdir=None, offline=False):
+    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir, outdir=None, offline=False):
         self.obsid = obsid # target observation ID
         self.cal_obsid = cal_obsid # calibrator observation ID
         self.offline = offline # switch to decide if offline correlated data or not
@@ -491,8 +495,9 @@ class BaseRTSconfig(object):
         files = sorted(glob.glob(file_glob))
         len_files = len(files)
         if len_files == 0:
-            logger.critical("No *_gpubox*.fits files found in {0}.".format(self.data_dir))
-            sys.exit(1)
+            errmsg = "No *_gpubox*.fits files found in {0}.".format(self.data_dir)
+            logger.critical(errmsg)
+            raise CalibrationError(errmsg)
         elif len_files % 24 != 0:
             logger.critical("Number of *_gpubox*.fits files is not divisible by 24!?")
             sys.exit(1)
@@ -665,9 +670,36 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir), \
         return file_str
 
 
+    def write_flag_files(self):
+        """
+        Given the output directory, write initial flagging files based on bad tiles in metafits and number of fine channels
+        """
+        metafits = fits.open(self.metafits) # read metafits file
+        bad_tiles = metafits[1].data['Flag'][::2] # both polarisation recorded, so we just want every second value 
+        bad_tiles = np.where(bad_tiles == 1)[0]
+        flagged_tiles = "{0}/flagged_tiles.txt".format(self.output_dir)
+        with open(flagged_tiles, 'w') as fid:
+            for b in bad_tiles:
+                fid.write("{0}\n".format(b))
+
+        # figure out how many edge channels to flag based on the fact that with 128, we flag the edge 8
+        ntoflag = int(8 * self.nfine_chan / 128.)
+        print "nchan = {0}, flagging {1} edge channels".format(self.nfine_chan, ntoflag)
+        chans = np.arange(self.nfine_chan)
+        start_chans = chans[:ntoflag]
+        end_chans = chans[-ntoflag:]
+        center_chan = [self.nfine_chan/2]
+        bad_chans = np.hstack((start_chans, center_chan, end_chans))
+        flagged_channels = "{0}/flagged_channels.txt".format(self.output_dir)
+        with open(flagged_channels, 'w') as fid:
+            for b in bad_chans:
+                fid.write("{0}\n".format(b))
+
+
     def run(self):
         self.get_info_from_data_header()
         self.base_str = self.construct_base_string()
+        self.write_flag_files()
 
 
 
@@ -702,8 +734,11 @@ if __name__ == '__main__':
     logger.addHandler(ch)
     
     logger.info("Creating BaseRTSconfig instance - setting up basic information for RTS configuration scripts")
-    baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist, args.gpubox_dir, args.rts_output_dir, args.offline)
-    baseRTSconfig.run()
+    try:
+        baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist, args.gpubox_dir, args.rts_output_dir, args.offline)
+        baseRTSconfig.run()
+    except CalibrationError as e:
+        logger.critical("Caught CalibrationError:", str(e))
 
     #calobj = RTScal(args.obs, args.cal_obsid, args.rts_in_file, args.rts_output_dir, args.submit)
     logger.info("Creating RTScal instance - determining specific config requirements for this observation")
