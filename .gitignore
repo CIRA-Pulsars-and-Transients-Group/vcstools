@@ -3,3 +3,4 @@ install/
 *.swp
 *~
 build_logs/
+*.pyc
