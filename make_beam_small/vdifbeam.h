@@ -1,6 +1,8 @@
 #ifndef VDIFBEAM_H
 #define VDIFBEAM_H
 
+#include <complex.h>
+
 /* convenience type - this just collects all the vdif info together */
 typedef struct vdifinfo_t {
 
@@ -43,5 +45,14 @@ typedef struct vdifinfo_t {
 } vdifinfo;
 
 void vdif_write_second (vdifinfo *vf,int8_t *output);
+
+complex float get_std_dev_complex(complex float *input, int nsamples);
+
+void set_level_occupancy(complex float *input, int nsamples, float *new_gain);
+
+void get_mean_complex(complex float *input, int nsamples, float *rmean,float *imean, complex float *cmean);
+
+void normalise_complex(complex float *input, int nsamples, float scale);
+
 
 #endif
