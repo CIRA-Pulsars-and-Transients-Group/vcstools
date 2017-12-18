@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 
-"""
-Script for RTS calibration jobs in the VCS Pulsar pipeline.
+"""Script for RTS calibration jobs in the VCS Pulsar pipeline.
 
 The class defined in this script attempts to abstract away any of the underlying 
-intricicais in creating a RTS configuration file. It can handle both:
+difficulties in creating a RTS configuration file. It can handle both types of VCS observing:
     "contiguous bandwidth" observations (i.e. all 24 coarse channels are adjacent), and
     "picket-fence" observations (i.e. where the 24 coarse channels are arbitrarily distributed
 
 Author: Bradley Meyers
-Date: 17-October-2017 (v0.1)
+Date: 18-December-2017 (v0.9)
 """
 
 import os
@@ -34,18 +33,55 @@ logger = logging.getLogger(__name__)
 class CalibrationError(Exception):
     pass
 
+
 class RTScal(object):
-    """ 
-    Class to contain calibration information, create and submit RTS calibration jobs.
+    """Class to contain calibration information, create and submit RTS calibration jobs.
     It is able to distinguish picket-fence and "normal" observations, and write the 
     appropriate RTS configuration files and batch scripts for each circumstance.
 
     The "run()" method ensures that information is gathered in order and that the 
     correct methods are called at the appropriate time. It should be the only method 
     call after initialising a RTScal object.
+
+
+    Attributes
+    ----------
+    obsid : int
+        The target observation ID
+    cal_obsid : int
+        The calibrator observation ID
+    channels : list of ints
+        The list of coarse channels recorded within a subband. Can range from length of 1-24.
+    hichans : list of ints
+        The coarse channel numbers >= 129, where the PFB begins to use frequencies in reverse order (i.e. channel 129 is higher in real-frequency than channel 130)"
+    lochans : list of ints
+        The coarse channel numbers < 129
+    picketfence : bool
+        True is the observation is picket fence (i.e. one or more subbands are not adjacent).
+    rts_out_dir : str
+        Path to where to write the relevant files to disk (i.e. RTS configuration files and flagging information)
+    batch_dir : str
+        Path to where the SLURM scripts and their output are to be written.
+    base_str : str
+        The basic RTS configuration skeleton script with some relevant information (built in BaseRTSconfig)
+    script_body : list of strs
+        Each element is a line to be written into the SBATCH script which will run the job on the compute nodes.
+    submit : bool
+        Whether to submit the created scripts to the SLRUM queue. True = submit, False = don't submit.
+
+
     """
 
     def __init__(self, RTSbase, submit=False):
+        """Initiliase the class attributes from the RTSbase information
+
+        Paramters
+        ---------
+        RTSbase : BaseRTSconfig
+            An instance of BaseRTSconfig which has been initialised to contain the basic observation information.
+        submit : boolean
+            Whether to submit the created scripts to the SLRUM queue. True = submit, False = don't submit.
+        """
         # initilaise class attributes with user-specified options
         self.obsid     = RTSbase.obsid
         self.cal_obsid = RTSbase.cal_obsid
@@ -99,9 +135,7 @@ class RTScal(object):
 
 
     def summary(self):
-        """
-        Print a nice looking summary of relevant attributes
-        """
+        """Print a nice looking summary of relevant attributes."""
         logger.debug("Summary of Calibration object contents:")
         logger.debug("Observation ID:             {0}".format(self.obsid))
         logger.debug("Calibrator Observation ID:  {0}".format(self.cal_obsid))
@@ -118,14 +152,19 @@ class RTScal(object):
 
 
     def submit_True(self):
-        # set the submit attribute to True (allow sbatch submission)
+        """Set the submit flag to True, allowing sbatch queue submission."""
         logger.info("Setting submit attribute to True")
         self.submit = True
 
 
+    def submit_Flase(self):
+        """Set the submit flag to False, not alloweing sbatch queue submission."""
+        logger.info("Setting submit attribute to False")
+        self.submit = False
+
+
     def is_picket_fence(self):
-        """
-        Check whether the observed channels imply picket-fence or not. 
+        """Check whether the observed channels imply picket-fence or not. 
         Set boolean attribute in either case.
         """
         ch_offset = self.channels[-1] - self.channels[0] 
@@ -173,9 +212,7 @@ class RTScal(object):
    
 
     def sort_obs_channels(self):
-        """
-        Just sort the channels and split them into "high" and "low" channel lists
-        """
+        """Just sort the channels and split them into "high" and "low" channel lists."""
         self.hichans = [c for c in self.channels if c>128]
         self.lochans = [c for c in self.channels if c<=128]
         logger.debug("High channels: {0}".format(self.hichans))
@@ -183,9 +220,13 @@ class RTScal(object):
 
 
     def construct_subbands(self):
-        """
-        Group the channels into consecutive subbands, being aware of the high channel ordering reversal.
+        """Group the channels into consecutive subbands, being aware of the high channel ordering reversal.
         If a subband is split across the channel 129 boundary, it is split into a "low" and "high" sub-subband.
+
+        Returns
+        -------
+        hichan_groups, lochan_groups : list of lists of ints (combined size = 24)
+            Each item will be a list containing 1 or more coarse channel numbers (>1 if the channels are consecutive).
         """
         logger.info("Grouping individual channels into consecutive chunks (if possible)")
 
@@ -203,10 +244,14 @@ class RTScal(object):
 
     
     def write_cont_scripts(self):
-        """
-        Function to write RTS submission script in the case of a "standard" 
+        """Function to write RTS submission script in the case of a "standard" 
         contiguous bandwidth observation. This is relatively simple and just
         requires us to use the standard format RTS configuration file.
+
+        Returns
+        -------
+        jobids : list of ints
+            A list of all the job IDs submitted to the system compute queue.
         """
         logger.info("Writing RTS configuration script for contiguous bandwith observation")
         fname = "{0}/rts_{1}.in".format(self.rts_out_dir, self.cal_obsid) # output file name to write
@@ -226,10 +271,34 @@ class RTScal(object):
  
 
     def get_subband_config(self, chan_groups, basepath, chan_type, count):
-        """
-        Function to make the appropriate changes to a base copy of the RTS configuration scripts.
+        """Function to make the appropriate changes to a base copy of the RTS configuration scripts.
         This will interrogate the channels and decide on the "subbandIDs" and 
         "ObservationBaseFrequency" that are appropriate for each subband.
+
+        Parameters
+        ----------
+        chan_groups : list of lists of ints, or list of ints
+            The list of coarse channels to be used when creating the RTS configuration information.
+        basepath : str
+            Path to where the script will eventually be written.
+        chan_type : str
+            "low" is coarse channels are <129, "high" if coarse channels are >=129
+        count : int
+            Counter variable that keeps track of re-ordering of channels.
+
+        Returns
+        -------
+        chan_file_dict : dict
+            Dictionary containing the number of nodes required for each subband and the appropriate filename. 
+            Key = filename, value = number of nodes required.
+        
+        count : int
+            Counter variable that keeps track of re-ordering of channels.
+
+        Raises
+        ------
+        CalibrationError
+            When there is a problem with some of the observation information and/or its manipulation.
         """
         chan_file_dict = {} # used to keep track of which file needs how many nodes
 
@@ -341,8 +410,7 @@ class RTScal(object):
        
             
     def write_picket_fence_scripts(self):
-        """
-        Function to write RTS submission scripts in the case of a picket-fence
+        """Function to write RTS submission scripts in the case of a picket-fence
         observation. A significant amount of extra information needs to be 
         determined and placed in the RTS configuration files. There will be:
             
@@ -350,6 +418,11 @@ class RTScal(object):
         
         The only exception to that rule is where the 129 boundary is crossed, 
         in which case that subband will be split in two.
+
+        Returns
+        -------
+        jobids : list of ints
+            A list of all the job IDs submitted to the system compute queue. 
         """
         logger.info("Sorting picket-fence channels and determining subband info...")
         self.sort_obs_channels()
@@ -384,10 +457,14 @@ class RTScal(object):
 
 
     def run(self):
-        """
-        Only function that needs to be called after creating the RTScal object.
+        """Only function that needs to be called after creating the RTScal object.
         Ensures functions are called in correct order to update/evalute attributes and 
         produce the RTS channel-specific files if required.
+
+        Returns
+        -------
+        jobids : list of ints
+            A list of all the job IDs submitted to the system compute queue.
         """
         #self.get_obs_channels() # fetch channels
         self.is_picket_fence()  # determine if picket-fence obs or not
@@ -403,9 +480,87 @@ class RTScal(object):
 
 
 class BaseRTSconfig(object):
+    """A class to hold the base information for a given RTS configuration file.
+    
+    Parameters
+    ----------
+    obsid : int
+        The target observation ID.
+    cal_obsid : int
+        The calibrator observation ID.
+    metafits : str
+        Path to the metafits file for the calibrator observation.
+    srclist : str
+        Path to the source list created for this calibrator observation (using srclist_by_beam.py).
+    datadir : str
+        Path to visibility data to be used to produce a calibration solution.
+    outdir : str, optional
+        Path to write RTS configuration and relevant flagging information.
+    offline : str, optional
+        Whether the visiility data were produced with the offline correlator. Default is False.
+
+
+    Attributes
+    ----------
+    obsid : int
+        The target observation ID
+    cal_obsid : int
+        The calibrator observation ID
+    offline : bool
+        Whether the calibrator data was produed by the offline correlator.
+    utctime : str
+        The start UTC time (as YYYY-MM-DDThh:mm:ss.ss)
+    nfine_chan : int
+        The number of fine channels per coarse channel
+    channels : list of ints
+        The list of coarse channels recorded within a subband. Can range from length of 1-24.
+    fine_cbw : float
+        The fine channel bandwidth in MHz
+    corr_dump_time : float
+        The time scale on which the correlator dumped the visibilities (i.e. the integration time).
+    n_corr_dumps_to_average : int
+        The number of correlator dumps to use. 
+        Must be such that `corr_dump_time * n_corr_dumps_to_average` is <= than the total amount of data 
+        available for the calibrator observation.
+    PB_HA : float
+        The primary beam Hour Angle (in degrees)
+    PB_DEC : float
+        The primary beam Declination (in degrees)
+    freq_base :  float
+        The starting frequency from which to count the subband IDs (coarse channels)
+    JD : float
+        Julian day conversion of `utctime`
+    metafits_RTSform : str
+        A modified string of the user-define metafits file location. Truncates "_metafits_pdds.fits".
+    ArrayPositionLat : float
+        The MWA's latittude (in degrees)
+    ArrayPositionLong : float
+        The MWA's longitude (in degrees)
+    base_str : str
+        The basic RTS configuration skeleton script with some relevant information (built in BaseRTSconfig)
+    data_dir : str
+        Path to look for visibilities to use for calibration.
+    output_dir : str
+        Path to write RTS configuration and relevant flagging information.
+    batch_dir : str
+        Path to where the SLURM scripts and their output are to be written.    
+    metafits : str
+        Path to the original metafits file for the calibrator observation.
+    source_list: str 
+        Path to the source list created for this calibrator observation (using srclist_by_beam.py).
+    useCorrInput : int
+        Option value for RTS configuration reagrdang intepretting correlator streamed data. 
+        For offline-correlated data, `useCorrInput=1` and `readDirect=0`.
+    readDirect : int
+        Option value for RTS configuration regarding reading data files from disk. 
+        For online-correlated data, `readDirect=1` and `useCorrInput=0`.
+
+    Raises
+    ------
+    CalibrationError
+        When there is a problem with some of the observation information and/or its manipulation.
     """
-    A class to hold the base information for a given RTS configuration file.
-    """
+
 
     def __init__(self, obsid, cal_obsid, metafits, srclist, datadir, outdir=None, offline=False):
         self.obsid = obsid # target observation ID
@@ -494,6 +649,13 @@ class BaseRTSconfig(object):
 
 
     def get_info_from_data_header(self):
+        """Read information from the FITS file header to figure out calibration configuration.
+        
+        Raises
+        ------
+        CalibrationError
+            When there is a problem with some of the observation information and/or its manipulation.
+        """
         # first determine the UTC time from the file name
         logger.info("Gathering information from data headers...")
         file_glob = "{0}/*_gpubox*.fits".format(self.data_dir)
@@ -560,6 +722,19 @@ class BaseRTSconfig(object):
 
 
     def construct_base_string(self):
+        """Construct the basic string to be written to the RTS config file. 
+        This string will then be edit with regexp to update the relevant details.
+
+        Returns
+        -------
+        file_str : str
+            The base string to be written to an RTS configuration srcipt after manipulation.
+
+        Raises
+        ------
+        CalibrationError
+            When there is a problem with some of the observation information and/or its manipulation.
+        """
         # get calibrator observation information from database
         # TODO: need to make this write a metafile so that we don't have to keep querying the database on every run
         logger.info("Querying metadata database for obsevation information...")
@@ -686,9 +861,7 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir), \
 
 
     def write_flag_files(self):
-        """
-        Given the output directory, write initial flagging files based on bad tiles in metafits and number of fine channels
-        """
+        """Given the output directory, write initial flagging files based on bad tiles in metafits and number of fine channels."""
         metafits = fits.open(self.metafits) # read metafits file
         bad_tiles = metafits[1].data['Flag'][::2] # both polarisation recorded, so we just want every second value 
         bad_tiles = np.where(bad_tiles == 1)[0]
@@ -719,6 +892,7 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir), \
 
 
     def run(self):
+        """Run through the pipeline to produce the RTS file string and write the channel/tile flags to disk."""
         self.get_info_from_data_header()
         self.base_str = self.construct_base_string()
         self.write_flag_files()
