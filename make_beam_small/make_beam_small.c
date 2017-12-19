@@ -74,6 +74,14 @@ void usage() {
     fprintf(stderr, "Absolute coarse channel number (0-255)\n");
 
     fprintf(stderr, "\n");
+    fprintf(stderr, "OUTPUT OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-i, --incoh               ");
+    fprintf(stderr, "Turn on incoherent beam output (off by default)\n");
+    fprintf(stderr, "\t--no-psrfits              ");
+    fprintf(stderr, "Turn off PSRFITS output (on by default) (NOT YET IMPLEMENTED)\n");
+
+    fprintf(stderr, "\n");
     fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-a, --antennas=N          ");
@@ -778,6 +786,37 @@ int read_pfb_call(char *in_name, char *heap) {
 
 }
 
+void correct_stt( struct psrfits *pf ) {
+    /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/
+    int    itmp    = 0;
+    int    itmp2   = 0;
+    double dtmp    = 0;
+    int    status  = 0;
+
+    //fits_open_file(&(pf.fptr), pf.filename, READWRITE, &status);
+
+    fits_read_key(pf->fptr, TDOUBLE, "STT_OFFS", &dtmp,  NULL, &status);
+    fits_read_key(pf->fptr, TINT,    "STT_SMJD", &itmp,  NULL, &status);
+    fits_read_key(pf->fptr, TINT,    "STT_IMJD", &itmp2, NULL, &status);
+
+    if (dtmp > 0.5) {
+        itmp = itmp+1;
+        if (itmp == 86400) {
+            itmp = 0;
+            itmp2++;
+        }
+    }
+    dtmp = 0.0;
+
+    fits_update_key(pf->fptr, TINT, "STT_SMJD", &itmp, NULL, &status);
+    fits_update_key(pf->fptr, TINT, "STT_IMJD", &itmp2, NULL, &status);
+    fits_update_key(pf->fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, &status);
+
+    //fits_close_file(pf.fptr, &status);
+    fprintf(stdout, "[%f]  Done.  Wrote %d subints (%f sec) in %d files.\n",
+            omp_get_wtime()-begintime, pf->tot_rows, pf->T, pf->filenum);
+
+}
 
 /*****************
  * MAIN FUNCTION *
@@ -806,6 +845,10 @@ int main(int argc, char **argv) {
     const int          npol          = 2;      // X,Y
     const int          outpol        = 4;      // I,Q,U,V
 
+    // Output options
+    int                out_incoh     = 0;  // Default = incoherent output turned OFF
+    int                out_coh       = 1;  // Default = coherent   output turned ON
+
     // Variables for calibration settings
     struct calibration cal;
     cal.filename          = NULL;
@@ -829,6 +872,7 @@ int main(int argc, char **argv) {
                 {"obsid",           required_argument, 0, 'o'},
                 {"begin",           required_argument, 0, 'b'},
                 {"end",             required_argument, 0, 'e'},
+                {"incoh",           no_argument,       0, 'i'},
                 {"utc-time",        required_argument, 0, 'z'},
                 {"dec",             required_argument, 0, 'D'},
                 {"ra",              required_argument, 0, 'R'},
@@ -850,7 +894,7 @@ int main(int argc, char **argv) {
             };
 
             int option_index = 0;
-            c = getopt_long( argc, argv, "a:b:B:C:d:D:e:f:FhJ:m:n:o:O:r:R:Vw:W:z:",
+            c = getopt_long( argc, argv, "a:b:B:C:d:D:e:f:FhiJ:m:n:o:O:r:R:Vw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -889,6 +933,9 @@ int main(int argc, char **argv) {
                 case 'h':
                     usage();
                     exit(0);
+                    break;
+                case 'i':
+                    out_incoh = 1;
                     break;
                 case 'J':
                     cal.filename = strdup(optarg);
@@ -957,6 +1004,14 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    // Check that at least one output option has been selected
+    if (!out_incoh || !out_coh)
+    {
+        fprintf(stderr, "Error: no output format selected\n");
+        usage();
+        exit(EXIT_FAILURE);
+    }
+
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = omp_get_wtime();
     printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
@@ -1008,8 +1063,9 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Structure for holding psrfits header information
+    // Structures for holding psrfits header information
     struct psrfits pf;
+    struct psrfits pf_incoh;
 
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, metafits);
@@ -1051,6 +1107,23 @@ int main(int argc, char **argv) {
     populate_psrfits_header( &pf, metafits, obsid, time_utc, sample_rate,
             frequency, nchan, chan_width, outpol, rec_channel, &delay_vals );
 
+    // If incoherent sum requested, populate incoherent psrfits header
+    if (out_incoh)
+    {
+        int incoh_npol = 1;
+        populate_psrfits_header( &pf_incoh, metafits, obsid, time_utc, sample_rate,
+                frequency, nchan, chan_width, incoh_npol, rec_channel, &delay_vals );
+
+        // The above sets the RA and Dec to be the beamforming pointing, but it ought
+        // to have the tile pointing, not the beam pointing
+        pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
+        pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
+
+        // Also, we need to give it a different base name for the output files
+        sprintf(pf_incoh.basefilename, "%s_%s_ch%03d_incoh",
+                pf_incoh.hdr.project_id, pf_incoh.hdr.source, atoi(rec_channel));
+    }
+
     // Create array for holding the raw data
     int bytes_per_file = sample_rate * nstation * npol * nchan;
     uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
@@ -1058,8 +1131,16 @@ int main(int argc, char **argv) {
 
     int8_t *out_buffer_8_psrfits = (int8_t *)malloc( outpol*nchan*pf.hdr.nsblk * sizeof(int8_t) );
     float  *data_buffer_psrfits  =  (float *)malloc( nchan*outpol*pf.hdr.nsblk * sizeof(float) );
+    int8_t *out_buffer_8_incoh   = NULL;
+    float  *data_buffer_incoh    = NULL;
+    if (out_incoh)
+    {
+        out_buffer_8_incoh = (int8_t *)malloc( nchan*pf_incoh.hdr.nsblk * sizeof(int8_t) );
+        data_buffer_incoh = (float *)malloc( nchan*pf_incoh.hdr.nsblk * sizeof(float) );
+    }
 
     int offset_in_psrfits;
+    int offset_in_incoh;
 
     int file_no = 0;
     int sample;
@@ -1094,9 +1175,14 @@ int main(int argc, char **argv) {
 #endif
 
         offset_in_psrfits  = 0;
+        offset_in_incoh    = 0;
 
         for (i = 0; i < nchan*outpol*pf.hdr.nsblk; i++)
             data_buffer_psrfits[i] = 0.0;
+
+        if (incoh)
+            for (i = 0; i < nchan*pf_incoh.hdr.nsblk; i++)
+                data_buffer_incoh[i] = 0.0;
 
 #ifdef PROFILE
         double sec1=0.0, sec2=0.0, sec3=0.0, sec4=0.0, sec5=0.0;
@@ -1124,8 +1210,10 @@ int main(int argc, char **argv) {
             int data_idx;
 
             complex float beam[nchan][nstation][npol];
+            float         incoh_beam[nchan][nstation][npol];
             complex float detected_beam[nchan][npol];
-            float spectrum[nchan*outpol];
+            float         detected_incoh_beam[nchan];
+            float         spectrum[nchan*outpol];
             complex float noise_floor[nchan][npol][npol];
             complex float e_true[npol], e_dash[npol];
 
@@ -1140,6 +1228,13 @@ int main(int argc, char **argv) {
             for (ch  = 0; ch  < nchan   ; ch++ )
             for (pol = 0; pol < npol    ; pol++)
                 detected_beam[ch][pol] = 0.0 + 0.0*I;
+
+            // Initialise incoherent beam arrays to zero, if necessary
+            if (out_incoh)
+            {
+                for (ch  = 0; ch  < nchan   ; ch++ )
+                    detected_incoh_beam[ch] = 0.0 + 0.0*I;
+            }
 
             // Calculate the beam, noise floor
             for (ant = 0; ant < nstation; ant++) {
@@ -1176,7 +1271,14 @@ int main(int argc, char **argv) {
                         sDr = (uDr >= 0x8 ? (signed int)uDr - 0x10 : (signed int) uDr);
                         sDi = (uDi >= 0x8 ? (signed int)uDi - 0x10 : (signed int) uDi);
 
+                        // Form a single complex number
                         e_dash[pol]  = (float)sDr + (float)sDi * I;
+
+                        // Detect the incoherent beam, if requested
+                        if (out_incoh)
+                            incoh_beam[ch][ant][pol] = creal(e_dash[pol] * conj(e_dash[pol]));
+
+                        // Apply complex weights
                         e_dash[pol] *= complex_weights_array[ant][ch][pol];
 
                     }
@@ -1213,7 +1315,13 @@ int main(int argc, char **argv) {
             for (ant = 0; ant < nstation; ant++)
             for (pol = 0; pol < npol    ; pol++)
             for (ch  = 0; ch  < nchan   ; ch++ )
+            {
                 detected_beam[ch][pol] += beam[ch][ant][pol];
+
+                // ...and the incoherent beam, if requested
+                if (out_incoh)
+                    detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
+            }
 
 #ifdef PROFILE
             chkpt5 = omp_get_wtime();
@@ -1255,8 +1363,12 @@ int main(int argc, char **argv) {
 #endif
 
             offset_in_psrfits  = sizeof(float)*nchan*outpol * sample;
+            offset_in_incoh    = sizeof(float)*nchan * sample;
 
             memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
+
+            if (incoh)
+                memcpy((void *)((char *)data_buffer_incoh + offset_in_incoh), detected_incoh_beam, sizeof(float)*nchan);
 
 #ifdef PROFILE
             chkpt7 = omp_get_wtime();
@@ -1292,6 +1404,21 @@ int main(int argc, char **argv) {
 
         memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
 
+        if (out_incoh)
+        {
+            flatten_bandpass(pf_incoh.hdr.nsblk, nchan, 1,
+                    data_buffer_incoh, pf_incoh.sub.dat_scales,
+                    pf_incoh.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
+
+            float2int8_trunc(data_buffer_incoh, pf_incoh.hdr.nsblk*nchan,
+                    -126.0, 127.0, out_buffer_8_incoh);
+
+            int8_to_uint8(pf_incoh.hdr.nsblk*nchan, 128,
+                    (char *) out_buffer_8_incoh);
+
+            memcpy(pf_incoh.sub.data, out_buffer_8_incoh, pf_incoh.sub.bytes_per_subint);
+        }
+
         printf("[%f]  Writing data to file\n", omp_get_wtime()-begintime);
         if (psrfits_write_subint(&pf) != 0) {
             fprintf(stderr, "Write subint failed file exists?\n");
@@ -1301,44 +1428,35 @@ int main(int argc, char **argv) {
         pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
         pf.sub.lst += pf.sub.tsubint;
 
+        if (out_incoh)
+        {
+            if (psrfits_write_subint(&pf_incoh) != 0) {
+                fprintf(stderr, "Write incoherent subint failed file exists?\n");
+                break; // Exit from while loop
+            }
+
+            pf_incoh.sub.offs = roundf(pf_incoh.tot_rows * pf_incoh.sub.tsubint) +
+                                0.5*pf_incoh.sub.tsubint;
+            pf_incoh.sub.lst += pf_incoh.sub.tsubint;
+        }
+
     }
 
     printf("[%f]  **FINISHED BEAMFORMING**\n", omp_get_wtime()-begintime);
     printf("[%f]  Starting clean-up\n", omp_get_wtime()-begintime);
 
     if (pf.status == 0) {
-        /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/
-        int itmp = 0;
-        int itmp2 = 0;
-        double dtmp = 0;
-        int status = 0;
+        correct_stt( &pf );
 
-        //fits_open_file(&(pf.fptr), pf.filename, READWRITE, &status);
+        flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits,
+                pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 0, 0, 0, 1);
+    }
 
-        fits_read_key(pf.fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, &status);
-        fits_read_key(pf.fptr, TINT, "STT_SMJD", &itmp, NULL, &status);
-        fits_read_key(pf.fptr, TINT, "STT_IMJD", &itmp2, NULL, &status);
+    if (pf_incoh.status == 0) {
+        correct_stt( &pf_incoh );
 
-        if (dtmp > 0.5) {
-            itmp = itmp+1;
-            if (itmp == 86400) {
-                itmp = 0;
-                itmp2++;
-            }
-        }
-        dtmp = 0.0;
-
-        fits_update_key(pf.fptr, TINT, "STT_SMJD", &itmp, NULL, &status);
-        fits_update_key(pf.fptr, TINT, "STT_IMJD", &itmp2, NULL, &status);
-        fits_update_key(pf.fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, &status);
-
-        //fits_close_file(pf.fptr, &status);
-        fprintf(stdout, "[%f]  Done.  Wrote %d subints (%f sec) in %d files.\n",
-               omp_get_wtime()-begintime, pf.tot_rows, pf.T, pf.filenum);
-
-        // free some memory
-        flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits, pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 0, 0, 0, 1);
-
+        flatten_bandpass(pf_incoh.hdr.nsblk, nchan, 1, data_buffer_incoh,
+                pf_incoh.sub.dat_scales, pf_incoh.sub.dat_offsets, 32, 0, 0, 0, 0, 1);
     }
 
     // Free up memory for filenames
@@ -1351,7 +1469,9 @@ int main(int argc, char **argv) {
 
     destroy_metafits_info( &mi );
     free( out_buffer_8_psrfits );
+    free( out_buffer_8_incoh );
     free( data_buffer_psrfits  );
+    free( data_buffer_incoh  );
     free( data );
 
     return 0;
