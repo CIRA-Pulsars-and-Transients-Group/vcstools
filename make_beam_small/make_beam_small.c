@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <assert.h>
 #include "make_beam_small.h"
+#include "vdifbeam.h"
 
 // Are GPU available
 
