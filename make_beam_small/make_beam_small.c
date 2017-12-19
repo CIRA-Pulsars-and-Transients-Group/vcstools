@@ -1001,7 +1001,7 @@ int main(int argc, char **argv) {
     }
 
     // Check that at least one output option has been selected
-    if (!out_incoh || !out_coh)
+    if (!out_incoh && !out_coh)
     {
         fprintf(stderr, "Error: no output format selected\n");
         usage();
