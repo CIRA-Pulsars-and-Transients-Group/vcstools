@@ -812,10 +812,6 @@ void correct_stt( struct psrfits *pf ) {
     fits_update_key(pf->fptr, TINT, "STT_IMJD", &itmp2, NULL, &status);
     fits_update_key(pf->fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, &status);
 
-    //fits_close_file(pf.fptr, &status);
-    fprintf(stdout, "[%f]  Done.  Wrote %d subints (%f sec) in %d files.\n",
-            omp_get_wtime()-begintime, pf->tot_rows, pf->T, pf->filenum);
-
 }
 
 /*****************
@@ -1180,7 +1176,7 @@ int main(int argc, char **argv) {
         for (i = 0; i < nchan*outpol*pf.hdr.nsblk; i++)
             data_buffer_psrfits[i] = 0.0;
 
-        if (incoh)
+        if (out_incoh)
             for (i = 0; i < nchan*pf_incoh.hdr.nsblk; i++)
                 data_buffer_incoh[i] = 0.0;
 
@@ -1367,7 +1363,7 @@ int main(int argc, char **argv) {
 
             memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
 
-            if (incoh)
+            if (out_incoh)
                 memcpy((void *)((char *)data_buffer_incoh + offset_in_incoh), detected_incoh_beam, sizeof(float)*nchan);
 
 #ifdef PROFILE
