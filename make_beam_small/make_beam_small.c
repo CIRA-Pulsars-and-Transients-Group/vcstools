@@ -1114,6 +1114,7 @@ int main(int argc, char **argv) {
         // to have the tile pointing, not the beam pointing
         pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
         pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
+        pf_incoh.hdr.summed_polns = 1;
 
         // Also, we need to give it a different base name for the output files
         sprintf(pf_incoh.basefilename, "%s_%s_ch%03d_incoh",
@@ -1227,10 +1228,8 @@ int main(int argc, char **argv) {
 
             // Initialise incoherent beam arrays to zero, if necessary
             if (out_incoh)
-            {
                 for (ch  = 0; ch  < nchan   ; ch++ )
-                    detected_incoh_beam[ch] = 0.0 + 0.0*I;
-            }
+                    detected_incoh_beam[ch] = 0.0;
 
             // Calculate the beam, noise floor
             for (ant = 0; ant < nstation; ant++) {
