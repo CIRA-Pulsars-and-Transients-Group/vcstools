@@ -15,7 +15,6 @@
 #include "ascii_header.h"
 #include "mwa_header.h"
 #include <omp.h>
-//#include <mpi.h>
 #include <glob.h>
 #include <fcntl.h>
 #include <assert.h>
@@ -40,212 +39,66 @@
 
 #define MAX_COMMAND_LENGTH 1024
 
-//#define PROFILE
-
-void usage();
-
-/*****************
- * MAIN FUNCTION *
- *****************/
-
 int main(int argc, char **argv) {
 
-    // Variables for required options
-    char              *obsid       = NULL; // The observation ID
-    unsigned long int  begin       = 0;    // GPS time -- when to start beamforming
-    unsigned long int  end         = 0;    // GPS time -- when to stop beamforming
-    char              *time_utc    = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
-    char              *dec_ddmmss  = NULL; // "dd:mm:ss"
-    char              *ra_hhmmss   = NULL; // "hh:mm:ss"
-    char              *datadir     = NULL; // The path to where the recombined data live
-    char              *metafits    = NULL; // filename of the metafits file
-    char              *rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
-    long int           frequency   = 0;    // = rec_channel expressed in Hz
-
-    // Variables for MWA/VCS configuration
-    int                nstation      = 128;    // The number of antennas
-    int                nchan         = 128;    // The number of fine channels (per coarse channel)
-    unsigned int       chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
-    unsigned int       sample_rate   = 10000;  // The VCS sample rate (Hz)
-    int                use_ant_flags = 0;      // Use flags in metafits file?
-    const int          npol          = 2;      // X,Y
-    const int          outpol        = 4;      // I,Q,U,V
-
-    // Output options
-    int                out_incoh     = 0;  // Default = incoherent output turned OFF
-    int                out_coh       = 1;  // Default = coherent   output turned ON
-
-    // Variables for calibration settings
-    struct calibration cal;
-    cal.filename          = NULL;
-    cal.bandpass_filename = NULL;
-    cal.chan_width        = 40000;
-    cal.nchan             = 0;
-    cal.cal_type          = NO_CALIBRATION;
-    cal.offr_chan_num     = 0;
+    // A place to hold the beamformer settings
+    struct make_beam_opts opts;
 
     // These are used to calculate how the input data are ordered
     const int npfb = 4;
     const int nrec = 16;
     const int ninc = 4;
 
-    if (argc > 1) {
+    /* Set default beamformer settings */
 
-        int c;
-        while (1) {
+    // Variables for required options
+    opts.obsid       = NULL; // The observation ID
+    opts.begin       = 0;    // GPS time -- when to start beamforming
+    opts.end         = 0;    // GPS time -- when to stop beamforming
+    opts.time_utc    = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
+    opts.dec_ddmmss  = NULL; // "dd:mm:ss"
+    opts.ra_hhmmss   = NULL; // "hh:mm:ss"
+    opts.datadir     = NULL; // The path to where the recombined data live
+    opts.metafits    = NULL; // filename of the metafits file
+    opts.rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
+    opts.frequency   = 0;    // = rec_channel expressed in Hz
 
-            static struct option long_options[] = {
-                {"obsid",           required_argument, 0, 'o'},
-                {"begin",           required_argument, 0, 'b'},
-                {"end",             required_argument, 0, 'e'},
-                {"incoh",           no_argument,       0, 'i'},
-                {"utc-time",        required_argument, 0, 'z'},
-                {"dec",             required_argument, 0, 'D'},
-                {"ra",              required_argument, 0, 'R'},
-                {"data-location",   required_argument, 0, 'd'},
-                {"metafits-file",   required_argument, 0, 'm'},
-                {"coarse-chan",     required_argument, 0, 'f'},
-                {"antennas",        required_argument, 0, 'a'},
-                {"num-fine-chans",  required_argument, 0, 'n'},
-                {"fine-chan-width", required_argument, 0, 'w'},
-                {"sample-rate",     required_argument, 0, 'r'},
-                {"use-ant-flags",   no_argument,       0, 'F'},
-                {"dijones-file",    required_argument, 0, 'J'},
-                {"bandpass-file",   required_argument, 0, 'B'},
-                {"rts-chan-width",  required_argument, 0, 'W'},
-                {"offringa-file",   required_argument, 0, 'O'},
-                {"offringa-chan",   required_argument, 0, 'C'},
-                {"help",            required_argument, 0, 'h'},
-                {"version",         required_argument, 0, 'V'}
-            };
+    // Variables for MWA/VCS configuration
+    opts.nstation      = 128;    // The number of antennas
+    opts.nchan         = 128;    // The number of fine channels (per coarse channel)
+    opts.chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
+    opts.sample_rate   = 10000;  // The VCS sample rate (Hz)
+    opts.use_ant_flags = 0;      // Use flags in metafits file?
 
-            int option_index = 0;
-            c = getopt_long( argc, argv, "a:b:B:C:d:D:e:f:FhiJ:m:n:o:O:r:R:Vw:W:z:",
-                             long_options, &option_index);
-            if (c == -1)
-                break;
+    // Output options
+    opts.out_incoh     = 0;  // Default = incoherent output turned OFF
+    opts.out_coh       = 1;  // Default = coherent   output turned ON
 
-            switch(c) {
+    // Variables for calibration settings
+    opts.cal.filename          = NULL;
+    opts.cal.bandpass_filename = NULL;
+    opts.cal.chan_width        = 40000;
+    opts.cal.nchan             = 0;
+    opts.cal.cal_type          = NO_CALIBRATION;
+    opts.cal.offr_chan_num     = 0;
 
-                case 'a':
-                    nstation = atoi(optarg);
-                    break;
-                case 'b':
-                    begin = atol(optarg);
-                    break;
-                case 'B':
-                    cal.bandpass_filename = strdup(optarg);
-                    cal.cal_type = RTS_BANDPASS;
-                    break;
-                case 'C':
-                    cal.offr_chan_num = atoi(optarg);
-                    break;
-                case 'd':
-                    datadir = strdup(optarg);
-                    break;
-                case 'D':
-                    dec_ddmmss = strdup(optarg);
-                    break;
-                case 'e':
-                    end = atol(optarg);
-                    break;
-                case 'f':
-                    rec_channel = strdup(optarg);
-                    frequency = atoi(optarg) * 1.28e6 - 640e3; // The base frequency of the coarse channel in Hz
-                    break;
-                case 'F':
-                    use_ant_flags = 1;
-                    break;
-                case 'h':
-                    usage();
-                    exit(0);
-                    break;
-                case 'i':
-                    out_incoh = 1;
-                    break;
-                case 'J':
-                    cal.filename = strdup(optarg);
-                    if (cal.cal_type != RTS_BANDPASS)
-                        cal.cal_type = RTS;
-                    break;
-                case 'm':
-                    metafits = strdup(optarg);
-                    break;
-                case 'n':
-                    nchan = atoi(optarg);
-                    break;
-                case 'o':
-                    obsid = strdup(optarg);
-                    break;
-                case 'O':
-                    cal.filename = strdup(optarg);
-                    cal.cal_type = OFFRINGA;
-                    break;
-                case 'r':
-                    sample_rate = atoi(optarg);
-                    break;
-                case 'R':
-                    ra_hhmmss = strdup(optarg);
-                    break;
-                case 'V':
-                    printf("%s\n", MAKE_BEAM_VERSION);
-                    exit(0);
-                    break;
-                case 'w':
-                    chan_width = atoi(optarg);
-                    break;
-                case 'W':
-                    cal.chan_width = atoi(optarg);
-                    break;
-                case 'z':
-                    time_utc = strdup(optarg);
-                    break;
-                default:
-                    fprintf(stderr, "Error: unrecognised option '%s'\n", optarg);
-                    usage();
-                    exit(EXIT_FAILURE);
-            }
-        }
-    }
-    else {
-        usage();
-        exit(EXIT_FAILURE);
-    }
+    // Parse command line arguments
+    make_beam_parse_cmdline( argc, argv, &opts );
 
-    // Check that all the required options were supplied
-    if (obsid == NULL || begin == 0 || end  == 0 || time_utc == NULL ||
-        dec_ddmmss == NULL || ra_hhmmss == NULL || datadir == NULL ||
-        metafits == NULL || rec_channel == NULL)
-    {
-        fprintf(stderr, "Error: missing required options\n");
-        usage();
-        exit(EXIT_FAILURE);
-    }
-
-    // Check that a calibration solution was supplied
-    if (cal.cal_type == NO_CALIBRATION)
-    {
-        fprintf(stderr, "Error: no calibration solution supplied\n");
-        usage();
-        exit(EXIT_FAILURE);
-    }
-
-    // Check that at least one output option has been selected
-    if (!out_incoh && !out_coh)
-    {
-        fprintf(stderr, "Error: no output format selected\n");
-        usage();
-        exit(EXIT_FAILURE);
-    }
+    // Create "shorthand" variables for options that are used frequently
+    int nstation       = opt.nstation;
+    int nchan          = opt.nchan;
+    const int npol     = 2;      // (X,Y)
+    const int outpol   = 4;      // (I,Q,U,V)
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = omp_get_wtime();
     printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
 
     // Calculate the number of files
-    int nfiles = end - begin + 1;
+    int nfiles = opts.end - opts.begin + 1;
     if (nfiles <= 0) {
-        fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, begin, end);
+        fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, opts.begin, opts.end);
         exit(EXIT_FAILURE);
     }
 
@@ -257,9 +110,9 @@ int main(int argc, char **argv) {
     int second;
     unsigned long int timestamp;
     for (second = 0; second < nfiles; second++) {
-        timestamp = second + begin;
+        timestamp = second + opts.begin;
         filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
-        sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", datadir, obsid, timestamp, rec_channel );
+        sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", opts.datadir, opts.obsid, timestamp, opts.rec_channel );
     }
 
     // Allocate memory for complex weights matrices
@@ -294,16 +147,16 @@ int main(int argc, char **argv) {
     struct psrfits pf_incoh;
 
     // Read in info from metafits file
-    printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, metafits);
+    printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, opts.metafits);
     struct metafits_info mi;
-    get_metafits_info( metafits, &mi, chan_width );
+    get_metafits_info( opts.metafits, &mi, opts.chan_width );
 
     // If using bandpass calibration solutions, calculate number of expected bandpass channels
     if (cal.cal_type == RTS_BANDPASS)
-        cal.nchan = (nchan * chan_width) / cal.chan_width;
+        cal.nchan = (nchan * opts.chan_width) / cal.chan_width;
 
     int i;
-    if (!use_ant_flags)
+    if (!opts.use_ant_flags)
         for (i = 0; i < nstation*npol; i++)
             mi.weights_array[i] = 1.0;
 
@@ -316,12 +169,12 @@ int main(int argc, char **argv) {
     printf("[%f]  Setting up output header information\n", omp_get_wtime()-begintime);
     struct delays delay_vals;
     get_delays(
-            dec_ddmmss,    // dec as a string "dd:mm:ss"
-            ra_hhmmss,     // ra  as a string "hh:mm:ss"
-            frequency,     // middle of the first frequency channel in Hz
+            opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
+            opts.ra_hhmmss,     // ra  as a string "hh:mm:ss"
+            opts.frequency,     // middle of the first frequency channel in Hz
             &cal,          // struct holding info about calibration
-            sample_rate,   // = 10000 samples per sec
-            time_utc,      // utc time string
+            opts.sample_rate,   // = 10000 samples per sec
+            opts.time_utc,      // utc time string
             0.0,           // seconds offset from time_utc at which to calculate delays
             &delay_vals,   // Populate psrfits header info
             &mi,           // Struct containing info from metafits file
@@ -330,15 +183,15 @@ int main(int argc, char **argv) {
     );
 
     // now we need to create a fits file and populate its header
-    populate_psrfits_header( &pf, metafits, obsid, time_utc, sample_rate,
-            frequency, nchan, chan_width, outpol, rec_channel, &delay_vals );
+    populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc, opts.sample_rate,
+            opts.frequency, nchan, opts.chan_width, outpol, opts.rec_channel, &delay_vals );
 
     // If incoherent sum requested, populate incoherent psrfits header
     if (out_incoh)
     {
         int incoh_npol = 1;
-        populate_psrfits_header( &pf_incoh, metafits, obsid, time_utc, sample_rate,
-                frequency, nchan, chan_width, incoh_npol, rec_channel, &delay_vals );
+        populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid, opts.time_utc, opts.sample_rate,
+                opts.frequency, nchan, opts.chan_width, incoh_npol, opts.rec_channel, &delay_vals );
 
         // The above sets the RA and Dec to be the beamforming pointing, but it ought
         // to have the tile pointing, not the beam pointing
@@ -348,11 +201,11 @@ int main(int argc, char **argv) {
 
         // Also, we need to give it a different base name for the output files
         sprintf(pf_incoh.basefilename, "%s_%s_ch%03d_incoh",
-                pf_incoh.hdr.project_id, pf_incoh.hdr.source, atoi(rec_channel));
+                pf_incoh.hdr.project_id, pf_incoh.hdr.source, atoi(opts.rec_channel));
     }
 
     // Create array for holding the raw data
-    int bytes_per_file = sample_rate * nstation * npol * nchan;
+    int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
     uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     assert(data);
 
@@ -383,23 +236,19 @@ int main(int argc, char **argv) {
         // Get the next second's worth of phases / jones matrices, if needed
         printf("[%f]  Calculating delays\n", omp_get_wtime()-begintime);
         get_delays(
-                dec_ddmmss,    // dec as a string "dd:mm:ss"
-                ra_hhmmss,     // ra  as a string "hh:mm:ss"
-                frequency,     // middle of the first frequency channel in Hz
+                opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
+                opts.ra_hhmmss,     // ra  as a string "hh:mm:ss"
+                opts.frequency,     // middle of the first frequency channel in Hz
                 &cal,          // struct holding info about calibration
-                sample_rate,   // = 10000 samples per sec
-                time_utc,      // utc time string
+                opts.sample_rate,   // = 10000 samples per sec
+                opts.time_utc,      // utc time string
                 (double)file_no, // seconds offset from time_utc at which to calculate delays
                 NULL,          // Don't update delay_vals
                 &mi,           // Struct containing info from metafits file
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );       // invJi array           (answer will be output here)
 
-#ifdef PROFILE
-        printf("[%f]  Calculating beam --       ", omp_get_wtime()-begintime);
-#else
         printf("[%f]  Calculating beam\n", omp_get_wtime()-begintime);
-#endif
 
         offset_in_psrfits  = 0;
         offset_in_incoh    = 0;
@@ -411,24 +260,8 @@ int main(int argc, char **argv) {
             for (i = 0; i < nchan*pf_incoh.hdr.nsblk; i++)
                 data_buffer_incoh[i] = 0.0;
 
-#ifdef PROFILE
-        double sec1=0.0, sec2=0.0, sec3=0.0, sec4=0.0, sec5=0.0;
-        int progress = 0;
-        int num_threads = omp_get_max_threads();
-#endif
-#ifdef PROFILE
-#pragma omp parallel for reduction(+:sec1,sec2,sec3,sec4,sec5,progress)
-#else
 #pragma omp parallel for
-#endif
-        for (sample = 0; sample < (int)sample_rate; sample++ ) {
-
-#ifdef PROFILE
-            double chkpt1, chkpt2, chkpt3, chkpt4, chkpt5, chkpt6, chkpt7;
-            printf("\b\b\b\b\b\b%5.1f%%", progress*num_threads/100.0 + 0.05);
-            fflush(stdout);
-            progress++;
-#endif
+        for (sample = 0; sample < (int)opts.sample_rate; sample++ ) {
 
             int ch, ant, pol, opol, opol1, opol2;
             uint8_t uD, uDr, uDi;
@@ -474,9 +307,6 @@ int main(int argc, char **argv) {
 
                 for (ch = 0; ch < nchan; ch++ ) {
 
-#ifdef PROFILE
-                    chkpt1 = omp_get_wtime();
-#endif
                     // Calculate quantities that depend only on "input" polarisation
                     for (pol = 0; pol < npol    ; pol++) {
 
@@ -508,10 +338,6 @@ int main(int argc, char **argv) {
 
                     }
 
-#ifdef PROFILE
-                    chkpt2 = omp_get_wtime();
-                    sec1 += chkpt2-chkpt1;
-#endif
                     // Calculate quantities that depend on output polarisation
                     // (i.e. apply inv(jones))
                     for (pol = 0; pol < npol; pol++) {
@@ -526,16 +352,9 @@ int main(int argc, char **argv) {
 
                         beam[ch][ant][pol] = e_true[pol];
                     }
-#ifdef PROFILE
-                    chkpt3 = omp_get_wtime();
-                    sec2 += chkpt3-chkpt2;
-#endif
                 }
             }
 
-#ifdef PROFILE
-            chkpt4 = omp_get_wtime();
-#endif
             // Detect the beam = sum over antennas
             for (ant = 0; ant < nstation; ant++)
             for (pol = 0; pol < npol    ; pol++)
@@ -547,11 +366,6 @@ int main(int argc, char **argv) {
                 if (out_incoh)
                     detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
             }
-
-#ifdef PROFILE
-            chkpt5 = omp_get_wtime();
-            sec3 += chkpt5-chkpt4;
-#endif
 
             // Calculate the Stokes parameters
             double beam00, beam11;
@@ -582,11 +396,6 @@ int main(int argc, char **argv) {
                 spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
             }
 
-#ifdef PROFILE
-            chkpt6 = omp_get_wtime();
-            sec4 += chkpt6-chkpt5;
-#endif
-
             offset_in_psrfits  = sizeof(float)*nchan*outpol * sample;
             offset_in_incoh    = sizeof(float)*nchan * sample;
 
@@ -595,24 +404,7 @@ int main(int argc, char **argv) {
             if (out_incoh)
                 memcpy((void *)((char *)data_buffer_incoh + offset_in_incoh), detected_incoh_beam, sizeof(float)*nchan);
 
-#ifdef PROFILE
-            chkpt7 = omp_get_wtime();
-            sec5 += chkpt7-chkpt6;
-#endif
-
         }
-#ifdef PROFILE
-        printf("\n");
-        double sectotal = sec1 + sec2 + sec3 + sec4 + sec5;
-        printf("%.1f  %.1f  %.1f  %.1f  %.1f out of %.1f sec on %d threads\n",
-                100.0*sec1/sectotal,
-                100.0*sec2/sectotal,
-                100.0*sec3/sectotal,
-                100.0*sec4/sectotal,
-                100.0*sec5/sectotal,
-                sectotal/num_threads,
-                num_threads);
-#endif
 
         // We've arrived at the end of a second's worth of data...
 
@@ -685,7 +477,7 @@ int main(int argc, char **argv) {
     }
 
     // Free up memory for filenames
-    if (datadir) {
+    if (opts.datadir) {
         int second;
         for (second = 0; second < nfiles; second++)
             free( filenames[second] );
@@ -824,3 +616,148 @@ void usage() {
     fprintf(stderr, "\n");
 }
 
+
+
+void make_beam_parse_cmdline(
+        int argc, char **argv, struct make_beam_opts *opts )
+{
+    if (argc > 1) {
+
+        int c;
+        while (1) {
+
+            static struct option long_options[] = {
+                {"obsid",           required_argument, 0, 'o'},
+                {"begin",           required_argument, 0, 'b'},
+                {"end",             required_argument, 0, 'e'},
+                {"incoh",           no_argument,       0, 'i'},
+                {"utc-time",        required_argument, 0, 'z'},
+                {"dec",             required_argument, 0, 'D'},
+                {"ra",              required_argument, 0, 'R'},
+                {"data-location",   required_argument, 0, 'd'},
+                {"metafits-file",   required_argument, 0, 'm'},
+                {"coarse-chan",     required_argument, 0, 'f'},
+                {"antennas",        required_argument, 0, 'a'},
+                {"num-fine-chans",  required_argument, 0, 'n'},
+                {"fine-chan-width", required_argument, 0, 'w'},
+                {"sample-rate",     required_argument, 0, 'r'},
+                {"use-ant-flags",   no_argument,       0, 'F'},
+                {"dijones-file",    required_argument, 0, 'J'},
+                {"bandpass-file",   required_argument, 0, 'B'},
+                {"rts-chan-width",  required_argument, 0, 'W'},
+                {"offringa-file",   required_argument, 0, 'O'},
+                {"offringa-chan",   required_argument, 0, 'C'},
+                {"help",            required_argument, 0, 'h'},
+                {"version",         required_argument, 0, 'V'}
+            };
+
+            int option_index = 0;
+            c = getopt_long( argc, argv,
+                             "a:b:B:C:d:D:e:f:FhiJ:m:n:o:O:r:R:Vw:W:z:",
+                             long_options, &option_index);
+            if (c == -1)
+                break;
+
+            switch(c) {
+
+                case 'a':
+                    opts->nstation = atoi(optarg);
+                    break;
+                case 'b':
+                    opts->begin = atol(optarg);
+                    break;
+                case 'B':
+                    opts->cal.bandpass_filename = strdup(optarg);
+                    opts->cal.cal_type = RTS_BANDPASS;
+                    break;
+                case 'C':
+                    opts->cal.offr_chan_num = atoi(optarg);
+                    break;
+                case 'd':
+                    opts->datadir = strdup(optarg);
+                    break;
+                case 'D':
+                    opts->dec_ddmmss = strdup(optarg);
+                    break;
+                case 'e':
+                    opts->end = atol(optarg);
+                    break;
+                case 'f':
+                    opts->rec_channel = strdup(optarg);
+                    // The base frequency of the coarse channel in Hz
+                    opts->frequency = atoi(optarg) * 1.28e6 - 640e3;
+                    break;
+                case 'F':
+                    opts->use_ant_flags = 1;
+                    break;
+                case 'h':
+                    usage();
+                    exit(0);
+                    break;
+                case 'i':
+                    opts->out_incoh = 1;
+                    break;
+                case 'J':
+                    opts->cal.filename = strdup(optarg);
+                    if (opts->cal.cal_type != RTS_BANDPASS)
+                        opts->cal.cal_type = RTS;
+                    break;
+                case 'm':
+                    opts->metafits = strdup(optarg);
+                    break;
+                case 'n':
+                    opts->nchan = atoi(optarg);
+                    break;
+                case 'o':
+                    opts->obsid = strdup(optarg);
+                    break;
+                case 'O':
+                    opts->cal.filename = strdup(optarg);
+                    opts->cal.cal_type = OFFRINGA;
+                    break;
+                case 'r':
+                    opts->sample_rate = atoi(optarg);
+                    break;
+                case 'R':
+                    opts->ra_hhmmss = strdup(optarg);
+                    break;
+                case 'V':
+                    printf("%s\n", MAKE_BEAM_VERSION);
+                    exit(0);
+                    break;
+                case 'w':
+                    opts->chan_width = atoi(optarg);
+                    break;
+                case 'W':
+                    opts->cal.chan_width = atoi(optarg);
+                    break;
+                case 'z':
+                    opts->time_utc = strdup(optarg);
+                    break;
+                default:
+                    fprintf(stderr, "error: make_beam_parse_cmdline: "
+                                    "unrecognised option '%s'\n", optarg);
+                    usage();
+                    exit(EXIT_FAILURE);
+            }
+        }
+    }
+    else {
+        usage();
+        exit(EXIT_FAILURE);
+    }
+
+    // Check that all the required options were supplied
+    assert( opts->obsid        != NULL );
+    assert( opts->begin        != 0    );
+    assert( opts->end          != 0    );
+    assert( opts->time_utc     != NULL );
+    assert( opts->dec_ddmmss   != NULL );
+    assert( opts->ra_hhmmss    != NULL );
+    assert( opts->datadir      != NULL );
+    assert( opts->metafits     != NULL );
+    assert( opts->rec_channel  != NULL );
+    assert( opts->cal.cal_type != NO_CALIBRATION );
+    assert( opts->out_incoh || opts->out_coh );
+
+}
