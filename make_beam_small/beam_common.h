@@ -1,6 +1,8 @@
 #ifndef BEAM_COMMON_H
 #define BEAM_COMMON_H
 
+#include <inttypes.h>
+
 // Calibration solution types
 #define NO_CALIBRATION  0
 #define RTS             1

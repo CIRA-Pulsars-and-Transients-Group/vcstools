@@ -1,10 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "psrfits.h"
-#include "beam_psrfits.h"
+#include <complex.h>
 #include "slalib.h"
-//#include "slamac.h"
+#include "slamac.h"
+#include "mwac_utils.h"
+#include "beamer_version.h"
+#include "psrfits.h"
+#include "beam_common.h"
+#include "beam_psrfits.h"
 
 void printf_psrfits( struct psrfits *pf ) {
     fprintf(stdout, "\nPSRFITS:\n");

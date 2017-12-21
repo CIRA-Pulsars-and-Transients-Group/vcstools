@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <complex.h>
 #include "beam_common.h"
+#include "psrfits.h"
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width ) {
 /* Read in the relevant information from the metafits file.

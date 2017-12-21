@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <complex.h>
 #include "beam_vdif.h"
 #include "mwa_header.h"

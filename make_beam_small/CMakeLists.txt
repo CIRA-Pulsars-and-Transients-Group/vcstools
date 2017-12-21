@@ -1,7 +1,7 @@
 
 cmake_minimum_required (VERSION 2.6)
 project (make_beam_small)
-add_executable(make_beam_small make_beam_small get_delays_small)
+add_executable(make_beam_small make_beam_small get_delays_small beam_common beam_psrfits beam_vdif)
 #target_link_libraries(get_delays_small -L${CMAKE_INSTALL_PREFIX}/lib MWAC_Utils)
 #target_link_libraries(get_delays_small ${PSRFITS_UTILS_LIBRARY} )
 #target_link_libraries(get_delays_small ${SLALIB_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} -lm)

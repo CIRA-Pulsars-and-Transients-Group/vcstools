@@ -3,9 +3,6 @@
 
 #include "beam_common.h"
 
-void usage();
-void make_beam_parse_cmdline( int argc, char **argv, struct make_beam_opts *opts );
-
 struct make_beam_opts {
     // Variables for required options
     char              *obsid;         // The observation ID
@@ -32,5 +29,8 @@ struct make_beam_opts {
 
     struct calibration cal;           // Variables for calibration settings
 };
+
+void usage();
+void make_beam_parse_cmdline( int argc, char **argv, struct make_beam_opts *opts );
 
 #endif

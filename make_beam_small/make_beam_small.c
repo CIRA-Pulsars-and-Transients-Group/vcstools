@@ -86,8 +86,8 @@ int main(int argc, char **argv) {
     make_beam_parse_cmdline( argc, argv, &opts );
 
     // Create "shorthand" variables for options that are used frequently
-    int nstation       = opt.nstation;
-    int nchan          = opt.nchan;
+    int nstation       = opts.nstation;
+    int nchan          = opts.nchan;
     const int npol     = 2;      // (X,Y)
     const int outpol   = 4;      // (I,Q,U,V)
 
@@ -152,8 +152,8 @@ int main(int argc, char **argv) {
     get_metafits_info( opts.metafits, &mi, opts.chan_width );
 
     // If using bandpass calibration solutions, calculate number of expected bandpass channels
-    if (cal.cal_type == RTS_BANDPASS)
-        cal.nchan = (nchan * opts.chan_width) / cal.chan_width;
+    if (opts.cal.cal_type == RTS_BANDPASS)
+        opts.cal.nchan = (nchan * opts.chan_width) / opts.cal.chan_width;
 
     int i;
     if (!opts.use_ant_flags)
@@ -172,7 +172,7 @@ int main(int argc, char **argv) {
             opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
             opts.ra_hhmmss,     // ra  as a string "hh:mm:ss"
             opts.frequency,     // middle of the first frequency channel in Hz
-            &cal,          // struct holding info about calibration
+            &opts.cal,          // struct holding info about calibration
             opts.sample_rate,   // = 10000 samples per sec
             opts.time_utc,      // utc time string
             0.0,           // seconds offset from time_utc at which to calculate delays
@@ -187,7 +187,7 @@ int main(int argc, char **argv) {
             opts.frequency, nchan, opts.chan_width, outpol, opts.rec_channel, &delay_vals );
 
     // If incoherent sum requested, populate incoherent psrfits header
-    if (out_incoh)
+    if (opts.out_incoh)
     {
         int incoh_npol = 1;
         populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid, opts.time_utc, opts.sample_rate,
@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
     float  *data_buffer_psrfits  =  (float *)malloc( nchan*outpol*pf.hdr.nsblk * sizeof(float) );
     int8_t *out_buffer_8_incoh   = NULL;
     float  *data_buffer_incoh    = NULL;
-    if (out_incoh)
+    if (opts.out_incoh)
     {
         out_buffer_8_incoh = (int8_t *)malloc( nchan*pf_incoh.hdr.nsblk * sizeof(int8_t) );
         data_buffer_incoh = (float *)malloc( nchan*pf_incoh.hdr.nsblk * sizeof(float) );
@@ -239,7 +239,7 @@ int main(int argc, char **argv) {
                 opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
                 opts.ra_hhmmss,     // ra  as a string "hh:mm:ss"
                 opts.frequency,     // middle of the first frequency channel in Hz
-                &cal,          // struct holding info about calibration
+                &opts.cal,          // struct holding info about calibration
                 opts.sample_rate,   // = 10000 samples per sec
                 opts.time_utc,      // utc time string
                 (double)file_no, // seconds offset from time_utc at which to calculate delays
@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
         for (i = 0; i < nchan*outpol*pf.hdr.nsblk; i++)
             data_buffer_psrfits[i] = 0.0;
 
-        if (out_incoh)
+        if (opts.out_incoh)
             for (i = 0; i < nchan*pf_incoh.hdr.nsblk; i++)
                 data_buffer_incoh[i] = 0.0;
 
@@ -290,7 +290,7 @@ int main(int argc, char **argv) {
                 detected_beam[ch][pol] = 0.0 + 0.0*I;
 
             // Initialise incoherent beam arrays to zero, if necessary
-            if (out_incoh)
+            if (opts.out_incoh)
                 for (ch  = 0; ch  < nchan   ; ch++ )
                     detected_incoh_beam[ch] = 0.0;
 
@@ -330,7 +330,7 @@ int main(int argc, char **argv) {
                         e_dash[pol]  = (float)sDr + (float)sDi * I;
 
                         // Detect the incoherent beam, if requested
-                        if (out_incoh)
+                        if (opts.out_incoh)
                             incoh_beam[ch][ant][pol] = creal(e_dash[pol] * conj(e_dash[pol]));
 
                         // Apply complex weights
@@ -363,7 +363,7 @@ int main(int argc, char **argv) {
                 detected_beam[ch][pol] += beam[ch][ant][pol];
 
                 // ...and the incoherent beam, if requested
-                if (out_incoh)
+                if (opts.out_incoh)
                     detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
             }
 
@@ -401,7 +401,7 @@ int main(int argc, char **argv) {
 
             memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
 
-            if (out_incoh)
+            if (opts.out_incoh)
                 memcpy((void *)((char *)data_buffer_incoh + offset_in_incoh), detected_incoh_beam, sizeof(float)*nchan);
 
         }
@@ -421,7 +421,7 @@ int main(int argc, char **argv) {
 
         memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
 
-        if (out_incoh)
+        if (opts.out_incoh)
         {
             flatten_bandpass(pf_incoh.hdr.nsblk, nchan, 1,
                     data_buffer_incoh, pf_incoh.sub.dat_scales,
@@ -445,7 +445,7 @@ int main(int argc, char **argv) {
         pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
         pf.sub.lst += pf.sub.tsubint;
 
-        if (out_incoh)
+        if (opts.out_incoh)
         {
             if (psrfits_write_subint(&pf_incoh) != 0) {
                 fprintf(stderr, "Write incoherent subint failed file exists?\n");
