@@ -176,7 +176,7 @@ int main(int argc, char **argv) {
 
     while (!feof(fin) && (nstep < 0 || step < nstep)) {
         
-        for (count = 0 ; count < ncount ; count++) { 
+        for (count = 0 ; (int)count < ncount ; count++) { 
             items_to_read = gulp;
             rtn = 0;
             rtn = fread(input_buffer,1,items_to_read,fin);
@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
                 if (binary == 4) {
                     int bindex=0;
                     float fval=0.0;
-                    for (bindex=0;bindex<out_size;bindex++) {
+                    for (bindex=0;bindex<(int)out_size;bindex++) {
                         fval = (float) *out_ptr;
                         memcpy(&binary_buffer[binary*bindex],&fval,binary);
                         out_ptr++;
@@ -293,7 +293,7 @@ int main(int argc, char **argv) {
                 else if (binary == 16) {
                     int bindex=0;
                     complex float fval=0.0;
-                    for (bindex=0;bindex<out_size/2;bindex++) {
+                    for (bindex=0;bindex<(int)out_size/2;bindex++) {
                         fval = (double) *out_ptr + 0.0*I;
                         out_ptr++;
                         fval += (double) I * (double) *out_ptr;

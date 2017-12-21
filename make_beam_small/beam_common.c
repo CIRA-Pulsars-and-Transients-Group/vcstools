@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <complex.h>
 #include "beam_common.h"
 #include "psrfits.h"

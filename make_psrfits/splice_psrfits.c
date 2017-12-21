@@ -10,10 +10,6 @@ void usage() {
     fprintf(stderr,"The output will get written to \"[basefilename]_0001.fits\". This file must not already exist.\n");
 }
 
-int match(void *in1, void *in2) {
-    return 1;
-}
-
 int prep_data(void *to_load) {
     struct psrfits *pf = (struct psrfits *) to_load;
     int rv = 0;
@@ -37,15 +33,9 @@ int cleanup(void *to_clean) {
     free(pf->sub.rawdata);
     return 1;
 }
-int add(char **to_add,int n) {
-    // this is just a simple combiner
-    // we are just adding the samples together
-    // we dont really check any of
-    return 1;
-}
 int append(char **to_append, void *total, int n){
 
-    // this would perhaps be beeter as C++
+    // this would perhaps be better as C++
     // this method appends two a number of psrfits files to the total
 
     // sets the total pointer to the input argument
@@ -315,26 +305,26 @@ int append(char **to_append, void *total, int n){
             }
         }
 	    // Now we need to get the MetaData for this subint
-	    pf_total->sub.tsubint = pf->sub.tsubint;         // Length of subintegration (sec)
-	    pf_total->sub.offs = pf->sub.offs ;            // Offset from Start of subint centre (sec)
-	    pf_total->sub.lst = pf->sub.lst ;             // LST at subint centre (sec)
-	    pf_total->sub.ra = pf->sub.ra ;              // RA (J2000) at subint centre (deg)
-	    pf_total->sub.dec = pf->sub.dec ;             // Dec (J2000) at subint centre (deg)
-	    pf_total->sub.glon = pf->sub.glon ;            // Gal longitude at subint centre (deg)
-	    pf_total->sub.glat = pf->sub.glat ;            // Gal latitude at subint centre (deg)
-	    pf_total->sub.feed_ang = pf->sub.feed_ang ;        // Feed angle at subint centre (deg)
-	    pf_total->sub.pos_ang = pf->sub.pos_ang ;         // Position angle of feed at subint centre (deg)
-	    pf_total->sub.par_ang = pf->sub.par_ang ;         // Parallactic angle at subint centre (deg)
-	    pf_total->sub.tel_az = pf->sub.tel_az;           // Telescope azimuth at subint centre (deg)
-	    pf_total->sub.tel_zen = pf->sub.tel_zen ;         // Telescope zenith angle at subint centre (deg)
+	    pf_total->sub.tsubint  = pf->sub.tsubint;  // Length of subintegration (sec)
+	    pf_total->sub.offs     = pf->sub.offs;     // Offset from Start of subint centre (sec)
+	    pf_total->sub.lst      = pf->sub.lst;      // LST at subint centre (sec)
+	    pf_total->sub.ra       = pf->sub.ra;       // RA (J2000) at subint centre (deg)
+	    pf_total->sub.dec      = pf->sub.dec;      // Dec (J2000) at subint centre (deg)
+	    pf_total->sub.glon     = pf->sub.glon;     // Gal longitude at subint centre (deg)
+	    pf_total->sub.glat     = pf->sub.glat;     // Gal latitude at subint centre (deg)
+	    pf_total->sub.feed_ang = pf->sub.feed_ang; // Feed angle at subint centre (deg)
+	    pf_total->sub.pos_ang  = pf->sub.pos_ang;  // Position angle of feed at subint centre (deg)
+	    pf_total->sub.par_ang  = pf->sub.par_ang;  // Parallactic angle at subint centre (deg)
+	    pf_total->sub.tel_az   = pf->sub.tel_az;   // Telescope azimuth at subint centre (deg)
+	    pf_total->sub.tel_zen  = pf->sub.tel_zen;  // Telescope zenith angle at subint centre (deg)
 
         psrfits_write_subint(pf_total);
     }
     return 1;
 }
-void unload_total(void *total) {
-    ;
-}
+
+
+
 int main(int argc, char *argv[]) {
 
     int i=0;

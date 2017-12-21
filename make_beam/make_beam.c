@@ -2190,12 +2190,12 @@ int main(int argc, char **argv) {
                 //fprintf(stderr,"Inverting %d chan PFB...",nchan);
                 if (offset_in_vdif == vf.sizeof_buffer-vf.sizeof_beam) {
 
-                    invert_pfb(pol_X,pol_X,nchan,1,1,1,fft_mode,1,NULL); // finishing up this second
-                    invert_pfb(pol_Y,pol_Y,nchan,1,1,1,fft_mode,1,NULL);
+                    invert_pfb(pol_X,pol_X,nchan,1,fft_mode,1,NULL); // finishing up this second
+                    invert_pfb(pol_Y,pol_Y,nchan,1,fft_mode,1,NULL);
                 }
                 else {
-                    invert_pfb(pol_X,pol_X,nchan,1,1,1,fft_mode,0,NULL);
-                    invert_pfb(pol_Y,pol_Y,nchan,1,1,1,fft_mode,0,NULL);
+                    invert_pfb(pol_X,pol_X,nchan,1,fft_mode,0,NULL);
+                    invert_pfb(pol_Y,pol_Y,nchan,1,fft_mode,0,NULL);
                 } //
                 // now we have nchan - time steps and 2 channels
                 // fprintf(stderr,"done\n");
@@ -2268,8 +2268,8 @@ int main(int argc, char **argv) {
                         cuda_invert_pfb ((Complex *) in_ptr_Y,(Complex *) out_ptr_Y,(Complex *) fcontext.filter,nchan,fcontext.ntaps,fcontext.nsamples/nchan);
 #else
                         fprintf(stderr,"invert\n");
-                        invert_pfb((complex float *) filter_buffer_X+(2*(sub_samp - fcontext.ntaps)),(complex float *) filter_out_X+(2*sub_samp),nchan,1,1,1,fft_mode,0,(void *) &fcontext);
-                        invert_pfb((complex float *) filter_buffer_Y+(2*(sub_samp - fcontext.ntaps)),(complex float *) filter_out_Y+(2*sub_samp),nchan,1,1,1,fft_mode,0, (void *) &fcontext);
+                        invert_pfb((complex float *) filter_buffer_X+(2*(sub_samp - fcontext.ntaps)),(complex float *) filter_out_X+(2*sub_samp),nchan,1,fft_mode,0,(void *) &fcontext);
+                        invert_pfb((complex float *) filter_buffer_Y+(2*(sub_samp - fcontext.ntaps)),(complex float *) filter_out_Y+(2*sub_samp),nchan,1,fft_mode,0, (void *) &fcontext);
 #endif
 
                     }

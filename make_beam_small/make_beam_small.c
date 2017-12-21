@@ -20,6 +20,7 @@
 #include <assert.h>
 #include "beam_common.h"
 #include "beam_psrfits.h"
+#include "beam_vdif.h"
 #include "make_beam_small.h"
 
 // Are GPU available

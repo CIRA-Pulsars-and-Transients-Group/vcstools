@@ -241,7 +241,7 @@ void get_delays(
     complex double invJref[4];
     if (cal->cal_type == RTS || cal->cal_type == RTS_BANDPASS) {
 
-        read_rts_file(M, Jref, NANT, &amp, cal->filename); // Read in the RTS DIJones file
+        read_rts_file(M, Jref, &amp, cal->filename); // Read in the RTS DIJones file
         inv2x2(Jref, invJref);
 
         if  (cal->cal_type == RTS_BANDPASS) {
