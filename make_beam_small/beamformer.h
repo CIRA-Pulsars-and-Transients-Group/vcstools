@@ -1,5 +1,5 @@
-#ifndef MAKE_BEAM_H
-#define MAKE_BEAM_H
+#ifndef BEAMFORMER_H
+#define BEAMFORMER_H
 
 #include <complex.h>
 #include "psrfits.h"

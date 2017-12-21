@@ -19,6 +19,7 @@
 #include <glob.h>
 #include <fcntl.h>
 #include <assert.h>
+#include "beamformer.h"
 #include "make_beam_small.h"
 
 // Are GPU available
