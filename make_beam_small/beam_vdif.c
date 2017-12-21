@@ -10,7 +10,7 @@ void vdif_write_second( vdifinfo *vf, int8_t *output )
 {
     // form the filename
     // there is a standard naming convention
-    char  filename[1024];
+    char  filename[1030];
     sprintf( filename, "%s.vdif", vf->basefilename );
 
     //fprintf(stderr,"Attempting to open VDIF file for writing: %s\n",filename);
@@ -64,7 +64,7 @@ complex float get_std_dev_complex(complex float *input, int nsamples)
 void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
 {
     float percentage = 0.0;
-    float occupancy = 17.0;
+    //float occupancy = 17.0;
     float limit = 0.00001;
     float step = 0.001;
     int i = 0;

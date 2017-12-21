@@ -24,5 +24,5 @@ target_link_libraries(make_beam_small ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY
 #    include_directories({MPI_INCLUDE_PATH} ${PROJECT_SOURCE_DIR}/../mwac_utils ${PROJECT_SOURCE_DIR}/../gpu_utils ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${MPI_INCLUDE_PATH} ${CMAKE_INSTALL_PREFIX}/include ${SLALIB_INCLUDE_DIR})
 #endif (CUDA_FOUND)
 
-#install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/make_beam_small DESTINATION bin)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/make_beam_small DESTINATION bin)
 
