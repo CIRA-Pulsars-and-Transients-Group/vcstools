@@ -19,7 +19,8 @@
 #include <glob.h>
 #include <fcntl.h>
 #include <assert.h>
-#include "beamformer.h"
+#include "beam_common.h"
+#include "beam_psrfits.h"
 #include "make_beam_small.h"
 
 // Are GPU available
@@ -41,269 +42,8 @@
 
 //#define PROFILE
 
-void usage() {
-    fprintf(stderr, "\n");
-    fprintf(stderr, "usage: make_beam_small [OPTIONS]\n");
+void usage();
 
-    fprintf(stderr, "\n");
-    fprintf(stderr, "REQUIRED OPTIONS\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-o, --obsid=GPSTIME       ");
-    fprintf(stderr, "Observation ID (GPS seconds).\n");
-    fprintf(stderr, "\t-b, --begin=GPSTIME       ");
-    fprintf(stderr, "Begin time of observation, in GPS seconds\n");
-    fprintf(stderr, "\t-e, --end=GPSTIME         ");
-    fprintf(stderr, "End time of observation, in GPS seconds\n");
-    fprintf(stderr, "\t-z, --utc-time=UTCTIME    ");
-    fprintf(stderr, "The UTC time that corresponds to the GPS time given by the -b\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "option. UTCTIME must have the format: yyyy-mm-ddThh:mm:ss\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-D, --dec=dd:mm:ss.s      ");
-    fprintf(stderr, "Declination of pointing direction\n");
-    fprintf(stderr, "\t-R, --ra=hh:mm:ss.s       ");
-    fprintf(stderr, "Right ascension of pointing direction\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-d, --data-location=PATH  ");
-    fprintf(stderr, "PATH is the directory containing the recombined data\n");
-    fprintf(stderr, "\t-m, --metafits-file=FILE  ");
-    fprintf(stderr, "FILE is the metafits file pertaining to the OBSID given by the\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr,  "-o option\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-f, --coarse-chan=N       ");
-    fprintf(stderr, "Absolute coarse channel number (0-255)\n");
-
-    fprintf(stderr, "\n");
-    fprintf(stderr, "OUTPUT OPTIONS\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-i, --incoh               ");
-    fprintf(stderr, "Turn on incoherent beam output (off by default)\n");
-    fprintf(stderr, "\t--no-psrfits              ");
-    fprintf(stderr, "Turn off PSRFITS output (on by default) (NOT YET IMPLEMENTED)\n");
-
-    fprintf(stderr, "\n");
-    fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-a, --antennas=N          ");
-    fprintf(stderr, "The number of antennas in the array. For MWA Phase 2, N=128.     ");
-    fprintf(stderr, "[default: 128]\n");
-    fprintf(stderr, "\t-n, --num-fine-chans=N    ");
-    fprintf(stderr, "The number of fine channels per coarse channel.                  ");
-    fprintf(stderr, "[default: 128]\n");
-    fprintf(stderr, "\t-w, --fine-chan-width=N   ");
-    fprintf(stderr, "The bandwidth of an individual fine channel (Hz).                ");
-    fprintf(stderr, "[default: 10000]\n");
-    fprintf(stderr, "\t-r, --sample-rate=N       ");
-    fprintf(stderr, "The VCS sample rate, in Hz. (The sample rate given in the meta-  ");
-    fprintf(stderr, "[default: 10000]\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "metafits file matches the correlator settings at the time of\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "the observation, which is not necessarily the same as that of\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "the VCS. Hence the necessity of this option.)\n");
-    fprintf(stderr, "\t-F, --use-ant-flags       ");
-    fprintf(stderr, "Only include those antennas in the beamformer that have not      ");
-    fprintf(stderr, "[default: off]\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "been flagged in the metafits file given by the -m option.\n");
-
-    fprintf(stderr, "\n");
-    fprintf(stderr, "CALIBRATION OPTIONS (RTS)\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-J, --dijones-file=PATH   ");
-    fprintf(stderr, "The direction-independent Jones matrix file that is output from\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "the RTS. Using this option instructs the beamformer to use the\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "RTS-generated calibration solution. Either -J or -O must be\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "supplied. If both are supplied the one that comes last will\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "override the former.\n");
-    fprintf(stderr, "\t-B, --bandpass-file=PATH  ");
-    fprintf(stderr, "The bandpass file that is output from the RTS. If this option\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "is given, the RTS calibration solution will be applied to each\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "fine channel. If -J is supplied but -B is not, then the coarse\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "channel solution will be applied to ALL fine channels\n");
-    fprintf(stderr, "\t-W, --rts-chan-width      ");
-    fprintf(stderr, "RTS calibration channel bandwidth (Hz)                           ");
-    fprintf(stderr, "[default: 40000]\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "CALIBRATION OPTIONS (OFFRINGA)\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-O, --offringa-file=PATH  ");
-    fprintf(stderr, "The calibration solution file that is output from the tools\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "made by Andre Offringa. Using this option instructs the beam-\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "former to use the Offringa-style calibration solution. Either\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "-J or -O must be supplied. If both are supplied the one that\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "comes last will override the former.\n");
-    fprintf(stderr, "\t-C, --offringa-chan=N     ");
-    fprintf(stderr, "The zero-offset position of the coarse channel solution in the   ");
-    fprintf(stderr, "[default: 0]\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "calibration file given by the -O option.\n");
-
-    fprintf(stderr, "\n");
-    fprintf(stderr, "OTHER OPTIONS\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-h, --help                ");
-    fprintf(stderr, "Print this help and exit\n");
-    fprintf(stderr, "\t-V, --version             ");
-    fprintf(stderr, "Print version number and exit\n");
-    fprintf(stderr, "\n");
-}
-
-void populate_psrfits_header(
-        struct psrfits *pf,
-        char           *metafits,
-        char           *obsid,
-        char           *time_utc,
-        unsigned int    sample_rate,
-        long int        frequency,
-        int             nchan,
-        long int        chan_width,
-        int             outpol,
-        char           *rec_channel,
-        struct delays  *delay_vals ) {
-
-    fitsfile *fptr = NULL;
-    int status      = 0;
-
-    fits_open_file(&fptr, metafits, READONLY, &status);
-    fits_read_key(fptr, TSTRING, "PROJECT", pf->hdr.project_id, NULL, &status);
-    fits_close_file(fptr, &status);
-
-    // Now set values for our hdrinfo structure
-    strcpy(pf->hdr.obs_mode,  "SEARCH");
-    strcpy(pf->hdr.observer,  "MWA User");
-    strcpy(pf->hdr.telescope, "MWA");
-    strncpy(pf->hdr.source, obsid, 23);
-    pf->hdr.scanlen = 1.0; // in sec
-
-    strcpy(pf->hdr.frontend, "MWA-RECVR");
-    snprintf(pf->hdr.backend, 24*sizeof(char), "GD-%s-MB-%s-U-%s",
-            GET_DELAYS_VERSION, MAKE_BEAM_VERSION, UTILS_VERSION);
-
-    // Now let us finally get the time right
-    strcpy(pf->hdr.date_obs,   time_utc);
-    strcpy(pf->hdr.poln_type,  "LIN");
-    strcpy(pf->hdr.track_mode, "TRACK");
-    strcpy(pf->hdr.cal_mode,   "OFF");
-    strcpy(pf->hdr.feed_mode,  "FA");
-
-    pf->hdr.dt   = 1.0/sample_rate;                            // (sec)
-    pf->hdr.fctr = (frequency + (nchan/2.0)*chan_width)/1.0e6; // (MHz)
-    pf->hdr.BW   = (nchan*chan_width)/1.0e6;                   // (MHz)
-
-    // npols + nbits and whether pols are added
-    pf->filenum       = 0;       // This is the crucial one to set to initialize things
-    pf->rows_per_file = 200;     // I assume this is a max subint issue
-
-    pf->hdr.npol         = outpol;
-    pf->hdr.nchan        = nchan;
-    pf->hdr.onlyI        = 0;
-
-    pf->hdr.scan_number   = 1;
-    pf->hdr.rcvr_polns    = 2;
-    pf->hdr.summed_polns  = 0;
-    pf->hdr.offset_subint = 0;
-
-    pf->hdr.df         = chan_width/1.0e6; // (MHz)
-    pf->hdr.orig_nchan = pf->hdr.nchan;
-    pf->hdr.orig_df    = pf->hdr.df;
-    pf->hdr.nbits      = 8;
-    pf->hdr.nsblk      = sample_rate;  // block is always 1 second of data
-
-    pf->hdr.ds_freq_fact = 1;
-    pf->hdr.ds_time_fact = 1;
-
-    // some things that we are unlikely to change
-    pf->hdr.fd_hand  = 1;
-    pf->hdr.fd_sang  = 45.0;
-    pf->hdr.fd_xyph  = 0.0;
-    pf->hdr.be_phase = 0;
-    pf->hdr.chan_dm  = 0.0;
-
-    // Now set values for our subint structure
-    pf->tot_rows     = 0;
-    pf->sub.tsubint  = roundf(pf->hdr.nsblk * pf->hdr.dt);
-    pf->sub.offs     = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
-
-    pf->sub.feed_ang = 0.0;
-    pf->sub.pos_ang  = 0.0;
-    pf->sub.par_ang  = 0.0;
-
-    // Specify psrfits data type
-    pf->sub.FITS_typecode = TBYTE;
-
-    pf->sub.bytes_per_subint = (pf->hdr.nbits * pf->hdr.nchan *
-                                pf->hdr.npol  * pf->hdr.nsblk) / 8;
-
-    // Create and initialize the subint arrays
-    pf->sub.dat_freqs   = (float *)malloc(sizeof(float) * pf->hdr.nchan);
-    pf->sub.dat_weights = (float *)malloc(sizeof(float) * pf->hdr.nchan);
-
-    double dtmp = pf->hdr.fctr - 0.5 * pf->hdr.BW + 0.5 * pf->hdr.df;
-    int i;
-    for (i = 0 ; i < pf->hdr.nchan ; i++) {
-        pf->sub.dat_freqs[i] = dtmp + i * pf->hdr.df;
-        pf->sub.dat_weights[i] = 1.0;
-    }
-
-    // the following is definitely needed for 8 bit numbers
-    pf->sub.dat_offsets = (float *)malloc(sizeof(float) * pf->hdr.nchan * pf->hdr.npol);
-    pf->sub.dat_scales  = (float *)malloc(sizeof(float) * pf->hdr.nchan * pf->hdr.npol);
-    for (i = 0 ; i < pf->hdr.nchan * pf->hdr.npol ; i++) {
-        pf->sub.dat_offsets[i] = 0.0;
-        pf->sub.dat_scales[i]  = 1.0;
-    }
-
-    pf->sub.data    = (unsigned char *)malloc(pf->sub.bytes_per_subint);
-    pf->sub.rawdata = pf->sub.data;
-
-    int ch = atoi(rec_channel);
-    sprintf(pf->basefilename, "%s_%s_ch%03d",
-            pf->hdr.project_id, pf->hdr.source, ch);
-
-    // Update values that depend on get_delays()
-    if (delay_vals != NULL) {
-
-        pf->hdr.ra2000  = delay_vals->mean_ra  * DR2D;
-        pf->hdr.dec2000 = delay_vals->mean_dec * DR2D;
-
-        dec2hms(pf->hdr.ra_str,  pf->hdr.ra2000/15.0, 0);
-        dec2hms(pf->hdr.dec_str, pf->hdr.dec2000,     1);
-
-        pf->hdr.azimuth    = delay_vals->az*DR2D;
-        pf->hdr.zenith_ang = 90.0 - (delay_vals->el*DR2D);
-
-        pf->hdr.beam_FWHM = 0.25;
-        pf->hdr.start_lst = delay_vals->lmst * 60.0 * 60.0;        // Local Apparent Sidereal Time in seconds
-        pf->hdr.start_sec = roundf(delay_vals->fracmjd*86400.0);   // this will always be a whole second
-        pf->hdr.start_day = delay_vals->intmjd;
-        pf->hdr.MJD_epoch  = delay_vals->intmjd + delay_vals->fracmjd;
-
-        // Now set values for our subint structure
-        pf->sub.lst      = pf->hdr.start_lst;
-        pf->sub.ra       = pf->hdr.ra2000;
-        pf->sub.dec      = pf->hdr.dec2000;
-        slaEqgal(pf->hdr.ra2000*DD2R, pf->hdr.dec2000*DD2R,
-                 &pf->sub.glon, &pf->sub.glat);
-        pf->sub.glon    *= DR2D;
-        pf->sub.glat    *= DR2D;
-        pf->sub.tel_az   = pf->hdr.azimuth;
-        pf->sub.tel_zen  = pf->hdr.zenith_ang;
-    }
-}
 
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width ) {
@@ -1372,3 +1112,126 @@ int main(int argc, char **argv) {
 
     return 0;
 }
+
+
+void usage() {
+    fprintf(stderr, "\n");
+    fprintf(stderr, "usage: make_beam_small [OPTIONS]\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "REQUIRED OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-o, --obsid=GPSTIME       ");
+    fprintf(stderr, "Observation ID (GPS seconds).\n");
+    fprintf(stderr, "\t-b, --begin=GPSTIME       ");
+    fprintf(stderr, "Begin time of observation, in GPS seconds\n");
+    fprintf(stderr, "\t-e, --end=GPSTIME         ");
+    fprintf(stderr, "End time of observation, in GPS seconds\n");
+    fprintf(stderr, "\t-z, --utc-time=UTCTIME    ");
+    fprintf(stderr, "The UTC time that corresponds to the GPS time given by the -b\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "option. UTCTIME must have the format: yyyy-mm-ddThh:mm:ss\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-D, --dec=dd:mm:ss.s      ");
+    fprintf(stderr, "Declination of pointing direction\n");
+    fprintf(stderr, "\t-R, --ra=hh:mm:ss.s       ");
+    fprintf(stderr, "Right ascension of pointing direction\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-d, --data-location=PATH  ");
+    fprintf(stderr, "PATH is the directory containing the recombined data\n");
+    fprintf(stderr, "\t-m, --metafits-file=FILE  ");
+    fprintf(stderr, "FILE is the metafits file pertaining to the OBSID given by the\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr,  "-o option\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-f, --coarse-chan=N       ");
+    fprintf(stderr, "Absolute coarse channel number (0-255)\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "OUTPUT OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-i, --incoh               ");
+    fprintf(stderr, "Turn on incoherent beam output (off by default)\n");
+    fprintf(stderr, "\t--no-psrfits              ");
+    fprintf(stderr, "Turn off PSRFITS output (on by default) (NOT YET IMPLEMENTED)\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-a, --antennas=N          ");
+    fprintf(stderr, "The number of antennas in the array. For MWA Phase 2, N=128.     ");
+    fprintf(stderr, "[default: 128]\n");
+    fprintf(stderr, "\t-n, --num-fine-chans=N    ");
+    fprintf(stderr, "The number of fine channels per coarse channel.                  ");
+    fprintf(stderr, "[default: 128]\n");
+    fprintf(stderr, "\t-w, --fine-chan-width=N   ");
+    fprintf(stderr, "The bandwidth of an individual fine channel (Hz).                ");
+    fprintf(stderr, "[default: 10000]\n");
+    fprintf(stderr, "\t-r, --sample-rate=N       ");
+    fprintf(stderr, "The VCS sample rate, in Hz. (The sample rate given in the meta-  ");
+    fprintf(stderr, "[default: 10000]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "metafits file matches the correlator settings at the time of\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the observation, which is not necessarily the same as that of\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the VCS. Hence the necessity of this option.)\n");
+    fprintf(stderr, "\t-F, --use-ant-flags       ");
+    fprintf(stderr, "Only include those antennas in the beamformer that have not      ");
+    fprintf(stderr, "[default: off]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "been flagged in the metafits file given by the -m option.\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "CALIBRATION OPTIONS (RTS)\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-J, --dijones-file=PATH   ");
+    fprintf(stderr, "The direction-independent Jones matrix file that is output from\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the RTS. Using this option instructs the beamformer to use the\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "RTS-generated calibration solution. Either -J or -O must be\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "supplied. If both are supplied the one that comes last will\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "override the former.\n");
+    fprintf(stderr, "\t-B, --bandpass-file=PATH  ");
+    fprintf(stderr, "The bandpass file that is output from the RTS. If this option\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "is given, the RTS calibration solution will be applied to each\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "fine channel. If -J is supplied but -B is not, then the coarse\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "channel solution will be applied to ALL fine channels\n");
+    fprintf(stderr, "\t-W, --rts-chan-width      ");
+    fprintf(stderr, "RTS calibration channel bandwidth (Hz)                           ");
+    fprintf(stderr, "[default: 40000]\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "CALIBRATION OPTIONS (OFFRINGA)\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-O, --offringa-file=PATH  ");
+    fprintf(stderr, "The calibration solution file that is output from the tools\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "made by Andre Offringa. Using this option instructs the beam-\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "former to use the Offringa-style calibration solution. Either\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "-J or -O must be supplied. If both are supplied the one that\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "comes last will override the former.\n");
+    fprintf(stderr, "\t-C, --offringa-chan=N     ");
+    fprintf(stderr, "The zero-offset position of the coarse channel solution in the   ");
+    fprintf(stderr, "[default: 0]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "calibration file given by the -O option.\n");
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "OTHER OPTIONS\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-h, --help                ");
+    fprintf(stderr, "Print this help and exit\n");
+    fprintf(stderr, "\t-V, --version             ");
+    fprintf(stderr, "Print version number and exit\n");
+    fprintf(stderr, "\n");
+}
+

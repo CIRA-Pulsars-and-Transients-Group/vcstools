@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <complex.h>
-#include "vdifbeam.h"
+#include "beam_vdif.h"
 #include "mwa_header.h"
 #include "ascii_header.h"
 

@@ -1,5 +1,5 @@
-#ifndef VDIFBEAM_H
-#define VDIFBEAM_H
+#ifndef BEAM_VDIF_H
+#define BEAM_VDIF_H
 
 #include <complex.h>
 

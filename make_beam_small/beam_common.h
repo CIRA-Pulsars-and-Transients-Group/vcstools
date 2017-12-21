@@ -1,8 +1,5 @@
-#ifndef BEAMFORMER_H
-#define BEAMFORMER_H
-
-#include <complex.h>
-#include "psrfits.h"
+#ifndef BEAM_COMMON_H
+#define BEAM_COMMON_H
 
 // Calibration solution types
 #define NO_CALIBRATION  0
@@ -64,6 +61,6 @@ void get_delays(
 );
 
 
-void printf_psrfits( struct psrfits *pf );  /* Prints values in psrfits struct to stdout */
+void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width );
 
 #endif
