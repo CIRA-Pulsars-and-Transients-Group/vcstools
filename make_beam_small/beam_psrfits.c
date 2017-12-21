@@ -222,4 +222,31 @@ void populate_psrfits_header(
 }
 
 
+void correct_psrfits_stt( struct psrfits *pf ) {
+    /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/
+    int    itmp    = 0;
+    int    itmp2   = 0;
+    double dtmp    = 0;
+    int    status  = 0;
+
+    //fits_open_file(&(pf.fptr), pf.filename, READWRITE, &status);
+
+    fits_read_key(pf->fptr, TDOUBLE, "STT_OFFS", &dtmp,  NULL, &status);
+    fits_read_key(pf->fptr, TINT,    "STT_SMJD", &itmp,  NULL, &status);
+    fits_read_key(pf->fptr, TINT,    "STT_IMJD", &itmp2, NULL, &status);
+
+    if (dtmp > 0.5) {
+        itmp = itmp+1;
+        if (itmp == 86400) {
+            itmp = 0;
+            itmp2++;
+        }
+    }
+    dtmp = 0.0;
+
+    fits_update_key(pf->fptr, TINT, "STT_SMJD", &itmp, NULL, &status);
+    fits_update_key(pf->fptr, TINT, "STT_IMJD", &itmp2, NULL, &status);
+    fits_update_key(pf->fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, &status);
+
+}
 

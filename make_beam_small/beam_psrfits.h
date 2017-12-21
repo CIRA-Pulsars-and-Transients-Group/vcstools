@@ -19,4 +19,6 @@ void populate_psrfits_header(
         char           *rec_channel,
         struct delays  *delay_vals );
 
+void correct_psrfits_stt( struct psrfits *pf );
+
 #endif

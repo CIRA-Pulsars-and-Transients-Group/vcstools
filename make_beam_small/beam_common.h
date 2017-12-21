@@ -62,5 +62,24 @@ void get_delays(
 
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width );
+void destroy_metafits_info( struct metafits_info *mi );
+
+void int8_to_uint8(int n, int shift, char * to_convert);
+void float2int8_trunc(float *f, int n, float min, float max, int8_t *i);
+void flatten_bandpass(
+        int nstep,
+        int nchan,
+        int npol,
+        void *data,
+        float *scales,
+        float *offsets,
+        int new_var,
+        int iscomplex,
+        int normalise,
+        int update,
+        int clear,
+        int shutdown );
+
+void read_data( char *filename, uint8_t *data, int nbytes );
 
 #endif
