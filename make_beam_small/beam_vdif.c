@@ -2,11 +2,12 @@
 #include <stdio.h>
 #include <math.h>
 #include <complex.h>
+#include "vdifio.h"
 #include "beam_vdif.h"
 #include "mwa_header.h"
 #include "ascii_header.h"
 
-void vdif_write_second( vdifinfo *vf, int8_t *output )
+void vdif_write_second( struct vdifinfo *vf, int8_t *output )
 {
     // form the filename
     // there is a standard naming convention
@@ -38,6 +39,41 @@ void vdif_write_second( vdifinfo *vf, int8_t *output )
     fwrite( ascii_header, MWA_HEADER_SIZE, 1, fs );
     fclose( fs );
 
+}
+
+
+void populate_vdif_header( struct vdifinfo *vf, vdif_header *vhdr, int sample_rate,
+       struct delays *delay_vals )
+{
+    // First how big is a DataFrame
+    vf->bits              = 8;   // this is because it is all the downstream apps support (dspsr/diFX)
+    vf->iscomplex         = 1;   // (it is complex data)
+    vf->nchan             = 2;   // I am hardcoding this to 2 channels per thread - one per pol
+    vf->samples_per_frame = 128; // also hardcoding to 128 time-samples per frame
+    vf->sample_rate       = sample_rate*128;  // also hardcoding this to the raw channel rate
+    vf->BW                = 1.28;
+
+    vf->frame_length  = vf->nchan * (vf->iscomplex+1) * (vf->bits) * vf->samples_per_frame + (32*8);
+    vf->frame_length /= 8;
+    vf->threadid      = 0;
+    sprintf( vf->stationid, "mw" );
+
+    vf->frame_rate = sample_rate;
+    vf->block_size = vf->frame_length * vf->frame_rate;
+
+    createVDIFHeader( vhdr, vf->frame_length, vf->threadid, vf->bits, vf->nchan,
+                            vf->iscomplex, vf->stationid);
+
+    // Now we have to add the time
+    uint64_t start_day = delay_vals->intmjd;
+    uint64_t start_sec = roundf( delay_vals->fracmjd * 86400.0 );
+    uint64_t mjdsec    = (start_day * 86400) + start_sec; // Note the VDIFEpoch is strange - from the standard
+
+    setVDIFEpoch( vhdr, start_day );
+    setVDIFMJDSec( vhdr, mjdsec );
+    setVDIFFrameNumber( vhdr, 0 );
+
+    strncpy( vf->exp_name, pf->hdr.project_id, 17 );
 }
 
 

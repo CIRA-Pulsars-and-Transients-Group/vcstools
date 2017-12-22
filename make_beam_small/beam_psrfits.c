@@ -230,7 +230,7 @@ void populate_psrfits_header(
         pf->hdr.start_lst = delay_vals->lmst * 60.0 * 60.0;        // Local Apparent Sidereal Time in seconds
         pf->hdr.start_sec = roundf(delay_vals->fracmjd*86400.0);   // this will always be a whole second
         pf->hdr.start_day = delay_vals->intmjd;
-        pf->hdr.MJD_epoch  = delay_vals->intmjd + delay_vals->fracmjd;
+        pf->hdr.MJD_epoch = delay_vals->intmjd + delay_vals->fracmjd;
 
         // Now set values for our subint structure
         pf->sub.lst      = pf->hdr.start_lst;

@@ -181,8 +181,10 @@ int main(int argc, char **argv) {
     );
 
     // Create structures for holding header information
-    struct psrfits pf;
-    struct psrfits pf_incoh;
+    struct psrfits  pf;
+    struct psrfits  pf_incoh;
+    vdif_header     vhdr;
+    struct vdifinfo vf;
 
     // Populate the relevant header structs
     if (opts.out_incoh)
