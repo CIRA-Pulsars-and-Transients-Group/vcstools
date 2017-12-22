@@ -71,8 +71,9 @@ int main(int argc, char **argv) {
     opts.use_ant_flags = 0;      // Use flags in metafits file?
 
     // Output options
-    opts.out_incoh     = 0;  // Default = incoherent output turned OFF
-    opts.out_coh       = 1;  // Default = coherent   output turned ON
+    opts.out_incoh     = 0;  // Default = PSRFITS (incoherent) output turned OFF
+    opts.out_coh       = 0;  // Default = PSRFITS (coherent)   output turned ON
+    opts.out_vdif      = 0;  // Default = VDIF                 output turned OFF
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -86,10 +87,11 @@ int main(int argc, char **argv) {
     make_beam_parse_cmdline( argc, argv, &opts );
 
     // Create "shorthand" variables for options that are used frequently
-    int nstation       = opts.nstation;
-    int nchan          = opts.nchan;
-    const int npol     = 2;      // (X,Y)
-    const int outpol   = 4;      // (I,Q,U,V)
+    int nstation           = opts.nstation;
+    int nchan              = opts.nchan;
+    const int npol         = 2;      // (X,Y)
+    const int outpol_coh   = 4;      // (I,Q,U,V)
+    const int outpol_incoh = 1;      // ("I")
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = omp_get_wtime();
@@ -142,10 +144,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Structures for holding psrfits header information
-    struct psrfits pf;
-    struct psrfits pf_incoh;
-
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, opts.metafits);
     struct metafits_info mi;
@@ -175,33 +173,32 @@ int main(int argc, char **argv) {
             &opts.cal,          // struct holding info about calibration
             opts.sample_rate,   // = 10000 samples per sec
             opts.time_utc,      // utc time string
-            0.0,           // seconds offset from time_utc at which to calculate delays
-            &delay_vals,   // Populate psrfits header info
-            &mi,           // Struct containing info from metafits file
-            NULL,          // complex weights array (ignore this time)
-            NULL           // invJi array           (ignore this time)
+            0.0,                // seconds offset from time_utc at which to calculate delays
+            &delay_vals,        // Populate psrfits header info
+            &mi,                // Struct containing info from metafits file
+            NULL,               // complex weights array (ignore this time)
+            NULL                // invJi array           (ignore this time)
     );
 
-    // now we need to create a fits file and populate its header
-    populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc, opts.sample_rate,
-            opts.frequency, nchan, opts.chan_width, outpol, opts.rec_channel, &delay_vals );
+    // Create structures for holding header information
+    struct psrfits pf;
+    struct psrfits pf_incoh;
 
-    // If incoherent sum requested, populate incoherent psrfits header
+    // Populate the relevant header structs
     if (opts.out_incoh)
     {
-        int incoh_npol = 1;
+        populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc, opts.sample_rate,
+                opts.frequency, nchan, opts.chan_width, outpol_coh, opts.rec_channel, &delay_vals );
+    }
+    if (opts.out_incoh)
+    {
         populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid, opts.time_utc, opts.sample_rate,
-                opts.frequency, nchan, opts.chan_width, incoh_npol, opts.rec_channel, &delay_vals );
+                opts.frequency, nchan, opts.chan_width, outpol_incoh, opts.rec_channel, &delay_vals );
 
-        // The above sets the RA and Dec to be the beamforming pointing, but it ought
-        // to have the tile pointing, not the beam pointing
+        // Use the tile pointing instead of the pencil beam pointing
+        // TO DO: Move this to populate_psrfits_header?
         pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
         pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
-        pf_incoh.hdr.summed_polns = 1;
-
-        // Also, we need to give it a different base name for the output files
-        sprintf(pf_incoh.basefilename, "%s_%s_ch%03d_incoh",
-                pf_incoh.hdr.project_id, pf_incoh.hdr.source, atoi(opts.rec_channel));
     }
 
     // Create array for holding the raw data
@@ -209,18 +206,14 @@ int main(int argc, char **argv) {
     uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     assert(data);
 
-    int8_t *out_buffer_8_psrfits = (int8_t *)malloc( outpol*nchan*pf.hdr.nsblk * sizeof(int8_t) );
-    float  *data_buffer_psrfits  =  (float *)malloc( nchan*outpol*pf.hdr.nsblk * sizeof(float) );
-    int8_t *out_buffer_8_incoh   = NULL;
-    float  *data_buffer_incoh    = NULL;
-    if (opts.out_incoh)
-    {
-        out_buffer_8_incoh = (int8_t *)malloc( nchan*pf_incoh.hdr.nsblk * sizeof(int8_t) );
-        data_buffer_incoh = (float *)malloc( nchan*pf_incoh.hdr.nsblk * sizeof(float) );
-    }
+    float *data_buffer_coh   = NULL;
+    float *data_buffer_incoh = NULL;
+    //float *data_buffer_vdif  = NULL;
 
-    int offset_in_psrfits;
-    int offset_in_incoh;
+    if (opts.out_coh)
+        data_buffer_coh   = (float *)malloc( nchan * outpol_coh  * pf.hdr.nsblk       * sizeof(float) );
+    if (opts.out_incoh)
+        data_buffer_incoh = (float *)malloc( nchan * outpol_incoh* pf_incoh.hdr.nsblk * sizeof(float) );
 
     int file_no = 0;
     int sample;
@@ -236,28 +229,26 @@ int main(int argc, char **argv) {
         // Get the next second's worth of phases / jones matrices, if needed
         printf("[%f]  Calculating delays\n", omp_get_wtime()-begintime);
         get_delays(
-                opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
-                opts.ra_hhmmss,     // ra  as a string "hh:mm:ss"
-                opts.frequency,     // middle of the first frequency channel in Hz
-                &opts.cal,          // struct holding info about calibration
-                opts.sample_rate,   // = 10000 samples per sec
-                opts.time_utc,      // utc time string
-                (double)file_no, // seconds offset from time_utc at which to calculate delays
-                NULL,          // Don't update delay_vals
-                &mi,           // Struct containing info from metafits file
+                opts.dec_ddmmss,        // dec as a string "dd:mm:ss"
+                opts.ra_hhmmss,         // ra  as a string "hh:mm:ss"
+                opts.frequency,         // middle of the first frequency channel in Hz
+                &opts.cal,              // struct holding info about calibration
+                opts.sample_rate,       // = 10000 samples per sec
+                opts.time_utc,          // utc time string
+                (double)file_no,        // seconds offset from time_utc at which to calculate delays
+                NULL,                   // Don't update delay_vals
+                &mi,                    // Struct containing info from metafits file
                 complex_weights_array,  // complex weights array (answer will be output here)
-                invJi );       // invJi array           (answer will be output here)
+                invJi );                // invJi array           (answer will be output here)
 
         printf("[%f]  Calculating beam\n", omp_get_wtime()-begintime);
 
-        offset_in_psrfits  = 0;
-        offset_in_incoh    = 0;
-
-        for (i = 0; i < nchan*outpol*pf.hdr.nsblk; i++)
-            data_buffer_psrfits[i] = 0.0;
+        if (opts.out_coh)
+            for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
+                data_buffer_coh[i] = 0.0;
 
         if (opts.out_incoh)
-            for (i = 0; i < nchan*pf_incoh.hdr.nsblk; i++)
+            for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
                 data_buffer_incoh[i] = 0.0;
 
 #pragma omp parallel for
@@ -272,24 +263,27 @@ int main(int argc, char **argv) {
             complex float beam[nchan][nstation][npol];
             float         incoh_beam[nchan][nstation][npol];
             complex float detected_beam[nchan][npol];
-            float         detected_incoh_beam[nchan];
-            float         spectrum[nchan*outpol];
+            float         detected_incoh_beam[nchan*outpol_incoh];
+            float         spectrum[nchan*outpol_coh];
             complex float noise_floor[nchan][npol][npol];
             complex float e_true[npol], e_dash[npol];
 
 
-            // Initialise noise floor to zero
-            for (ch    = 0; ch    < nchan;  ch++   )
-            for (opol1 = 0; opol1 < npol; opol1++)
-            for (opol2 = 0; opol2 < npol; opol2++)
-                noise_floor[ch][opol1][opol2] = 0.0;
+            // Initialise beam arrays to zero
+            if (opts.out_coh)
+            {
+                // Initialise noise floor to zero
+                for (ch    = 0; ch    < nchan; ch++   )
+                for (opol1 = 0; opol1 < npol;  opol1++)
+                for (opol2 = 0; opol2 < npol;  opol2++)
+                    noise_floor[ch][opol1][opol2] = 0.0;
 
-            // Initialise detected beam to zero
-            for (ch  = 0; ch  < nchan   ; ch++ )
-            for (pol = 0; pol < npol    ; pol++)
-                detected_beam[ch][pol] = 0.0 + 0.0*I;
+                // Initialise detected beam to zero
+                for (ch  = 0; ch  < nchan; ch++ )
+                for (pol = 0; pol < npol ; pol++)
+                    detected_beam[ch][pol] = 0.0 + 0.0*I;
+            }
 
-            // Initialise incoherent beam arrays to zero, if necessary
             if (opts.out_incoh)
                 for (ch  = 0; ch  < nchan   ; ch++ )
                     detected_incoh_beam[ch] = 0.0;
@@ -334,23 +328,27 @@ int main(int argc, char **argv) {
                             incoh_beam[ch][ant][pol] = creal(e_dash[pol] * conj(e_dash[pol]));
 
                         // Apply complex weights
-                        e_dash[pol] *= complex_weights_array[ant][ch][pol];
+                        if (opts.out_coh)
+                            e_dash[pol] *= complex_weights_array[ant][ch][pol];
 
                     }
 
                     // Calculate quantities that depend on output polarisation
                     // (i.e. apply inv(jones))
-                    for (pol = 0; pol < npol; pol++) {
+                    if (opts.out_coh)
+                    {
+                        for (pol = 0; pol < npol; pol++)
+                        {
+                            e_true[pol] = 0.0 + 0.0*I;
 
-                        e_true[pol] = 0.0 + 0.0*I;
+                            for (opol = 0; opol < npol; opol++)
+                                e_true[pol] += invJi[ant][ch][pol][opol] * e_dash[opol];
 
-                        for (opol = 0; opol < npol; opol++)
-                            e_true[pol] += invJi[ant][ch][pol][opol] * e_dash[opol];
+                            for (opol = 0; opol < npol; opol++)
+                                noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
 
-                        for (opol = 0; opol < npol; opol++)
-                            noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
-
-                        beam[ch][ant][pol] = e_true[pol];
+                            beam[ch][ant][pol] = e_true[pol];
+                        }
                     }
                 }
             }
@@ -360,121 +358,71 @@ int main(int argc, char **argv) {
             for (pol = 0; pol < npol    ; pol++)
             for (ch  = 0; ch  < nchan   ; ch++ )
             {
-                detected_beam[ch][pol] += beam[ch][ant][pol];
+                // Coherent beam
+                if (opts.out_coh)
+                    detected_beam[ch][pol] += beam[ch][ant][pol];
 
-                // ...and the incoherent beam, if requested
+                // Incoherent beam
                 if (opts.out_incoh)
                     detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
             }
 
             // Calculate the Stokes parameters
-            double beam00, beam11;
-            double noise0, noise1, noise3;
-            complex double beam01;
-            unsigned int stokesIidx, stokesQidx, stokesUidx, stokesVidx;
+            if (opts.out_coh)
+            {
+                double beam00, beam11;
+                double noise0, noise1, noise3;
+                complex double beam01;
+                unsigned int stokesIidx, stokesQidx, stokesUidx, stokesVidx;
 
-            for (ch = 0; ch < nchan; ch++) {
+                for (ch = 0; ch < nchan; ch++) {
 
-                beam00 = (double)(detected_beam[ch][0] * conj(detected_beam[ch][0]));
-                beam11 = (double)(detected_beam[ch][1] * conj(detected_beam[ch][1]));
-                beam01 = detected_beam[ch][0] * conj(detected_beam[ch][1]);
+                    beam00 = (double)(detected_beam[ch][0] * conj(detected_beam[ch][0]));
+                    beam11 = (double)(detected_beam[ch][1] * conj(detected_beam[ch][1]));
+                    beam01 = detected_beam[ch][0] * conj(detected_beam[ch][1]);
 
-                noise0 = noise_floor[ch][0][0];
-                noise1 = noise_floor[ch][0][1];
-                noise3 = noise_floor[ch][1][1];
+                    noise0 = noise_floor[ch][0][0];
+                    noise1 = noise_floor[ch][0][1];
+                    noise3 = noise_floor[ch][1][1];
 
-                stokesIidx = 0*nchan + ch;
-                stokesQidx = 1*nchan + ch;
-                stokesUidx = 2*nchan + ch;
-                stokesVidx = 3*nchan + ch;
+                    stokesIidx = 0*nchan + ch;
+                    stokesQidx = 1*nchan + ch;
+                    stokesUidx = 2*nchan + ch;
+                    stokesVidx = 3*nchan + ch;
 
-                // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
-                // so for a single timestep we do not have to interleave - I could just stack these
-                spectrum[stokesIidx] = (beam00 + beam11 - noise0 - noise3) * invw;
-                spectrum[stokesQidx] = (beam00 - beam11 - noise0 + noise3) * invw;
-                spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise1)*invw;
-                spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
+                    // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
+                    // so for a single timestep we do not have to interleave - I could just stack these
+                    spectrum[stokesIidx] = (beam00 + beam11 - noise0 - noise3) * invw;
+                    spectrum[stokesQidx] = (beam00 - beam11 - noise0 + noise3) * invw;
+                    spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise1)*invw;
+                    spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
+                }
+
+                int offset_in_coh = sizeof(float) * nchan * outpol_coh * sample;
+                memcpy((void *)((char *)data_buffer_coh + offset_in_coh), spectrum, sizeof(float)*nchan*outpol_coh);
             }
 
-            offset_in_psrfits  = sizeof(float)*nchan*outpol * sample;
-            offset_in_incoh    = sizeof(float)*nchan * sample;
-
-            memcpy((void *)((char *)data_buffer_psrfits + offset_in_psrfits), spectrum, sizeof(float)*nchan*outpol);
-
             if (opts.out_incoh)
-                memcpy((void *)((char *)data_buffer_incoh + offset_in_incoh), detected_incoh_beam, sizeof(float)*nchan);
+            {
+                int offset_in_incoh = sizeof(float) * nchan * outpol_incoh * sample;
+                memcpy((void *)((char *)data_buffer_incoh + offset_in_incoh), detected_incoh_beam, sizeof(float)*nchan*outpol_incoh);
+            }
 
         }
 
         // We've arrived at the end of a second's worth of data...
 
-        printf("[%f]  Flattening bandpass\n", omp_get_wtime()-begintime);
-        flatten_bandpass(pf.hdr.nsblk, nchan, outpol,
-                data_buffer_psrfits, pf.sub.dat_scales,
-                pf.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
-
-        float2int8_trunc(data_buffer_psrfits, pf.hdr.nsblk*nchan*outpol,
-                -126.0, 127.0, out_buffer_8_psrfits);
-
-        int8_to_uint8(pf.hdr.nsblk*nchan*outpol, 128,
-                (char *) out_buffer_8_psrfits);
-
-        memcpy(pf.sub.data, out_buffer_8_psrfits, pf.sub.bytes_per_subint);
-
-        if (opts.out_incoh)
-        {
-            flatten_bandpass(pf_incoh.hdr.nsblk, nchan, 1,
-                    data_buffer_incoh, pf_incoh.sub.dat_scales,
-                    pf_incoh.sub.dat_offsets, 32, 0, 1, 1, 1, 0);
-
-            float2int8_trunc(data_buffer_incoh, pf_incoh.hdr.nsblk*nchan,
-                    -126.0, 127.0, out_buffer_8_incoh);
-
-            int8_to_uint8(pf_incoh.hdr.nsblk*nchan, 128,
-                    (char *) out_buffer_8_incoh);
-
-            memcpy(pf_incoh.sub.data, out_buffer_8_incoh, pf_incoh.sub.bytes_per_subint);
-        }
-
         printf("[%f]  Writing data to file\n", omp_get_wtime()-begintime);
-        if (psrfits_write_subint(&pf) != 0) {
-            fprintf(stderr, "Write subint failed file exists?\n");
-            break; // Exit from while loop
-        }
 
-        pf.sub.offs = roundf(pf.tot_rows * pf.sub.tsubint) + 0.5*pf.sub.tsubint;
-        pf.sub.lst += pf.sub.tsubint;
-
+        if (opts.out_coh)
+            psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );
         if (opts.out_incoh)
-        {
-            if (psrfits_write_subint(&pf_incoh) != 0) {
-                fprintf(stderr, "Write incoherent subint failed file exists?\n");
-                break; // Exit from while loop
-            }
-
-            pf_incoh.sub.offs = roundf(pf_incoh.tot_rows * pf_incoh.sub.tsubint) +
-                                0.5*pf_incoh.sub.tsubint;
-            pf_incoh.sub.lst += pf_incoh.sub.tsubint;
-        }
+            psrfits_write_second( &pf_incoh, data_buffer_incoh, nchan, outpol_incoh );
 
     }
 
     printf("[%f]  **FINISHED BEAMFORMING**\n", omp_get_wtime()-begintime);
     printf("[%f]  Starting clean-up\n", omp_get_wtime()-begintime);
-
-    if (pf.status == 0) {
-        correct_psrfits_stt( &pf );
-
-        flatten_bandpass(pf.hdr.nsblk, nchan, outpol, data_buffer_psrfits,
-                pf.sub.dat_scales, pf.sub.dat_offsets, 32, 0, 0, 0, 0, 1);
-    }
-
-    if (pf_incoh.status == 0) {
-        correct_psrfits_stt( &pf_incoh );
-
-        flatten_bandpass(pf_incoh.hdr.nsblk, nchan, 1, data_buffer_incoh,
-                pf_incoh.sub.dat_scales, pf_incoh.sub.dat_offsets, 32, 0, 0, 0, 0, 1);
-    }
 
     // Free up memory for filenames
     if (opts.datadir) {
@@ -485,9 +433,7 @@ int main(int argc, char **argv) {
     }
 
     destroy_metafits_info( &mi );
-    free( out_buffer_8_psrfits );
-    free( out_buffer_8_incoh );
-    free( data_buffer_psrfits  );
+    free( data_buffer_coh  );
     free( data_buffer_incoh  );
     free( data );
 
@@ -531,10 +477,17 @@ void usage() {
     fprintf(stderr, "\n");
     fprintf(stderr, "OUTPUT OPTIONS\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "\t-i, --incoh               ");
-    fprintf(stderr, "Turn on incoherent beam output (off by default)\n");
-    fprintf(stderr, "\t--no-psrfits              ");
-    fprintf(stderr, "Turn off PSRFITS output (on by default) (NOT YET IMPLEMENTED)\n");
+    fprintf(stderr, "\t-i, --incoh                ");
+    fprintf(stderr, "Turn on incoherent PSRFITS beam output.                          ");
+    fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-p, --psrfits              ");
+    fprintf(stderr, "Turn on coherent PSRFITS output (will be turned on if none of\n");
+    fprintf(stderr, "\t                           ");
+    fprintf(stderr, "-i, -p, -v are chosen).                                          ");
+    fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-v, --vdif                 ");
+    fprintf(stderr, "Turn on VDIF output. (NOT YET IMPLEMENTED)                       ");
+    fprintf(stderr, "[default: OFF]\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
@@ -631,6 +584,8 @@ void make_beam_parse_cmdline(
                 {"begin",           required_argument, 0, 'b'},
                 {"end",             required_argument, 0, 'e'},
                 {"incoh",           no_argument,       0, 'i'},
+                {"psrfits",         no_argument,       0, 'p'},
+                {"vdif",            no_argument,       0, 'v'},
                 {"utc-time",        required_argument, 0, 'z'},
                 {"dec",             required_argument, 0, 'D'},
                 {"ra",              required_argument, 0, 'R'},
@@ -715,11 +670,17 @@ void make_beam_parse_cmdline(
                     opts->cal.filename = strdup(optarg);
                     opts->cal.cal_type = OFFRINGA;
                     break;
+                case 'p':
+                    opts->out_coh = 1;
+                    break;
                 case 'r':
                     opts->sample_rate = atoi(optarg);
                     break;
                 case 'R':
                     opts->ra_hhmmss = strdup(optarg);
+                    break;
+                case 'v':
+                    opts->out_vdif = 1;
                     break;
                 case 'V':
                     printf("MWA Beamformer v%s\n", VERSION_BEAMFORMER);
@@ -758,6 +719,9 @@ void make_beam_parse_cmdline(
     assert( opts->metafits     != NULL );
     assert( opts->rec_channel  != NULL );
     assert( opts->cal.cal_type != NO_CALIBRATION );
-    assert( opts->out_incoh || opts->out_coh );
+
+    // If neither -i, -p, nor -v were chosen, set -p by default
+    if ( !opts->out_incoh && !opts->out_coh && !opts->out_vdif )
+        opts->out_coh = 1;
 
 }

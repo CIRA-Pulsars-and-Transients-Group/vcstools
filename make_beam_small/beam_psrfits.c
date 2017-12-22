@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <complex.h>
 #include "slalib.h"
 #include "slamac.h"
@@ -93,6 +94,15 @@ void populate_psrfits_header(
         char           *rec_channel,
         struct delays  *delay_vals )
 {
+    int is_coherent = 0;
+    if (outpol == 4)
+        is_coherent = 1;
+    else if (outpol != 1)
+    {
+        fprintf( stderr, "warning: populate_psrfits_header: "
+                         "unusual number of output pols = %d\n", outpol );
+    }
+
 
     fitsfile *fptr = NULL;
     int status      = 0;
@@ -132,8 +142,12 @@ void populate_psrfits_header(
 
     pf->hdr.scan_number   = 1;
     pf->hdr.rcvr_polns    = 2;
-    pf->hdr.summed_polns  = 0;
     pf->hdr.offset_subint = 0;
+
+    if (is_coherent)
+        pf->hdr.summed_polns = 0;
+    else
+        pf->hdr.summed_polns = 1;
 
     pf->hdr.df         = chan_width/1.0e6; // (MHz)
     pf->hdr.orig_nchan = pf->hdr.nchan;
@@ -189,8 +203,16 @@ void populate_psrfits_header(
     pf->sub.rawdata = pf->sub.data;
 
     int ch = atoi(rec_channel);
-    sprintf(pf->basefilename, "%s_%s_ch%03d",
-            pf->hdr.project_id, pf->hdr.source, ch);
+    if (!is_coherent)
+    {
+        sprintf(pf->basefilename, "%s_%s_ch%03d_incoh",
+                pf->hdr.project_id, pf->hdr.source, ch);
+    }
+    else
+    {
+        sprintf(pf->basefilename, "%s_%s_ch%03d",
+                pf->hdr.project_id, pf->hdr.source, ch);
+    }
 
     // Update values that depend on get_delays()
     if (delay_vals != NULL) {
@@ -224,7 +246,8 @@ void populate_psrfits_header(
 }
 
 
-void correct_psrfits_stt( struct psrfits *pf ) {
+void correct_psrfits_stt( struct psrfits *pf )
+{
     /* now we have to correct the STT_SMJD/STT_OFFS as they will have been broken by the write_psrfits*/
     int    itmp    = 0;
     int    itmp2   = 0;
@@ -252,3 +275,29 @@ void correct_psrfits_stt( struct psrfits *pf ) {
 
 }
 
+
+void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan, int outpol )
+{
+    int8_t *out_buffer_8 = (int8_t *)malloc( outpol*nchan*pf->hdr.nsblk * sizeof(int8_t) );
+
+    flatten_bandpass( pf->hdr.nsblk, nchan, outpol,
+                      data_buffer, pf->sub.dat_scales,
+                      pf->sub.dat_offsets, 32, 0, 1, 1, 1, 0 );
+
+    float2int8_trunc( data_buffer, pf->hdr.nsblk * nchan * outpol,
+                      -126.0, 127.0, out_buffer_8 );
+
+    int8_to_uint8( pf->hdr.nsblk * nchan * outpol, 128,
+                   (char *) out_buffer_8 );
+
+    memcpy( pf->sub.data, out_buffer_8, pf->sub.bytes_per_subint );
+
+    if (psrfits_write_subint(pf) != 0)
+    {
+        fprintf(stderr, "error: Write subint failed. File exists?\n");
+        exit(EXIT_FAILURE);
+    }
+
+    pf->sub.offs = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
+    pf->sub.lst += pf->sub.tsubint;
+}

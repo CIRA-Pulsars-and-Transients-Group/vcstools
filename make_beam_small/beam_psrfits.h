@@ -21,4 +21,6 @@ void populate_psrfits_header(
 
 void correct_psrfits_stt( struct psrfits *pf );
 
+void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan, int outpol );
+
 #endif

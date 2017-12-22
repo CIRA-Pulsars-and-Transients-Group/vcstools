@@ -24,8 +24,9 @@ struct make_beam_opts {
     int                use_ant_flags; // Use flags in metafits file?
 
     // Output options
-    int                out_incoh;     // Default = incoherent output turned OFF
-    int                out_coh;       // Default = coherent   output turned ON
+    int                out_incoh;     // Default = PSRFITS (incoherent) output turned OFF
+    int                out_coh;       // Default = PSRFITS (coherent)   output turned ON
+    int                out_vdif;      // Default = VDIF                 output turned OFF
 
     struct calibration cal;           // Variables for calibration settings
 };
