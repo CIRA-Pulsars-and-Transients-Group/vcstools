@@ -36,7 +36,6 @@
 // write out psrfits directly
 #include "psrfits.h"
 #include "antenna_mapping.h"
-#include "beamer_version.h"
 
 #define MAX_COMMAND_LENGTH 1024
 
@@ -723,7 +722,7 @@ void make_beam_parse_cmdline(
                     opts->ra_hhmmss = strdup(optarg);
                     break;
                 case 'V':
-                    printf("%s\n", MAKE_BEAM_VERSION);
+                    printf("MWA Beamformer v%s\n", VERSION_BEAMFORMER);
                     exit(0);
                     break;
                 case 'w':

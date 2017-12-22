@@ -36,7 +36,7 @@ int cleanup(void *to_clean) {
 int append(char **to_append, void *total, int n){
 
     // this would perhaps be better as C++
-    // this method appends two a number of psrfits files to the total
+    // this method appends a number of psrfits files to the total
 
     // sets the total pointer to the input argument
     // this has already been populated by a open/close pair

@@ -1,4 +1,7 @@
 cmake_minimum_required (VERSION 2.6)
+cmake_policy(SET CMP0012 NEW)
+cmake_policy(SET CMP0048 NEW)
+
 project(mwac_utils)
 
 include_directories(/usr/local/include ./ ${FFTW3_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIRS} ${PLOTUTILS_INCLUDE_DIR})

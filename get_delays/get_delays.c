@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,7 +10,6 @@
 #include "psrfits.h"
 #include "fitsio.h"
 #include <string.h>
-#include "beamer_version.h"
 
 /* make a connection to the MWA database and get the antenna positions.
  * Then: calculate the geometric delay to a source for each antenna
@@ -847,9 +845,7 @@ int     main(int argc, char **argv) {
         strcpy(pf.hdr.telescope, "MWA");
         strncpy(pf.hdr.source,obsid,23);
         strcpy(pf.hdr.frontend, "MWA-RECVR");
-        char backend[24];
-        snprintf(backend, 24*sizeof(char), "GD%s-MB%s-U%s", GET_DELAYS_VERSION, MAKE_BEAM_VERSION, UTILS_VERSION);
-        strcpy(pf.hdr.backend, backend);
+        snprintf(pf.hdr.backend, 24*sizeof(char), "MWA Beamformer v%s", VERSION_BEAMFORMER);
         
         /* Now let us finally get the time right */
         strcpy(pf.hdr.date_obs, time_utc);

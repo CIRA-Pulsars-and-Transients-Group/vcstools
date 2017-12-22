@@ -5,7 +5,6 @@
 #include "slalib.h"
 #include "slamac.h"
 #include "mwac_utils.h"
-#include "beamer_version.h"
 #include "psrfits.h"
 #include "beam_common.h"
 #include "beam_psrfits.h"
@@ -110,8 +109,7 @@ void populate_psrfits_header(
     pf->hdr.scanlen = 1.0; // in sec
 
     strcpy(pf->hdr.frontend, "MWA-RECVR");
-    snprintf(pf->hdr.backend, 24*sizeof(char), "GD-%s-MB-%s-U-%s",
-            GET_DELAYS_VERSION, MAKE_BEAM_VERSION, UTILS_VERSION);
+    snprintf(pf->hdr.backend, 24*sizeof(char), "MWA Beamformer v%s", VERSION_BEAMFORMER );
 
     // Now let us finally get the time right
     strcpy(pf->hdr.date_obs,   time_utc);

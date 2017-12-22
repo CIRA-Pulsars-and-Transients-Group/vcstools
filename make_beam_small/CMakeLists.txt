@@ -1,4 +1,7 @@
 cmake_minimum_required (VERSION 2.6)
+cmake_policy(SET CMP0012 NEW)
+cmake_policy(SET CMP0048 NEW)
+
 project (make_beam_small)
 
 include_directories(${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIR} ${PROJECT_SOURCE_DIR}/../mwac_utils)

@@ -10,7 +10,6 @@
 #include "psrfits.h"
 #include "fitsio.h"
 #include <string.h>
-#include "beamer_version.h"
 #include "beam_common.h"
 
 /* make a connection to the MWA database and get the antenna positions.

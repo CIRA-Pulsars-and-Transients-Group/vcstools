@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
+cmake_policy(SET CMP0012 NEW)
+cmake_policy(SET CMP0048 NEW)
+
 project(read_pfb)
 add_executable(read_pfb read_pfb)
 #set_target_properties(read_pfb PROPERTIES LINK_FLAGS "-Wl,-no_compact_unwind")

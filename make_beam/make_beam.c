@@ -31,7 +31,6 @@
 // write out psrfits directly
 #include "psrfits.h"
 #include "antenna_mapping.h"
-#include "beamer_version.h"
 
 #define MAX_COMMAND_LENGTH 1024
 
