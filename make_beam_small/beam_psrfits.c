@@ -105,7 +105,7 @@ void populate_psrfits_header(
 
 
     fitsfile *fptr = NULL;
-    int status      = 0;
+    int status     = 0;
 
     fits_open_file(&fptr, metafits, READONLY, &status);
     fits_read_key(fptr, TSTRING, "PROJECT", pf->hdr.project_id, NULL, &status);

@@ -42,8 +42,18 @@ void vdif_write_second( struct vdifinfo *vf, int8_t *output )
 }
 
 
-void populate_vdif_header( struct vdifinfo *vf, vdif_header *vhdr, int sample_rate,
-       struct delays *delay_vals )
+void populate_vdif_header(
+        struct vdifinfo *vf,
+        vdif_header     *vhdr,
+        char            *metafits,
+        char            *obsid,
+        char            *time_utc,
+        int              sample_rate,
+        long int         frequency,
+        int              nchan, 
+        long int         chan_width,
+        char            *rec_channel,
+        struct delays   *delay_vals )
 {
     // First how big is a DataFrame
     vf->bits              = 8;   // this is because it is all the downstream apps support (dspsr/diFX)
@@ -73,7 +83,40 @@ void populate_vdif_header( struct vdifinfo *vf, vdif_header *vhdr, int sample_ra
     setVDIFMJDSec( vhdr, mjdsec );
     setVDIFFrameNumber( vhdr, 0 );
 
-    strncpy( vf->exp_name, pf->hdr.project_id, 17 );
+    // Get the project ID directly from the metafits file
+    fitsfile *fptr = NULL;
+    int status     = 0;
+
+    fits_open_file(&fptr, metafits, READONLY, &status);
+    fits_read_key(fptr, TSTRING, "PROJECT", vf->exp_name, NULL, &status);
+    fits_close_file(fptr, &status);
+
+    strncpy( vf->scan_name, obsid, 17 );
+
+    vf->b_scales   = (float *)malloc( sizeof(float) * vf->nchan );
+    vf->b_offsets  = (float *)malloc( sizeof(float) * vf->nchan );
+    vf->got_scales = 0;
+
+    strncpy( vf->telescope, "MWA", 24);
+    strncpy( vf->obs_mode,  "PSR", 8);
+
+    // Determine the RA and Dec strings
+    double ra2000  = delay_vals->mean_ra  * DR2D;
+    double dec2000 = delay_vals->mean_dec * DR2D;
+
+    dec2hms(vf->ra_str,  ra2000/15.0, 0); // 0 = no '+' sign
+    dec2hms(vf->dec_str, dec2000,     1); // 1 = with '+' sign
+
+    strncpy( vf->date_obs, time_utc, 24);
+
+    vf->MJD_epoch = delay_vals->intmjd + delay_vals->fracmjd;
+    vf->fctr      = (frequency + (nchan/2.0)*chan_width)/1.0e6; // (MHz)
+    strncpy( vf->source, "unset", 24 );
+
+    // The output file basename
+    int ch = atoi(rec_channel);
+    sprintf( vf->basefilename, "%s_%s_ch%03d",
+             vf->exp_name, vf->scan_name, ch);
 }
 
 
