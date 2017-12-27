@@ -71,6 +71,12 @@ void populate_vdif_header(
     vf->frame_rate = sample_rate;
     vf->block_size = vf->frame_length * vf->frame_rate;
 
+    // A single frame (128 samples). Remember vf.nchan is kludged to npol
+    vf->sizeof_beam = vf->samples_per_frame * vf->nchan * (vf->iscomplex+1);
+
+    // One full second (1.28 million 2 bit samples)
+    vf->sizeof_buffer = vf->frame_rate * vf->sizeof_beam;
+
     createVDIFHeader( vhdr, vf->frame_length, vf->threadid, vf->bits, vf->nchan,
                             vf->iscomplex, vf->stationid);
 
