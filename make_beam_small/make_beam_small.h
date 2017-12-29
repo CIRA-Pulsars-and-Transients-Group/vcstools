@@ -27,8 +27,9 @@ struct make_beam_opts {
 
     // Output options
     int                out_incoh;     // Default = PSRFITS (incoherent) output turned OFF
-    int                out_coh;       // Default = PSRFITS (coherent)   output turned ON
+    int                out_coh;       // Default = PSRFITS (coherent)   output turned OFF
     int                out_vdif;      // Default = VDIF                 output turned OFF
+    int                out_uvdif;     // Default = upsampled VDIF       output turned OFF
 
     struct calibration cal;           // Variables for calibration settings
 };

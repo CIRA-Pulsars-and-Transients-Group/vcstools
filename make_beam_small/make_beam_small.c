@@ -72,8 +72,9 @@ int main(int argc, char **argv) {
 
     // Output options
     opts.out_incoh     = 0;  // Default = PSRFITS (incoherent) output turned OFF
-    opts.out_coh       = 0;  // Default = PSRFITS (coherent)   output turned ON
+    opts.out_coh       = 0;  // Default = PSRFITS (coherent)   output turned OFF
     opts.out_vdif      = 0;  // Default = VDIF                 output turned OFF
+    opts.out_uvdif     = 0;  // Default = upsampled VDIF       output turned OFF
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -196,7 +197,7 @@ int main(int argc, char **argv) {
         pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
         pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
     }
-    if (opts.out_vdif)
+    if (opts.out_vdif | opts.out_uvdif)
     {
         populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
                 opts.time_utc, opts.sample_rate, opts.frequency, nchan,
@@ -649,7 +650,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:b:B:C:d:D:e:f:FhiJ:m:n:o:O:r:R:Vw:W:z:",
+                             "a:b:B:C:d:D:e:f:FhiJ:m:n:o:O:pr:R:uvVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -720,6 +721,9 @@ void make_beam_parse_cmdline(
                 case 'R':
                     opts->ra_hhmmss = strdup(optarg);
                     break;
+                case 'u':
+                    opts->out_uvdif = 1;
+                    break;
                 case 'v':
                     opts->out_vdif = 1;
                     break;
@@ -762,8 +766,11 @@ void make_beam_parse_cmdline(
     assert( opts->cal.cal_type != NO_CALIBRATION );
 
     // If neither -i, -p, nor -v were chosen, set -p by default
-    if ( !opts->out_incoh && !opts->out_coh && !opts->out_vdif )
+    if ( !opts->out_incoh && !opts->out_coh &&
+         !opts->out_vdif  && !opts->out_uvdif )
+    {
         opts->out_coh = 1;
+    }
 
 }
 
