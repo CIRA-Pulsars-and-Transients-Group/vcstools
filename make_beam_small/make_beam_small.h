@@ -1,69 +1,37 @@
-#ifndef MAKE_BEAM_H
-#define MAKE_BEAM_H
+#ifndef MAKE_BEAM_SMALL_H
+#define MAKE_BEAM_SMALL_H
 
-#include <complex.h>
-#include "psrfits.h"
+#include "beam_common.h"
 
-// Calibration solution types
-#define NO_CALIBRATION  0
-#define RTS             1
-#define RTS_BANDPASS    2
-#define OFFRINGA        3
+struct make_beam_opts {
+    // Variables for required options
+    char              *obsid;         // The observation ID
+    unsigned long int  begin;         // GPS time -- when to start beamforming
+    unsigned long int  end;           // GPS time -- when to stop beamforming
+    char              *time_utc;      // utc time string "yyyy-mm-ddThh:mm:ss"
+    char              *dec_ddmmss;    // "dd:mm:ss"
+    char              *ra_hhmmss;     // "hh:mm:ss"
+    char              *datadir;       // The path to where the recombined data live
+    char              *metafits;      // filename of the metafits file
+    char              *rec_channel;   // 0 - 255 receiver 1.28MHz channel
+    long int           frequency;     // = rec_channel expressed in Hz
 
-// A structure to read in all the relevant info from the observation metafits
-// file.
-struct metafits_info {
-    double      tile_pointing_ra;
-    double      tile_pointing_dec;
-    double      tile_pointing_az;
-    double      tile_pointing_el;
-    float      *N_array;
-    float      *E_array;
-    float      *H_array;
-    float      *cable_array;
-    int        *flag_array;
-    double     *weights_array;
-    short int  *antenna_num;
-    char      **tilenames;
-    int         ninput;
-    int         chan_width;
-} metafits_info;
+    // Variables for MWA/VCS configuration
+    int                nstation;      // The number of antennas
+    int                nchan;         // The number of fine channels (per coarse channel)
+    unsigned int       chan_width;    // The bandwidth of an individual fine chanel (Hz)
+    unsigned int       sample_rate;   // The VCS sample rate (Hz)
+    int                use_ant_flags; // Use flags in metafits file?
 
-struct delays {
-    double mean_ra;
-    double mean_dec;
-    double az;
-    double el;
-    double lmst;
-    double fracmjd;
-    double intmjd;
+    // Output options
+    int                out_incoh;     // Default = PSRFITS (incoherent) output turned OFF
+    int                out_coh;       // Default = PSRFITS (coherent)   output turned ON
+    int                out_vdif;      // Default = VDIF                 output turned OFF
+
+    struct calibration cal;           // Variables for calibration settings
 };
 
-struct calibration {
-    char *filename;           // The file that houses the calibration solution
-    char *bandpass_filename;  // The file that houses the RTS bandpass information
-    int   chan_width;         // Channel width used in RTS bandpass solutions (in Hz)
-    int   nchan;              // The number of channels in the RTS bandpass solutions
-    int   cal_type;           // Either RTS or OFFRINGA
-    int   offr_chan_num;      // The channel number in the Offringa calibration solution file
-};
-
-/* Running get_delays from within make_beam */
-void get_delays(
-        char                  *dec_ddmmss,
-        char                  *ra_hhmmss,
-        long int               frequency,
-        struct                 calibration *cal,
-        float                  samples_per_sec,
-        char                  *time_utc,
-        double                 sec_offset,
-        struct delays         *delay_vals,
-        struct metafits_info  *mi,
-        complex double      ***complex_weights_array,  // output
-        complex double     ****invJi                   // output
-);
-
-
-void printf_psrfits( struct psrfits *pf );  /* Prints values in psrfits struct to stdout */
+void usage();
+void make_beam_parse_cmdline( int argc, char **argv, struct make_beam_opts *opts );
 
 #endif

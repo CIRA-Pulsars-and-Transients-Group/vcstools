@@ -21,6 +21,6 @@ endif ()
 
 CUDA_ADD_CUFFT_TO_TARGET(MWAC_GPU_Utils)
 
-install(FILES gpu_utils.h reduce.h cuda_error.h DESTINATION include)
-install(TARGETS MWAC_GPU_Utils LIBRARY DESTINATION lib)
+#install(FILES gpu_utils.h reduce.h cuda_error.h DESTINATION include)
+#install(TARGETS MWAC_GPU_Utils LIBRARY DESTINATION lib)
 

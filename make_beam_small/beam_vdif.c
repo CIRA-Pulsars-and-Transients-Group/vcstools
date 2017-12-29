@@ -1,15 +1,17 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <complex.h>
-#include "vdifbeam.h"
+#include "vdifio.h"
+#include "beam_vdif.h"
 #include "mwa_header.h"
 #include "ascii_header.h"
 
-void vdif_write_second( vdifinfo *vf, int8_t *output )
+void vdif_write_second( struct vdifinfo *vf, int8_t *output )
 {
     // form the filename
     // there is a standard naming convention
-    char  filename[1024];
+    char  filename[1030];
     sprintf( filename, "%s.vdif", vf->basefilename );
 
     //fprintf(stderr,"Attempting to open VDIF file for writing: %s\n",filename);
@@ -40,6 +42,90 @@ void vdif_write_second( vdifinfo *vf, int8_t *output )
 }
 
 
+void populate_vdif_header(
+        struct vdifinfo *vf,
+        vdif_header     *vhdr,
+        char            *metafits,
+        char            *obsid,
+        char            *time_utc,
+        int              sample_rate,
+        long int         frequency,
+        int              nchan, 
+        long int         chan_width,
+        char            *rec_channel,
+        struct delays   *delay_vals )
+{
+    // First how big is a DataFrame
+    vf->bits              = 8;   // this is because it is all the downstream apps support (dspsr/diFX)
+    vf->iscomplex         = 1;   // (it is complex data)
+    vf->nchan             = 2;   // I am hardcoding this to 2 channels per thread - one per pol
+    vf->samples_per_frame = 128; // also hardcoding to 128 time-samples per frame
+    vf->sample_rate       = sample_rate*128;  // also hardcoding this to the raw channel rate
+    vf->BW                = 1.28;
+
+    vf->frame_length  = vf->nchan * (vf->iscomplex+1) * (vf->bits) * vf->samples_per_frame + (32*8);
+    vf->frame_length /= 8;
+    vf->threadid      = 0;
+    sprintf( vf->stationid, "mw" );
+
+    vf->frame_rate = sample_rate;
+    vf->block_size = vf->frame_length * vf->frame_rate;
+
+    // A single frame (128 samples). Remember vf.nchan is kludged to npol
+    vf->sizeof_beam = vf->samples_per_frame * vf->nchan * (vf->iscomplex+1);
+
+    // One full second (1.28 million 2 bit samples)
+    vf->sizeof_buffer = vf->frame_rate * vf->sizeof_beam;
+
+    createVDIFHeader( vhdr, vf->frame_length, vf->threadid, vf->bits, vf->nchan,
+                            vf->iscomplex, vf->stationid);
+
+    // Now we have to add the time
+    uint64_t start_day = delay_vals->intmjd;
+    uint64_t start_sec = roundf( delay_vals->fracmjd * 86400.0 );
+    uint64_t mjdsec    = (start_day * 86400) + start_sec; // Note the VDIFEpoch is strange - from the standard
+
+    setVDIFEpoch( vhdr, start_day );
+    setVDIFMJDSec( vhdr, mjdsec );
+    setVDIFFrameNumber( vhdr, 0 );
+
+    // Get the project ID directly from the metafits file
+    fitsfile *fptr = NULL;
+    int status     = 0;
+
+    fits_open_file(&fptr, metafits, READONLY, &status);
+    fits_read_key(fptr, TSTRING, "PROJECT", vf->exp_name, NULL, &status);
+    fits_close_file(fptr, &status);
+
+    strncpy( vf->scan_name, obsid, 17 );
+
+    vf->b_scales   = (float *)malloc( sizeof(float) * vf->nchan );
+    vf->b_offsets  = (float *)malloc( sizeof(float) * vf->nchan );
+    vf->got_scales = 0;
+
+    strncpy( vf->telescope, "MWA", 24);
+    strncpy( vf->obs_mode,  "PSR", 8);
+
+    // Determine the RA and Dec strings
+    double ra2000  = delay_vals->mean_ra  * DR2D;
+    double dec2000 = delay_vals->mean_dec * DR2D;
+
+    dec2hms(vf->ra_str,  ra2000/15.0, 0); // 0 = no '+' sign
+    dec2hms(vf->dec_str, dec2000,     1); // 1 = with '+' sign
+
+    strncpy( vf->date_obs, time_utc, 24);
+
+    vf->MJD_epoch = delay_vals->intmjd + delay_vals->fracmjd;
+    vf->fctr      = (frequency + (nchan/2.0)*chan_width)/1.0e6; // (MHz)
+    strncpy( vf->source, "unset", 24 );
+
+    // The output file basename
+    int ch = atoi(rec_channel);
+    sprintf( vf->basefilename, "%s_%s_ch%03d",
+             vf->exp_name, vf->scan_name, ch);
+}
+
+
 complex float get_std_dev_complex(complex float *input, int nsamples)
 {
     // assume zero mean
@@ -63,7 +149,7 @@ complex float get_std_dev_complex(complex float *input, int nsamples)
 void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
 {
     float percentage = 0.0;
-    float occupancy = 17.0;
+    //float occupancy = 17.0;
     float limit = 0.00001;
     float step = 0.001;
     int i = 0;

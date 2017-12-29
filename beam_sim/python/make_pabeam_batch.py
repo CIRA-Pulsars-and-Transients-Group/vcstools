@@ -125,8 +125,8 @@ def write_showspec_batch(time,obsid,ra,dec,freq,ntheta,nphi,out):
     fstart = int(np.floor(freq/1e6))
     fend = int(np.ceil(freq/1e6))
 
-    azcol = 0
-    zacol = 1
+    azcol = 1
+    zacol = 0
     gaincol = 8
 
     with open(fname,'w') as f:

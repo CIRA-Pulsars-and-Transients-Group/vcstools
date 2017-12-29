@@ -51,14 +51,14 @@ void usage() {
 
 int  checkFile(time_t index, char * fileName, time_t gap) {
 	struct stat *s;
-	time_t accessTime;
+	//time_t accessTime;
 	time_t modTime;
-	time_t changeTime;
+	//time_t changeTime;
 	s = malloc(sizeof(struct stat));
 	if(stat(fileName,s) == 0) {
-		accessTime = s->st_atime;
+		//accessTime = s->st_atime;
 		modTime = s->st_mtime;      
-		changeTime = s->st_ctime;
+		//changeTime = s->st_ctime;
 		if (index-modTime < gap) {
 			return 1;
 		}
@@ -172,7 +172,7 @@ int main(int argc, char **argv) {
 
 					fwrite(average,sizeof(float),nbaselines*2,stdout);
 					bzero((void *)average,nbaselines*2*sizeof(float));
-				} while (ii<nbuffer);
+				} while (ii<(int)nbuffer);
 				free(average);
 
 			}
@@ -301,7 +301,7 @@ int main(int argc, char **argv) {
 				printf("there were no matching files");
 			else {
 				int i;
-				for(i = 0; i < globbuf.gl_pathc; i++) {
+				for(i = 0; i < (int)globbuf.gl_pathc; i++) {
 					if (checkFile(now,globbuf.gl_pathv[i],10)) {
 						printf("%s \n",globbuf.gl_pathv[i]);
 					}

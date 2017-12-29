@@ -1,10 +1,10 @@
-#ifndef VDIFBEAM_H
-#define VDIFBEAM_H
+#ifndef BEAM_VDIF_H
+#define BEAM_VDIF_H
 
 #include <complex.h>
 
 /* convenience type - this just collects all the vdif info together */
-typedef struct vdifinfo_t {
+struct vdifinfo {
 
     int frame_length; //length of the vdif frame
     int frame_rate; // frames per second
@@ -42,17 +42,19 @@ typedef struct vdifinfo_t {
 
     int got_scales;
 
-} vdifinfo;
+};
 
-void vdif_write_second (vdifinfo *vf,int8_t *output);
+void vdif_write_second( struct vdifinfo *vf, int8_t *output );
 
-complex float get_std_dev_complex(complex float *input, int nsamples);
+complex float get_std_dev_complex( complex float *input, int nsamples );
 
-void set_level_occupancy(complex float *input, int nsamples, float *new_gain);
+void set_level_occupancy( complex float *input, int nsamples,
+                          float *new_gain );
 
-void get_mean_complex(complex float *input, int nsamples, float *rmean,float *imean, complex float *cmean);
+void get_mean_complex( complex float *input, int nsamples, float *rmean,
+                       float *imean, complex float *cmean );
 
-void normalise_complex(complex float *input, int nsamples, float scale);
+void normalise_complex( complex float *input, int nsamples, float scale );
 
 
 #endif
