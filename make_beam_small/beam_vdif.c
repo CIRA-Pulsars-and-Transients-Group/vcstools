@@ -2,12 +2,78 @@
 #include <stdio.h>
 #include <math.h>
 #include <complex.h>
+#include <fftw3.h>
 #include "vdifio.h"
+#include "beam_common.h"
 #include "beam_vdif.h"
 #include "mwa_header.h"
 #include "ascii_header.h"
 
-void vdif_write_second( struct vdifinfo *vf, int8_t *output )
+
+void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
+        float *data_buffer_vdif, float *gain )
+{
+    float gain;
+    if (vf->got_scales == 0) {
+
+        float rmean, imean;
+        complex float cmean, stddev;
+
+        get_mean_complex(
+                (complex float *)data_buffer_vdif,
+                vf->sizeof_buffer/2.0,
+                &rmean, &imean, &cmean );
+
+        stddev = get_std_dev_complex(
+                (complex float *)data_buffer_vdif,
+                vf->sizeof_buffer/2.0 );
+
+        if (fabsf(rmean) > 0.001) {
+            fprintf( stderr, "error: vdif_write_second: significantly "
+                             "non-zero mean (%f)", rmean );
+            exit(EXIT_FAILURE);
+        }
+
+        vf->b_scales[0] = crealf(stddev);
+        vf->b_scales[1] = crealf(stddev);
+
+        vf->got_scales = 1; // TODO: find out if this is ever meant to be reset to 0
+        set_level_occupancy(
+                (complex float *)data_buffer_vdif,
+                vf->sizeof_buffer/2.0, gain);
+
+    }
+
+    normalise_complex(
+            (complex float *)data_buffer_vdif,
+            vf->sizeof_buffer/2.0,
+            1.0/gain );
+
+    float *data_buffer_ptr = data_buffer_vdif;
+    size_t offset_out_vdif = 0;
+
+    int8_t *out_buffer_8_vdif = (int8_t *)malloc(vf->block_size);
+
+    while  (offset_out_vdif < vf->block_size) {
+
+        memcpy( (out_buffer_8_vdif + offset_out_vdif), vhdr, VDIF_HEADER_SIZE ); // add the current header
+        offset_out_vdif += VDIF_HEADER_SIZE; // offset into the output array
+
+        float2int8_trunc( data_buffer_ptr, vf->sizeof_beam, -126.0, 127.0,
+                          (out_buffer_8_vdif + offset_out_vdif) );
+        to_offset_binary( (out_buffer_8_vdif + offset_out_vdif),
+                          vf->sizeof_beam );
+
+        offset_out_vdif += vf->frame_length - VDIF_HEADER_SIZE; // increment output offset
+        data_buffer_ptr += vf->sizeof_beam;
+        nextVDIFHeader( vhdr, vf->frame_rate );
+    }
+
+    // Write a full second's worth of samples
+    vdif_write_data( vf, out_buffer_8_vdif );
+}
+
+void vdif_write_data( struct vdifinfo *vf, int8_t *output )
 {
     // form the filename
     // there is a standard naming convention
@@ -16,11 +82,10 @@ void vdif_write_second( struct vdifinfo *vf, int8_t *output )
 
     //fprintf(stderr,"Attempting to open VDIF file for writing: %s\n",filename);
     FILE *fs = fopen( filename, "a" );
-    fwrite( output, vf->block_size ,1, fs );
+    fwrite( output, vf->block_size, 1, fs );
     fclose( fs );
 
     // write a CPSR2 test header for DSPSR
-
     char ascii_header[MWA_HEADER_SIZE] = MWA_HEADER_INIT;
     //ascii_header_set( ascii_header, "UTC_START", "%s", vf->date_obs  );
     ascii_header_set( ascii_header, "DATAFILE",   "%s", filename      );
@@ -63,8 +128,8 @@ void populate_vdif_header(
     vf->sample_rate       = sample_rate*128;  // also hardcoding this to the raw channel rate
     vf->BW                = 1.28;
 
-    vf->frame_length  = vf->nchan * (vf->iscomplex+1) * (vf->bits) * vf->samples_per_frame + (32*8);
-    vf->frame_length /= 8;
+    vf->frame_length  = (vf->nchan * (vf->iscomplex+1) * (vf->bits) * vf->samples_per_frame) +
+                        VDIF_HEADER_SIZE;
     vf->threadid      = 0;
     sprintf( vf->stationid, "mw" );
 
@@ -210,4 +275,72 @@ void normalise_complex(complex float *input, int nsamples, float scale)
     }
 }
 
+
+void to_offset_binary(int8_t *i, int n)
+{
+    int j;
+    for (j = 0; j < n; j++) {
+        i[j] = i[j] ^ 0x80;
+    }
+}
+
+void invert_pfb_ifft( complex float *input complex float *output, int nchan )
+/* "Invert the PFB" by simply applying an inverse FFT.
+ * This function expects that both "input" and "output" contain at least
+ * nchan elements.
+ */
+{
+    // Set up the FFTW arrays and plans
+    int direction = FFTW_BACKWARD;
+
+    fftwf_complex *in  = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
+    fftwf_complex *out = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
+    fftwf_plan     p   = fftwf_plan_dft_1d( nchan, in, out, direction, FFTW_ESTIMATE );
+
+    if (in == NULL || out == NULL)
+    {
+        fprintf( stderr, "error: invert_pfb_ifft: Failed to allocate FFTW arrays\n" );
+        exit(EXIT_FAILURE);
+    }
+
+    // Populate the arrays
+    int ch;
+    for (ch = 0; ch < nchan; ch++)
+    {
+        if (ch < nchan/2)
+        {
+            // these are the negative frequencies
+            // pack them in the second half of the array
+            // skip over the edges
+            in[(nchan/2) + ch] = input[ch];
+        }
+        else if (ch > nchan/2)
+        {
+            // positive frequencies -- shift them to the first half
+            in[ch-(nchan/2)] = input[ch];
+        }
+        else // if (ch == nchan/2)
+        {
+            // Nyquist bin - give it a zero mean
+            in[0] = 0.0;
+        }
+    }
+
+    // Make it so!
+    fftwf_execute(p);
+
+    // Pack result into the output array
+    for (ch = 0; ch < nchan; ch++)
+        output[ch] = out[ch];
+
+    // Free memory
+    fftwf_destroy_plan(p);
+    fftwf_free(in);
+    fftwf_free(out);
+}
+
+void invert_pfb_ord( complex float *input, complex float *output,
+                     int nchan_in, int nchan_out, ... ); // TODO: decide how to handle Ord's filter_context structure
+{
+}
 

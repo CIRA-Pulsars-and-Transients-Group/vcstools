@@ -3,6 +3,8 @@
 
 #include <complex.h>
 
+#define  VDIF_HEADER_SIZE  32
+
 /* convenience type - this just collects all the vdif info together */
 struct vdifinfo {
 
@@ -44,7 +46,20 @@ struct vdifinfo {
 
 };
 
-void vdif_write_second( struct vdifinfo *vf, int8_t *output );
+void vdif_write_data( struct vdifinfo *vf, int8_t *output );
+
+void populate_vdif_header(
+        struct vdifinfo *vf,
+        vdif_header     *vhdr,
+        char            *metafits,
+        char            *obsid,
+        char            *time_utc,
+        int              sample_rate,
+        long int         frequency,
+        int              nchan, 
+        long int         chan_width,
+        char            *rec_channel,
+        struct delays   *delay_vals );
 
 complex float get_std_dev_complex( complex float *input, int nsamples );
 
@@ -56,5 +71,12 @@ void get_mean_complex( complex float *input, int nsamples, float *rmean,
 
 void normalise_complex( complex float *input, int nsamples, float scale );
 
+void to_offset_binary( int8_t *i, int n );
+
+void invert_pfb_ifft( complex float *input complex float *output,
+                      int nchan_in, int nchan_out );
+
+void invert_pfb_ord( complex float *input, complex float *output,
+                     int nchan_in, int nchan_out, ... ); // TODO: decide how to handle Ord's filter_context structure
 
 #endif

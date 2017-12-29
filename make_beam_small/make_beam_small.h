@@ -3,6 +3,8 @@
 
 #include "beam_common.h"
 
+#define MAX_COMMAND_LENGTH 1024
+
 struct make_beam_opts {
     // Variables for required options
     char              *obsid;         // The observation ID
@@ -33,5 +35,8 @@ struct make_beam_opts {
 
 void usage();
 void make_beam_parse_cmdline( int argc, char **argv, struct make_beam_opts *opts );
+
+char **create_filenames( struct make_beam_opts *opts );
+void   destroy_filenames( char **filenames, struct make_beam_opts *opts );
 
 #endif

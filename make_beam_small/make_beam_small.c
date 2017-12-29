@@ -1,3 +1,4 @@
+// TODO: Remove superfluous #includes
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -37,8 +38,6 @@
 // write out psrfits directly
 #include "psrfits.h"
 #include "antenna_mapping.h"
-
-#define MAX_COMMAND_LENGTH 1024
 
 int main(int argc, char **argv) {
 
@@ -94,29 +93,21 @@ int main(int argc, char **argv) {
     const int outpol_coh   = 4;      // (I,Q,U,V)
     const int outpol_incoh = 1;      // ("I")
 
+    float gain = 1.0; // This is re-calculated every second for the VDIF output
+
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = omp_get_wtime();
     printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
 
     // Calculate the number of files
-    int nfiles = opts.end - opts.begin + 1;
     if (nfiles <= 0) {
         fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, opts.begin, opts.end);
         exit(EXIT_FAILURE);
     }
 
     // Allocate memory for the file name list
-    char **filenames = NULL;
-    filenames = (char **)malloc( nfiles*sizeof(char *) );
-
-    // Allocate memory and write filenames
-    int second;
-    unsigned long int timestamp;
-    for (second = 0; second < nfiles; second++) {
-        timestamp = second + opts.begin;
-        filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
-        sprintf( filenames[second], "%s/%s_%ld_ch%s.dat", opts.datadir, opts.obsid, timestamp, opts.rec_channel );
-    }
+    char **filenames = create_filenames( &opts );
+    int    nfiles    = opts.end - opts.begin + 1;
 
     // Allocate memory for complex weights matrices
     int ant, p, ch; // Loop variables
@@ -188,20 +179,28 @@ int main(int argc, char **argv) {
     struct vdifinfo vf;
 
     // Populate the relevant header structs
-    if (opts.out_incoh)
+    if (opts.out_coh)
     {
-        populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc, opts.sample_rate,
-                opts.frequency, nchan, opts.chan_width, outpol_coh, opts.rec_channel, &delay_vals );
+        populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc,
+                opts.sample_rate, opts.frequency, nchan, opts.chan_width,
+                outpol_coh, opts.rec_channel, &delay_vals );
     }
     if (opts.out_incoh)
     {
-        populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid, opts.time_utc, opts.sample_rate,
-                opts.frequency, nchan, opts.chan_width, outpol_incoh, opts.rec_channel, &delay_vals );
+        populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid,
+                opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+                opts.chan_width, outpol_incoh, opts.rec_channel, &delay_vals );
 
         // Use the tile pointing instead of the pencil beam pointing
         // TO DO: Move this to populate_psrfits_header?
         pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
         pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
+    }
+    if (opts.out_vdif)
+    {
+        populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
+                opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+                opts.chan_width, opts.rec_channel, &delay_vals );
     }
 
     // Create array for holding the raw data
@@ -209,14 +208,23 @@ int main(int argc, char **argv) {
     uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     assert(data);
 
+    // Create output buffer arrays
     float *data_buffer_coh   = NULL;
     float *data_buffer_incoh = NULL;
-    //float *data_buffer_vdif  = NULL;
+    float *data_buffer_vdif  = NULL;
+    complex float *pol_X     = NULL;
+    complex float *pol_Y     = NULL;
 
     if (opts.out_coh)
         data_buffer_coh   = (float *)malloc( nchan * outpol_coh  * pf.hdr.nsblk       * sizeof(float) );
     if (opts.out_incoh)
         data_buffer_incoh = (float *)malloc( nchan * outpol_incoh* pf_incoh.hdr.nsblk * sizeof(float) );
+    if (opts.out_vdif)
+    {
+        pol_X = (complex float *)malloc( nchan, sizeof(complex float) );
+        pol_Y = (complex float *)malloc( nchan, sizeof(complex float) );
+        data_buffer_vdif  = (float *)malloc( vf.sizeof_buffer * sizeof(float) );
+    }
 
     int file_no = 0;
     int sample;
@@ -362,7 +370,7 @@ int main(int argc, char **argv) {
             for (ch  = 0; ch  < nchan   ; ch++ )
             {
                 // Coherent beam
-                if (opts.out_coh)
+                if (opts.out_coh || opts.out_vdif)
                     detected_beam[ch][pol] += beam[ch][ant][pol];
 
                 // Incoherent beam
@@ -378,8 +386,8 @@ int main(int argc, char **argv) {
                 complex double beam01;
                 unsigned int stokesIidx, stokesQidx, stokesUidx, stokesVidx;
 
-                for (ch = 0; ch < nchan; ch++) {
-
+                for (ch = 0; ch < nchan; ch++)
+                {
                     beam00 = (double)(detected_beam[ch][0] * conj(detected_beam[ch][0]));
                     beam11 = (double)(detected_beam[ch][1] * conj(detected_beam[ch][1]));
                     beam01 = detected_beam[ch][0] * conj(detected_beam[ch][1]);
@@ -411,6 +419,35 @@ int main(int argc, char **argv) {
                 memcpy((void *)((char *)data_buffer_incoh + offset_in_incoh), detected_incoh_beam, sizeof(float)*nchan*outpol_incoh);
             }
 
+            if (opts.out_vdif)
+            {
+                int offset_in_vdif = vf.sizeof_beam * sample;
+                float *data_buffer_ptr = &data_buffer_vdif[offset_in_vdif];
+
+                for (ch = 0; ch < nchan; ch++)
+                {
+                    pol_X[ch] = detected_beam[ch][0] * invw;
+                    pol_Y[ch] = detected_beam[ch][1] * invw;
+                }
+
+                // Invert the PFB
+                // This can be done in two ways:
+                //   1) Plain vanilla inverse-FFT (invert_pfb_ifft())
+                //   2) Ord's up-sampling scheme  (invert_pfb_ord())
+                // TODO: Implement these here, operating on a single time sample
+                invert_pfb_ifft( pol_X, pol_X, nchan );
+                invert_pfb_ifft( pol_Y, pol_Y, nchan );
+
+                // Pack result into the output data buffer
+                for (ch = 0; ch < nchan; ch++)
+                {
+                    int data_offset = 4*ch;
+                    data_buffer_ptr[data_offset++] = crealf(pol_X[ch]);
+                    data_buffer_ptr[data_offset++] = cimagf(pol_X[ch]);
+                    data_buffer_ptr[data_offset++] = crealf(pol_Y[ch]);
+                    data_buffer_ptr[data_offset  ] = cimagf(pol_Y[ch]);
+                }
+            }
         }
 
         // We've arrived at the end of a second's worth of data...
@@ -421,6 +458,8 @@ int main(int argc, char **argv) {
             psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );
         if (opts.out_incoh)
             psrfits_write_second( &pf_incoh, data_buffer_incoh, nchan, outpol_incoh );
+        if (opts.out_vdif)
+            vdif_write_second( &vf, &vhdr, data_buffer_vdif, &gain ); // TODO: Correct function arguments
 
     }
 
@@ -428,16 +467,12 @@ int main(int argc, char **argv) {
     printf("[%f]  Starting clean-up\n", omp_get_wtime()-begintime);
 
     // Free up memory for filenames
-    if (opts.datadir) {
-        int second;
-        for (second = 0; second < nfiles; second++)
-            free( filenames[second] );
-        free( filenames );
-    }
+    destroy_filenames( filenames, &opts );
 
     destroy_metafits_info( &mi );
-    free( data_buffer_coh  );
-    free( data_buffer_incoh  );
+    free( data_buffer_coh   );
+    free( data_buffer_incoh );
+    free( data_buffer_vdif  );
     free( data );
 
     return 0;
@@ -727,4 +762,43 @@ void make_beam_parse_cmdline(
     if ( !opts->out_incoh && !opts->out_coh && !opts->out_vdif )
         opts->out_coh = 1;
 
+}
+
+
+
+char **create_filenames( struct make_beam_opts *opts )
+{
+    // Calculate the number of files
+    int nfiles = opts->end - opts->begin + 1;
+    if (nfiles <= 0) {
+        fprintf( stderr, "Cannot beamform on %d files (between %lu and %lu)\n",
+                 nfiles, opts->begin, opts->end);
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate memory for the file name list
+    char **filenames = NULL;
+    filenames = (char **)malloc( nfiles*sizeof(char *) );
+
+    // Allocate memory and write filenames
+    int second;
+    unsigned long int timestamp;
+    for (second = 0; second < nfiles; second++) {
+        timestamp = second + opts->begin;
+        filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
+        sprintf( filenames[second], "%s/%s_%ld_ch%s.dat",
+                 opts->datadir, opts->obsid, timestamp, opts->rec_channel );
+    }
+
+    return filenames;
+}
+
+
+void destroy_filenames( char **filenames, struct make_beam_opts *opts )
+{
+    int nfiles = opts->end - opts->begin + 1;
+    int second;
+    for (second = 0; second < nfiles; second++)
+        free( filenames[second] );
+    free( filenames );
 }
