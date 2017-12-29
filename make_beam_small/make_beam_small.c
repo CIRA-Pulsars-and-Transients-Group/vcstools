@@ -178,6 +178,7 @@ int main(int argc, char **argv) {
     struct psrfits  pf_incoh;
     vdif_header     vhdr;
     struct vdifinfo vf;
+    struct vdifinfo uvf;
 
     // Populate the relevant header structs
     if (opts.out_coh)
@@ -197,11 +198,21 @@ int main(int argc, char **argv) {
         pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
         pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
     }
-    if (opts.out_vdif | opts.out_uvdif)
+    if (opts.out_vdif)
     {
         populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
                 opts.time_utc, opts.sample_rate, opts.frequency, nchan,
                 opts.chan_width, opts.rec_channel, &delay_vals );
+
+    }
+    if (opts.out_uvdif)
+    {
+        populate_vdif_header( &uvf, &vhdr, opts.metafits, opts.obsid,
+                opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+                opts.chan_width, opts.rec_channel, &delay_vals );
+
+        sprintf( uvf.basefilename, "%s_%s_ch%03d_u",
+                 uvf.exp_name, uvf.scan_name, atoi(rec_channel) );
     }
 
     // Create array for holding the raw data
@@ -213,19 +224,16 @@ int main(int argc, char **argv) {
     float *data_buffer_coh   = NULL;
     float *data_buffer_incoh = NULL;
     float *data_buffer_vdif  = NULL;
+    float *data_buffer_uvdif = NULL;
     complex float *pol_X     = NULL;
     complex float *pol_Y     = NULL;
 
     if (opts.out_coh)
-        data_buffer_coh   = (float *)malloc( nchan * outpol_coh  * pf.hdr.nsblk       * sizeof(float) );
+        data_buffer_coh = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
     if (opts.out_incoh)
-        data_buffer_incoh = (float *)malloc( nchan * outpol_incoh* pf_incoh.hdr.nsblk * sizeof(float) );
+        data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
     if (opts.out_vdif)
-    {
-        pol_X = (complex float *)malloc( nchan * sizeof(complex float) );
-        pol_Y = (complex float *)malloc( nchan * sizeof(complex float) );
-        data_buffer_vdif  = (float *)malloc( vf.sizeof_buffer * sizeof(float) );
-    }
+        data_buffer_vdif = create_data_buffer_vdif( &vf, nchan, &pol_X, &pol_Y );
 
     int file_no = 0;
     int sample;
@@ -431,11 +439,7 @@ int main(int argc, char **argv) {
                     pol_Y[ch] = detected_beam[ch][1] * invw;
                 }
 
-                // Invert the PFB
-                // This can be done in two ways:
-                //   1) Plain vanilla inverse-FFT (invert_pfb_ifft())
-                //   2) Ord's up-sampling scheme  (invert_pfb_ord())
-                // TODO: Implement these here, operating on a single time sample
+                // Invert the PFB (plain vanilla inverse-FFT)
                 invert_pfb_ifft( pol_X, pol_X, nchan );
                 invert_pfb_ifft( pol_Y, pol_Y, nchan );
 
@@ -474,6 +478,8 @@ int main(int argc, char **argv) {
     free( data_buffer_coh   );
     free( data_buffer_incoh );
     free( data_buffer_vdif  );
+    free( pol_X );
+    free( pol_Y );
     free( data );
 
     return 0;
@@ -812,3 +818,20 @@ void destroy_filenames( char **filenames, struct make_beam_opts *opts )
         free( filenames[second] );
     free( filenames );
 }
+
+float *create_data_buffer_psrfits( size_t size )
+{
+    float *ptr = (float *)malloc( size * sizeof(float) );
+    return ptr;
+}
+
+
+float *create_data_buffer_vdif( struct vdifinfo *vf, int nchan,
+        complex float **pol_X, complex float **pol_Y )
+{
+    *pol_X = (complex float *)malloc( nchan * sizeof(complex float) );
+    *pol_Y = (complex float *)malloc( nchan * sizeof(complex float) );
+    float *ptr  = (float *)malloc( vf->sizeof_buffer * sizeof(float) );
+    return ptr;
+}
+
