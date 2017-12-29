@@ -521,10 +521,13 @@ void usage() {
     fprintf(stderr, "\t-p, --psrfits              ");
     fprintf(stderr, "Turn on coherent PSRFITS output (will be turned on if none of\n");
     fprintf(stderr, "\t                           ");
-    fprintf(stderr, "-i, -p, -v are chosen).                                          ");
+    fprintf(stderr, "-i, -p, -u, -v are chosen).                                      ");
+    fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-u, --uvdif                ");
+    fprintf(stderr, "Turn on VDIF output with upsampling                              ");
     fprintf(stderr, "[default: OFF]\n");
     fprintf(stderr, "\t-v, --vdif                 ");
-    fprintf(stderr, "Turn on VDIF output. (NOT YET IMPLEMENTED)                       ");
+    fprintf(stderr, "Turn on VDIF output without upsampling                           ");
     fprintf(stderr, "[default: OFF]\n");
 
     fprintf(stderr, "\n");
