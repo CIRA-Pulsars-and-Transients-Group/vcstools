@@ -23,7 +23,7 @@
 #include "beam_psrfits.h"
 #include "beam_vdif.h"
 #include "make_beam_small.h"
-#include "vdifbeam.h"
+#include "vdifio.h"
 
 // Are GPU available
 
@@ -100,6 +100,7 @@ int main(int argc, char **argv) {
     printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
 
     // Calculate the number of files
+    int nfiles = opts.end - opts.begin + 1;
     if (nfiles <= 0) {
         fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, opts.begin, opts.end);
         exit(EXIT_FAILURE);
@@ -107,7 +108,6 @@ int main(int argc, char **argv) {
 
     // Allocate memory for the file name list
     char **filenames = create_filenames( &opts );
-    int    nfiles    = opts.end - opts.begin + 1;
 
     // Allocate memory for complex weights matrices
     int ant, p, ch; // Loop variables
@@ -221,8 +221,8 @@ int main(int argc, char **argv) {
         data_buffer_incoh = (float *)malloc( nchan * outpol_incoh* pf_incoh.hdr.nsblk * sizeof(float) );
     if (opts.out_vdif)
     {
-        pol_X = (complex float *)malloc( nchan, sizeof(complex float) );
-        pol_Y = (complex float *)malloc( nchan, sizeof(complex float) );
+        pol_X = (complex float *)malloc( nchan * sizeof(complex float) );
+        pol_Y = (complex float *)malloc( nchan * sizeof(complex float) );
         data_buffer_vdif  = (float *)malloc( vf.sizeof_buffer * sizeof(float) );
     }
 

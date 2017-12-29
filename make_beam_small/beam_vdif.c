@@ -1,19 +1,23 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 #include <complex.h>
 #include <fftw3.h>
 #include "vdifio.h"
+#include "psrfits.h"
+#include "slamac.h"
+#include "mwac_utils.h"
 #include "beam_common.h"
 #include "beam_vdif.h"
 #include "mwa_header.h"
+#include "vdifio.h"
 #include "ascii_header.h"
 
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         float *data_buffer_vdif, float *gain )
 {
-    float gain;
     if (vf->got_scales == 0) {
 
         float rmean, imean;
@@ -47,7 +51,7 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
     normalise_complex(
             (complex float *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
-            1.0/gain );
+            1.0/(*gain) );
 
     float *data_buffer_ptr = data_buffer_vdif;
     size_t offset_out_vdif = 0;
@@ -284,7 +288,7 @@ void to_offset_binary(int8_t *i, int n)
     }
 }
 
-void invert_pfb_ifft( complex float *input complex float *output, int nchan )
+void invert_pfb_ifft( complex float *input, complex float *output, int nchan )
 /* "Invert the PFB" by simply applying an inverse FFT.
  * This function expects that both "input" and "output" contain at least
  * nchan elements.
@@ -339,8 +343,4 @@ void invert_pfb_ifft( complex float *input complex float *output, int nchan )
     fftwf_free(out);
 }
 
-void invert_pfb_ord( complex float *input, complex float *output,
-                     int nchan_in, int nchan_out, ... ); // TODO: decide how to handle Ord's filter_context structure
-{
-}
 
