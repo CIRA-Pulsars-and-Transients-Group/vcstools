@@ -111,6 +111,9 @@ int main(int argc, char **argv) {
     char **filenames = create_filenames( &opts );
     complex double ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
     complex double ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
+    fftwf_complex *fftw_in  = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
+    fftwf_complex *fftw_out = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
+    fftwf_plan fftw_p;
 
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, opts.metafits);
@@ -178,7 +181,6 @@ int main(int argc, char **argv) {
         populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
                 opts.time_utc, opts.sample_rate, opts.frequency, nchan,
                 opts.chan_width, opts.rec_channel, &delay_vals );
-
     }
     if (opts.out_uvdif)
     {
@@ -200,15 +202,13 @@ int main(int argc, char **argv) {
     float *data_buffer_incoh = NULL;
     float *data_buffer_vdif  = NULL;
     float *data_buffer_uvdif = NULL;
-    complex float *pol_X     = NULL;
-    complex float *pol_Y     = NULL;
 
     if (opts.out_coh)
         data_buffer_coh = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
     if (opts.out_incoh)
         data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
     if (opts.out_vdif)
-        data_buffer_vdif = create_data_buffer_vdif( &vf, nchan, &pol_X, &pol_Y );
+        data_buffer_vdif = create_data_buffer_vdif( &vf );
 
     int file_no = 0;
     int sample;
@@ -263,6 +263,16 @@ int main(int argc, char **argv) {
             complex float noise_floor[nchan][npol][npol];
             complex float e_true[npol], e_dash[npol];
 
+            if (opts.out_vdif)
+            {
+                // Setup arrays for FFTW
+                fftw_in  = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
+                fftw_out = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
+                fftw_p = fftwf_plan_dft_1d( nchan, fftw_in, fftw_out,
+                        FFTW_BACKWARD, FFTW_ESTIMATE );
+            }
+            complex float *pol_X = (complex float *)malloc( nchan * sizeof(complex float) );
+            complex float *pol_Y = (complex float *)malloc( nchan * sizeof(complex float) );
 
             // Initialise beam arrays to zero
             if (opts.out_coh)
@@ -388,8 +398,8 @@ int main(int argc, char **argv) {
                 }
 
                 // Invert the PFB (plain vanilla inverse-FFT)
-                invert_pfb_ifft( pol_X, pol_X, nchan );
-                invert_pfb_ifft( pol_Y, pol_Y, nchan );
+                invert_pfb_ifft( pol_X, nchan, fftw_p, fftw_in, fftw_out );
+                invert_pfb_ifft( pol_Y, nchan, fftw_p, fftw_in, fftw_out );
 
                 // Pack result into the output data buffer
                 for (ch = 0; ch < nchan; ch++)
@@ -401,6 +411,10 @@ int main(int argc, char **argv) {
                     data_buffer_ptr[data_offset  ] = cimagf(pol_Y[ch]);
                 }
             }
+
+            // Free dynamically allocated memory within the parallel for loop
+            free( pol_X );
+            free( pol_Y );
         }
 
         // We've arrived at the end of a second's worth of data...
@@ -412,7 +426,7 @@ int main(int argc, char **argv) {
         if (opts.out_incoh)
             psrfits_write_second( &pf_incoh, data_buffer_incoh, nchan, outpol_incoh );
         if (opts.out_vdif)
-            vdif_write_second( &vf, &vhdr, data_buffer_vdif, &gain ); // TODO: Correct function arguments
+            vdif_write_second( &vf, &vhdr, data_buffer_vdif, &gain );
 
     }
 
@@ -423,13 +437,17 @@ int main(int argc, char **argv) {
     destroy_filenames( filenames, &opts );
     destroy_complex_weights( complex_weights_array, nstation, nchan );
     destroy_invJi( invJi, nstation, nchan, npol );
+    if (opts.out_vdif)
+    {
+        fftwf_free( fftw_in );
+        fftwf_free( fftw_out );
+        fftwf_destroy_plan( fftw_p );
+    }
 
     destroy_metafits_info( &mi );
     free( data_buffer_coh   );
     free( data_buffer_incoh );
     free( data_buffer_vdif  );
-    free( pol_X );
-    free( pol_Y );
     free( data );
 
     return 0;
@@ -857,11 +875,8 @@ float *create_data_buffer_psrfits( size_t size )
 }
 
 
-float *create_data_buffer_vdif( struct vdifinfo *vf, int nchan,
-        complex float **pol_X, complex float **pol_Y )
+float *create_data_buffer_vdif( struct vdifinfo *vf )
 {
-    *pol_X = (complex float *)malloc( nchan * sizeof(complex float) );
-    *pol_Y = (complex float *)malloc( nchan * sizeof(complex float) );
     float *ptr  = (float *)malloc( vf->sizeof_buffer * sizeof(float) );
     return ptr;
 }

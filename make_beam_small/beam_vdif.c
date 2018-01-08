@@ -288,26 +288,16 @@ void to_offset_binary(int8_t *i, int n)
     }
 }
 
-void invert_pfb_ifft( complex float *input, complex float *output, int nchan )
+void invert_pfb_ifft( complex float *array, int nchan,
+                      fftwf_plan p, fftwf_complex *in, fftwf_complex *out )
 /* "Invert the PFB" by simply applying an inverse FFT.
- * This function expects that both "input" and "output" contain at least
- * nchan elements.
+ * This function expects "array" to contain at least nchan elements. It also
+ * expects that the arrays in the plan also contain at least nchan elements.
+ * The output of the inverse FFT is packed back into "array".
+ * "in" and "out" must be the same arrays as those used to make the plan "p"
  */
 {
-    // Set up the FFTW arrays and plans
-    int direction = FFTW_BACKWARD;
-
-    fftwf_complex *in  = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
-    fftwf_complex *out = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
-    fftwf_plan     p   = fftwf_plan_dft_1d( nchan, in, out, direction, FFTW_ESTIMATE );
-
-    if (in == NULL || out == NULL)
-    {
-        fprintf( stderr, "error: invert_pfb_ifft: Failed to allocate FFTW arrays\n" );
-        exit(EXIT_FAILURE);
-    }
-
-    // Populate the arrays
+    // Populate the FFTW arrays
     int ch;
     for (ch = 0; ch < nchan; ch++)
     {
@@ -316,12 +306,12 @@ void invert_pfb_ifft( complex float *input, complex float *output, int nchan )
             // these are the negative frequencies
             // pack them in the second half of the array
             // skip over the edges
-            in[(nchan/2) + ch] = input[ch];
+            in[(nchan/2) + ch] = array[ch];
         }
         else if (ch > nchan/2)
         {
             // positive frequencies -- shift them to the first half
-            in[ch-(nchan/2)] = input[ch];
+            in[ch-(nchan/2)] = array[ch];
         }
         else // if (ch == nchan/2)
         {
@@ -331,16 +321,11 @@ void invert_pfb_ifft( complex float *input, complex float *output, int nchan )
     }
 
     // Make it so!
-    fftwf_execute(p);
+    fftwf_execute( p );
 
     // Pack result into the output array
     for (ch = 0; ch < nchan; ch++)
-        output[ch] = out[ch];
+        array[ch] = out[ch];
 
-    // Free memory
-    fftwf_destroy_plan(p);
-    fftwf_free(in);
-    fftwf_free(out);
 }
-
 

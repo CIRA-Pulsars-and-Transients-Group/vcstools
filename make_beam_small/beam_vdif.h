@@ -2,6 +2,7 @@
 #define BEAM_VDIF_H
 
 #include <complex.h>
+#include <fftw3.h>
 #include "vdifio.h"
 
 #define  VDIF_HEADER_SIZE  32
@@ -76,7 +77,8 @@ void normalise_complex( complex float *input, int nsamples, float scale );
 
 void to_offset_binary( int8_t *i, int n );
 
-void invert_pfb_ifft( complex float *input, complex float *output, int nchan );
+void invert_pfb_ifft( complex float *array, int nchan,
+                      fftwf_plan p, fftwf_complex *in, fftwf_complex *out );
 
 void invert_pfb_ord( complex float *input, complex float *output,
                      int nchan_in, int nchan_out, ... ); // TODO: decide how to handle Ord's filter_context structure

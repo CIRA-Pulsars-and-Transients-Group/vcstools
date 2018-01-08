@@ -49,8 +49,7 @@ complex double ****create_invJi( int nstation, int nchan, int pol );
 void              destroy_invJi( complex double ****array, int nstation, int nchan, int npol );
 
 float *create_data_buffer_psrfits( size_t size );
-float *create_data_buffer_vdif( struct vdifinfo *vf, int nchan,
-        complex float **pol_X, complex float **pol_Y );
+float *create_data_buffer_vdif( struct vdifinfo *vf );
 //float *create_data_buffer_uvdif( size_t );
 
 #endif
