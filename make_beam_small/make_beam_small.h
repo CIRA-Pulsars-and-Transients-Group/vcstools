@@ -40,7 +40,13 @@ void usage();
 void make_beam_parse_cmdline( int argc, char **argv, struct make_beam_opts *opts );
 
 char **create_filenames( struct make_beam_opts *opts );
-void   destroy_filenames( char **filenames, struct make_beam_opts *opts );
+void  destroy_filenames( char **filenames, struct make_beam_opts *opts );
+
+complex double ***create_complex_weights( int nstation, int nchan, int npol );
+void             destroy_complex_weights( complex double ***array, int nstation, int nchan );
+
+complex double ****create_invJi( int nstation, int nchan, int pol );
+void              destroy_invJi( complex double ****array, int nstation, int nchan, int npol );
 
 float *create_data_buffer_psrfits( size_t size );
 float *create_data_buffer_vdif( struct vdifinfo *vf, int nchan,

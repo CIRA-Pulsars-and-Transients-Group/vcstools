@@ -107,35 +107,10 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    // Allocate memory for the file name list
+    // Allocate memory
     char **filenames = create_filenames( &opts );
-
-    // Allocate memory for complex weights matrices
-    int ant, p, ch; // Loop variables
-
-    complex double  ***complex_weights_array = NULL; // [ant][ch][pol]
-    
-    complex_weights_array = (complex double ***)malloc( nstation * sizeof(complex double **) );
-    for (ant = 0; ant < nstation; ant++) {
-        complex_weights_array[ant] = (complex double **)malloc( nchan * sizeof(complex double *) );
-        for (ch = 0; ch < nchan; ch++) {
-            complex_weights_array[ant][ch] = (complex double *)malloc( npol * sizeof(complex double) );
-        }
-    }
-
-    // Allocate memory for (inverse) Jones matrices
-    complex double ****invJi = NULL; // [ant][ch][pol][pol]
-
-    invJi = (complex double ****)malloc( nstation * sizeof(complex double ***) );
-    for (ant = 0; ant < nstation; ant++) {
-        invJi[ant] =(complex double ***)malloc( nchan * sizeof(complex double **) );
-        for (ch = 0; ch < nchan; ch++) {
-            invJi[ant][ch] = (complex double **)malloc( npol * sizeof(complex double *) );
-            for (p = 0; p < npol; p++) {
-                invJi[ant][ch][p] = (complex double *)malloc( npol * sizeof(complex double) );
-            }
-        }
-    }
+    complex double ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
+    complex double ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
 
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, opts.metafits);
@@ -444,8 +419,10 @@ int main(int argc, char **argv) {
     printf("[%f]  **FINISHED BEAMFORMING**\n", omp_get_wtime()-begintime);
     printf("[%f]  Starting clean-up\n", omp_get_wtime()-begintime);
 
-    // Free up memory for filenames
+    // Free up memory
     destroy_filenames( filenames, &opts );
+    destroy_complex_weights( complex_weights_array, nstation, nchan );
+    destroy_invJi( invJi, nstation, nchan, npol );
 
     destroy_metafits_info( &mi );
     free( data_buffer_coh   );
@@ -791,6 +768,87 @@ void destroy_filenames( char **filenames, struct make_beam_opts *opts )
         free( filenames[second] );
     free( filenames );
 }
+
+
+complex double ***create_complex_weights( int nstation, int nchan, int npol )
+// Allocate memory for complex weights matrices
+{
+    int ant, ch; // Loop variables
+    complex double ***array;
+    
+    array = (complex double ***)malloc( nstation * sizeof(complex double **) );
+
+    for (ant = 0; ant < nstation; ant++)
+    {
+        array[ant] = (complex double **)malloc( nchan * sizeof(complex double *) );
+
+        for (ch = 0; ch < nchan; ch++)
+            array[ant][ch] = (complex double *)malloc( npol * sizeof(complex double) );
+    }
+
+    return array;
+}
+
+
+void destroy_complex_weights( complex double ***array, int nstation, int nchan )
+{
+    int ant, ch;
+    for (ant = 0; ant < nstation; ant++)
+    {
+        for (ch = 0; ch < nchan; ch++)
+            free( array[ant][ch] );
+
+        free( array[ant] );
+    }
+
+    free( array );
+}
+
+
+complex double ****create_invJi( int nstation, int nchan, int npol )
+// Allocate memory for (inverse) Jones matrices
+{
+    int ant, p, ch; // Loop variables
+    complex double ****invJi;
+
+    invJi = (complex double ****)malloc( nstation * sizeof(complex double ***) );
+
+    for (ant = 0; ant < nstation; ant++)
+    {
+        invJi[ant] =(complex double ***)malloc( nchan * sizeof(complex double **) );
+
+        for (ch = 0; ch < nchan; ch++)
+        {
+            invJi[ant][ch] = (complex double **)malloc( npol * sizeof(complex double *) );
+
+            for (p = 0; p < npol; p++)
+                invJi[ant][ch][p] = (complex double *)malloc( npol * sizeof(complex double) );
+        }
+    }
+
+    return invJi;
+}
+
+
+void destroy_invJi( complex double ****array, int nstation, int nchan, int npol )
+{
+    int ant, ch, p;
+    for (ant = 0; ant < nstation; ant++)
+    {
+        for (ch = 0; ch < nchan; ch++)
+        {
+            for (p = 0; p < npol; p++)
+                free( array[ant][ch][p] );
+
+            free( array[ant][ch] );
+        }
+
+        free( array[ant] );
+    }
+
+    free( array );
+}
+
 
 float *create_data_buffer_psrfits( size_t size )
 {
