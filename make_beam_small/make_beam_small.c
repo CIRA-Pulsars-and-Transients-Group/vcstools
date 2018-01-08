@@ -212,7 +212,7 @@ int main(int argc, char **argv) {
                 opts.chan_width, opts.rec_channel, &delay_vals );
 
         sprintf( uvf.basefilename, "%s_%s_ch%03d_u",
-                 uvf.exp_name, uvf.scan_name, atoi(rec_channel) );
+                 uvf.exp_name, uvf.scan_name, atoi(opts.rec_channel) );
     }
 
     // Create array for holding the raw data
@@ -387,37 +387,10 @@ int main(int argc, char **argv) {
                     detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
             }
 
-            // Calculate the Stokes parameters
             if (opts.out_coh)
             {
-                double beam00, beam11;
-                double noise0, noise1, noise3;
-                complex double beam01;
-                unsigned int stokesIidx, stokesQidx, stokesUidx, stokesVidx;
-
-                for (ch = 0; ch < nchan; ch++)
-                {
-                    beam00 = (double)(detected_beam[ch][0] * conj(detected_beam[ch][0]));
-                    beam11 = (double)(detected_beam[ch][1] * conj(detected_beam[ch][1]));
-                    beam01 = detected_beam[ch][0] * conj(detected_beam[ch][1]);
-
-                    noise0 = noise_floor[ch][0][0];
-                    noise1 = noise_floor[ch][0][1];
-                    noise3 = noise_floor[ch][1][1];
-
-                    stokesIidx = 0*nchan + ch;
-                    stokesQidx = 1*nchan + ch;
-                    stokesUidx = 2*nchan + ch;
-                    stokesVidx = 3*nchan + ch;
-
-                    // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
-                    // so for a single timestep we do not have to interleave - I could just stack these
-                    spectrum[stokesIidx] = (beam00 + beam11 - noise0 - noise3) * invw;
-                    spectrum[stokesQidx] = (beam00 - beam11 - noise0 + noise3) * invw;
-                    spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise1)*invw;
-                    spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
-                }
-
+                // Calculate the Stokes parameters
+                form_stokes( detected_beam, noise_floor, nchan, invw, spectrum );
                 int offset_in_coh = sizeof(float) * nchan * outpol_coh * sample;
                 memcpy((void *)((char *)data_buffer_coh + offset_in_coh), spectrum, sizeof(float)*nchan*outpol_coh);
             }

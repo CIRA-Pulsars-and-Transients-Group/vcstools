@@ -276,7 +276,8 @@ void correct_psrfits_stt( struct psrfits *pf )
 }
 
 
-void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan, int outpol )
+void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
+        int outpol )
 {
     int8_t *out_buffer_8 = (int8_t *)malloc( outpol*nchan*pf->hdr.nsblk * sizeof(int8_t) );
 
@@ -300,4 +301,60 @@ void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan, in
 
     pf->sub.offs = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
     pf->sub.lst += pf->sub.tsubint;
+}
+
+
+void form_stokes( complex float detected_beam[][2],
+                  complex float noise_floor[][2][2],
+                  int nchan, double invw, float *spectrum )
+/* This function forms the Stokes parameters IQUV from the detected beam and
+ * the constructed "noise floor". It packs the IQUV parameters into a single
+ * 1D array in the following format (assuming nchan = 128):
+ *
+ *   I1, I2, I3, ..., I128,
+ *   Q1, Q2, Q3, ..., Q128,
+ *   U1, U2, U3, ..., U128,
+ *   V1, V2, V3, ..., V128
+ *
+ * Where the numbers indicate the fine channel number. The above 4x128 block
+ * represents a single time sample.
+ *
+ * The following array sizes are assumed:
+ *
+ *   detected_beam[nchan][2]
+ *   noise_floor[nchan][2][2]
+ *   spectrum[nchan*4]
+ *
+ * IQUV are all weighted by multiplication by "invw"
+ * These calculations are described in .../doc/doc.pdf.
+ */
+{
+    double beam00, beam11;
+    double noise0, noise1, noise3;
+    complex double beam01;
+    unsigned int stokesIidx, stokesQidx, stokesUidx, stokesVidx;
+
+    int ch;
+    for (ch = 0; ch < nchan; ch++)
+    {
+        beam00 = (double)(detected_beam[ch][0] * conj(detected_beam[ch][0]));
+        beam11 = (double)(detected_beam[ch][1] * conj(detected_beam[ch][1]));
+        beam01 = detected_beam[ch][0] * conj(detected_beam[ch][1]);
+
+        noise0 = noise_floor[ch][0][0];
+        noise1 = noise_floor[ch][0][1];
+        noise3 = noise_floor[ch][1][1];
+
+        stokesIidx = 0*nchan + ch;
+        stokesQidx = 1*nchan + ch;
+        stokesUidx = 2*nchan + ch;
+        stokesVidx = 3*nchan + ch;
+
+        // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
+        // so for a single timestep we do not have to interleave - I could just stack these
+        spectrum[stokesIidx] = (beam00 + beam11 - noise0 - noise3) * invw;
+        spectrum[stokesQidx] = (beam00 - beam11 - noise0 + noise3) * invw;
+        spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise1)*invw;
+        spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
+    }
 }

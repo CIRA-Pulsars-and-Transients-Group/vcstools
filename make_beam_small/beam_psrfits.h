@@ -21,6 +21,11 @@ void populate_psrfits_header(
 
 void correct_psrfits_stt( struct psrfits *pf );
 
-void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan, int outpol );
+void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
+        int outpol );
+
+void form_stokes( complex float detected_beam[][2],
+                  complex float noise_floor[][2][2],
+                  int nchan, double invw, float *spectrum );
 
 #endif
