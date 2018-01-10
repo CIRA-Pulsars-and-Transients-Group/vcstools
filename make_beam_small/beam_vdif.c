@@ -288,10 +288,11 @@ void to_offset_binary(int8_t *i, int n)
     }
 }
 
+
 void invert_pfb_ifft( complex float *array, int nchan,
                       fftwf_plan p, fftwf_complex *in, fftwf_complex *out )
 /* "Invert the PFB" by simply applying an inverse FFT.
- * This function expects "array" to contain at least nchan elements. It also
+ * This function expects "array" to contain (at least) nchan elements. It also
  * expects that the arrays in the plan also contain at least nchan elements.
  * The output of the inverse FFT is packed back into "array".
  * "in" and "out" must be the same arrays as those used to make the plan "p"
@@ -329,3 +330,18 @@ void invert_pfb_ifft( complex float *array, int nchan,
 
 }
 
+
+//void invert_pfb_ord( complex float *input, complex float *output,
+//                     int nchan_in, int nchan_out )
+/* Inverting the PFB, using Ord's algorithm:
+ * In order to build a single time step at the new <high> resolution
+ * 
+ * 1) first take each channel and upsample the correct factor by adding the upsample-1 number of zeros
+ * 2) filter the upsampled channel to remove the images 
+ * 3) phase rotate the channel to shift the frequency response
+ * 4) Sum all to get the final time series
+ * 
+ * The "input" array is expected to have nchan_in elements, and 
+ */
+//{
+//}

@@ -12,7 +12,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 find_package(SLALIB)
 find_package(PSRFITS_UTILS)
 find_package(CFITSIO)
-#find_package(FFTW3 COMPONENTS single)
+find_package(FFTW3 COMPONENTS single)
 #find_package(Postgres)
 find_package(CUDA)
 

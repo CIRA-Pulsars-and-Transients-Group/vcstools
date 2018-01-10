@@ -80,7 +80,7 @@ void to_offset_binary( int8_t *i, int n );
 void invert_pfb_ifft( complex float *array, int nchan,
                       fftwf_plan p, fftwf_complex *in, fftwf_complex *out );
 
-void invert_pfb_ord( complex float *input, complex float *output,
-                     int nchan_in, int nchan_out, ... ); // TODO: decide how to handle Ord's filter_context structure
+//void invert_pfb_ord( complex float *input, complex float *output,
+//                     int nchan_in, int nchan_out );
 
 #endif
