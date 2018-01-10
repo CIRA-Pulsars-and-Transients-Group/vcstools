@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
-#include <plot.h>
+//#include <plot.h>
 #include <math.h>
 #include <complex.h>
 #include <inttypes.h>

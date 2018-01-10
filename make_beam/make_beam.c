@@ -1198,7 +1198,7 @@ int main(int argc, char **argv) {
                     vdif_file = strdup(optarg);
                     break;
                 case 'V':
-                    printf("%s\n", MAKE_BEAM_VERSION);
+                    printf("MWA Beamformer v%s\n", VERSION_BEAMFORMER);
                     exit(0);
                 case 'h':
                     usage();

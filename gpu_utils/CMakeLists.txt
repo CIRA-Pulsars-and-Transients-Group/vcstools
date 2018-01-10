@@ -1,5 +1,9 @@
 
 cmake_minimum_required (VERSION 2.6)
+
+cmake_policy(SET CMP0012 NEW)
+cmake_policy(SET CMP0048 NEW)
+
 project (gpu_utils)
 
 find_package(CUDA)

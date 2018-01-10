@@ -346,7 +346,7 @@ int     main(int argc, char **argv) {
                     verbose = 1;
                     break;
                 case 'V':
-                    printf("%s\n", GET_DELAYS_VERSION);
+                    printf("MWA Beamformer v%s\n", VERSION_BEAMFORMER);
                     exit(0);
                     break;
                 case 'w':
