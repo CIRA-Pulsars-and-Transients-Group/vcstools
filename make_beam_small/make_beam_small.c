@@ -24,6 +24,7 @@
 #include "beam_vdif.h"
 #include "make_beam_small.h"
 #include "vdifio.h"
+#include <fftw3.h>
 
 // Are GPU available
 
@@ -111,9 +112,15 @@ int main(int argc, char **argv) {
     char **filenames = create_filenames( &opts );
     complex double ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
     complex double ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
-    fftwf_complex *fftw_in  = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
-    fftwf_complex *fftw_out = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
+    fftwf_complex *fftw_in  = NULL;
+    fftwf_complex *fftw_out = NULL;
     fftwf_plan fftw_p;
+    if (fftw_init_threads() == 0)
+    {
+        fprintf( stderr, "error: make_beam_small: fftw_init_threads() returned 0\n" );;
+        exit(EXIT_FAILURE);
+    }
+    fftw_plan_with_nthreads(omp_get_max_threads());
 
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, opts.metafits);
@@ -263,16 +270,20 @@ int main(int argc, char **argv) {
             complex float noise_floor[nchan][npol][npol];
             complex float e_true[npol], e_dash[npol];
 
+            complex float *pol_X = (complex float *)malloc( nchan * sizeof(complex float) );
+            complex float *pol_Y = (complex float *)malloc( nchan * sizeof(complex float) );
+
             if (opts.out_vdif)
             {
                 // Setup arrays for FFTW
                 fftw_in  = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
                 fftw_out = (fftwf_complex *)fftwf_malloc( sizeof(fftwf_complex) );
-                fftw_p = fftwf_plan_dft_1d( nchan, fftw_in, fftw_out,
-                        FFTW_BACKWARD, FFTW_ESTIMATE );
+                #pragma omp critical (make_plan)
+                {
+                    fftw_p = fftwf_plan_dft_1d( nchan, fftw_in, fftw_out,
+                            FFTW_BACKWARD, FFTW_ESTIMATE );
+                }
             }
-            complex float *pol_X = (complex float *)malloc( nchan * sizeof(complex float) );
-            complex float *pol_Y = (complex float *)malloc( nchan * sizeof(complex float) );
 
             // Initialise beam arrays to zero
             if (opts.out_coh)
@@ -415,6 +426,16 @@ int main(int argc, char **argv) {
             // Free dynamically allocated memory within the parallel for loop
             free( pol_X );
             free( pol_Y );
+            if (opts.out_vdif)
+            {
+fprintf(stderr, "here1\n");
+                fftwf_free( fftw_in );
+fprintf(stderr, "here2\n");
+                fftwf_free( fftw_out );
+fprintf(stderr, "here3\n");
+#pragma omp critical (destroy_plan)
+                fftwf_destroy_plan( fftw_p );
+            }
         }
 
         // We've arrived at the end of a second's worth of data...
@@ -437,12 +458,6 @@ int main(int argc, char **argv) {
     destroy_filenames( filenames, &opts );
     destroy_complex_weights( complex_weights_array, nstation, nchan );
     destroy_invJi( invJi, nstation, nchan, npol );
-    if (opts.out_vdif)
-    {
-        fftwf_free( fftw_in );
-        fftwf_free( fftw_out );
-        fftwf_destroy_plan( fftw_p );
-    }
 
     destroy_metafits_info( &mi );
     free( data_buffer_coh   );
