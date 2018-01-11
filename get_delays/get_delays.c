@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,7 +10,6 @@
 #include "psrfits.h"
 #include "fitsio.h"
 #include <string.h>
-#include "beamer_version.h"
 
 /* make a connection to the MWA database and get the antenna positions.
  * Then: calculate the geometric delay to a source for each antenna
@@ -207,7 +205,6 @@ int     main(int argc, char **argv) {
     float limit = 0.0;
 
     int c;
-    int tile_request = -1;
     int conjugate = 1;
     int invert = 1;
     long int frequency = 0;
@@ -224,7 +221,6 @@ int     main(int argc, char **argv) {
     char *DI_Jones_file = NULL;
     char *metafits = NULL;
 
-    int write_calib = 0;
     int write_psrfits = 0;
     FILE *phase_file = NULL;
     FILE *flag_file = NULL;
@@ -295,7 +291,6 @@ int     main(int argc, char **argv) {
                     get_offringa = 1;
                     get_rts = 0;
                     DI_Jones_file = strdup(optarg);
-                    write_calib = 1;
                     break;
                 case 'p':
                     get_psrfits=1;
@@ -305,7 +300,6 @@ int     main(int argc, char **argv) {
                     get_rts = 1;
                     get_offringa = 0;
                     DI_Jones_file = strdup(optarg);
-                    write_calib = 1;
                     break;
                 case 'h':
                     usage();
@@ -348,14 +342,11 @@ int     main(int argc, char **argv) {
                 case 'z':
                     time_utc = strdup(optarg);
                     break;
-                case 't':
-                    tile_request = atoi(optarg);
-                    break;
                 case 'v':
                     verbose = 1;
                     break;
                 case 'V':
-                    printf("%s\n", GET_DELAYS_VERSION);
+                    printf("MWA Beamformer v%s\n", VERSION_BEAMFORMER);
                     exit(0);
                     break;
                 case 'w':
@@ -483,7 +474,7 @@ int     main(int argc, char **argv) {
     float *E_array = (float *) malloc(ninput*sizeof(float));
     float *H_array = (float *) malloc(ninput*sizeof(float));
     char **tilenames = (char **) malloc(ninput*sizeof(char *));
-    for (i = 0; i < ninput; i++) {
+    for (i = 0; i < (int)ninput; i++) {
         tilenames[i] = (char *) malloc(32*sizeof(char));
     }
     float *cable_array = (float *) malloc(ninput*sizeof(float));
@@ -499,7 +490,7 @@ int     main(int argc, char **argv) {
         fprintf(stderr,"Error:Failed to read flags column in metafile\n");
         exit(-1);
     }
-    for (i=0;i<ninput;i++) {
+    for (i=0;i<(int)ninput;i++) {
 
         fits_get_colnum(fptr, 1, "Length", &colnum, &status);
         if(fits_read_col_str(fptr,colnum,i+1,1,1,"0.0",&testval,&anynull,&status)) {
@@ -579,13 +570,12 @@ int     main(int argc, char **argv) {
     double unit_N;
     double unit_E;
     double unit_H;
-    int    ant; // Used for iterating through tiles
     int    n;
 
     // Read in the Jones matrices for this (coarse) channel, if requested
     complex double invJref[4];
     if (get_rts) {
-        read_rts_file(M, Jref, nstation, &amp, DI_Jones_file);
+        read_rts_file(M, Jref, &amp, DI_Jones_file);
         inv2x2(Jref, invJref);
         //fprintf(stdout, "RTS antenna order:\n");
         //for (n = 0; n < nstation; n++)
@@ -724,7 +714,7 @@ int     main(int argc, char **argv) {
         
         int ch=0;
 
-        for (row=0; row<ninput; row++) {
+        for (row=0; row<(int)ninput; row++) {
 
 
             double cable = cable_array[row]-cable_array[refinp];
@@ -855,9 +845,7 @@ int     main(int argc, char **argv) {
         strcpy(pf.hdr.telescope, "MWA");
         strncpy(pf.hdr.source,obsid,23);
         strcpy(pf.hdr.frontend, "MWA-RECVR");
-        char backend[24];
-        snprintf(backend, 24*sizeof(char), "GD-%s-MB-%s-U-%s", GET_DELAYS_VERSION, MAKE_BEAM_VERSION, UTILS_VERSION);
-        strcpy(pf.hdr.backend, backend);
+        snprintf(pf.hdr.backend, 24*sizeof(char), "MWA Beamformer v%s", VERSION_BEAMFORMER);
         
         /* Now let us finally get the time right */
         strcpy(pf.hdr.date_obs, time_utc);
@@ -960,7 +948,7 @@ int     main(int argc, char **argv) {
     free(N_array);
     free(E_array);
     free(H_array);
-    for (i = 0; i < ninput; i++)
+    for (i = 0; i < (int)ninput; i++)
         free(tilenames[i]);
     free(tilenames);
     free(cable_array);
@@ -980,13 +968,13 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
                const float za) {
     
     const double c = VEL_LIGHT;
-    float sza, cza, saz, caz, sza0, cza0, saz0, caz0;
+    //float sza, cza, saz, caz, sza0, cza0, saz0, caz0;
     float ground_plane, ha, dec, beam_ha, beam_dec;
     float dipl_e, dipl_n, dipl_z, proj_e, proj_n, proj_z, proj0_e, proj0_n,
     proj0_z;
     float rot[2 * N_COPOL];
     complex double PhaseShift, multiplier;
-    int i, j, k, n_cols = 4, n_rows = 4, result = 0;
+    int i, j, n_cols = 4, n_rows = 4, result = 0;
     
     float lambda = c / freq;
     float radperm = 2.0 * DPI / lambda;
@@ -999,14 +987,14 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
     response[2] = 0.0;
     response[3] = 0.0;
     
-    sza = sin(za);
-    cza = cos(za);
-    saz = sin(az);
-    caz = cos(az);
-    sza0 = sin(za0);
-    cza0 = cos(za0);
-    saz0 = sin(az0);
-    caz0 = cos(az0);
+    //sza = sin(za);
+    //cza = cos(za);
+    //saz = sin(az);
+    //caz = cos(az);
+    //sza0 = sin(za0);
+    //cza0 = cos(za0);
+    //saz0 = sin(az0);
+    //caz0 = cos(az0);
     
     proj_e = sin(za) * sin(az);
     proj_n = sin(za) * cos(az);
@@ -1024,7 +1012,6 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
     /* loop over dipoles */
     for (i = 0; i < n_cols; i++) {
         for (j = 0; j < n_rows; j++) {
-            k = i * n_rows + j;
             dipl_e = (i + 1 - 2.5) * dpl_sep;
             dipl_n = (j + 1 - 2.5) * dpl_sep;
             dipl_z = 0.0;

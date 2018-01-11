@@ -1,16 +1,11 @@
 
 cmake_minimum_required (VERSION 2.6)
+
+cmake_policy(SET CMP0012 NEW)
+cmake_policy(SET CMP0048 NEW)
+
 project (make_beam)
 add_executable(make_beam make_beam)
-
-find_package(CPGPLOT)
-find_package(PSRFITS_UTILS)
-find_package(CFITSIO)
-find_package(MPI REQUIRED)
-find_package(FFTW3 COMPONENTS single)
-find_package(CUDA)
-find_package(OpenMP)
-
 
 SET(BEAM_CXX_FLAGS "" )
 SET(BEAM_C_FLAGS "" )
@@ -40,15 +35,15 @@ endif (CUDA_FOUND)
 
 if (MPI_C_LIBRARIES)
     if (CUDA_FOUND)
-        target_link_libraries(make_beam MWAC_Utils MWAC_GPU_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_C_LIBRARIES} m)
+        target_link_libraries(make_beam mwac_utils MWAC_GPU_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_C_LIBRARIES} m)
     else ()
-        target_link_libraries(make_beam MWAC_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_C_LIBRARIES} m)
+        target_link_libraries(make_beam mwac_utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_C_LIBRARIES} m)
     endif (CUDA_FOUND)
 else()
     if (CUDA_FOUND)
-        target_link_libraries(make_beam MWAC_Utils MWAC_GPU_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_LIBRARIES} m)
+        target_link_libraries(make_beam mwac_utils MWAC_GPU_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_LIBRARIES} m)
     else ()
-        target_link_libraries(make_beam MWAC_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_LIBRARIES} m)
+        target_link_libraries(make_beam mwac_utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_LIBRARIES} m)
     endif (CUDA_FOUND)
 endif()
 
@@ -62,10 +57,6 @@ if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
-
-message ("MPI LIBS ${MPI_LIBRARIES}")
-message ("MPI COMPILER ${MPI_COMPILER}")
-message ("CUDA ${CUDA_CUFFT_LIBRARIES}")
 
 if (MPI_EXTRA_LIBRARY)
     target_link_libraries(make_beam ${MPI_EXTRA_LIBRARY} m)

@@ -1,10 +1,10 @@
 cmake_minimum_required (VERSION 2.6)
+cmake_policy(SET CMP0012 NEW)
+cmake_policy(SET CMP0048 NEW)
+
 project (make_psrfits)
 add_executable(make_psrfits make_psrfits)
 add_executable(splice_psrfits splice_psrfits)
-find_package(CFITSIO)
-find_package(SLALIB)
-find_package(PSRFITS_UTILS)
 
 
 include_directories(${CMAKE_INSTALL_PREFIX}/include 

@@ -10,12 +10,14 @@
 #  SLALIB_LIBRARIES    - the SLALIB libraries
 #                         (identical to SLALIB_LIBRARY)
 
+message("Finding SLALIB")
+
 set(SLALIB_ROOT_DIR $ENV{SLALIB_DIR})
 
 if(NOT DEFINED SLALIB_ROOT_DIR)
-	message("-- Warning SLALIB_ROOT_DIR not set: will try and find it ")
+	message(STATUS "Warning SLALIB_ROOT_DIR not set: will try and find it ")
 else(NOT DEFINED SLALIB_ROOT_DIR)
-	message("-- SLALIB_ROOT_DIR = ${SLALIB_ROOT_DIR}")
+	message(STATUS "SLALIB_ROOT_DIR = ${SLALIB_ROOT_DIR}")
 endif(NOT DEFINED SLALIB_ROOT_DIR)
 
 if(NOT SLALIB_FOUND)
@@ -36,7 +38,7 @@ if(NOT SLALIB_FOUND)
 endif(NOT SLALIB_FOUND)
 
 if (SLALIB_FOUND)
-	message("-- Found SLALIB --")
+    message(STATUS "Found SLALIB (${SLALIB_LIBRARIES})")
 endif (SLALIB_FOUND)
 
 
