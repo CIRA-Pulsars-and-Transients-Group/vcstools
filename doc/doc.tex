@@ -229,7 +229,7 @@ Here is the algorithm as I read it from Stephen's current code:\\[10pt]
     \item \texttt{int \blue{vf.sizeof\_beam} = vf.samples\_per\_frame * vf.nchan * (vf.iscomplex+1) = \blue{512}}
     \item \texttt{int \blue{vf.sizeof\_buffer} = vf.frame\_rate * vf.sizeof\_beam = \blue{5120000}}
     \item \texttt{int \blue{ntap\_per\_call} = \blue{2}}
-    \item \texttt{int \blue{fcontext.ntaps} = \blue{1536}? or \blue{32768}?}
+    \item \texttt{int \blue{fcontext.ntaps} = \blue{1536}}
     \item \texttt{int \blue{fcontext.nsamples} = vf.sizeof\_buffer / vf.nchan = \blue{2560000}} (line 1733 of \texttt{make\_beam.c})
     \item \texttt{int \blue{fcontext.nsamples} = ntap\_per\_call * fcontext.ntaps = \blue{3072}? or \blue{65536}?} (line 2250 of \texttt{make\_beam.c})
     \item \texttt{int \blue{upsample\_factor} = \blue{128}}
@@ -237,11 +237,11 @@ Here is the algorithm as I read it from Stephen's current code:\\[10pt]
 
 \subsubsection*{Arrays:}
 \begin{itemize}
-    \item \texttt{complex float \blue{upsample\_working}\arrsize{upsample\_factor*nsamples = \blue{393216}? or \blue{8388608}?}}
-    \item \texttt{complex float \blue{filter\_dft\_in}\arrsize{upsample\_factor*nsamples = \blue{393216}? or \blue{8388608}?}}
-    \item \texttt{complex float \blue{filter\_dft\_out}\arrsize{upsample\_factor*nsamples = \blue{393216}? or \blue{8388608}?}}
-    \item \texttt{complex float \blue{in}\arrsize{nchan\_in = \blue{128}}\arrsize{upsample\_factor*nsamples = \blue{393216}? or \blue{8388608}?}}
-    \item \texttt{complex float \blue{out}\arrsize{nchan\_in = \blue{128}}\arrsize{upsample\_factor*nsamples = \blue{393216}? or \blue{8388608}?}}
+    \item \texttt{complex float \blue{upsample\_working}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
+    \item \texttt{complex float \blue{filter\_dft\_in}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
+    \item \texttt{complex float \blue{filter\_dft\_out}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
+    \item \texttt{complex float \blue{in}\arrsize{nchan\_in = \blue{128}}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
+    \item \texttt{complex float \blue{out}\arrsize{nchan\_in = \blue{128}}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
 \end{itemize}
 
 \subsubsection*{Pseudocode:}
@@ -267,9 +267,8 @@ Here is the algorithm as I read it from Stephen's current code:\\[10pt]
     \item Populate \vrbl{upsample\_working} as follows:
         \begin{equation}
             \texttt{upsample\_working[i]}
-              = \sum_{\texttt{ch}=0}^{128} (\texttt{filter\_dft\_out[i] \red{out}[ch][i]})
+              = \sum_{\texttt{ch}=0}^{128} \texttt{filter\_dft\_out[i]} \times \texttt{out[ch][i]}
         \end{equation}
-        AT THIS POINT, IT SEEMS \vrbl{out} IS UNINITIALISED. (Is it meant to be \vrbl{in}?)
     \item Backward FFT \vrbl{upsample\_working}. This is the desired result.
 \end{enumerate}
 
