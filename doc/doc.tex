@@ -204,6 +204,7 @@ Finally, the Stokes parameters $I$, $Q$, $U$, and $V$, are calculated as follows
 \end{align}
 where $w_\text{ant}$ is a weighting factor equal to the number of antennas used in the sums.
 
+\newpage
 \section{Inverting the PFB}
 
 It is sometimes desirable to sacrifice spectral information for a higher time resolution.
@@ -217,7 +218,7 @@ Here is the algorithm as I read it from Stephen's current code:\\[10pt]
 \newcommand{\arrsize}[1]{{\color{red}[}#1{\color{red}]}}
 \newcommand{\vrbl}[1]{{\texttt{\blue{#1}}}}
 
-Variables:
+\subsubsection*{Variables:}
 \begin{itemize}
     \item \texttt{int \blue{sample\_rate} = \blue{10000}}
     \item \texttt{int \blue{vf.sample\_rate} = sample\_rate * 128 = \blue{1280000}}
@@ -234,7 +235,7 @@ Variables:
     \item \texttt{int \blue{upsample\_factor} = \blue{128}}
 \end{itemize}
 
-Arrays:
+\subsubsection*{Arrays:}
 \begin{itemize}
     \item \texttt{complex float \blue{upsample\_working}\arrsize{upsample\_factor*nsamples = \blue{393216}? or \blue{8388608}?}}
     \item \texttt{complex float \blue{filter\_dft\_in}\arrsize{upsample\_factor*nsamples = \blue{393216}? or \blue{8388608}?}}
@@ -243,9 +244,33 @@ Arrays:
     \item \texttt{complex float \blue{out}\arrsize{nchan\_in = \blue{128}}\arrsize{upsample\_factor*nsamples = \blue{393216}? or \blue{8388608}?}}
 \end{itemize}
 
-Pseudocode:
+\subsubsection*{Pseudocode:}
 \begin{enumerate}
     \item Fill \vrbl{upsample\_working} and \vrbl{filter\_dft\_in} with zeros
+    \item Populate \vrbl{filter\_dft\_in} with the (real) filter coefficients and Fourier transform them (forward) storing the (complex) result in \vrbl{filter\_dft\_out}.
+    \item Populate \vrbl{in} as follows (upsampling step):
+        \begin{equation}
+            \texttt{in[ch][i]} =
+            \begin{cases}
+                \texttt{input[i+ch]}, & \text{\texttt{i} is a multiple of 128} \\
+                0, & \text{otherwise}
+            \end{cases}
+        \end{equation}
+        This is a merely a rearrangement of the input data from a 1D array:\\[8pt]
+        \texttt{[i=0,ch=0], [i=0,ch=1], \dots [i=0,ch=127], [i=1,ch=0], [i=1,ch=1], \dots}\\[8pt]
+        To a 2D array:\\[8pt]
+        \texttt{ch=0: [i=0], 0, 0, \dots [i=1], 0, 0, \dots [i=2], \dots}\\
+        \texttt{ch=1: [i=0], 0, 0, \dots [i=1], 0, 0, \dots [i=2], \dots}\\
+        \texttt{ch=2: \dots}\\[8pt]
+        where there are 127 zeros between each input sample.
+    \item Fourier transform (forward) each row of \vrbl{in}.
+    \item Populate \vrbl{upsample\_working} as follows:
+        \begin{equation}
+            \texttt{upsample\_working[i]}
+              = \sum_{\texttt{ch}=0}^{128} (\texttt{filter\_dft\_out[i] \red{out}[ch][i]})
+        \end{equation}
+        AT THIS POINT, IT SEEMS \vrbl{out} IS UNINITIALISED. (Is it meant to be \vrbl{in}?)
+    \item Backward FFT \vrbl{upsample\_working}. This is the desired result.
 \end{enumerate}
 
 \end{document}
