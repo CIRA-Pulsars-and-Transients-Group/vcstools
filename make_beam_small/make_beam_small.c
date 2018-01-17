@@ -250,8 +250,6 @@ int main(int argc, char **argv) {
         for (sample = 0; sample < (int)opts.sample_rate; sample++ ) {
 
             int ch, ant, pol, opol, opol1, opol2;
-            uint8_t uD, uDr, uDi;
-            int sDr, sDi;
             int pfb, rec, inc;
             int data_idx;
 
@@ -317,20 +315,12 @@ int main(int argc, char **argv) {
                                    rec    * (ninc)                 +
                                    inc;
 
-                        uD  = data[data_idx];
-                        uDr = uD & 0xf;        // Real part = least significant nibble
-                        uDi = (uD >> 4) & 0xf; // Imag part = most  significant nibble
-
-                        // Convert from unsigned to signed
-                        sDr = (uDr >= 0x8 ? (signed int)uDr - 0x10 : (signed int) uDr);
-                        sDi = (uDi >= 0x8 ? (signed int)uDi - 0x10 : (signed int) uDi);
-
                         // Form a single complex number
-                        e_dash[pol]  = (float)sDr + (float)sDi * I;
+                        e_dash[pol]  = UCMPLX4_TO_CMPLX_FLT(data[data_idx]);
 
                         // Detect the incoherent beam, if requested
                         if (opts.out_incoh)
-                            incoh_beam[ch][ant][pol] = creal(e_dash[pol] * conj(e_dash[pol]));
+                            incoh_beam[ch][ant][pol] = DETECT(e_dash[pol]);
 
                         // Apply complex weights
                         if (opts.out_coh)
