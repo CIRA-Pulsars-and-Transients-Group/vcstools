@@ -41,6 +41,10 @@
 
 int main(int argc, char **argv) {
 
+    // Initialise FFTW with OpenMP
+    fftw_init_threads();
+    fftw_plan_with_nthreads( omp_get_max_threads() );
+
     // A place to hold the beamformer settings
     struct make_beam_opts opts;
 
@@ -404,6 +408,9 @@ int main(int argc, char **argv) {
     free( data_buffer_incoh );
     free( data_buffer_vdif  );
     free( data );
+
+    // Clean up FFTW OpenMP
+    fftw_cleanup_threads();
 
     return 0;
 }

@@ -62,6 +62,8 @@ foreach(_comp ${_components})
     list(APPEND _libraries fftw3l)
   elseif(_comp STREQUAL "threads")
     set(_use_threads ON)
+  elseif(_comp STREQUAL "openmp")
+    list(APPEND _libraries fftw3_omp)
   else(_comp STREQUAL "single")
     message(FATAL_ERROR "FindFFTW3: unknown component `${_comp}' specified. "
       "Valid components are `single', `double', `long-double', and `threads'.")
