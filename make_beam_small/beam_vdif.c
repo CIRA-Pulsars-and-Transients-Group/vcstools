@@ -4,6 +4,7 @@
 #include <math.h>
 #include <complex.h>
 #include <fftw3.h>
+#include <omp.h>
 #include "vdifio.h"
 #include "psrfits.h"
 #include "slamac.h"
@@ -289,45 +290,109 @@ void to_offset_binary(int8_t *i, int n)
 }
 
 
-void invert_pfb_ifft( complex float *array, int nchan,
-                      fftwf_plan p, fftwf_complex *in, fftwf_complex *out )
+void invert_pfb_ifft( complex float ***detected_beam, int file_no,
+                      int nsamples, int nchan, int npol,
+                      float *data_buffer_vdif )
 /* "Invert the PFB" by simply applying an inverse FFT.
- * This function expects "array" to contain (at least) nchan elements. It also
- * expects that the arrays in the plan also contain at least nchan elements.
- * The output of the inverse FFT is packed back into "array".
- * "in" and "out" must be the same arrays as those used to make the plan "p"
+ * This function expects "detected_beam" to be structured as follows:
+ *
+ *   detected_beam[2*nsamples][nchan][npol]
+ *
+ * Although detected_samples potentially contains 2 seconds' worth of data,
+ * this function only FFTs one second. The appropriate second is worked out
+ * using file_no: if it is even, the first half of detected_beam is used,
+ * if odd, the second half.
+ *
+ * The output of the inverse FFT is packed back into data_buffer_vdif, a 1D
+ * array whose ordering is as follows:
+ *
+ *   time, chan, pol, complexity
+ *
+ * This ordering is suited for immediate output to the VDIF format.
  */
 {
-    // Populate the FFTW arrays
-    int ch;
-    for (ch = 0; ch < nchan; ch++)
+    // Allocate FFTW arrays
+    int arr_size = nsamples * nchan * npol;
+    fftwf_complex *in  = (fftwf_complex *)fftwf_malloc( arr_size * sizeof(fftwf_complex) );
+
+    // Create a plan for doing column-wise 1D transforms
+    int rank     = 1;
+    int n[]      = { nchan };
+    int howmany  = nsamples * npol;
+    int idist    = nchan;
+    int odist    = nchan;
+    int istride  = 1;
+    int ostride  = 1;
+    int *inembed = n, *onembed = n;
+    fftwf_plan p = fftwf_plan_many_dft( rank, n, howmany,
+                                        in, inembed, istride, idist,
+                                        in, onembed, ostride, odist,
+                                        FFTW_BACKWARD, FFTW_ESTIMATE );
+
+    // Populate the FFTW arrays such that the middle channel of detected_beam
+    // is placed nearest the DC term.
+
+    int s;    // sample index
+
+#pragma omp parallel for
+    for (s = 0; s < nsamples; s ++)
     {
-        if (ch < nchan/2)
+        int ds, ch, pol;
+        int ii;   // "in" index
+        int chi;  // corrected channel index for "in" array
+
+        // Calculate the proper sample index for this second
+        ds = (file_no % 2)*nsamples + s;
+
+        for (ch  = 0; ch  < nchan; ch++ )
+        for (pol = 0; pol < npol;  pol++)
         {
-            // these are the negative frequencies
-            // pack them in the second half of the array
-            // skip over the edges
-            in[(nchan/2) + ch] = array[ch];
-        }
-        else if (ch > nchan/2)
-        {
-            // positive frequencies -- shift them to the first half
-            in[ch-(nchan/2)] = array[ch];
-        }
-        else // if (ch == nchan/2)
-        {
-            // Nyquist bin - give it a zero mean
-            in[0] = 0.0;
+            // Swap the two halves of the array
+            chi = (ch < nchan/2 ? ch + (nchan/2) : ch - (nchan/2));
+
+            // Calculate the "in" index
+            ii = nchan * npol * s +
+                 nchan * pol +
+                 chi;
+
+            // Copy across the data (but set DC bin to 0)
+            in[ii] = (chi == 0 ? 0.0 : detected_beam[ds][chi][pol]);
         }
     }
 
-    // Make it so!
+    // Execute the FFT
     fftwf_execute( p );
 
     // Pack result into the output array
-    for (ch = 0; ch < nchan; ch++)
-        array[ch] = out[ch];
 
+#pragma omp parallel for
+    for (s = 0; s < nsamples; s ++)
+    {
+        int ch, pol;
+        int ii, oi; // "in" index & "out" index
+
+        for (ch  = 0; ch  < nchan; ch++ )
+        for (pol = 0; pol < npol;  pol++)
+        {
+            // Calculate the "in" index
+            ii = nchan * npol * s +
+                 nchan * pol +
+                 ch;
+
+            // Calculate the "out" index
+            oi = 2 * npol * nchan * s +
+                 2 * npol * ch +
+                 2 * pol;
+
+            // Copy data across
+            data_buffer_vdif[oi]   = crealf(in[ii]);
+            data_buffer_vdif[oi+1] = cimagf(in[ii]);
+        }
+    }
+
+    // Clean up
+    fftwf_free( in );
+    fftwf_destroy_plan( p );
 }
 
 
