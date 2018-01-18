@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = omp_get_wtime();
-    printf("[%f]  Starting make_beam\n", omp_get_wtime()-begintime);
+    printf("[%f]  Starting make_beam with %d possible OpenMP threads\n", omp_get_wtime()-begintime, omp_get_max_threads());
 
     // Calculate the number of files
     int nfiles = opts.end - opts.begin + 1;
@@ -380,6 +380,7 @@ int main(int argc, char **argv) {
         // Invert the PFB, if requested
         if (opts.out_vdif)
         {
+            printf("[%f]  Inverting the PFB (IFFT)\n", omp_get_wtime()-begintime);
             invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan, npol, data_buffer_vdif );
         }
 

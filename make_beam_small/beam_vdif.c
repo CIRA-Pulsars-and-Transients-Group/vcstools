@@ -43,9 +43,9 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         vf->b_scales[1] = crealf(stddev);
 
         vf->got_scales = 1; // TODO: find out if this is ever meant to be reset to 0
-        set_level_occupancy(
-                (complex float *)data_buffer_vdif,
-                vf->sizeof_buffer/2.0, gain);
+        //set_level_occupancy(
+        //        (complex float *)data_buffer_vdif,
+        //        vf->sizeof_buffer/2.0, gain);
 
     }
 
