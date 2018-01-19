@@ -396,17 +396,41 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
 }
 
 
-//void invert_pfb_ord( complex float *input, complex float *output,
-//                     int nchan_in, int nchan_out )
-/* Inverting the PFB, using Ord's algorithm:
- * In order to build a single time step at the new <high> resolution
- * 
- * 1) first take each channel and upsample the correct factor by adding the upsample-1 number of zeros
- * 2) filter the upsampled channel to remove the images 
- * 3) phase rotate the channel to shift the frequency response
- * 4) Sum all to get the final time series
- * 
- * The "input" array is expected to have nchan_in elements, and 
+void invert_pfb_ord( complex float ***detected_beam, int file_no,
+                      int nsamples, int nchan, int npol, int blocksize,
+                      float *filter, int ntaps, int samples_per_tap,
+                      float *data_buffer_uvdif )
+/* "Invert the PFB" by applying a resynthesis filter.
+ * This function expects "detected_beam" to be structured as follows:
+ *
+ *   detected_beam[2*nsamples][nchan][npol]
+ *
+ * Although detected_samples potentially contains 2 seconds' worth of data,
+ * this function only FFTs one second. The appropriate second is worked out
+ * using file_no: if it is even, the first half of detected_beam is used,
+ * if odd, the second half.
+ *
+ * The output of the inverse FFT is packed back into data_buffer_vdif, a 1D
+ * array whose ordering is as follows:
+ *
+ *   time, chan, pol, complexity
+ *
+ * This ordering is suited for immediate output to the VDIF format.
+ *
+ * Next, blocksize indicates how many (10 kHz) samples to process at once.
+ * This is primarily limited by the size of the arrays that will be used to do
+ * the intermediate calculations. To wit, a single 10 kHz sample requires a
+ * 128x128x(1+11) = 196608 array of complex floats, so 10000 dual polarisation
+ * samples would require about 2.44 GB of memory (=128x128x(10000+11)x2
+ * complex floats).
+ *
+ * Finally, filter points to a prepared array of the filter coefficients that
+ * have been "rotated" with phase ramps of different amounts. The size of the
+ * original filter is ntaps*samples_per_tap, and so the size of the prepared
+ * filter array that is passed in must be ntaps*samples_per_tap*nchan, since
+ * each fine channel requires the filter coefficients to be phase rotated by
+ * a different amount.
  */
-//{
-//}
+{
+
+}
