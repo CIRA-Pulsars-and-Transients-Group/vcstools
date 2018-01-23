@@ -433,4 +433,7 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
  */
 {
 
+    // Create a dynamic array for doing the calculations in
+    // This array has have
+
 }
