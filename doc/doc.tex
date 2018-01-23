@@ -5,6 +5,8 @@
 \usepackage{hyperref}
 \usepackage{color}
 \usepackage{listings}
+\usepackage{tikz}
+\usepackage{graphicx}
 
 \author{Sam McSweeney}
 \title{Miscellaneous Documentation for the Beamformer}
@@ -212,10 +214,18 @@ It is sometimes desirable to sacrifice spectral information for a higher time re
 Unfortunately, this is non-trivial due to the (strictly) non-invertible process applied to the original high time resolution to get the spectral information in the first place, viz. the polyphase filter bank, or PFB.
 In principle, however, a decent reconstruction of the input time series can be obtained.
 In light of this, it may actually be closer to the mark to call the process `resynthesis' instead of `inversion', but I will continue to call it `inversion' here.
+The proposed algorithm for inverting the PFB is illustrated in Fig. \ref{fig:ipfb}.
+
+\begin{figure}[!p]
+    \centering
+    \includegraphics[scale=0.4,angle=270]{ipfb/ipfb-diagram1.pdf}
+    \caption{The inverse PFB algorithm.}
+    \label{fig:ipfb}
+\end{figure}
 
 \subsection{Current CPU version}
 
-Here is the algorithm as I read it from Stephen's current code:
+Here is the algorithm as I read it from Stephen's current code.
 
 \newcommand{\blue}[1]{{\color{blue}#1}}
 \newcommand{\red}[1]{{\color{red}#1}}
@@ -249,6 +259,7 @@ Here is the algorithm as I read it from Stephen's current code:
 \end{itemize}
 
 \subsubsection*{Pseudocode:}
+
 \begin{enumerate}
     \item Fill \vrbl{upsample\_working} and \vrbl{filter\_dft\_in} with zeros
     \item Populate \vrbl{filter\_dft\_in} with the (real) filter coefficients and Fourier transform them (forward) storing the (complex) result in \vrbl{filter\_dft\_out}.
