@@ -84,6 +84,27 @@ void load_filter( char *filename, int dtype, int ntaps, filter *fil )
     fclose(f);
 }
 
+void upsample( complex double *x, int xsize, int ufact, complex double *y )
+/* Upsample signal x by inserting ufact-1 zeros between each element of x.
+ * 
+ * Inputs:
+ *   complex double *x     = the input array
+ *   int             xsize = the size of array x
+ *   int             ufact = the upsampling factor
+ *
+ * Outputs:
+ *   complex double *y = the output array. Must have size at least xsize*ufact.
+ */
+{
+    int i, j;
+    for (i = 0; i < xsize; i++)
+    {
+        y[i*ufact] = x[i];
+        for (j = 1; j < ufact; j++)
+            y[i*ufact + j] = 0.0;
+    }
+}
+
 void apply_phase_ramp( filter *in, double slope, filter *out )
 /* Applies a phase ramp across the input filter. If in->size differs from
  * out->size, then only the first [size] elements are calculated, where
@@ -129,16 +150,15 @@ void apply_mult_phase_ramps( filter *in, int N, filter outs[] )
     }
 }
 
-void fir_filter_1D( complex double *coeff, complex double *signal, int *size,
+void fir_filter_1D( filter *fil, complex double *signal, int size,
                     complex double *res )
 /* This implementation of a simple FIR filter is designed to
  * match scipy's "lfilter" function.
  *
  * Inputs:
- *   complex double *coeff  = the filter coefficients
+ *   filter *fil            = the filter to be applied
  *   complex double *signal = the signal to be filtered
- *   int            *size   = an array of 2 ints:
- *                            { size_of_coeff, size_of_signal }
+ *   int             size   = the size of the signal
  *
  * Outputs:
  *   complex double *res = the result of the filtering operation. It is
@@ -148,20 +168,20 @@ void fir_filter_1D( complex double *coeff, complex double *signal, int *size,
 {
     int n, i, m;
 
-    for (n = 0; n < size[1]; n++)
+    for (n = 0; n < size; n++)
     {
         // Reset res element to zero
         res[n] = 0.0;
 
         // Sum of signal weighted by coefficients
-        for (i = 0; i < size[0]; i++)
+        for (i = 0; i < fil->size; i++)
         {
             m = n - i;
 
             if (m < 0)
                 continue;
 
-            res[n] += signal[m] * coeff[i];
+            res[n] += signal[m] * fil->coeffs[i];
         }
     }
 }
@@ -170,14 +190,16 @@ int test_fir_filter_1D()
 {
     int       test_success = 1;
     double    tol          = 1e-8;
-    int       size[2]      = { 5, 20 };
+    int       size         = 20;
 
     // Create a custom filter
-    complex double coeff[] = { -1.0+0.5*I,
-                                3.5+0.6*I,
-                               -6.2-0.7*I,
-                                4.2-0.8*I,
-                                0.1+0.1*I };
+    filter fil;
+    create_filter( &fil, 5, 12 );
+    fil.coeffs[0] = -1.0+0.5*I;
+    fil.coeffs[1] =  3.5+0.6*I;
+    fil.coeffs[2] = -6.2-0.7*I;
+    fil.coeffs[3] =  4.2-0.8*I;
+    fil.coeffs[4] =  0.1+0.1*I;
 
     // Create a custom signal
     complex double signal[] = { -0.2792024707796282  + 0.14465327403336403*I,
@@ -224,14 +246,14 @@ int test_fir_filter_1D()
                              -12.24024464 - 5.32797534*I };
 
     // Create a results array
-    complex double res[size[1]];
+    complex double res[size];
 
     // Run the function to be tested
-    fir_filter_1D( coeff, signal, size, res );
+    fir_filter_1D( &fil, signal, size, res );
 
     // Compare the result with the known solution
     int i;
-    for (i = 0; i < size[1]; i++)
+    for (i = 0; i < size; i++)
     {
         //fprintf( stderr, "(%15e, %15e)  (%15e, %15e)  ",
         //                     creal(res[i]),   cimag(res[i]),
@@ -246,22 +268,58 @@ int test_fir_filter_1D()
         //fprintf( stderr, "\n" );
     }
 
+    // Free memory
+    destroy_filter( &fil );
+
+    return test_success;
+}
+
+int test_upsample()
+{
+    int test_success = 1;
+
+    int ufact = 3;
+    int xsize = 5;
+    complex double x[] = { 1.0, 2.0*I, 3.0, 4.0*I, -5.0 };
+    complex double y[xsize*ufact];
+    upsample( x, xsize, ufact, y );
+
+    complex double ans[] = { 1.0,   0.0, 0.0,
+                             2.0*I, 0.0, 0.0,
+                             3.0  , 0.0, 0.0,
+                             4.0*I, 0.0, 0.0,
+                            -5.0  , 0.0, 0.0 };
+
+    int i;
+    for (i = 0; i < xsize*ufact; i++)
+        if (y[i] != ans[i])
+            test_success = 0;
+
     return test_success;
 }
 
 void run_all_tests()
 {
+    int successful;
+
     // Test the test_fir_filter_1D() function
-    int successful = test_fir_filter_1D();
+    successful = test_fir_filter_1D();
     if (successful)
         fprintf( stderr, "FIR filter test successful\n" );
     else
         fprintf( stderr, "FIR filter test failed\n" );
+
+    // Test the upsample() function
+    successful = test_upsample();
+    if (successful)
+        fprintf( stderr, "Upsample test successful\n" );
+    else
+        fprintf( stderr, "Upsample test failed\n" );
 }
 
 void main()
 {
-    //run_all_tests();
+    run_all_tests();
 
     filter fil;
     int ntaps = 12;
@@ -275,6 +333,7 @@ void main()
 
     apply_mult_phase_ramps( &fil, N, fil_ramps );
 
+    /*
     int i;
     for (n = 0; n < N; n++)
     {
@@ -283,6 +342,7 @@ void main()
 
         printf( "\n" );
     }
+    */
 
     destroy_filter( &fil );
     for (n = 0; n < N; n++)
