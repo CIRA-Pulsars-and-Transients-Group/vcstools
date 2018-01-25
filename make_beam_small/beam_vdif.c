@@ -36,9 +36,12 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
         if (fabsf(rmean) > 0.001) {
             fprintf( stderr, "error: vdif_write_second: significantly "
-                             "non-zero mean (%f)", rmean );
+                             "non-zero mean (%f)\n", rmean );
             exit(EXIT_FAILURE);
         }
+        else
+            fprintf( stderr, "vdif_write_second: "
+                             "mean (%f)\n", rmean );
 
         vf->b_scales[0] = crealf(stddev);
         vf->b_scales[1] = crealf(stddev);
@@ -424,23 +427,29 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
  * has been "rotated" with phase ramps of different amounts.
  */
 {
-    int U        = nchan;        // upsampling factor = number of channels
-    int fil_size = fils[0].size; // All filters should have the same size
-    int i0;                      // The index of the first input sample to be
-                                 // included in the output sum
-    int f0;                      // The index of the first filter coefficient
-                                 // to be included in the output sum
-    int N        = nsamples * U; // The total number of output samples
-    int s, ch, f, i, pol, oi;    // Various loop counters
-    complex float part;
-
     // Set the output buffer to zeros
+    int s;
+#pragma omp parallel for
     for (s = 0; s < 2*npol*nchan*nsamples; s++)
+    {
         data_buffer_uvdif[s] = 0.0;
+    }
 
     // Loop over (output) sample -- embarassingly parallel
-    for (s = 0; s < N; s++)
+#pragma omp parallel for
+    for (s = 0; s < nchan*nsamples; s++)
     {
+        //fprintf( stderr, "  Thread num: %d, s = %d\n", omp_get_thread_num(), s );
+        int U        = nchan;        // upsampling factor = number of channels
+        int fil_size = fils[0].size; // All filters should have the same size
+        int i0;                      // The index of the first input sample to
+                                     // be included in the output sum
+        int f0;                      // The index of the first filter coeffi-
+                                     // cient to be included in the output sum
+        int N        = nsamples * U; // The total number of output samples
+        int ch, f, i, pol, oi;       // Various loop counters
+        complex float part;
+
         for (pol = 0; pol < npol; pol++)
         {
             // Calculate the output index for data_buffer_uvdif
@@ -477,8 +486,13 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
                     i++;
                     if (i == 2*nsamples)  i = 0; // (i.e. loop back around to
                                                  //  the other second)
-                }
-            }
-        }
-    }
+                } // Loop over relevant filter coefficients
+            } // Loop over channels
+
+            // Normalise the result
+            data_buffer_uvdif[oi  ] /= nchan;
+            data_buffer_uvdif[oi+1] /= nchan;
+
+        } // Loop over X/Y pol
+    } // Loop over samples
 }
