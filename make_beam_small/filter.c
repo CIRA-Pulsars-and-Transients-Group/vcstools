@@ -2,41 +2,122 @@
 #include <stdio.h>
 #include <math.h>
 #include <complex.h>
+#include "filter.h"
 
-void apply_phase_ramp( complex double *x, int size, double slope,
-                       complex double *y )
-/* Applies a phase ramp across the array x.
- *
- * Inputs:
- *   complex double *x     = an arbitrary input array
- *   int             size  = the size of x
- *   double          slope = the phase ramp slope, in revolutions,
- *                           i.e. unique in interval [0,1), so
- *                           slope = 0 is the same as slope = 1
- *
- * Outputs:
- *   complex double *y = the output array. It is assumed to point to a
- *                       block of memory at least as big as x.
- */
+void create_filter( filter *fil, int size, int ntaps )
 {
-    int i;
-    for (i = 0; i < size; i++)
-        y[i] = x[i] * cexp( 2*M_PI*I*slope*i );
+    fil->size  = size;
+    fil->ntaps = ntaps;
+    fil->coeffs = (complex double *)malloc( size * sizeof(complex double) );
 }
 
-void apply_mult_phase_ramps( complex double *x, int xsize, int N,
-                             complex double **y )
+
+void destroy_filter( filter *fil )
+{
+    free( fil->coeffs );
+}
+
+void load_filter( char *filename, int dtype, int ntaps, filter *fil )
+/* This function allocates memory for, and loads into memory, the filter
+ * coefficients contained in [filename]. The file is expected to be white-
+ * space separated ASCII text.
+ *
+ * dtype can be REAL_COEFFS (=0) or CPLX_COEFFS (=1). If dtype is REAL_COEFFS,
+ * the file will be assumed to formatted as one float per entry. If dtype is
+ * CPLX_COEFFS, two floats will be read in per filter coefficient and will be
+ * assumed to represent the real and imaginary parts respectively. In either
+ * case, the output is cast to complex doubles.
+ *
+ * The memory allocated here should be freed using destroy_filter().
+ */
+{
+    // Check that a valid dtype was passed in
+    if (dtype != REAL_COEFFS && dtype != CPLX_COEFFS)
+    {
+        fprintf( stderr, "error: load_filter: unrecognised dtype (%d). Valid "
+                         "values are REAL_COEFFS(=0) or CPLX_COEFFS(=1).\n",
+                         dtype );
+        exit(EXIT_FAILURE);
+    }
+
+    // Variables to read the numbers in [filename] into
+    double re, im;
+
+    // Open the file for reading
+    FILE *f = fopen( filename, "r" );
+    if (!f)
+    {
+        fprintf( stderr, "error: load_filter: Couldn't open file %s\n",
+                 filename );
+        exit(EXIT_FAILURE);
+    }
+
+    // Run through file and count how many coefficients there are
+    int ncoeffs = 0;
+    while (fscanf( f, "%lf", &re) != EOF)
+        ncoeffs++;
+
+    if (dtype == CPLX_COEFFS)
+        ncoeffs /= 2;
+
+    // Allocate memory for that many coefficients
+    create_filter( fil, ncoeffs, ntaps );
+
+    // Rewind to the start of the file and read in the coefficients
+    rewind(f);
+    int i;
+    for (i = 0; i < ncoeffs; i++)
+    {
+        // Read in a real value
+        fscanf( f, "%lf", &re );
+
+        // Read in or assign an imag value
+        if (dtype == REAL_COEFFS)
+            im = 0.0;
+        else // dtype == CPLX_COEFFS
+            fscanf( f, "%lf", im );
+
+        fil->coeffs[i] = re + im*I;
+    }
+
+    // Close the file
+    fclose(f);
+}
+
+void apply_phase_ramp( filter *in, double slope, filter *out )
+/* Applies a phase ramp across the input filter. If in->size differs from
+ * out->size, then only the first [size] elements are calculated, where
+ * size is the smaller of in->size and out->size.
+ *
+ * Inputs:
+ *   filter *in   = an arbitrary input array
+ *   double slope = the phase ramp slope, in revolutions,
+ *                  i.e. unique in interval [0,1), so
+ *                  slope = 0 is the same as slope = 1
+ *
+ * Outputs:
+ *   filter *out  = the output filter
+ */
+{
+    // Get the size of the smallest filter
+    int size = (in->size < out->size ? in->size : out->size);
+
+    // Calculate the phase ramp and apply it
+    int i;
+    for (i = 0; i < size; i++)
+        out->coeffs[i] = in->coeffs[i] * cexp( 2*M_PI*I*slope*i );
+}
+
+void apply_mult_phase_ramps( filter *in, int N, filter outs[] )
 /* Applies multiple phase ramps to the array x. The slopes are chosen such
  * that the nth ramp has slope n/N (in revolutions, see apply_phase_ramp()).
  *
  * Inputs:
- *   complex double *x     = an arbitrary input array
- *   int             xsize = the size of x
- *   int             N     = the number of ramps to apply
+ *   filter *in     = an arbitrary input array
+ *   int     N      = the number of ramps to apply
  *
  * Outputs:
- *   complex double **y = the output arrays. It is assumed that y points to
- *                        N valid arrays, each of size xsize (or greater).
+ *   filter *outs[] = the output filters (there must be at least N).
  */
 {
     double slope;
@@ -44,7 +125,7 @@ void apply_mult_phase_ramps( complex double *x, int xsize, int N,
     for (n = 0; n < N; n++)
     {
         slope = (double)n / (double)N;
-        apply_phase_ramp( x, xsize, slope, y[n] );
+        apply_phase_ramp( in, slope, &(outs[n]) );
     }
 }
 
@@ -182,22 +263,28 @@ void main()
 {
     //run_all_tests();
 
-    int xsize = 128;
-    int N     = 128;
-    complex double x[xsize];
-    complex double *y[N];
+    filter fil;
+    int ntaps = 12;
+    load_filter( "filter_coeffs.txt", REAL_COEFFS, ntaps, &fil );
+
+    int N = fil.size;
+    filter fil_ramps[N];
+    int n;
+    for (n = 0; n < N; n++)
+        create_filter( &fil_ramps[n], fil.size, ntaps );
+
+    apply_mult_phase_ramps( &fil, N, fil_ramps );
+
     int i;
-    for (i = 0; i < N; i++)
-        y[i] = (complex double *)malloc( xsize * sizeof(complex double) );
+    for (n = 0; n < N; n++)
+    {
+        for (i = 0; i < fil.size; i++)
+            printf( "%lf ", carg(fil_ramps[n].coeffs[i]), cimag(fil.coeffs[i]) );
 
-    for (i = 0; i < xsize; i++)
-        x[i] = 1.0 + 0.0*I;
+        printf( "\n" );
+    }
 
-    apply_mult_phase_ramps(x, xsize, N, (complex double **)y);
-
-    for (i = 0; i < xsize; i++)
-        printf( "%d %f %f\n", i, creal(y[2][i]), cimag(y[2][i]) );
-
-    for (i = 0; i < N; i++)
-        free(y[i]);
+    destroy_filter( &fil );
+    for (n = 0; n < N; n++)
+        destroy_filter( &fil_ramps[n] );
 }
