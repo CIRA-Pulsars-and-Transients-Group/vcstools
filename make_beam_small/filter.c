@@ -75,7 +75,7 @@ void load_filter( char *filename, int dtype, int ntaps, filter *fil )
         if (dtype == REAL_COEFFS)
             im = 0.0;
         else // dtype == CPLX_COEFFS
-            fscanf( f, "%lf", im );
+            fscanf( f, "%lf", &im );
 
         fil->coeffs[i] = re + im*I;
     }
