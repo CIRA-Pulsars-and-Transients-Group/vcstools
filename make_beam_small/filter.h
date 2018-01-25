@@ -23,6 +23,8 @@ void apply_phase_ramp( filter *in, double slope, filter *out );
 
 void apply_mult_phase_ramps( filter *in, int N, filter outs[] );
 
+void upsample( complex double *x, int xsize, int ufact, complex double *y );
+
 void fir_filter_1D( filter *fil, complex double *signal, int size,
                     complex double *res );
 

@@ -4,6 +4,7 @@
 #include <complex.h>
 #include <fftw3.h>
 #include "vdifio.h"
+#include "filter.h"
 
 #define  VDIF_HEADER_SIZE  32
 
@@ -81,7 +82,8 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
                       float *data_buffer_vdif );
 
-//void invert_pfb_ord( complex float *input, complex float *output,
-//                     int nchan_in, int nchan_out );
+void invert_pfb_ord( complex float ***detected_beam, int file_no,
+                      int nsamples, int nchan, int npol,
+                      filter fils[], float *data_buffer_uvdif );
 
 #endif

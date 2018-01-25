@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = omp_get_wtime();
-    printf("[%f]  Starting %s with %d possible OpenMP threads\n", argv[0], omp_get_wtime()-begintime, omp_get_max_threads());
+    printf("[%f]  Starting %s with %d possible OpenMP threads\n", omp_get_wtime()-begintime, argv[0], omp_get_max_threads());
 
     // Calculate the number of files
     int nfiles = opts.end - opts.begin + 1;

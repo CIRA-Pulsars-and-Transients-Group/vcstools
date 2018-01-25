@@ -14,6 +14,7 @@
 #include "mwa_header.h"
 #include "vdifio.h"
 #include "ascii_header.h"
+#include "filter.h"
 
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
@@ -306,7 +307,7 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
  * The output of the inverse FFT is packed back into data_buffer_vdif, a 1D
  * array whose ordering is as follows:
  *
- *   time, chan, pol, complexity
+ *   time, pol, complexity
  *
  * This ordering is suited for immediate output to the VDIF format.
  */
@@ -379,7 +380,8 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
                  nchan * pol +
                  ch;
 
-            // Calculate the "out" index
+            // Calculate the "out" index ("ch" here turns into a subvidivion
+            // of time)
             oi = 2 * npol * nchan * s +
                  2 * npol * ch +
                  2 * pol;
@@ -397,43 +399,86 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
 
 
 void invert_pfb_ord( complex float ***detected_beam, int file_no,
-                      int nsamples, int nchan, int npol, int blocksize,
-                      float *filter, int ntaps, int samples_per_tap,
-                      float *data_buffer_uvdif )
+                      int nsamples, int nchan, int npol,
+                      filter fils[], float *data_buffer_uvdif )
 /* "Invert the PFB" by applying a resynthesis filter.
  * This function expects "detected_beam" to be structured as follows:
  *
  *   detected_beam[2*nsamples][nchan][npol]
  *
  * Although detected_samples potentially contains 2 seconds' worth of data,
- * this function only FFTs one second. The appropriate second is worked out
+ * this function only inverts 1 second. The appropriate second is worked out
  * using file_no: if it is even, the first half of detected_beam is used,
  * if odd, the second half.
  *
- * The output of the inverse FFT is packed back into data_buffer_vdif, a 1D
+ * fs is the sampling rate in Hz (usually 10000).
+ *
+ * The output of the inversion is packed back into data_buffer_vdif, a 1D
  * array whose ordering is as follows:
  *
- *   time, chan, pol, complexity
+ *   time, pol, complexity
  *
  * This ordering is suited for immediate output to the VDIF format.
  *
- * Next, blocksize indicates how many (10 kHz) samples to process at once.
- * This is primarily limited by the size of the arrays that will be used to do
- * the intermediate calculations. To wit, a single 10 kHz sample requires a
- * 128x128x(1+11) = 196608 array of complex floats, so 10000 dual polarisation
- * samples would require about 2.44 GB of memory (=128x128x(10000+11)x2
- * complex floats).
- *
- * Finally, filter points to a prepared array of the filter coefficients that
- * have been "rotated" with phase ramps of different amounts. The size of the
- * original filter is ntaps*samples_per_tap, and so the size of the prepared
- * filter array that is passed in must be ntaps*samples_per_tap*nchan, since
- * each fine channel requires the filter coefficients to be phase rotated by
- * a different amount.
+ * Finally, fils points to an array of filter coefficients, each row of which
+ * has been "rotated" with phase ramps of different amounts.
  */
 {
+    int U        = nchan;        // upsampling factor = number of channels
+    int fil_size = fils[0].size; // All filters should have the same size
+    int i0;                      // The index of the first input sample to be
+                                 // included in the output sum
+    int f0;                      // The index of the first filter coefficient
+                                 // to be included in the output sum
+    int N        = nsamples * U; // The total number of output samples
+    int s, ch, f, i, pol, oi;    // Various loop counters
+    complex float part;
 
-    // Create a dynamic array for doing the calculations in
-    // This array has have
+    // Set the output buffer to zeros
+    for (s = 0; s < 2*npol*nchan*nsamples; s++)
+        data_buffer_uvdif[s] = 0.0;
 
+    // Loop over (output) sample -- embarassingly parallel
+    for (s = 0; s < N; s++)
+    {
+        for (pol = 0; pol < npol; pol++)
+        {
+            // Calculate the output index for data_buffer_uvdif
+            oi = 2 * npol * s +
+                2 * pol;
+
+            // First take care of the corner case = the very first second
+            if (file_no == 0 && s < fil_size - 1)
+            {
+                data_buffer_uvdif[oi] = 0.0;
+                continue;
+            }
+
+            // Calculate the first input idx to be included in this out sample
+            if (file_no % 2 == 0)
+                i0 = ((s + 2*N - fil_size + U - 1) / U) % (2*nsamples);
+            else // file_no % 2 == 1
+                i0 = (s + 1*N - fil_size + U - 1) / U;
+
+            // Calculate the first filter coefficient index
+            f0 = (U - (s % U)) % U;
+
+            // Loop over channels and filter coefficients to calculate output
+            for (ch = 0; ch < nchan; ch++)
+            {
+                i = i0;
+                for (f = f0; f < fil_size; f += U)
+                {
+                    part = fils[ch].coeffs[f] * detected_beam[i][ch][pol];
+                    data_buffer_uvdif[oi  ] += creal(part);
+                    data_buffer_uvdif[oi+1] += cimag(part);
+
+                    // Update input index simultaneously with filter coeff
+                    i++;
+                    if (i == 2*nsamples)  i = 0; // (i.e. loop back around to
+                                                 //  the other second)
+                }
+            }
+        }
+    }
 }
