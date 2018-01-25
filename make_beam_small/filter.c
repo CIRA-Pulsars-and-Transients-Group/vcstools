@@ -317,6 +317,7 @@ void run_all_tests()
         fprintf( stderr, "Upsample test failed\n" );
 }
 
+/*
 void main()
 {
     run_all_tests();
@@ -333,7 +334,6 @@ void main()
 
     apply_mult_phase_ramps( &fil, N, fil_ramps );
 
-    /*
     int i;
     for (n = 0; n < N; n++)
     {
@@ -342,9 +342,9 @@ void main()
 
         printf( "\n" );
     }
-    */
 
     destroy_filter( &fil );
     for (n = 0; n < N; n++)
         destroy_filter( &fil_ramps[n] );
 }
+*/

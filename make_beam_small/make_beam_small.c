@@ -24,6 +24,7 @@
 #include "beam_vdif.h"
 #include "make_beam_small.h"
 #include "vdifio.h"
+#include "filter.h"
 
 // Are GPU available
 
@@ -160,6 +161,18 @@ int main(int argc, char **argv) {
     struct vdifinfo vf;
     struct vdifinfo uvf;
 
+    // Create structures for the PFB filter coefficients
+    filter fil;
+    int ntaps = 12; // This number is never actually used
+    load_filter( "filter_coeffs.txt", REAL_COEFFS, ntaps, &fil );
+
+    filter fil_ramps[nchan];
+    int n;
+    for (n = 0; n < nchan; n++)
+        create_filter( &fil_ramps[n], fil.size, ntaps );
+
+    apply_mult_phase_ramps( &fil, nchan, fil_ramps );
+
     // Populate the relevant header structs
     if (opts.out_coh)
     {
@@ -211,6 +224,8 @@ int main(int argc, char **argv) {
         data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
     if (opts.out_vdif)
         data_buffer_vdif = create_data_buffer_vdif( &vf );
+    if (opts.out_uvdif)
+        data_buffer_uvdif = create_data_buffer_vdif( &uvf );
 
     int file_no = 0;
     int sample;
@@ -384,6 +399,12 @@ int main(int argc, char **argv) {
             invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan, npol, data_buffer_vdif );
         }
 
+        if (opts.out_uvdif)
+        {
+            printf("[%f]  Inverting the PFB (full)\n", omp_get_wtime()-begintime);
+            invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, data_buffer_uvdif );
+        }
+
         printf("[%f]  Writing data to file\n", omp_get_wtime()-begintime);
 
         if (opts.out_coh)
@@ -392,6 +413,8 @@ int main(int argc, char **argv) {
             psrfits_write_second( &pf_incoh, data_buffer_incoh, nchan, outpol_incoh );
         if (opts.out_vdif)
             vdif_write_second( &vf, &vhdr, data_buffer_vdif, &gain );
+        if (opts.out_uvdif)
+            vdif_write_second( &uvf, &vhdr, data_buffer_uvdif, &gain );
 
     }
 
@@ -403,6 +426,10 @@ int main(int argc, char **argv) {
     destroy_complex_weights( complex_weights_array, nstation, nchan );
     destroy_invJi( invJi, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, 2*opts.sample_rate, nchan );
+
+    destroy_filter( &fil );
+    for (n = 0; n < nchan; n++)
+        destroy_filter( &fil_ramps[n] );
 
     destroy_metafits_info( &mi );
     free( data_buffer_coh   );
