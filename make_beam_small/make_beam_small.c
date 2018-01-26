@@ -99,7 +99,8 @@ int main(int argc, char **argv) {
     const int outpol_coh   = 4;      // (I,Q,U,V)
     const int outpol_incoh = 1;      // ("I")
 
-    float gain = 1.0; // This is re-calculated every second for the VDIF output
+    float vgain = 1.0; // This is re-calculated every second for the VDIF output
+    float ugain = 1.0; // This is re-calculated every second for the VDIF output
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = omp_get_wtime();
@@ -364,7 +365,7 @@ int main(int argc, char **argv) {
             for (ch  = 0; ch  < nchan   ; ch++ )
             {
                 // Coherent beam
-                if (opts.out_coh || opts.out_vdif)
+                if (opts.out_coh || opts.out_vdif || opts.out_uvdif)
                     detected_beam[db_sample][ch][pol] += beam[ch][ant][pol];
 
                 // Incoherent beam
@@ -412,9 +413,9 @@ int main(int argc, char **argv) {
         if (opts.out_incoh)
             psrfits_write_second( &pf_incoh, data_buffer_incoh, nchan, outpol_incoh );
         if (opts.out_vdif)
-            vdif_write_second( &vf, &vhdr, data_buffer_vdif, &gain );
+            vdif_write_second( &vf, &vhdr, data_buffer_vdif, &vgain );
         if (opts.out_uvdif)
-            vdif_write_second( &uvf, &vhdr, data_buffer_uvdif, &gain );
+            vdif_write_second( &uvf, &vhdr, data_buffer_uvdif, &ugain );
 
     }
 

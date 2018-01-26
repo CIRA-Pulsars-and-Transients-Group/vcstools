@@ -175,7 +175,7 @@ void populate_vdif_header(
 
     vf->b_scales   = (float *)malloc( sizeof(float) * vf->nchan );
     vf->b_offsets  = (float *)malloc( sizeof(float) * vf->nchan );
-    vf->got_scales = 0;
+    vf->got_scales = 1;
 
     strncpy( vf->telescope, "MWA", 24);
     strncpy( vf->obs_mode,  "PSR", 8);
