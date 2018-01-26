@@ -8,7 +8,7 @@
 #define MAX_COMMAND_LENGTH 1024
 
 #define REAL_NIBBLE_TO_UINT8(X)  ((X) & 0xf)
-#define IMAG_NIBBLE_TO_UINT8(X)  (((X) >> 4) & 0x4)
+#define IMAG_NIBBLE_TO_UINT8(X)  (((X) >> 4) & 0xf)
 #define UINT8_TO_INT(X)          ((X) >= 0x8 ? (signed int)(X) - 0x10 : (signed int)(X))
 #define UCMPLX4_TO_CMPLX_FLT(X)  ((float)(UINT8_TO_INT(REAL_NIBBLE_TO_UINT8(X))) + \
                                   (float)(UINT8_TO_INT(IMAG_NIBBLE_TO_UINT8(X))) * I)
