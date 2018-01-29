@@ -141,13 +141,13 @@ void populate_vdif_header(
     vf->sample_rate       = sample_rate*128;  // = 1280000 (also hardcoding this to the raw channel rate)
     vf->BW                = 1.28;
 
-    vf->frame_length  = (vf->nchan * (vf->iscomplex+1) * (vf->bits) * vf->samples_per_frame) +
-                        VDIF_HEADER_SIZE;                                         // = 4128
+    vf->frame_length  = (vf->nchan * (vf->iscomplex+1) * vf->samples_per_frame) +
+                        VDIF_HEADER_SIZE;                                         // = 544
     vf->threadid      = 0;
     sprintf( vf->stationid, "mw" );
 
     vf->frame_rate = sample_rate;                                                 // = 10000
-    vf->block_size = vf->frame_length * vf->frame_rate;                           // = 41280000
+    vf->block_size = vf->frame_length * vf->frame_rate;                           // = 5440000
 
     // A single frame (128 samples). Remember vf.nchan is kludged to npol
     vf->sizeof_beam = vf->samples_per_frame * vf->nchan * (vf->iscomplex+1);      // = 512
