@@ -65,9 +65,13 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     while  (offset_out_vdif < vf->block_size) {
 
-        memcpy( (out_buffer_8_vdif + offset_out_vdif), vhdr, VDIF_HEADER_SIZE ); // add the current header
-        offset_out_vdif += VDIF_HEADER_SIZE; // offset into the output array
+        // Add the current header
+        memcpy( (out_buffer_8_vdif + offset_out_vdif), vhdr, VDIF_HEADER_SIZE );
 
+        // Offset into the output array
+        offset_out_vdif += VDIF_HEADER_SIZE;
+
+        // Convert from float to int8
         float2int8_trunc( data_buffer_ptr, vf->sizeof_beam, -126.0, 127.0,
                           (out_buffer_8_vdif + offset_out_vdif) );
         to_offset_binary( (out_buffer_8_vdif + offset_out_vdif),
@@ -134,22 +138,22 @@ void populate_vdif_header(
     vf->iscomplex         = 1;   // (it is complex data)
     vf->nchan             = 2;   // I am hardcoding this to 2 channels per thread - one per pol
     vf->samples_per_frame = 128; // also hardcoding to 128 time-samples per frame
-    vf->sample_rate       = sample_rate*128;  // also hardcoding this to the raw channel rate
+    vf->sample_rate       = sample_rate*128;  // = 1280000 (also hardcoding this to the raw channel rate)
     vf->BW                = 1.28;
 
     vf->frame_length  = (vf->nchan * (vf->iscomplex+1) * (vf->bits) * vf->samples_per_frame) +
-                        VDIF_HEADER_SIZE;
+                        VDIF_HEADER_SIZE;                                         // = 4128
     vf->threadid      = 0;
     sprintf( vf->stationid, "mw" );
 
-    vf->frame_rate = sample_rate;
-    vf->block_size = vf->frame_length * vf->frame_rate;
+    vf->frame_rate = sample_rate;                                                 // = 10000
+    vf->block_size = vf->frame_length * vf->frame_rate;                           // = 41280000
 
     // A single frame (128 samples). Remember vf.nchan is kludged to npol
-    vf->sizeof_beam = vf->samples_per_frame * vf->nchan * (vf->iscomplex+1);
+    vf->sizeof_beam = vf->samples_per_frame * vf->nchan * (vf->iscomplex+1);      // = 512
 
     // One full second (1.28 million 2 bit samples)
-    vf->sizeof_buffer = vf->frame_rate * vf->sizeof_beam;
+    vf->sizeof_buffer = vf->frame_rate * vf->sizeof_beam;                         // = 5120000
 
     createVDIFHeader( vhdr, vf->frame_length, vf->threadid, vf->bits, vf->nchan,
                             vf->iscomplex, vf->stationid);
