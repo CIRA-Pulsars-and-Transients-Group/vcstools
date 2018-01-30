@@ -86,4 +86,10 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
                       filter fils[], float *data_buffer_uvdif );
 
+/*********
+ * Tests *
+ *********/
+
+int test_invert_pfb_ifft();
+
 #endif

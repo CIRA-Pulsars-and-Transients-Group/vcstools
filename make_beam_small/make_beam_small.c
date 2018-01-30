@@ -341,7 +341,7 @@ int main(int argc, char **argv) {
 
                     // Calculate quantities that depend on output polarisation
                     // (i.e. apply inv(jones))
-                    if (opts.out_coh)
+                    if (opts.out_coh || opts.out_vdif || opts.out_uvdif )
                     {
                         for (pol = 0; pol < npol; pol++)
                         {
@@ -350,8 +350,9 @@ int main(int argc, char **argv) {
                             for (opol = 0; opol < npol; opol++)
                                 e_true[pol] += invJi[ant][ch][pol][opol] * e_dash[opol];
 
-                            for (opol = 0; opol < npol; opol++)
-                                noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
+                            if (opts.out_coh)
+                                for (opol = 0; opol < npol; opol++)
+                                    noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
 
                             beam[ch][ant][pol] = e_true[pol];
                         }
@@ -398,6 +399,27 @@ int main(int argc, char **argv) {
         {
             printf("[%f]  Inverting the PFB (IFFT)\n", omp_get_wtime()-begintime);
             invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan, npol, data_buffer_vdif );
+
+/*
+            // Calculate the mean and std of data_buffer_vdif, as a temporary test
+            int N = 0;
+            int nans = 0;
+            unsigned int i;
+            for (i = 0; i < vf.sizeof_buffer; i++)
+            {
+                if (isnan(data_buffer_vdif[i]))  nans++;
+                N++;
+            }
+            printf( "     num of nans / total = %d / %d\n", nans, N );
+
+            if (test_invert_pfb_ifft())
+                printf( "     test succeeded\n" );
+            else
+            {
+                printf( "     test failed\n" );
+                exit(EXIT_FAILURE);
+            }
+*/
         }
 
         if (opts.out_uvdif)
