@@ -3,6 +3,7 @@
 
 #include <complex.h>
 #include <fftw3.h>
+#include "beam_common.h"
 #include "vdifio.h"
 #include "filter.h"
 
@@ -85,11 +86,5 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
 void invert_pfb_ord( complex float ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
                       filter fils[], float *data_buffer_uvdif );
-
-/*********
- * Tests *
- *********/
-
-int test_invert_pfb_ifft();
 
 #endif
