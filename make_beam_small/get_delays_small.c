@@ -46,7 +46,7 @@ double parse_dec( char* dec_ddmmss ) {
 
     int id=0, im=0, J=0, sign=0;
     double fs=0., dec_rad=0.;
-    char id_str[4];
+    char id_str[16];
 
     sscanf(dec_ddmmss, "%s:%d:%lf", id_str, &im, &fs);
 

@@ -98,6 +98,7 @@ int main(int argc, char **argv) {
     const int npol         = 2;      // (X,Y)
     const int outpol_coh   = 4;      // (I,Q,U,V)
     const int outpol_incoh = 1;      // ("I")
+    int coherent_requested = opts.out_coh || opts.out_vdif || opts.out_uvdif;
 
     float vgain = 1.0; // This is re-calculated every second for the VDIF output
     float ugain = 1.0; // This is re-calculated every second for the VDIF output
@@ -291,7 +292,10 @@ int main(int argc, char **argv) {
                 for (opol1 = 0; opol1 < npol;  opol1++)
                 for (opol2 = 0; opol2 < npol;  opol2++)
                     noise_floor[ch][opol1][opol2] = 0.0;
+            }
 
+            if (coherent_requested)
+            {
                 // Initialise detected beam to zero
                 for (ch  = 0; ch  < nchan; ch++ )
                 for (pol = 0; pol < npol ; pol++)
@@ -334,14 +338,14 @@ int main(int argc, char **argv) {
                             incoh_beam[ch][ant][pol] = DETECT(e_dash[pol]);
 
                         // Apply complex weights
-                        if (opts.out_coh)
+                        if (coherent_requested)
                             e_dash[pol] *= complex_weights_array[ant][ch][pol];
 
                     }
 
                     // Calculate quantities that depend on output polarisation
                     // (i.e. apply inv(jones))
-                    if (opts.out_coh || opts.out_vdif || opts.out_uvdif )
+                    if (coherent_requested)
                     {
                         for (pol = 0; pol < npol; pol++)
                         {
@@ -366,7 +370,7 @@ int main(int argc, char **argv) {
             for (ch  = 0; ch  < nchan   ; ch++ )
             {
                 // Coherent beam
-                if (opts.out_coh || opts.out_vdif || opts.out_uvdif)
+                if (coherent_requested)
                     detected_beam[db_sample][ch][pol] += beam[ch][ant][pol];
 
                 // Incoherent beam
@@ -399,27 +403,6 @@ int main(int argc, char **argv) {
         {
             printf("[%f]  Inverting the PFB (IFFT)\n", omp_get_wtime()-begintime);
             invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan, npol, data_buffer_vdif );
-
-/*
-            // Calculate the mean and std of data_buffer_vdif, as a temporary test
-            int N = 0;
-            int nans = 0;
-            unsigned int i;
-            for (i = 0; i < vf.sizeof_buffer; i++)
-            {
-                if (isnan(data_buffer_vdif[i]))  nans++;
-                N++;
-            }
-            printf( "     num of nans / total = %d / %d\n", nans, N );
-
-            if (test_invert_pfb_ifft())
-                printf( "     test succeeded\n" );
-            else
-            {
-                printf( "     test failed\n" );
-                exit(EXIT_FAILURE);
-            }
-*/
         }
 
         if (opts.out_uvdif)

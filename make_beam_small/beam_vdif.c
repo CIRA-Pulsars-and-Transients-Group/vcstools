@@ -20,39 +20,35 @@
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         float *data_buffer_vdif, float *gain )
 {
-    if (vf->got_scales == 0) {
 
-        float rmean, imean;
-        complex float cmean, stddev;
+    // Set level occupancy
+    float rmean, imean;
+    complex float cmean, stddev;
 
-        get_mean_complex(
-                (complex float *)data_buffer_vdif,
-                vf->sizeof_buffer/2.0,
-                &rmean, &imean, &cmean );
+    get_mean_complex(
+            (complex float *)data_buffer_vdif,
+            vf->sizeof_buffer/2.0,
+            &rmean, &imean, &cmean );
 
-        stddev = get_std_dev_complex(
-                (complex float *)data_buffer_vdif,
-                vf->sizeof_buffer/2.0 );
+    stddev = get_std_dev_complex(
+            (complex float *)data_buffer_vdif,
+            vf->sizeof_buffer/2.0 );
 
-        if (fabsf(rmean) > 0.001) {
-            fprintf( stderr, "error: vdif_write_second: significantly "
-                             "non-zero mean (%f)\n", rmean );
-            exit(EXIT_FAILURE);
-        }
-        else
-            fprintf( stderr, "vdif_write_second: "
-                             "mean (%f)\n", rmean );
-
-        vf->b_scales[0] = crealf(stddev);
-        vf->b_scales[1] = crealf(stddev);
-
-        vf->got_scales = 1; // TODO: find out if this is ever meant to be reset to 0
-        //set_level_occupancy(
-        //        (complex float *)data_buffer_vdif,
-        //        vf->sizeof_buffer/2.0, gain);
-
+    if (fabsf(rmean) > 0.001) {
+        fprintf( stderr, "error: vdif_write_second: significantly "
+                         "non-zero mean (%f)\n", rmean );
+        exit(EXIT_FAILURE);
     }
 
+    vf->b_scales[0] = crealf(stddev);
+    vf->b_scales[1] = crealf(stddev);
+
+    vf->got_scales = 1;
+    set_level_occupancy(
+            (complex float *)data_buffer_vdif,
+            vf->sizeof_buffer/2.0, gain);
+
+    // Normalise
     normalise_complex(
             (complex float *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
@@ -226,7 +222,7 @@ complex float get_std_dev_complex(complex float *input, int nsamples)
 
 void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
 {
-    float percentage = 0.0;
+    //float percentage = 0.0;
     //float occupancy = 17.0;
     float limit = 0.00001;
     float step = 0.001;
@@ -252,10 +248,10 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
         else {
             gain = gain - step;
         }
-        percentage = ((float)count/nsamples)*100.0;
-        fprintf(stdout,"Gain set to %f (linear)\n",gain);
-        fprintf(stdout,"percentage of samples in the first 64 (+ve) levels - %f percent \n",percentage);
-        fprintf(stdout,"percentage clipped %f percent\n",percentage_clipped);
+        //percentage = ((float)count/nsamples)*100.0;
+        //fprintf(stdout,"Gain set to %f (linear)\n",gain);
+        //fprintf(stdout,"percentage of samples in the first 64 (+ve) levels - %f percent \n",percentage);
+        //fprintf(stdout,"percentage clipped %f percent\n",percentage_clipped);
     }
     *new_gain = gain;
 }
