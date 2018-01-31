@@ -131,7 +131,8 @@ void apply_phase_ramp( filter *in, double slope, filter *out )
 
 void apply_mult_phase_ramps( filter *in, int N, filter outs[] )
 /* Applies multiple phase ramps to the array x. The slopes are chosen such
- * that the nth ramp has slope n/N (in revolutions, see apply_phase_ramp()).
+ * that the nth ramp has slope (n-c)/N, where c=N/2 is the central channel
+ * and where the slope is given in revolutions (see apply_phase_ramp()).
  *
  * Inputs:
  *   filter *in     = an arbitrary input array
@@ -145,7 +146,7 @@ void apply_mult_phase_ramps( filter *in, int N, filter outs[] )
     int n;
     for (n = 0; n < N; n++)
     {
-        slope = (double)n / (double)N;
+        slope = (double)(n-N/2) / (double)N;
         apply_phase_ramp( in, slope, &(outs[n]) );
     }
 }

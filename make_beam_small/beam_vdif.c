@@ -35,9 +35,14 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
             vf->sizeof_buffer/2.0 );
 
     if (fabsf(rmean) > 0.001) {
-        fprintf( stderr, "error: vdif_write_second: significantly "
-                         "non-zero mean (%f)\n", rmean );
-        exit(EXIT_FAILURE);
+        printf( "warning: vdif_write_second: significantly "
+                "non-zero mean (%f), adjusting data\n", rmean );
+        unsigned int i;
+        for (i = 0; i < vf->sizeof_buffer/2; i++)
+        {
+            data_buffer_vdif[2*i+0] -= creal(cmean);
+            data_buffer_vdif[2*i+1] -= cimag(cmean);
+        }
     }
 
     vf->b_scales[0] = crealf(stddev);
@@ -422,8 +427,6 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
  * using file_no: if it is even, the first half of detected_beam is used,
  * if odd, the second half.
  *
- * fs is the sampling rate in Hz (usually 10000).
- *
  * The output of the inversion is packed back into data_buffer_vdif, a 1D
  * array whose ordering is as follows:
  *
@@ -462,7 +465,7 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
         {
             // Calculate the output index for data_buffer_uvdif
             oi = 2 * npol * s +
-                2 * pol;
+                 2 * pol;
 
             // First take care of the corner case = the very first second
             if (file_no == 0 && s < fil_size - 1)
