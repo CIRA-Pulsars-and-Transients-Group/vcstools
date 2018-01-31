@@ -165,13 +165,20 @@ int main(int argc, char **argv) {
 
     // Create structures for the PFB filter coefficients
     filter fil;
-    int ntaps = 12; // This number is never actually used
-    load_filter( "filter_coeffs.txt", REAL_COEFFS, ntaps, &fil );
+    fil.ntaps  = FINE_PFB_FILTER_NTAPS;
+    fil.size   = FINE_PFB_FILTER_SIZE;
+    fil.coeffs = (complex double *)malloc( fil.size * sizeof(complex double) );
+
+    int coeffs[] = FINE_PFB_FILTER_COEFFS;
+    for (i = 0; i < fil.size; i++)
+    {
+        fil.coeffs[i] = (complex double)coeffs[i];
+    }
 
     filter fil_ramps[nchan];
     int n;
     for (n = 0; n < nchan; n++)
-        create_filter( &fil_ramps[n], fil.size, ntaps );
+        create_filter( &fil_ramps[n], fil.size, fil.ntaps );
 
     apply_mult_phase_ramps( &fil, nchan, fil_ramps );
 
