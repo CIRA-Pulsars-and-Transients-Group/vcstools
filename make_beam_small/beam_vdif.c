@@ -441,13 +441,13 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
     // Set the output buffer to zeros
     int s;
 #pragma omp parallel for
-    for (s = 0; s < 2*npol*nchan*nsamples; s++)
+    for (s = 0; s < 2*npol*nchan*nsamples*2; s++)
     {
         data_buffer_uvdif[s] = 0.0;
     }
 
     // Loop over (output) sample -- embarassingly parallel
-#pragma omp parallel for
+//#pragma omp parallel for
     for (s = 0; s < nchan*nsamples; s++)
     {
         //fprintf( stderr, "  Thread num: %d, s = %d\n", omp_get_thread_num(), s );
@@ -464,34 +464,41 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
         for (pol = 0; pol < npol; pol++)
         {
             // Calculate the output index for data_buffer_uvdif
-            oi = 2 * npol * s +
-                 2 * pol;
+            oi = 2*npol*s + 2*pol + 2*file_no*nsamples*nchan;
 
+            /*
             // First take care of the corner case = the very first second
             if (file_no == 0 && s < fil_size - 1)
             {
-                data_buffer_uvdif[oi] = 0.0;
+                data_buffer_uvdif[oi  ] = 0.0; // "real"
+                data_buffer_uvdif[oi+1] = 0.0; // "imag"
                 continue;
             }
+            */
 
             // Calculate the first input idx to be included in this out sample
             if (file_no % 2 == 0)
-                i0 = ((s + 2*N - fil_size + U - 1) / U) % (2*nsamples);
+                i0 = ((s + 2*N - fil_size + U) / U) % (2*nsamples);
             else // file_no % 2 == 1
-                i0 = (s + 1*N - fil_size + U - 1) / U;
+                i0 = (s + 1*N - fil_size + U) / U;
 
             // Calculate the first filter coefficient index
-            f0 = (U - (s % U)) % U;
+            f0 = (U - (s % U) - 1) % U;
 
+//fprintf( stderr, "file_no = %d   s = %d   pol = %d   i0 = %d   f0 = %d   oi = %d\n", file_no, s, pol, i0, f0, oi );
             // Loop over channels and filter coefficients to calculate output
-            for (ch = 0; ch < nchan; ch++)
+            //for (ch = 0; ch < nchan; ch++)
+            for (ch = 0; ch < 1; ch++)
             {
                 i = i0;
                 for (f = f0; f < fil_size; f += U)
                 {
-                    part = fils[ch].coeffs[f] * detected_beam[i][ch][pol];
-                    data_buffer_uvdif[oi  ] += creal(part);
-                    data_buffer_uvdif[oi+1] += cimag(part);
+                    if (i >= 0)
+                    {
+                        part = fils[ch].coeffs[f] * detected_beam[i][ch][pol];
+                        data_buffer_uvdif[oi  ] += creal(part);
+                        data_buffer_uvdif[oi+1] += cimag(part);
+                    }
 
                     // Update input index simultaneously with filter coeff
                     i++;
@@ -503,6 +510,7 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
             // Normalise the result
             data_buffer_uvdif[oi  ] /= nchan;
             data_buffer_uvdif[oi+1] /= nchan;
+//fprintf( stderr, "[s=%d][pol=%d],   re = %f,   im = %f\n", s, pol, data_buffer_uvdif[oi], data_buffer_uvdif[oi+1] );
 
         } // Loop over X/Y pol
     } // Loop over samples

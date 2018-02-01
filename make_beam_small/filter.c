@@ -146,7 +146,7 @@ void apply_mult_phase_ramps( filter *in, int N, filter outs[] )
     int n;
     for (n = 0; n < N; n++)
     {
-        slope = (double)(n-N/2) / (double)N;
+        slope = -(double)(n-N/2) / (double)N;
         apply_phase_ramp( in, slope, &(outs[n]) );
     }
 }
