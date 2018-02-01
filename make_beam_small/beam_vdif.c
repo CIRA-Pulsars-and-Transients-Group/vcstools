@@ -441,9 +441,9 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
     // Set the output buffer to zeros
     int s;
 #pragma omp parallel for
-    for (s = 0; s < 2*npol*nchan*nsamples*2; s++)
+    for (s = 0; s < npol*nchan*nsamples*2; s++)
     {
-        data_buffer_uvdif[s] = 0.0;
+        data_buffer_uvdif[s + 2*(file_no%2)*nsamples*nchan] = 0.0;
     }
 
     // Loop over (output) sample -- embarassingly parallel
@@ -464,9 +464,8 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
         for (pol = 0; pol < npol; pol++)
         {
             // Calculate the output index for data_buffer_uvdif
-            oi = 2*npol*s + 2*pol + 2*file_no*nsamples*nchan;
+            oi = 2*npol*s + 2*pol + 2*(file_no%2)*nsamples*nchan;
 
-            /*
             // First take care of the corner case = the very first second
             if (file_no == 0 && s < fil_size - 1)
             {
@@ -474,7 +473,6 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
                 data_buffer_uvdif[oi+1] = 0.0; // "imag"
                 continue;
             }
-            */
 
             // Calculate the first input idx to be included in this out sample
             if (file_no % 2 == 0)
@@ -493,12 +491,9 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
                 i = i0;
                 for (f = f0; f < fil_size; f += U)
                 {
-                    if (i >= 0)
-                    {
-                        part = fils[ch].coeffs[f] * detected_beam[i][ch][pol];
-                        data_buffer_uvdif[oi  ] += creal(part);
-                        data_buffer_uvdif[oi+1] += cimag(part);
-                    }
+                    part = fils[ch].coeffs[f] * detected_beam[i][ch][pol];
+                    data_buffer_uvdif[oi  ] += creal(part);
+                    data_buffer_uvdif[oi+1] += cimag(part);
 
                     // Update input index simultaneously with filter coeff
                     i++;

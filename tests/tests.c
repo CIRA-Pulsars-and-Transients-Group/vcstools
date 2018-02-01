@@ -153,6 +153,11 @@ int test_invert_pfb_ord()
     // Set up the answer array
     float answer[] = INVERT_PFB_ORD_OUT;
 
+    // (I forgot to record the normalised data in tests.h, so I have to
+    // normalise the answers here, now)
+    //for (s = 0; s < nsamples*nchan*npol*2*2; s++)
+    //    answer[s] /= nchan;
+
     // Test the invert_pfb_ord() function!
     int nfiles = 2;
     int f;
@@ -173,6 +178,8 @@ int test_invert_pfb_ord()
     }
     complex double inv_channel[2*nsamples*nchan];
     fir_filter_1D( &(fil_ramps[0]), ch0, 2*nsamples*nchan, inv_channel );
+    for (s = 0; s < 2*nsamples*nchan; s++)
+        inv_channel[s] /= nchan;
 
     // Compare the results
     printf( "#         ch0                   data_buffer_uvdif               inv_channel\n" );
@@ -186,7 +193,7 @@ int test_invert_pfb_ord()
         }
         //printf( "%f  %f\n", answer[s], data_buffer_uvdif[s] );
         if (s%2 == 0)
-            printf( "%10f  %10f  -->  %10f  %10f  -->  %10f  %10f\n",
+            printf( "%10f  %10f  -->  %10f  %10f   ==? %10f  %10f\n",
                     creal(ch0[s/2]), cimag(ch0[s/2]),
                     data_buffer_uvdif[s], data_buffer_uvdif[s+1],
                     creal(inv_channel[s/2]), cimag(inv_channel[s/2]) );
