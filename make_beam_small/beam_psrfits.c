@@ -301,6 +301,8 @@ void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
 
     pf->sub.offs = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
     pf->sub.lst += pf->sub.tsubint;
+
+    free( out_buffer_8 );
 }
 
 

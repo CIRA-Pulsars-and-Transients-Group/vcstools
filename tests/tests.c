@@ -97,7 +97,7 @@ int test_invert_pfb_ord()
 {
     int test_success = 1;
 
-    int s, c, p; // Some usefule loop counters
+    int s, c, p, i; // Some useful loop counters
 
     // Set up the input array
     int nsamples = 46;
@@ -148,24 +148,27 @@ int test_invert_pfb_ord()
     apply_mult_phase_ramps( &fil, nchan, fil_ramps );
 
     // Set up the output array
-    float data_buffer_uvdif[2*nsamples*npol*nchan*2];
+    int nfiles = 2;
+    float data_buffer_uvdif[nfiles][2*nsamples*npol*nchan];
 
     // Set up the answer array
     float answer[] = INVERT_PFB_ORD_OUT;
 
     // Test the invert_pfb_ord() function!
-    int nfiles = 2;
     int f;
     for (f = 0; f < nfiles; f++)
     {
         invert_pfb_ord( detected_beam, f, nsamples, nchan, npol,
-                        fil_ramps, data_buffer_uvdif );
+                        fil_ramps, data_buffer_uvdif[f] );
     }
 
     // Compare the results
     for (s = 0; s < 4*nsamples*npol*nchan; s++)
     {
-        if (fabs( answer[s] - data_buffer_uvdif[s] ) > 1e-5)
+        f = s / (2*nsamples*npol*nchan);
+        i = s % (2*nsamples*npol*nchan);
+
+        if (fabs( answer[s] - data_buffer_uvdif[f][i] ) > 1e-5)
         {
             test_success = 0;
         }

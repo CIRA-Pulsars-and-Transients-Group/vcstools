@@ -85,6 +85,8 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     // Write a full second's worth of samples
     vdif_write_data( vf, out_buffer_8_vdif );
+
+    free( out_buffer_8_vdif );
 }
 
 void vdif_write_data( struct vdifinfo *vf, int8_t *output )
@@ -443,7 +445,7 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
 #pragma omp parallel for
     for (s = 0; s < npol*nchan*nsamples*2; s++)
     {
-        data_buffer_uvdif[s + 2*(file_no%2)*nsamples*nchan] = 0.0;
+        data_buffer_uvdif[s] = 0.0;
     }
 
     // Loop over (output) sample -- embarassingly parallel
@@ -464,7 +466,7 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
         for (pol = 0; pol < npol; pol++)
         {
             // Calculate the output index for data_buffer_uvdif
-            oi = 2*npol*s + 2*pol + 2*(file_no%2)*nsamples*nchan;
+            oi = 2*npol*s + 2*pol;
 
             // First take care of the corner case = the very first second
             if (file_no == 0 && s < fil_size - 1)

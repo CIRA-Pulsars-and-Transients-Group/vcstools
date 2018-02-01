@@ -443,8 +443,10 @@ void get_delays(
         for (ch = 0; ch < cal->nchan; ch++)
             free(Jf[ant][ch]);
         free(Jf[ant]);
+        free(M[ant]);
     }
     free(Jf);
+    free(M);
 
 }
 

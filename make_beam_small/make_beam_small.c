@@ -160,6 +160,7 @@ int main(int argc, char **argv) {
     struct psrfits  pf;
     struct psrfits  pf_incoh;
     vdif_header     vhdr;
+    vdif_header     uvhdr;
     struct vdifinfo vf;
     struct vdifinfo uvf;
 
@@ -208,7 +209,7 @@ int main(int argc, char **argv) {
     }
     if (opts.out_uvdif)
     {
-        populate_vdif_header( &uvf, &vhdr, opts.metafits, opts.obsid,
+        populate_vdif_header( &uvf, &uvhdr, opts.metafits, opts.obsid,
                 opts.time_utc, opts.sample_rate, opts.frequency, nchan,
                 opts.chan_width, opts.rec_channel, &delay_vals );
 
@@ -427,7 +428,7 @@ int main(int argc, char **argv) {
         if (opts.out_vdif)
             vdif_write_second( &vf, &vhdr, data_buffer_vdif, &vgain );
         if (opts.out_uvdif)
-            vdif_write_second( &uvf, &vhdr, data_buffer_uvdif, &ugain );
+            vdif_write_second( &uvf, &uvhdr, data_buffer_uvdif, &ugain );
 
     }
 
@@ -448,8 +449,44 @@ int main(int argc, char **argv) {
     free( data_buffer_coh   );
     free( data_buffer_incoh );
     free( data_buffer_vdif  );
-    free( data_buffer_uvdif  );
+    free( data_buffer_uvdif );
     free( data );
+
+    free( opts.obsid        );
+    free( opts.time_utc     );
+    free( opts.dec_ddmmss   );
+    free( opts.ra_hhmmss    );
+    free( opts.datadir      );
+    free( opts.metafits     );
+    free( opts.rec_channel  );
+    free( opts.cal.filename );
+
+    if (opts.out_coh)
+    {
+        free( pf.sub.data        );
+        free( pf.sub.dat_freqs   );
+        free( pf.sub.dat_weights );
+        free( pf.sub.dat_offsets );
+        free( pf.sub.dat_scales  );
+    }
+    if (opts.out_incoh)
+    {
+        free( pf_incoh.sub.data        );
+        free( pf_incoh.sub.dat_freqs   );
+        free( pf_incoh.sub.dat_weights );
+        free( pf_incoh.sub.dat_offsets );
+        free( pf_incoh.sub.dat_scales  );
+    }
+    if (opts.out_vdif)
+    {
+        free( vf.b_scales  );
+        free( vf.b_offsets );
+    }
+    if (opts.out_uvdif)
+    {
+        free( uvf.b_scales  );
+        free( uvf.b_offsets );
+    }
 
     // Clean up FFTW OpenMP
     fftw_cleanup_threads();
