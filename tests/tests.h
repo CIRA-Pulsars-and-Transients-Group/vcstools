@@ -1,6 +1,8 @@
 #ifndef TESTS_H
 #define TESTS_H
 
+#define RAND_PHASE  (cexp(2*M_PI*((double)rand()/(double)RAND_MAX)))
+
 int test_invert_pfb_ifft();
 int test_invert_pfb_ord();
 

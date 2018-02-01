@@ -397,7 +397,7 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
                  nchan * pol +
                  ch;
 
-            // Calculate the "out" index ("ch" here turns into a subvidivion
+            // Calculate the "out" index ("ch" here turns into a subdivision
             // of time)
             oi = 2 * npol * nchan * s +
                  2 * npol * ch +

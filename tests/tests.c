@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <complex.h>
+#include <time.h>
 #include "beam_vdif.h"
 #include "filter.h"
 #include "tests.h"
@@ -97,12 +98,12 @@ int test_invert_pfb_ord()
 {
     int test_success = 1;
 
-    int s, c, p, i; // Some useful loop counters
+    int f, s, c, p; // Some useful loop counters
 
     // Set up the input array
     int nsamples = 46;
     int nchan    = 4;
-    int npol     = 1;
+    int npol     = 2;
 
     complex float input_ch0[] = INVERT_PFB_ORD_IN_CH0;
     complex float input_ch1[] = INVERT_PFB_ORD_IN_CH1;
@@ -120,13 +121,23 @@ int test_invert_pfb_ord()
         }
     }
 
+    // Pack the input values into the detected_beam array. Artificially make
+    // a second polarisation that is 180 deg out of phase with the original
+    // polarisation.
     for (s = 0; s < 2*nsamples; s++)
-    for (p = 0; p < npol      ; p++)
     {
+        // First polarisation
+        p = 0;
         detected_beam[s][0][p] = input_ch2[s];
         detected_beam[s][1][p] = input_ch3[s];
         detected_beam[s][2][p] = input_ch0[s];
         detected_beam[s][3][p] = input_ch1[s];
+        // Second polarisation
+        p = 1;
+        detected_beam[s][0][p] = -input_ch2[s];
+        detected_beam[s][1][p] = -input_ch3[s];
+        detected_beam[s][2][p] = -input_ch0[s];
+        detected_beam[s][3][p] = -input_ch1[s];
     }
 
     // Set up the filters
@@ -155,7 +166,6 @@ int test_invert_pfb_ord()
     float answer[] = INVERT_PFB_ORD_OUT;
 
     // Test the invert_pfb_ord() function!
-    int f;
     for (f = 0; f < nfiles; f++)
     {
         invert_pfb_ord( detected_beam, f, nsamples, nchan, npol,
@@ -163,12 +173,21 @@ int test_invert_pfb_ord()
     }
 
     // Compare the results
-    for (s = 0; s < 4*nsamples*npol*nchan; s++)
+    int ai, di; // indexes for answer and data_buffer_uvdif respectively
+    int x;      // loop counter for complexity
+    float ans, calc;
+    for (f = 0; f < nfiles; f++)
+    for (s = 0; s < nsamples*nchan; s++)
+    for (p = 0; p < npol; p++)
+    for (x = 0; x < 2; x++)
     {
-        f = s / (2*nsamples*npol*nchan);
-        i = s % (2*nsamples*npol*nchan);
+        ai = 2*nsamples*f + 2*s + x;
+        di = 2*npol*s + 2*p + x;
 
-        if (fabs( answer[s] - data_buffer_uvdif[f][i] ) > 1e-5)
+        ans = (p == 0 ? answer[ai] : -answer[ai]);
+        calc = data_buffer_uvdif[f][di];
+
+        if (fabs( ans - calc ) > 1e-5)
         {
             test_success = 0;
         }
