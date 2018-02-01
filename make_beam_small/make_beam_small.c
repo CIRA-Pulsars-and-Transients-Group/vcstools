@@ -448,6 +448,7 @@ int main(int argc, char **argv) {
     free( data_buffer_coh   );
     free( data_buffer_incoh );
     free( data_buffer_vdif  );
+    free( data_buffer_uvdif  );
     free( data );
 
     // Clean up FFTW OpenMP

@@ -447,7 +447,7 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
     }
 
     // Loop over (output) sample -- embarassingly parallel
-//#pragma omp parallel for
+#pragma omp parallel for
     for (s = 0; s < nchan*nsamples; s++)
     {
         //fprintf( stderr, "  Thread num: %d, s = %d\n", omp_get_thread_num(), s );
@@ -469,8 +469,8 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
             // First take care of the corner case = the very first second
             if (file_no == 0 && s < fil_size - 1)
             {
-                data_buffer_uvdif[oi  ] = 0.0; // "real"
-                data_buffer_uvdif[oi+1] = 0.0; // "imag"
+                //data_buffer_uvdif[oi  ] = 0.0; // "real"
+                //data_buffer_uvdif[oi+1] = 0.0; // "imag"
                 continue;
             }
 
@@ -483,15 +483,14 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
             // Calculate the first filter coefficient index
             f0 = (U - (s % U) - 1) % U;
 
-//fprintf( stderr, "file_no = %d   s = %d   pol = %d   i0 = %d   f0 = %d   oi = %d\n", file_no, s, pol, i0, f0, oi );
             // Loop over channels and filter coefficients to calculate output
-            //for (ch = 0; ch < nchan; ch++)
-            for (ch = 0; ch < 1; ch++)
+            for (ch = 0; ch < nchan; ch++)
+            //for (ch = 3; ch < 4; ch++)
             {
                 i = i0;
                 for (f = f0; f < fil_size; f += U)
                 {
-                    part = fils[ch].coeffs[f] * detected_beam[i][ch][pol];
+                    part = fils[ch].coeffs[(fil_size-1) - f] * detected_beam[i][ch][pol];
                     data_buffer_uvdif[oi  ] += creal(part);
                     data_buffer_uvdif[oi+1] += cimag(part);
 
@@ -505,7 +504,6 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
             // Normalise the result
             data_buffer_uvdif[oi  ] /= nchan;
             data_buffer_uvdif[oi+1] /= nchan;
-//fprintf( stderr, "[s=%d][pol=%d],   re = %f,   im = %f\n", s, pol, data_buffer_uvdif[oi], data_buffer_uvdif[oi+1] );
 
         } // Loop over X/Y pol
     } // Loop over samples
