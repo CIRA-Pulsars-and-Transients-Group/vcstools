@@ -181,7 +181,7 @@ int test_invert_pfb_ord()
     for (p = 0; p < npol; p++)
     for (x = 0; x < 2; x++)
     {
-        ai = 2*nsamples*f + 2*s + x;
+        ai = 2*nsamples*nchan*f + 2*s + x;
         di = 2*npol*s + 2*p + x;
 
         ans = (p == 0 ? answer[ai] : -answer[ai]);
