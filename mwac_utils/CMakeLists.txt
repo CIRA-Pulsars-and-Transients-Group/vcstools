@@ -11,5 +11,5 @@ target_link_libraries(mwac_utils ${FFTW3F_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_L
 set_target_properties(mwac_utils PROPERTIES LINK_FLAGS "-Wl,-no_compact_unwind")
 
 #install(FILES mwac_utils.h antenna_mapping.h uvfits.h vdifio.h ascii_header.h mwa_header.h DESTINATION include)
-#install(TARGETS MWAC_Utils ARCHIVE DESTINATION lib)
+#install(TARGETS mwac_utils ARCHIVE DESTINATION lib)
 

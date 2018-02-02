@@ -1,5 +1,9 @@
 
 cmake_minimum_required (VERSION 2.6)
+
+cmake_policy(SET CMP0012 NEW)
+cmake_policy(SET CMP0048 NEW)
+
 project (make_beam)
 add_executable(make_beam make_beam)
 
@@ -31,15 +35,15 @@ endif (CUDA_FOUND)
 
 if (MPI_C_LIBRARIES)
     if (CUDA_FOUND)
-        target_link_libraries(make_beam MWAC_Utils MWAC_GPU_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_C_LIBRARIES} m)
+        target_link_libraries(make_beam mwac_utils MWAC_GPU_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_C_LIBRARIES} m)
     else ()
-        target_link_libraries(make_beam MWAC_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_C_LIBRARIES} m)
+        target_link_libraries(make_beam mwac_utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_C_LIBRARIES} m)
     endif (CUDA_FOUND)
 else()
     if (CUDA_FOUND)
-        target_link_libraries(make_beam MWAC_Utils MWAC_GPU_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_LIBRARIES} m)
+        target_link_libraries(make_beam mwac_utils MWAC_GPU_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_LIBRARIES} m)
     else ()
-        target_link_libraries(make_beam MWAC_Utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_LIBRARIES} m)
+        target_link_libraries(make_beam mwac_utils ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${FFTW3F_LIBRARY} ${MPI_LIBRARIES} m)
     endif (CUDA_FOUND)
 endif()
 
@@ -60,5 +64,5 @@ endif()
 
 add_definitions(${MPI_C_COMPILE_FLAGS})
 
-#install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/make_beam DESTINATION bin)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/make_beam DESTINATION bin)
 
