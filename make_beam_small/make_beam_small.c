@@ -171,9 +171,10 @@ int main(int argc, char **argv) {
     fil.coeffs = (complex double *)malloc( fil.size * sizeof(complex double) );
 
     int coeffs[] = FINE_PFB_FILTER_COEFFS;
+    float approx_filter_scale = 120000.0;
     for (i = 0; i < fil.size; i++)
     {
-        fil.coeffs[i] = (complex double)coeffs[i];
+        fil.coeffs[i] = (complex double)coeffs[i] / approx_filter_scale;
     }
 
     filter fil_ramps[nchan];
@@ -419,7 +420,7 @@ int main(int argc, char **argv) {
             invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, data_buffer_uvdif );
         }
 
-        printf("[%f]  Writing data to file\n", omp_get_wtime()-begintime);
+        printf("[%f]  Writing data to file(s)\n", omp_get_wtime()-begintime);
 
         if (opts.out_coh)
             psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );

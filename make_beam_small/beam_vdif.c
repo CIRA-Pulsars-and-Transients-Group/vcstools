@@ -34,7 +34,7 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
             (complex float *)data_buffer_vdif,
             vf->sizeof_buffer/2.0 );
 
-    if (fabsf(rmean) > 0.001) {
+    //if (fabsf(rmean) > 0.001) {
         printf( "warning: vdif_write_second: significantly "
                 "non-zero mean (%f), adjusting data\n", rmean );
         unsigned int i;
@@ -43,7 +43,7 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
             data_buffer_vdif[2*i+0] -= creal(cmean);
             data_buffer_vdif[2*i+1] -= cimag(cmean);
         }
-    }
+    //}
 
     vf->b_scales[0] = crealf(stddev);
     vf->b_scales[1] = crealf(stddev);
