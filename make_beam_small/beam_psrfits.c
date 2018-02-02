@@ -301,10 +301,12 @@ void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
 
     pf->sub.offs = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
     pf->sub.lst += pf->sub.tsubint;
+
+    free( out_buffer_8 );
 }
 
 
-void form_stokes( complex float detected_beam[][2],
+void form_stokes( complex float **detected_beam,
                   complex float noise_floor[][2][2],
                   int nchan, double invw, float *spectrum )
 /* This function forms the Stokes parameters IQUV from the detected beam and

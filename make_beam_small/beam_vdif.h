@@ -3,7 +3,9 @@
 
 #include <complex.h>
 #include <fftw3.h>
+#include "beam_common.h"
 #include "vdifio.h"
+#include "filter.h"
 
 #define  VDIF_HEADER_SIZE  32
 
@@ -77,10 +79,12 @@ void normalise_complex( complex float *input, int nsamples, float scale );
 
 void to_offset_binary( int8_t *i, int n );
 
-void invert_pfb_ifft( complex float *array, int nchan,
-                      fftwf_plan p, fftwf_complex *in, fftwf_complex *out );
+void invert_pfb_ifft( complex float ***detected_beam, int file_no,
+                      int nsamples, int nchan, int npol,
+                      float *data_buffer_vdif );
 
-//void invert_pfb_ord( complex float *input, complex float *output,
-//                     int nchan_in, int nchan_out );
+void invert_pfb_ord( complex float ***detected_beam, int file_no,
+                      int nsamples, int nchan, int npol,
+                      filter fils[], float *data_buffer_uvdif );
 
 #endif

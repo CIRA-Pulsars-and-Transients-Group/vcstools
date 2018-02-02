@@ -4,6 +4,7 @@
 #include <math.h>
 #include <complex.h>
 #include <fftw3.h>
+#include <omp.h>
 #include "vdifio.h"
 #include "psrfits.h"
 #include "slamac.h"
@@ -13,41 +14,46 @@
 #include "mwa_header.h"
 #include "vdifio.h"
 #include "ascii_header.h"
+#include "filter.h"
 
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         float *data_buffer_vdif, float *gain )
 {
-    if (vf->got_scales == 0) {
 
-        float rmean, imean;
-        complex float cmean, stddev;
+    // Set level occupancy
+    float rmean, imean;
+    complex float cmean, stddev;
 
-        get_mean_complex(
-                (complex float *)data_buffer_vdif,
-                vf->sizeof_buffer/2.0,
-                &rmean, &imean, &cmean );
+    get_mean_complex(
+            (complex float *)data_buffer_vdif,
+            vf->sizeof_buffer/2.0,
+            &rmean, &imean, &cmean );
 
-        stddev = get_std_dev_complex(
-                (complex float *)data_buffer_vdif,
-                vf->sizeof_buffer/2.0 );
+    stddev = get_std_dev_complex(
+            (complex float *)data_buffer_vdif,
+            vf->sizeof_buffer/2.0 );
 
-        if (fabsf(rmean) > 0.001) {
-            fprintf( stderr, "error: vdif_write_second: significantly "
-                             "non-zero mean (%f)", rmean );
-            exit(EXIT_FAILURE);
+    //if (fabsf(rmean) > 0.001) {
+        printf( "warning: vdif_write_second: significantly "
+                "non-zero mean (%f), adjusting data\n", rmean );
+        unsigned int i;
+        for (i = 0; i < vf->sizeof_buffer/2; i++)
+        {
+            data_buffer_vdif[2*i+0] -= creal(cmean);
+            data_buffer_vdif[2*i+1] -= cimag(cmean);
         }
+    //}
 
-        vf->b_scales[0] = crealf(stddev);
-        vf->b_scales[1] = crealf(stddev);
+    vf->b_scales[0] = crealf(stddev);
+    vf->b_scales[1] = crealf(stddev);
 
-        vf->got_scales = 1; // TODO: find out if this is ever meant to be reset to 0
-        set_level_occupancy(
-                (complex float *)data_buffer_vdif,
-                vf->sizeof_buffer/2.0, gain);
+    vf->got_scales = 1;
+    set_level_occupancy(
+            (complex float *)data_buffer_vdif,
+            vf->sizeof_buffer/2.0, gain);
 
-    }
-
+    // Normalise
     normalise_complex(
             (complex float *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
@@ -60,9 +66,13 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     while  (offset_out_vdif < vf->block_size) {
 
-        memcpy( (out_buffer_8_vdif + offset_out_vdif), vhdr, VDIF_HEADER_SIZE ); // add the current header
-        offset_out_vdif += VDIF_HEADER_SIZE; // offset into the output array
+        // Add the current header
+        memcpy( (out_buffer_8_vdif + offset_out_vdif), vhdr, VDIF_HEADER_SIZE );
 
+        // Offset into the output array
+        offset_out_vdif += VDIF_HEADER_SIZE;
+
+        // Convert from float to int8
         float2int8_trunc( data_buffer_ptr, vf->sizeof_beam, -126.0, 127.0,
                           (out_buffer_8_vdif + offset_out_vdif) );
         to_offset_binary( (out_buffer_8_vdif + offset_out_vdif),
@@ -75,6 +85,8 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     // Write a full second's worth of samples
     vdif_write_data( vf, out_buffer_8_vdif );
+
+    free( out_buffer_8_vdif );
 }
 
 void vdif_write_data( struct vdifinfo *vf, int8_t *output )
@@ -129,22 +141,22 @@ void populate_vdif_header(
     vf->iscomplex         = 1;   // (it is complex data)
     vf->nchan             = 2;   // I am hardcoding this to 2 channels per thread - one per pol
     vf->samples_per_frame = 128; // also hardcoding to 128 time-samples per frame
-    vf->sample_rate       = sample_rate*128;  // also hardcoding this to the raw channel rate
+    vf->sample_rate       = sample_rate*128;  // = 1280000 (also hardcoding this to the raw channel rate)
     vf->BW                = 1.28;
 
-    vf->frame_length  = (vf->nchan * (vf->iscomplex+1) * (vf->bits) * vf->samples_per_frame) +
-                        VDIF_HEADER_SIZE;
+    vf->frame_length  = (vf->nchan * (vf->iscomplex+1) * vf->samples_per_frame) +
+                        VDIF_HEADER_SIZE;                                         // = 544
     vf->threadid      = 0;
     sprintf( vf->stationid, "mw" );
 
-    vf->frame_rate = sample_rate;
-    vf->block_size = vf->frame_length * vf->frame_rate;
+    vf->frame_rate = sample_rate;                                                 // = 10000
+    vf->block_size = vf->frame_length * vf->frame_rate;                           // = 5440000
 
     // A single frame (128 samples). Remember vf.nchan is kludged to npol
-    vf->sizeof_beam = vf->samples_per_frame * vf->nchan * (vf->iscomplex+1);
+    vf->sizeof_beam = vf->samples_per_frame * vf->nchan * (vf->iscomplex+1);      // = 512
 
     // One full second (1.28 million 2 bit samples)
-    vf->sizeof_buffer = vf->frame_rate * vf->sizeof_beam;
+    vf->sizeof_buffer = vf->frame_rate * vf->sizeof_beam;                         // = 5120000
 
     createVDIFHeader( vhdr, vf->frame_length, vf->threadid, vf->bits, vf->nchan,
                             vf->iscomplex, vf->stationid);
@@ -170,7 +182,7 @@ void populate_vdif_header(
 
     vf->b_scales   = (float *)malloc( sizeof(float) * vf->nchan );
     vf->b_offsets  = (float *)malloc( sizeof(float) * vf->nchan );
-    vf->got_scales = 0;
+    vf->got_scales = 1;
 
     strncpy( vf->telescope, "MWA", 24);
     strncpy( vf->obs_mode,  "PSR", 8);
@@ -217,7 +229,7 @@ complex float get_std_dev_complex(complex float *input, int nsamples)
 
 void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
 {
-    float percentage = 0.0;
+    //float percentage = 0.0;
     //float occupancy = 17.0;
     float limit = 0.00001;
     float step = 0.001;
@@ -243,10 +255,10 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
         else {
             gain = gain - step;
         }
-        percentage = ((float)count/nsamples)*100.0;
-        fprintf(stdout,"Gain set to %f (linear)\n",gain);
-        fprintf(stdout,"percentage of samples in the first 64 (+ve) levels - %f percent \n",percentage);
-        fprintf(stdout,"percentage clipped %f percent\n",percentage_clipped);
+        //percentage = ((float)count/nsamples)*100.0;
+        //fprintf(stdout,"Gain set to %f (linear)\n",gain);
+        //fprintf(stdout,"percentage of samples in the first 64 (+ve) levels - %f percent \n",percentage);
+        //fprintf(stdout,"percentage clipped %f percent\n",percentage_clipped);
     }
     *new_gain = gain;
 }
@@ -289,59 +301,212 @@ void to_offset_binary(int8_t *i, int n)
 }
 
 
-void invert_pfb_ifft( complex float *array, int nchan,
-                      fftwf_plan p, fftwf_complex *in, fftwf_complex *out )
+void invert_pfb_ifft( complex float ***detected_beam, int file_no,
+                      int nsamples, int nchan, int npol,
+                      float *data_buffer_vdif )
 /* "Invert the PFB" by simply applying an inverse FFT.
- * This function expects "array" to contain (at least) nchan elements. It also
- * expects that the arrays in the plan also contain at least nchan elements.
- * The output of the inverse FFT is packed back into "array".
- * "in" and "out" must be the same arrays as those used to make the plan "p"
+ * This function expects "detected_beam" to be structured as follows:
+ *
+ *   detected_beam[2*nsamples][nchan][npol]
+ *
+ * Although detected_samples potentially contains 2 seconds' worth of data,
+ * this function only FFTs one second. The appropriate second is worked out
+ * using file_no: if it is even, the first half of detected_beam is used,
+ * if odd, the second half.
+ *
+ * The output of the inverse FFT is packed back into data_buffer_vdif, a 1D
+ * array whose ordering is as follows:
+ *
+ *   time, pol, complexity
+ *
+ * This ordering is suited for immediate output to the VDIF format.
  */
 {
-    // Populate the FFTW arrays
-    int ch;
-    for (ch = 0; ch < nchan; ch++)
+    // Allocate FFTW arrays
+    int arr_size = nsamples * nchan * npol;
+    fftwf_complex *in  = (fftwf_complex *)fftwf_malloc( arr_size * sizeof(fftwf_complex) );
+
+    // Create a plan for doing column-wise 1D transforms
+    int rank     = 1;
+    int n[]      = { nchan };
+    int howmany  = nsamples * npol;
+    int idist    = nchan;
+    int odist    = nchan;
+    int istride  = 1;
+    int ostride  = 1;
+    int *inembed = n, *onembed = n;
+    fftwf_plan p = fftwf_plan_many_dft( rank, n, howmany,
+                                        in, inembed, istride, idist,
+                                        in, onembed, ostride, odist,
+                                        FFTW_BACKWARD, FFTW_ESTIMATE );
+
+    // Populate the FFTW arrays such that the middle channel of detected_beam
+    // is placed nearest the DC term.
+
+    int s;    // sample index
+
+#pragma omp parallel for
+    for (s = 0; s < nsamples; s ++)
     {
-        if (ch < nchan/2)
+        int ds, ch, pol;
+        int ii;   // "in" index
+        int chi;  // corrected channel index for "in" array
+
+        // Calculate the proper sample index for this second
+        ds = (file_no % 2)*nsamples + s;
+
+        for (ch  = 0; ch  < nchan; ch++ )
+        for (pol = 0; pol < npol;  pol++)
         {
-            // these are the negative frequencies
-            // pack them in the second half of the array
-            // skip over the edges
-            in[(nchan/2) + ch] = array[ch];
-        }
-        else if (ch > nchan/2)
-        {
-            // positive frequencies -- shift them to the first half
-            in[ch-(nchan/2)] = array[ch];
-        }
-        else // if (ch == nchan/2)
-        {
-            // Nyquist bin - give it a zero mean
-            in[0] = 0.0;
+            // Swap the two halves of the array
+            chi = (ch < nchan/2 ? ch + (nchan/2) : ch - (nchan/2));
+
+            // Calculate the "in" index
+            ii = nchan * npol * s +
+                 nchan * pol +
+                 chi;
+
+            // Copy across the data (but set DC bin to 0)
+            in[ii] = (chi == 0 ? 0.0 : detected_beam[ds][ch][pol]);
         }
     }
 
-    // Make it so!
+/*
+    fprintf( stderr, "  First column to be iFFT'd (inside invert_pfb_ifft()): [\n" );
+    for (s = 0; s < nchan; s++)
+       fprintf( stderr, " %f + %f*I\n", creal(in[s]), cimag(in[s]) );
+    fprintf( stderr, "]\n" );
+*/
+
+    // Execute the FFT
     fftwf_execute( p );
 
     // Pack result into the output array
-    for (ch = 0; ch < nchan; ch++)
-        array[ch] = out[ch];
 
+#pragma omp parallel for
+    for (s = 0; s < nsamples; s ++)
+    {
+        int ch, pol;
+        int ii, oi; // "in" index & "out" index
+
+        for (ch  = 0; ch  < nchan; ch++ )
+        for (pol = 0; pol < npol;  pol++)
+        {
+            // Calculate the "in" index
+            ii = nchan * npol * s +
+                 nchan * pol +
+                 ch;
+
+            // Calculate the "out" index ("ch" here turns into a subdivision
+            // of time)
+            oi = 2 * npol * nchan * s +
+                 2 * npol * ch +
+                 2 * pol;
+
+            // Copy data across, dividing by nchan to account for the lack of
+            // normalisation in the FFTW library.
+            data_buffer_vdif[oi]   = crealf(in[ii]) / (double)nchan;
+            data_buffer_vdif[oi+1] = cimagf(in[ii]) / (double)nchan;
+        }
+    }
+
+    // Clean up
+    fftwf_free( in );
+    fftwf_destroy_plan( p );
 }
 
 
-//void invert_pfb_ord( complex float *input, complex float *output,
-//                     int nchan_in, int nchan_out )
-/* Inverting the PFB, using Ord's algorithm:
- * In order to build a single time step at the new <high> resolution
- * 
- * 1) first take each channel and upsample the correct factor by adding the upsample-1 number of zeros
- * 2) filter the upsampled channel to remove the images 
- * 3) phase rotate the channel to shift the frequency response
- * 4) Sum all to get the final time series
- * 
- * The "input" array is expected to have nchan_in elements, and 
+void invert_pfb_ord( complex float ***detected_beam, int file_no,
+                      int nsamples, int nchan, int npol,
+                      filter fils[], float *data_buffer_uvdif )
+/* "Invert the PFB" by applying a resynthesis filter.
+ * This function expects "detected_beam" to be structured as follows:
+ *
+ *   detected_beam[2*nsamples][nchan][npol]
+ *
+ * Although detected_samples potentially contains 2 seconds' worth of data,
+ * this function only inverts 1 second. The appropriate second is worked out
+ * using file_no: if it is even, the first half of detected_beam is used,
+ * if odd, the second half.
+ *
+ * The output of the inversion is packed back into data_buffer_vdif, a 1D
+ * array whose ordering is as follows:
+ *
+ *   time, pol, complexity
+ *
+ * This ordering is suited for immediate output to the VDIF format.
+ *
+ * Finally, fils points to an array of filter coefficients, each row of which
+ * has been "rotated" with phase ramps of different amounts.
  */
-//{
-//}
+{
+    // Set the output buffer to zeros
+    int s;
+#pragma omp parallel for
+    for (s = 0; s < npol*nchan*nsamples*2; s++)
+    {
+        data_buffer_uvdif[s] = 0.0;
+    }
+
+    // Loop over (output) sample -- embarassingly parallel
+#pragma omp parallel for
+    for (s = 0; s < nchan*nsamples; s++)
+    {
+        //fprintf( stderr, "  Thread num: %d, s = %d\n", omp_get_thread_num(), s );
+        int U        = nchan;        // upsampling factor = number of channels
+        int fil_size = fils[0].size; // All filters should have the same size
+        int i0;                      // The index of the first input sample to
+                                     // be included in the output sum
+        int f0;                      // The index of the first filter coeffi-
+                                     // cient to be included in the output sum
+        int N        = nsamples * U; // The total number of output samples
+        int ch, f, i, pol, oi;       // Various loop counters
+        complex float part;
+
+        for (pol = 0; pol < npol; pol++)
+        {
+            // Calculate the output index for data_buffer_uvdif
+            oi = 2*npol*s + 2*pol;
+
+            // First take care of the corner case = the very first second
+            if (file_no == 0 && s < fil_size - 1)
+            {
+                //data_buffer_uvdif[oi  ] = 0.0; // "real"
+                //data_buffer_uvdif[oi+1] = 0.0; // "imag"
+                continue;
+            }
+
+            // Calculate the first input idx to be included in this out sample
+            if (file_no % 2 == 0)
+                i0 = ((s + 2*N - fil_size + U) / U) % (2*nsamples);
+            else // file_no % 2 == 1
+                i0 = (s + 1*N - fil_size + U) / U;
+
+            // Calculate the first filter coefficient index
+            f0 = (U - (s % U) - 1) % U;
+
+            // Loop over channels and filter coefficients to calculate output
+            for (ch = 0; ch < nchan; ch++)
+            //for (ch = 3; ch < 4; ch++)
+            {
+                i = i0;
+                for (f = f0; f < fil_size; f += U)
+                {
+                    part = fils[ch].coeffs[(fil_size-1) - f] * detected_beam[i][ch][pol];
+                    data_buffer_uvdif[oi  ] += creal(part);
+                    data_buffer_uvdif[oi+1] += cimag(part);
+
+                    // Update input index simultaneously with filter coeff
+                    i++;
+                    if (i == 2*nsamples)  i = 0; // (i.e. loop back around to
+                                                 //  the other second)
+                } // Loop over relevant filter coefficients
+            } // Loop over channels
+
+            // Normalise the result
+            data_buffer_uvdif[oi  ] /= nchan;
+            data_buffer_uvdif[oi+1] /= nchan;
+
+        } // Loop over X/Y pol
+    } // Loop over samples
+}

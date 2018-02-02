@@ -3,6 +3,10 @@
 \usepackage{fullpage}
 \usepackage{amsmath}
 \usepackage{hyperref}
+\usepackage{color}
+\usepackage{listings}
+\usepackage{tikz}
+\usepackage{graphicx}
 
 \author{Sam McSweeney}
 \title{Miscellaneous Documentation for the Beamformer}
@@ -203,11 +207,145 @@ Finally, the Stokes parameters $I$, $Q$, $U$, and $V$, are calculated as follows
 \end{align}
 where $w_\text{ant}$ is a weighting factor equal to the number of antennas used in the sums.
 
+\newpage
 \section{Inverting the PFB}
 
 It is sometimes desirable to sacrifice spectral information for a higher time resolution.
 Unfortunately, this is non-trivial due to the (strictly) non-invertible process applied to the original high time resolution to get the spectral information in the first place, viz. the polyphase filter bank, or PFB.
+In principle, however, a decent reconstruction of the input time series can be obtained.
+In light of this, it may actually be closer to the mark to call the process `resynthesis' instead of `inversion', but I will continue to call it `inversion' here.
+The proposed algorithm for inverting the PFB is illustrated in Fig. \ref{fig:ipfb}.
 
-In principle, a decent reconstruction can be obtained, because although information has been lost 
+\begin{figure}[!p]
+    \centering
+    \includegraphics[scale=0.4,angle=270]{ipfb/ipfb-diagram1.pdf}
+    \caption{The inverse PFB algorithm.}
+    \label{fig:ipfb}
+\end{figure}
+
+\subsection{Current CPU version}
+
+Here is the algorithm as I read it from Stephen's current code.
+
+\newcommand{\blue}[1]{{\color{blue}#1}}
+\newcommand{\red}[1]{{\color{red}#1}}
+\newcommand{\arrsize}[1]{{\color{red}[}#1{\color{red}]}}
+\newcommand{\vrbl}[1]{{\texttt{\blue{#1}}}}
+
+\subsubsection*{Relevant Variables:}
+\begin{itemize}
+    \item \texttt{int \blue{sample\_rate} = \blue{10000}}
+    \item \texttt{int \blue{vf.sample\_rate} = sample\_rate * 128 = \blue{1280000}}
+    \item \texttt{int \blue{vf.samples\_per\_frame} = \blue{128}}
+    \item \texttt{int \blue{vf.frame\_rate} = vf.sample\_rate / vf.samples\_per\_frame = \blue{10000}}
+    \item \texttt{int \blue{vf.nchan} = \blue{2}}
+    \item \texttt{int \blue{vf.iscomplex} = \blue{1}}
+    \item \texttt{int \blue{vf.sizeof\_beam} = vf.samples\_per\_frame * vf.nchan * (vf.iscomplex+1) = \blue{512}}
+    \item \texttt{int \blue{vf.sizeof\_buffer} = vf.frame\_rate * vf.sizeof\_beam = \blue{5120000}}
+    \item \texttt{int \blue{ntap\_per\_call} = \blue{2}}
+    \item \texttt{int \blue{fcontext.ntaps} = \blue{1536}}
+    \item \texttt{int \blue{fcontext.nsamples} = vf.sizeof\_buffer / vf.nchan = \blue{2560000}} (line 1733 of \texttt{make\_beam.c})
+    \item \texttt{int \blue{fcontext.nsamples} = ntap\_per\_call * fcontext.ntaps = \blue{3072}} (line 2250 of \texttt{make\_beam.c})
+    \item \texttt{int \blue{upsample\_factor} = \blue{128}}
+\end{itemize}
+
+\subsubsection*{Arrays:}
+\begin{itemize}
+    \item \texttt{complex float \blue{upsample\_working}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
+    \item \texttt{complex float \blue{filter\_dft\_in}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
+    \item \texttt{complex float \blue{filter\_dft\_out}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
+    \item \texttt{complex float \blue{in}\arrsize{nchan\_in = \blue{128}}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
+    \item \texttt{complex float \blue{out}\arrsize{nchan\_in = \blue{128}}\arrsize{upsample\_factor*nsamples = \blue{393216}}}
+\end{itemize}
+
+\subsubsection*{Pseudocode:}
+
+\begin{enumerate}
+    \item Fill \vrbl{upsample\_working} and \vrbl{filter\_dft\_in} with zeros
+    \item Populate \vrbl{filter\_dft\_in} with the (real) filter coefficients and Fourier transform them (forward) storing the (complex) result in \vrbl{filter\_dft\_out}.
+    \item Populate \vrbl{in} as follows (upsampling step):
+        \begin{equation}
+            \texttt{in[ch][i]} =
+            \begin{cases}
+                \texttt{input[i+ch]}, & \text{\texttt{i} is a multiple of 128} \\
+                0, & \text{otherwise}
+            \end{cases}
+        \end{equation}
+        This is a merely a rearrangement of the input data from a 1D array:\\[8pt]
+        \texttt{[i=0,ch=0], [i=0,ch=1], \dots [i=0,ch=127], [i=1,ch=0], [i=1,ch=1], \dots}\\[8pt]
+        To a 2D array:\\[8pt]
+        \texttt{ch=0: [i=0], 0, 0, \dots [i=1], 0, 0, \dots [i=2], \dots}\\
+        \texttt{ch=1: [i=0], 0, 0, \dots [i=1], 0, 0, \dots [i=2], \dots}\\
+        \texttt{ch=2: \dots}\\[8pt]
+        where there are 127 zeros between each input sample.
+    \item Fourier transform (forward) each row of \vrbl{in} (output stored in \vrbl{out}).
+    \item Populate \vrbl{upsample\_working} as follows:
+        \begin{equation}
+            \texttt{upsample\_working[i]}
+              = \sum_{\texttt{ch}=0}^{128} \texttt{filter\_dft\_out[i]} \times \texttt{out[ch][i]}
+        \end{equation}
+    \item Backward FFT \vrbl{upsample\_working}. This is the desired result.
+\end{enumerate}
+
+\red{According to Steve, this algorithm appears to lack a necessary phase rotation step.}
+
+\subsection{Current GPU version}
+
+Stephen's original documentation reads:
+
+\begin{lstlisting}[language=c,basicstyle=\footnotesize\ttfamily,commentstyle=\color{blue},frame=single,breaklines=true]
+// A more specific version of the filter that tries to invert the PFB a bit more efficiently
+// input:
+// nsamples time samples of an nchan filter bank packed in the following order:
+//
+// [time][ch][complexity]
+//
+// Each pol is processed separately 
+// all this routine has to do is to apply the filter
+
+// filter: padded to nsamples in length
+// 
+// Algorithm   
+// we first: Upsample the data by a factor of nchan by adding nchan-1 zeros to the streal
+// Then we low pass filter each channel
+// I then rotate the phase of each sample - this mimics rotating the phase of the synthesis filter
+// which I will try doing if this works...
+\end{lstlisting}
+
+\subsubsection*{Relevant Variables:}
+
+\begin{itemize}
+    \item \texttt{int \blue{nsamples} = fcontext.nsamples / nchan = \blue{24}}
+    \item \texttt{int \blue{nchan\_in} = \blue{128}}
+    \item \texttt{int \blue{mem\_size} = sizeof(Complex) * nsamples * nchan\_in * nchan\_in = \blue{393216} $\times$ sizeof(Complex)}
+    \item \texttt{int \blue{nelements} = nsamples * nchan\_in = \blue{3072}}
+\end{itemize}
+
+\subsubsection*{Arrays:}
+
+\begin{itemize}
+    \item \texttt{Complex \blue{d\_buffer}\arrsize{nelements = \blue{3072}}}
+    \item \texttt{Complex \blue{d\_signal}\arrsize{nsamples * nchan\_in * nchan\_in = \blue{393216}}}
+    \item \texttt{Complex \blue{d\_filter\_kernel}\arrsize{nelements = \blue{3072}}}
+\end{itemize}
+
+\subsubsection*{Pseudocode:}
+
+\begin{enumerate}
+    \item Copy \vrbl{input} data into \vrbl{d\_buffer}.
+    \item Copy the filter coefficients into \vrbl{d\_filter\_kernel}.
+    \item Fill \vrbl{d\_signal} with zeros.
+    \item Upsample \vrbl{d\_buffer} and store the result in \vrbl{d\_signal}.
+    \item FFT (forward) \vrbl{d\_signal} (in-place).
+    \item FFT (forward) \vrbl{d\_filter\_kernel} (in-place).
+    \item Element-wise multiply \vrbl{d\_signal} and \vrbl{d\_filter\_kernel}.
+        The two arrays are different sizes, and the implementation looks as though the function is called with a parameter that lets you choose what position within \vrbl{d\_signal} you want to apply the filter at.
+        \red{I'm not convinced that this is implemented correctly.}
+    \item FFT (backward) \vrbl{d\_signal} (in-place)
+    \item Shift and reduce: Add the ``rows'' of \vrbl{d\_signal} (still representing channelised data) together, making sure to shift each row by an appropriate amount (which turns out to be a multiple of 24 samples in this case).
+        The result of the reduction is stored in the last ``row'' of \vrbl{d\_signal}.
+        \red{This part of the code is currently commented out.}
+    \item The desired output is the last ``row'' of \vrbl{d\_signal}.
+\end{enumerate}
 
 \end{document}

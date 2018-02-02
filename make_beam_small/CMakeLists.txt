@@ -8,8 +8,7 @@ include_directories(${FFTW3_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_
 
 file(GLOB sources "*.c")
 add_executable(make_beam_small ${sources})
-target_link_libraries(make_beam_small ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} mwac_utils)
-
+target_link_libraries(make_beam_small ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${FFTW3_OMP_LIBRARY} ${FFTW3_LIBRARY} mwac_utils)
 
 
 #if(CUDA_FOUND)
