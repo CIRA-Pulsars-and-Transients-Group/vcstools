@@ -219,14 +219,14 @@ This is schematically represented in Fig. \ref{fig:schematic}.
     \centering
     \includegraphics[scale=0.6]{images/pfb_fig1.pdf}
     \vspace{-1cm}
-    \caption{A schematic of the data transformation that takes place under the PFB inversion algorithm.}
+    \caption{A schematic of the data transformation that takes place under the PFB inversion algorithm. On the left are the fine-channelised time samples, sampled at $10\,$kHz. On the right is a single channel, sampled at $1.28\,$MHz, in which each time sample is a weighted sum of a block of original $10\,$kHz time samples.}
     \label{fig:schematic}
 \end{figure}
 
 {\bf Each resynthesised time sample is simply a weighted sum of a block of fine channel samples}, and the pairing of samples and weights for a given output time sample is described below.
 The weights are derived from the filter coefficients that were used in the (forward) PFB.
 These filter coefficients, in their original form, are a fixed set of 1536 ($= 12 \times 128$) real numbers, shown in Fig. \ref{fig:filter_coeffs}.
-\begin{figure}[!ht]
+\begin{figure}[!b]
     \centering
     \includegraphics[scale=0.45]{images/filter_coeffs.png}
     \caption{The PFB filter coefficients, retrieved from \url{http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/Finepfb}. The vertical lines divide the coefficients up into 12 sets (or ``taps'') of 128 coefficients each.}
@@ -290,17 +290,17 @@ This works out as follows.
 Consider the $n$th output time sample.
 The column numbers of the weight matrix that are required for this sample is
 \begin{equation}
-    j_k = 128(k+1) - (n \mod 128) - 1, \quad \forall k \in \{0,1,\dots,11\}.
+    j_m = 128(m+1) - (n \mod 128) - 1, \quad \forall m \in \{0,1,\dots,11\}.
 \end{equation}
 The corresponding columns of the original time samples (i.e. \emph{without} upsampling) are
 \begin{equation}
-    j_k^\prime = \left\lfloor \frac{n - 1536}{128} \right\rfloor + (k+1), \quad \forall k \in \{0,1,\dots,11\}.
+    j_m^\prime = \left\lfloor \frac{n - 1536}{128} \right\rfloor + (m+1), \quad \forall m \in \{0,1,\dots,11\}.
 \end{equation}
 Thus, Eqn. \eqref{eqn:invertpfb} is actually implemented as
 \begin{equation}
     y_n = \begin{cases}
         0, &\qquad n < 1535, \\[5pt]
-              \sum\limits_{i=0}^{(127)} \sum\limits_{m=0}^{(12)} w_{ij_m} x_{ij_m^\prime}, &\qquad \text{otherwise,}
+              \sum\limits_{i=0}^{(127)} \sum\limits_{m=0}^{(11)} w_{ij_m} x_{ij_m^\prime}, &\qquad \text{otherwise,}
           \end{cases}
     \label{eqn:invertpfb_optimised}
 \end{equation}
