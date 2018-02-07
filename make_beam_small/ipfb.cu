@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <cuda_runtime.h>
+#include <cuComplex.h>
 
 __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *fils_real, float *fils_imag,
@@ -59,9 +60,9 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
     __syncthreads();
 }
 
-void cu_invert_pfb_ord( complex float ***detected_beam, int file_no,
+void cu_invert_pfb_ord( ComplexFloat ***detected_beam, int file_no,
                         int nsamples, int nchan, int npol,
-                        complex double **fils, int fil_size,
+                        ComplexDouble **fils, int fil_size,
                         float *data_buffer_uvdif )
 /* "Invert the PFB" by applying a resynthesis filter, using GPU
  * acceleration.

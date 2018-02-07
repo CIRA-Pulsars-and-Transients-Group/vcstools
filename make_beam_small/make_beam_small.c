@@ -28,11 +28,20 @@
 
 // Are GPU available
 
-//#ifdef HAVE_CUDA
-//#include <cuda_runtime.h>
-//#else
-//#define Complex float _Complex
-//#endif
+#ifdef HAVE_CUDA
+
+#include <cuComplex.h>
+#define  ComplexDouble  cuDoubleComplex
+#define  ComplexFloat   cuFloatComplex
+
+#include <ipfb.h>
+
+#else
+
+#define ComplexDouble  complex double
+#define ComplexFloat   complex float
+
+#endif
 
 //
 // write out psrfits directly
@@ -115,9 +124,9 @@ int main(int argc, char **argv) {
 
     // Allocate memory
     char **filenames = create_filenames( &opts );
-    complex double ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
-    complex double ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
-    complex float ***detected_beam = create_detected_beam( 2*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
+    ComplexDouble ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
+    ComplexDouble ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
+    ComplexFloat ***detected_beam = create_detected_beam( 2*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
 
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, opts.metafits);
@@ -166,7 +175,7 @@ int main(int argc, char **argv) {
     // Create structures for the PFB filter coefficients
     int ntaps    = 12;
     int fil_size = ntaps * nchan; // = 12 * 128 = 1536
-    complex double fil[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
+    ComplexDouble fil[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
     float approx_filter_scale = 1.0/120000.0;
     for (i = 0; i < fil_size; i++)
     {
@@ -174,7 +183,7 @@ int main(int argc, char **argv) {
     }
 
     // Memory for fil_ramps is allocated here:
-    complex double **fil_ramps = apply_mult_phase_ramps( fil, fil_size, nchan );
+    ComplexDouble **fil_ramps = apply_mult_phase_ramps( fil, fil_size, nchan );
 
     // Populate the relevant header structs
     if (opts.out_coh)
@@ -278,12 +287,12 @@ int main(int argc, char **argv) {
             // maintaining a circular buffer filled with the last two seconds
             int db_sample = (file_no % 2)*opts.sample_rate + sample;
 
-            complex float beam[nchan][nstation][npol];
+            ComplexFloat  beam[nchan][nstation][npol];
             float         incoh_beam[nchan][nstation][npol];
             float         detected_incoh_beam[nchan*outpol_incoh];
             float         spectrum[nchan*outpol_coh];
-            complex float noise_floor[nchan][npol][npol];
-            complex float e_true[npol], e_dash[npol];
+            ComplexFloat  noise_floor[nchan][npol][npol];
+            ComplexFloat  e_true[npol], e_dash[npol];
 
             // Initialise beam arrays to zero
             if (opts.out_coh)
@@ -829,27 +838,27 @@ void destroy_filenames( char **filenames, struct make_beam_opts *opts )
 }
 
 
-complex double ***create_complex_weights( int nstation, int nchan, int npol )
+ComplexDouble ***create_complex_weights( int nstation, int nchan, int npol )
 // Allocate memory for complex weights matrices
 {
     int ant, ch; // Loop variables
-    complex double ***array;
+    ComplexDouble ***array;
     
-    array = (complex double ***)malloc( nstation * sizeof(complex double **) );
+    array = (ComplexDouble ***)malloc( nstation * sizeof(ComplexDouble **) );
 
     for (ant = 0; ant < nstation; ant++)
     {
-        array[ant] = (complex double **)malloc( nchan * sizeof(complex double *) );
+        array[ant] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
 
         for (ch = 0; ch < nchan; ch++)
-            array[ant][ch] = (complex double *)malloc( npol * sizeof(complex double) );
+            array[ant][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
     }
 
     return array;
 }
 
 
-void destroy_complex_weights( complex double ***array, int nstation, int nchan )
+void destroy_complex_weights( ComplexDouble ***array, int nstation, int nchan )
 {
     int ant, ch;
     for (ant = 0; ant < nstation; ant++)
@@ -864,24 +873,24 @@ void destroy_complex_weights( complex double ***array, int nstation, int nchan )
 }
 
 
-complex double ****create_invJi( int nstation, int nchan, int npol )
+ComplexDouble ****create_invJi( int nstation, int nchan, int npol )
 // Allocate memory for (inverse) Jones matrices
 {
     int ant, p, ch; // Loop variables
-    complex double ****invJi;
+    ComplexDouble ****invJi;
 
-    invJi = (complex double ****)malloc( nstation * sizeof(complex double ***) );
+    invJi = (ComplexDouble ****)malloc( nstation * sizeof(ComplexDouble ***) );
 
     for (ant = 0; ant < nstation; ant++)
     {
-        invJi[ant] =(complex double ***)malloc( nchan * sizeof(complex double **) );
+        invJi[ant] =(ComplexDouble ***)malloc( nchan * sizeof(ComplexDouble **) );
 
         for (ch = 0; ch < nchan; ch++)
         {
-            invJi[ant][ch] = (complex double **)malloc( npol * sizeof(complex double *) );
+            invJi[ant][ch] = (ComplexDouble **)malloc( npol * sizeof(ComplexDouble *) );
 
             for (p = 0; p < npol; p++)
-                invJi[ant][ch][p] = (complex double *)malloc( npol * sizeof(complex double) );
+                invJi[ant][ch][p] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
         }
     }
 
@@ -889,7 +898,7 @@ complex double ****create_invJi( int nstation, int nchan, int npol )
 }
 
 
-void destroy_invJi( complex double ****array, int nstation, int nchan, int npol )
+void destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol )
 {
     int ant, ch, p;
     for (ant = 0; ant < nstation; ant++)
@@ -909,27 +918,27 @@ void destroy_invJi( complex double ****array, int nstation, int nchan, int npol 
 }
 
 
-complex float ***create_detected_beam( int nsamples, int nchan, int npol )
+ComplexFloat ***create_detected_beam( int nsamples, int nchan, int npol )
 // Allocate memory for complex weights matrices
 {
     int s, ch; // Loop variables
-    complex float ***array;
+    ComplexFloat ***array;
     
-    array = (complex float ***)malloc( nsamples * sizeof(complex float **) );
+    array = (ComplexFloat ***)malloc( nsamples * sizeof(ComplexFloat **) );
 
     for (s = 0; s < nsamples; s++)
     {
-        array[s] = (complex float **)malloc( nchan * sizeof(complex float *) );
+        array[s] = (ComplexFloat **)malloc( nchan * sizeof(ComplexFloat *) );
 
         for (ch = 0; ch < nchan; ch++)
-            array[s][ch] = (complex float *)malloc( npol * sizeof(complex float) );
+            array[s][ch] = (ComplexFloat *)malloc( npol * sizeof(ComplexFloat) );
     }
 
     return array;
 }
 
 
-void destroy_detected_beam( complex float ***array, int nsamples, int nchan )
+void destroy_detected_beam( ComplexFloat ***array, int nsamples, int nchan )
 {
     int s, ch;
     for (s = 0; s < nsamples; s++)

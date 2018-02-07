@@ -83,16 +83,4 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
                       float *data_buffer_vdif );
 
-void invert_pfb_ord( complex float ***detected_beam, int file_no,
-                      int nsamples, int nchan, int npol,
-                      complex double **fils, int fil_size,
-                      float *data_buffer_uvdif );
-
-#ifdef HAVE_CUDA
-void cu_invert_pfb_ord( complex float ***detected_beam, int file_no,
-                        int nsamples, int nchan, int npol,
-                        complex double **fils, int fil_size,
-                        float *data_buffer_uvdif );
-#endif
-
 #endif
