@@ -4,20 +4,7 @@
 #define REAL_COEFFS  0
 #define CPLX_COEFFS  1
 
-/* Define how to handle complex numbers */
-#ifdef HAVE_CUDA
-
-#include <cuComplex.h>
-#define  ComplexDouble  cuDoubleComplex
-#define  ComplexFloat   cuFloatComplex
-
-#else
-
-#include <complex.h>
-#define ComplexDouble  complex double
-#define ComplexFloat   complex float
-
-#endif
+#define "mycomplex.h"
 
 void load_filter( char *filename, int dtype, ComplexDouble *filter );
 

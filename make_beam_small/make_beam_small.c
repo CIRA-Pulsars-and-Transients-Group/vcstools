@@ -25,21 +25,14 @@
 #include "vdifio.h"
 #include "filter.h"
 #include "psrfits.h"
+#include "mycomplex.h"
 
 /* Define how to handle complex numbers */
 #ifdef HAVE_CUDA
 
-#include <cuComplex.h>
-#define  ComplexDouble  cuDoubleComplex
-#define  ComplexFloat   cuFloatComplex
-
 #include "ipfb.h"
 
 #else
-
-#include <complex.h>
-#define ComplexDouble  complex double
-#define ComplexFloat   complex float
 
 #endif
 
@@ -119,8 +112,8 @@ int main(int argc, char **argv) {
 
     // Allocate memory
     char **filenames = create_filenames( &opts );
-    ComplexDouble ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
-    ComplexDouble ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
+    ComplexFloat ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
+    ComplexFloat ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
     ComplexFloat ***detected_beam = create_detected_beam( 2*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
 
     // Read in info from metafits file
@@ -171,20 +164,15 @@ int main(int argc, char **argv) {
     int ntaps    = 12;
     int fil_size = ntaps * nchan; // = 12 * 128 = 1536
     double coeffs[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
-    ComplexDouble fil[fil_size];
-    float approx_filter_scale = 1.0/120000.0;
+    ComplexFloat fil[fil_size];
+    double approx_filter_scale = 1.0/120000.0;
     for (i = 0; i < fil_size; i++)
     {
-#ifdef HAVE_CUDA
-        fil[i].x = coeffs[i] * approx_filter_scale;
-        fil[i].y = 0.0;
-#else
-        fil[i] = coeffs[i] * approx_filter_scale;
-#endif
+        fil[i] = CMaked( coeffs[i] * approx_filter_scale, 0.0 );
     }
 
     // Memory for fil_ramps is allocated here:
-    ComplexDouble **fil_ramps = apply_mult_phase_ramps( fil, fil_size, nchan );
+    ComplexFloat **fil_ramps = apply_mult_phase_ramps( fil, fil_size, nchan );
 
     // Populate the relevant header structs
     if (opts.out_coh)
@@ -302,7 +290,7 @@ int main(int argc, char **argv) {
                 for (ch    = 0; ch    < nchan; ch++   )
                 for (opol1 = 0; opol1 < npol;  opol1++)
                 for (opol2 = 0; opol2 < npol;  opol2++)
-                    noise_floor[ch][opol1][opol2] = 0.0;
+                    noise_floor[ch][opol1][opol2] = CMakef( 0.0, 0.0 );
             }
 
             if (coherent_requested)
@@ -310,7 +298,7 @@ int main(int argc, char **argv) {
                 // Initialise detected beam to zero
                 for (ch  = 0; ch  < nchan; ch++ )
                 for (pol = 0; pol < npol ; pol++)
-                    detected_beam[db_sample][ch][pol] = 0.0 + 0.0*I;
+                    detected_beam[db_sample][ch][pol] = CMakef( 0.0, 0.0 );
             }
 
             if (opts.out_incoh)
@@ -342,7 +330,7 @@ int main(int argc, char **argv) {
                                    inc;
 
                         // Form a single complex number
-                        e_dash[pol]  = UCMPLX4_TO_CMPLX_FLT(data[data_idx]);
+                        e_dash[pol] = UCMPLX4_TO_CMPLX_FLT(data[data_idx]);
 
                         // Detect the incoherent beam, if requested
                         if (opts.out_incoh)
@@ -350,7 +338,7 @@ int main(int argc, char **argv) {
 
                         // Apply complex weights
                         if (coherent_requested)
-                            e_dash[pol] *= complex_weights_array[ant][ch][pol];
+                            e_dash[pol] = CMulf( e_dash[pol], complex_weights_array[ant][ch][pol] );
 
                     }
 
@@ -360,14 +348,14 @@ int main(int argc, char **argv) {
                     {
                         for (pol = 0; pol < npol; pol++)
                         {
-                            e_true[pol] = 0.0 + 0.0*I;
+                            e_true[pol] = CMakef( 0.0, 0.0 );
 
                             for (opol = 0; opol < npol; opol++)
-                                e_true[pol] += invJi[ant][ch][pol][opol] * e_dash[opol];
+                                e_true[pol] = CAddf( e_true[pol], CMulf( invJi[ant][ch][pol][opol], e_dash[opol] ) );
 
                             if (opts.out_coh)
                                 for (opol = 0; opol < npol; opol++)
-                                    noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
+                                    noise_floor[ch][pol][opol] = CAddf( noise_floor[ch][pol][opol], CMulf( e_true[pol], CConjf(e_true[opol]) ) );
 
                             beam[ch][ant][pol] = e_true[pol];
                         }
@@ -382,11 +370,11 @@ int main(int argc, char **argv) {
             {
                 // Coherent beam
                 if (coherent_requested)
-                    detected_beam[db_sample][ch][pol] += beam[ch][ant][pol];
+                    detected_beam[db_sample][ch][pol] = CAddf( detected_beam[db_sample][ch][pol], beam[ch][ant][pol] );
 
                 // Incoherent beam
                 if (opts.out_incoh)
-                    detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
+                    detected_incoh_beam[ch] = CAddf( detected_incoh_beam[ch], incoh_beam[ch][ant][pol] );
             }
 
             if (opts.out_coh)
@@ -839,27 +827,27 @@ void destroy_filenames( char **filenames, struct make_beam_opts *opts )
 }
 
 
-ComplexDouble ***create_complex_weights( int nstation, int nchan, int npol )
+ComplexFloat ***create_complex_weights( int nstation, int nchan, int npol )
 // Allocate memory for complex weights matrices
 {
     int ant, ch; // Loop variables
-    ComplexDouble ***array;
+    ComplexFloat ***array;
     
-    array = (ComplexDouble ***)malloc( nstation * sizeof(ComplexDouble **) );
+    array = (ComplexFloat ***)malloc( nstation * sizeof(ComplexFloat **) );
 
     for (ant = 0; ant < nstation; ant++)
     {
-        array[ant] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
+        array[ant] = (ComplexFloat **)malloc( nchan * sizeof(ComplexFloat *) );
 
         for (ch = 0; ch < nchan; ch++)
-            array[ant][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+            array[ant][ch] = (ComplexFloat *)malloc( npol * sizeof(ComplexFloat) );
     }
 
     return array;
 }
 
 
-void destroy_complex_weights( ComplexDouble ***array, int nstation, int nchan )
+void destroy_complex_weights( ComplexFloat ***array, int nstation, int nchan )
 {
     int ant, ch;
     for (ant = 0; ant < nstation; ant++)
@@ -874,24 +862,24 @@ void destroy_complex_weights( ComplexDouble ***array, int nstation, int nchan )
 }
 
 
-ComplexDouble ****create_invJi( int nstation, int nchan, int npol )
+ComplexFloat ****create_invJi( int nstation, int nchan, int npol )
 // Allocate memory for (inverse) Jones matrices
 {
     int ant, p, ch; // Loop variables
-    ComplexDouble ****invJi;
+    ComplexFloat ****invJi;
 
-    invJi = (ComplexDouble ****)malloc( nstation * sizeof(ComplexDouble ***) );
+    invJi = (ComplexFloat ****)malloc( nstation * sizeof(ComplexFloat ***) );
 
     for (ant = 0; ant < nstation; ant++)
     {
-        invJi[ant] =(ComplexDouble ***)malloc( nchan * sizeof(ComplexDouble **) );
+        invJi[ant] =(ComplexFloat ***)malloc( nchan * sizeof(ComplexFloat **) );
 
         for (ch = 0; ch < nchan; ch++)
         {
-            invJi[ant][ch] = (ComplexDouble **)malloc( npol * sizeof(ComplexDouble *) );
+            invJi[ant][ch] = (ComplexFloat **)malloc( npol * sizeof(ComplexFloat *) );
 
             for (p = 0; p < npol; p++)
-                invJi[ant][ch][p] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+                invJi[ant][ch][p] = (ComplexFloat *)malloc( npol * sizeof(ComplexFloat) );
         }
     }
 
@@ -899,7 +887,7 @@ ComplexDouble ****create_invJi( int nstation, int nchan, int npol )
 }
 
 
-void destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol )
+void destroy_invJi( ComplexFloat ****array, int nstation, int nchan, int npol )
 {
     int ant, ch, p;
     for (ant = 0; ant < nstation; ant++)

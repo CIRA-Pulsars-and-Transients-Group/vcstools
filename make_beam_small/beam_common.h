@@ -2,6 +2,7 @@
 #define BEAM_COMMON_H
 
 #include <inttypes.h>
+#include "mycomplex.h"
 
 // Calibration solution types
 #define NO_CALIBRATION  0
@@ -58,8 +59,8 @@ void get_delays(
         double                 sec_offset,
         struct delays         *delay_vals,
         struct metafits_info  *mi,
-        complex double      ***complex_weights_array,  // output
-        complex double     ****invJi                   // output
+        ComplexDouble       ***complex_weights_array,  // output
+        ComplexDouble      ****invJi                   // output
 );
 
 

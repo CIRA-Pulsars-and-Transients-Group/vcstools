@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include <complex.h>
+#include <mycomplex.h>
 #include "beam_common.h"
 #include "psrfits.h"
 
@@ -238,13 +238,12 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             }
         }
         else {
-            complex float  *data_ptr = (complex float *) data;
-            for (i=0;i<nstep;i++) {
+            int di = 0; // Index for data[]
+            for (i = 0;i<nstep;i++) {
                 for (p = 0;p<npol;p++) {
-                    for (j=0;j<nchan;j++){
+                    for (j = 0;j<nchan;j++){
 
-                        band[p][j] += cabsf(*data_ptr);
-                        data_ptr++;
+                        band[p][j] += CAbsf(data[di++]);
                     }
                 }
 
