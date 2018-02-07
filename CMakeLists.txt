@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-project (MWA_Beamformer VERSION 1.3.0)
+project(MWA_Beamformer VERSION 1.3.1)
 
 add_definitions( -DVERSION_BEAMFORMER="${PROJECT_VERSION}" )
 
@@ -17,7 +17,7 @@ find_package(PSRFITS_UTILS)
 find_package(CFITSIO)
 find_package(FFTW3 COMPONENTS single openmp)
 #find_package(Postgres)
-#find_package(CUDA)
+find_package(CUDA)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
 

@@ -410,7 +410,11 @@ int main(int argc, char **argv) {
         if (opts.out_uvdif)
         {
             printf("[%f]  Inverting the PFB (full)\n", omp_get_wtime()-begintime);
+#ifdef HAVE_CUDA
+            cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, fil_size, data_buffer_uvdif );
+#else
             invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, fil_size, data_buffer_uvdif );
+#endif
         }
 
         printf("[%f]  Writing data to file(s)\n", omp_get_wtime()-begintime);
