@@ -28,12 +28,11 @@
 
 // Are GPU available
 
-#ifdef HAVE_CUDA
-#include "gpu_utils.h"
-#include <cuda_runtime.h>
-#else
-#define Complex float _Complex
-#endif
+//#ifdef HAVE_CUDA
+//#include <cuda_runtime.h>
+//#else
+//#define Complex float _Complex
+//#endif
 
 //
 // write out psrfits directly
