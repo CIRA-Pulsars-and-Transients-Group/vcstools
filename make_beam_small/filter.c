@@ -4,20 +4,8 @@
 #include <complex.h>
 #include "filter.h"
 
-void create_filter( filter *fil, int size, int ntaps )
-{
-    fil->size  = size;
-    fil->ntaps = ntaps;
-    fil->coeffs = (complex double *)malloc( size * sizeof(complex double) );
-}
 
-
-void destroy_filter( filter *fil )
-{
-    free( fil->coeffs );
-}
-
-void load_filter( char *filename, int dtype, int ntaps, filter *fil )
+void load_filter( char *filename, int dtype, complex double *fil )
 /* This function allocates memory for, and loads into memory, the filter
  * coefficients contained in [filename]. The file is expected to be white-
  * space separated ASCII text.
@@ -28,7 +16,7 @@ void load_filter( char *filename, int dtype, int ntaps, filter *fil )
  * assumed to represent the real and imaginary parts respectively. In either
  * case, the output is cast to complex doubles.
  *
- * The memory allocated here should be freed using destroy_filter().
+ * The memory allocated here should be freed by the caller.
  */
 {
     // Check that a valid dtype was passed in
@@ -61,7 +49,18 @@ void load_filter( char *filename, int dtype, int ntaps, filter *fil )
         ncoeffs /= 2;
 
     // Allocate memory for that many coefficients
-    create_filter( fil, ncoeffs, ntaps );
+    if (fil) // != NULL
+    {
+        fprintf( stderr, "load_filter: warning: non-NULL value of filter to "
+                         "be initialised\n" );
+    }
+    fil = (complex double *)malloc( ncoeffs * sizeof(complex double) );
+    if (!fil) // i.e. fil == NULL
+    {
+        fprintf( stderr, "load_filter: error: unable to allocate memory for "
+                         "filter\n" );
+        exit(EXIT_FAILURE);
+    }
 
     // Rewind to the start of the file and read in the coefficients
     rewind(f);
@@ -77,94 +76,97 @@ void load_filter( char *filename, int dtype, int ntaps, filter *fil )
         else // dtype == CPLX_COEFFS
             fscanf( f, "%lf", &im );
 
-        fil->coeffs[i] = re + im*I;
+        fil[i] = re + im*I;
     }
 
     // Close the file
     fclose(f);
 }
 
-void upsample( complex double *x, int xsize, int ufact, complex double *y )
-/* Upsample signal x by inserting ufact-1 zeros between each element of x.
- * 
- * Inputs:
- *   complex double *x     = the input array
- *   int             xsize = the size of array x
- *   int             ufact = the upsampling factor
- *
- * Outputs:
- *   complex double *y = the output array. Must have size at least xsize*ufact.
- */
-{
-    int i, j;
-    for (i = 0; i < xsize; i++)
-    {
-        y[i*ufact] = x[i];
-        for (j = 1; j < ufact; j++)
-            y[i*ufact + j] = 0.0;
-    }
-}
 
-void apply_phase_ramp( filter *in, double slope, filter *out )
-/* Applies a phase ramp across the input filter. If in->size differs from
- * out->size, then only the first [size] elements are calculated, where
- * size is the smaller of in->size and out->size.
+void apply_phase_ramp( complex double *in, int size, double slope,
+                       complex double *out )
+/* Applies a phase ramp across the input filter. This assumes that both "in"
+ * and "out" are at least as big as "size".
  *
  * Inputs:
- *   filter *in   = an arbitrary input array
- *   double slope = the phase ramp slope, in revolutions,
- *                  i.e. unique in interval [0,1), so
- *                  slope = 0 is the same as slope = 1
+ *   complex double *in   = an arbitrary input array
+ *   int             size = the size of arrays in and out
+ *   double slope         = the phase ramp slope, in revolutions,
+ *                          i.e. unique in interval [0,1), so
+ *                          slope = 0 is the same as slope = 1
  *
  * Outputs:
- *   filter *out  = the output filter
+ *   complex double *out  = the output filter
  */
 {
-    // Get the size of the smallest filter
-    int size = (in->size < out->size ? in->size : out->size);
-
     // Calculate the phase ramp and apply it
     int i;
     for (i = 0; i < size; i++)
-        out->coeffs[i] = in->coeffs[i] * cexp( 2*M_PI*I*slope*i );
+        out[i] = in[i] * cexp( 2*M_PI*I*slope*i );
 }
 
-void apply_mult_phase_ramps( filter *in, int N, filter outs[] )
+
+complex double **apply_mult_phase_ramps( complex double *in, int size, int N )
 /* Applies multiple phase ramps to the array x. The slopes are chosen such
  * that the nth ramp has slope (n-c)/N, where c=N/2 is the central channel
  * and where the slope is given in revolutions (see apply_phase_ramp()).
  *
+ * This function allocates memory for "out", such that it has dimensions
+ *   out[N][size]
+ * This should be freed by the caller.
+ *
  * Inputs:
- *   filter *in     = an arbitrary input array
- *   int     N      = the number of ramps to apply
+ *   complex double *in   = an arbitrary input array
+ *   int             size = the size of "in"
+ *   int             N    = the number of ramps to apply
  *
  * Outputs:
- *   filter *outs[] = the output filters (there must be at least N).
+ *   complex double **out = the output filters (there must be at least N).
  */
 {
-    double slope;
+    // Allocate (2D) memory for out
+    complex double **out = (complex double **)malloc( N * sizeof(complex double *) );
     int n;
     for (n = 0; n < N; n++)
     {
-        slope = (double)(n-N/2) / (double)N;
-        apply_phase_ramp( in, slope, &(outs[n]) );
+        out[n] = (complex double *)malloc( size * sizeof(complex double) );
     }
+
+    // Make sure the memory allocation worked
+    if (!out) // i.e. out == NULL
+    {
+        fprintf( stderr, "apply_mult_phase_ramps: error: unable to allocate "
+                         "memory for \"out\" variable\n" );
+        exit(EXIT_FAILURE);
+    }
+
+    // Apply a phase ramp to each row
+    double slope;
+    for (n = 0; n < N; n++)
+    {
+        slope = (double)(n-N/2) / (double)N;
+        apply_phase_ramp( in, size, slope, out[n] );
+    }
+    return out;
 }
 
-void fir_filter_1D( filter *fil, complex double *signal, int size,
-                    complex double *res )
+
+void fir_filter_1D( complex double *fil, int fil_size, complex double *signal,
+                    int size, complex double *res )
 /* This implementation of a simple FIR filter is designed to
  * match scipy's "lfilter" function.
  *
  * Inputs:
- *   filter *fil            = the filter to be applied
- *   complex double *signal = the signal to be filtered
- *   int             size   = the size of the signal
+ *   complex double *fil       = the filter to be applied
+ *   int             fil_size  = the size of the filter
+ *   complex double *signal    = the signal to be filtered
+ *   int             size      = the size of the signal
  *
  * Outputs:
- *   complex double *res = the result of the filtering operation. It is
- *                         assumed that res points to a block of memory equal
- *                         to or bigger than signal
+ *   complex double *res       = the result of the filtering operation. It is
+ *                               assumed that res points to a block of memory
+ *                               equal to or bigger than signal
  */
 {
     int n, i, m;
@@ -175,32 +177,32 @@ void fir_filter_1D( filter *fil, complex double *signal, int size,
         res[n] = 0.0;
 
         // Sum of signal weighted by coefficients
-        for (i = 0; i < fil->size; i++)
+        for (i = 0; i < fil_size; i++)
         {
             m = n - i;
 
             if (m < 0)
                 continue;
 
-            res[n] += signal[m] * fil->coeffs[i];
+            res[n] += signal[m] * fil[i];
         }
     }
 }
+
 
 int test_fir_filter_1D()
 {
     int       test_success = 1;
     double    tol          = 1e-8;
     int       size         = 20;
+    int       fil_size     = 5;
 
     // Create a custom filter
-    filter fil;
-    create_filter( &fil, 5, 12 );
-    fil.coeffs[0] = -1.0+0.5*I;
-    fil.coeffs[1] =  3.5+0.6*I;
-    fil.coeffs[2] = -6.2-0.7*I;
-    fil.coeffs[3] =  4.2-0.8*I;
-    fil.coeffs[4] =  0.1+0.1*I;
+    complex double fil[] = { -1.0+0.5*I,
+                              3.5+0.6*I,
+                             -6.2-0.7*I,
+                              4.2-0.8*I,
+                              0.1+0.1*I };
 
     // Create a custom signal
     complex double signal[] = { -0.2792024707796282  + 0.14465327403336403*I,
@@ -250,7 +252,7 @@ int test_fir_filter_1D()
     complex double res[size];
 
     // Run the function to be tested
-    fir_filter_1D( &fil, signal, size, res );
+    fir_filter_1D( fil, fil_size, signal, size, res );
 
     // Compare the result with the known solution
     int i;
@@ -269,35 +271,9 @@ int test_fir_filter_1D()
         //fprintf( stderr, "\n" );
     }
 
-    // Free memory
-    destroy_filter( &fil );
-
     return test_success;
 }
 
-int test_upsample()
-{
-    int test_success = 1;
-
-    int ufact = 3;
-    int xsize = 5;
-    complex double x[] = { 1.0, 2.0*I, 3.0, 4.0*I, -5.0 };
-    complex double y[xsize*ufact];
-    upsample( x, xsize, ufact, y );
-
-    complex double ans[] = { 1.0,   0.0, 0.0,
-                             2.0*I, 0.0, 0.0,
-                             3.0  , 0.0, 0.0,
-                             4.0*I, 0.0, 0.0,
-                            -5.0  , 0.0, 0.0 };
-
-    int i;
-    for (i = 0; i < xsize*ufact; i++)
-        if (y[i] != ans[i])
-            test_success = 0;
-
-    return test_success;
-}
 
 void run_all_tests()
 {
@@ -309,43 +285,5 @@ void run_all_tests()
         fprintf( stderr, "FIR filter test successful\n" );
     else
         fprintf( stderr, "FIR filter test failed\n" );
-
-    // Test the upsample() function
-    successful = test_upsample();
-    if (successful)
-        fprintf( stderr, "Upsample test successful\n" );
-    else
-        fprintf( stderr, "Upsample test failed\n" );
 }
 
-/*
-void main()
-{
-    run_all_tests();
-
-    filter fil;
-    int ntaps = 12;
-    load_filter( "filter_coeffs.txt", REAL_COEFFS, ntaps, &fil );
-
-    int N = fil.size;
-    filter fil_ramps[N];
-    int n;
-    for (n = 0; n < N; n++)
-        create_filter( &fil_ramps[n], fil.size, ntaps );
-
-    apply_mult_phase_ramps( &fil, N, fil_ramps );
-
-    int i;
-    for (n = 0; n < N; n++)
-    {
-        for (i = 0; i < fil.size; i++)
-            printf( "%lf ", carg(fil_ramps[n].coeffs[i]), cimag(fil.coeffs[i]) );
-
-        printf( "\n" );
-    }
-
-    destroy_filter( &fil );
-    for (n = 0; n < N; n++)
-        destroy_filter( &fil_ramps[n] );
-}
-*/

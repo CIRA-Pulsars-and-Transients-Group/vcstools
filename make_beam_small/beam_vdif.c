@@ -418,7 +418,8 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
 
 void invert_pfb_ord( complex float ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
-                      filter fils[], float *data_buffer_uvdif )
+                      complex double **fils, int fil_size,
+                      float *data_buffer_uvdif )
 /* "Invert the PFB" by applying a resynthesis filter.
  * This function expects "detected_beam" to be structured as follows:
  *
@@ -436,8 +437,11 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
  *
  * This ordering is suited for immediate output to the VDIF format.
  *
- * Finally, fils points to an array of filter coefficients, each row of which
- * has been "rotated" with phase ramps of different amounts.
+ * Finally, fils points to a 2D array of filter coefficients, each row of
+ * which has been "rotated" with phase ramps of different amounts. It is
+ * assumed that fils has size:
+ *
+ *   fils[nchan][fil_size]
  */
 {
     // Set the output buffer to zeros
@@ -454,7 +458,6 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
     {
         //fprintf( stderr, "  Thread num: %d, s = %d\n", omp_get_thread_num(), s );
         int U        = nchan;        // upsampling factor = number of channels
-        int fil_size = fils[0].size; // All filters should have the same size
         int i0;                      // The index of the first input sample to
                                      // be included in the output sum
         int f0;                      // The index of the first filter coeffi-
@@ -492,7 +495,7 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
                 i = i0;
                 for (f = f0; f < fil_size; f += U)
                 {
-                    part = fils[ch].coeffs[(fil_size-1) - f] * detected_beam[i][ch][pol];
+                    part = fils[ch][(fil_size-1) - f] * detected_beam[i][ch][pol];
                     data_buffer_uvdif[oi  ] += creal(part);
                     data_buffer_uvdif[oi+1] += cimag(part);
 

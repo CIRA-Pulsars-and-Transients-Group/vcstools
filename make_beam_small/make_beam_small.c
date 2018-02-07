@@ -165,24 +165,17 @@ int main(int argc, char **argv) {
     struct vdifinfo uvf;
 
     // Create structures for the PFB filter coefficients
-    filter fil;
-    fil.ntaps  = FINE_PFB_FILTER_NTAPS;
-    fil.size   = FINE_PFB_FILTER_SIZE;
-    fil.coeffs = (complex double *)malloc( fil.size * sizeof(complex double) );
-
-    int coeffs[] = FINE_PFB_FILTER_COEFFS;
-    float approx_filter_scale = 120000.0;
-    for (i = 0; i < fil.size; i++)
+    int ntaps    = 12;
+    int fil_size = ntaps * nchan; // = 12 * 128 = 1536
+    complex double fil[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
+    float approx_filter_scale = 1.0/120000.0;
+    for (i = 0; i < fil_size; i++)
     {
-        fil.coeffs[i] = (complex double)coeffs[i] / approx_filter_scale;
+        fil[i] *= approx_filter_scale;
     }
 
-    filter fil_ramps[nchan];
-    int n;
-    for (n = 0; n < nchan; n++)
-        create_filter( &fil_ramps[n], fil.size, fil.ntaps );
-
-    apply_mult_phase_ramps( &fil, nchan, fil_ramps );
+    // Memory for fil_ramps is allocated here:
+    complex double **fil_ramps = apply_mult_phase_ramps( fil, fil_size, nchan );
 
     // Populate the relevant header structs
     if (opts.out_coh)
@@ -417,7 +410,7 @@ int main(int argc, char **argv) {
         if (opts.out_uvdif)
         {
             printf("[%f]  Inverting the PFB (full)\n", omp_get_wtime()-begintime);
-            invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, data_buffer_uvdif );
+            invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, fil_size, data_buffer_uvdif );
         }
 
         printf("[%f]  Writing data to file(s)\n", omp_get_wtime()-begintime);
@@ -442,9 +435,12 @@ int main(int argc, char **argv) {
     destroy_invJi( invJi, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, 2*opts.sample_rate, nchan );
 
-    destroy_filter( &fil );
-    for (n = 0; n < nchan; n++)
-        destroy_filter( &fil_ramps[n] );
+    int ch;
+    for (ch = 0; ch < nchan; ch++)
+    {
+        free( fil_ramps[ch] );
+    }
+    free( fil_ramps );
 
     destroy_metafits_info( &mi );
     free( data_buffer_coh   );
