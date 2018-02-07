@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <inttypes.h>
-#include <complex.h>
 #include <math.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -25,28 +24,24 @@
 #include "make_beam_small.h"
 #include "vdifio.h"
 #include "filter.h"
+#include "psrfits.h"
 
-// Are GPU available
-
+/* Define how to handle complex numbers */
 #ifdef HAVE_CUDA
 
 #include <cuComplex.h>
 #define  ComplexDouble  cuDoubleComplex
 #define  ComplexFloat   cuFloatComplex
 
-#include <ipfb.h>
+#include "ipfb.h"
 
 #else
 
+#include <complex.h>
 #define ComplexDouble  complex double
 #define ComplexFloat   complex float
 
 #endif
-
-//
-// write out psrfits directly
-#include "psrfits.h"
-#include "antenna_mapping.h"
 
 int main(int argc, char **argv) {
 
@@ -175,11 +170,17 @@ int main(int argc, char **argv) {
     // Create structures for the PFB filter coefficients
     int ntaps    = 12;
     int fil_size = ntaps * nchan; // = 12 * 128 = 1536
-    ComplexDouble fil[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
+    double coeffs[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
+    ComplexDouble fil[fil_size];
     float approx_filter_scale = 1.0/120000.0;
     for (i = 0; i < fil_size; i++)
     {
-        fil[i] *= approx_filter_scale;
+#ifdef HAVE_CUDA
+        fil[i].x = coeffs[i] * approx_filter_scale;
+        fil[i].y = 0.0;
+#else
+        fil[i] = coeffs[i] * approx_filter_scale;
+#endif
     }
 
     // Memory for fil_ramps is allocated here:

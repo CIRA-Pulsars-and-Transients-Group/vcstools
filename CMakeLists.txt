@@ -29,7 +29,6 @@ add_subdirectory(make_psrfits)
 #add_subdirectory(gpu_utils)    
 #add_subdirectory(make_beam)
 add_subdirectory(make_beam_small)
-#add_subdirectory(tests)
 
 INCLUDE(InstallRequiredSystemLibraries)
 

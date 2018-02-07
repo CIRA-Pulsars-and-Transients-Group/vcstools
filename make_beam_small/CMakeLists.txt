@@ -4,14 +4,21 @@ cmake_policy(SET CMP0048 NEW)
 
 project (make_beam_small LANGUAGES C CUDA)
 
-include_directories(${FFTW3_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIR} ${PROJECT_SOURCE_DIR}/../mwac_utils)
-
-file(GLOB sources "*.c" "*.cu")
-add_executable(make_beam_small ${sources})
-target_link_libraries(make_beam_small ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${FFTW3_OMP_LIBRARY} ${FFTW3_LIBRARY} mwac_utils)
-
 if(CUDA_FOUND)
+
+    include_directories(${FFTW3_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIR} ${PROJECT_SOURCE_DIR}/../mwac_utils ${CUDA_INCLUDE_DIRS})
+    file(GLOB sources "*.c" "*.cu")
+    add_executable(make_beam_small ${sources})
+    target_link_libraries(make_beam_small ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${FFTW3_OMP_LIBRARY} ${FFTW3_LIBRARY} mwac_utils)
     set_target_properties(make_beam_small PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DHAVE_CUDA")
+
+else ()
+
+    include_directories(${FFTW3_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIR} ${PROJECT_SOURCE_DIR}/../mwac_utils)
+    file(GLOB sources "*.c")
+    add_executable(make_beam_small ${sources})
+    target_link_libraries(make_beam_small ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${FFTW3_OMP_LIBRARY} ${FFTW3_LIBRARY} mwac_utils)
+
 endif(CUDA_FOUND)    
 
 #if(CUDA_FOUND)

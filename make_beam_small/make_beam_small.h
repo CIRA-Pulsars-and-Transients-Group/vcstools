@@ -2,8 +2,23 @@
 #define MAKE_BEAM_SMALL_H
 
 #include <stdlib.h>
-#include <complex.h>
 #include "beam_common.h"
+
+/* Define how to handle complex numbers */
+#ifdef HAVE_CUDA
+
+#include <cuComplex.h>
+#define  ComplexDouble  cuDoubleComplex
+#define  ComplexFloat   cuFloatComplex
+
+#else
+
+#include <complex.h>
+#define ComplexDouble  complex double
+#define ComplexFloat   complex float
+
+#endif
+
 
 #define MAX_COMMAND_LENGTH 1024
 
@@ -49,14 +64,14 @@ void make_beam_parse_cmdline( int argc, char **argv, struct make_beam_opts *opts
 char **create_filenames( struct make_beam_opts *opts );
 void  destroy_filenames( char **filenames, struct make_beam_opts *opts );
 
-complex double ***create_complex_weights( int nstation, int nchan, int npol );
-void             destroy_complex_weights( complex double ***array, int nstation, int nchan );
+ComplexDouble ***create_complex_weights( int nstation, int nchan, int npol );
+void             destroy_complex_weights( ComplexDouble ***array, int nstation, int nchan );
 
-complex double ****create_invJi( int nstation, int nchan, int pol );
-void              destroy_invJi( complex double ****array, int nstation, int nchan, int npol );
+ComplexDouble ****create_invJi( int nstation, int nchan, int pol );
+void              destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol );
 
-complex float ***create_detected_beam( int nsamples, int nchan, int npol );
-void            destroy_detected_beam( complex float ***array, int nsamples, int nchan );
+ComplexFloat ***create_detected_beam( int nsamples, int nchan, int npol );
+void            destroy_detected_beam( ComplexFloat ***array, int nsamples, int nchan );
 
 float *create_data_buffer_psrfits( size_t size );
 float *create_data_buffer_vdif( struct vdifinfo *vf );

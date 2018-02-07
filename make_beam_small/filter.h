@@ -4,22 +4,31 @@
 #define REAL_COEFFS  0
 #define CPLX_COEFFS  1
 
+/* Define how to handle complex numbers */
+#ifdef HAVE_CUDA
+
+#include <cuComplex.h>
+#define  ComplexDouble  cuDoubleComplex
+#define  ComplexFloat   cuFloatComplex
+
+#else
+
 #include <complex.h>
+#define ComplexDouble  complex double
+#define ComplexFloat   complex float
 
-void load_filter( char *filename, int dtype, complex double *filter );
+#endif
 
-void apply_phase_ramp( complex double *in, int size, double slope,
-                       complex double *out );
+void load_filter( char *filename, int dtype, ComplexDouble *filter );
 
-complex double **apply_mult_phase_ramps( complex double *in,
+void apply_phase_ramp( ComplexDouble *in, int size, double slope,
+                       ComplexDouble *out );
+
+ComplexDouble **apply_mult_phase_ramps( ComplexDouble *in,
                                          int size, int N );
 
-void fir_filter_1D( complex double *fil, int fil_size, complex double *signal,
-                    int size, complex double *res );
-
-int test_fir_filter_1D();
-
-void run_all_tests();
+void fir_filter_1D( ComplexDouble *fil, int fil_size, ComplexDouble *signal,
+                    int size, ComplexDouble *res );
 
 #define FINE_PFB_FILTER_SIZE    1536
 #define FINE_PFB_FILTER_COEFFS  { \
@@ -214,6 +223,6 @@ void run_all_tests();
     -18, -16, -15, -13, -12, -11, -10, -9, \
     -8, -7, -6, -5, -4, -4, -3, -3, \
     -2, -2, -1, -1, -1, -1, 0, 0, \
-    0, 0, 0, 0, 0, 0, 0, 0, }
+    0, 0, 0, 0, 0, 0, 0, 0 }
 
 #endif
