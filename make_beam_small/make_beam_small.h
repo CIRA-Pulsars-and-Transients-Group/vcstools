@@ -11,9 +11,9 @@
 #define REAL_NIBBLE_TO_UINT8(X)  ((X) & 0xf)
 #define IMAG_NIBBLE_TO_UINT8(X)  (((X) >> 4) & 0xf)
 #define UINT8_TO_INT(X)          ((X) >= 0x8 ? (signed int)(X) - 0x10 : (signed int)(X))
-#define UCMPLX4_TO_CMPLX_FLT(X)  (CMakef((float)(UINT8_TO_INT(REAL_NIBBLE_TO_UINT8(X))), \
+#define UCMPLX4_TO_CMPLX_FLT(X)  (CMaked((float)(UINT8_TO_INT(REAL_NIBBLE_TO_UINT8(X))), \
                                          (float)(UINT8_TO_INT(IMAG_NIBBLE_TO_UINT8(X)))))
-#define DETECT(X)                (CRealf((X)*CConjf(X)))
+#define DETECT(X)                (CReald(CMuld(X,CConjd(X))))
 
 struct make_beam_opts {
     // Variables for required options

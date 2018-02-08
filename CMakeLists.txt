@@ -19,6 +19,10 @@ find_package(FFTW3 COMPONENTS single openmp)
 #find_package(Postgres)
 find_package(CUDA)
 
+if (CUDA_FOUND)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_35")
+endif()
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
 
 add_subdirectory(mwac_utils)

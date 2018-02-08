@@ -3,7 +3,6 @@
 #include <string.h>
 #include <math.h>
 #include <fftw3.h>
-#include <omp.h>
 #include "vdifio.h"
 #include "psrfits.h"
 #include "slamac.h"
@@ -15,6 +14,9 @@
 #include "filter.h"
 #include "mycomplex.h"
 
+#ifndef HAVE_CUDA
+#include <omp.h>
+#endif
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         float *data_buffer_vdif, float *gain )
@@ -33,7 +35,9 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
             (ComplexDouble *)data_buffer_vdif,
             vf->sizeof_buffer/2.0 );
 
-    //if (fabsf(rmean) > 0.001) {
+    //if (fabsf(rmean) > 0.001)
+    if (1)
+    {
         printf( "warning: vdif_write_second: significantly "
                 "non-zero mean (%f), adjusting data\n", rmean );
         unsigned int i;
@@ -42,7 +46,7 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
             data_buffer_vdif[2*i+0] -= CReald(cmean);
             data_buffer_vdif[2*i+1] -= CImagd(cmean);
         }
-    //}
+    }
 
     vf->b_scales[0] = CReald(stddev);
     vf->b_scales[1] = CReald(stddev);
@@ -239,11 +243,19 @@ void set_level_occupancy(ComplexDouble *input, int nsamples, float *new_gain)
     while (percentage_clipped > 0 && percentage_clipped > limit) {
         int count = 0;
         int clipped = 0;
-        for (i=0;i<nsamples;i++) {
-            if (gain*CReald(input[i]) >= 0 && gain*CReald(input[i]) < 64) {
+        for (i = 0; i < nsamples; i++) {
+            if (isnan(CReald(input[i])) || isnan(CImagd(input[i])))
+            {
+                fprintf( stderr, "error: set_level_occupancy: input[%d] = "
+                                 "NaN\n", i );
+                exit(EXIT_FAILURE);
+            }
+            if (gain*CReald(input[i]) >= 0 && gain*CReald(input[i]) < 64)
+            {
                 count++;
             }
-            if (fabs(gain*CReald(input[i])) > 127) {
+            if (fabs(gain*CReald(input[i])) > 127)
+            {
                 clipped++;
             }
         }
@@ -415,8 +427,6 @@ void invert_pfb_ifft( ComplexDouble ***detected_beam, int file_no,
     fftwf_destroy_plan( p );
 }
 
-#endif
-
 void invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
                       ComplexDouble **fils, int fil_size,
@@ -515,3 +525,4 @@ void invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     } // Loop over samples
 }
 
+#endif

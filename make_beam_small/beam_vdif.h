@@ -83,6 +83,11 @@ void to_offset_binary( int8_t *i, int n );
 void invert_pfb_ifft( ComplexDouble ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
                       float *data_buffer_vdif );
+
+void invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
+                      int nsamples, int nchan, int npol,
+                      ComplexDouble **fils, int fil_size,
+                      float *data_buffer_uvdif )
 #endif
 
 #endif

@@ -1,7 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <cuda_runtime.h>
-#include <cuComplex.h>
+
+extern "C" {
+#include "mycomplex.h"
+}
 
 __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *fils_real, float *fils_imag,
@@ -17,7 +20,7 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
              blockIdx.z;
 
     // Calculate the "out" index
-    int o_real = 2 * i;
+    int o_real = 2 * i0;
     int o_imag = o_real + 1;
 
     // Calculate the "fils" first column index
@@ -30,7 +33,6 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
     // Multiply the filter with the in data and sum
     int tap, ch;
     int i, f;
-    float tmp;
     for (tap = 0; tap < ntaps; tap++)
     {
         for (ch = 0; ch < blockDim.y; ch++)
@@ -46,10 +48,10 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
                 f0;
 
             // Complex multiplication
-            out[o_real] += in_real[i] * fils_real[i] -
-                           in_imag[i] * fils_imag[i];
-            out[o_imag] += in_real[i] * fils_imag[i] +
-                           in_imag[i] * fils_real[i];
+            out[o_real] += in_real[i] * fils_real[f] -
+                           in_imag[i] * fils_imag[f];
+            out[o_imag] += in_real[i] * fils_imag[f] +
+                           in_imag[i] * fils_real[f];
         }
     }
 
@@ -60,7 +62,8 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
     __syncthreads();
 }
 
-void cu_invert_pfb_ord( ComplexFloat ***detected_beam, int file_no,
+extern "C"
+void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
                         int nsamples, int nchan, int npol,
                         ComplexDouble **fils, int fil_size,
                         float *data_buffer_uvdif )
@@ -129,7 +132,6 @@ void cu_invert_pfb_ord( ComplexFloat ***detected_beam, int file_no,
     int start_s = (file_no % 2 == 0 ? 2*nsamples-ntaps : nsamples-ntaps);
 
     int s_in;
-#pragma omp parallel for
     for (s_in = 0; s_in < nsamples + ntaps; s_in++)
     {
         int s, ch, pol, i;
@@ -142,21 +144,20 @@ void cu_invert_pfb_ord( ComplexFloat ***detected_beam, int file_no,
                 i = npol*nchan*s_in + npol*ch + pol;
 
                 // Copy the data across
-                in_real[i] = creal( detected_beam[s][ch][pol] );
-                in_imag[i] = cimag( detected_beam[s][ch][pol] );
+                in_real[i] = CReald( detected_beam[s][ch][pol] );
+                in_imag[i] = CImagd( detected_beam[s][ch][pol] );
             }
         }
     }
 
     // Setup filter values:
     int ch, f, i;
-#pragma omp parallel for
     for (ch = 0; ch < nchan; ch++)
     for (f = 0; f < fil_size; f++)
     {
         i = fil_size*ch + f;
-        fils_real[i] = creal( fils[ch][f] );
-        fils_imag[i] = cimag( fils[ch][f] );
+        fils_real[i] = CReald( fils[ch][f] );
+        fils_imag[i] = CImagd( fils[ch][f] );
     }
 
     // Copy the data to the device

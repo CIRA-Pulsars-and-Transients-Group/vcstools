@@ -13,7 +13,6 @@
 #include "slamac.h"
 #include "ascii_header.h"
 #include "mwa_header.h"
-#include <omp.h>
 #include <glob.h>
 #include <fcntl.h>
 #include <assert.h>
@@ -26,20 +25,25 @@
 #include "psrfits.h"
 #include "mycomplex.h"
 
-/* Define how to handle complex numbers */
 #ifdef HAVE_CUDA
 
 #include "ipfb.h"
+#define NOW  ((double)clock()/(double)CLOCKS_PER_SEC)
 
 #else
 
+#include <omp.h>
+#define NOW  (omp_get_wtime())
+
 #endif
 
-int main(int argc, char **argv) {
-
+int main(int argc, char **argv)
+{
+#ifndef HAVE_CUDA
     // Initialise FFTW with OpenMP
     fftw_init_threads();
     fftw_plan_with_nthreads( omp_get_max_threads() );
+#endif
 
     // A place to hold the beamformer settings
     struct make_beam_opts opts;
@@ -99,8 +103,12 @@ int main(int argc, char **argv) {
     float ugain = 1.0; // This is re-calculated every second for the VDIF output
 
     // Start counting time from here (i.e. after parsing the command line)
-    double begintime = omp_get_wtime();
-    printf("[%f]  Starting %s with %d possible OpenMP threads\n", omp_get_wtime()-begintime, argv[0], omp_get_max_threads());
+    double begintime = NOW;
+#ifdef HAVE_CUDA
+    printf("[%f]  Starting %s with GPU acceleration\n", NOW-begintime, argv[0] );
+#else
+    printf("[%f]  Starting %s with %d possible OpenMP threads\n", NOW-begintime, argv[0], omp_get_max_threads());
+#endif
 
     // Calculate the number of files
     int nfiles = opts.end - opts.begin + 1;
@@ -116,7 +124,7 @@ int main(int argc, char **argv) {
     ComplexDouble ***detected_beam = create_detected_beam( 2*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
 
     // Read in info from metafits file
-    printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, opts.metafits);
+    printf("[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
     struct metafits_info mi;
     get_metafits_info( opts.metafits, &mi, opts.chan_width );
 
@@ -135,7 +143,7 @@ int main(int argc, char **argv) {
     double invw = 1.0/wgt_sum;
 
     // Run get_delays to populate the delay_vals struct
-    printf("[%f]  Setting up output header information\n", omp_get_wtime()-begintime);
+    printf("[%f]  Setting up output header information\n", NOW-begintime);
     struct delays delay_vals;
     get_delays(
             opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
@@ -230,16 +238,16 @@ int main(int argc, char **argv) {
     int file_no = 0;
     int sample;
 
-    printf("[%f]  **BEGINNING BEAMFORMING**\n", omp_get_wtime()-begintime);
+    printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
     for (file_no = 0; file_no < nfiles; file_no++) {
 
         // Read in data from next file
-        printf("[%f]  Reading in data from %s [%d/%d]\n", omp_get_wtime()-begintime,
+        printf("[%f]  Reading in data from %s [%d/%d]\n", NOW-begintime,
                 filenames[file_no], file_no+1, nfiles);
         read_data( filenames[file_no], data, bytes_per_file  );
 
         // Get the next second's worth of phases / jones matrices, if needed
-        printf("[%f]  Calculating delays\n", omp_get_wtime()-begintime);
+        printf("[%f]  Calculating delays\n", NOW-begintime);
         get_delays(
                 opts.dec_ddmmss,        // dec as a string "dd:mm:ss"
                 opts.ra_hhmmss,         // ra  as a string "hh:mm:ss"
@@ -253,7 +261,7 @@ int main(int argc, char **argv) {
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );                // invJi array           (answer will be output here)
 
-        printf("[%f]  Calculating beam\n", omp_get_wtime()-begintime);
+        printf("[%f]  Calculating beam\n", NOW-begintime);
 
         if (opts.out_coh)
             for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
@@ -263,7 +271,9 @@ int main(int argc, char **argv) {
             for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
                 data_buffer_incoh[i] = 0.0;
 
+#ifndef HAVE_CUDA
 #pragma omp parallel for
+#endif
         for (sample = 0; sample < (int)opts.sample_rate; sample++ ) {
 
             int ch, ant, pol, opol, opol1, opol2;
@@ -373,7 +383,7 @@ int main(int argc, char **argv) {
 
                 // Incoherent beam
                 if (opts.out_incoh)
-                    detected_incoh_beam[ch] = CAddd( detected_incoh_beam[ch], incoh_beam[ch][ant][pol] );
+                    detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
             }
 
             if (opts.out_coh)
@@ -399,7 +409,7 @@ int main(int argc, char **argv) {
         // Invert the PFB, if requested
         if (opts.out_vdif)
         {
-            printf("[%f]  Inverting the PFB (IFFT)\n", omp_get_wtime()-begintime);
+            printf("[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
 #ifndef HAVE_CUDA
             invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan, npol, data_buffer_vdif );
 #endif
@@ -407,7 +417,7 @@ int main(int argc, char **argv) {
 
         if (opts.out_uvdif)
         {
-            printf("[%f]  Inverting the PFB (full)\n", omp_get_wtime()-begintime);
+            printf("[%f]  Inverting the PFB (full)\n", NOW-begintime);
 #ifdef HAVE_CUDA
             cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, fil_size, data_buffer_uvdif );
 #else
@@ -415,7 +425,7 @@ int main(int argc, char **argv) {
 #endif
         }
 
-        printf("[%f]  Writing data to file(s)\n", omp_get_wtime()-begintime);
+        printf("[%f]  Writing data to file(s)\n", NOW-begintime);
 
         if (opts.out_coh)
             psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );
@@ -428,8 +438,8 @@ int main(int argc, char **argv) {
 
     }
 
-    printf("[%f]  **FINISHED BEAMFORMING**\n", omp_get_wtime()-begintime);
-    printf("[%f]  Starting clean-up\n", omp_get_wtime()-begintime);
+    printf("[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
+    printf("[%f]  Starting clean-up\n", NOW-begintime);
 
     // Free up memory
     destroy_filenames( filenames, &opts );
@@ -487,8 +497,10 @@ int main(int argc, char **argv) {
         free( uvf.b_offsets );
     }
 
+#ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
     fftw_cleanup_threads();
+#endif
 
     return 0;
 }
