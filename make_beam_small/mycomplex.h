@@ -37,27 +37,39 @@
 #define  CExpd(X)       (CMaked(expf(CReald(X))*cos(Cimagd(X)), \
                                 expf(CReald(X))*sin(Cimagd(X))))
 
+#define  CSclf(X,F)     (CMakef(F*CRealf(X),F*CImagf(X)))
+#define  CScld(X,F)     (CMaked(F*CReald(X),F*CImagd(X)))
+
+#define  CRcpf(X)       (CSclf(CConjf(X),1.0/(CRealf(X)*CRealf(X) + CImagf(X)*CImagf(X))))
+#define  CRcpd(X)       (CScld(CConjd(X),1.0/(CReald(X)*CReald(X) + CImagd(X)*CImagd(X))))
+
+#define  CNegf(X)       (CSclf((X),-1.0))
+#define  CNegd(X)       (CScld((X),-1.0))
+
+#define  CD2F(X)        (CMakef((float)CReald(X),(float)CImagd(X)))
+#define  CF2D(X)        (CMaked((double)CRealf(X),(double)CImagf(X)))
+
 #else
 
 #include <complex.h>
 #define ComplexDouble  complex double
 #define ComplexFloat   complex float
 
-#define  CMakef(X,Y)    (X+Y*I)
-#define  CMaked(X,Y)    (X+Y*I)
+#define  CMakef(X,Y)    ((X)+(Y)*I)
+#define  CMaked(X,Y)    ((X)+(Y)*I)
 
-#define  CAddf(X,Y)     (X+Y)
-#define  CSubf(X,Y)     (X-Y)
-#define  CMulf(X,Y)     (X*Y)
-#define  CDivf(X,Y)     (X/Y)
+#define  CAddf(X,Y)     ((X)+(Y))
+#define  CSubf(X,Y)     ((X)-(Y))
+#define  CMulf(X,Y)     ((X)*(Y))
+#define  CDivf(X,Y)     ((X)/(Y))
 
 #define  CRealf(X)      (crealf(X))
 #define  CImagf(X)      (cimagf(X))
 
-#define  CAddd(X,Y)     (X+Y)
-#define  CSubd(X,Y)     (X-Y)
-#define  CMuld(X,Y)     (X*Y)
-#define  CDivd(X,Y)     (X/Y)
+#define  CAddd(X,Y)     ((X)+(Y))
+#define  CSubd(X,Y)     ((X)-(Y))
+#define  CMuld(X,Y)     ((X)*(Y))
+#define  CDivd(X,Y)     ((X)/(Y))
 
 #define  CReald(X)      (creal(X))
 #define  CImagd(X)      (cimag(X))
@@ -71,8 +83,19 @@
 #define  CExpf(X)       (cexpf(X))
 #define  CExpd(X)       (cexp(X))
 
-#endif
+#define  CSclf(X,F)     ((F)*(X))
+#define  CScld(X,F)     ((F)*(X))
 
+#define  CRcpf(X)       (1.0/(X))
+#define  CRcpd(X)       (1.0/(X))
+
+#define  CNegf(X)       (-(X))
+#define  CNegd(X)       (-(X))
+
+#define  CD2F(X)        ((ComplexFloat)(X))
+#define  CF2D(X)        ((ComplexDouble)(X))
+
+#endif
 
 
 

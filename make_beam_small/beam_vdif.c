@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <complex.h>
 #include <fftw3.h>
 #include <omp.h>
 #include "vdifio.h"
@@ -15,6 +14,7 @@
 #include "vdifio.h"
 #include "ascii_header.h"
 #include "filter.h"
+#include "mycomplex.h"
 
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
@@ -23,15 +23,15 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     // Set level occupancy
     float rmean, imean;
-    complex float cmean, stddev;
+    ComplexFloat cmean, stddev;
 
     get_mean_complex(
-            (complex float *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
             &rmean, &imean, &cmean );
 
     stddev = get_std_dev_complex(
-            (complex float *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0 );
 
     //if (fabsf(rmean) > 0.001) {
@@ -40,8 +40,8 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         unsigned int i;
         for (i = 0; i < vf->sizeof_buffer/2; i++)
         {
-            data_buffer_vdif[2*i+0] -= creal(cmean);
-            data_buffer_vdif[2*i+1] -= cimag(cmean);
+            data_buffer_vdif[2*i+0] -= CRealf(cmean);
+            data_buffer_vdif[2*i+1] -= CImagf(cmean);
         }
     //}
 
@@ -50,12 +50,12 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     vf->got_scales = 1;
     set_level_occupancy(
-            (complex float *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0, gain);
 
     // Normalise
     normalise_complex(
-            (complex float *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
             1.0/(*gain) );
 
@@ -207,7 +207,7 @@ void populate_vdif_header(
 }
 
 
-complex float get_std_dev_complex(complex float *input, int nsamples)
+ComplexFloat get_std_dev_complex(ComplexFloat *input, int nsamples)
 {
     // assume zero mean
     float rtotal = 0;
@@ -217,17 +217,17 @@ complex float get_std_dev_complex(complex float *input, int nsamples)
     int i;
 
     for (i=0;i<nsamples;i++){
-         rtotal = rtotal+(crealf(input[i])*crealf(input[i]));
-         itotal = itotal+(cimagf(input[i])*cimagf(input[i]));
+         rtotal = rtotal+(CRealf(input[i])*CRealf(input[i]));
+         itotal = itotal+(CImagf(input[i])*CImagf(input[i]));
 
      }
     rsigma = sqrtf((1.0/(nsamples-1))*rtotal);
     isigma = sqrtf((1.0/(nsamples-1))*itotal);
 
-    return rsigma+I*isigma;
+    return CMakef( rsigma, isigma );
 }
 
-void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
+void set_level_occupancy(ComplexFloat *input, int nsamples, float *new_gain)
 {
     //float percentage = 0.0;
     //float occupancy = 17.0;
@@ -241,10 +241,10 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
         int count = 0;
         int clipped = 0;
         for (i=0;i<nsamples;i++) {
-            if (gain*creal(input[i]) >= 0 && gain*creal(input[i]) < 64) {
+            if (gain*CRealf(input[i]) >= 0 && gain*CRealf(input[i]) < 64) {
                 count++;
             }
-            if (fabs(gain*creal(input[i])) > 127) {
+            if (fabs(gain*CRealf(input[i])) > 127) {
                 clipped++;
             }
         }
@@ -264,17 +264,17 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
 }
 
 
-void get_mean_complex(complex float *input, int nsamples, float *rmean,float *imean, complex float *cmean)
+void get_mean_complex(ComplexFloat *input, int nsamples, float *rmean,float *imean, ComplexFloat *cmean)
 {
 
     int i=0;
     float rtotal = 0;
     float itotal = 0 ;
-    complex float ctotal = 0 + I*0.0;
+    ComplexFloat ctotal = CMakef( 0.0, 0.0 );
     for (i=0;i<nsamples;i++){
-        rtotal = rtotal+crealf(input[i]);
-        itotal = itotal+cimagf(input[i]);
-        ctotal = ctotal + input[i];
+        rtotal += CRealf(input[i]);
+        itotal += CImagf(input[i]);
+        ctotal  = CAddf( ctotal, input[i] );
     }
     *rmean=rtotal/nsamples;
     *imean=itotal/nsamples;

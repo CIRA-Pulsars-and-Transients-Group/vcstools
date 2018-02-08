@@ -85,4 +85,12 @@ void flatten_bandpass(
 
 void read_data( char *filename, uint8_t *data, int nbytes );
 
+/**** MATRIX OPERATIONS ****/
+
+void cp2x2(ComplexDouble *Min, ComplexDouble *Mout);
+void inv2x2(ComplexDouble *Min, ComplexDouble *Mout);
+void inv2x2S(ComplexDouble *Min, ComplexDouble **Mout);
+void mult2x2d(ComplexDouble *M1, ComplexDouble *M2, ComplexDouble *Mout);
+void conj2x2(ComplexDouble *M, ComplexDouble *Mout)
+
 #endif

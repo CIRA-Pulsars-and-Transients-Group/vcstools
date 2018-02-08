@@ -4,7 +4,6 @@
 #include <time.h>
 #include <math.h>
 #include "mycomplex.h"
-#include "mwac_utils.h"
 #include "slalib.h"
 #include "slamac.h"
 #include "psrfits.h"
@@ -350,11 +349,11 @@ void get_delays(
             mult2x2d(Gf, E, Ji); // the gain in the desired look direction
 
             // this automatically spots an RTS flagged tile
-            if (fabs(cimag(Ji[0])) < 0.0000001) {  // THIS TEST CAN PROBABLY BE IMPROVED
-                Ji[0] = 0.0 + I*0;
-                Ji[1] = 0.0 + I*0;
-                Ji[2] = 0.0 + I*0;
-                Ji[3] = 0.0 + I*0;
+            if (fabs(CImagd(Ji[0])) < 0.0000001) {  // THIS TEST CAN PROBABLY BE IMPROVED
+                Ji[0] = CMaked( 0.0, 0.0 );
+                Ji[1] = CMaked( 0.0, 0.0 );
+                Ji[2] = CMaked( 0.0, 0.0 );
+                Ji[3] = CMaked( 0.0, 0.0 );
             }
 
             // Calculate the complex weights array
@@ -394,11 +393,12 @@ void get_delays(
                     phase = phase*2*M_PI*conjugate;
 
                     // Store result for later use
-                    complex_weights_array[ant][ch][pol] = mi->weights_array[row]*cexp(I*phase);
+                    complex_weights_array[ant][ch][pol] =
+                        CMulf( mi->weights_array[row], CExpf( CMakef( 0.0, phase ) ) );
 
                 }
                 else {
-                    complex_weights_array[ant][ch][pol] = mi->weights_array[row]; // i.e. =0.0
+                    complex_weights_array[ant][ch][pol] = CMakef( mi->weights_array[row], 0.0 ); // i.e. = 0.0
                 }
             }
 
@@ -416,7 +416,7 @@ void get_delays(
                     else {
                         for (p1 = 0; p1 < NPOL;  p1++)
                         for (p2 = 0; p2 < NPOL;  p2++)
-                            invJi[ant][ch][p1][p2] = 0.0 + I*0.0;
+                            invJi[ant][ch][p1][p2] = CMakef( 0.0, 0.0 );
                     }
                 }
             }
@@ -473,10 +473,10 @@ int calcEjones(ComplexFloat response[MAX_POLS], // pointer to 4-element (2x2) vo
     
     const int scaling = 1; /* 0 -> no scaling; 1 -> scale to unity toward zenith; 2 -> scale to unity in look-dir */
     
-    response[0] = 0.0;
-    response[1] = 0.0;
-    response[2] = 0.0;
-    response[3] = 0.0;
+    response[0] = CMaked( 0.0, 0.0 );
+    response[1] = CMaked( 0.0, 0.0 );
+    response[2] = CMaked( 0.0, 0.0 );
+    response[3] = CMaked( 0.0, 0.0 );
     
     sza = sin(za);
     cza = cos(za);
@@ -498,7 +498,7 @@ int calcEjones(ComplexFloat response[MAX_POLS], // pointer to 4-element (2x2) vo
     n_cols = 4;
     n_rows = 4;
     
-    multiplier = R2C_SIGN * I * radperm;
+    multiplier = CMakef( 0.0, R2C_SIGN * radperm );
     
     /* loop over dipoles */
     for (i = 0; i < n_cols; i++) {
@@ -506,17 +506,17 @@ int calcEjones(ComplexFloat response[MAX_POLS], // pointer to 4-element (2x2) vo
             dipl_e = (i + 1 - 2.5) * dpl_sep;
             dipl_n = (j + 1 - 2.5) * dpl_sep;
             dipl_z = 0.0;
-            PhaseShift = cexp(
-                              multiplier
-                              * (dipl_e * (proj_e - proj0_e)
+            PhaseShift = CCexpf( CCMulf( 
+                              multiplier,
+                                  (dipl_e * (proj_e - proj0_e)
                                  + dipl_n * (proj_n - proj0_n)
-                                 + dipl_z * (proj_z - proj0_z)));
+                                 + dipl_z * (proj_z - proj0_z)) ) );
             // sum for p receptors
-            response[0] += PhaseShift;
-            response[1] += PhaseShift;
+            response[0] = CAddd( response[0], CF2D(PhaseShift) );
+            response[1] = CAddd( response[1], CF2D(PhaseShift) );
             // sum for q receptors
-            response[2] += PhaseShift;
-            response[3] += PhaseShift;
+            response[2] = CAddd( response[2], CF2D(PhaseShift) );
+            response[3] = CAddd( response[3], CF2D(PhaseShift) );
         }
     }
     // assuming that the beam centre is normal to the ground plane, the separation should be used instead of the za.
@@ -546,10 +546,8 @@ int calcEjones(ComplexFloat response[MAX_POLS], // pointer to 4-element (2x2) vo
     
     //fprintf(stdout,"calib:HA is %f hours \n",ha*DR2H);
     // rot is the Jones matrix, response just contains the phases, so this should be an element-wise multiplication.
-    response[0] *= rot[0] * ground_plane;
-    response[1] *= rot[1] * ground_plane;
-    response[2] *= rot[2] * ground_plane;
-    response[3] *= rot[3] * ground_plane;
+    for (i = 0; i < 4; i++)
+        response[i] = CSclf( response[i], rot[i] * ground_plane );
     //fprintf(stdout,"calib:HA is %f groundplane factor is %f\n",ha*DR2H,ground_plane);
     return (result);
     

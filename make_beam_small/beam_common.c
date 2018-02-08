@@ -382,3 +382,94 @@ void float2int8_trunc(float *f, int n, float min, float max, int8_t *i)
     }
 }
 
+
+void cp2x2(ComplexDouble *Min, ComplexDouble *Mout)
+{
+    Mout[0] = Min[0];
+    Mout[1] = Min[1];
+    Mout[2] = Min[2];
+    Mout[3] = Min[3];
+}
+
+
+void inv2x2(ComplexDouble *Min, ComplexDouble *Mout)
+{
+    ComplexDouble m1 = CMuld( Min[0], Min[3] );
+    ComplexDouble m2 = CMuld( Min[1], Min[2] );
+    ComplexDouble det = CSubd( m1, m2 );
+    ComplexDouble inv_det = CRcpd( det );
+    Mout[0] = CMuld(       inv_det,  Min[3] );
+    Mout[1] = CMuld( CNegd(inv_det), Min[1] );
+    Mout[2] = CMuld( CNegd(inv_det), Min[2] );
+    Mout[3] = CMuld(       inv_det,  Min[0] );
+}
+
+
+void inv2x2S(ComplexDouble *Min, ComplexDouble **Mout)
+// Same as inv2x2(), but the output is a 2x2 2D array, instead of a 4-element
+// 1D array
+{
+    ComplexDouble m1 = CMuld( Min[0], Min[3] );
+    ComplexDouble m2 = CMuld( Min[1], Min[2] );
+    ComplexDouble det = CSubd( m1, m2 );
+    ComplexDouble inv_det = CRcpd( det );
+    Mout[0][0] = CMuld(       inv_det,  Min[3] );
+    Mout[0][1] = CMuld( CNegd(inv_det), Min[1] );
+    Mout[1][0] = CMuld( CNegd(inv_det), Min[2] );
+    Mout[1][1] = CMuld(       inv_det,  Min[0] );
+}
+
+
+void mult2x2d(ComplexDouble *M1, ComplexDouble *M2, ComplexDouble *Mout)
+{
+    ComplexDouble m00 = CMuld( M1[0], M2[0] );
+    ComplexDouble m12 = CMuld( M1[1], M2[2] );
+    ComplexDouble m01 = CMuld( M1[0], M2[1] );
+    ComplexDouble m13 = CMuld( M1[1], M2[3] );
+    ComplexDouble m20 = CMuld( M1[2], M2[0] );
+    ComplexDouble m32 = CMuld( M1[3], M2[2] );
+    ComplexDouble m21 = CMuld( M1[2], M2[1] );
+    ComplexDouble m33 = CMuld( M1[3], M2[3] );
+    Mout[0] = CSumd( m00, m12 );
+    Mout[1] = CSumd( m01, m13 );
+    Mout[2] = CSumd( m20, m32 );
+    Mout[3] = CSumd( m21, m33 );
+}
+
+
+void conj2x2(ComplexDouble *M, ComplexDouble *Mout)
+/* Calculate the conjugate of a matrix
+ * It is safe for M and Mout to point to the same matrix
+ */
+{
+    int i;
+    for (i = 0; i < 4; i++)
+        Mout[i] = CConjd(M[i]);
+}
+
+
+double norm2x2(ComplexDouble *M, ComplexDouble *Mout)
+/* Normalise a 2x2 matrix via the Frobenius norm
+ * It is safe for M and Mout to point to the same matrix.
+ */
+{
+    // Calculate the normalising factor
+    double Fnorm = 0.0;
+    int i;
+    for (i = 0; i < 4; i++)
+        Fnorm += CMuld( M[i], CConjd(M[i]) );
+
+    Fnorm = sqrt(Fnorm);
+
+    // Divide each element through by the normalising factor.
+    // If norm is 0, then output zeros everywhere
+    for (i = 0; i < 4; i++) {
+        if (Fnorm == 0.0)
+            Mout[i] = CMaked( 0.0, 0.0 );
+        else
+            Mout[i] = CScld( M[i], 1.0 / Fnorm );
+    }
+
+    return Fnorm;
+}
+
