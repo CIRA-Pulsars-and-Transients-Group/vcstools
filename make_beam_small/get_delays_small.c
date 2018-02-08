@@ -267,10 +267,10 @@ void get_delays(
 
         // Just make Jref (and invJref) the identity matrix since they are already
         // incorporated into Offringa's calibration solutions.
-        Jref[0] = 1 + I*0;
-        Jref[1] = 0 + I*0;
-        Jref[2] = 0 + I*0;
-        Jref[3] = 1 + I*0;
+        Jref[0] = CMaked( 1.0, 0.0 );
+        Jref[1] = CMaked( 0.0, 0.0 );
+        Jref[2] = CMaked( 0.0, 0.0 );
+        Jref[3] = CMaked( 1.0, 0.0 );
         inv2x2(Jref, invJref);
     }
 
@@ -394,7 +394,7 @@ void get_delays(
 
                     // Store result for later use
                     complex_weights_array[ant][ch][pol] =
-                        CMuld( mi->weights_array[row], CExpd( CMaked( 0.0, phase ) ) );
+                        CScld( CExpd( CMaked( 0.0, phase ) ), mi->weights_array[row] );
 
                 }
                 else {
@@ -506,7 +506,7 @@ int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) v
             dipl_e = (i + 1 - 2.5) * dpl_sep;
             dipl_n = (j + 1 - 2.5) * dpl_sep;
             dipl_z = 0.0;
-            PhaseShift = CExpd( CMuld( multiplier,
+            PhaseShift = CExpd( CScld( multiplier,
                                   (dipl_e * (proj_e - proj0_e)
                                  + dipl_n * (proj_n - proj0_n)
                                  + dipl_z * (proj_z - proj0_z)) ) );

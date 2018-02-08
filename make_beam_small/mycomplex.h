@@ -9,21 +9,21 @@
 #define  ComplexDouble  cuDoubleComplex
 #define  ComplexFloat   cuFloatComplex
 
-#define  CMakef(X,Y)    (make_cuFloatComplex((X),(Y)))
-#define  CMaked(X,Y)    (make_cuDoubleComplex((X),(Y)))
+#define  CMakef(X,Y)    (make_cuFloatComplex(X,Y))
+#define  CMaked(X,Y)    (make_cuDoubleComplex(X,Y))
 
-#define  CAddf(X,Y)     (cuCaddf((X),(Y)))
-#define  CSubf(X,Y)     (cuCsubf((X),(Y)))
-#define  CMulf(X,Y)     (cuCmulf((X),(Y)))
-#define  CDivf(X,Y)     (cuCdivf((X),(Y)))
+#define  CAddf(X,Y)     (cuCaddf(X,Y))
+#define  CSubf(X,Y)     (cuCsubf(X,Y))
+#define  CMulf(X,Y)     (cuCmulf(X,Y))
+#define  CDivf(X,Y)     (cuCdivf(X,Y))
 
 #define  CRealf(X)      (cuCrealf(X))
 #define  CImagf(X)      (cuCimagf(X))
 
-#define  CAddd(X,Y)     (cuCadd((X),(Y)))
-#define  CSubd(X,Y)     (cuCsub((X),(Y)))
-#define  CMuld(X,Y)     (cuCmul((X),(Y)))
-#define  CDivd(X,Y)     (cuCdiv((X),(Y)))
+#define  CAddd(X,Y)     (cuCadd(X,Y))
+#define  CSubd(X,Y)     (cuCsub(X,Y))
+#define  CMuld(X,Y)     (cuCmul(X,Y))
+#define  CDivd(X,Y)     (cuCdiv(X,Y))
 
 #define  CReald(X)      (cuCreal(X))
 #define  CImagd(X)      (cuCimag(X))

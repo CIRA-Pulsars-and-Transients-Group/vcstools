@@ -15,6 +15,7 @@
 #define BUFSIZE    4096
 #define VEL_LIGHT  299792458.0
 #define N_COPOL    2
+#define R2C_SIGN   -1.0
 
 // A structure to read in all the relevant info from the observation metafits
 // file.
@@ -92,6 +93,10 @@ void flatten_bandpass(
 void read_data( char *filename, uint8_t *data, int nbytes );
 int read_rts_file(ComplexDouble **G, ComplexDouble *Jref,
                   double *amp, char *fname);
+int read_bandpass_file( ComplexDouble ***Jm, ComplexDouble ***Jf,
+                        int chan_width, int nchan, int nant, char *filename );
+int read_offringa_gains_file( ComplexDouble **antenna_gain, int nant,
+                              int coarse_chan, char *gains_file, int *order );
 
 
 void dec2hms( char *out, double in, int sflag );
