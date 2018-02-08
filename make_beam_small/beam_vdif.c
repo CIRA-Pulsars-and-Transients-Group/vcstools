@@ -275,22 +275,27 @@ void set_level_occupancy(ComplexDouble *input, int nsamples, float *new_gain)
 }
 
 
-void get_mean_complex(ComplexDouble *input, int nsamples, float *rmean,float *imean, ComplexDouble *cmean)
+void get_mean_complex( ComplexDouble *input, int nsamples, float *rmean,
+                       float *imean, ComplexDouble *cmean)
 {
+    int i;
 
-    int i=0;
     float rtotal = 0;
     float itotal = 0 ;
+
     ComplexDouble ctotal = CMaked( 0.0, 0.0 );
-    for (i=0;i<nsamples;i++){
+
+    for (i = 0; i < nsamples; i++)
+    {
+if (isnan(CReald(input[i])) || isnan(CImagd(input[i]))) { fprintf(stderr, "\ninput[%d] = %e + %e*I\n\n", i, CReald(input[i]), CImagd(input[i])); exit(1); }
         rtotal += CReald( input[i] );
         itotal += CImagd( input[i] );
         ctotal  = CAddd( ctotal, input[i] );
     }
+
     *rmean = rtotal / nsamples;
     *imean = itotal / nsamples;
-    *cmean = CScld( ctotal, 1.0 / (float)nsamples );
-
+    *cmean = CScld( ctotal, 1.0 / (double)nsamples );
 }
 
 void normalise_complex(ComplexDouble *input, int nsamples, float scale)

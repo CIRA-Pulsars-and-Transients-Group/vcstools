@@ -1,6 +1,26 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <cuda_runtime.h>
+
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+    /* Wrapper function for GPU/CUDA error handling. Every CUDA call goes through
+       this function. It will return a message giving your the error string,
+       file name and line of the error. Aborts on error. */
+
+    if (code != 0)
+    {
+        fprintf(stderr, "GPUAssert:: %s - %s (%d)\n", cudaGetErrorString(code), file, line);
+        if (abort)
+        {
+            exit(code);
+        }
+    }
+}
+
+// define a macro for accessing gpuAssert
+#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
 
 extern "C" {
 #include "mycomplex.h"
@@ -11,8 +31,7 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                int ntaps, float *out )
 {
     // Called the kernel with
-    //   (10000, 128, 2) blocks  = (nsamples, nchan, npol)
-    //   (    1,   1, 1) threads
+    //   10000x128x2 blocks
 
     // Calculate the first "in" index for this block
     int i0 = blockDim.z * blockDim.y * blockIdx.x +
@@ -101,6 +120,7 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     int   in_size = ((nsamples + ntaps) * nchan * npol) * sizeof(float);
     int fils_size = nchan * fil_size * sizeof(float);
     int  out_size = nsamples * nchan * npol * 2 * sizeof(float);
+fprintf(stderr, "---- in_size = %d, fils_size = %d, out_size = %d ----\n", in_size/sizeof(float), fils_size/sizeof(float), out_size/sizeof(float) );
 
     float     *in_real,     *in_imag;
     float   *d_in_real,   *d_in_imag;
@@ -111,12 +131,12 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
                   // data_buffer_uvdif exactly
 
     // Allocate memory on the device
-    cudaMalloc( (void **)&d_in_real, in_size );
-    cudaMalloc( (void **)&d_in_imag, in_size );
-    cudaMalloc( (void **)&d_fils_real, fils_size );
-    cudaMalloc( (void **)&d_fils_imag, fils_size );
+    gpuErrchk(cudaMalloc( (void **)&d_in_real, in_size ));
+    gpuErrchk(cudaMalloc( (void **)&d_in_imag, in_size ));
+    gpuErrchk(cudaMalloc( (void **)&d_fils_real, fils_size ));
+    gpuErrchk(cudaMalloc( (void **)&d_fils_imag, fils_size ));
 
-    cudaMalloc( (void **)&d_out, out_size );
+    gpuErrchk(cudaMalloc( (void **)&d_out, out_size ));
 
     // Allocate memory for host copies of the same
     in_real = (float *)malloc( in_size );
@@ -131,10 +151,9 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     // odd.
     int start_s = (file_no % 2 == 0 ? 2*nsamples-ntaps : nsamples-ntaps);
 
-    int s_in;
+    int s_in, s, ch, pol, i, f;
     for (s_in = 0; s_in < nsamples + ntaps; s_in++)
     {
-        int s, ch, pol, i;
         s = (start_s + s_in) % (2*nsamples);
         for (ch = 0; ch < nchan; ch++)
         {
@@ -151,7 +170,6 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     }
 
     // Setup filter values:
-    int ch, f, i;
     for (ch = 0; ch < nchan; ch++)
     for (f = 0; f < fil_size; f++)
     {
@@ -161,10 +179,10 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     }
 
     // Copy the data to the device
-    cudaMemcpy( d_in_real, in_real, in_size, cudaMemcpyHostToDevice );
-    cudaMemcpy( d_in_imag, in_imag, in_size, cudaMemcpyHostToDevice );
-    cudaMemcpy( d_fils_real, fils_real, fils_size, cudaMemcpyHostToDevice );
-    cudaMemcpy( d_fils_imag, fils_imag, fils_size, cudaMemcpyHostToDevice );
+    gpuErrchk(cudaMemcpy( d_in_real, in_real, in_size, cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpy( d_in_imag, in_imag, in_size, cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpy( d_fils_real, fils_real, fils_size, cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpy( d_fils_imag, fils_imag, fils_size, cudaMemcpyHostToDevice ));
 
     // Call the kernel with
     //   (10000, 128, 2) blocks  = (nsamples, nchan, npol)
@@ -175,10 +193,16 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     filter_kernel<<<blocks, threads>>>( d_in_real, d_in_imag,
                                         d_fils_real, d_fils_imag,
                                         ntaps, d_out );
+    cudaDeviceSynchronize();
 
     // Copy the result back into host memory
-    cudaMemcpy( data_buffer_uvdif, d_out, out_size, cudaMemcpyDeviceToHost );
+    gpuErrchk(cudaMemcpy( data_buffer_uvdif, d_out, out_size, cudaMemcpyDeviceToHost ));
 
+for (i = 10000; i < 26000; i += 2)
+{
+    fprintf(stderr, "out_real[%8d] = %15e\t", i,   data_buffer_uvdif[i]);
+    fprintf(stderr, "out_imag[%8d] = %15e\n", i+1, data_buffer_uvdif[i+1]);
+}
     // Free memory on host and device
     free( in_real );
     free( in_imag );
