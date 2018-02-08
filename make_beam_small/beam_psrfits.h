@@ -1,8 +1,8 @@
 #ifndef BEAM_PSRFITS_H
 #define BEAM_PSRFITS_H
 
-#include <complex.h>
 #include "psrfits.h"
+#include "mycomplex.h"
 
 void printf_psrfits( struct psrfits *pf );  /* Prints values in psrfits struct to stdout */
 
@@ -24,8 +24,8 @@ void correct_psrfits_stt( struct psrfits *pf );
 void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
         int outpol );
 
-void form_stokes( complex float **detected_beam,
-                  complex float noise_floor[][2][2],
+void form_stokes( ComplexDouble **detected_beam,
+                  ComplexDouble noise_floor[][2][2],
                   int nchan, double invw, float *spectrum );
 
 #endif

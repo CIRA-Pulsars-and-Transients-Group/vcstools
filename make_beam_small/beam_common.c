@@ -1,9 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include <mycomplex.h>
 #include "beam_common.h"
 #include "psrfits.h"
+#include "mycomplex.h"
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width ) {
 /* Read in the relevant information from the metafits file.
@@ -238,12 +238,12 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             }
         }
         else {
-            int di = 0; // Index for data[]
-            for (i = 0;i<nstep;i++) {
-                for (p = 0;p<npol;p++) {
-                    for (j = 0;j<nchan;j++){
-
-                        band[p][j] += CAbsf(data[di++]);
+            ComplexDouble *data_ptr = (ComplexDouble *) data;
+            for (i = 0; i < nstep; i++) {
+                for (p = 0; p < npol; p++) {
+                    for (j = 0; j < nchan; j++){
+                        band[p][j] += CAbsd(*data_ptr);
+                        data_ptr++;
                     }
                 }
 
@@ -357,6 +357,61 @@ void read_data( char *filename, uint8_t *data, int nbytes ) {
 }
 
 
+int read_rts_file(ComplexDouble **G, ComplexDouble *Jref,
+                  double *amp, char *fname)
+{
+    FILE *fp = NULL;
+    if ((fp = fopen(fname, "r")) == NULL) {
+        fprintf(stderr, "Error: cannot open gain Jones matrix file: %s\n",
+                fname);
+        exit(EXIT_FAILURE);
+    }
+
+    char line[BUFSIZE];
+    int index = 0;
+    double re0, im0, re1, im1, re2, im2, re3, im3;
+
+    while ((fgets(line, BUFSIZE - 1, fp)) != NULL) {
+
+        if (line[0] == '\n' || line[0] == '#' || line[0] == '\0')
+            continue; // skip blank/comment lines
+        if (line[0] == '/' && line[1] == '/')
+            continue; // also a comment (to match other input files using this style)
+
+        if (index == 0) {
+
+            // read the amplitude and the Alignment Line
+            sscanf(line, "%lf", amp);
+            fgets(line, BUFSIZE - 1, fp);
+            sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
+                           &im0, &re1, &im1, &re2, &im2, &re3, &im3);
+
+            Jref[0] = CMaked( re0, im0 );
+            Jref[1] = CMaked( re1, im1 );
+            Jref[2] = CMaked( re2, im2 );
+            Jref[3] = CMaked( re3, im3 );
+
+        }
+        if (index > 0) {
+            sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
+                           &im0, &re1, &im1, &re2, &im2, &re3, &im3);
+            G[index - 1][0] = CMaked( re0, im0 );
+            G[index - 1][1] = CMaked( re1, im1 );
+            G[index - 1][2] = CMaked( re2, im2 );
+            G[index - 1][3] = CMaked( re3, im3 );
+        }
+
+        index++;
+
+    }
+
+    fclose(fp);
+
+    return 0;
+
+}
+
+
 void int8_to_uint8(int n, int shift, char * to_convert) {
     int j;
     int scratch;
@@ -430,10 +485,10 @@ void mult2x2d(ComplexDouble *M1, ComplexDouble *M2, ComplexDouble *Mout)
     ComplexDouble m32 = CMuld( M1[3], M2[2] );
     ComplexDouble m21 = CMuld( M1[2], M2[1] );
     ComplexDouble m33 = CMuld( M1[3], M2[3] );
-    Mout[0] = CSumd( m00, m12 );
-    Mout[1] = CSumd( m01, m13 );
-    Mout[2] = CSumd( m20, m32 );
-    Mout[3] = CSumd( m21, m33 );
+    Mout[0] = CAddd( m00, m12 );
+    Mout[1] = CAddd( m01, m13 );
+    Mout[2] = CAddd( m20, m32 );
+    Mout[3] = CAddd( m21, m33 );
 }
 
 
@@ -457,7 +512,7 @@ double norm2x2(ComplexDouble *M, ComplexDouble *Mout)
     double Fnorm = 0.0;
     int i;
     for (i = 0; i < 4; i++)
-        Fnorm += CMuld( M[i], CConjd(M[i]) );
+        Fnorm += CReald( CMuld( M[i], CConjd(M[i]) ) );
 
     Fnorm = sqrt(Fnorm);
 
@@ -473,3 +528,33 @@ double norm2x2(ComplexDouble *M, ComplexDouble *Mout)
     return Fnorm;
 }
 
+
+void dec2hms( char *out, double in, int sflag )
+{
+    int sign  = 1;
+    char *ptr = out;
+    int h, m;
+    double s;
+
+    if (in < 0.0)
+    {
+        sign = -1;
+        in = fabs(in);
+    }
+
+    h = (int)in; in -= (double)h; in *= 60.0;
+    m = (int)in; in -= (double)m; in *= 60.0;
+
+    s = in;
+    if (sign==1 && sflag)
+    {
+        *ptr='+';
+        ptr++;
+    }
+    else if (sign==-1)
+    {
+        *ptr='-';
+        ptr++;
+    }
+    sprintf( ptr, "%2.2d:%2.2d:%07.4f", h, m, s );
+}

@@ -4,6 +4,8 @@
 /* Define how to handle complex numbers */
 #ifdef HAVE_CUDA
 
+#include <cuComplex.h>
+
 #define  ComplexDouble  cuDoubleComplex
 #define  ComplexFloat   cuFloatComplex
 
@@ -32,10 +34,10 @@
 #define  CAbsf(X)       (cuCabsf(X))
 #define  CAbsd(X)       (cuCabs(X))
 
-#define  CExpf(X)       (CMakef(expf(CRealf(X))*cos(Cimagf(X)), \
-                                expf(CRealf(X))*sin(Cimagf(X))))
-#define  CExpd(X)       (CMaked(expf(CReald(X))*cos(Cimagd(X)), \
-                                expf(CReald(X))*sin(Cimagd(X))))
+#define  CExpf(X)       (CMakef(expf(CRealf(X))*cos(CImagf(X)), \
+                                expf(CRealf(X))*sin(CImagf(X))))
+#define  CExpd(X)       (CMaked(expf(CReald(X))*cos(CImagd(X)), \
+                                expf(CReald(X))*sin(CImagd(X))))
 
 #define  CSclf(X,F)     (CMakef(F*CRealf(X),F*CImagf(X)))
 #define  CScld(X,F)     (CMaked(F*CReald(X),F*CImagd(X)))

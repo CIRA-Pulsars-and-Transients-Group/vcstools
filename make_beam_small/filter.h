@@ -4,7 +4,7 @@
 #define REAL_COEFFS  0
 #define CPLX_COEFFS  1
 
-#define "mycomplex.h"
+#include "mycomplex.h"
 
 void load_filter( char *filename, int dtype, ComplexDouble *filter );
 

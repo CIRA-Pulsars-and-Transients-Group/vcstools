@@ -56,8 +56,8 @@ void             destroy_complex_weights( ComplexDouble ***array, int nstation, 
 ComplexDouble ****create_invJi( int nstation, int nchan, int pol );
 void              destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol );
 
-ComplexFloat ***create_detected_beam( int nsamples, int nchan, int npol );
-void            destroy_detected_beam( ComplexFloat ***array, int nsamples, int nchan );
+ComplexDouble ***create_detected_beam( int nsamples, int nchan, int npol );
+void            destroy_detected_beam( ComplexDouble ***array, int nsamples, int nchan );
 
 float *create_data_buffer_psrfits( size_t size );
 float *create_data_buffer_vdif( struct vdifinfo *vf );

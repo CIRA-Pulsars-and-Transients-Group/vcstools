@@ -103,7 +103,7 @@ void apply_phase_ramp( ComplexDouble *in, int size, double slope,
     // Calculate the phase ramp and apply it
     int i;
     for (i = 0; i < size; i++)
-        out[i] = CMultd( in[i], Cexpd( CMaked( 0.0, 2*M_PI*slope*i ) ) );
+        out[i] = CMuld( in[i], CExpd( CMaked( 0.0, 2*M_PI*slope*i ) ) );
 }
 
 
@@ -174,7 +174,7 @@ void fir_filter_1D( ComplexDouble *fil, int fil_size, ComplexDouble *signal,
     for (n = 0; n < size; n++)
     {
         // Reset res element to zero
-        res[n] = 0.0;
+        res[n] = CMaked( 0.0, 0.0 );
 
         // Sum of signal weighted by coefficients
         for (i = 0; i < fil_size; i++)
@@ -184,7 +184,7 @@ void fir_filter_1D( ComplexDouble *fil, int fil_size, ComplexDouble *signal,
             if (m < 0)
                 continue;
 
-            res[n] = Caddd( res[n], Cmuld( signal[m], fil[i] ) );
+            res[n] = CAddd( res[n], CMuld( signal[m], fil[i] ) );
         }
     }
 }

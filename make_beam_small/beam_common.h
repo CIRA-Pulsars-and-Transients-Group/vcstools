@@ -10,6 +10,12 @@
 #define RTS_BANDPASS    2
 #define OFFRINGA        3
 
+#define MAX_POLS   4
+
+#define BUFSIZE    4096
+#define VEL_LIGHT  299792458.0
+#define N_COPOL    2
+
 // A structure to read in all the relevant info from the observation metafits
 // file.
 struct metafits_info {
@@ -84,6 +90,11 @@ void flatten_bandpass(
         int shutdown );
 
 void read_data( char *filename, uint8_t *data, int nbytes );
+int read_rts_file(ComplexDouble **G, ComplexDouble *Jref,
+                  double *amp, char *fname);
+
+
+void dec2hms( char *out, double in, int sflag );
 
 /**** MATRIX OPERATIONS ****/
 
@@ -91,6 +102,7 @@ void cp2x2(ComplexDouble *Min, ComplexDouble *Mout);
 void inv2x2(ComplexDouble *Min, ComplexDouble *Mout);
 void inv2x2S(ComplexDouble *Min, ComplexDouble **Mout);
 void mult2x2d(ComplexDouble *M1, ComplexDouble *M2, ComplexDouble *Mout);
-void conj2x2(ComplexDouble *M, ComplexDouble *Mout)
+void conj2x2(ComplexDouble *M, ComplexDouble *Mout);
+double norm2x2(ComplexDouble *M, ComplexDouble *Mout);
 
 #endif

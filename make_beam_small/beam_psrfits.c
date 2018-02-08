@@ -2,13 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <complex.h>
 #include "slalib.h"
 #include "slamac.h"
-#include "mwac_utils.h"
 #include "psrfits.h"
 #include "beam_common.h"
 #include "beam_psrfits.h"
+#include "mycomplex.h"
 
 void printf_psrfits( struct psrfits *pf ) {
     fprintf(stdout, "\nPSRFITS:\n");
@@ -306,8 +305,8 @@ void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
 }
 
 
-void form_stokes( complex float **detected_beam,
-                  complex float noise_floor[][2][2],
+void form_stokes( ComplexDouble **detected_beam,
+                  ComplexDouble noise_floor[][2][2],
                   int nchan, double invw, float *spectrum )
 /* This function forms the Stokes parameters IQUV from the detected beam and
  * the constructed "noise floor". It packs the IQUV parameters into a single
@@ -331,32 +330,34 @@ void form_stokes( complex float **detected_beam,
  * These calculations are described in .../doc/doc.pdf.
  */
 {
-    double beam00, beam11;
-    double noise0, noise1, noise3;
-    complex double beam01;
+    float beam00, beam11;
+    float noise0, noise1, noise3;
+    ComplexDouble beam01, beam01_n;
     unsigned int stokesIidx, stokesQidx, stokesUidx, stokesVidx;
 
     int ch;
     for (ch = 0; ch < nchan; ch++)
     {
-        beam00 = (double)(detected_beam[ch][0] * conj(detected_beam[ch][0]));
-        beam11 = (double)(detected_beam[ch][1] * conj(detected_beam[ch][1]));
-        beam01 = detected_beam[ch][0] * conj(detected_beam[ch][1]);
+        beam00 = CReald( CMuld( detected_beam[ch][0], CConjd(detected_beam[ch][0]) ) );
+        beam11 = CReald( CMuld( detected_beam[ch][1], CConjd(detected_beam[ch][1]) ) );
+        beam01 = CMuld( detected_beam[ch][0], CConjd(detected_beam[ch][1]) );
 
-        noise0 = noise_floor[ch][0][0];
-        noise1 = noise_floor[ch][0][1];
-        noise3 = noise_floor[ch][1][1];
+        noise0 = CReald( noise_floor[ch][0][0] );
+        noise1 = CReald( noise_floor[ch][0][1] );
+        noise3 = CReald( noise_floor[ch][1][1] );
 
         stokesIidx = 0*nchan + ch;
         stokesQidx = 1*nchan + ch;
         stokesUidx = 2*nchan + ch;
         stokesVidx = 3*nchan + ch;
 
+        beam01_n = CSubd( beam01, CMaked( noise1, 0.0 ) );
+
         // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
         // so for a single timestep we do not have to interleave - I could just stack these
         spectrum[stokesIidx] = (beam00 + beam11 - noise0 - noise3) * invw;
         spectrum[stokesQidx] = (beam00 - beam11 - noise0 + noise3) * invw;
-        spectrum[stokesUidx] = 2.0 * (creal(beam01) - noise1)*invw;
-        spectrum[stokesVidx] = -2.0 * cimag((beam01 - noise1)*invw);
+        spectrum[stokesUidx] =  2.0 * CReald(beam01_n) * invw;
+        spectrum[stokesVidx] = -2.0 * CImagd(beam01_n) * invw;
     }
 }
