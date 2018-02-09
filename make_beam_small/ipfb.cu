@@ -44,7 +44,8 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
              (threadIdx.x % npol);
 
     // Calculate the "fils" first column index
-    int f0 = nchan - ((idx/npol - 1 + nchan) % nchan) - 1;
+    //int f0 = nchan - ((idx/npol + nchan - 1) % nchan) - 1;
+    int f0 = (idx/npol) % nchan;
 
     // Initialise the output sample to zero
     out[o_real] = 0.0;
@@ -61,7 +62,7 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
             i = i0 + blockDim.x*tap + npol*ch;
 
             // The "fils" index
-            f = f0 + nchan*tap + nchan*ntaps*ch;
+            f = f0 + nchan*(ntaps-1-tap) + nchan*ntaps*ch;
 
             // Complex multiplication
             out[o_real] += in_real[i] * fils_real[f] -
