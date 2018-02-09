@@ -24,15 +24,15 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     // Set level occupancy
     float rmean, imean;
-    ComplexDouble cmean, stddev;
+    ComplexFloat cmean, stddev;
 
     get_mean_complex(
-            (ComplexDouble *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
             &rmean, &imean, &cmean );
 
     stddev = get_std_dev_complex(
-            (ComplexDouble *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0 );
 
     //if (fabsf(rmean) > 0.001)
@@ -43,22 +43,22 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         unsigned int i;
         for (i = 0; i < vf->sizeof_buffer/2; i++)
         {
-            data_buffer_vdif[2*i+0] -= CReald(cmean);
-            data_buffer_vdif[2*i+1] -= CImagd(cmean);
+            data_buffer_vdif[2*i+0] -= CRealf(cmean);
+            data_buffer_vdif[2*i+1] -= CImagf(cmean);
         }
     }
 
-    vf->b_scales[0] = CReald(stddev);
-    vf->b_scales[1] = CReald(stddev);
+    vf->b_scales[0] = CRealf(stddev);
+    vf->b_scales[1] = CRealf(stddev);
 
     vf->got_scales = 1;
     set_level_occupancy(
-            (ComplexDouble *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0, gain);
 
     // Normalise
     normalise_complex(
-            (ComplexDouble *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
             1.0/(*gain) );
 
@@ -210,7 +210,7 @@ void populate_vdif_header(
 }
 
 
-ComplexDouble get_std_dev_complex(ComplexDouble *input, int nsamples)
+ComplexFloat get_std_dev_complex(ComplexFloat *input, int nsamples)
 {
     // assume zero mean
     float rtotal = 0;
@@ -220,17 +220,17 @@ ComplexDouble get_std_dev_complex(ComplexDouble *input, int nsamples)
     int i;
 
     for (i=0;i<nsamples;i++){
-         rtotal = rtotal+(CReald(input[i])*CReald(input[i]));
-         itotal = itotal+(CImagd(input[i])*CImagd(input[i]));
+         rtotal = rtotal+(CRealf(input[i])*CRealf(input[i]));
+         itotal = itotal+(CImagf(input[i])*CImagf(input[i]));
 
      }
     rsigma = sqrtf((1.0/(nsamples-1))*rtotal);
     isigma = sqrtf((1.0/(nsamples-1))*itotal);
 
-    return CMaked( rsigma, isigma );
+    return CMakef( rsigma, isigma );
 }
 
-void set_level_occupancy(ComplexDouble *input, int nsamples, float *new_gain)
+void set_level_occupancy(ComplexFloat *input, int nsamples, float *new_gain)
 {
     //float percentage = 0.0;
     //float occupancy = 17.0;
@@ -244,17 +244,17 @@ void set_level_occupancy(ComplexDouble *input, int nsamples, float *new_gain)
         int count = 0;
         int clipped = 0;
         for (i = 0; i < nsamples; i++) {
-            if (isnan(CReald(input[i])) || isnan(CImagd(input[i])))
+            if (isnan(CRealf(input[i])) || isnan(CImagf(input[i])))
             {
                 fprintf( stderr, "error: set_level_occupancy: input[%d] = "
                                  "NaN\n", i );
                 exit(EXIT_FAILURE);
             }
-            if (gain*CReald(input[i]) >= 0 && gain*CReald(input[i]) < 64)
+            if (gain*CRealf(input[i]) >= 0 && gain*CRealf(input[i]) < 64)
             {
                 count++;
             }
-            if (fabs(gain*CReald(input[i])) > 127)
+            if (fabs(gain*CRealf(input[i])) > 127)
             {
                 clipped++;
             }
@@ -275,35 +275,35 @@ void set_level_occupancy(ComplexDouble *input, int nsamples, float *new_gain)
 }
 
 
-void get_mean_complex( ComplexDouble *input, int nsamples, float *rmean,
-                       float *imean, ComplexDouble *cmean)
+void get_mean_complex( ComplexFloat *input, int nsamples, float *rmean,
+                       float *imean, ComplexFloat *cmean)
 {
     int i;
 
     float rtotal = 0;
     float itotal = 0 ;
 
-    ComplexDouble ctotal = CMaked( 0.0, 0.0 );
+    ComplexFloat ctotal = CMakef( 0.0, 0.0 );
 
     for (i = 0; i < nsamples; i++)
     {
-if (isnan(CReald(input[i])) || isnan(CImagd(input[i]))) { fprintf(stderr, "\ninput[%d] = %e + %e*I\n\n", i, CReald(input[i]), CImagd(input[i])); exit(1); }
-        rtotal += CReald( input[i] );
-        itotal += CImagd( input[i] );
-        ctotal  = CAddd( ctotal, input[i] );
+//if (isnan(CRealf(input[i])) || isnan(CImagf(input[i]))) { fprintf(stderr, "\ninput[%d] = %e + %e*I\n\n", i, CRealf(input[i]), CImagf(input[i])); exit(1); }
+        rtotal += CRealf( input[i] );
+        itotal += CImagf( input[i] );
+        ctotal  = CAddf( ctotal, input[i] );
     }
 
     *rmean = rtotal / nsamples;
     *imean = itotal / nsamples;
-    *cmean = CScld( ctotal, 1.0 / (double)nsamples );
+    *cmean = CSclf( ctotal, 1.0 / (float)nsamples );
 }
 
-void normalise_complex(ComplexDouble *input, int nsamples, float scale)
+void normalise_complex(ComplexFloat *input, int nsamples, float scale)
 {
     int i=0;
 
     for (i=0;i<nsamples;i++){
-        input[i] = CScld( input[i], scale );
+        input[i] = CSclf( input[i], scale );
     }
 }
 

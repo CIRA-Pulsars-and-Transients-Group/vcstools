@@ -28,22 +28,23 @@ extern "C" {
 
 __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *fils_real, float *fils_imag,
-                               int ntaps, float *out )
+                               int ntaps, int npol, float *out )
 {
-    // Called the kernel with
-    //   10000x128x2 blocks
+    int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-    // Calculate the first "in" index for this block
-    int i0 = blockDim.z * blockDim.y * blockIdx.x +
-             blockDim.z * blockIdx.y +
-             blockIdx.z;
+    // Calculate the number of channels
+    int nchan = blockDim.x / npol;
 
-    // Calculate the "out" index
-    int o_real = 2 * i0;
+    // Calculate the first "out" index
+    int o_real = 2*idx;
     int o_imag = o_real + 1;
 
+    // Calculate the first "in" index for this thread
+    int i0 = ((idx + blockDim.x - npol) / blockDim.x) * blockDim.x +
+             (threadIdx.x % npol);
+
     // Calculate the "fils" first column index
-    int f0 = blockDim.y - ((blockIdx.x-1) % blockDim.y) - 1;
+    int f0 = nchan - ((idx/npol - 1 + nchan) % nchan) - 1;
 
     // Initialise the output sample to zero
     out[o_real] = 0.0;
@@ -54,17 +55,13 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
     int i, f;
     for (tap = 0; tap < ntaps; tap++)
     {
-        for (ch = 0; ch < blockDim.y; ch++)
+        for (ch = 0; ch < nchan; ch++)
         {
             // The "in" index
-            i = blockDim.z * blockDim.y * (blockIdx.x + tap) +
-                blockDim.z * ch +
-                blockIdx.z;
+            i = i0 + blockDim.x*tap + npol*ch;
 
             // The "fils" index
-            f = blockDim.y * ntaps * ch +
-                blockDim.y * tap +
-                f0;
+            f = f0 + nchan*tap + nchan*ntaps*ch;
 
             // Complex multiplication
             out[o_real] += in_real[i] * fils_real[f] -
@@ -75,8 +72,8 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
     }
 
     // Normalise
-    out[o_real] /= (float)blockDim.y;
-    out[o_imag] /= (float)blockDim.y;
+    out[o_real] /= (float)nchan;
+    out[o_imag] /= (float)nchan;
 
     __syncthreads();
 }
@@ -120,7 +117,6 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     int   in_size = ((nsamples + ntaps) * nchan * npol) * sizeof(float);
     int fils_size = nchan * fil_size * sizeof(float);
     int  out_size = nsamples * nchan * npol * 2 * sizeof(float);
-fprintf(stderr, "---- in_size = %d, fils_size = %d, out_size = %d ----\n", in_size/sizeof(float), fils_size/sizeof(float), out_size/sizeof(float) );
 
     float     *in_real,     *in_imag;
     float   *d_in_real,   *d_in_imag;
@@ -162,9 +158,17 @@ fprintf(stderr, "---- in_size = %d, fils_size = %d, out_size = %d ----\n", in_si
                 // Calculate the index for in_real and in_imag;
                 i = npol*nchan*s_in + npol*ch + pol;
 
-                // Copy the data across
-                in_real[i] = CReald( detected_beam[s][ch][pol] );
-                in_imag[i] = CImagd( detected_beam[s][ch][pol] );
+                // Copy the data across - taking care of the file_no = 0 case
+                if (file_no == 0 && s_in < ntaps)
+                {
+                    in_real[i] = 0.0;
+                    in_imag[i] = 0.0;
+                }
+                else
+                {
+                    in_real[i] = CReald( detected_beam[s][ch][pol] );
+                    in_imag[i] = CImagd( detected_beam[s][ch][pol] );
+                }
             }
         }
     }
@@ -184,25 +188,21 @@ fprintf(stderr, "---- in_size = %d, fils_size = %d, out_size = %d ----\n", in_si
     gpuErrchk(cudaMemcpy( d_fils_real, fils_real, fils_size, cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( d_fils_imag, fils_imag, fils_size, cudaMemcpyHostToDevice ));
 
-    // Call the kernel with
-    //   (10000, 128, 2) blocks  = (nsamples, nchan, npol)
-    //   (    1,   1, 1) threads
-    dim3 blocks( nsamples, nchan, npol );
-    dim3 threads( 1, 1, 1 );
-
-    filter_kernel<<<blocks, threads>>>( d_in_real, d_in_imag,
-                                        d_fils_real, d_fils_imag,
-                                        ntaps, d_out );
+    // Call the kernel
+    filter_kernel<<<nsamples, nchan*npol>>>( d_in_real, d_in_imag,
+                                             d_fils_real, d_fils_imag,
+                                             ntaps, npol, d_out );
     cudaDeviceSynchronize();
 
     // Copy the result back into host memory
     gpuErrchk(cudaMemcpy( data_buffer_uvdif, d_out, out_size, cudaMemcpyDeviceToHost ));
-
-for (i = 10000; i < 26000; i += 2)
+/*
+for (i = 0; i < 1000; i += 2)
 {
     fprintf(stderr, "out_real[%8d] = %15e\t", i,   data_buffer_uvdif[i]);
     fprintf(stderr, "out_imag[%8d] = %15e\n", i+1, data_buffer_uvdif[i+1]);
 }
+*/
     // Free memory on host and device
     free( in_real );
     free( in_imag );
