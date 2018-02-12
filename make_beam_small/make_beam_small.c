@@ -33,6 +33,7 @@
 #else
 
 #include <omp.h>
+#include "form_beam.h"
 #define NOW  (omp_get_wtime())
 
 #endif
@@ -47,11 +48,6 @@ int main(int argc, char **argv)
 
     // A place to hold the beamformer settings
     struct make_beam_opts opts;
-
-    // These are used to calculate how the input data are ordered
-    const int npfb = 4;
-    const int nrec = 16;
-    const int ninc = 4;
 
     /* Set default beamformer settings */
 
@@ -97,7 +93,6 @@ int main(int argc, char **argv)
     const int npol         = 2;      // (X,Y)
     const int outpol_coh   = 4;      // (I,Q,U,V)
     const int outpol_incoh = 1;      // ("I")
-    int coherent_requested = opts.out_coh || opts.out_vdif || opts.out_uvdif;
 
     float vgain = 1.0; // This is re-calculated every second for the VDIF output
     float ugain = 1.0; // This is re-calculated every second for the VDIF output
@@ -236,7 +231,6 @@ int main(int argc, char **argv)
         data_buffer_uvdif = create_data_buffer_vdif( &uvf );
 
     int file_no = 0;
-    int sample;
 
     printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
     for (file_no = 0; file_no < nfiles; file_no++) {
@@ -271,146 +265,21 @@ int main(int argc, char **argv)
             for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
                 data_buffer_incoh[i] = 0.0;
 
-#ifndef HAVE_CUDA
-#pragma omp parallel for
+#ifdef HAVE_CUDA
+        // cu_form_beam( ... ) // YET TO IMPLEMENT
+#else
+        form_beam( data, &opts, complex_weights_array, invJi, file_no,
+                   nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
+                   detected_beam, data_buffer_coh, data_buffer_incoh );
 #endif
-        for (sample = 0; sample < (int)opts.sample_rate; sample++ ) {
-
-            int ch, ant, pol, opol, opol1, opol2;
-            int pfb, rec, inc;
-            int data_idx;
-
-            // Because detected_beam is large enough to contain 2 seconds' worth of data,
-            // we need an index that keeps track of which "second" we're in, effectively
-            // maintaining a circular buffer filled with the last two seconds
-            int db_sample = (file_no % 2)*opts.sample_rate + sample;
-
-            ComplexDouble  beam[nchan][nstation][npol];
-            float          incoh_beam[nchan][nstation][npol];
-            float          detected_incoh_beam[nchan*outpol_incoh];
-            float          spectrum[nchan*outpol_coh];
-            ComplexDouble  noise_floor[nchan][npol][npol];
-            ComplexDouble  e_true[npol], e_dash[npol];
-
-            // Initialise beam arrays to zero
-            if (opts.out_coh)
-            {
-                // Initialise noise floor to zero
-                for (ch    = 0; ch    < nchan; ch++   )
-                for (opol1 = 0; opol1 < npol;  opol1++)
-                for (opol2 = 0; opol2 < npol;  opol2++)
-                    noise_floor[ch][opol1][opol2] = CMaked( 0.0, 0.0 );
-            }
-
-            if (coherent_requested)
-            {
-                // Initialise detected beam to zero
-                for (ch  = 0; ch  < nchan; ch++ )
-                for (pol = 0; pol < npol ; pol++)
-                    detected_beam[db_sample][ch][pol] = CMaked( 0.0, 0.0 );
-            }
-
-            if (opts.out_incoh)
-                for (ch  = 0; ch  < nchan   ; ch++ )
-                    detected_incoh_beam[ch] = 0.0;
-
-            // Calculate the beam, noise floor
-            for (ant = 0; ant < nstation; ant++) {
-
-                // Get the index for the data that corresponds to this
-                //   sample, channel, antenna, polarisation
-                // Justification for the rather bizarre mapping is found in
-                // the docs.
-                // (rec depends on polarisation, so is calculating in the inner loop)
-                pfb = ant / 32;
-                inc = (ant / 8) % 4;
-
-                for (ch = 0; ch < nchan; ch++ ) {
-
-                    // Calculate quantities that depend only on "input" polarisation
-                    for (pol = 0; pol < npol; pol++) {
-
-                        rec = (2*ant+pol) % 16;
-
-                        data_idx = sample * (ninc*nrec*npfb*nchan) +
-                                   ch     * (ninc*nrec*npfb)       +
-                                   pfb    * (ninc*nrec)            +
-                                   rec    * (ninc)                 +
-                                   inc;
-
-                        // Form a single complex number
-                        e_dash[pol] = UCMPLX4_TO_CMPLX_FLT(data[data_idx]);
-
-                        // Detect the incoherent beam, if requested
-                        if (opts.out_incoh)
-                            incoh_beam[ch][ant][pol] = DETECT(e_dash[pol]);
-
-                        // Apply complex weights
-                        if (coherent_requested)
-                            e_dash[pol] = CMuld( e_dash[pol], complex_weights_array[ant][ch][pol] );
-
-                    }
-
-                    // Calculate quantities that depend on output polarisation
-                    // (i.e. apply inv(jones))
-                    if (coherent_requested)
-                    {
-                        for (pol = 0; pol < npol; pol++)
-                        {
-                            e_true[pol] = CMaked( 0.0, 0.0 );
-
-                            for (opol = 0; opol < npol; opol++)
-                                e_true[pol] = CAddd( e_true[pol], CMuld( invJi[ant][ch][pol][opol], e_dash[opol] ) );
-
-                            if (opts.out_coh)
-                                for (opol = 0; opol < npol; opol++)
-                                    noise_floor[ch][pol][opol] = CAddd( noise_floor[ch][pol][opol], CMuld( e_true[pol], CConjd(e_true[opol]) ) );
-
-                            beam[ch][ant][pol] = e_true[pol];
-                        }
-                    }
-                }
-            }
-
-            // Detect the beam = sum over antennas
-            for (ant = 0; ant < nstation; ant++)
-            for (pol = 0; pol < npol    ; pol++)
-            for (ch  = 0; ch  < nchan   ; ch++ )
-            {
-                // Coherent beam
-                if (coherent_requested)
-                    detected_beam[db_sample][ch][pol] = CAddd( detected_beam[db_sample][ch][pol], beam[ch][ant][pol] );
-
-                // Incoherent beam
-                if (opts.out_incoh)
-                    detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
-            }
-
-            if (opts.out_coh)
-            {
-                // Calculate the Stokes parameters
-                form_stokes( detected_beam[db_sample], noise_floor, nchan, invw, spectrum );
-                int offset_in_coh = sizeof(float) * nchan * outpol_coh * sample;
-                memcpy((void *)((char *)data_buffer_coh + offset_in_coh), spectrum, sizeof(float)*nchan*outpol_coh);
-            }
-
-            if (opts.out_incoh)
-            {
-                int offset_in_incoh = sizeof(float) * nchan * outpol_incoh * sample;
-                memcpy((void *)((char *)data_buffer_incoh + offset_in_incoh), detected_incoh_beam, sizeof(float)*nchan*outpol_incoh);
-            }
-
-        } // End OpenMP parallel for
-
-        //
-        // We've now arrived at the end of a second's worth of data...
-        //
 
         // Invert the PFB, if requested
         if (opts.out_vdif)
         {
             printf("[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
-#ifndef HAVE_CUDA
+#ifdef HAVE_CUDA
+            // cu_invert_pfb_ifft( ... ) // YET_TO_IMPLEMENT
+#else
             invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan, npol, data_buffer_vdif );
 #endif
         }
