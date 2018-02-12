@@ -1,6 +1,10 @@
 #include "pabeam_kernal.h"
 
-__global__ void calcArrayFactor(int nel, int ntiles, double a, double *za, double *az, float *xp, float *yp, float *zp, double tkx, double tky, double tkz, cuDoubleComplex *af)
+__global__ void calcArrayFactor(int nel, int ntiles, double a, 
+                                double *za, double *az, 
+                                float *xp, float *yp, float *zp, 
+                                double tkx, double tky, double tkz, 
+                                cuDoubleComplex *af)
 {
     /* Kernal which takes (az,za) coordinates and tile positions to 
        compute the array factor. This minimises data transfer between 
@@ -57,9 +61,9 @@ __global__ void calcArrayFactor(int nel, int ntiles, double a, double *za, doubl
     int stride = blockDim.x * gridDim.x;
     
     // other intermediate variables
-    double ast=0, phi=0;
-    double ph=0;
-    double kx=0, ky=0, kz=0;
+    double ast = 0, phi = 0;
+    double ph = 0;
+    double kx = 0, ky = 0, kz = 0;
     cuDoubleComplex n = make_cuDoubleComplex(ntiles,0);
 
     

@@ -17,7 +17,7 @@ SLA_INC = ${PSRSOFT}/include
 SLA_LIB = ${PSRSOFT}/lib
 
 # HDF5 inc/lib dirs
-HDF5_INC = ${HDF5_ROOT}/include
+HDF5_INC = ${HDF5_ROOT}/serial/include
 HDF5_LIB = ${HDF5_ROOT}/lib
 
 # BOOST inc/lib dirs
@@ -44,11 +44,12 @@ LDFLAGS = $(LIB_DIRS) -lm -lsla -lcfitsio -lhdf5_cpp -lhdf5 -lboost_system -lboo
 
 # targets
 FEE2016_OBJECTS = FEE2016/beam2016implementation.o FEE2016/mwa_beam_interface.o FEE2016/system.o
-PABEAM_OBJECTS = pabeam_kernal.o pabeam.o
+PABEAM_OBJECTS = pabeam_kernal.o pabeam.o utils.o
 
 OBJECTS = $(FEE2016_OBJECTS) $(PABEAM_OBJECTS) 
 
-TARGETS = pabeam_gpu_notile pabeam_gpu
+#TARGETS = pabeam_gpu_notile pabeam_gpu
+TARGETS = pabeam_gpu
 
 BIN_DIR = ../bin
 
@@ -58,22 +59,13 @@ all: $(TARGETS)
 pabeam_gpu_notile: pabeam_notile.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-#$(NVCC) -o $@ $^ $(NVCC_FLAGS) $(LIB_DIRS_NOTILE) $(INC_DIRS_NOTILE) $(FLAGS_NOTILE)
 
 pabeam_gpu: $(OBJECTS)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
-#$(NVCC) -o $@ $(OBJECTS) $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS)
-
-
 
 %.o: %.cu
 	$(CC) -c $@ $(CFLAGS) $<
 
-#pabeam_kernal.o: pabeam_kernal.cu
-#	$(NVCC) -c $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS) $<
-
-#p%.o: p%.cu
-#	$(NVCC) -c $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS) $<
 
 FEE2016/%.o:
 	@$(MAKE) -C $(@D) $(@F)

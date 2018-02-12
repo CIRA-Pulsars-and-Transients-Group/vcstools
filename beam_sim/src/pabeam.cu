@@ -1,52 +1,14 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <math.h>
-#include <slalib.h>
-#include <fitsio.h>
-//#include <complex.h>
-
-// MWA tile beam
-#include "FEE2016/beam2016implementation.h"
-#include "FEE2016/mwa_beam_interface.h"
-#include "FEE2016/system.h"
-#include <H5Cpp.h>
-
-// CUDA kernal
+#include "pabeam.h"
 #include "pabeam_kernal.h"
 
-#define PI (acos(-1.0))         // Ensures PI is defined on all systems
-#define RAD2DEG (180.0 / PI)
-#define DEG2RAD (PI / 180.0)
-#define SOL (299792458.0)       // Speed of light
-#define KB (1.38064852e-23)     // Boltzmann's constant
 
-#define MWA_LAT (-26.703319)    // Array latitude, degrees North
-#define MWA_LON (116.67081)     // Array longitude, degrees East
-#define MWA_HGT (377.827)       // Array elevation above sea level, in meters
-
-/* struct to hold all the wavenumbers for each (Az,ZA) */
-typedef struct wavenums_t
-{
-    double kx;
-    double ky;
-    double kz;
-} wavenums; // can just refer to this struct as type wavenums
-
-/* struct to hold the target Azimuth and Zenith angle (in radians) */
-typedef struct tazza_t
-{
-    double az;
-    double za;
-} tazza;
-
-
-/* Define all the function prototypes */
+/* Function prototypes */
 void usage();
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd);
+
 void mjd2lst(double mjd, double *lst);
+
 void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn);
 void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza);
 int getNumTiles(const char *metafits);
@@ -357,130 +319,6 @@ void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
         counter++;
     }
 }
-
-void getDeviceDimensions(int *nDevices)
-{
-    /* We need to know how many devices are available and its functionality. */
-
-    printf("Querying system for device information --\n");
-    cudaGetDeviceCount(nDevices); // get CUDA to count GPUs
-
-    for (int i = 0; i < *nDevices; i++)
-    {
-        struct cudaDeviceProp prop; // create struct to store device info
-        cudaGetDeviceProperties(&prop, i); // populate prop for this device
-        printf("    Device number:                       %d\n", *nDevices-1);
-        printf("    Device name:                         %s\n", prop.name);
-        printf("    Total global memory available (MB):  %f\n", prop.totalGlobalMem/1e6);
-        printf("    Max grid size (# blocks):           (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
-        printf("    Max number of threads per block:    (%d, %d, %d)\n", prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
-    }
-}
-
-void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
-{
-    /* Estimate how much device/host memory will be required per iteration.
-
-       The device kernal consists of:
-        
-       az array = size * sizeof(double) - array of azimuth coords
-       za array = size * sizeof(double) - array of zenith coords
-       xpos = ntiles * sizeof(float) - x position of tiles from array center
-       ypos = ntiles * sizeof(float) - y position of tiles from array center
-       zpos = ntiles * sizeof(float) - z position of tiles from array center
-       af_array = size * sizeof(cuDoubleComplex) - array factor
-
-       plus we also pass:
-       2 integers
-       1 double
-
-       and compute in the kernal:
-       2 integers
-       6 doubles
-       1 cuDoubleComplex */
-
-    int iters=1;
-    int nDevices=0;
-    long double azzaMem=0, tileposMem=0, afMem=0, otherMem=0, reqMem=0, devMem=0;
-    double tfrac = 0.9;
-    size_t freeMem, totMem;
-    cudaError_t res;
-    struct cudaDeviceProp prop; // create struct to store device info
-
-    // get info about avilable devices
-    getDeviceDimensions(&nDevices);
-    printf("Number of devices on system: %d\n", nDevices);
-    printf("Using device: %d\n", nDevices-1);
-    cudaGetDeviceProperties(&prop, 0); 
-
-    // check how much FREE memory is available
-    res = cudaMemGetInfo(&freeMem, &totMem);
-    if (res == cudaSuccess)
-    {
-        printf("Free device memory: %.2f MB\n", (double)freeMem/1.0e6);
-    }
-    else
-    {
-        printf("%s\n", cudaGetErrorString(res));
-    }
-    
-    // get device max. threads per block
-    *blockSize = prop.maxThreadsDim[0];
-
-    // define the array sizes that will go onto the device
-    azzaMem = 2 * (size/1.0e6) * sizeof(double); // az and za arrays
-    tileposMem = 3 * (ntiles/1.0e6) * sizeof(float); // x,y,z positions of all tiles
-    afMem = (size/1.0e6) * sizeof(cuDoubleComplex); // "array factor" array
-    // misc. memory requirments (likely inconsequential)
-    otherMem = (7 * sizeof(double) + 4 * sizeof(int) + sizeof(cuDoubleComplex) + sizeof(wavenums))/1.0e6;
-    
-    reqMem = azzaMem + tileposMem + afMem + otherMem; // total required memory in MB
-    devMem = (double)freeMem/1.0e6; // available memory in MB
-
-    printf("Memory required for:\n");
-    printf("    Az,ZA arrays: %Lf MB\n",azzaMem);
-    printf("    tile positions: %Lf MB\n",tileposMem);
-    printf("    array fator: %Lf MB\n",afMem);
-    printf("    intermediate: %Lf MB\n",otherMem);
-    printf("Total: %Lf MB\n",reqMem);
-
-    if (reqMem < 0)
-    {
-        fprintf(stderr, "Negative required memory (%Lf)!! Aborting.\n", reqMem);
-        exit(1);
-    }
-    else if ((tfrac*devMem) <= reqMem)
-    {
-        fprintf(stderr, "Arrays will not fit on device!\n");
-        fprintf(stderr, "   total device memory required = %Lf MB\n", reqMem);
-        fprintf(stderr, "   useable device memory        = %Lf MB\n", tfrac*devMem);
-        fprintf(stderr, "       (useable fraction = %.2f of total)\n", tfrac);
-
-        iters = (int)ceil(tfrac*reqMem / devMem)+1;
-        printf("Will split task into: %d iterations (approx. %.2Lf MB per iteration)\n", iters, (reqMem/iters));
-    }
-    printf("\n");
-
-    *niter = iters;
-}
-
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-    /* Wrapper function for GPU/CUDA error handling. Every CUDA call goes through 
-       this function. It will return a message giving your the error string, 
-       file name and line of the error. Aborts on error. */
-
-    if (code != 0)
-    {
-        fprintf(stderr, "GPUAssert:: %s - %s (%d)\n", cudaGetErrorString(code), file, line);
-        if (abort)
-        {
-            exit(code);
-        }
-    }
-}
-// define a macro for accessing gpuAssert
-#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
 
 
 int main(int argc, char *argv[])
