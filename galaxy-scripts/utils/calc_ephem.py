@@ -86,7 +86,7 @@ class Observatory(object):
             self.altmax = self.alt[self.altmaxidx]
             self.maxtimeUTC = times[self.altmaxidx]
             self.maxtimeLST = self.maxtimeUTC.sidereal_time(('apparent'), "{0}d".format(self.longitude))
-            self.maxtimeLocalStr = str(self.maxtime.to_datetime(timezone=tz))
+            self.maxtimeLocalStr = str(self.maxtimeUTC.to_datetime(timezone=tz))
             self.utcoffsetStr = self.maxtimeLocalStr[-6:] 
         else:
             print "The RA, DEC or time was not provided and so we cannot calculate the altaz of the target. Aborting."
