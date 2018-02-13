@@ -197,13 +197,7 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
 
     // Copy the result back into host memory
     gpuErrchk(cudaMemcpy( data_buffer_uvdif, d_out, out_size, cudaMemcpyDeviceToHost ));
-/*
-for (i = 0; i < 1000; i += 2)
-{
-    fprintf(stderr, "out_real[%8d] = %15e\t", i,   data_buffer_uvdif[i]);
-    fprintf(stderr, "out_imag[%8d] = %15e\n", i+1, data_buffer_uvdif[i+1]);
-}
-*/
+
     // Free memory on host and device
     free( in_real );
     free( in_imag );

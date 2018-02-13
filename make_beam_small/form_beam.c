@@ -12,7 +12,7 @@
 
 void form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
                 ComplexDouble ****J, int file_no, int nstation, int nchan,
-                int npol, int outpol_coh, int outpol_incoh, int invw,
+                int npol, int outpol_coh, int outpol_incoh, double invw,
                 ComplexDouble ***detected_beam, float *coh, float *incoh )
 /* The CPU version of the beamforming operations, using OpenMP for
  * parallelisation.

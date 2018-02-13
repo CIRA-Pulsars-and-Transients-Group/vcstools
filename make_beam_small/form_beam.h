@@ -18,13 +18,25 @@
 #define DETECT(X)                (CReald(CMuld(X,CConjd(X))))
 
 
+
+#ifdef HAVE_CUDA
+
+void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
+                   ComplexDouble ****J, int file_no, int nstation, int nchan,
+                   int npol, int outpol_coh, int outpol_incoh, double invw,
+                   ComplexDouble ***detected_beam, float *coh, float *incoh );
+
+#else
+
 void form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
                 ComplexDouble ****J, int file_no, int nstation, int nchan,
-                int npol, int outpol_coh, int outpol_incoh, int invw,
+                int npol, int outpol_coh, int outpol_incoh, double invw,
                 ComplexDouble ***detected_beam, float *coh, float *incoh );
 
 void form_stokes( ComplexDouble **detected_beam,
                   ComplexDouble noise_floor[][2][2],
                   int nchan, double invw, float *spectrum );
+
+#endif
 
 #endif

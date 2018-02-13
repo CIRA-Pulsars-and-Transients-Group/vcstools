@@ -34,7 +34,7 @@ __global__ void beamform_kernel( uint8_t *data,
                                  ComplexDouble *W,
                                  ComplexDouble *J,
                                  int nstation,
-                                 int invw,
+                                 double invw,
                                  ComplexDouble *Bd,
                                  float *C,
                                  float *I )
@@ -164,9 +164,10 @@ __global__ void beamform_kernel( uint8_t *data,
     C[Ci[3]] = -2.0*invw*CImagd( bnXY );
 }
 
-void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
-                   ComplexDouble ****J, int file_no, int nstation, int nchan,
-                   int npol, int outpol_coh, int outpol_incoh, int invw,
+void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
+                   ComplexDouble ***complex_weights_array,
+                   ComplexDouble ****invJi, int file_no, int nstation, int nchan,
+                   int npol, int outpol_coh, int outpol_incoh, double invw,
                    ComplexDouble ***detected_beam, float *coh, float *incoh )
 /* The CPU version of the beamforming operations, using OpenMP for
  * parallelisation.
@@ -201,147 +202,72 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***
                              opts->out_vdif   ||
                              opts->out_uvdif;
 
-    int data_size = opts->sample_rate * nchan * npol * sizeof(uint8_t);
-    int W_size    = nstation * nchan * npol * sizeof(ComplexDouble);
-    int J_size    = nstation * nchan * npol * npol * sizeof(ComplexDouble);
+    // Calculate array sizes for host and device
+    int coh_size   = opts->sample_rate * outpol_coh   * nchan * sizeof(float);
+    int incoh_size = opts->sample_rate * outpol_incoh * nchan * sizeof(float);
+    int data_size  = opts->sample_rate * nchan * npol * sizeof(uint8_t);
+    int Bd_size    = opts->sample_rate * nchan * npol * sizeof(ComplexDouble);
+    int W_size     = nstation * nchan * npol          * sizeof(ComplexDouble);
+    int J_size     = nstation * nchan * npol * npol   * sizeof(ComplexDouble);
 
-    // UP TO HERE
+    // Arrays to be passed to the GPU kernel
+    // (We don't need to allocate host memory for data, coh, or incoh -- we
+    // assume this is allocated before these pointers were passed into this
+    // function)
+    ComplexDouble *W, *d_W;
+    ComplexDouble *J, *d_J;
+    ComplexDouble *Bd, *d_Bd;
+    uint8_t *d_data;
+    float   *d_coh;
+    float   *d_incoh;
 
-    // Because detected_beam is large enough to contain 2 seconds' worth
-    // of data, we need an index that keeps track of which "second" we're
-    // in, effectively maintaining a circular buffer filled with the last
-    // two seconds.
-    int db_sample = (file_no % 2)*opts->sample_rate + sample;
+    // Allocate host memory
+    W  = (ComplexDouble *)malloc( W_size );
+    J  = (ComplexDouble *)malloc( J_size );
+    Bd = (ComplexDouble *)malloc( Bd_size );
 
-    ComplexDouble  beam[nchan][nstation][npol];
-    float          incoh_beam[nchan][nstation][npol];
-    float          detected_incoh_beam[nchan*outpol_incoh];
-    float          spectrum[nchan*outpol_coh];
-    ComplexDouble  noise_floor[nchan][npol][npol];
-    ComplexDouble  e_true[npol], e_dash[npol];
+    // Allocate device memory
+    gpuErrchk(cudaMalloc( (void **)&d_W,     W_size ));
+    gpuErrchk(cudaMalloc( (void **)&d_J,     J_size ));
+    gpuErrchk(cudaMalloc( (void **)&d_Bd,    Bd_size ));
+    gpuErrchk(cudaMalloc( (void **)&d_data,  data_size ));
+    gpuErrchk(cudaMalloc( (void **)&d_coh,   coh_size ));
+    gpuErrchk(cudaMalloc( (void **)&d_incoh, incoh_size ));
 
-    // Initialise beam arrays to zero
-    if (opts->out_coh)
+    // Setup input values:
+    int ant, ch, pol, pol2;
+    int Wi, Ji;
+    for (ant = 0; ant < opts->sample_rate; ant++)
+    for (ch  = 0; ch  < nchan            ; ch++ )
+    for (pol = 0; pol < npol             ; pol++)
     {
-        // Initialise noise floor to zero
-        for (ch    = 0; ch    < nchan; ch++   )
-            for (opol1 = 0; opol1 < npol;  opol1++)
-                for (opol2 = 0; opol2 < npol;  opol2++)
-                    noise_floor[ch][opol1][opol2] = CMaked( 0.0, 0.0 );
-    }
+        Wi = ant * (npol*nchan) +
+             ch  * (npol) +
+             pol;
+        W[Wi] = complex_weights_array[ant][ch][pol];
 
-    if (coherent_requested)
-    {
-        // Initialise detected beam to zero
-        for (ch  = 0; ch  < nchan; ch++ )
-            for (pol = 0; pol < npol ; pol++)
-                detected_beam[db_sample][ch][pol] = CMaked( 0.0, 0.0 );
-    }
-
-    if (opts->out_incoh)
-        for (ch  = 0; ch  < nchan   ; ch++ )
-            detected_incoh_beam[ch] = 0.0;
-
-    // Calculate the beam, noise floor
-    for (ant = 0; ant < nstation; ant++) {
-
-        // Get the index for the data that corresponds to this
-        //   sample, channel, antenna, polarisation
-        // Justification for the (bizarre) mapping is found in the docs
-        pfb = ant / 32;
-        inc = (ant / 8) % 4;
-        // rec depends on pol, so is calculated in the inner loop
-
-        for (ch = 0; ch < nchan; ch++ ) {
-
-            // Calculate quantities that depend only on "input" pol
-            for (pol = 0; pol < npol; pol++) {
-
-                rec = (2*ant+pol) % 16;
-
-                data_idx = sample * (NINC*NREC*NPFB*nchan) +
-                    ch     * (NINC*NREC*NPFB)       +
-                    pfb    * (NINC*NREC)            +
-                    rec    * (NINC)                 +
-                    inc;
-
-                // Form a single complex number
-                e_dash[pol] = UCMPLX4_TO_CMPLX_FLT(data[data_idx]);
-
-                // Detect the incoherent beam, if requested
-                if (opts->out_incoh)
-                    incoh_beam[ch][ant][pol] = DETECT(e_dash[pol]);
-
-                // Apply complex weights
-                if (coherent_requested)
-                    e_dash[pol] = CMuld( e_dash[pol], W[ant][ch][pol] );
-
-            }
-
-            // Calculate quantities that depend on output polarisation
-            // (i.e. apply inv(jones))
-            if (coherent_requested)
-            {
-                for (pol = 0; pol < npol; pol++)
-                {
-                    e_true[pol] = CMaked( 0.0, 0.0 );
-
-                    for (opol = 0; opol < npol; opol++)
-                        e_true[pol] = CAddd( e_true[pol],
-                                CMuld( J[ant][ch][pol][opol],
-                                    e_dash[opol] ) );
-
-                    if (opts->out_coh)
-                        for (opol = 0; opol < npol; opol++)
-                            noise_floor[ch][pol][opol] =
-                                CAddd( noise_floor[ch][pol][opol],
-                                        CMuld( e_true[pol],
-                                            CConjd(e_true[opol]) ) );
-
-                    beam[ch][ant][pol] = e_true[pol];
-                }
-            }
+        for (pol2 = 0; pol2 < npol; pol2++)
+        {
+            Ji = Wi*npol + pol2;
+            J[Ji] = invJi[ant][ch][pol][pol2];
         }
     }
 
-    // Detect the beam = sum over antennas
-    for (ant = 0; ant < nstation; ant++)
-        for (pol = 0; pol < npol    ; pol++)
-            for (ch  = 0; ch  < nchan   ; ch++ )
-            {
-                // Coherent beam
-                if (coherent_requested)
-                    detected_beam[db_sample][ch][pol] =
-                        CAddd( detected_beam[db_sample][ch][pol],
-                                beam[ch][ant][pol] );
+    // Copy the data to the device
+    gpuErrchk(cudaMemcpy( d_data, data, data_size, cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpy( d_W,    W,    W_size,    cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpy( d_J,    J,    J_size,    cudaMemcpyHostToDevice ));
 
-                // Incoherent beam
-                if (opts->out_incoh)
-                    detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
-            }
+    // Call the kernel
+    beamformer_kernel<<<opts->sample_rate, nchan>>>(
+            d_data, d_W, d_J, nstation, invw, d_Bd, d_coh, d_incoh );
 
-    if (opts->out_coh)
-    {
-        // Calculate the Stokes parameters
-        form_stokes( detected_beam[db_sample],
-                noise_floor,
-                nchan,
-                invw,
-                spectrum );
+    // Copy the results back into host memory
+    gpuErrchk(cudaMemcpy( coh,   d_coh,   coh_size,   cudaMemcpyDeviceToHost ));
+    gpuErrchk(cudaMemcpy( incoh, d_incoh, incoh_size, cudaMemcpyDeviceToHost ));
+    // Sort out detected_beam
 
-        int offset_in_coh = sizeof(float)*nchan*outpol_coh*sample;
-        memcpy((void *)((char *)coh + offset_in_coh),
-                spectrum,
-                sizeof(float)*nchan*outpol_coh);
-    }
-
-    if (opts->out_incoh)
-    {
-        int offset_in_incoh = sizeof(float)*nchan*outpol_incoh*sample;
-        memcpy((void *)((char *)incoh + offset_in_incoh),
-                detected_incoh_beam,
-                sizeof(float)*nchan*outpol_incoh);
-    }
+    // UP TO HERE
 
 }
 

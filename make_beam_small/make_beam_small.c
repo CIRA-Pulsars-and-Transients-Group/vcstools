@@ -24,6 +24,7 @@
 #include "filter.h"
 #include "psrfits.h"
 #include "mycomplex.h"
+#include "form_beam.h"
 
 #ifdef HAVE_CUDA
 
@@ -33,7 +34,6 @@
 #else
 
 #include <omp.h>
-#include "form_beam.h"
 #define NOW  (omp_get_wtime())
 
 #endif
@@ -266,7 +266,9 @@ int main(int argc, char **argv)
                 data_buffer_incoh[i] = 0.0;
 
 #ifdef HAVE_CUDA
-        // cu_form_beam( ... ) // YET TO IMPLEMENT
+        cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
+                      nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
+                      detected_beam, data_buffer_coh, data_buffer_incoh );
 #else
         form_beam( data, &opts, complex_weights_array, invJi, file_no,
                    nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
