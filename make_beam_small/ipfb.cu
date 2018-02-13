@@ -3,6 +3,10 @@
 #include <math.h>
 #include <cuda_runtime.h>
 
+extern "C" {
+#include "mycomplex.h"
+}
+
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
     /* Wrapper function for GPU/CUDA error handling. Every CUDA call goes through
@@ -21,10 +25,6 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 
 // define a macro for accessing gpuAssert
 #define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
-
-extern "C" {
-#include "mycomplex.h"
-}
 
 __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *fils_real, float *fils_imag,

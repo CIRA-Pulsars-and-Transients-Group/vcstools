@@ -3,16 +3,39 @@
 #include <unistd.h>
 #include <string.h>
 #include <cuda_runtime.h>
+
+extern "C" {
 #include "beam_common.h"
 #include "form_beam.h"
 #include "mycomplex.h"
+}
+
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+    /* Wrapper function for GPU/CUDA error handling. Every CUDA call goes through
+       this function. It will return a message giving your the error string,
+       file name and line of the error. Aborts on error. */
+
+    if (code != 0)
+    {
+        fprintf(stderr, "GPUAssert:: %s - %s (%d)\n", cudaGetErrorString(code), file, line);
+        if (abort)
+        {
+            exit(code);
+        }
+    }
+}
+
+// define a macro for accessing gpuAssert
+#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
+
 
 __global__ void beamform_kernel( uint8_t *data,
                                  ComplexDouble *W,
                                  ComplexDouble *J,
                                  int nstation,
                                  int invw,
-                                 ComplexDouble *B,
+                                 ComplexDouble *Bd,
                                  float *C,
                                  float *I )
 /* Layout for input arrays:
@@ -20,7 +43,7 @@ __global__ void beamform_kernel( uint8_t *data,
  *   W    [nstation] [nchan] [npol]               -- weights array
  *   J    [nstation] [nchan] [npol] [npol]        -- jones matrix
  * Layout for output arrays:
- *   B    [nsamples] [nchan]   [npol]             -- detected beam
+ *   Bd   [nsamples] [nchan]   [npol]             -- detected beam
  *   C    [nsamples] [nstokes] [nchan]            -- coherent full stokes
  *   I    [nsamples] [nchan]                      -- incoherent
  */
@@ -70,14 +93,14 @@ __global__ void beamform_kernel( uint8_t *data,
     }
 
     // Calculate the indices for the output arrays
-    int Bi[npol];
+    int Bdi[npol];
     int Ci[nstokes];
     int Ii;
 
     for (pol = 0; pol < npol; pol++)
-        Bi[pol] = sample * (npol*nchan) +
-                  ch     * (npol)       +
-                  pol;
+        Bdi[pol] = sample * (npol*nchan) +
+                   ch     * (npol)       +
+                   pol;
 
     for (st = 0; st < nstokes; st++)
         Ci[st] = sample * (nchan*nstokes) +
@@ -86,40 +109,65 @@ __global__ void beamform_kernel( uint8_t *data,
 
     Ii = sample*nchan + ch;
 
-    // Calculate the beam (B = J*W*D)
+    // Calculate the beam and the noise floor
+    ComplexDouble B[npol];
     ComplexDouble D[npol];
     ComplexDouble WD[npol];
+    ComplexDouble N[npol][npol];
 
     for (pol = 0; pol < npol; pol++)
     {
-        B[Bi] = CMaked( 0.0, 0.0 );
+        // Initialise beams and noise floor to zero
+        Bd[Bdi[pol]] = CMaked( 0.0, 0.0 );
+        I[Ii]        = 0.0;
+        for (pol2 = 0; pol2 < npol; pol2++)
+            N[pol][pol2] = CMaked( 0.0, 0.0 );
+
         for (ant = 0; ant < nstation; ant++)
         {
+            // Calculate the coherent beam (B = J*W*D)
+            B[pol]  = CMaked( 0.0, 0.0 );
             D[pol]  = UCMPLX4_TO_CMPLX_FLT(data[Di[ant][pol]]);
             WD[pol] = CMuld( W[Wi[ant][pol]], D[pol] );
 
+            // (... and along the way, calculate the incoherent beam...)
+            I[Ii] += DETECT(D[pol]);
+
             for (pol2 = 0; pol2 < npol; pol2++)
             {
-                B[Bi] = CAddd( B[Bi], CMuld( J[Ji[ant][pol][pol2]],
-                                             WD[pol2] ) );
+                B[pol] = CAddd( B[pol], CMuld( J[Ji[ant][pol][pol2]],
+                                               WD[pol2] ) );
+            }
+
+            // Detect the coherent beam
+            Bd[Bdi[pol]] += CAddd( Bd[Bdi[pol]], B[pol] );
+
+            // Calculate the noise floor (N = B*B')
+            for (pol2 = 0; pol2 < npol; pol2++)
+            {
+                N[pol][pol2] = CAddd( N[pol][pol2],
+                                      CMuld( B[pol], CConjd[B[pol2]] ) );
             }
         }
     }
 
-    // Calculate the noise floor (N = B*B')
-    ComplexDouble N[npol][npol];
-    for (pol  = 0; pol  < npol; pol++ )
-    for (pol2 = 0; pol2 < npol; pol2++)
-    {
-        N[pol][pol2] = CMuld( B[pol], CConj(B[pol2]) );
-    }
+    // Form the stokes parameters for the coherent beam
+    float bnXX = DETECT(Bd[Bdi[0]]) - CReald(N[0][0]);
+    float bnYY = DETECT(Bd[Bdi[1]]) - CReald(N[1][1]);
+    ComplexDouble bnXY = CSubd( CMuld( Bd[Bdi[0]], CConj( Bd[Bdi[1]] ) ),
+                                N[0][1] );
 
+    // Stokes I, Q, U, V:
+    C[Ci[0]] = invw*(bnXX + bnYY);
+    C[Ci[1]] = invw*(bnXX - bnYY);
+    C[Ci[2]] =  2.0*invw*CReald( bnXY );
+    C[Ci[3]] = -2.0*invw*CImagd( bnXY );
 }
 
-void form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
-                ComplexDouble ****J, int file_no, int nstation, int nchan,
-                int npol, int outpol_coh, int outpol_incoh, int invw,
-                ComplexDouble ***detected_beam, float *coh, float *incoh )
+void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
+                   ComplexDouble ****J, int file_no, int nstation, int nchan,
+                   int npol, int outpol_coh, int outpol_incoh, int invw,
+                   ComplexDouble ***detected_beam, float *coh, float *incoh )
 /* The CPU version of the beamforming operations, using OpenMP for
  * parallelisation.
  *
@@ -149,217 +197,151 @@ void form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
  * Assumes "coh" and "incoh" contain only zeros.
  */
 {
-    int sample;
-#ifndef HAVE_CUDA
-#pragma omp parallel for
-#endif
-    for (sample = 0; sample < (int)opts->sample_rate; sample++) {
+    int coherent_requested = opts->out_coh    ||
+                             opts->out_vdif   ||
+                             opts->out_uvdif;
 
-        int ch, ant, pol, opol, opol1, opol2;
-        int pfb, rec, inc;
-        int data_idx;
+    int data_size = opts->sample_rate * nchan * npol * sizeof(uint8_t);
+    int W_size    = nstation * nchan * npol * sizeof(ComplexDouble);
+    int J_size    = nstation * nchan * npol * npol * sizeof(ComplexDouble);
 
-        // Find out if any of the scenarios that need coherent
-        // output are wanted.
-        int coherent_requested = opts->out_coh    ||
-                                 opts->out_vdif   ||
-                                 opts->out_uvdif;
+    // UP TO HERE
 
-        // Because detected_beam is large enough to contain 2 seconds' worth
-        // of data, we need an index that keeps track of which "second" we're
-        // in, effectively maintaining a circular buffer filled with the last
-        // two seconds.
-        int db_sample = (file_no % 2)*opts->sample_rate + sample;
+    // Because detected_beam is large enough to contain 2 seconds' worth
+    // of data, we need an index that keeps track of which "second" we're
+    // in, effectively maintaining a circular buffer filled with the last
+    // two seconds.
+    int db_sample = (file_no % 2)*opts->sample_rate + sample;
 
-        ComplexDouble  beam[nchan][nstation][npol];
-        float          incoh_beam[nchan][nstation][npol];
-        float          detected_incoh_beam[nchan*outpol_incoh];
-        float          spectrum[nchan*outpol_coh];
-        ComplexDouble  noise_floor[nchan][npol][npol];
-        ComplexDouble  e_true[npol], e_dash[npol];
+    ComplexDouble  beam[nchan][nstation][npol];
+    float          incoh_beam[nchan][nstation][npol];
+    float          detected_incoh_beam[nchan*outpol_incoh];
+    float          spectrum[nchan*outpol_coh];
+    ComplexDouble  noise_floor[nchan][npol][npol];
+    ComplexDouble  e_true[npol], e_dash[npol];
 
-        // Initialise beam arrays to zero
-        if (opts->out_coh)
-        {
-            // Initialise noise floor to zero
-            for (ch    = 0; ch    < nchan; ch++   )
+    // Initialise beam arrays to zero
+    if (opts->out_coh)
+    {
+        // Initialise noise floor to zero
+        for (ch    = 0; ch    < nchan; ch++   )
             for (opol1 = 0; opol1 < npol;  opol1++)
-            for (opol2 = 0; opol2 < npol;  opol2++)
-                noise_floor[ch][opol1][opol2] = CMaked( 0.0, 0.0 );
-        }
+                for (opol2 = 0; opol2 < npol;  opol2++)
+                    noise_floor[ch][opol1][opol2] = CMaked( 0.0, 0.0 );
+    }
 
-        if (coherent_requested)
-        {
-            // Initialise detected beam to zero
-            for (ch  = 0; ch  < nchan; ch++ )
+    if (coherent_requested)
+    {
+        // Initialise detected beam to zero
+        for (ch  = 0; ch  < nchan; ch++ )
             for (pol = 0; pol < npol ; pol++)
                 detected_beam[db_sample][ch][pol] = CMaked( 0.0, 0.0 );
-        }
+    }
 
-        if (opts->out_incoh)
-            for (ch  = 0; ch  < nchan   ; ch++ )
-                detected_incoh_beam[ch] = 0.0;
+    if (opts->out_incoh)
+        for (ch  = 0; ch  < nchan   ; ch++ )
+            detected_incoh_beam[ch] = 0.0;
 
-        // Calculate the beam, noise floor
-        for (ant = 0; ant < nstation; ant++) {
+    // Calculate the beam, noise floor
+    for (ant = 0; ant < nstation; ant++) {
 
-            // Get the index for the data that corresponds to this
-            //   sample, channel, antenna, polarisation
-            // Justification for the (bizarre) mapping is found in the docs
-            pfb = ant / 32;
-            inc = (ant / 8) % 4;
-            // rec depends on pol, so is calculated in the inner loop
+        // Get the index for the data that corresponds to this
+        //   sample, channel, antenna, polarisation
+        // Justification for the (bizarre) mapping is found in the docs
+        pfb = ant / 32;
+        inc = (ant / 8) % 4;
+        // rec depends on pol, so is calculated in the inner loop
 
-            for (ch = 0; ch < nchan; ch++ ) {
+        for (ch = 0; ch < nchan; ch++ ) {
 
-                // Calculate quantities that depend only on "input" pol
-                for (pol = 0; pol < npol; pol++) {
+            // Calculate quantities that depend only on "input" pol
+            for (pol = 0; pol < npol; pol++) {
 
-                    rec = (2*ant+pol) % 16;
+                rec = (2*ant+pol) % 16;
 
-                    data_idx = sample * (NINC*NREC*NPFB*nchan) +
-                               ch     * (NINC*NREC*NPFB)       +
-                               pfb    * (NINC*NREC)            +
-                               rec    * (NINC)                 +
-                               inc;
+                data_idx = sample * (NINC*NREC*NPFB*nchan) +
+                    ch     * (NINC*NREC*NPFB)       +
+                    pfb    * (NINC*NREC)            +
+                    rec    * (NINC)                 +
+                    inc;
 
-                    // Form a single complex number
-                    e_dash[pol] = UCMPLX4_TO_CMPLX_FLT(data[data_idx]);
+                // Form a single complex number
+                e_dash[pol] = UCMPLX4_TO_CMPLX_FLT(data[data_idx]);
 
-                    // Detect the incoherent beam, if requested
-                    if (opts->out_incoh)
-                        incoh_beam[ch][ant][pol] = DETECT(e_dash[pol]);
+                // Detect the incoherent beam, if requested
+                if (opts->out_incoh)
+                    incoh_beam[ch][ant][pol] = DETECT(e_dash[pol]);
 
-                    // Apply complex weights
-                    if (coherent_requested)
-                        e_dash[pol] = CMuld( e_dash[pol], W[ant][ch][pol] );
-
-                }
-
-                // Calculate quantities that depend on output polarisation
-                // (i.e. apply inv(jones))
+                // Apply complex weights
                 if (coherent_requested)
+                    e_dash[pol] = CMuld( e_dash[pol], W[ant][ch][pol] );
+
+            }
+
+            // Calculate quantities that depend on output polarisation
+            // (i.e. apply inv(jones))
+            if (coherent_requested)
+            {
+                for (pol = 0; pol < npol; pol++)
                 {
-                    for (pol = 0; pol < npol; pol++)
-                    {
-                        e_true[pol] = CMaked( 0.0, 0.0 );
+                    e_true[pol] = CMaked( 0.0, 0.0 );
 
+                    for (opol = 0; opol < npol; opol++)
+                        e_true[pol] = CAddd( e_true[pol],
+                                CMuld( J[ant][ch][pol][opol],
+                                    e_dash[opol] ) );
+
+                    if (opts->out_coh)
                         for (opol = 0; opol < npol; opol++)
-                            e_true[pol] = CAddd( e_true[pol],
-                                                 CMuld( J[ant][ch][pol][opol],
-                                                        e_dash[opol] ) );
+                            noise_floor[ch][pol][opol] =
+                                CAddd( noise_floor[ch][pol][opol],
+                                        CMuld( e_true[pol],
+                                            CConjd(e_true[opol]) ) );
 
-                        if (opts->out_coh)
-                            for (opol = 0; opol < npol; opol++)
-                                noise_floor[ch][pol][opol] =
-                                    CAddd( noise_floor[ch][pol][opol],
-                                           CMuld( e_true[pol],
-                                                  CConjd(e_true[opol]) ) );
-
-                        beam[ch][ant][pol] = e_true[pol];
-                    }
+                    beam[ch][ant][pol] = e_true[pol];
                 }
             }
         }
-
-        // Detect the beam = sum over antennas
-        for (ant = 0; ant < nstation; ant++)
-            for (pol = 0; pol < npol    ; pol++)
-                for (ch  = 0; ch  < nchan   ; ch++ )
-                {
-                    // Coherent beam
-                    if (coherent_requested)
-                        detected_beam[db_sample][ch][pol] =
-                            CAddd( detected_beam[db_sample][ch][pol],
-                                   beam[ch][ant][pol] );
-
-                    // Incoherent beam
-                    if (opts->out_incoh)
-                        detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
-                }
-
-        if (opts->out_coh)
-        {
-            // Calculate the Stokes parameters
-            form_stokes( detected_beam[db_sample],
-                         noise_floor,
-                         nchan,
-                         invw,
-                         spectrum );
-
-            int offset_in_coh = sizeof(float)*nchan*outpol_coh*sample;
-            memcpy((void *)((char *)coh + offset_in_coh),
-                   spectrum,
-                   sizeof(float)*nchan*outpol_coh);
-        }
-
-        if (opts->out_incoh)
-        {
-            int offset_in_incoh = sizeof(float)*nchan*outpol_incoh*sample;
-            memcpy((void *)((char *)incoh + offset_in_incoh),
-                   detected_incoh_beam,
-                   sizeof(float)*nchan*outpol_incoh);
-        }
-
-    } // End OpenMP parallel for
-
-}
-
-
-void form_stokes( ComplexDouble **detected_beam,
-                  ComplexDouble noise_floor[][2][2],
-                  int nchan, double invw, float *spectrum )
-/* This function forms the Stokes parameters IQUV from the detected beam and
- * the constructed "noise floor". It packs the IQUV parameters into a single
- * 1D array in the following format (assuming nchan = 128):
- *
- *   I1, I2, I3, ..., I128,
- *   Q1, Q2, Q3, ..., Q128,
- *   U1, U2, U3, ..., U128,
- *   V1, V2, V3, ..., V128
- *
- * Where the numbers indicate the fine channel number. The above 4x128 block
- * represents a single time sample.
- *
- * The following array sizes are assumed:
- *
- *   detected_beam[nchan][2]
- *   noise_floor[nchan][2][2]
- *   spectrum[nchan*4]
- *
- * IQUV are all weighted by multiplication by "invw"
- * These calculations are described in .../doc/doc.pdf.
- */
-{
-    float beam00, beam11;
-    float noise0, noise1, noise3;
-    ComplexDouble beam01, beam01_n;
-    unsigned int stokesIidx, stokesQidx, stokesUidx, stokesVidx;
-
-    int ch;
-    for (ch = 0; ch < nchan; ch++)
-    {
-        beam00 = CReald( CMuld( detected_beam[ch][0], CConjd(detected_beam[ch][0]) ) );
-        beam11 = CReald( CMuld( detected_beam[ch][1], CConjd(detected_beam[ch][1]) ) );
-        beam01 = CMuld( detected_beam[ch][0], CConjd(detected_beam[ch][1]) );
-
-        noise0 = CReald( noise_floor[ch][0][0] );
-        noise1 = CReald( noise_floor[ch][0][1] );
-        noise3 = CReald( noise_floor[ch][1][1] );
-
-        stokesIidx = 0*nchan + ch;
-        stokesQidx = 1*nchan + ch;
-        stokesUidx = 2*nchan + ch;
-        stokesVidx = 3*nchan + ch;
-
-        beam01_n = CSubd( beam01, CMaked( noise1, 0.0 ) );
-
-        // Looking at the dspsr loader the expected order is <ntime><npol><nchan>
-        // so for a single timestep we do not have to interleave - I could just stack these
-        spectrum[stokesIidx] = (beam00 + beam11 - noise0 - noise3) * invw;
-        spectrum[stokesQidx] = (beam00 - beam11 - noise0 + noise3) * invw;
-        spectrum[stokesUidx] =  2.0 * CReald(beam01_n) * invw;
-        spectrum[stokesVidx] = -2.0 * CImagd(beam01_n) * invw;
     }
+
+    // Detect the beam = sum over antennas
+    for (ant = 0; ant < nstation; ant++)
+        for (pol = 0; pol < npol    ; pol++)
+            for (ch  = 0; ch  < nchan   ; ch++ )
+            {
+                // Coherent beam
+                if (coherent_requested)
+                    detected_beam[db_sample][ch][pol] =
+                        CAddd( detected_beam[db_sample][ch][pol],
+                                beam[ch][ant][pol] );
+
+                // Incoherent beam
+                if (opts->out_incoh)
+                    detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
+            }
+
+    if (opts->out_coh)
+    {
+        // Calculate the Stokes parameters
+        form_stokes( detected_beam[db_sample],
+                noise_floor,
+                nchan,
+                invw,
+                spectrum );
+
+        int offset_in_coh = sizeof(float)*nchan*outpol_coh*sample;
+        memcpy((void *)((char *)coh + offset_in_coh),
+                spectrum,
+                sizeof(float)*nchan*outpol_coh);
+    }
+
+    if (opts->out_incoh)
+    {
+        int offset_in_incoh = sizeof(float)*nchan*outpol_incoh*sample;
+        memcpy((void *)((char *)incoh + offset_in_incoh),
+                detected_incoh_beam,
+                sizeof(float)*nchan*outpol_incoh);
+    }
+
 }
 
