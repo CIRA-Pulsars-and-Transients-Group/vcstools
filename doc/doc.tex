@@ -157,8 +157,14 @@ Both are listed in the table below, and both are calculated in \texttt{get\_dela
 \end{table}
 The individual components in the matrices $W$ and $J^{-1}$ are complex numbers\footnote{I have avoided using the inverse notation on the components of $J$ for brevity.}. The subscript indices denote polarisation, so that $w_X$, for example, can be thought of as only a function of antenna and channel number, while $j_{XX}$ is just a function of antenna.
 
-\subsection{Beam detection}
-A polarisation pair of samples, $D = \begin{bmatrix} d_X \\ d_Y \end{bmatrix}$ is then operated on as follows to produce the beam product
+\subsection{Incoherent beam detection}
+A polarisation pair of samples, $D = \begin{bmatrix} d_X \\ d_Y \end{bmatrix}$, is operated on as follows to produce the incoherent beam product
+\begin{equation}
+    I = |d_X|^2 + |d_Y|^2.
+\end{equation}
+
+\subsection{Coherent beam detection}
+A polarisation pair of samples, $D = \begin{bmatrix} d_X \\ d_Y \end{bmatrix}$, is operated on as follows to produce the coherent beam product
 \begin{equation}
     B = \begin{bmatrix} b_X \\ b_Y \end{bmatrix} = \sum_a J^{-1}WD
 \end{equation}
