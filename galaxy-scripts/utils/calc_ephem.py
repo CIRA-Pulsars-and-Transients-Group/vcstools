@@ -76,7 +76,7 @@ class Observatory(object):
         self.utcoffsetStr = None
 
 
-    def compute_target_position(self, ra, dec, times, tzoffset):
+    def compute_target_position(self, ra, dec, times, tz):
         if ra and dec and times:
             self.target = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
             self.altaz = self.target.transform_to(AltAz(obstime=times, location=self.location))
@@ -99,7 +99,7 @@ def plot_ephem(ax, times, obs):
 
     ax.plot_date(times, obs.alt, color='r', lw=2, alpha=0.6)
     ax.axhline(0, ls="--", color='k')
-    ax.axvline(obs.maxtimeUTC, ls="--", color='r', lw=2)
+    ax.axvline(dates.date2num(obs.maxtimeUTC.datetime), ls="--", color='r', lw=2)
     if ax.get_ylim()[1] > 90:
 	    ax.set_ylim(None, 90)
 	
@@ -138,7 +138,7 @@ def calculate_ephem(ra, dec, date, tzoffset, site, center):
     for s in site:
         o = Observatory(s)
         o.compute_target_position(ra, dec, times, tz)
-        plot_ephem(ax, times, o)
+        plot_ephem(ax, plttimes, o)
     
     plt.show()
    
