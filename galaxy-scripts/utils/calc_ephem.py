@@ -23,9 +23,6 @@ from datetime import datetime, timedelta
 import sys
 import argparse
 
-# get updated IERS tables
-iers.IERS.iers_table = iers.IERS_A.open(iers.IERS_A_URL)
-
 
 #radio telescope sites: Name, latitude, longitude, elevation
 site_dict = {'MWA':(-26.7033,116.671,377.827),\
@@ -88,18 +85,19 @@ class Observatory(object):
             self.altmax = self.alt[self.altmaxidx]
             self.maxtimeUTC = times[self.altmaxidx]
             self.maxtimeLST = self.maxtimeUTC.sidereal_time(('apparent'), "{0}d".format(self.longitude))
-            tmp = str(self.maxtimeUTC.to_datetime(timezone=tzoffset))
-            self.maxtimeLocalStr = tmp[:-6] 
-            self.utcoffsetStr = tmp[-6:]
+            self.maxtimeLocalStr = str(self.maxtime.to_datetime(timezone=tz))
+            self.utcoffsetStr = self.maxtimeLocalStr[-6:] 
         else:
             print "The RA, DEC or time was not provided and so we cannot calculate the altaz of the target. Aborting."
             sys.exit(1)
         
 
+
 def plot_ephem(ax, times, obs):
-    p = ax.plot_date(times, obs.alt, marker='', ls="-", lw=2, alpha=0.6, label=obs.name)
+    
+    ax.plot_date(times, obs.alt, color='r', lw=2, alpha=0.6)
     ax.axhline(0, ls="--", color='k')
-    ax.axvline(dates.date2num(obs.maxtimeUTC.datetime), ls="--", lw=2, color=p[0].get_color())
+    ax.axvline(obs.maxtimeUTC, ls="--", color='r', lw=2)
     if ax.get_ylim()[1] > 90:
 	    ax.set_ylim(None, 90)
 	
@@ -109,9 +107,10 @@ def plot_ephem(ax, times, obs):
     ax.fill_between(times, [ax.get_ylim()[0]]*len(times), interpolate=True, color='gray')
 
     coords = obs.target.to_string('hmsdms')
-    ax.set_title("Source: {0}".format(coords))
+    ax.set_title("Source: {0}\n{1} UTC{2}".format(coords, obs.maxtimeLocalStr, obs.utcoffsetStr))
     ax.set_xlabel("Time (UTC)")
     ax.set_ylabel("Elevation  [deg]")
+    
 
 
 def calculate_ephem(ra, dec, date, tzoffset, site, center):
@@ -123,12 +122,35 @@ def calculate_ephem(ra, dec, date, tzoffset, site, center):
     mi = [int((hours[i]-hr[i])*60) for i in range(len(hours))]
     se = [0]*len(hours)
     t = [datetime(int(year), int(month), int(day), h, m, s) for h,m,s in zip(hr,mi,se)]
-
+ 
     times = Time(t, scale='utc', format='datetime') # list of Time objects at which the ephemeris is computed
     tz = TimezoneInfo(utc_offset=tzoffset * u.hour) # timezone object to convert times
     plttimes = dates.date2num([t for t in times.datetime]) # times in plottable format
 
-#    # TODO: need to re-implement this in a consistent way...   
+    # set up figure for plot
+    fig = plt.figure(figsize=(10,8))
+    ax = fig.add_subplot(111)
+
+    # site can be a list, so we need to create an Observatory for each
+    for s in site:
+        o = Observatory(s)
+        o.compute_target_position(ra, dec, times, tz)
+        plot_ephem(ax, times, o)
+    
+    plt.show()
+    #locations = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=elev*u.m)
+    #locations = {"{0}".format(o.name):o.location for o in observatories}
+
+    #target = SkyCoord(ra,dec,unit=(u.hourangle,u.deg))
+    
+    # for each observatory, calcaulte the soure Altitude and Azimuth
+    #altaz = target.transform_to(AltAz(obstime=times, location=locations.))
+    #alt = altaz.alt.deg
+
+    #maxidx = alt.argmax() #np.where(alt==alt.max())[0][0]
+    #maxtime = times[maxidx]
+    
+    # TODO: need to re-implement this in a consistent way...   
 #    if center:
 #        # shifting things to the centre of the plot
 #        dt = (times[-1]-times[0]) / len(times)
@@ -139,28 +161,13 @@ def calculate_ephem(ra, dec, date, tzoffset, site, center):
 #        # for things to be unaltered downstream
 #        maxidx = 1200
 
+    # converting the times to something plottable
+    #lst = str(maxtime.to_datetime(timezone=tz))
+    #utcoff = lst[-6:]
+    #lst = lst[:-6]
+    #print "Local time (UTC{0}) of maximum elevation: {1}".format(utcoff,lst)
 
-    # set up figure for plot
-    fig = plt.figure(figsize=(10,8))
-    ax = fig.add_subplot(111)
 
-    # site can be a list, so we need to create an Observatory for each
-    for s in site:
-        o = Observatory(s)
-        o.compute_target_position(ra, dec, times, tz)
-        print "For {0}:".format(o.name)
-        print "Maximum elevation = {0:.2} deg".format(o.altmax)
-        print "Time of max. elevation:"
-        print "  UTC = {0}".format(o.maxtimeUTC)
-        print "local = {0}".format(o.maxtimeLocalStr)
-        print "  LST = {0}".format(o.maxtimeLST)
-        print "-------------------------------"
-        plot_ephem(ax, plttimes, o)
-    
-    plt.legend(loc=2)
-    plt.tight_layout()
-    plt.show()
-    
        
 
 
