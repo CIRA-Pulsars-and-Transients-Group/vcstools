@@ -3,15 +3,15 @@
 """
 Updated to be a little more general and not require LSL libraries...
 I suppose the next step would be to move over to using astropy given that pyephem is depricated now...
+ - BWM 2016/06/13
 
-Date: 2016/06/13
+This script will accept a source position and a UTC day in which to calculate the ephemerides for 24 hours.
+This can be done for multiple observatories simultaneously. 
+
+Date: 2018/02/13
 Author: Bradley Meyers
 """
 
-#import ephem
-#from lsl.common.stations import lwa1
-#from psr_constants import *
-#from math import pi
 import matplotlib.pyplot as plt
 from matplotlib import dates
 import numpy as np
@@ -24,7 +24,7 @@ import sys
 import argparse
 
 
-#radio telescope sites: Name, latitude, longitude, elevation
+# Radio telescope sites: Name, latitude, longitude, elevation
 site_dict = {'MWA':(-26.7033,116.671,377.827),\
 		'PKS':(-32.999944,148.262306,372),\
 		'ATCA':(-30.312778,149.550278,209),\
@@ -41,6 +41,7 @@ site_dict = {'MWA':(-26.7033,116.671,377.827),\
 
 
 class Observatory(object):
+    """ Class to hold information regardin the observatory and the ephemeris it observes for the given target."""
 
     def __init__(self, name, latitude=None, longitude=None, elevation=None):
         if name in site_dict.keys():
@@ -94,7 +95,8 @@ class Observatory(object):
 
 
 def plot_ephem(ax, times, obs):
-    
+    """ Given an axis object, the times (x) and observed ephemeris (y), plot the source track."""
+
     ax.plot_date(times, obs.alt, color='r', lw=2, alpha=0.6)
     ax.axhline(0, ls="--", color='k')
     ax.axvline(obs.maxtimeUTC, ls="--", color='r', lw=2)
@@ -114,6 +116,7 @@ def plot_ephem(ax, times, obs):
 
 
 def calculate_ephem(ra, dec, date, tzoffset, site, center):
+    """Compute the ephemeris for a target on a given day at a target position."""
     
     # first, let's set up the times we want to evaluate the source position for
     year, month, day = date.split("/")
@@ -138,18 +141,7 @@ def calculate_ephem(ra, dec, date, tzoffset, site, center):
         plot_ephem(ax, times, o)
     
     plt.show()
-    #locations = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=elev*u.m)
-    #locations = {"{0}".format(o.name):o.location for o in observatories}
-
-    #target = SkyCoord(ra,dec,unit=(u.hourangle,u.deg))
-    
-    # for each observatory, calcaulte the soure Altitude and Azimuth
-    #altaz = target.transform_to(AltAz(obstime=times, location=locations.))
-    #alt = altaz.alt.deg
-
-    #maxidx = alt.argmax() #np.where(alt==alt.max())[0][0]
-    #maxtime = times[maxidx]
-    
+   
     # TODO: need to re-implement this in a consistent way...   
 #    if center:
 #        # shifting things to the centre of the plot
@@ -160,32 +152,23 @@ def calculate_ephem(ra, dec, date, tzoffset, site, center):
 #        #times += tzoffset*u.hour
 #        # for things to be unaltered downstream
 #        maxidx = 1200
-
-    # converting the times to something plottable
-    #lst = str(maxtime.to_datetime(timezone=tz))
-    #utcoff = lst[-6:]
-    #lst = lst[:-6]
-    #print "Local time (UTC{0}) of maximum elevation: {1}".format(utcoff,lst)
-
-
        
 
 
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Determine ephemeris for source object over 24hrs.")
+    parser.add_argument('--ra',      type=str,   metavar="RAJ2000",  help="RAJ2000 coordinate of target source (hh:mm:ss.ss)",  required=True)
+    parser.add_argument('--dec',     type=str,   metavar="DECJ2000", help="DECJ2000 coordinate of target source (dd:mm:ss.ss)", required=True)
+    parser.add_argument('--utcdate', type=str,   metavar="date",     help="Desired ephemeris UTC date (YYYY/MM/DD)",            required=True)
+    parser.add_argument('--utcoff',  type=float, metavar="offset",   help="Hour offset from UTC [default = 0]", default=0)
+    parser.add_argument('--site',    type=str,   metavar="name", nargs='+', 
+                            choices=site_dict.keys(), help="Common radio telescope sites to use as observer position. "
+                            "Choose from: {0}. Or use --observer option. No default.".format(site_dict.keys()), default=None)
 
+    # TODO: need to allow any number of manually defined observing positions, but for now just use those in the site_dict
+    #parser.add_argument('--observer', type=float, nargs=3, metavar=("lat", "lon", "elev"), help="Latitude (deg), longitude (deg) and elevation (m) of observer. No default.",default=(None,None,None))
+    parser.add_argument('-c', '--center', action='store_true', help='Center the time of maximum elevation on the plot')
+    args = parser.parse_args()
 
-
-
-
-parser = argparse.ArgumentParser(description="Determine ephemeris for source object over 24hrs.")
-parser.add_argument('--ra', type=str, metavar="RAJ2000", help="RAJ2000 coordinate of target source (hh:mm:ss.ss)",required=True)
-parser.add_argument('--dec', type=str, metavar="DECJ2000", help="DECJ2000 coordinate of target source (dd:mm:ss.ss)",required=True)
-parser.add_argument('--utcdate', type=str, metavar="date", help="Desired ephemeris UTC date (YYYY/MM/DD)",required=True)
-parser.add_argument('--utcoff', type=float, metavar="offset", help="Hour offset from UTC [default = 0]",default=0)
-parser.add_argument('--site', type=str, metavar="name", nargs='+', choices=site_dict.keys(), help="Common radio telescope sites to use as observer position. Choose from: {0}. Or use --observer option. No default.".format(site_dict.keys()),default=None)
-# TODO: need to allow any number of manually defined observing positions, but for now just use those in the site_dict
-#parser.add_argument('--observer', type=float, nargs=3, metavar=("lat", "lon", "elev"), help="Latitude (deg), longitude (deg) and elevation (m) of observer. No default.",default=(None,None,None))
-parser.add_argument('-c', '--center', action='store_true', help='Center the time of maximum elevation on the plot')
-args = parser.parse_args()
-
-calculate_ephem(args.ra, args.dec, args.utcdate, args.utcoff, args.site, args.center)
+    calculate_ephem(args.ra, args.dec, args.utcdate, args.utcoff, args.site, args.center)
