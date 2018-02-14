@@ -38,8 +38,8 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
     //if (fabsf(rmean) > 0.001)
     if (1)
     {
-        printf( "warning: vdif_write_second: significantly "
-                "non-zero mean (%f), adjusting data\n", rmean );
+        fprintf( stderr, "warning: vdif_write_second: significantly "
+                         "non-zero mean (%f), adjusting data\n", rmean );
         unsigned int i;
         for (i = 0; i < vf->sizeof_buffer/2; i++)
         {
