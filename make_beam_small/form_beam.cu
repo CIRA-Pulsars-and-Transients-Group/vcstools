@@ -204,7 +204,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     // Calculate array sizes for host and device
     size_t coh_size   = opts->sample_rate * outpol_coh   * nchan * sizeof(float);
     size_t incoh_size = opts->sample_rate * outpol_incoh * nchan * sizeof(float);
-    size_t data_size  = opts->sample_rate * nchan * npol * sizeof(uint8_t);
+    size_t data_size  = opts->sample_rate * nstation * nchan * npol * sizeof(uint8_t);
     size_t Bd_size    = opts->sample_rate * nchan * npol * sizeof(ComplexDouble);
     size_t W_size     = nstation * nchan * npol          * sizeof(ComplexDouble);
     size_t J_size     = nstation * nchan * npol * npol   * sizeof(ComplexDouble);
@@ -223,12 +223,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     // Allocate host memory
     W  = (ComplexDouble *)malloc( W_size );
     J  = (ComplexDouble *)malloc( J_size );
-    // Make Bd point to either the first or second half of detected beam,
-    // according to whether this is an odd- or even-numbered file
-    if (file_no % 2 == 0)
-        Bd = &(detected_beam[0][0][0]);
-    else
-        Bd = &(detected_beam[opts->sample_rate][0][0]);
+    Bd = (ComplexDouble *)malloc( Bd_size );
 
 
     // Allocate device memory
@@ -240,7 +235,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     gpuErrchk(cudaMalloc( (void **)&d_incoh, incoh_size ));
 
     // Setup input values (= populate W and J)
-    int ant, ch, pol, pol2;
+    int s, ant, ch, pol, pol2;
     int Wi, Ji;
     for (ant = 0; ant < nstation; ant++)
     for (ch  = 0; ch  < nchan   ; ch++ )
@@ -269,22 +264,34 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     cudaDeviceSynchronize();
 
     // Copy the results back into host memory
-fprintf(stderr, "*coh   = %p\n", coh );
-fprintf(stderr, "*incoh = %p\n", incoh );
-fprintf(stderr, "*Bd    = %p\n", Bd );
-fprintf(stderr, "*d_coh   = %p\n", d_coh );
-fprintf(stderr, "*d_incoh = %p\n", d_incoh );
-fprintf(stderr, "*d_Bd    = %p\n", d_Bd );
-fprintf(stderr, "coh_size   = %d\n", coh_size);
-fprintf(stderr, "incoh_size = %d\n", incoh_size);
-fprintf(stderr, "Bd_size    = %d\n", Bd_size);
     gpuErrchk(cudaMemcpy( coh,   d_coh,   coh_size,   cudaMemcpyDeviceToHost ));
     gpuErrchk(cudaMemcpy( incoh, d_incoh, incoh_size, cudaMemcpyDeviceToHost ));
     gpuErrchk(cudaMemcpy( Bd,    d_Bd,    Bd_size,    cudaMemcpyDeviceToHost ));
 
+    // Copy the data back from Bd back into the detected_beam array
+    // Make sure we put it back into the correct half of the array, depending
+    // on whether this is an even or odd second.
+    int offset, i;
+    if (file_no % 2 == 0)
+        offset = 0;
+    else
+        offset = opts->sample_rate;
+
+    for (s   = 0; s   < opts->sample_rate; s++  )
+    for (ch  = 0; ch  < nchan            ; ch++ )
+    for (pol = 0; pol < npol             ; pol++)
+    {
+        i = s  * (npol*nchan) +
+            ch * (npol)       +
+            pol;
+
+        detected_beam[s+offset][ch][pol] = Bd[i];
+    }
+
     // Free memory on host and device
     free( W );
     free( J );
+    free( Bd );
     cudaFree( d_W );
     cudaFree( d_J );
     cudaFree( d_Bd );

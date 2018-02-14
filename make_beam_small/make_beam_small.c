@@ -210,8 +210,6 @@ int main(int argc, char **argv)
     float *data_buffer_vdif  = NULL;
     float *data_buffer_uvdif = NULL;
 
-fprintf(stderr, "nchan * outpol_coh * pf.hdr.nsblk * sizeof(float) = %d * %d * %d * %ld = %ld\n", nchan, outpol_coh, pf.hdr.nsblk, sizeof(float), nchan * outpol_coh * pf.hdr.nsblk * sizeof(float) );
-fprintf(stderr, "nchan * outpol_incoh * pf_incoh.hdr.nsblk * sizeof(float) = %d * %d * %d * %ld = %ld\n", nchan, outpol_incoh, pf_incoh.hdr.nsblk, sizeof(float), nchan * outpol_incoh * pf_incoh.hdr.nsblk * sizeof(float) );
     data_buffer_coh   = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
     data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
     data_buffer_vdif  = create_data_buffer_vdif( &vf );
@@ -251,8 +249,6 @@ fprintf(stderr, "nchan * outpol_incoh * pf_incoh.hdr.nsblk * sizeof(float) = %d 
             data_buffer_incoh[i] = 0.0;
 
 #ifdef HAVE_CUDA
-fprintf(stderr, "*data_buffer_coh   = %p\n", data_buffer_coh );
-fprintf(stderr, "*data_buffer_incoh = %p\n", data_buffer_incoh );
         cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                       nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
                       detected_beam, data_buffer_coh, data_buffer_incoh );
