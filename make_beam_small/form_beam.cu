@@ -202,12 +202,12 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
  */
 {
     // Calculate array sizes for host and device
-    int coh_size   = opts->sample_rate * outpol_coh   * nchan * sizeof(float);
-    int incoh_size = opts->sample_rate * outpol_incoh * nchan * sizeof(float);
-    int data_size  = opts->sample_rate * nchan * npol * sizeof(uint8_t);
-    int Bd_size    = opts->sample_rate * nchan * npol * sizeof(ComplexDouble);
-    int W_size     = nstation * nchan * npol          * sizeof(ComplexDouble);
-    int J_size     = nstation * nchan * npol * npol   * sizeof(ComplexDouble);
+    size_t coh_size   = opts->sample_rate * outpol_coh   * nchan * sizeof(float);
+    size_t incoh_size = opts->sample_rate * outpol_incoh * nchan * sizeof(float);
+    size_t data_size  = opts->sample_rate * nchan * npol * sizeof(uint8_t);
+    size_t Bd_size    = opts->sample_rate * nchan * npol * sizeof(ComplexDouble);
+    size_t W_size     = nstation * nchan * npol          * sizeof(ComplexDouble);
+    size_t J_size     = nstation * nchan * npol * npol   * sizeof(ComplexDouble);
 
     // Arrays to be passed to the GPU kernel
     // (We don't need to allocate host memory for data, coh, or incoh -- we
