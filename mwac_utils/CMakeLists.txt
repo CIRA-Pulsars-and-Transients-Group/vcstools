@@ -4,6 +4,8 @@ cmake_policy(SET CMP0048 NEW)
 
 project(mwac_utils)
 
+message("***Entering project mwac_utils***")
+
 include_directories(/usr/local/include ./ ${FFTW3_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIRS} ${PLOTUTILS_INCLUDE_DIR})
 
 add_library(mwac_utils STATIC mwac_utils.c antenna_mapping.c ascii_header.c uvfits.c vdifio.c )

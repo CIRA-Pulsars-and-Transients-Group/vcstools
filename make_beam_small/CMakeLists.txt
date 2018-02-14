@@ -10,7 +10,7 @@ if(CUDA_FOUND)
     #file(GLOB sources "*.c" "*.cu")
     set(sources "${PROJECT_SOURCE_DIR}/beam_common.c;${PROJECT_SOURCE_DIR}/beam_psrfits.c;${PROJECT_SOURCE_DIR}/beam_vdif.c;${PROJECT_SOURCE_DIR}/filter.c;${PROJECT_SOURCE_DIR}/form_beam.cu;${PROJECT_SOURCE_DIR}/get_delays_small.c;${PROJECT_SOURCE_DIR}/ipfb.cu;make_beam_small.c;${PROJECT_SOURCE_DIR}/ascii_header.c;${PROJECT_SOURCE_DIR}/vdifio.c")
     add_executable(make_beam_small ${sources})
-    target_link_libraries(make_beam_small ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${FFTW3_OMP_LIBRARY} ${FFTW3_LIBRARY})
+    target_link_libraries(make_beam_small ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY})
     set_target_properties(make_beam_small PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DHAVE_CUDA")
 
 else ()
