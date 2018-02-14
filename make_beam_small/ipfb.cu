@@ -24,7 +24,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 }
 
 // define a macro for accessing gpuAssert
-#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
+#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__, true);}
 
 __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *fils_real, float *fils_imag,
