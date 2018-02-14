@@ -116,11 +116,11 @@ __global__ void beamform_kernel( uint8_t *data,
     ComplexDouble WD[NPOL];
     ComplexDouble N[NPOL][NPOL];
 
+    I[Ii] = 0.0;
     for (pol = 0; pol < NPOL; pol++)
     {
         // Initialise beams and noise floor to zero
         Bd[Bdi[pol]] = CMaked( 0.0, 0.0 );
-        I[Ii]        = 0.0;
         for (pol2 = 0; pol2 < NPOL; pol2++)
             N[pol][pol2] = CMaked( 0.0, 0.0 );
 
@@ -267,9 +267,6 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     gpuErrchk(cudaMemcpy( coh,   d_coh,   coh_size,   cudaMemcpyDeviceToHost ));
     gpuErrchk(cudaMemcpy( incoh, d_incoh, incoh_size, cudaMemcpyDeviceToHost ));
     gpuErrchk(cudaMemcpy( Bd,    d_Bd,    Bd_size,    cudaMemcpyDeviceToHost ));
-
-for (s = 0; s < incoh_size / sizeof(float); s++)
-fprintf(stderr, "incoh[%6d] = %e\n", s, incoh[s]);
 
     // Copy the data back from Bd back into the detected_beam array
     // Make sure we put it back into the correct half of the array, depending
