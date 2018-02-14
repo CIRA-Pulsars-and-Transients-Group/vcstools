@@ -49,16 +49,11 @@ PABEAM_OBJECTS = utils.o pabeam_kernal.o pabeam.o
 
 OBJECTS = $(FEE2016_OBJECTS) $(PABEAM_OBJECTS)
 
-#TARGETS = pabeam_gpu_notile pabeam_gpu
 TARGETS = pabeam_gpu
 
 BIN_DIR = ../bin
 
 all: $(TARGETS)
-
-
-pabeam_gpu_notile: pabeam_notile.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 
 pabeam_gpu: $(OBJECTS)

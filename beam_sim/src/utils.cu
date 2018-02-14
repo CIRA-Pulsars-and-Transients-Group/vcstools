@@ -111,6 +111,23 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
 }
 
 
+void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+    /* Wrapper function for GPU/CUDA error handling. Every CUDA call goes through 
+       this function. It will return a message giving your the error string, 
+       file name and line of the error. Aborts on error. */
+
+    if (code != 0)
+    {
+        fprintf(stderr, "GPUAssert:: %s - %s (%d)\n", cudaGetErrorString(code), file, line);
+        if (abort)
+        {
+            exit(code);
+        }
+    }
+}
+
+
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
 {
     /* Convert a UTC string (YYYY-MM-DDThh:mm:ss.ss) into MJD in radians.
@@ -137,4 +154,5 @@ void mjd2lst(double mjd, double *lst)
     lmst = slaRanorm(slaGmst(mjd) + MWA_LON*DEG2RAD);
     *lst = lmst;
 }
+
 

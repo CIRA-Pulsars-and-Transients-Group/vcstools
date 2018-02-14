@@ -23,6 +23,9 @@
 #define MWA_LON (116.67081)     // Array longitude, degrees East
 #define MWA_HGT (377.827)       // Array elevation above sea level, in meters
 
+// Macro to use gpuAssert function
+#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
+
 
 /* struct to hold all the wavenumbers for each (Az,ZA) */
 typedef struct wavenums_t
@@ -44,6 +47,8 @@ typedef struct tazza_t
 void getDeviceDimensions(int *nDevices);
 
 void requiredMemory(int size, int ntiles, int *niter, int *blockSize);
+
+void gpuAssert(cudaError_t code, const char *file, int line, bool abort);
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd);
 

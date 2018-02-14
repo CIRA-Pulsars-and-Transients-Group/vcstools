@@ -15,12 +15,8 @@
 #include "H5Cpp.h"
 
 
-// Macro to use gpuAssert function
-#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
-
 void usage();
 
-void gpuAssert(cudaError_t code, const char *file, int line, bool abort);
 
 void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn);
 
