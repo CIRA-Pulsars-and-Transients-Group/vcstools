@@ -5,10 +5,7 @@
 #include "beam_common.h"
 #include "form_beam.h"
 #include "mycomplex.h"
-
-#ifndef HAVE_CUDA
 #include <omp.h>
-#endif
 
 void form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
                 ComplexDouble ****J, int file_no, int nstation, int nchan,
@@ -44,9 +41,7 @@ void form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
  */
 {
     int sample;
-#ifndef HAVE_CUDA
 #pragma omp parallel for
-#endif
     for (sample = 0; sample < (int)opts->sample_rate; sample++) {
 
         int ch, ant, pol, opol, opol1, opol2;

@@ -158,19 +158,26 @@ Both are listed in the table below, and both are calculated in \texttt{get\_dela
 The individual components in the matrices $W$ and $J^{-1}$ are complex numbers\footnote{I have avoided using the inverse notation on the components of $J$ for brevity.}. The subscript indices denote polarisation, so that $w_X$, for example, can be thought of as only a function of antenna and channel number, while $j_{XX}$ is just a function of antenna.
 
 \subsection{Incoherent beam detection}
-A polarisation pair of samples, $D = \begin{bmatrix} d_X \\ d_Y \end{bmatrix}$, is operated on as follows to produce the incoherent beam product
+A polarisation pair of samples measured by antenna $a$, $D_a = \begin{bmatrix} d_{a,X} \\ d_{a,Y} \end{bmatrix}$, is operated on as follows to produce the incoherent beam product
 \begin{equation}
-    I = \sum_a D^\dagger D = \sum_a (|d_X|^2 + |d_Y|^2).
+    I_a = D_a^\dagger D_a = (|d_{a,X}|^2 + |d_{a,Y}|^2),
+\end{equation}
+which is then summed over the antennas to produce the final detected sample
+\begin{equation}
+    I = \sum_a I_a
 \end{equation}
 
 \subsection{Coherent beam detection}
-A polarisation pair of samples, $D = \begin{bmatrix} d_X \\ d_Y \end{bmatrix}$, is operated on as follows to produce the coherent beam product
+A polarisation pair of samples measured by antenna $a$, $D_a = \begin{bmatrix} d_{a,X} \\ d_{a,Y} \end{bmatrix}$, is operated on as follows to produce the coherent beam product
 \begin{equation}
-    B = \begin{bmatrix} b_X \\ b_Y \end{bmatrix} = \sum_a J^{-1}WD
+    B_a = \begin{bmatrix} b_{a,X} \\ b_{a,Y} \end{bmatrix} = J_a^{-1} W_a D_a
 \end{equation}
-where the sum is over the antennas, giving a detected beam, $B$, that is a function of channel number only.
+which is then summed over the antennas to produce the final detected sample
+\begin{equation}
+    B = \sum_a B_a
+\end{equation}
 
-\subsubsection{Efficiency via pre-calculation}
+\paragraph{Efficiency via pre-calculation}
 \label{sec:precalc1}
 Since, within a second, every sample is multiplied to the same $J^{-1}$ and $W$, the possibility exists for a processing speed by means of pre-calculating the product
 \begin{equation}
@@ -187,22 +194,22 @@ where
 Unfortunately, such a pre-calculation was found not to reduce significantly the number of mathematical operations required in the innermost for-loop, and the total time was found to be comprable to the case where the pre-calculation step was not used.
 Therefore, this approach was abandoned.
 
-\subsection{Noise floor}
+\subsubsection{Noise floor}
 In preparation for calculating the Stokes parameters, a quantity called the \texttt{noise\_floor} is calculated, which is a function of channel only,
 \begin{equation}
     N = \begin{bmatrix} n_{XX} & n_{XY} \\ n_{YX} & n_{YY} \end{bmatrix}
-      = \sum_a BB^\dagger
+      = \sum_a B_a B_a^\dagger
 \end{equation}
 where $\dagger$ denotes the Hermitian transpose.
-In particular, note that $n_{XY,c} = n_{YX,c}$.
+In particular, note that $n_{XX}$ and $n_{YY}$ are both real-valued, and that $n_{XY} = n_{YX}$.
 
-\subsubsection{Efficiency via pre-calculation}
+\paragraph{Efficiency via pre-calculation}
 Similarly to the pre-calculation attempted in Section \ref{sec:precalc1}, pre-calculation of the quantities within the product $BB^\dagger$ was attempted in the effort to speed up the overall computation.
 This involved expanding the product $BB^\dagger$ as a linear combination of $d_X$ and $d_Y$ (and their conjugates) and pre-calculating the coefficients.
 This turned out to actually increase the number of mathematical operations within the innermost for-loop (by virtue of the linear sum), and thus \emph{increase} the total wall time.
 Thus, this approach was also abandoned.
 
-\subsection{Stokes parameters}
+\subsubsection{Stokes parameters}
 
 Finally, the Stokes parameters $I$, $Q$, $U$, and $V$, are calculated as follows.
 \begin{align}

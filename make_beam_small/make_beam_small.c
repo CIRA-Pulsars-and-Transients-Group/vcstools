@@ -177,38 +177,27 @@ int main(int argc, char **argv)
     ComplexDouble **fil_ramps = apply_mult_phase_ramps( fil, fil_size, nchan );
 
     // Populate the relevant header structs
-    if (opts.out_coh)
-    {
-        populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc,
-                opts.sample_rate, opts.frequency, nchan, opts.chan_width,
-                outpol_coh, opts.rec_channel, &delay_vals );
-    }
-    if (opts.out_incoh)
-    {
-        populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid,
-                opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-                opts.chan_width, outpol_incoh, opts.rec_channel, &delay_vals );
+    populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc,
+            opts.sample_rate, opts.frequency, nchan, opts.chan_width,
+            outpol_coh, opts.rec_channel, &delay_vals );
+    populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid,
+            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.chan_width, outpol_incoh, opts.rec_channel, &delay_vals );
 
-        // Use the tile pointing instead of the pencil beam pointing
-        // TO DO: Move this to populate_psrfits_header?
-        pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
-        pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
-    }
-    if (opts.out_vdif)
-    {
-        populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
-                opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-                opts.chan_width, opts.rec_channel, &delay_vals );
-    }
-    if (opts.out_uvdif)
-    {
-        populate_vdif_header( &uvf, &uvhdr, opts.metafits, opts.obsid,
-                opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-                opts.chan_width, opts.rec_channel, &delay_vals );
+    // Use the tile pointing instead of the pencil beam pointing
+    // TO DO: Move this to populate_psrfits_header?
+    pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
+    pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
 
-        sprintf( uvf.basefilename, "%s_%s_ch%03d_u",
-                 uvf.exp_name, uvf.scan_name, atoi(opts.rec_channel) );
-    }
+    populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
+            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.chan_width, opts.rec_channel, &delay_vals );
+    populate_vdif_header( &uvf, &uvhdr, opts.metafits, opts.obsid,
+            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.chan_width, opts.rec_channel, &delay_vals );
+
+    sprintf( uvf.basefilename, "%s_%s_ch%03d_u",
+             uvf.exp_name, uvf.scan_name, atoi(opts.rec_channel) );
 
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
@@ -221,14 +210,12 @@ int main(int argc, char **argv)
     float *data_buffer_vdif  = NULL;
     float *data_buffer_uvdif = NULL;
 
-    if (opts.out_coh)
-        data_buffer_coh = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
-    if (opts.out_incoh)
-        data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
-    if (opts.out_vdif)
-        data_buffer_vdif = create_data_buffer_vdif( &vf );
-    if (opts.out_uvdif)
-        data_buffer_uvdif = create_data_buffer_vdif( &uvf );
+fprintf(stderr, "nchan * outpol_coh * pf.hdr.nsblk * sizeof(float) = %d * %d * %d * %ld = %ld\n", nchan, outpol_coh, pf.hdr.nsblk, sizeof(float), nchan * outpol_coh * pf.hdr.nsblk * sizeof(float) );
+fprintf(stderr, "nchan * outpol_incoh * pf_incoh.hdr.nsblk * sizeof(float) = %d * %d * %d * %ld = %ld\n", nchan, outpol_incoh, pf_incoh.hdr.nsblk, sizeof(float), nchan * outpol_incoh * pf_incoh.hdr.nsblk * sizeof(float) );
+    data_buffer_coh   = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
+    data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
+    data_buffer_vdif  = create_data_buffer_vdif( &vf );
+    data_buffer_uvdif = create_data_buffer_vdif( &uvf );
 
     int file_no = 0;
 
@@ -257,15 +244,15 @@ int main(int argc, char **argv)
 
         printf("[%f]  Calculating beam\n", NOW-begintime);
 
-        if (opts.out_coh)
-            for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
-                data_buffer_coh[i] = 0.0;
+        for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
+            data_buffer_coh[i] = 0.0;
 
-        if (opts.out_incoh)
-            for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
-                data_buffer_incoh[i] = 0.0;
+        for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
+            data_buffer_incoh[i] = 0.0;
 
 #ifdef HAVE_CUDA
+fprintf(stderr, "*data_buffer_coh   = %p\n", data_buffer_coh );
+fprintf(stderr, "*data_buffer_incoh = %p\n", data_buffer_incoh );
         cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                       nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
                       detected_beam, data_buffer_coh, data_buffer_incoh );

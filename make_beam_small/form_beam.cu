@@ -30,21 +30,26 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 #define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
 
 
+// define constants to be used in the kernel
+#define NSTATION  128
+#define NPOL      2
+#define NSTOKES   4
+
+
 __global__ void beamform_kernel( uint8_t *data,
                                  ComplexDouble *W,
                                  ComplexDouble *J,
-                                 int nstation,
                                  double invw,
                                  ComplexDouble *Bd,
                                  float *C,
                                  float *I )
 /* Layout for input arrays:
  *   data [nsamples] [nchan] [NPFB] [NREC] [NINC] -- see docs
- *   W    [nstation] [nchan] [npol]               -- weights array
- *   J    [nstation] [nchan] [npol] [npol]        -- jones matrix
+ *   W    [NSTATION] [nchan] [NPOL]               -- weights array
+ *   J    [NSTATION] [nchan] [NPOL] [NPOL]        -- jones matrix
  * Layout for output arrays:
- *   Bd   [nsamples] [nchan]   [npol]             -- detected beam
- *   C    [nsamples] [nstokes] [nchan]            -- coherent full stokes
+ *   Bd   [nsamples] [nchan]   [NPOL]             -- detected beam
+ *   C    [nsamples] [NSTOKES] [nchan]            -- coherent full stokes
  *   I    [nsamples] [nchan]                      -- incoherent
  */
 {
@@ -53,22 +58,18 @@ __global__ void beamform_kernel( uint8_t *data,
     int nchan  = blockDim.x;
     int ch     = threadIdx.x;
 
-    // Assume something about the number of polarisations
-    const int nstokes = 4;
-    const int npol    = 2;
-
     // Calculate the indices for the input arrays
-    int Di[nstation][npol];
-    int Wi[nstation][npol];
-    int Ji[nstation][npol][npol];
+    int Di[NSTATION][NPOL];
+    int Wi[NSTATION][NPOL];
+    int Ji[NSTATION][NPOL][NPOL];
 
     int ant, pol, pol2, st;
     int pfb, rec, inc;
-    for (ant = 0; ant < nstation; ant++)
+    for (ant = 0; ant < NSTATION; ant++)
     {
         pfb = ant / 32;
         inc = (ant / 8) % 4;
-        for (pol = 0; pol < npol; pol++)
+        for (pol = 0; pol < NPOL; pol++)
         {
             rec = (2*ant+pol) % 16;
 
@@ -78,52 +79,52 @@ __global__ void beamform_kernel( uint8_t *data,
                            rec    * (NINC)                 +
                            inc;
 
-            Wi[ant][pol] = ant * (npol*nchan) +
-                           ch  * (npol)       +
+            Wi[ant][pol] = ant * (NPOL*nchan) +
+                           ch  * (NPOL)       +
                            pol;
 
-            for (pol2 = 0; pol2 < npol; pol2++)
+            for (pol2 = 0; pol2 < NPOL; pol2++)
             {
-                Ji[ant][pol][pol2] = ant  * (npol*npol*nchan) +
-                                     ch   * (npol*npol)       +
-                                     pol  * (npol)            +
+                Ji[ant][pol][pol2] = ant  * (NPOL*NPOL*nchan) +
+                                     ch   * (NPOL*NPOL)       +
+                                     pol  * (NPOL)            +
                                      pol2;
             }
         }
     }
 
     // Calculate the indices for the output arrays
-    int Bdi[npol];
-    int Ci[nstokes];
+    int Bdi[NPOL];
+    int Ci[NSTOKES];
     int Ii;
 
-    for (pol = 0; pol < npol; pol++)
-        Bdi[pol] = sample * (npol*nchan) +
-                   ch     * (npol)       +
+    for (pol = 0; pol < NPOL; pol++)
+        Bdi[pol] = sample * (NPOL*nchan) +
+                   ch     * (NPOL)       +
                    pol;
 
-    for (st = 0; st < nstokes; st++)
-        Ci[st] = sample * (nchan*nstokes) +
+    for (st = 0; st < NSTOKES; st++)
+        Ci[st] = sample * (nchan*NSTOKES) +
                  st     * (nchan)         +
                  ch;
 
     Ii = sample*nchan + ch;
 
     // Calculate the beam and the noise floor
-    ComplexDouble B[npol];
-    ComplexDouble D[npol];
-    ComplexDouble WD[npol];
-    ComplexDouble N[npol][npol];
+    ComplexDouble B[NPOL];
+    ComplexDouble D[NPOL];
+    ComplexDouble WD[NPOL];
+    ComplexDouble N[NPOL][NPOL];
 
-    for (pol = 0; pol < npol; pol++)
+    for (pol = 0; pol < NPOL; pol++)
     {
         // Initialise beams and noise floor to zero
         Bd[Bdi[pol]] = CMaked( 0.0, 0.0 );
         I[Ii]        = 0.0;
-        for (pol2 = 0; pol2 < npol; pol2++)
+        for (pol2 = 0; pol2 < NPOL; pol2++)
             N[pol][pol2] = CMaked( 0.0, 0.0 );
 
-        for (ant = 0; ant < nstation; ant++)
+        for (ant = 0; ant < NSTATION; ant++)
         {
             // Calculate the coherent beam (B = J*W*D)
             B[pol]  = CMaked( 0.0, 0.0 );
@@ -133,20 +134,20 @@ __global__ void beamform_kernel( uint8_t *data,
             // (... and along the way, calculate the incoherent beam...)
             I[Ii] += DETECT(D[pol]);
 
-            for (pol2 = 0; pol2 < npol; pol2++)
+            for (pol2 = 0; pol2 < NPOL; pol2++)
             {
                 B[pol] = CAddd( B[pol], CMuld( J[Ji[ant][pol][pol2]],
                                                WD[pol2] ) );
             }
 
             // Detect the coherent beam
-            Bd[Bdi[pol]] += CAddd( Bd[Bdi[pol]], B[pol] );
+            Bd[Bdi[pol]] = CAddd( Bd[Bdi[pol]], B[pol] );
 
             // Calculate the noise floor (N = B*B')
-            for (pol2 = 0; pol2 < npol; pol2++)
+            for (pol2 = 0; pol2 < NPOL; pol2++)
             {
                 N[pol][pol2] = CAddd( N[pol][pol2],
-                                      CMuld( B[pol], CConjd[B[pol2]] ) );
+                                      CMuld( B[pol], CConjd( B[pol2] ) ) );
             }
         }
     }
@@ -154,7 +155,7 @@ __global__ void beamform_kernel( uint8_t *data,
     // Form the stokes parameters for the coherent beam
     float bnXX = DETECT(Bd[Bdi[0]]) - CReald(N[0][0]);
     float bnYY = DETECT(Bd[Bdi[1]]) - CReald(N[1][1]);
-    ComplexDouble bnXY = CSubd( CMuld( Bd[Bdi[0]], CConj( Bd[Bdi[1]] ) ),
+    ComplexDouble bnXY = CSubd( CMuld( Bd[Bdi[0]], CConjd( Bd[Bdi[1]] ) ),
                                 N[0][1] );
 
     // Stokes I, Q, U, V:
@@ -162,6 +163,8 @@ __global__ void beamform_kernel( uint8_t *data,
     C[Ci[1]] = invw*(bnXX - bnYY);
     C[Ci[2]] =  2.0*invw*CReald( bnXY );
     C[Ci[3]] = -2.0*invw*CImagd( bnXY );
+
+    __syncthreads();
 }
 
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
@@ -198,10 +201,6 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
  * Assumes "coh" and "incoh" contain only zeros.
  */
 {
-    int coherent_requested = opts->out_coh    ||
-                             opts->out_vdif   ||
-                             opts->out_uvdif;
-
     // Calculate array sizes for host and device
     int coh_size   = opts->sample_rate * outpol_coh   * nchan * sizeof(float);
     int incoh_size = opts->sample_rate * outpol_incoh * nchan * sizeof(float);
@@ -224,7 +223,13 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     // Allocate host memory
     W  = (ComplexDouble *)malloc( W_size );
     J  = (ComplexDouble *)malloc( J_size );
-    Bd = (ComplexDouble *)malloc( Bd_size );
+    // Make Bd point to either the first or second half of detected beam,
+    // according to whether this is an odd- or even-numbered file
+    if (file_no % 2 == 0)
+        Bd = &(detected_beam[0][0][0]);
+    else
+        Bd = &(detected_beam[opts->sample_rate][0][0]);
+
 
     // Allocate device memory
     gpuErrchk(cudaMalloc( (void **)&d_W,     W_size ));
@@ -234,12 +239,12 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     gpuErrchk(cudaMalloc( (void **)&d_coh,   coh_size ));
     gpuErrchk(cudaMalloc( (void **)&d_incoh, incoh_size ));
 
-    // Setup input values:
+    // Setup input values (= populate W and J)
     int ant, ch, pol, pol2;
     int Wi, Ji;
-    for (ant = 0; ant < opts->sample_rate; ant++)
-    for (ch  = 0; ch  < nchan            ; ch++ )
-    for (pol = 0; pol < npol             ; pol++)
+    for (ant = 0; ant < nstation; ant++)
+    for (ch  = 0; ch  < nchan   ; ch++ )
+    for (pol = 0; pol < npol    ; pol++)
     {
         Wi = ant * (npol*nchan) +
              ch  * (npol) +
@@ -259,15 +264,32 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     gpuErrchk(cudaMemcpy( d_J,    J,    J_size,    cudaMemcpyHostToDevice ));
 
     // Call the kernel
-    beamformer_kernel<<<opts->sample_rate, nchan>>>(
-            d_data, d_W, d_J, nstation, invw, d_Bd, d_coh, d_incoh );
+    beamform_kernel<<<opts->sample_rate, nchan>>>(
+            d_data, d_W, d_J, invw, d_Bd, d_coh, d_incoh );
+    cudaDeviceSynchronize();
 
     // Copy the results back into host memory
+fprintf(stderr, "*coh   = %p\n", coh );
+fprintf(stderr, "*incoh = %p\n", incoh );
+fprintf(stderr, "*Bd    = %p\n", Bd );
+fprintf(stderr, "*d_coh   = %p\n", d_coh );
+fprintf(stderr, "*d_incoh = %p\n", d_incoh );
+fprintf(stderr, "*d_Bd    = %p\n", d_Bd );
+fprintf(stderr, "coh_size   = %d\n", coh_size);
+fprintf(stderr, "incoh_size = %d\n", incoh_size);
+fprintf(stderr, "Bd_size    = %d\n", Bd_size);
     gpuErrchk(cudaMemcpy( coh,   d_coh,   coh_size,   cudaMemcpyDeviceToHost ));
     gpuErrchk(cudaMemcpy( incoh, d_incoh, incoh_size, cudaMemcpyDeviceToHost ));
-    // Sort out detected_beam
+    gpuErrchk(cudaMemcpy( Bd,    d_Bd,    Bd_size,    cudaMemcpyDeviceToHost ));
 
-    // UP TO HERE
-
+    // Free memory on host and device
+    free( W );
+    free( J );
+    cudaFree( d_W );
+    cudaFree( d_J );
+    cudaFree( d_Bd );
+    cudaFree( d_data );
+    cudaFree( d_coh );
+    cudaFree( d_incoh );
 }
 
