@@ -1,38 +1,6 @@
 #include "pabeam.h"
+#include "utils.h"
 #include "pabeam_kernal.h"
-
-
-/* Function prototypes */
-void usage();
-
-void utc2mjd(char *utc_str, double *intmjd, double *fracmjd);
-
-void mjd2lst(double mjd, double *lst);
-
-void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn);
-void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza);
-int getNumTiles(const char *metafits);
-void getTilePositions(const char *metafits, int ninput, 
-                        float *n_pols, float *e_pols, float *h_pols,
-                        float *n_tile, float *e_tile, float *h_tile);
-int getFlaggedTiles(const char *badfile, int *badtiles);
-void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile, 
-                        int *badtiles, int nbad, int nelements);
-void getDeviceDimensions(int *nDevices);
-void requiredMemory(int size, int ntiles, int *niter, int *blockSize);
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort);
-
-// GPU kernal for calculation
-//__global__ void calcArrayFactor(int nel, int ntiles, double a,
-//                                double *za, double *az,
-//                                float *xp, float *yp, float *zp,
-//                                wavenums *p_twn,
-//                                cuDoubleComplex *af);
-//void calcArrayFactorCPU(int nel, int ntiles, double a,
-//                        double *za, double *az,
-//                        float *xp, float *yp, float *zp,
-//                        wavenums *p_twn,
-//                        double complex *af);
 
 
 void usage()
@@ -41,6 +9,7 @@ void usage()
     printf("syntax:\n");
     printf("    pabeam -f <frequency in Hz> -r <ra in hh:mm:ss> -d <dec in dd:mm:ss> -t <UTC in ISOT format> -m <metafits file> -b <RTS flagged_tiles.txt file> [-e] [-x] [-y] [-g]\n\n");
     printf("Options:\n");
+    printf("    -h this help\n");
     printf("    -f observing frequency, in Hz\n");
     printf("    -r target RA (J2000), in hh:mm:ss.ss format\n");
     printf("    -d target DEC (J2000), in dd:mm:ss.ss format\n");
@@ -53,31 +22,23 @@ void usage()
     printf("    -g Calculate and apply the FEE2016 tile beam with the given \"gridpoint\" number\n");
 }
 
-void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
+
+void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
-    /* Convert a UTC string (YYYY-MM-DDThh:mm:ss.ss) into MJD in radians.
-     * Accepts a stc string and pointers to the integer and fractional MJD values. */
-    int year, month, day, hour, min, sec, jflag;
+    /* Wrapper function for GPU/CUDA error handling. Every CUDA call goes through 
+       this function. It will return a message giving your the error string, 
+       file name and line of the error. Aborts on error. */
 
-    sscanf(utc_str,"%d-%d-%dT%d:%d:%d", &year, &month, &day, &hour, &min, &sec);
-    //fprintf(stderr,"Parsed date : yr %d, month %d, day %d, hour %d, min %d, sec %f\n", year, month, day, hour, min, sec);
-
-    slaCaldj(year, month, day, intmjd, &jflag);
-    if (jflag != 0) 
+    if (code != 0)
     {
-        fprintf(stderr,"Failed to calculate MJD\n");
+        fprintf(stderr, "GPUAssert:: %s - %s (%d)\n", cudaGetErrorString(code), file, line);
+        if (abort)
+        {
+            exit(code);
+        }
     }
-    *fracmjd = (hour + (min/60.0) + (sec/3600.0))/24.0;
 }
 
-void mjd2lst(double mjd, double *lst)
-{
-    /* Greenwich Mean Sidereal Time to LMST
-     * east longitude in hours at the epoch of the MJD */
-    double lmst;
-    lmst = slaRanorm(slaGmst(mjd) + MWA_LON*DEG2RAD);
-    *lst = lmst;
-}
 
 void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn)
 {
@@ -106,6 +67,7 @@ void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn)
     p_wn->ky = ast * sin(phi); 
     p_wn->kz = a * cos(za);   
 }
+
 
 void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza)
 {
@@ -167,6 +129,7 @@ void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_
     p_tazza->za = (PI/2) - el;
 }
 
+
 int getNumTiles(const char *metafits)
 {
     /* Figure out the number of tiles based on the information in the metafits.
@@ -178,16 +141,17 @@ int getNumTiles(const char *metafits)
     fitsfile *fptr=NULL;
     int status=0;
     size_t ninput=0;
+    char tiledata[]="TILEDATA", naxis2[]="NAXIS2";
 
     fits_open_file(&fptr, metafits, READONLY, &status); // open metafits file
-    fits_movnam_hdu(fptr, BINARY_TBL, "TILEDATA", 0, &status); // move to TILEDATA HDU
+    fits_movnam_hdu(fptr, BINARY_TBL, tiledata, 0, &status); // move to TILEDATA HDU
     if (status != 0)
     {
         fprintf(stderr,"Error: Failed to move to TILEDATA HDU\n");
         exit(-1);
     }
 
-    fits_read_key(fptr, TINT, "NAXIS2", &ninput, NULL, &status); // read how many tiles are included
+    fits_read_key(fptr, TINT, naxis2, &ninput, NULL, &status); // read how many tiles are included
     if (status != 0)
     {
         fprintf(stderr,"Error: Failed to read size of binary table in TILEDATA\n");
@@ -196,6 +160,7 @@ int getNumTiles(const char *metafits)
     fits_close_file(fptr, &status);
     return ninput;
 }
+
 
 void getTilePositions(const char *metafits, int ninput,\
         float *n_pols, float *e_pols, float *h_pols,\
@@ -214,17 +179,18 @@ void getTilePositions(const char *metafits, int ninput,\
     fitsfile *fptr=NULL;
     int status=0, anynull=0;
     int colnum=0;
+    char north[]="North", east[]="East", height[]="Height", tiledata[]="TILEDATA";
 
 
     fits_open_file(&fptr, metafits, READONLY, &status); // open metafits file
-    fits_movnam_hdu(fptr, BINARY_TBL, "TILEDATA", 0, &status); // move to TILEDATA HDU
+    fits_movnam_hdu(fptr, BINARY_TBL, tiledata, 0, &status); // move to TILEDATA HDU
     if (status != 0) 
     {
         fprintf(stderr,"Error: Failed to move to TILEDATA HDU\n");
         exit(-1);
     }
 
-    fits_get_colnum(fptr, 1, "North", &colnum, &status); // get north coordinates of tiles
+    fits_get_colnum(fptr, 1, north, &colnum, &status); // get north coordinates of tiles
     fits_read_col_flt(fptr, colnum, 1, 1, ninput, 0.0, n_pols, &anynull, &status);
     if (status != 0)
     {
@@ -232,7 +198,7 @@ void getTilePositions(const char *metafits, int ninput,\
         exit(-1);
     }
 
-    fits_get_colnum(fptr, 1, "East", &colnum, &status); // get east coordinates of tiles
+    fits_get_colnum(fptr, 1, east, &colnum, &status); // get east coordinates of tiles
     fits_read_col_flt(fptr, colnum, 1, 1, ninput, 0.0, e_pols, &anynull, &status);
     if (status != 0)
     {
@@ -240,7 +206,7 @@ void getTilePositions(const char *metafits, int ninput,\
         exit(-1);
     }
 
-    fits_get_colnum(fptr, 1, "Height", &colnum, &status); // get height a.s.l. of tiles
+    fits_get_colnum(fptr, 1, height, &colnum, &status); // get height a.s.l. of tiles
     fits_read_col_flt(fptr, colnum, 1, 1, ninput, 0.0, h_pols, &anynull, &status);
     if (status != 0)
     {
@@ -263,6 +229,7 @@ void getTilePositions(const char *metafits, int ninput,\
         h_tile[i] = h_tile[i] - MWA_HGT;
     }
 }
+
 
 int getFlaggedTiles(const char *badfile, int *badtiles)
 {
@@ -291,6 +258,7 @@ int getFlaggedTiles(const char *badfile, int *badtiles)
     fclose(fp);
     return nlines;
 }
+
 
 void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
         int *badtiles, int nbad, int nelements)
@@ -323,9 +291,9 @@ void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
 
 int main(int argc, char *argv[])
 {
-    char *ra="00:00:00.00";
-    char *dec="-26:00:00.00";
-    char *time="2017-06-19T11:13:00";
+    char *ra=NULL;
+    char *dec=NULL;
+    char *time=NULL;
     char *metafits=NULL;
     char *flagfile=NULL;
     int c=0;
@@ -337,10 +305,13 @@ int main(int argc, char *argv[])
     /* Parse options */
     if (argc > 1)
     {
-        while ((c = getopt(argc, argv, "f:e:r:d:t:m:b:x:y:g:")) != -1)
+        while ((c = getopt(argc, argv, "h:f:e:r:d:t:m:b:x:y:g:")) != -1)
         {
             switch(c)
             {
+                case 'h':
+                    usage();
+                    exit(0);
                 case 'f':
                     freq = atof(optarg);
                     lambda = SOL/freq;

@@ -1,11 +1,12 @@
+#ifndef PABEAM_H
+#define PABEAM_H
+
 // Standard includes
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <math.h>
-#include <slalib.h>
-#include <fitsio.h>
+#include "utils.h"
 
 // MWA tile beam
 #include "FEE2016/beam2016implementation.h"
@@ -14,29 +15,27 @@
 #include "H5Cpp.h"
 
 
-#define PI (acos(-1.0))         // Ensures PI is defined on all systems
-#define RAD2DEG (180.0 / PI)
-#define DEG2RAD (PI / 180.0)
-#define SOL (299792458.0)       // Speed of light
-#define KB (1.38064852e-23)     // Boltzmann's constant
+// Macro to use gpuAssert function
+#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
 
-#define MWA_LAT (-26.703319)    // Array latitude, degrees North
-#define MWA_LON (116.67081)     // Array longitude, degrees East
-#define MWA_HGT (377.827)       // Array elevation above sea level, in meters
+void usage();
+
+void gpuAssert(cudaError_t code, const char *file, int line, bool abort);
+
+void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn);
+
+void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza);
+
+int getNumTiles(const char *metafits);
+
+void getTilePositions(const char *metafits, int ninput, 
+                        float *n_pols, float *e_pols, float *h_pols,
+                        float *n_tile, float *e_tile, float *h_tile);
+
+int getFlaggedTiles(const char *badfile, int *badtiles);
+
+void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile, 
+                        int *badtiles, int nbad, int nelements);
 
 
-/* struct to hold all the wavenumbers for each (Az,ZA) */
-typedef struct wavenums_t
-{
-    double kx;
-    double ky;
-    double kz;
-} wavenums;
-
-/* struct to hold the target Azimuth and Zenith angle (in radians) */
-typedef struct tazza_t
-{
-    double az;
-    double za;
-} tazza;
-
+#endif

@@ -466,24 +466,6 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
     *niter = iters;
 }
 
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-    /* Wrapper function for GPU/CUDA error handling. Every CUDA call goes through 
-       this function. It will return a message giving your the error string, 
-       file name and line of the error. Aborts on error. */
-
-    if (code != 0)
-    {
-        fprintf(stderr, "GPUAssert:: %s - %s (%d)\n", cudaGetErrorString(code), file, line);
-        if (abort)
-        {
-            exit(code);
-        }
-    }
-}
-// define a macro for accessing gpuAssert
-#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
-
 __global__ void calcArrayFactor(int nel, int ntiles, double a,
                                 double *za, double *az, 
                                 float *xp, float *yp, float *zp, 

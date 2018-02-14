@@ -1,5 +1,6 @@
 #include "utils.h"
 
+
 void getDeviceDimensions(int *nDevices)
 {
     /* We need to know how many devices are available and its functionality. */
@@ -108,3 +109,32 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
 
     *niter = iters;
 }
+
+
+void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
+{
+    /* Convert a UTC string (YYYY-MM-DDThh:mm:ss.ss) into MJD in radians.
+     * Accepts a stc string and pointers to the integer and fractional MJD values. */
+    int year, month, day, hour, min, sec, jflag;
+
+    sscanf(utc_str,"%d-%d-%dT%d:%d:%d", &year, &month, &day, &hour, &min, &sec);
+    //fprintf(stderr,"Parsed date : yr %d, month %d, day %d, hour %d, min %d, sec %f\n", year, month, day, hour, min, sec);
+
+    slaCaldj(year, month, day, intmjd, &jflag);
+    if (jflag != 0) 
+    {
+        fprintf(stderr,"Failed to calculate MJD\n");
+    }
+    *fracmjd = (hour + (min/60.0) + (sec/3600.0))/24.0;
+}
+
+
+void mjd2lst(double mjd, double *lst)
+{
+    /* Greenwich Mean Sidereal Time to LMST
+     * east longitude in hours at the epoch of the MJD */
+    double lmst;
+    lmst = slaRanorm(slaGmst(mjd) + MWA_LON*DEG2RAD);
+    *lst = lmst;
+}
+
