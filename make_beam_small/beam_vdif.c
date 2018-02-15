@@ -2,20 +2,21 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <complex.h>
 #include <fftw3.h>
-#include <omp.h>
 #include "vdifio.h"
 #include "psrfits.h"
 #include "slamac.h"
-#include "mwac_utils.h"
 #include "beam_common.h"
 #include "beam_vdif.h"
 #include "mwa_header.h"
 #include "vdifio.h"
 #include "ascii_header.h"
 #include "filter.h"
+#include "mycomplex.h"
 
+#ifndef HAVE_CUDA
+#include <omp.h>
+#endif
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         float *data_buffer_vdif, float *gain )
@@ -23,39 +24,41 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     // Set level occupancy
     float rmean, imean;
-    complex float cmean, stddev;
+    ComplexFloat cmean, stddev;
 
     get_mean_complex(
-            (complex float *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
             &rmean, &imean, &cmean );
 
     stddev = get_std_dev_complex(
-            (complex float *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0 );
 
-    //if (fabsf(rmean) > 0.001) {
-        printf( "warning: vdif_write_second: significantly "
-                "non-zero mean (%f), adjusting data\n", rmean );
+    //if (fabsf(rmean) > 0.001)
+    if (1)
+    {
+        fprintf( stderr, "warning: vdif_write_second: significantly "
+                         "non-zero mean (%f), adjusting data\n", rmean );
         unsigned int i;
         for (i = 0; i < vf->sizeof_buffer/2; i++)
         {
-            data_buffer_vdif[2*i+0] -= creal(cmean);
-            data_buffer_vdif[2*i+1] -= cimag(cmean);
+            data_buffer_vdif[2*i+0] -= CRealf(cmean);
+            data_buffer_vdif[2*i+1] -= CImagf(cmean);
         }
-    //}
+    }
 
-    vf->b_scales[0] = crealf(stddev);
-    vf->b_scales[1] = crealf(stddev);
+    vf->b_scales[0] = CRealf(stddev);
+    vf->b_scales[1] = CRealf(stddev);
 
     vf->got_scales = 1;
     set_level_occupancy(
-            (complex float *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0, gain);
 
     // Normalise
     normalise_complex(
-            (complex float *)data_buffer_vdif,
+            (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
             1.0/(*gain) );
 
@@ -207,7 +210,7 @@ void populate_vdif_header(
 }
 
 
-complex float get_std_dev_complex(complex float *input, int nsamples)
+ComplexFloat get_std_dev_complex(ComplexFloat *input, int nsamples)
 {
     // assume zero mean
     float rtotal = 0;
@@ -217,17 +220,17 @@ complex float get_std_dev_complex(complex float *input, int nsamples)
     int i;
 
     for (i=0;i<nsamples;i++){
-         rtotal = rtotal+(crealf(input[i])*crealf(input[i]));
-         itotal = itotal+(cimagf(input[i])*cimagf(input[i]));
+         rtotal = rtotal+(CRealf(input[i])*CRealf(input[i]));
+         itotal = itotal+(CImagf(input[i])*CImagf(input[i]));
 
      }
     rsigma = sqrtf((1.0/(nsamples-1))*rtotal);
     isigma = sqrtf((1.0/(nsamples-1))*itotal);
 
-    return rsigma+I*isigma;
+    return CMakef( rsigma, isigma );
 }
 
-void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
+void set_level_occupancy(ComplexFloat *input, int nsamples, float *new_gain)
 {
     //float percentage = 0.0;
     //float occupancy = 17.0;
@@ -240,11 +243,19 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
     while (percentage_clipped > 0 && percentage_clipped > limit) {
         int count = 0;
         int clipped = 0;
-        for (i=0;i<nsamples;i++) {
-            if (gain*creal(input[i]) >= 0 && gain*creal(input[i]) < 64) {
+        for (i = 0; i < nsamples; i++) {
+            if (isnan(CRealf(input[i])) || isnan(CImagf(input[i])))
+            {
+                fprintf( stderr, "error: set_level_occupancy: input[%d] = "
+                                 "NaN\n", i );
+                exit(EXIT_FAILURE);
+            }
+            if (gain*CRealf(input[i]) >= 0 && gain*CRealf(input[i]) < 64)
+            {
                 count++;
             }
-            if (fabs(gain*creal(input[i])) > 127) {
+            if (fabs(gain*CRealf(input[i])) > 127)
+            {
                 clipped++;
             }
         }
@@ -264,30 +275,35 @@ void set_level_occupancy(complex float *input, int nsamples, float *new_gain)
 }
 
 
-void get_mean_complex(complex float *input, int nsamples, float *rmean,float *imean, complex float *cmean)
+void get_mean_complex( ComplexFloat *input, int nsamples, float *rmean,
+                       float *imean, ComplexFloat *cmean)
 {
+    int i;
 
-    int i=0;
     float rtotal = 0;
     float itotal = 0 ;
-    complex float ctotal = 0 + I*0.0;
-    for (i=0;i<nsamples;i++){
-        rtotal = rtotal+crealf(input[i]);
-        itotal = itotal+cimagf(input[i]);
-        ctotal = ctotal + input[i];
-    }
-    *rmean=rtotal/nsamples;
-    *imean=itotal/nsamples;
-    *cmean=ctotal/nsamples;
 
+    ComplexFloat ctotal = CMakef( 0.0, 0.0 );
+
+    for (i = 0; i < nsamples; i++)
+    {
+//if (isnan(CRealf(input[i])) || isnan(CImagf(input[i]))) { fprintf(stderr, "\ninput[%d] = %e + %e*I\n\n", i, CRealf(input[i]), CImagf(input[i])); exit(1); }
+        rtotal += CRealf( input[i] );
+        itotal += CImagf( input[i] );
+        ctotal  = CAddf( ctotal, input[i] );
+    }
+
+    *rmean = rtotal / nsamples;
+    *imean = itotal / nsamples;
+    *cmean = CSclf( ctotal, 1.0 / (float)nsamples );
 }
 
-void normalise_complex(complex float *input, int nsamples, float scale)
+void normalise_complex(ComplexFloat *input, int nsamples, float scale)
 {
     int i=0;
 
     for (i=0;i<nsamples;i++){
-        input[i]=input[i]*scale;
+        input[i] = CSclf( input[i], scale );
     }
 }
 
@@ -300,8 +316,9 @@ void to_offset_binary(int8_t *i, int n)
     }
 }
 
+#ifndef HAVE_CUDA
 
-void invert_pfb_ifft( complex float ***detected_beam, int file_no,
+void invert_pfb_ifft( ComplexDouble ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
                       float *data_buffer_vdif )
 /* "Invert the PFB" by simply applying an inverse FFT.
@@ -415,10 +432,10 @@ void invert_pfb_ifft( complex float ***detected_beam, int file_no,
     fftwf_destroy_plan( p );
 }
 
-
-void invert_pfb_ord( complex float ***detected_beam, int file_no,
+void invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
-                      filter fils[], float *data_buffer_uvdif )
+                      ComplexDouble **fils, int fil_size,
+                      float *data_buffer_uvdif )
 /* "Invert the PFB" by applying a resynthesis filter.
  * This function expects "detected_beam" to be structured as follows:
  *
@@ -436,8 +453,11 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
  *
  * This ordering is suited for immediate output to the VDIF format.
  *
- * Finally, fils points to an array of filter coefficients, each row of which
- * has been "rotated" with phase ramps of different amounts.
+ * Finally, fils points to a 2D array of filter coefficients, each row of
+ * which has been "rotated" with phase ramps of different amounts. It is
+ * assumed that fils has size:
+ *
+ *   fils[nchan][fil_size]
  */
 {
     // Set the output buffer to zeros
@@ -454,14 +474,13 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
     {
         //fprintf( stderr, "  Thread num: %d, s = %d\n", omp_get_thread_num(), s );
         int U        = nchan;        // upsampling factor = number of channels
-        int fil_size = fils[0].size; // All filters should have the same size
         int i0;                      // The index of the first input sample to
                                      // be included in the output sum
         int f0;                      // The index of the first filter coeffi-
                                      // cient to be included in the output sum
         int N        = nsamples * U; // The total number of output samples
         int ch, f, i, pol, oi;       // Various loop counters
-        complex float part;
+        ComplexDouble part;
 
         for (pol = 0; pol < npol; pol++)
         {
@@ -492,9 +511,9 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
                 i = i0;
                 for (f = f0; f < fil_size; f += U)
                 {
-                    part = fils[ch].coeffs[(fil_size-1) - f] * detected_beam[i][ch][pol];
-                    data_buffer_uvdif[oi  ] += creal(part);
-                    data_buffer_uvdif[oi+1] += cimag(part);
+                    part = CMuld( fils[ch][(fil_size-1) - f], detected_beam[i][ch][pol] );
+                    data_buffer_uvdif[oi  ] += CReald(part);
+                    data_buffer_uvdif[oi+1] += CImagd(part);
 
                     // Update input index simultaneously with filter coeff
                     i++;
@@ -510,3 +529,5 @@ void invert_pfb_ord( complex float ***detected_beam, int file_no,
         } // Loop over X/Y pol
     } // Loop over samples
 }
+
+#endif

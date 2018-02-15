@@ -4,34 +4,19 @@
 #define REAL_COEFFS  0
 #define CPLX_COEFFS  1
 
-typedef struct filter_t
-{
-    complex double *coeffs;
-    int             size;
-    int             ntaps;
-} filter;
+#include "mycomplex.h"
 
-#include <complex.h>
+void load_filter( char *filename, int dtype, ComplexDouble *filter );
 
-void create_filter( filter *fil, int size, int ntaps );
-void destroy_filter( filter *fil );
+void apply_phase_ramp( ComplexDouble *in, int size, double slope,
+                       ComplexDouble *out );
 
-void load_filter( char *filename, int dtype, int ntaps, filter *fil );
+ComplexDouble **apply_mult_phase_ramps( ComplexDouble *in,
+                                         int size, int N );
 
-void apply_phase_ramp( filter *in, double slope, filter *out );
+void fir_filter_1D( ComplexDouble *fil, int fil_size, ComplexDouble *signal,
+                    int size, ComplexDouble *res );
 
-void apply_mult_phase_ramps( filter *in, int N, filter outs[] );
-
-void upsample( complex double *x, int xsize, int ufact, complex double *y );
-
-void fir_filter_1D( filter *fil, complex double *signal, int size,
-                    complex double *res );
-
-int test_fir_filter_1D();
-
-void run_all_tests();
-
-#define FINE_PFB_FILTER_NTAPS   12
 #define FINE_PFB_FILTER_SIZE    1536
 #define FINE_PFB_FILTER_COEFFS  { \
     0, 0, 0, 0, 0, 0, 0, 0, \
@@ -225,6 +210,6 @@ void run_all_tests();
     -18, -16, -15, -13, -12, -11, -10, -9, \
     -8, -7, -6, -5, -4, -4, -3, -3, \
     -2, -2, -1, -1, -1, -1, 0, 0, \
-    0, 0, 0, 0, 0, 0, 0, 0, }
+    0, 0, 0, 0, 0, 0, 0, 0 }
 
 #endif

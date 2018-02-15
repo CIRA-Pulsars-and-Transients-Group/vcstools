@@ -3,19 +3,16 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <inttypes.h>
-#include <complex.h>
 #include <math.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <string.h>
 #include <errno.h>
 #include <time.h>
-#include "mwac_utils.h"
 #include "slalib.h"
 #include "slamac.h"
 #include "ascii_header.h"
 #include "mwa_header.h"
-#include <omp.h>
 #include <glob.h>
 #include <fcntl.h>
 #include <assert.h>
@@ -25,34 +22,32 @@
 #include "make_beam_small.h"
 #include "vdifio.h"
 #include "filter.h"
-
-// Are GPU available
+#include "psrfits.h"
+#include "mycomplex.h"
+#include "form_beam.h"
 
 #ifdef HAVE_CUDA
-#include "gpu_utils.h"
-#include <cuda_runtime.h>
+
+#include "ipfb.h"
+#define NOW  ((double)clock()/(double)CLOCKS_PER_SEC)
+
 #else
-#define Complex float _Complex
+
+#include <omp.h>
+#define NOW  (omp_get_wtime())
+
 #endif
 
-//
-// write out psrfits directly
-#include "psrfits.h"
-#include "antenna_mapping.h"
-
-int main(int argc, char **argv) {
-
+int main(int argc, char **argv)
+{
+#ifndef HAVE_CUDA
     // Initialise FFTW with OpenMP
     fftw_init_threads();
     fftw_plan_with_nthreads( omp_get_max_threads() );
+#endif
 
     // A place to hold the beamformer settings
     struct make_beam_opts opts;
-
-    // These are used to calculate how the input data are ordered
-    const int npfb = 4;
-    const int nrec = 16;
-    const int ninc = 4;
 
     /* Set default beamformer settings */
 
@@ -98,14 +93,17 @@ int main(int argc, char **argv) {
     const int npol         = 2;      // (X,Y)
     const int outpol_coh   = 4;      // (I,Q,U,V)
     const int outpol_incoh = 1;      // ("I")
-    int coherent_requested = opts.out_coh || opts.out_vdif || opts.out_uvdif;
 
     float vgain = 1.0; // This is re-calculated every second for the VDIF output
     float ugain = 1.0; // This is re-calculated every second for the VDIF output
 
     // Start counting time from here (i.e. after parsing the command line)
-    double begintime = omp_get_wtime();
-    printf("[%f]  Starting %s with %d possible OpenMP threads\n", omp_get_wtime()-begintime, argv[0], omp_get_max_threads());
+    double begintime = NOW;
+#ifdef HAVE_CUDA
+    printf("[%f]  Starting %s with GPU acceleration\n", NOW-begintime, argv[0] );
+#else
+    printf("[%f]  Starting %s with %d possible OpenMP threads\n", NOW-begintime, argv[0], omp_get_max_threads());
+#endif
 
     // Calculate the number of files
     int nfiles = opts.end - opts.begin + 1;
@@ -116,12 +114,12 @@ int main(int argc, char **argv) {
 
     // Allocate memory
     char **filenames = create_filenames( &opts );
-    complex double ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
-    complex double ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
-    complex float ***detected_beam = create_detected_beam( 2*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
+    ComplexDouble ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
+    ComplexDouble ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
+    ComplexDouble ***detected_beam = create_detected_beam( 2*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
 
     // Read in info from metafits file
-    printf("[%f]  Reading in metafits file information from %s\n", omp_get_wtime()-begintime, opts.metafits);
+    printf("[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
     struct metafits_info mi;
     get_metafits_info( opts.metafits, &mi, opts.chan_width );
 
@@ -140,7 +138,7 @@ int main(int argc, char **argv) {
     double invw = 1.0/wgt_sum;
 
     // Run get_delays to populate the delay_vals struct
-    printf("[%f]  Setting up output header information\n", omp_get_wtime()-begintime);
+    printf("[%f]  Setting up output header information\n", NOW-begintime);
     struct delays delay_vals;
     get_delays(
             opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
@@ -165,58 +163,41 @@ int main(int argc, char **argv) {
     struct vdifinfo uvf;
 
     // Create structures for the PFB filter coefficients
-    filter fil;
-    fil.ntaps  = FINE_PFB_FILTER_NTAPS;
-    fil.size   = FINE_PFB_FILTER_SIZE;
-    fil.coeffs = (complex double *)malloc( fil.size * sizeof(complex double) );
-
-    int coeffs[] = FINE_PFB_FILTER_COEFFS;
-    float approx_filter_scale = 120000.0;
-    for (i = 0; i < fil.size; i++)
+    int ntaps    = 12;
+    int fil_size = ntaps * nchan; // = 12 * 128 = 1536
+    double coeffs[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
+    ComplexDouble fil[fil_size];
+    double approx_filter_scale = 1.0/120000.0;
+    for (i = 0; i < fil_size; i++)
     {
-        fil.coeffs[i] = (complex double)coeffs[i] / approx_filter_scale;
+        fil[i] = CMaked( coeffs[i] * approx_filter_scale, 0.0 );
     }
 
-    filter fil_ramps[nchan];
-    int n;
-    for (n = 0; n < nchan; n++)
-        create_filter( &fil_ramps[n], fil.size, fil.ntaps );
-
-    apply_mult_phase_ramps( &fil, nchan, fil_ramps );
+    // Memory for fil_ramps is allocated here:
+    ComplexDouble **fil_ramps = apply_mult_phase_ramps( fil, fil_size, nchan );
 
     // Populate the relevant header structs
-    if (opts.out_coh)
-    {
-        populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc,
-                opts.sample_rate, opts.frequency, nchan, opts.chan_width,
-                outpol_coh, opts.rec_channel, &delay_vals );
-    }
-    if (opts.out_incoh)
-    {
-        populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid,
-                opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-                opts.chan_width, outpol_incoh, opts.rec_channel, &delay_vals );
+    populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc,
+            opts.sample_rate, opts.frequency, nchan, opts.chan_width,
+            outpol_coh, opts.rec_channel, &delay_vals );
+    populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid,
+            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.chan_width, outpol_incoh, opts.rec_channel, &delay_vals );
 
-        // Use the tile pointing instead of the pencil beam pointing
-        // TO DO: Move this to populate_psrfits_header?
-        pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
-        pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
-    }
-    if (opts.out_vdif)
-    {
-        populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
-                opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-                opts.chan_width, opts.rec_channel, &delay_vals );
-    }
-    if (opts.out_uvdif)
-    {
-        populate_vdif_header( &uvf, &uvhdr, opts.metafits, opts.obsid,
-                opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-                opts.chan_width, opts.rec_channel, &delay_vals );
+    // Use the tile pointing instead of the pencil beam pointing
+    // TO DO: Move this to populate_psrfits_header?
+    pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
+    pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
 
-        sprintf( uvf.basefilename, "%s_%s_ch%03d_u",
-                 uvf.exp_name, uvf.scan_name, atoi(opts.rec_channel) );
-    }
+    populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
+            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.chan_width, opts.rec_channel, &delay_vals );
+    populate_vdif_header( &uvf, &uvhdr, opts.metafits, opts.obsid,
+            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.chan_width, opts.rec_channel, &delay_vals );
+
+    sprintf( uvf.basefilename, "%s_%s_ch%03d_u",
+             uvf.exp_name, uvf.scan_name, atoi(opts.rec_channel) );
 
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
@@ -229,28 +210,23 @@ int main(int argc, char **argv) {
     float *data_buffer_vdif  = NULL;
     float *data_buffer_uvdif = NULL;
 
-    if (opts.out_coh)
-        data_buffer_coh = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
-    if (opts.out_incoh)
-        data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
-    if (opts.out_vdif)
-        data_buffer_vdif = create_data_buffer_vdif( &vf );
-    if (opts.out_uvdif)
-        data_buffer_uvdif = create_data_buffer_vdif( &uvf );
+    data_buffer_coh   = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
+    data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
+    data_buffer_vdif  = create_data_buffer_vdif( &vf );
+    data_buffer_uvdif = create_data_buffer_vdif( &uvf );
 
     int file_no = 0;
-    int sample;
 
-    printf("[%f]  **BEGINNING BEAMFORMING**\n", omp_get_wtime()-begintime);
+    printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
     for (file_no = 0; file_no < nfiles; file_no++) {
 
         // Read in data from next file
-        printf("[%f]  Reading in data from %s [%d/%d]\n", omp_get_wtime()-begintime,
+        printf("[%f]  Reading in data from %s [%d/%d]\n", NOW-begintime,
                 filenames[file_no], file_no+1, nfiles);
         read_data( filenames[file_no], data, bytes_per_file  );
 
         // Get the next second's worth of phases / jones matrices, if needed
-        printf("[%f]  Calculating delays\n", omp_get_wtime()-begintime);
+        printf("[%f]  Calculating delays\n", NOW-begintime);
         get_delays(
                 opts.dec_ddmmss,        // dec as a string "dd:mm:ss"
                 opts.ra_hhmmss,         // ra  as a string "hh:mm:ss"
@@ -264,163 +240,46 @@ int main(int argc, char **argv) {
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );                // invJi array           (answer will be output here)
 
-        printf("[%f]  Calculating beam\n", omp_get_wtime()-begintime);
+        printf("[%f]  Calculating beam\n", NOW-begintime);
 
-        if (opts.out_coh)
-            for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
-                data_buffer_coh[i] = 0.0;
+        for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
+            data_buffer_coh[i] = 0.0;
 
-        if (opts.out_incoh)
-            for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
-                data_buffer_incoh[i] = 0.0;
+        for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
+            data_buffer_incoh[i] = 0.0;
 
-#pragma omp parallel for
-        for (sample = 0; sample < (int)opts.sample_rate; sample++ ) {
-
-            int ch, ant, pol, opol, opol1, opol2;
-            int pfb, rec, inc;
-            int data_idx;
-
-            // Because detected_beam is large enough to contain 2 seconds' worth of data,
-            // we need an index that keeps track of which "second" we're in, effectively
-            // maintaining a circular buffer filled with the last two seconds
-            int db_sample = (file_no % 2)*opts.sample_rate + sample;
-
-            complex float beam[nchan][nstation][npol];
-            float         incoh_beam[nchan][nstation][npol];
-            float         detected_incoh_beam[nchan*outpol_incoh];
-            float         spectrum[nchan*outpol_coh];
-            complex float noise_floor[nchan][npol][npol];
-            complex float e_true[npol], e_dash[npol];
-
-            // Initialise beam arrays to zero
-            if (opts.out_coh)
-            {
-                // Initialise noise floor to zero
-                for (ch    = 0; ch    < nchan; ch++   )
-                for (opol1 = 0; opol1 < npol;  opol1++)
-                for (opol2 = 0; opol2 < npol;  opol2++)
-                    noise_floor[ch][opol1][opol2] = 0.0;
-            }
-
-            if (coherent_requested)
-            {
-                // Initialise detected beam to zero
-                for (ch  = 0; ch  < nchan; ch++ )
-                for (pol = 0; pol < npol ; pol++)
-                    detected_beam[db_sample][ch][pol] = 0.0 + 0.0*I;
-            }
-
-            if (opts.out_incoh)
-                for (ch  = 0; ch  < nchan   ; ch++ )
-                    detected_incoh_beam[ch] = 0.0;
-
-            // Calculate the beam, noise floor
-            for (ant = 0; ant < nstation; ant++) {
-
-                // Get the index for the data that corresponds to this
-                //   sample, channel, antenna, polarisation
-                // Justification for the rather bizarre mapping is found in
-                // the docs.
-                // (rec depends on polarisation, so is calculating in the inner loop)
-                pfb = ant / 32;
-                inc = (ant / 8) % 4;
-
-                for (ch = 0; ch < nchan; ch++ ) {
-
-                    // Calculate quantities that depend only on "input" polarisation
-                    for (pol = 0; pol < npol; pol++) {
-
-                        rec = (2*ant+pol) % 16;
-
-                        data_idx = sample * (ninc*nrec*npfb*nchan) +
-                                   ch     * (ninc*nrec*npfb)       +
-                                   pfb    * (ninc*nrec)            +
-                                   rec    * (ninc)                 +
-                                   inc;
-
-                        // Form a single complex number
-                        e_dash[pol]  = UCMPLX4_TO_CMPLX_FLT(data[data_idx]);
-
-                        // Detect the incoherent beam, if requested
-                        if (opts.out_incoh)
-                            incoh_beam[ch][ant][pol] = DETECT(e_dash[pol]);
-
-                        // Apply complex weights
-                        if (coherent_requested)
-                            e_dash[pol] *= complex_weights_array[ant][ch][pol];
-
-                    }
-
-                    // Calculate quantities that depend on output polarisation
-                    // (i.e. apply inv(jones))
-                    if (coherent_requested)
-                    {
-                        for (pol = 0; pol < npol; pol++)
-                        {
-                            e_true[pol] = 0.0 + 0.0*I;
-
-                            for (opol = 0; opol < npol; opol++)
-                                e_true[pol] += invJi[ant][ch][pol][opol] * e_dash[opol];
-
-                            if (opts.out_coh)
-                                for (opol = 0; opol < npol; opol++)
-                                    noise_floor[ch][pol][opol] += e_true[pol] * conj(e_true[opol]);
-
-                            beam[ch][ant][pol] = e_true[pol];
-                        }
-                    }
-                }
-            }
-
-            // Detect the beam = sum over antennas
-            for (ant = 0; ant < nstation; ant++)
-            for (pol = 0; pol < npol    ; pol++)
-            for (ch  = 0; ch  < nchan   ; ch++ )
-            {
-                // Coherent beam
-                if (coherent_requested)
-                    detected_beam[db_sample][ch][pol] += beam[ch][ant][pol];
-
-                // Incoherent beam
-                if (opts.out_incoh)
-                    detected_incoh_beam[ch] += incoh_beam[ch][ant][pol];
-            }
-
-            if (opts.out_coh)
-            {
-                // Calculate the Stokes parameters
-                form_stokes( detected_beam[db_sample], noise_floor, nchan, invw, spectrum );
-                int offset_in_coh = sizeof(float) * nchan * outpol_coh * sample;
-                memcpy((void *)((char *)data_buffer_coh + offset_in_coh), spectrum, sizeof(float)*nchan*outpol_coh);
-            }
-
-            if (opts.out_incoh)
-            {
-                int offset_in_incoh = sizeof(float) * nchan * outpol_incoh * sample;
-                memcpy((void *)((char *)data_buffer_incoh + offset_in_incoh), detected_incoh_beam, sizeof(float)*nchan*outpol_incoh);
-            }
-
-        } // End OpenMP parallel for
-
-        //
-        // We've now arrived at the end of a second's worth of data...
-        //
+#ifdef HAVE_CUDA
+        cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
+                      nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
+                      detected_beam, data_buffer_coh, data_buffer_incoh );
+#else
+        form_beam( data, &opts, complex_weights_array, invJi, file_no,
+                   nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
+                   detected_beam, data_buffer_coh, data_buffer_incoh );
+#endif
 
         // Invert the PFB, if requested
         if (opts.out_vdif)
         {
-            printf("[%f]  Inverting the PFB (IFFT)\n", omp_get_wtime()-begintime);
+            printf("[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
+#ifdef HAVE_CUDA
+            // cu_invert_pfb_ifft( ... ) // YET_TO_IMPLEMENT
+#else
             invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan, npol, data_buffer_vdif );
+#endif
         }
 
         if (opts.out_uvdif)
         {
-            printf("[%f]  Inverting the PFB (full)\n", omp_get_wtime()-begintime);
-            invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, data_buffer_uvdif );
+            printf("[%f]  Inverting the PFB (full)\n", NOW-begintime);
+#ifdef HAVE_CUDA
+            cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, fil_size, data_buffer_uvdif );
+#else
+            invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, fil_size, data_buffer_uvdif );
+#endif
         }
 
-        printf("[%f]  Writing data to file(s)\n", omp_get_wtime()-begintime);
+        printf("[%f]  Writing data to file(s)\n", NOW-begintime);
 
         if (opts.out_coh)
             psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );
@@ -433,8 +292,8 @@ int main(int argc, char **argv) {
 
     }
 
-    printf("[%f]  **FINISHED BEAMFORMING**\n", omp_get_wtime()-begintime);
-    printf("[%f]  Starting clean-up\n", omp_get_wtime()-begintime);
+    printf("[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
+    printf("[%f]  Starting clean-up\n", NOW-begintime);
 
     // Free up memory
     destroy_filenames( filenames, &opts );
@@ -442,9 +301,12 @@ int main(int argc, char **argv) {
     destroy_invJi( invJi, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, 2*opts.sample_rate, nchan );
 
-    destroy_filter( &fil );
-    for (n = 0; n < nchan; n++)
-        destroy_filter( &fil_ramps[n] );
+    int ch;
+    for (ch = 0; ch < nchan; ch++)
+    {
+        free( fil_ramps[ch] );
+    }
+    free( fil_ramps );
 
     destroy_metafits_info( &mi );
     free( data_buffer_coh   );
@@ -489,8 +351,10 @@ int main(int argc, char **argv) {
         free( uvf.b_offsets );
     }
 
+#ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
     fftw_cleanup_threads();
+#endif
 
     return 0;
 }
@@ -769,6 +633,16 @@ void make_beam_parse_cmdline(
         exit(EXIT_FAILURE);
     }
 
+#ifdef HAVE_CUDA
+    // At the moment, -v is not implemented if CUDA is available
+    if (opts->out_vdif)
+    {
+        fprintf( stderr, "error: -v is not available in the CUDA version. "
+                         "To use -v, please recompile without CUDA.\n" );
+        exit(EXIT_FAILURE);
+    }
+#endif
+
     // Check that all the required options were supplied
     assert( opts->obsid        != NULL );
     assert( opts->begin        != 0    );
@@ -787,7 +661,6 @@ void make_beam_parse_cmdline(
     {
         opts->out_coh = 1;
     }
-
 }
 
 
@@ -830,27 +703,27 @@ void destroy_filenames( char **filenames, struct make_beam_opts *opts )
 }
 
 
-complex double ***create_complex_weights( int nstation, int nchan, int npol )
+ComplexDouble ***create_complex_weights( int nstation, int nchan, int npol )
 // Allocate memory for complex weights matrices
 {
     int ant, ch; // Loop variables
-    complex double ***array;
+    ComplexDouble ***array;
     
-    array = (complex double ***)malloc( nstation * sizeof(complex double **) );
+    array = (ComplexDouble ***)malloc( nstation * sizeof(ComplexDouble **) );
 
     for (ant = 0; ant < nstation; ant++)
     {
-        array[ant] = (complex double **)malloc( nchan * sizeof(complex double *) );
+        array[ant] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
 
         for (ch = 0; ch < nchan; ch++)
-            array[ant][ch] = (complex double *)malloc( npol * sizeof(complex double) );
+            array[ant][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
     }
 
     return array;
 }
 
 
-void destroy_complex_weights( complex double ***array, int nstation, int nchan )
+void destroy_complex_weights( ComplexDouble ***array, int nstation, int nchan )
 {
     int ant, ch;
     for (ant = 0; ant < nstation; ant++)
@@ -865,24 +738,24 @@ void destroy_complex_weights( complex double ***array, int nstation, int nchan )
 }
 
 
-complex double ****create_invJi( int nstation, int nchan, int npol )
+ComplexDouble ****create_invJi( int nstation, int nchan, int npol )
 // Allocate memory for (inverse) Jones matrices
 {
     int ant, p, ch; // Loop variables
-    complex double ****invJi;
+    ComplexDouble ****invJi;
 
-    invJi = (complex double ****)malloc( nstation * sizeof(complex double ***) );
+    invJi = (ComplexDouble ****)malloc( nstation * sizeof(ComplexDouble ***) );
 
     for (ant = 0; ant < nstation; ant++)
     {
-        invJi[ant] =(complex double ***)malloc( nchan * sizeof(complex double **) );
+        invJi[ant] =(ComplexDouble ***)malloc( nchan * sizeof(ComplexDouble **) );
 
         for (ch = 0; ch < nchan; ch++)
         {
-            invJi[ant][ch] = (complex double **)malloc( npol * sizeof(complex double *) );
+            invJi[ant][ch] = (ComplexDouble **)malloc( npol * sizeof(ComplexDouble *) );
 
             for (p = 0; p < npol; p++)
-                invJi[ant][ch][p] = (complex double *)malloc( npol * sizeof(complex double) );
+                invJi[ant][ch][p] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
         }
     }
 
@@ -890,7 +763,7 @@ complex double ****create_invJi( int nstation, int nchan, int npol )
 }
 
 
-void destroy_invJi( complex double ****array, int nstation, int nchan, int npol )
+void destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol )
 {
     int ant, ch, p;
     for (ant = 0; ant < nstation; ant++)
@@ -910,27 +783,27 @@ void destroy_invJi( complex double ****array, int nstation, int nchan, int npol 
 }
 
 
-complex float ***create_detected_beam( int nsamples, int nchan, int npol )
+ComplexDouble ***create_detected_beam( int nsamples, int nchan, int npol )
 // Allocate memory for complex weights matrices
 {
     int s, ch; // Loop variables
-    complex float ***array;
+    ComplexDouble ***array;
     
-    array = (complex float ***)malloc( nsamples * sizeof(complex float **) );
+    array = (ComplexDouble ***)malloc( nsamples * sizeof(ComplexDouble **) );
 
     for (s = 0; s < nsamples; s++)
     {
-        array[s] = (complex float **)malloc( nchan * sizeof(complex float *) );
+        array[s] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
 
         for (ch = 0; ch < nchan; ch++)
-            array[s][ch] = (complex float *)malloc( npol * sizeof(complex float) );
+            array[s][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
     }
 
     return array;
 }
 
 
-void destroy_detected_beam( complex float ***array, int nsamples, int nchan )
+void destroy_detected_beam( ComplexDouble ***array, int nsamples, int nchan )
 {
     int s, ch;
     for (s = 0; s < nsamples; s++)

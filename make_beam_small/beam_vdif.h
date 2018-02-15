@@ -1,11 +1,11 @@
 #ifndef BEAM_VDIF_H
 #define BEAM_VDIF_H
 
-#include <complex.h>
 #include <fftw3.h>
 #include "beam_common.h"
 #include "vdifio.h"
 #include "filter.h"
+#include "mycomplex.h"
 
 #define  VDIF_HEADER_SIZE  32
 
@@ -67,24 +67,27 @@ void populate_vdif_header(
         char            *rec_channel,
         struct delays   *delay_vals );
 
-complex float get_std_dev_complex( complex float *input, int nsamples );
+ComplexFloat get_std_dev_complex( ComplexFloat *input, int nsamples );
 
-void set_level_occupancy( complex float *input, int nsamples,
+void set_level_occupancy( ComplexFloat *input, int nsamples,
                           float *new_gain );
 
-void get_mean_complex( complex float *input, int nsamples, float *rmean,
-                       float *imean, complex float *cmean );
+void get_mean_complex( ComplexFloat *input, int nsamples, float *rmean,
+                       float *imean, ComplexFloat *cmean );
 
-void normalise_complex( complex float *input, int nsamples, float scale );
+void normalise_complex( ComplexFloat *input, int nsamples, float scale );
 
 void to_offset_binary( int8_t *i, int n );
 
-void invert_pfb_ifft( complex float ***detected_beam, int file_no,
+#ifndef HAVE_CUDA
+void invert_pfb_ifft( ComplexDouble ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
                       float *data_buffer_vdif );
 
-void invert_pfb_ord( complex float ***detected_beam, int file_no,
+void invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
                       int nsamples, int nchan, int npol,
-                      filter fils[], float *data_buffer_uvdif );
+                      ComplexDouble **fils, int fil_size,
+                      float *data_buffer_uvdif )
+#endif
 
 #endif

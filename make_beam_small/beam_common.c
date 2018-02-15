@@ -1,9 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include <complex.h>
 #include "beam_common.h"
 #include "psrfits.h"
+#include "mycomplex.h"
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width ) {
 /* Read in the relevant information from the metafits file.
@@ -238,12 +238,11 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales,
             }
         }
         else {
-            complex float  *data_ptr = (complex float *) data;
-            for (i=0;i<nstep;i++) {
-                for (p = 0;p<npol;p++) {
-                    for (j=0;j<nchan;j++){
-
-                        band[p][j] += cabsf(*data_ptr);
+            ComplexDouble *data_ptr = (ComplexDouble *) data;
+            for (i = 0; i < nstep; i++) {
+                for (p = 0; p < npol; p++) {
+                    for (j = 0; j < nchan; j++){
+                        band[p][j] += CAbsd(*data_ptr);
                         data_ptr++;
                     }
                 }
@@ -358,6 +357,294 @@ void read_data( char *filename, uint8_t *data, int nbytes ) {
 }
 
 
+int read_rts_file(ComplexDouble **G, ComplexDouble *Jref,
+                  double *amp, char *fname)
+{
+    FILE *fp = NULL;
+    if ((fp = fopen(fname, "r")) == NULL) {
+        fprintf(stderr, "Error: cannot open gain Jones matrix file: %s\n",
+                fname);
+        exit(EXIT_FAILURE);
+    }
+
+    char line[BUFSIZE];
+    int index = 0;
+    double re0, im0, re1, im1, re2, im2, re3, im3;
+
+    while ((fgets(line, BUFSIZE - 1, fp)) != NULL) {
+
+        if (line[0] == '\n' || line[0] == '#' || line[0] == '\0')
+            continue; // skip blank/comment lines
+        if (line[0] == '/' && line[1] == '/')
+            continue; // also a comment (to match other input files using this style)
+
+        if (index == 0) {
+
+            // read the amplitude and the Alignment Line
+            sscanf(line, "%lf", amp);
+            fgets(line, BUFSIZE - 1, fp);
+            sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
+                           &im0, &re1, &im1, &re2, &im2, &re3, &im3);
+
+            Jref[0] = CMaked( re0, im0 );
+            Jref[1] = CMaked( re1, im1 );
+            Jref[2] = CMaked( re2, im2 );
+            Jref[3] = CMaked( re3, im3 );
+
+        }
+        if (index > 0) {
+            sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
+                           &im0, &re1, &im1, &re2, &im2, &re3, &im3);
+            G[index - 1][0] = CMaked( re0, im0 );
+            G[index - 1][1] = CMaked( re1, im1 );
+            G[index - 1][2] = CMaked( re2, im2 );
+            G[index - 1][3] = CMaked( re3, im3 );
+        }
+
+        index++;
+
+    }
+
+    fclose(fp);
+
+    return 0;
+
+}
+
+
+int read_bandpass_file(
+        ComplexDouble ***Jm, // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
+        ComplexDouble ***Jf, // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
+        int chan_width,       // Input:  channel width of one column in file (in Hz)
+        int nchan,            // Input:  (max) number of channels in one file (=128/(chan_width/10000))
+        int nant,             // Input:  (max) number of antennas in one file (=128)
+        char *filename        // Input:  name of bandpass file
+        )
+{
+
+    // Open the file for reading
+    FILE *f = NULL;
+    if ((f = fopen(filename, "r")) == NULL) {
+        fprintf(stderr, "Error: cannot open Bandpass file: %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    // Read in top row = frequency offsets
+    int max_len = 4096; // Overkill
+    char freqline[max_len];
+    if (fgets( freqline, max_len, f ) == NULL) {
+        fprintf(stderr, "Error: could not read first line of %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    // Parse top row
+    // Find out which channels are actually in the Bandpass file
+    // (i.e. which channels have not been flagged)
+    char *freqline_ptr = freqline;
+    int pos;
+    double freq_offset;
+    int chan_count = 0;
+    int chan_idxs[nchan];
+    int chan_idx;
+    while (sscanf(freqline_ptr, "%lf,%n", &freq_offset, &pos) == 1) {
+
+        chan_count++;
+
+        // Make sure we haven't exceeded the total
+        if (chan_count > nchan) {
+            fprintf(stderr, "Error: More than nchan = %d columns in Bandpass file %s\n", nchan, filename);
+            exit(EXIT_FAILURE);
+        }
+        chan_idx = (int)roundf( freq_offset*1e6 / (double)chan_width );
+        chan_idxs[chan_count-1] = chan_idx;
+
+        freqline_ptr += pos;
+    }
+
+    // Read in all the values
+    int ant, curr_ant = 0;     // The antenna number, read in from the file
+    int ant_row       = 0;     // Number between 0 and 7. Each antenna has 8 rows.
+    int ch;                    // A counter for channel numbers
+    int ci;                    // A counter for channel number indices
+    double amp,ph;             // For holding the read-in value pairs (real, imaginary)
+    int pol;                   // Number between 0 and 3. Corresponds to position in Jm/Jf matrices: [0,1]
+                               //                                                                    [2,3]
+    ComplexDouble ***J;       // Either points to Jm or Jf, according to which row we're on
+
+    while (1) {   // Will terminate when EOF is reached
+
+        if (fscanf(f, "%d,", &ant) == EOF)     // Read in first number = antenna number
+            break;
+
+        if (ant > nant) {                      // Check that the antenna number is not bigger than expected
+            fprintf(stderr, "Error: More than nant = %d antennas in Bandpass file %s\n", nant, filename);
+            exit(EXIT_FAILURE);
+        }
+
+        ant--;                                 // Convert to 0-offset
+
+        if (ant == curr_ant) {                 // Ensure that there is not an unusual (!=8) number of rows for this antenna
+            ant_row++;
+            if (ant_row > 8) {
+                fprintf(stderr, "Error: More than 8 rows for antenna %d in Bandpass file %s\n",
+                        ant, filename);
+                exit(EXIT_FAILURE);
+            }
+        }
+        else {
+            if (ant_row < 7) {
+                fprintf(stderr, "Error: Fewer than 8 rows for antenna %d in Bandpass file %s\n",
+                        ant, filename);
+                exit(EXIT_FAILURE);
+            }
+            curr_ant = ant;
+            ant_row  = 1;
+        }
+
+        if ((ant_row-1) % 2 == 0)  J = Jm;      // Decide if the row corresponds to the Jm values (even rows)
+        else                       J = Jf;      // or Jf values (odd rows)
+
+        if (J == NULL) {                        // If the caller doesn't care about this row
+            fgets( freqline, max_len, f );      // Skip the rest of this line (freqline isn't needed any more)
+            continue;                           // And start afresh on the next line
+        }
+
+        pol = (ant_row-1) / 2;                  // Get the polarisation index
+
+        for (ci = 0; ci < chan_count; ci++) {   // Loop over the row
+
+            ch = chan_idxs[ci];                 // Get the channel number
+            fscanf(f, "%lf,%lf,", &amp, &ph);   // Read in the re,im pairs in each row
+
+            J[ant][ch][pol] = CScld( CExpd( CMaked(0.0, ph) ), amp );
+                                                // Convert to complex number and store in output array
+        }
+
+        // (Assumes that the number of values in each row are correct)
+    }
+
+    return 1;
+}
+
+
+int read_offringa_gains_file( ComplexDouble **antenna_gain, int nant,
+                              int coarse_chan, char *gains_file, int *order )
+{
+    // Assumes that memory for antenna has already been allocated
+
+    // Open the calibration file for reading
+    FILE *fp = NULL;
+    fp = fopen(gains_file,"r");
+    if (fp == NULL) {
+        fprintf(stderr,"Failed to open %s: quitting\n",gains_file);
+        exit(EXIT_FAILURE);
+    }
+
+    // Read in the necessary information from the header
+
+    uint32_t intervalCount, antennaCount, channelCount, polarizationCount;
+
+    fseek(fp, 16, SEEK_SET);
+    fread(&intervalCount,     sizeof(uint32_t), 1, fp);
+    fread(&antennaCount,      sizeof(uint32_t), 1, fp);
+    fread(&channelCount,      sizeof(uint32_t), 1, fp);
+    fread(&polarizationCount, sizeof(uint32_t), 1, fp);
+
+    // Error-checking the info extracted from the header
+    if (intervalCount > 1) {
+        fprintf(stderr, "Warning: Only the first interval in the calibration ");
+        fprintf(stderr, "solution (%s) will be used\n", gains_file);
+    }
+    if ((int)antennaCount != nant) {
+        fprintf(stderr, "Error: Calibration solution (%s) ", gains_file);
+        fprintf(stderr, "contains a different number of antennas (%d) ", antennaCount);
+        fprintf(stderr, "than specified (%d)\n", nant);
+        exit(1);
+    }
+    if (channelCount != 24) {
+        fprintf(stderr, "Warning: Calibration solution (%s) ", gains_file);
+        fprintf(stderr, "contains a different number (%d) ", channelCount);
+        fprintf(stderr, "than the expected (%d) channels. ", 24);
+    }
+    if ((int)channelCount <= coarse_chan) {
+        fprintf(stderr, "Error: Requested channel number (%d) ", coarse_chan);
+        fprintf(stderr, "is more than the number of channels (0-%d) ", channelCount-1);
+        fprintf(stderr, "available in the calibration solution (%s)\n", gains_file);
+        exit(1);
+    }
+    int npols = polarizationCount; // This will always = 4
+
+    // Prepare to jump to the first solution to be read in
+    int bytes_left_in_header = 16;
+    int bytes_to_first_jones = bytes_left_in_header + (npols * coarse_chan * sizeof(ComplexDouble));
+         //     (See Offringa's specs for details)
+         //     Assumes coarse_chan is zero-offset
+         //     sizeof(complex double) *must* be 64-bit x 2 = 16-byte
+    int bytes_to_next_jones = npols * (channelCount-1) * sizeof(ComplexDouble);
+
+    int ant, pol;           // Iterate through antennas and polarisations
+    int pol_idx, ant_idx;   // Used for "re-ordering" the antennas and pols
+    int count = 0;          // Keep track of how many solutions have actually been read in
+    double re, im;          // Temporary placeholders for the real and imaginary doubles read in
+
+    // Loop through antennas and read in calibration solution
+    int first = 1;
+    for (ant = 0; ant < nant; ant++) {
+
+        // Get correct antenna index
+        // To wit: The nth antenna in the Offringa binary file will get put into
+        // position number order[n]. Default is no re-ordering.
+        if (order) {
+            ant_idx = order[ant];
+        }
+        else {
+            ant_idx = ant;
+        }
+
+        // Jump to next Jones matrix position for this channel
+        if (first) {
+            fseek(fp, bytes_to_first_jones, SEEK_CUR);
+            first = 0;
+        }
+        else {
+            fseek(fp, bytes_to_next_jones, SEEK_CUR);
+        }
+
+        // Read in the data
+        for (pol = 0; pol < npols; pol++) {
+
+            pol_idx = 3 - pol; // Read them in "backwards", because RTS's "x" = Offringa's "y"
+
+            fread(&re, sizeof(double), 1, fp);
+            fread(&im, sizeof(double), 1, fp);
+
+            // Check for NaNs
+            if (isnan(re) | isnan(im)) {
+
+                // If NaN, set to identity matrix
+                if (pol_idx == 0 || pol_idx == 3)
+                    antenna_gain[ant_idx][pol_idx] = CMaked( 1.0, 0.0 );
+                else
+                    antenna_gain[ant_idx][pol_idx] = CMaked( 0.0, 0.0 );
+
+            }
+            else {
+                antenna_gain[ant_idx][pol_idx] = CMaked( re, im );
+            }
+
+            count++;
+
+        }
+    }
+
+    // Close the file, print a summary, and return
+    fclose(fp);
+    fprintf(stdout, "Read %d inputs from %s\n", count, gains_file);
+
+    return count/npols; // should equal the number of antennas
+}
+
+
 void int8_to_uint8(int n, int shift, char * to_convert) {
     int j;
     int scratch;
@@ -383,3 +670,124 @@ void float2int8_trunc(float *f, int n, float min, float max, int8_t *i)
     }
 }
 
+
+void cp2x2(ComplexDouble *Min, ComplexDouble *Mout)
+{
+    Mout[0] = Min[0];
+    Mout[1] = Min[1];
+    Mout[2] = Min[2];
+    Mout[3] = Min[3];
+}
+
+
+void inv2x2(ComplexDouble *Min, ComplexDouble *Mout)
+{
+    ComplexDouble m1 = CMuld( Min[0], Min[3] );
+    ComplexDouble m2 = CMuld( Min[1], Min[2] );
+    ComplexDouble det = CSubd( m1, m2 );
+    ComplexDouble inv_det = CRcpd( det );
+    Mout[0] = CMuld(       inv_det,  Min[3] );
+    Mout[1] = CMuld( CNegd(inv_det), Min[1] );
+    Mout[2] = CMuld( CNegd(inv_det), Min[2] );
+    Mout[3] = CMuld(       inv_det,  Min[0] );
+}
+
+
+void inv2x2S(ComplexDouble *Min, ComplexDouble **Mout)
+// Same as inv2x2(), but the output is a 2x2 2D array, instead of a 4-element
+// 1D array
+{
+    ComplexDouble m1 = CMuld( Min[0], Min[3] );
+    ComplexDouble m2 = CMuld( Min[1], Min[2] );
+    ComplexDouble det = CSubd( m1, m2 );
+    ComplexDouble inv_det = CRcpd( det );
+    Mout[0][0] = CMuld(       inv_det,  Min[3] );
+    Mout[0][1] = CMuld( CNegd(inv_det), Min[1] );
+    Mout[1][0] = CMuld( CNegd(inv_det), Min[2] );
+    Mout[1][1] = CMuld(       inv_det,  Min[0] );
+}
+
+
+void mult2x2d(ComplexDouble *M1, ComplexDouble *M2, ComplexDouble *Mout)
+{
+    ComplexDouble m00 = CMuld( M1[0], M2[0] );
+    ComplexDouble m12 = CMuld( M1[1], M2[2] );
+    ComplexDouble m01 = CMuld( M1[0], M2[1] );
+    ComplexDouble m13 = CMuld( M1[1], M2[3] );
+    ComplexDouble m20 = CMuld( M1[2], M2[0] );
+    ComplexDouble m32 = CMuld( M1[3], M2[2] );
+    ComplexDouble m21 = CMuld( M1[2], M2[1] );
+    ComplexDouble m33 = CMuld( M1[3], M2[3] );
+    Mout[0] = CAddd( m00, m12 );
+    Mout[1] = CAddd( m01, m13 );
+    Mout[2] = CAddd( m20, m32 );
+    Mout[3] = CAddd( m21, m33 );
+}
+
+
+void conj2x2(ComplexDouble *M, ComplexDouble *Mout)
+/* Calculate the conjugate of a matrix
+ * It is safe for M and Mout to point to the same matrix
+ */
+{
+    int i;
+    for (i = 0; i < 4; i++)
+        Mout[i] = CConjd(M[i]);
+}
+
+
+double norm2x2(ComplexDouble *M, ComplexDouble *Mout)
+/* Normalise a 2x2 matrix via the Frobenius norm
+ * It is safe for M and Mout to point to the same matrix.
+ */
+{
+    // Calculate the normalising factor
+    double Fnorm = 0.0;
+    int i;
+    for (i = 0; i < 4; i++)
+        Fnorm += CReald( CMuld( M[i], CConjd(M[i]) ) );
+
+    Fnorm = sqrt(Fnorm);
+
+    // Divide each element through by the normalising factor.
+    // If norm is 0, then output zeros everywhere
+    for (i = 0; i < 4; i++) {
+        if (Fnorm == 0.0)
+            Mout[i] = CMaked( 0.0, 0.0 );
+        else
+            Mout[i] = CScld( M[i], 1.0 / Fnorm );
+    }
+
+    return Fnorm;
+}
+
+
+void dec2hms( char *out, double in, int sflag )
+{
+    int sign  = 1;
+    char *ptr = out;
+    int h, m;
+    double s;
+
+    if (in < 0.0)
+    {
+        sign = -1;
+        in = fabs(in);
+    }
+
+    h = (int)in; in -= (double)h; in *= 60.0;
+    m = (int)in; in -= (double)m; in *= 60.0;
+
+    s = in;
+    if (sign==1 && sflag)
+    {
+        *ptr='+';
+        ptr++;
+    }
+    else if (sign==-1)
+    {
+        *ptr='-';
+        ptr++;
+    }
+    sprintf( ptr, "%2.2d:%2.2d:%07.4f", h, m, s );
+}

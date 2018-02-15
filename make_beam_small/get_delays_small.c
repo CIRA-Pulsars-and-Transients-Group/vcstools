@@ -3,8 +3,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <math.h>
-#include <complex.h>
-#include "mwac_utils.h"
+#include "mycomplex.h"
 #include "slalib.h"
 #include "slamac.h"
 #include "psrfits.h"
@@ -121,7 +120,7 @@ void calcUVW(double ha,double dec,double x,double y,double z,double *u,double *v
 
 
 
-int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
+int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
                const long freq, // observing freq (Hz)
                const float lat, // observing latitude (radians)
                const float az0, // azimuth & zenith angle of tile pointing
@@ -169,8 +168,8 @@ void get_delays(
         double                 sec_offset,
         struct delays         *delay_vals,
         struct metafits_info  *mi,
-        complex double      ***complex_weights_array,  // output: cmplx[ant][ch][pol]
-        complex double     ****invJi                   // output: invJi[ant][ch][pol][pol]
+        ComplexDouble       ***complex_weights_array,  // output: cmplx[ant][ch][pol]
+        ComplexDouble      ****invJi                   // output: invJi[ant][ch][pol][pol]
         ) {
     
     int row;     // For counting through nstation*npol rows in the metafits file
@@ -199,20 +198,20 @@ void get_delays(
 
     double amp = 0;
 
-    complex double Jref[NPOL*NPOL];            // Calibration Direction
-    complex double E[NPOL*NPOL];               // Model Jones in Desired Direction
-    complex double G[NPOL*NPOL];               // Coarse channel DI Gain
-    complex double Gf[NPOL*NPOL];              // Fine channel DI Gain
-    complex double Ji[NPOL*NPOL];              // Gain in Desired Direction
+    ComplexDouble Jref[NPOL*NPOL];            // Calibration Direction
+    ComplexDouble E[NPOL*NPOL];               // Model Jones in Desired Direction
+    ComplexDouble G[NPOL*NPOL];               // Coarse channel DI Gain
+    ComplexDouble Gf[NPOL*NPOL];              // Fine channel DI Gain
+    ComplexDouble Ji[NPOL*NPOL];              // Gain in Desired Direction
 
-    complex double  **M  = (complex double ** ) calloc(NANT, sizeof(complex double * )); // Gain in direction of Calibration
-    complex double ***Jf = (complex double ***) calloc(NANT, sizeof(complex double **)); // Fitted bandpass solutions
+    ComplexDouble  **M  = (ComplexDouble ** ) calloc(NANT, sizeof(ComplexDouble * )); // Gain in direction of Calibration
+    ComplexDouble ***Jf = (ComplexDouble ***) calloc(NANT, sizeof(ComplexDouble **)); // Fitted bandpass solutions
 
     for (ant = 0; ant < NANT; ant++) {
-        M[ant]  = (complex double * ) calloc(NPOL*NPOL,  sizeof(complex double));
-        Jf[ant] = (complex double **) calloc(cal->nchan, sizeof(complex double *));
+        M[ant]  = (ComplexDouble * ) calloc(NPOL*NPOL,  sizeof(ComplexDouble));
+        Jf[ant] = (ComplexDouble **) calloc(cal->nchan, sizeof(ComplexDouble *));
         for (ch = 0; ch < cal->nchan; ch++) { // Only need as many channels as used in calibration solution
-            Jf[ant][ch] = (complex double *) calloc(NPOL*NPOL, sizeof(complex double));
+            Jf[ant][ch] = (ComplexDouble *) calloc(NPOL*NPOL, sizeof(ComplexDouble));
         }
     }
 
@@ -237,7 +236,7 @@ void get_delays(
     int    n;
 
     // Read in the Jones matrices for this (coarse) channel, if requested
-    complex double invJref[4];
+    ComplexDouble invJref[4];
     if (cal->cal_type == RTS || cal->cal_type == RTS_BANDPASS) {
 
         read_rts_file(M, Jref, &amp, cal->filename); // Read in the RTS DIJones file
@@ -268,10 +267,10 @@ void get_delays(
 
         // Just make Jref (and invJref) the identity matrix since they are already
         // incorporated into Offringa's calibration solutions.
-        Jref[0] = 1 + I*0;
-        Jref[1] = 0 + I*0;
-        Jref[2] = 0 + I*0;
-        Jref[3] = 1 + I*0;
+        Jref[0] = CMaked( 1.0, 0.0 );
+        Jref[1] = CMaked( 0.0, 0.0 );
+        Jref[2] = CMaked( 0.0, 0.0 );
+        Jref[3] = CMaked( 1.0, 0.0 );
         inv2x2(Jref, invJref);
     }
 
@@ -350,11 +349,11 @@ void get_delays(
             mult2x2d(Gf, E, Ji); // the gain in the desired look direction
 
             // this automatically spots an RTS flagged tile
-            if (fabs(cimag(Ji[0])) < 0.0000001) {  // THIS TEST CAN PROBABLY BE IMPROVED
-                Ji[0] = 0.0 + I*0;
-                Ji[1] = 0.0 + I*0;
-                Ji[2] = 0.0 + I*0;
-                Ji[3] = 0.0 + I*0;
+            if (fabs(CImagd(Ji[0])) < 0.0000001) {  // THIS TEST CAN PROBABLY BE IMPROVED
+                Ji[0] = CMaked( 0.0, 0.0 );
+                Ji[1] = CMaked( 0.0, 0.0 );
+                Ji[2] = CMaked( 0.0, 0.0 );
+                Ji[3] = CMaked( 0.0, 0.0 );
             }
 
             // Calculate the complex weights array
@@ -394,11 +393,12 @@ void get_delays(
                     phase = phase*2*M_PI*conjugate;
 
                     // Store result for later use
-                    complex_weights_array[ant][ch][pol] = mi->weights_array[row]*cexp(I*phase);
+                    complex_weights_array[ant][ch][pol] =
+                        CScld( CExpd( CMaked( 0.0, phase ) ), mi->weights_array[row] );
 
                 }
                 else {
-                    complex_weights_array[ant][ch][pol] = mi->weights_array[row]; // i.e. =0.0
+                    complex_weights_array[ant][ch][pol] = CMaked( mi->weights_array[row], 0.0 ); // i.e. = 0.0
                 }
             }
 
@@ -416,7 +416,7 @@ void get_delays(
                     else {
                         for (p1 = 0; p1 < NPOL;  p1++)
                         for (p2 = 0; p2 < NPOL;  p2++)
-                            invJi[ant][ch][p1][p2] = 0.0 + I*0.0;
+                            invJi[ant][ch][p1][p2] = CMaked( 0.0, 0.0 );
                     }
                 }
             }
@@ -450,7 +450,7 @@ void get_delays(
 
 }
 
-int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
+int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
                const long freq, // observing freq (Hz)
                const float lat, // observing latitude (radians)
                const float az0, // azimuth & zenith angle of tile pointing
@@ -464,7 +464,7 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
     float dipl_e, dipl_n, dipl_z, proj_e, proj_n, proj_z, proj0_e, proj0_n,
     proj0_z;
     float rot[2 * N_COPOL];
-    complex double PhaseShift, multiplier;
+    ComplexDouble PhaseShift, multiplier;
     int i, j, n_cols = 4, n_rows = 4, result = 0;
     
     float lambda = c / freq;
@@ -473,10 +473,10 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
     
     const int scaling = 1; /* 0 -> no scaling; 1 -> scale to unity toward zenith; 2 -> scale to unity in look-dir */
     
-    response[0] = 0.0;
-    response[1] = 0.0;
-    response[2] = 0.0;
-    response[3] = 0.0;
+    response[0] = CMaked( 0.0, 0.0 );
+    response[1] = CMaked( 0.0, 0.0 );
+    response[2] = CMaked( 0.0, 0.0 );
+    response[3] = CMaked( 0.0, 0.0 );
     
     sza = sin(za);
     cza = cos(za);
@@ -498,7 +498,7 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
     n_cols = 4;
     n_rows = 4;
     
-    multiplier = R2C_SIGN * I * radperm;
+    multiplier = CMaked( 0.0, R2C_SIGN * radperm );
     
     /* loop over dipoles */
     for (i = 0; i < n_cols; i++) {
@@ -506,17 +506,16 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
             dipl_e = (i + 1 - 2.5) * dpl_sep;
             dipl_n = (j + 1 - 2.5) * dpl_sep;
             dipl_z = 0.0;
-            PhaseShift = cexp(
-                              multiplier
-                              * (dipl_e * (proj_e - proj0_e)
+            PhaseShift = CExpd( CScld( multiplier,
+                                  (dipl_e * (proj_e - proj0_e)
                                  + dipl_n * (proj_n - proj0_n)
-                                 + dipl_z * (proj_z - proj0_z)));
+                                 + dipl_z * (proj_z - proj0_z)) ) );
             // sum for p receptors
-            response[0] += PhaseShift;
-            response[1] += PhaseShift;
+            response[0] = CAddd( response[0], PhaseShift );
+            response[1] = CAddd( response[1], PhaseShift );
             // sum for q receptors
-            response[2] += PhaseShift;
-            response[3] += PhaseShift;
+            response[2] = CAddd( response[2], PhaseShift );
+            response[3] = CAddd( response[3], PhaseShift );
         }
     }
     // assuming that the beam centre is normal to the ground plane, the separation should be used instead of the za.
@@ -546,10 +545,8 @@ int calcEjones(complex double response[MAX_POLS], // pointer to 4-element (2x2) 
     
     //fprintf(stdout,"calib:HA is %f hours \n",ha*DR2H);
     // rot is the Jones matrix, response just contains the phases, so this should be an element-wise multiplication.
-    response[0] *= rot[0] * ground_plane;
-    response[1] *= rot[1] * ground_plane;
-    response[2] *= rot[2] * ground_plane;
-    response[3] *= rot[3] * ground_plane;
+    for (i = 0; i < 4; i++)
+        response[i] = CScld( response[i], rot[i] * ground_plane );
     //fprintf(stdout,"calib:HA is %f groundplane factor is %f\n",ha*DR2H,ground_plane);
     return (result);
     
