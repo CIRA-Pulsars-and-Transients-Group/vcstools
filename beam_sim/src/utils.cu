@@ -111,7 +111,7 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
 }
 
 
-void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+void gpuAssert(cudaError_t code, const char *file, int line, bool abort)
 {
     /* Wrapper function for GPU/CUDA error handling. Every CUDA call goes through 
        this function. It will return a message giving your the error string, 

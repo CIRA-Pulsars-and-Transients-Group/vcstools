@@ -24,7 +24,7 @@
 #define MWA_HGT (377.827)       // Array elevation above sea level, in meters
 
 // Macro to use gpuAssert function
-#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__);}
+#define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__, true);}
 
 
 /* struct to hold all the wavenumbers for each (Az,ZA) */

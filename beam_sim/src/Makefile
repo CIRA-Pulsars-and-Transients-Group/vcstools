@@ -13,8 +13,8 @@ CUDA_INC = ${CUDATOOLKIT_HOME}/include
 CUDA_LIB = ${CUDATOOLKIT_HOME}/lib
 
 # SLALIB inc/lib dirs
-SLA_INC = ${PSRSOFT}/include
-SLA_LIB = ${PSRSOFT}/lib
+SLA_INC = ${LIBSLA_LIB}/include
+SLA_LIB = ${LIBSLA_LIB}/lib
 
 # HDF5 inc/lib dirs
 HDF5_INC = ${HDF5_ROOT}/include
