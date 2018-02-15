@@ -13,8 +13,8 @@ CUDA_INC = ${CUDATOOLKIT_HOME}/include
 CUDA_LIB = ${CUDATOOLKIT_HOME}/lib
 
 # SLALIB inc/lib dirs
-SLA_INC = ${PSRSOFT}/include
-SLA_LIB = ${PSRSOFT}/lib
+SLA_INC = ${LIBSLA_LIB}/include
+SLA_LIB = ${LIBSLA_LIB}/lib
 
 # HDF5 inc/lib dirs
 HDF5_INC = ${HDF5_ROOT}/include
@@ -39,50 +39,41 @@ FLAGS = -O3 # -D_GET_JONES_2016_TEST
 NVCC_FLAGS = -arch=$(NVCC_ARCH) -Xcompiler
 
 # All compile flags
-CFLAGS = $(NVCC_FLAGS) $(FLAGS) $(INC_DIRS)
+CFLAGS = $(NVCC_FLAGS) $(FLAGS)
+INCFLAGS = $(INC_DIRS)
 LDFLAGS = $(LIB_DIRS) -lm -lsla -lcfitsio -lhdf5_cpp -lhdf5 -lboost_system -lboost_filesystem # -lcuda
 
 # targets
 FEE2016_OBJECTS = FEE2016/beam2016implementation.o FEE2016/mwa_beam_interface.o FEE2016/system.o
-PABEAM_OBJECTS = pabeam_kernal.o pabeam.o
+PABEAM_OBJECTS = utils.o pabeam_kernal.o pabeam.o
 
-OBJECTS = $(FEE2016_OBJECTS) $(PABEAM_OBJECTS) 
+OBJECTS = $(FEE2016_OBJECTS) $(PABEAM_OBJECTS)
 
-TARGETS = pabeam_gpu_notile pabeam_gpu
+TARGETS = pabeam_gpu
 
 BIN_DIR = ../bin
 
 all: $(TARGETS)
 
 
-pabeam_gpu_notile: pabeam_notile.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
-
-#$(NVCC) -o $@ $^ $(NVCC_FLAGS) $(LIB_DIRS_NOTILE) $(INC_DIRS_NOTILE) $(FLAGS_NOTILE)
-
 pabeam_gpu: $(OBJECTS)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
-#$(NVCC) -o $@ $(OBJECTS) $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS)
-
 
 
 %.o: %.cu
-	$(CC) -c $@ $(CFLAGS) $<
+	$(CC) $(CFLAGS) -c $@ $< $(INCFLAGS)
 
-#pabeam_kernal.o: pabeam_kernal.cu
-#	$(NVCC) -c $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS) $<
-
-#p%.o: p%.cu
-#	$(NVCC) -c $(NVCC_FLAGS) $(LIB_DIRS) $(INC_DIRS) $(FLAGS) $<
 
 FEE2016/%.o:
 	@$(MAKE) -C $(@D) $(@F)
+
 
 clean:
 	$(RM) *.o
 	$(RM) pabeam_gpu_notile
 	$(RM) pabeam_gpu
 	$(RM) pabeam_cpu
+
 
 # clean this directory and the FEE2016 model directory
 dist-clean:
