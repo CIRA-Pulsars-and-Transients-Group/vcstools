@@ -283,10 +283,10 @@ int main(int argc, char *argv[])
     int c=0;
     double freq=0.0, lambda=0.0;
     double az_step=1.0, za_step=1.0, eta=1.0;
-    int blockSize=1024, numBlocks=1024;
+    int nThreads=1, nBlocks=1; // Just initialise, will figure it out later on after querying device
     int use_tile_beam=0, gridpoint=0;
 
-    /* Parse options */
+    // Parse options
     if (argc > 1)
     {
         while ((c = getopt(argc, argv, "h:f:e:r:d:t:m:b:x:y:g:")) != -1)
@@ -353,7 +353,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
     
-    // let user know that using the FEE2016 tile beam model will slow down the simulation
+    // Let user know that using the FEE2016 tile beam model will slow down the simulation
     if (use_tile_beam == 1)
     {
         printf("Using FEE2016 tile beam model - this will slow down the computation significantly, but you can get antenna temperatures...\n");
@@ -364,7 +364,7 @@ int main(int argc, char *argv[])
         printf("Not using tile beam model - only computing array factor, but you cannot get antenna temperatures from this...\n");
     }
 
-    // calculate target az,za and wavevector
+    // Calculate target az,za and wavevector
     tazza target;
     wavenums target_wn;
 
@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
     calcWaveNumber(lambda, target.az, target.za, &target_wn);
     printf("    kx = %f    ky = %f    kz = %f\n", target_wn.kx, target_wn.ky, target_wn.kz); 
 
-    // get the number of tiles in array
+    // Get the number of tiles in array
     int ntiles=0;
 
     printf("Determining number of tiles from metafits\n");
@@ -382,42 +382,46 @@ int main(int argc, char *argv[])
     ntiles = ntiles / 2;
     printf("    number of tiles: %d\n",ntiles);
 
-    // allocate dynamic memory for intermediate tile position arrays
+    // Allocate dynamic memory for intermediate tile position arrays
     // (probably don't need to check as this should be ~MB scale)
     float *N_pols = (float *)malloc(2 * ntiles * sizeof(float));
     float *E_pols = (float *)malloc(2 * ntiles * sizeof(float));
     float *H_pols = (float *)malloc(2 * ntiles * sizeof(float));
-    // allocate dynamic memory for tile positions
+    // Allocate dynamic memory for tile positions
     float *N_tile = (float *)malloc(ntiles * sizeof(float));
     float *E_tile = (float *)malloc(ntiles * sizeof(float));
     float *H_tile = (float *)malloc(ntiles * sizeof(float));
     printf("Getting tile positions\n");
-    getTilePositions(metafits, 2*ntiles,\
-            N_pols, E_pols, H_pols,\
-            N_tile, E_tile, H_tile);
+    getTilePositions(metafits, 2*ntiles,
+                     N_pols, E_pols, H_pols, 
+                     N_tile, E_tile, H_tile);
     free(N_pols);
     free(E_pols);
     free(H_pols);
 
-    // have to remove tiles from the flagged tiles list.
-    // each element in the list is the index of a tile that needs to be removed.
+    // We have to remove tiles from the flagged tiles list.
+    // Each element in the list is the index of a tile that needs to be removed.
     printf("Getting flagged tiles\n");
     int *flagged_tiles = (int *)malloc(ntiles * sizeof(int));
     int ntoread;
+
     ntoread = getFlaggedTiles(flagfile, flagged_tiles);
+    
     int flagged[ntoread];
 
     for (int i=0; i < ntoread; i++)
     {
         flagged[i] = flagged_tiles[i];
     }
-    printf("Removing %d flagged tiles\n",ntoread);
-    printf("Tiles remaining: %d\n",ntiles-ntoread);
+    
+    printf("Removing %d flagged tiles\n", ntoread);
+    printf("Tiles remaining: %d\n",       ntiles-ntoread);
+    
     removeFlaggedTiles(N_tile, E_tile, H_tile, flagged, ntoread, ntiles);
     free(flagged_tiles);
     printf("\n");
 
-    // but, the last ntoread elements are pointless 
+    // But, the last ntoread elements are pointless,
     // so now we can allocate static memory for the final list of positions
     ntiles = ntiles - ntoread;
     float xpos[ntiles], ypos[ntiles], zpos[ntiles];
@@ -434,7 +438,7 @@ int main(int argc, char *argv[])
     free(H_tile);
 
 
-    // determine number of az/za elements from specified pixel size
+    // Determine number of az/za elements from specified pixel size
     int niter=1;
     int n_az, n_za;
     long int size;
@@ -442,47 +446,48 @@ int main(int argc, char *argv[])
     n_az = (int)(360.0/az_step);
     n_za = (int)(90.0/za_step)+1; // +1 because we want to evalute at 90deg too!
     size = n_az * n_za;
-    printf("Number of az steps [0,360): %d\n", n_az); // step from [0,360) - 360 will double count the 0 values
-    printf("Number of za steps [0,90] : %d\n", n_za); // step from [0,90]
+    printf("Number of az steps [0,360): %d\n",           n_az); // step from [0,360) - 360 will double count the 0 values
+    printf("Number of za steps [0,90] : %d\n",           n_za); // step from [0,90]
     printf("Total number of elements to compute: %ld\n", size);
-    niter = 1; // how many times do I need to split the problem up?
+    niter = 1; // How many times do I need to split the problem up?
     printf("\n");
  
-    // figure out how many iterations are required (being conservative)
+    // Figure out how many iterations are required (being conservative)
     // and the device properties (as a consequence)
-    requiredMemory(size, ntiles, &niter, &blockSize);
+    requiredMemory(size, ntiles, &niter, &nThreads);
 
 
     /* We now have the relevant array configuration and target source information 
        needed to calculate the array factor. The best way is to split it up into 
-       managable chunks (depending on the device capabilities). */
+       managable chunks (depending on the device capabilities). 
+     */
 
-      // construct arrays for computation on host
+    // Construct arrays for computation on host
     double *az_array, *za_array;
     
-    // allocate memory on host and check
+    // Allocate memory and initialise to zeros on host and check
     // azimuth vector
     az_array = (double *)calloc(size, sizeof(double));
     if (!az_array)
     {
-        fprintf(stderr,"Host memory allocation failed (allocate az_array)\n");
+        fprintf(stderr, "Host memory allocation failed (allocate az_array)\n");
         return EXIT_FAILURE;
     }
     // zenith vector
     za_array = (double *)calloc(size, sizeof(double));
     if (!za_array)
     {
-        fprintf(stderr,"Host memory allocation failed (allocate za_array)\n");
+        fprintf(stderr, "Host memory allocation failed (allocate za_array)\n");
         return EXIT_FAILURE;
     }
 
-    // populate the host vectors:
+    // Populate the host vectors:
     // TODO: this is currently the most memory intensive part on host.
     //       maybe we want to move this initilisation part into the iteration loop
     //       which will then make the arrays smaller --
     //           need to figure out how to populate correctly then...
     printf("Initialising az, za and result matrix\n");
-    // want arrays to be something like:
+    // We want arrays to be something like:
     // az = [0 0 0 0 ... 1 1 1 1 ...]
     // za = [0 1 2 3 ... 0 1 2 3 ...]
     int cc=0, i=0;
@@ -499,18 +504,16 @@ int main(int argc, char *argv[])
     printf("Done\n");
 
 
-    // construct arrays for device computation
-    double *d_az_array, *d_za_array;
-    double *subAz, *subZA;
+    // Construct arrays for device computation
+    double *d_az_array, *d_za_array, *subAz, *subZA;
+    double af_max = -1, omega_A = 0.0;
     cuDoubleComplex *af_array, *d_af_array;
     float *d_xpos, *d_ypos, *d_zpos;
-    //wavenums *d_twn;
     int itersize, az_idx1, az_idx2, za_idx1, za_idx2; 
     int iter_n_az = (int)floor(size / niter);
     int iter_n_za = (int)floor(size / niter);
-    double af_max = -1, omega_A = 0.0;
 
-    // before we get to the real computation, better open a file ready for writing
+    // Before we get to the real computation, better open a file ready for writing
     int obsid;
     char output[100];
     sscanf(metafits, "%d%*s", &obsid);
@@ -519,25 +522,23 @@ int main(int argc, char *argv[])
     sprintf(output, "%d_%.2fMHz_%s.dat", obsid, freq/1.0e6, time);
     
     FILE *fp;
-    fp = fopen(output,"w");  // open the file to write
-    //fprintf(fp, "Az\tZA\tP\n"); // and write the header info
+    fp = fopen(output, "w");  // open the file to write
 
-    /* This is the primary loop which does the calculations */
+    // This is the primary loop which does the calculations
     printf("%d az , %d za per iteration\n", iter_n_az, iter_n_za);
     for (int iter = 0; iter < niter; iter++)
     {  
         printf("==== Iteration %d ====\n", iter);
-        //fprintf(fp, "Iteration %d\n", iter);
-        // figure out this iteration size, then allocate memory
+        // Figure out this iteration size, then allocate memory
         if (iter != niter-1)
         {
             itersize = iter_n_az; // = iter_n_za
-
-            az_idx1 = iter * iter_n_az;
-            az_idx2 = (iter+1) * iter_n_az;
-            
-            za_idx1 = iter * iter_n_za;
-            za_idx2 = (iter+1) * iter_n_za;
+            az_idx1  = iter * iter_n_az;
+            az_idx2  = (iter+1) * iter_n_az;
+            za_idx1  = az_idx1;
+            //za_idx1  = iter * iter_n_za;
+            za_idx2  = az_idx2;
+            //za_idx2  = (iter+1) * iter_n_za;
         }
         else
         {
@@ -547,7 +548,8 @@ int main(int argc, char *argv[])
                
                Should be ok in terms of memory because we made
                the number of iterations was computed on a 
-               conservative estimate of the device memory. */
+               conservative estimate of the device memory. 
+             */
             
             iter_n_za = size - (iter * iter_n_za);
             iter_n_az = size - (iter * iter_n_az);
@@ -562,34 +564,38 @@ int main(int argc, char *argv[])
 
         printf("# az: %d  # za: %d\n", iter_n_az, iter_n_za); 
         
+        // Allocate interation array(s) memory
         subAz = (double *)malloc(iter_n_az * sizeof(double));
         if (!subAz)
         {
-            fprintf(stderr,"Host memory allocation failed (allocate subAz)\n");
+            fprintf(stderr, "Host memory allocation failed (allocate subAz)\n");
             return EXIT_FAILURE;
         }
         subZA = (double *)malloc(iter_n_za * sizeof(double));
         if (!subZA)
         {
-            fprintf(stderr,"Host memory allocation failed (allocate subZA)\n");
+            fprintf(stderr, "Host memory allocation failed (allocate subZA)\n");
             return EXIT_FAILURE;
         }
         af_array = (cuDoubleComplex *)malloc(iter_n_az * sizeof(cuDoubleComplex));
         if (!af_array)
         {
-            fprintf(stderr,"Host memory allocation failed (allocate af_array)\n");
+            fprintf(stderr, "Host memory allocation failed (allocate af_array)\n");
             return EXIT_FAILURE;
         }
 
-        // number of blocks required 
-        numBlocks = (itersize + blockSize - 1) / blockSize; 
-
+        // Number of blocks required 
+        nBlocks = (itersize + nThreads - 1) / nThreads; 
+        
 
         printf("azimuth idx: %d - %d\n", az_idx1, az_idx2);
         printf("zenith  idx: %d - %d\n", za_idx1, za_idx2);
-        printf("Number of GPU blocks used: %d\n", numBlocks);
+        printf("Number of GPU blocks and threads used:\n");
+        printf("    # blocks = %d\n",             nBlocks);
+        printf("    # threads = %d\n",           nThreads);
+
         
-        // place subset of az/za array into subAz/subZA
+        // Place subset of az/za array into subAz/subZA
         for (int i=0; i<itersize; i++)
         {
             subAz[i] = az_array[i+az_idx1];
@@ -597,57 +603,41 @@ int main(int argc, char *argv[])
             af_array[i] = make_cuDoubleComplex(0,0);
         }
 
-        // allocate memory on device
-        gpuErrchk( cudaMalloc((void **)&d_az_array, itersize * sizeof(*az_array)));
-        gpuErrchk( cudaMalloc((void **)&d_za_array, itersize * sizeof(*za_array)));
-        //gpuErrchk( cudaMalloc((void **)&d_twn, sizeof(wavenums)));
-        gpuErrchk( cudaMalloc((void **)&d_xpos, ntiles * sizeof(*xpos)));
-        gpuErrchk( cudaMalloc((void **)&d_ypos, ntiles * sizeof(*ypos)));
-        gpuErrchk( cudaMalloc((void **)&d_zpos, ntiles * sizeof(*zpos)));
-        gpuErrchk( cudaMalloc((void **)&d_af_array, itersize * sizeof(*af_array)));
+        // Allocate memory on device
+        gpuErrchk( cudaMalloc( (void **)&d_az_array, itersize * sizeof(*az_array) ));
+        gpuErrchk( cudaMalloc( (void **)&d_za_array, itersize * sizeof(*za_array) ));
+        gpuErrchk( cudaMalloc( (void **)&d_xpos,     ntiles   * sizeof(*xpos)     ));
+        gpuErrchk( cudaMalloc( (void **)&d_ypos,     ntiles   * sizeof(*ypos)     ));
+        gpuErrchk( cudaMalloc( (void **)&d_zpos,     ntiles   * sizeof(*zpos)     ));
+        gpuErrchk( cudaMalloc( (void **)&d_af_array, itersize * sizeof(*af_array) ));
 
 
-        // copy arrays onto device
-        gpuErrchk( cudaMemcpy(d_az_array, subAz, itersize * sizeof(*subAz), cudaMemcpyHostToDevice));
-        gpuErrchk( cudaMemcpy(d_za_array, subZA, itersize * sizeof(*subZA), cudaMemcpyHostToDevice));
-        //gpuErrchk( cudaMemcpy(d_twn, &target_wn, sizeof(wavenums), cudaMemcpyHostToDevice));
+        // Copy arrays onto device
+        gpuErrchk( cudaMemcpy( d_az_array, subAz, itersize * sizeof(*subAz), cudaMemcpyHostToDevice ));
+        gpuErrchk( cudaMemcpy( d_za_array, subZA, itersize * sizeof(*subZA), cudaMemcpyHostToDevice ));
+
+        // Copy the array factor vector to device
+        gpuErrchk( cudaMemcpy( d_af_array, af_array, itersize * sizeof(*af_array), cudaMemcpyHostToDevice ));
         
-
-        // copy the array factor vector to device
-        gpuErrchk( cudaMemcpy(d_af_array, af_array, itersize * sizeof(*af_array), cudaMemcpyHostToDevice));
-        
-        // copy over tile position arrays to device
-        gpuErrchk( cudaMemcpy(d_xpos, xpos, ntiles * sizeof(*xpos), cudaMemcpyHostToDevice));
-        gpuErrchk( cudaMemcpy(d_ypos, ypos, ntiles * sizeof(*ypos), cudaMemcpyHostToDevice));
-        gpuErrchk( cudaMemcpy(d_zpos, zpos, ntiles * sizeof(*zpos), cudaMemcpyHostToDevice));
+        // Copy over tile position arrays to device
+        gpuErrchk( cudaMemcpy( d_xpos, xpos, ntiles * sizeof(*xpos), cudaMemcpyHostToDevice ));
+        gpuErrchk( cudaMemcpy( d_ypos, ypos, ntiles * sizeof(*ypos), cudaMemcpyHostToDevice ));
+        gpuErrchk( cudaMemcpy( d_zpos, zpos, ntiles * sizeof(*zpos), cudaMemcpyHostToDevice ));
 
         printf("Launching kernal to compute array factor\n");
-        calcArrayFactor<<<numBlocks, blockSize>>>(itersize, ntiles, 2*PI/lambda, d_za_array, d_az_array, d_xpos, d_ypos, d_zpos, target_wn.kx, target_wn.ky, target_wn.kz, d_af_array);
+        calcArrayFactor<<<nBlocks, nThreads>>>(itersize, ntiles, 2*PI/lambda, 
+                                                  d_za_array, d_az_array, 
+                                                  d_xpos, d_ypos, d_zpos, 
+                                                  target_wn.kx, target_wn.ky, target_wn.kz, 
+                                                  d_af_array);
         cudaDeviceSynchronize();
 
-        // copy relevant memory back to host
+        // Copy relevant memory back to host
         gpuErrchk( cudaMemcpy(af_array, d_af_array, itersize * sizeof(*af_array), cudaMemcpyDeviceToHost));
         printf("==== Done ====\n");
 
-
-        // test the CPU equivalent to make sure we get the same numbers
-        //printf("    comparing CPU to GPU:\n");
-        //printf("    real: %f imag: %f abs: %f\n", af_array[12].x, af_array[12].y, cuCabs(af_array[12]));
-        //printf("initialise cpu af array\n");
-        //double complex *aftmp;
-        //aftmp = (double complex *)malloc(itersize * sizeof(*aftmp));
-        //printf("inttialise elements\n");
-        //for (int i=0; i<itersize; i++)
-        //{
-        //    aftmp[i] = 0+I*0;
-        //}
-        //printf("call function\n");
-        //calcArrayFactorCPU(itersize, ntiles, 2*PI/lambda, subZA, subAz, xpos, ypos, zpos, &target_wn, aftmp);
-        //printf("    real: %f imag: %f abs: %f\n", creal(aftmp[12]), cimag(aftmp[12]), cabs(aftmp[12]));
-
-        // cool, we're done with the GPU computation
+        // Cool, we're done with the GPU computation
         printf("Freeing device memory\n");
-        //gpuErrchk( cudaFree(d_twn));
         gpuErrchk( cudaFree(d_xpos));
         gpuErrchk( cudaFree(d_ypos));
         gpuErrchk( cudaFree(d_zpos));
@@ -655,27 +645,17 @@ int main(int argc, char *argv[])
         gpuErrchk( cudaFree(d_az_array));
         gpuErrchk( cudaFree(d_za_array));
 
-        // test the CPU equivalent to make sure we get the same numbers
-        //printf("Calculation array factor power (|af|^2)\n");
-        //printf("    comparing CPU to GPU:\n");
-        //double tmp1 = pow(cuCabs(af_array[12]), 2);
-        //double tmp2 = pow(cabs(aftmp[12]), 2);
-        //printf("    gpu power: %f\n", tmp1);
-        //printf("    cpu power: %f\n", tmp2);
-
-        
-        /* Write the output to a file */
+        // Write the output to a file
         double af_power = 0.0;
         double tile_power = 1.0;
         printf("Writing to file...\n");
         for (int i=0; i<itersize; i++)
         {
             af_power = pow(cuCabs(af_array[i]), 2); // need to use cuCabs given af_array is of cuComplexDouble type
-            //cpu_power = pow(cabs(aftmp[i]), 2);
 
             if (use_tile_beam == 1)
             {
-                // calcaulte the tile beam power at (az,za) for a given frequency and sweet-spot
+                // Calculate the tile beam power at (az,za) for a given frequency and sweet-spot
                 tile_power = CalcMWABeam(subAz[i]-PI/2, subZA[i], freq, 'X', gridpoint, 1);
             }
  
@@ -684,11 +664,10 @@ int main(int argc, char *argv[])
             fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power*tile_power);
             if (af_power > af_max) {af_max = af_power;}
             
-            // integrate over sky
+            // Integrate over sky
             omega_A = omega_A + sin(subZA[i]) * af_power * (za_step*DEG2RAD) * (az_step*DEG2RAD);
         }
         printf("\nDone -- freeing intermediate host memory\n");
-        //free(aftmp);
         free(subAz);
         free(subZA);
         free(af_array);
@@ -701,7 +680,7 @@ int main(int argc, char *argv[])
     free(az_array);
     free(za_array);
 
-    // compute the gain and effective area from simulation
+    // Compute the gain and effective area from simulation
     double eff_area = 0.0, gain = 0.0;
     printf("Finished -- now computing relevant parameters:\n");
     eff_area = eta * pow(lambda, 2) * (4 * PI / omega_A);
