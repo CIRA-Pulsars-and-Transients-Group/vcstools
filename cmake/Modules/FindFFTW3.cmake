@@ -40,7 +40,7 @@ set(FFTW3_ROOT_DIR $ENV{FFTW3_DIR})
 if(NOT DEFINED FFTW3_ROOT_DIR)
     message(STATUS "Warning FFTW3_ROOT_DIR not set: will try and find it ")
 else(NOT DEFINED FFTW3_ROOT_DIR)
-    message(STATUS "FFTW3_ROOT_DIR = ${CPGPLOT_ROOT_DIR}")
+    message(STATUS "FFTW3_ROOT_DIR = ${FFTW3_ROOT_DIR}")
 endif(NOT DEFINED FFTW3_ROOT_DIR)
 
 set(_components double)
