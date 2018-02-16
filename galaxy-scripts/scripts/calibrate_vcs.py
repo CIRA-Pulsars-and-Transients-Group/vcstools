@@ -198,9 +198,10 @@ class RTScal(object):
         nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
         slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:20:00",
-                        "nodes": "{0}".format(nnodes)}
+                        "nodes": "{0, "gres":"gpu:1"}".format(nnodes)}
         commands = list(self.script_body)  # make a copy of body to then extend
-        commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes, fname))
+        #commands.append("srun -n {0} -c 1  rts_gpu {1}".format(nnodes, fname))
+        commands.append("srun rts_cpu {0}".format(fname))
         jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir,
                              submit=self.submit)
         jobids.append(jobid)
@@ -373,9 +374,10 @@ class RTScal(object):
             chans = k.split('_')[-1].split(".")[0]
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
             slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:45:00",
-                            "nodes": "{0}".format(nnodes)}
+                            "nodes": "{0}, "gres":"gpu:1"".format(nnodes)}
             commands = list(self.script_body)  # make a copy of body to then extend
-            commands.append("aprun -n {0} -N 1  rts_gpu {1}".format(nnodes, k))
+            #commands.append("srun -n {0} -c 1  rts_gpu {1}".format(nnodes, k))
+            commands.append("srun rts_cpu {0}".format(k))
             jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir,
                                  submit=self.submit)
             jobids.append(jobid)
