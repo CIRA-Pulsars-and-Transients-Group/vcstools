@@ -27,10 +27,10 @@ endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
 
-#add_subdirectory(mwac_utils)
+add_subdirectory(mwac_utils)
 #add_subdirectory(read_mwac)
 #add_subdirectory(read_pfb)
-#add_subdirectory(make_psrfits)
+add_subdirectory(make_psrfits)
 #add_subdirectory(get_delays)
 #add_subdirectory(gpu_utils)    
 #add_subdirectory(make_beam)
