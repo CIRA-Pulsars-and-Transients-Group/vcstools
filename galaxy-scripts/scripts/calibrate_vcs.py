@@ -198,7 +198,7 @@ class RTScal(object):
         nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
         slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:20:00",
-                        "nodes": "{0, "gres":"gpu:1"}".format(nnodes)}
+                        "nodes": "{0}, "gres":"gpu:1".format(nnodes)}
         commands = list(self.script_body)  # make a copy of body to then extend
         #commands.append("srun -n {0} -c 1  rts_gpu {1}".format(nnodes, fname))
         commands.append("srun rts_cpu {0}".format(fname))
