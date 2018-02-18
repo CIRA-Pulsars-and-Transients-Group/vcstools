@@ -19,7 +19,7 @@ find_package(SLALIB)
 find_package(PSRFITS_UTILS)
 find_package(CFITSIO)
 find_package(FFTW3 COMPONENTS single openmp)
-#find_package(Postgres)
+find_package(XGPU)
 
 if (CUDA_FOUND)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_35")
@@ -35,6 +35,9 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}
 #add_subdirectory(gpu_utils)    
 #add_subdirectory(make_beam)
 add_subdirectory(make_beam_small)
+if (XGPU_FOUND)
+    add_subdirectory(offline_correlator)
+endif()
 
 INCLUDE(InstallRequiredSystemLibraries)
 
