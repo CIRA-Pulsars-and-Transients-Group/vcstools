@@ -4,8 +4,6 @@ cmake_policy(SET CMP0048 NEW)
 
 project (offline_correlator LANGUAGES C CUDA)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
-
 include_directories(${CFITSIO_INCLUDE_DIR} ${CUDA_INCLUDE_DIRS} ${XGPU_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/../make_beam_small /usr/include)
 file(GLOB sources "*.cc" "*.cu" "*.c")
 add_executable(offline_correlator ${sources})

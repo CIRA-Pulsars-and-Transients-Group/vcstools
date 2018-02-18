@@ -80,7 +80,7 @@ int configure_ring_buffers(size_t numbufs,size_t bufsize, ringbuf_t * bufs) {
 
 	for (i = 0; i<numbufs; i++) {
 		bufs->buffers[i] = NULL;
-		posix_memalign (&bufs->buffers[i],(size_t) sysconf(_SC_PAGESIZE),bufsize);
+		posix_memalign ((void **)&bufs->buffers[i],(size_t) sysconf(_SC_PAGESIZE),bufsize);
 		if (bufs->buffers[i] == NULL) {
 			return -1;	
 		}

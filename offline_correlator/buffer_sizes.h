@@ -1,6 +1,7 @@
 #ifndef __BUFFER_SIZES_H
 #define __BUFFER_SIZES_H
 
+#define PFB_CAPTURE 1
 
 /* Ideally these should be integral numbers of packets - in fact I may force this.
    The code used to be smart enough to resize these. But I think for simplicity I may force these
@@ -43,12 +44,12 @@
 #define NEDT 2			// number of EDT cards per demux
 /* EDT buffer sizes */
 
-#define EDT_NBUFS 8
+#define EDT_NBUFS 4
 #define EDT_BUFSZ (10*PAGE_SIZE*PACKET)
 
 /* IPC for the shared memory */
 
-#define IPC_NBUFS 60
+#define IPC_NBUFS 24
 #define IPC_BUFSZ (4*NPACKET*PACKET)
 #define IPC_UTIME 200000 // time is useconds in 1 IPC_BUFFER
 
