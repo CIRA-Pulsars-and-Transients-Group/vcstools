@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-project(MWA_Beamformer VERSION 1.3.1)
+project(MWA_Beamformer VERSION 1.3.2)
 
 add_definitions( -DVERSION_BEAMFORMER="${PROJECT_VERSION}" )
 
