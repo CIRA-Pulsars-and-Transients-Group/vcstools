@@ -1,6 +1,4 @@
 #include "pabeam.h"
-#include "utils.h"
-#include "pabeam_kernal.h"
 
 
 void usage()
@@ -23,125 +21,49 @@ void usage()
 }
 
 
-
-void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn)
-{
-    /* Calculate the 3D wavenumbers for a given wavelength (lambda) from the direction (az,za).
-     * Accepts wavelength (m), azimuth (rad) and zenith angle (rad) and a pointer to a wavenums struct to populate.*/
-    double a, ast, phi;
-
-    a = 2 * PI / lambda;
-    ast = a * sin(za);
-    phi = PI/2 - az;
-
-    /* 
-     * the standard equations are:
-     *      a = 2 * pi / lambda
-     *      kx = a * sin(theta) * cos(phi)
-     *      ky = a * sin(theta) * sin(phi)
-     *      kz = a * cos(theta)
-     * this is assuming that the coordinates (theta,phi) are defined in 
-     * the convention from Sutinjo et al. 2015, where
-     *      theta = za
-     *      phi = pi/2 - az
-     * i.e. the azimuth is measured clockwise from East (standard for antenna theory, offset from astronomy)
-     */
-
-    p_wn->kx = ast * cos(phi); 
-    p_wn->ky = ast * sin(phi); 
-    p_wn->kz = a * cos(za);   
-}
-
-
-void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza)
-{
-    int ra_ih, ra_im, ra_j;
-    int dec_id, dec_im, dec_j;
-    int sign;
-    double ra_rad, ra_fs, ha_rad;
-    double dec_rad, dec_fs;
-    double az, el;
-    double mjd, intmjd, fracmjd, lmst;
-    double pr=0, pd=0, px=0, rv=0, eq=2000, ra_ap=0, dec_ap=0; // all for conversion to apparent RA/DEC
-    char id_str[20];
-
-    // read ra string into hours, minutes and seconds
-    sscanf(ra_hhmmss, "%d:%d:%lf", &ra_ih, &ra_im, &ra_fs);
-
-    //read dec string into degrees, arcmin and arsec (extra steps for sign, '+' or '-')
-    sscanf(dec_ddmmss, "%s:%d:%lf", id_str, &dec_im, &dec_fs);
-    sign = (id_str[0] == '-' ? -1 : 1); // check sign of dec
-
-    sscanf(dec_ddmmss, "%d:%d:%lf", &dec_id, &dec_im, &dec_fs); // assign values
-    dec_id = dec_id * sign; // ensure correct sign
-
-
-    // convert angles to radians
-    slaCtf2r(ra_ih, ra_im, ra_fs, &ra_rad, &ra_j); //right ascension
-    slaDaf2r(dec_id, dec_im, dec_fs, &dec_rad, &dec_j); //declination
-
-    if (ra_j != 0) 
-    {
-        fprintf(stderr,"Error parsing %s as hhmmss\nslalib error code: j=%d\n", ra_hhmmss, ra_j);
-        fprintf(stderr,"ih = %d, im = %d, fs = %f\n", ra_ih, ra_im, ra_fs);
-        exit(-1);
-    }
-    if (dec_j != 0) 
-    {
-        fprintf(stderr,"Error parsing %s as ddmmss\nslalib error code: j=%d\n", dec_ddmmss, dec_j);
-        fprintf(stderr,"ih = %d, im = %d, fs = %f\n", dec_id, dec_im, dec_fs);
-        exit(-1);
-    }
-
-    // convert UTC to MJD
-    utc2mjd(time_utc, &intmjd, &fracmjd);
-    mjd = intmjd + fracmjd;
-    mjd2lst(mjd, &lmst);
-
-    // get apparent RA and Dec of target
-    slaMap(ra_rad, dec_rad, pr, pd, px, rv, eq, mjd, &ra_ap, &dec_ap);
-    printf("RA = %.4f  RA_app = %.4f  DEC = %.4f  DEC_app = %.4f\n", ra_rad, ra_ap, dec_rad, dec_ap);
-
-    // use RA and LST to get HA
-    ha_rad = slaRanorm(lmst - ra_ap);
-
-    // convert (HA, Dec) to (az, el)
-    slaDe2h(ha_rad, dec_rad, MWA_LAT*DEG2RAD, &az, &el);
-
-    printf("Az = %.4f  ZA = %.4f\n", az, PI/2-el);
-    p_tazza->az = az;
-    p_tazza->za = (PI/2) - el;
-}
-
-
 int getNumTiles(const char *metafits)
 {
     /* Figure out the number of tiles based on the information in the metafits.
 
        NOTE: we get warnings from this in compilation because the library functions
        expect char characters, but conversion from string literals to chars is bad.
-       It works, but we get warnings... */
+       It works, but we get warnings... 
+     */
 
-    fitsfile *fptr=NULL;
-    int status=0;
-    size_t ninput=0;
-    char tiledata[]="TILEDATA", naxis2[]="NAXIS2";
+    fitsfile *fptr = NULL;
+    int status = 0;
+    size_t ninput = 0;
+    char tiledata[] = "TILEDATA", naxis2[] = "NAXIS2";
 
-    fits_open_file(&fptr, metafits, READONLY, &status); // open metafits file
-    fits_movnam_hdu(fptr, BINARY_TBL, tiledata, 0, &status); // move to TILEDATA HDU
+    fits_open_file(&fptr, metafits, READONLY, &status); // Open metafits file
     if (status != 0)
     {
-        fprintf(stderr,"Error: Failed to move to TILEDATA HDU\n");
-        exit(-1);
+        fprintf(stderr, "CRITICAL: Error - Failed to open metafits file for reading\n");
+        exit(EXIT_FAILURE);
     }
 
-    fits_read_key(fptr, TINT, naxis2, &ninput, NULL, &status); // read how many tiles are included
+    fits_movnam_hdu(fptr, BINARY_TBL, tiledata, 0, &status); // Move to TILEDATA HDU
     if (status != 0)
     {
-        fprintf(stderr,"Error: Failed to read size of binary table in TILEDATA\n");
-        exit(-1);
+        fprintf(stderr, "CRITICAL: Error - Failed to move to TILEDATA HDU\n");
+        exit(EXIT_FAILURE);
     }
+
+    fits_read_key(fptr, TINT, naxis2, &ninput, NULL, &status); // Read how many tiles are included
+    if (status != 0)
+    {
+        fprintf(stderr, "CRITICAL: Error - Failed to read size of binary table in TILEDATA\n");
+        exit(EXIT_FAILURE);
+    }
+
     fits_close_file(fptr, &status);
+    if (status != 0)
+    {
+        fprintf(stderr, "CRITICAL: Error - Failed to close metafits file\n");
+        exit(EXIT_FAILURE);
+    }
+
+
     return ninput;
 }
 
@@ -160,57 +82,83 @@ void getTilePositions(const char *metafits, int ninput,\
        expect char characters, but conversion from string literals to chars is bad.
        It works, but we get warnings... */
 
-    fitsfile *fptr=NULL;
-    int status=0, anynull=0;
-    int colnum=0;
-    char north[]="North", east[]="East", height[]="Height", tiledata[]="TILEDATA";
+    fitsfile *fptr = NULL;
+    int status = 0, anynull = 0;
+    int colnum = 0;
+    int i; // Loop counter
+    char north[] = "North", east[] = "East", height[] = "Height", tiledata[] = "TILEDATA";
 
 
-    fits_open_file(&fptr, metafits, READONLY, &status); // open metafits file
-    fits_movnam_hdu(fptr, BINARY_TBL, tiledata, 0, &status); // move to TILEDATA HDU
-    if (status != 0) 
+    fits_open_file(&fptr, metafits, READONLY, &status); // Open metafits file
+    if (status != 0)
     {
-        fprintf(stderr,"Error: Failed to move to TILEDATA HDU\n");
-        exit(-1);
+        fprintf(stderr, "CRITICAL: Error - Failed to open metafits file for reading\n");
+        exit(EXIT_FAILURE);
     }
 
-    fits_get_colnum(fptr, 1, north, &colnum, &status); // get north coordinates of tiles
+
+    fits_movnam_hdu(fptr, BINARY_TBL, tiledata, 0, &status); // Move to TILEDATA HDU
+    if (status != 0) 
+    {
+        fprintf(stderr, "CRITICAL: Error - Failed to move to TILEDATA HDU\n");
+        exit(EXIT_FAILURE);
+    }
+
+    fits_get_colnum(fptr, 1, north, &colnum, &status); // Get north coordinates of tiles
+    if (status != 0)
+    {
+        fprintf(stderr, "CRITICAL: Error - Failed to locate tile North coordinates column in metafits file\n");
+        exit(EXIT_FAILURE);
+    }
+
     fits_read_col_flt(fptr, colnum, 1, 1, ninput, 0.0, n_pols, &anynull, &status);
     if (status != 0)
     {
-        fprintf(stderr,"Error: Failed to read  N coord in metafile\n");
-        exit(-1);
+        fprintf(stderr, "CRITICAL: Error - Failed to read North coordinates from metafits file\n");
+        exit(EXIT_FAILURE);
     }
 
-    fits_get_colnum(fptr, 1, east, &colnum, &status); // get east coordinates of tiles
-    fits_read_col_flt(fptr, colnum, 1, 1, ninput, 0.0, e_pols, &anynull, &status);
+    fits_get_colnum(fptr, 1, east, &colnum, &status); // Get east coordinates of tiles
     if (status != 0)
     {
-        fprintf(stderr,"Error: Failed to read E coord in metafile\n");
-        exit(-1);
+        fprintf(stderr, "CRITICAL: Error - Failed to locate tile East coordinates column in metafits file\n");
+        exit(EXIT_FAILURE);
     }
 
-    fits_get_colnum(fptr, 1, height, &colnum, &status); // get height a.s.l. of tiles
+   fits_read_col_flt(fptr, colnum, 1, 1, ninput, 0.0, e_pols, &anynull, &status);
+    if (status != 0)
+    {
+        fprintf(stderr, "CRITICAL: Error - Failed to read East coordinates in metafits file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    fits_get_colnum(fptr, 1, height, &colnum, &status); // Get height a.s.l. of tiles
+    if (status != 0)
+    {
+        fprintf(stderr, "CRITICAL: Error - Failed to locate tile Height coordinates column in metafits file\n");
+        exit(EXIT_FAILURE);
+    }
+
     fits_read_col_flt(fptr, colnum, 1, 1, ninput, 0.0, h_pols, &anynull, &status);
     if (status != 0)
     {
-        fprintf(stderr,"Error: Failed to read H coord in metafile\n");
-        exit(-1);
+        fprintf(stderr, "CRITICAL: Error - Failed to read H coord in metafile\n");
+        exit(EXIT_FAILURE);
     }
     fits_close_file(fptr, &status);
 
-    // populate the tile arrays with every second element of the pol arrays
-    for (int i = 0; i < ninput; i+=2)
+    // Populate the tile arrays with every second element of the polarisation arrays
+    for (i = 0; i < ninput; i+=2)
     {
         n_tile[i/2] = n_pols[i];
         e_tile[i/2] = e_pols[i];
         h_tile[i/2] = h_pols[i];
     }
 
-    // convert heights into height above array center
-    for (int i = 0; i < ninput/2; i++)
+    // Convert heights into height above array center
+    for (i = 0; i < ninput/2; i++)
     {
-        h_tile[i] = h_tile[i] - MWA_HGT;
+        h_tile[i] -= MWA_HGT;
     }
 }
 
@@ -219,54 +167,61 @@ int getFlaggedTiles(const char *badfile, int *badtiles)
 {
     /* Open the flagged tiles file, read into an array and count how many lines are read.
        Update the array pointer and return number of elements to read from that array
-       (as it's initialised to be able to hold every tile) */
+       (as it's initialised to be able to hold every tile) 
+     */
     
     FILE *fp;
-    int tile=0, i=0;
-    int nlines=0;
+    int tile = 0;
+    int i = 0; // Loop counter
 
-    fp = fopen(badfile,"r");
+    fp = fopen(badfile, "r");
+
     if (fp == NULL)
     {
-        fprintf(stderr,"Error opening flagged tiles file.\n");
-        exit(-1);
+        fprintf(stderr, "CRITICAL: Error - Failed to open tile flagging file %s\n", badfile);
+        exit(EXIT_FAILURE);
     }
 
     while(fscanf(fp, "%d\n", &tile) > 0)
     {
         printf("    bad tile: %d\n",tile);
-        badtiles[i++] = tile;
-        nlines++;
+        
+        badtiles[i] = tile;
+        
+        i++;
     }
 
     fclose(fp);
-    return nlines;
+
+    return i;
 }
 
 
-void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
-        int *badtiles, int nbad, int nelements)
+void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,
+                        int *badtiles, int nbad, int nelements)
 {
     /* Get rid of the bad/flagged tiles from the array. Basically just
        shift all the indexes around so that whenever a bad tile is there,
        it's data is over-written. We end up with an array of the same size,
-       but the last nbad elements are all identical (and can be ignored). */
+       but the last nbad elements are all identical (and can be ignored). 
+     */
 
-    int counter=0,bidx=0;
+    int counter = 0, bidx = 0;
+    int b, i; // Loop counter
 
-    for (int b=0; b < nbad; b++)
+    for (b = 0; b < nbad; b++)
     {
-        // for each bad tile index in badtiles
+        // For each bad tile index in badtiles
         bidx = badtiles[b];
-        for (int i=(bidx-counter); i < nelements-1; i++)
+        for (i = (bidx-counter); i < nelements-1; i++)
         {
-            // shift each element in tile positions to the left by one
+            // Shift each element in tile positions to the left by one
             // excluding the last element
             n_tile[i] = n_tile[i+1];
             e_tile[i] = e_tile[i+1];
             h_tile[i] = h_tile[i+1];
         }
-        // array shifted left one, but the bad indexes refer to original tile positions
+        // Array is now shifted left one place, but the bad indexes refer to original tile positions
         // so we need to move the bad index to the left by one, too
         counter++;
     }
@@ -275,16 +230,17 @@ void removeFlaggedTiles(float *n_tile, float *e_tile, float *h_tile,\
 
 int main(int argc, char *argv[])
 {
-    char *ra=NULL;
-    char *dec=NULL;
-    char *time=NULL;
-    char *metafits=NULL;
-    char *flagfile=NULL;
-    int c=0;
-    double freq=0.0, lambda=0.0;
-    double az_step=1.0, za_step=1.0, eta=1.0;
-    int nThreads=1, nBlocks=1; // Just initialise, will figure it out later on after querying device
-    int use_tile_beam=0, gridpoint=0;
+    char *ra = NULL;
+    char *dec = NULL;
+    char *time = NULL;
+    char *metafits = NULL;
+    char *flagfile = NULL;
+    int c = 0; // Arguments counter
+    int i, j, k; // Loop counters
+    double freq = 0.0, lambda = 0.0;
+    double az_step = 1.0, za_step = 1.0, eta = 1.0;
+    int nThreads = 1, nBlocks = 1;
+    int use_tile_beam = 0, gridpoint = 0;
 
     // Parse options
     if (argc > 1)
@@ -295,9 +251,9 @@ int main(int argc, char *argv[])
             {
                 case 'h':
                     usage();
-                    exit(0);
+                    exit(EXIT_SUCCESS);
                 case 'f':
-                    freq = atof(optarg);
+                    freq   = atof(optarg);
                     lambda = SOL/freq;
                     break;
                 case 'e': 
@@ -322,18 +278,22 @@ int main(int argc, char *argv[])
                     az_step = atof(optarg);
                     if (az_step < 0.01)
                     {
-                        printf("error (option -x): can't use smaller than 0.01 deg resolution (hasn't been tested for that case)\n");
-                        usage();
-                        exit(1);
+                        fprintf(stderr, "WARNING: Using smaller that 0.01 degrees hasn't been tested...\n");
+                        fprintf(stderr, "         Overriding to 0.01 degrees\n");
+                        //usage();
+                        //exit(EXIT_FAILURE);
+                        az_step = 0.01;
                     }
                     break;
                 case 'y':
                     za_step = atof(optarg);
                     if (az_step < 0.01)
                     {
-                        printf("error (option -y): can't use smaller than 0.01 deg resolution (hasn't been tested for that case)\n");
-                        usage();
-                        exit(1);
+                        fprintf(stderr, "WARNING: Using smaller that 0.01 degrees hasn't been tested...\n");
+                        fprintf(stderr, "         Overriding to 0.01 degrees\n");
+                        //usage();
+                        //exit(EXIT_FAILURE);
+                        za_step = 0.01;
                     }
                     break;
                 case 'g':
@@ -342,7 +302,7 @@ int main(int argc, char *argv[])
                     break;
                 default:
                     usage();
-                    exit(1);
+                    exit(EXIT_SUCCESS);
             }
         }
     }
@@ -350,22 +310,24 @@ int main(int argc, char *argv[])
     if (argc == 1)
     {
         usage();
-        exit(1);
+        exit(EXIT_SUCCESS);
     }
     
     // Let user know that using the FEE2016 tile beam model will slow down the simulation
     if (use_tile_beam == 1)
     {
-        printf("Using FEE2016 tile beam model - this will slow down the computation significantly, but you can get antenna temperatures...\n");
+        printf("Using FEE2016 tile beam model\n");
+        printf("This will slow down the computation significantly...\n");
         printf("    grid point number provided: %d\n", gridpoint);
     }
     else
     {
-        printf("Not using tile beam model - only computing array factor, but you cannot get antenna temperatures from this...\n");
+        printf("Not using FEE2016 tile beam model\n");
+        printf("Only computing array factor power...\n");
     }
 
     // Calculate target az,za and wavevector
-    tazza target;
+    tazza    target;
     wavenums target_wn;
 
     printf("Getting target (Az,ZA)\n");
@@ -375,9 +337,9 @@ int main(int argc, char *argv[])
     printf("    kx = %f    ky = %f    kz = %f\n", target_wn.kx, target_wn.ky, target_wn.kz); 
 
     // Get the number of tiles in array
-    int ntiles=0;
+    int ntiles = 0;
 
-    printf("Determining number of tiles from metafits\n");
+    printf("Determining number of tiles from metafits file\n");
     ntiles = getNumTiles(metafits); // returns 2x the number of tiles, 1 per pol.
     ntiles = ntiles / 2;
     printf("    number of tiles: %d\n",ntiles);
@@ -409,7 +371,7 @@ int main(int argc, char *argv[])
     
     int flagged[ntoread];
 
-    for (int i=0; i < ntoread; i++)
+    for (i = 0; i < ntoread; i++)
     {
         flagged[i] = flagged_tiles[i];
     }
@@ -423,10 +385,10 @@ int main(int argc, char *argv[])
 
     // But, the last ntoread elements are pointless,
     // so now we can allocate static memory for the final list of positions
-    ntiles = ntiles - ntoread;
+    ntiles -= ntoread;
     float xpos[ntiles], ypos[ntiles], zpos[ntiles];
 
-    for (int i=0; i<ntiles; i++)
+    for (i = 0; i < ntiles; i++)
     {
         // x = East, y = North, z = Height
         xpos[i] = E_tile[i];
@@ -439,7 +401,7 @@ int main(int argc, char *argv[])
 
 
     // Determine number of az/za elements from specified pixel size
-    int niter=1;
+    int niter = 1;
     int n_az, n_za;
     long int size;
 
@@ -466,18 +428,17 @@ int main(int argc, char *argv[])
     double *az_array, *za_array;
     
     // Allocate memory and initialise to zeros on host and check
-    // azimuth vector
-    az_array = (double *)calloc(size, sizeof(double));
+    az_array = (double *)calloc(size, sizeof(double)); // azimuth vector
     if (!az_array)
     {
-        fprintf(stderr, "Host memory allocation failed (allocate az_array)\n");
+        fprintf(stderr, "CRITCAL: Error - Host memory allocation failed (allocate az_array)\n");
         return EXIT_FAILURE;
     }
-    // zenith vector
-    za_array = (double *)calloc(size, sizeof(double));
+
+    za_array = (double *)calloc(size, sizeof(double)); // zenith vector
     if (!za_array)
     {
-        fprintf(stderr, "Host memory allocation failed (allocate za_array)\n");
+        fprintf(stderr, "CRITICAL: Error - Host memory allocation failed (allocate za_array)\n");
         return EXIT_FAILURE;
     }
 
@@ -486,27 +447,29 @@ int main(int argc, char *argv[])
     //       maybe we want to move this initilisation part into the iteration loop
     //       which will then make the arrays smaller --
     //           need to figure out how to populate correctly then...
-    printf("Initialising az, za and result matrix\n");
+    printf("Initialising (az, za) arrays\n");
     // We want arrays to be something like:
     // az = [0 0 0 0 ... 1 1 1 1 ...]
     // za = [0 1 2 3 ... 0 1 2 3 ...]
-    int cc=0, i=0;
+    
+    k = 0; // Will be incremented by iteration size
+    i = 0;
     do
     {
-        for (int j=0; j<n_za; j++)
+        for (j = 0; j < n_za; j++)
         {
-            za_array[cc+j] = j * za_step * DEG2RAD;
-            az_array[cc+j] = i * az_step * DEG2RAD;
+            za_array[k+j] = j * za_step * DEG2RAD;
+            az_array[k+j] = i * az_step * DEG2RAD;
         }
-        cc += n_za;
+        k += n_za;
         i++;
-    } while(cc < size);
+    } while(k < size);
     printf("Done\n");
 
 
     // Construct arrays for device computation
     double *d_az_array, *d_za_array, *subAz, *subZA;
-    double af_max = -1, omega_A = 0.0;
+    double af_max = -1.0, omega_A = 0.0;
     cuDoubleComplex *af_array, *d_af_array;
     float *d_xpos, *d_ypos, *d_zpos;
     int itersize, az_idx1, az_idx2, za_idx1, za_idx2; 
@@ -553,7 +516,7 @@ int main(int argc, char *argv[])
             
             iter_n_za = size - (iter * iter_n_za);
             iter_n_az = size - (iter * iter_n_az);
-            itersize =  iter_n_az; // = iter_n_za
+            itersize  = iter_n_az; // = iter_n_za
 
             az_idx1 = iter * iter_n_az;
             az_idx2 = az_idx1 + itersize - 1;
@@ -568,19 +531,21 @@ int main(int argc, char *argv[])
         subAz = (double *)malloc(iter_n_az * sizeof(double));
         if (!subAz)
         {
-            fprintf(stderr, "Host memory allocation failed (allocate subAz)\n");
+            fprintf(stderr, "CRITICAL: Error - Host memory allocation failed (allocate subAz)\n");
             return EXIT_FAILURE;
         }
+
         subZA = (double *)malloc(iter_n_za * sizeof(double));
         if (!subZA)
         {
-            fprintf(stderr, "Host memory allocation failed (allocate subZA)\n");
+            fprintf(stderr, "CRITICAL: Error - Host memory allocation failed (allocate subZA)\n");
             return EXIT_FAILURE;
         }
+
         af_array = (cuDoubleComplex *)malloc(iter_n_az * sizeof(cuDoubleComplex));
         if (!af_array)
         {
-            fprintf(stderr, "Host memory allocation failed (allocate af_array)\n");
+            fprintf(stderr, "CRITICAL: Error - Host memory allocation failed (allocate af_array)\n");
             return EXIT_FAILURE;
         }
 
@@ -596,10 +561,10 @@ int main(int argc, char *argv[])
 
         
         // Place subset of az/za array into subAz/subZA
-        for (int i=0; i<itersize; i++)
+        for (i = 0; i < itersize; i++)
         {
-            subAz[i] = az_array[i+az_idx1];
-            subZA[i] = za_array[i+za_idx1];
+            subAz[i]    = az_array[i+az_idx1];
+            subZA[i]    = za_array[i+za_idx1];
             af_array[i] = make_cuDoubleComplex(0,0);
         }
 
@@ -626,10 +591,10 @@ int main(int argc, char *argv[])
 
         printf("Launching kernal to compute array factor\n");
         calcArrayFactor<<<nBlocks, nThreads>>>(itersize, ntiles, 2*PI/lambda, 
-                                                  d_za_array, d_az_array, 
-                                                  d_xpos, d_ypos, d_zpos, 
-                                                  target_wn.kx, target_wn.ky, target_wn.kz, 
-                                                  d_af_array);
+                                               d_za_array, d_az_array, 
+                                               d_xpos, d_ypos, d_zpos, 
+                                               target_wn.kx, target_wn.ky, target_wn.kz, 
+                                               d_af_array);
         cudaDeviceSynchronize();
 
         // Copy relevant memory back to host
@@ -646,35 +611,49 @@ int main(int argc, char *argv[])
         gpuErrchk( cudaFree(d_za_array));
 
         // Write the output to a file
-        double af_power = 0.0;
-        double tile_power = 1.0;
+        double af_power = 0.0, tile_power = 1.0, total_power = 1.0; 
+      
+        printf("Done.\n");
         printf("Writing to file...\n");
-        for (int i=0; i<itersize; i++)
+        for (i = 0; i < itersize; i++)
         {
             af_power = pow(cuCabs(af_array[i]), 2); // need to use cuCabs given af_array is of cuComplexDouble type
-
+            
+            // Compute the tile beam power
             if (use_tile_beam == 1)
             {
-                // Calculate the tile beam power at (az,za) for a given frequency and sweet-spot
                 tile_power = CalcMWABeam(subAz[i]-PI/2, subZA[i], freq, 'X', gridpoint, 1);
             }
- 
-            if (i % 10000 == 0) {printf("\rWriting element %d/%d", i, itersize); fflush(stdout);}
+            else
+            {
+                tile_power = 1.0;
+            }
+            
+            total_power = af_power * tile_power;
 
-            fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, af_power*tile_power);
-            if (af_power > af_max) {af_max = af_power;}
+            //if (i % 10000 == 0) {printf("\rWriting element %d/%d", i, itersize); fflush(stdout);}
+
+            fprintf(fp, "%f\t%f\t%f\n", subAz[i]*RAD2DEG, subZA[i]*RAD2DEG, total_power);
+            
+            // Check what the maximum array factor power is (should be ~1)
+            if (af_power > af_max)
+            {
+                af_max = af_power;
+            }
             
             // Integrate over sky
-            omega_A = omega_A + sin(subZA[i]) * af_power * (za_step*DEG2RAD) * (az_step*DEG2RAD);
-        }
+            omega_A += sin(subZA[i]) * af_power * (za_step*DEG2RAD) * (az_step*DEG2RAD);
+        } // End power evaluation and file writing
+        
         printf("\nDone -- freeing intermediate host memory\n");
         free(subAz);
         free(subZA);
         free(af_array);
     }
+
     printf("\n");
     printf("Closing file\n");
-    fclose(fp); // close the file
+    fclose(fp); // Close the file
     
     printf("Freeing host memory\n");
     free(az_array);
@@ -686,9 +665,9 @@ int main(int argc, char *argv[])
     eff_area = eta * pow(lambda, 2) * (4 * PI / omega_A);
     gain = (1.0e-26) * eff_area / (2 * KB);
 
-    printf("    Array factor max:                 %f\n", af_max);
-    printf("    Beam solid angle (sr):            %f\n", omega_A);
-    printf("    Radiation efficiency:             %f\n", eta);
+    printf("    Array factor max:                 %f\n",   af_max);
+    printf("    Beam solid angle (sr):            %f\n",   omega_A);
+    printf("    Radiation efficiency:             %f\n",   eta);
     printf("    Effective collecting area (m^2):  %.4f\n", eff_area);
     printf("    Effective array gain (K/Jy):      %.4f\n", gain);
 

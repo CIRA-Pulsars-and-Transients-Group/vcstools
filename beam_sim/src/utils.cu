@@ -156,3 +156,92 @@ void mjd2lst(double mjd, double *lst)
 }
 
 
+void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn)
+{
+    /* Calculate the 3D wavenumbers for a given wavelength (lambda) from the direction (az,za).
+     * Accepts wavelength (m), azimuth (rad) and zenith angle (rad) and a pointer to a wavenums struct to populate.*/
+    double a, ast, phi;
+
+    a   = 2 * PI / lambda;
+    ast = a * sin(za);
+    phi = PI/2 - az;
+
+    /* 
+     * the standard equations are:
+     *      a = 2 * pi / lambda
+     *      kx = a * sin(theta) * cos(phi)
+     *      ky = a * sin(theta) * sin(phi)
+     *      kz = a * cos(theta)
+     * this is assuming that the coordinates (theta,phi) are defined in 
+     * the convention from Sutinjo et al. 2015, where
+     *      theta = za
+     *      phi = pi/2 - az
+     * i.e. the azimuth is measured clockwise from East (standard for antenna theory, offset from astronomy)
+     */
+
+    p_wn->kx = ast * cos(phi); 
+    p_wn->ky = ast * sin(phi); 
+    p_wn->kz = a   * cos(za);   
+}
+
+void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza)
+{
+    int ra_ih, ra_im, ra_j;
+    int dec_id, dec_im, dec_j;
+    int sign;
+    double ra_rad, ra_fs, ha_rad;
+    double dec_rad, dec_fs;
+    double az, el;
+    double mjd, intmjd, fracmjd, lmst;
+    double pr = 0.0, pd = 0.0, px = 0.0, rv = 0.0, eq = 2000.0;
+    double ra_ap = 0.0, dec_ap = 0.0;
+    char id_str[20];
+
+    // Read RA string into hours, minutes and seconds
+    sscanf(ra_hhmmss, "%d:%d:%lf", &ra_ih, &ra_im, &ra_fs);
+
+    // Read Dec string into degrees, arcmin and arsec (extra steps for sign, '+' or '-')
+    sscanf(dec_ddmmss, "%s:%d:%lf", id_str, &dec_im, &dec_fs);
+    sign = (id_str[0] == '-' ? -1 : 1); // Check sign of dec
+
+    sscanf(dec_ddmmss, "%d:%d:%lf", &dec_id, &dec_im, &dec_fs); // Assign values
+    dec_id = dec_id * sign; // Ensure correct sign
+
+
+    // Convert angles to radians
+    slaCtf2r(ra_ih, ra_im, ra_fs, &ra_rad, &ra_j); // RA 
+    slaDaf2r(dec_id, dec_im, dec_fs, &dec_rad, &dec_j); // Dec
+
+    if (ra_j != 0) 
+    {
+        fprintf(stderr, "CRITICAL: Error parsing %s as hhmmss\nslalib error code: j=%d\n", ra_hhmmss, ra_j);
+        fprintf(stderr, "          ih = %d, im = %d, fs = %f\n", ra_ih, ra_im, ra_fs);
+        exit(EXIT_FAILURE);
+    }
+    if (dec_j != 0) 
+    {
+        fprintf(stderr, "CRITICAL: Error parsing %s as ddmmss\nslalib error code: j=%d\n", dec_ddmmss, dec_j);
+        fprintf(stderr, "          ih = %d, im = %d, fs = %f\n", dec_id, dec_im, dec_fs);
+        exit(EXIT_FAILURE);
+    }
+
+    // Convert UTC to MJD
+    utc2mjd(time_utc, &intmjd, &fracmjd);
+    mjd = intmjd + fracmjd;
+    mjd2lst(mjd, &lmst);
+
+    // Get apparent RA and Dec of target
+    slaMap(ra_rad, dec_rad, pr, pd, px, rv, eq, mjd, &ra_ap, &dec_ap);
+    printf("RA = %.4f  RA_app = %.4f  DEC = %.4f  DEC_app = %.4f\n", ra_rad, ra_ap, dec_rad, dec_ap);
+
+    // Use RA and LST to get HA
+    ha_rad = slaRanorm(lmst - ra_ap);
+
+    // Convert (HA, Dec) to (az, el)
+    slaDe2h(ha_rad, dec_rad, MWA_LAT*DEG2RAD, &az, &el);
+
+    printf("Az = %.4f  ZA = %.4f\n", az, PI/2-el);
+    p_tazza->az = az;
+    p_tazza->za = (PI/2) - el;
+}
+
