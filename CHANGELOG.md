@@ -4,6 +4,13 @@
 ## Unreleased
 
 ----
+## v1.3.2
+
+### Added
+
+* Imported the offline correlator into this project
+
+----
 ## v1.3.1
 
 ### Added

@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-project(MWA_Beamformer VERSION 1.3.1)
+project(MWA_Beamformer VERSION 1.3.2)
 
 add_definitions( -DVERSION_BEAMFORMER="${PROJECT_VERSION}" )
 
@@ -11,6 +11,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
 message("Finding CUDA")
 find_package(CUDA)
+if (CUDA_FOUND)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_35")
+endif()
 
 message("Finding OpenMP")
 include(FindOpenMP)
@@ -19,22 +22,24 @@ find_package(SLALIB)
 find_package(PSRFITS_UTILS)
 find_package(CFITSIO)
 find_package(FFTW3 COMPONENTS single openmp)
-#find_package(Postgres)
-
-if (CUDA_FOUND)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_35")
-endif()
+find_package(XGPU)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
 
-add_subdirectory(mwac_utils)
+# Add the subdirectories for the three target projects
+if (XGPU_FOUND)
+    add_subdirectory(offline_correlator)
+endif()
+add_subdirectory(make_beam_small)
+add_subdirectory(make_psrfits)
+
+## The following are deprecated:
+#add_subdirectory(mwac_utils)
 #add_subdirectory(read_mwac)
 #add_subdirectory(read_pfb)
-add_subdirectory(make_psrfits)
 #add_subdirectory(get_delays)
 #add_subdirectory(gpu_utils)    
 #add_subdirectory(make_beam)
-add_subdirectory(make_beam_small)
 
 INCLUDE(InstallRequiredSystemLibraries)
 
