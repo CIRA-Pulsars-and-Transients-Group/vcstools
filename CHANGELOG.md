@@ -1,17 +1,17 @@
-# make\_beam\_small
+# VCS Tools
 
 ----
 ## Unreleased
 
 ----
-## v1.3.2
+## v1.3.2 (2018-02-19)
 
 ### Added
 
 * Imported the offline correlator into this project
 
 ----
-## v1.3.1
+## v1.3.1 (2018-02-15)
 
 ### Added
 
@@ -24,7 +24,7 @@
 * Support for **-v** when compiled with GPU support
 
 ----
-## v1.3.0
+## v1.3.0 (2018-02-03)
 
 * Added support for full PFB inversion
 * Added options for toggling output formats:
