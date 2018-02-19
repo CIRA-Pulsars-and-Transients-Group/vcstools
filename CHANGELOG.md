@@ -3,6 +3,9 @@
 ----
 ## Unreleased
 
+* Remove deprecated code for the beamformer
+* Rename `make_beam_small` to `make_beam` 
+
 ----
 ## v1.3.2 (2018-02-19)
 
