@@ -19,9 +19,9 @@ message("Finding OpenMP")
 include(FindOpenMP)
 
 find_package(SLALIB)
-find_package(PSRFITS_UTILS)
 find_package(CFITSIO)
-find_package(FFTW3 COMPONENTS single openmp)
+find_package(PSRFITS_UTILS)
+#find_package(FFTW3 COMPONENTS single openmp)
 find_package(XGPU)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
@@ -32,6 +32,7 @@ if (XGPU_FOUND)
 endif()
 add_subdirectory(make_beam_small)
 add_subdirectory(make_psrfits)
+add_subdirectory(galaxy-scripts)
 
 ## The following are deprecated:
 #add_subdirectory(mwac_utils)
