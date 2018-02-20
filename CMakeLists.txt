@@ -5,7 +5,15 @@ cmake_policy(SET CMP0048 NEW)
 
 project(MWA_Beamformer VERSION 1.3.2)
 
-add_definitions( -DVERSION_BEAMFORMER="${PROJECT_VERSION}" )
+# Set up version number
+execute_process(
+  COMMAND git log -1 --format="%cd_%h" --date=short
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE VERSION_GIT
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+add_definitions( -DVERSION_BEAMFORMER="${PROJECT_VERSION}_${VERSION_GIT}" )
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
