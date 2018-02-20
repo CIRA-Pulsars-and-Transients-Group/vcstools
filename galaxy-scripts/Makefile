@@ -2,6 +2,7 @@ INSTALL_DIR = /group/mwaops/PULSAR/bin/
 
 SCRIPT_TARGETS = bf_adjust_flags.py \
           build_mwacutils.sh \
+		  calibrate_vcs.py \
           checks.py \
           create_psrfits.sh \
           fetch_mwacutils.sh \
