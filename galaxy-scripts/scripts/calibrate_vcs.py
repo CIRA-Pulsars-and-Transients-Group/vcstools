@@ -525,7 +525,7 @@ class BaseRTSconfig(object):
         if datadir is None:
             # use the default data path
             self.data_dir = "/group/mwaops/vcs/{0}/cal/{1}/vis".format(obsid, cal_obsid)
-            logger.info("Using default calibrator data path: {0}".format(self.data_dir)
+            logger.info("Using default calibrator data path: {0}".format(self.data_dir))
         elif os.path.isdir(datadir):
             self.data_dir = os.path.abspath(datadir)
             logger.info("Using the user specified data directory: {0}".format(datadir))
@@ -734,7 +734,7 @@ class BaseRTSconfig(object):
         hh, mm, ss = lststring.split(":")
         jd = time.MJD + 2400000.5
         logger.info("   LST: {0}".format(lststring))
-        logger.info("   JD : {0}".format(jd)
+        logger.info("   JD : {0}".format(jd))
         
         lst_in_hours = float(hh) + float(mm) / 60.0 + float(ss) / 60.0 ** 2
 
@@ -867,6 +867,10 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
 
 
 if __name__ == '__main__':
+
+    # convnience dictionary for choosing log-levels
+    loglevels = {"DEBUG":logging.DEBUG, "INFO":logging.INFO, "WARNING":logging.WARNING}
+
     # Option parsing
     parser = argparse.ArgumentParser(
         description="Script for creating RTS configuration files and submitting relevant jobs in the VCS pulsar pipeline")
@@ -892,14 +896,16 @@ if __name__ == '__main__':
                         help="Tell the RTS to read calibrator data in the offline correlated data format.")
 
     #parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
-    parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue")
+    parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue.")
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: DEBUG.", 
+                        choices=loglevels.keys(), default="DEBUG")
 
     args = parser.parse_args()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(loglevels[args.loglvl])
     formatter = logging.Formatter('%(asctime)s %(thread)d  %(name)s  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
