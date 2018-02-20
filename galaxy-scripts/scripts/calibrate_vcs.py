@@ -20,6 +20,7 @@ from astropy.io import fits
 from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
 from mdir import mdir
 from mwa_metadb_utils import getmeta
+from mwapy import ephem_utils
 from itertools import groupby
 from operator import itemgetter
 import distutils.spawn
@@ -500,7 +501,7 @@ class BaseRTSconfig(object):
         When there is a problem with some of the observation information and/or its manipulation.
     """
 
-    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir, outdir=None, offline=False):
+    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir=None, outdir=None, offline=False):
         self.obsid = obsid  # target observation ID
         self.cal_obsid = cal_obsid  # calibrator observation ID
         self.offline = offline  # switch to decide if offline correlated data or not
@@ -521,9 +522,13 @@ class BaseRTSconfig(object):
 
         # Check to make sure paths and files exist:
         # First, check that the actual data directory exists
-        if os.path.isdir(datadir):
+        if datadir is None:
+            # use the default data path
+            self.data_dir = "/group/mwaops/vcs/{0}/cal/{1}/vis".format(obsid, cal_obsid)
+            logger.info("Using default calibrator data path: {0}".format(self.data_dir)
+        elif os.path.isdir(datadir):
             self.data_dir = os.path.abspath(datadir)
-            logger.info("Checking data directory exists... Ok")
+            logger.info("Using the user specified data directory: {0}".format(datadir))
         else:
             errmsg = "Data directory ({0}) does not exists. Aborting.".format(datadir)
             logger.error(errmsg)
@@ -562,7 +567,7 @@ class BaseRTSconfig(object):
             logger.error(errmsg)
             raise CalibrationError(errmsg)
         else:
-            logger.info("Checking metafits file exists and is named correctly... Ok")
+            logger.info("Metafits file exists and is named correctly.")
             self.metafits = os.path.abspath(metafits)
 
         # the check that the source list exists
@@ -629,7 +634,7 @@ class BaseRTSconfig(object):
             ngroups = len_files / 24
             fgrouped = np.array(np.array_split(files, ngroups))
             ndumps = 0
-            for item in fgrouped[:, 0]:
+            for item in fgrouped[:,0]:
                 # count how many units are present, subtract one (primary HDU)
                 ndumps += len(fits.open(item)) - 1
 
@@ -675,6 +680,7 @@ class BaseRTSconfig(object):
         """
         # get calibrator observation information from database
         # TODO: need to make this write a metafile so that we don't have to keep querying the database on every run
+        # TODO: actually, do we?
         logger.info("Querying metadata database for obsevation information...")
         obsinfo = getmeta(service='obs', params={'obs_id': str(self.cal_obsid)})
 
@@ -693,6 +699,9 @@ class BaseRTSconfig(object):
 
         # convert times using our timeconvert and get LST and JD 
         # TODO: need to make this not have to call an external script
+        #       we could do this by using the mwapy.ephem_utils 
+        #       (which timeconvert.py just wraps) or use astropy
+        """
         try:
             timeconvert = distutils.spawn.find_executable("timeconvert.py")
         except Exception:
@@ -716,7 +725,17 @@ class BaseRTSconfig(object):
 
             if "JD" in line:
                 jdflag, jd = line.split()
-
+        """
+        # use the same operations as in timeconvert.py for our specific need
+        logger.info("Converting times with mwapy.ephem_utils")
+        time = ephem_utils.MWATime()
+        time.datetimestring = self.utctime
+        lststring = time.LST.strftime('%H:%M:%S')
+        hh, mm, ss = lststring.split(":")
+        jd = time.MJD + 2400000.5
+        logger.info("   LST: {0}".format(lststring))
+        logger.info("   JD : {0}".format(jd)
+        
         lst_in_hours = float(hh) + float(mm) / 60.0 + float(ss) / 60.0 ** 2
 
         # set the HA of the image centre to the primary beam HA
@@ -863,7 +882,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list.", required=True)
 
-    parser.add_argument("--gpubox_dir", type=str, help="Where the *_gpubox*.fits files are located")
+    parser.add_argument("--gpubox_dir", type=str, help="Where the *_gpubox*.fits files are located", default=None)
 
     parser.add_argument("--rts_output_dir", type=str,
                         help="Parent directory where you want the /rts directory and /batch directory to be created."
