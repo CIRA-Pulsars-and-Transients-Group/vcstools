@@ -19,7 +19,6 @@
 #include "buffer_sizes.h"
 #include "packet.h"
 #include <complex.h>
-#include <syslog.h>
 #include <unistd.h>
 #include "fitsio.h"
 #include "fourbit.h"
@@ -34,8 +33,6 @@
 /* -------------------------------- Beamformer ------------------------------ */
 #include "run_beamer.h"
 /* -------------------------------- End Beamformer ------------------------------ */
-
-#define CORR_VERSION "0.1"
 
 #define checkCudaError() do {                           \
 cudaError_t error = cudaGetLastError();             \
@@ -67,21 +64,29 @@ return XGPU_CUDA_ERROR;                                           \
 ringbuf_t ring;
 
 
-char whoami[64];
-
 
 
 /*--------------------------------------------------------------------------*/
 
-void usage() {
-    std::cout << "mwac_offline: a light-weight correlator for the MWA. Takes a NCHAN of data from stdin and correlates as per the parameters of the linked xGPU library" << std::endl;
-    std::cout << "-r <dump_rate> how many correlator dumps per second [1]" << std::endl;
-    std::cout << "-n <number of channels to average> how many adjacent channels to average " << std::endl;
-    std::cout << "-i <number of correlator dumps to average> how many correlator dumps to average " << std::endl;
-    std::cout << "It will take data from stdin. In this case you need to give it the start second of the dataset and the associated obsid" << std::endl;
-    std::cout << " mwac_lite -o <obsid> -s <time_t> -f nchan" << std::endl;
-    std::cout << "A note on input file formats. We assume that the input order is [time][fine_channel][station][polarization][complexity]. We assume that the data is simply being piped to stdin" << std::endl;
-    
+void usage()
+{
+    std::cout << "offline_correlator: a light-weight correlator for the MWA. "
+              << "Takes a NCHAN of data from stdin and correlates as per the "
+              << "parameters of the linked xGPU library" << std::endl;
+    std::cout << "offline_correlator from VCS Tools v" << VERSION_BEAMFORMER
+              << std::endl << std::endl;
+    std::cout << "offline_correlator: -o <obsid> -s <time_t> -f nchan"
+              << std::endl;
+    std::cout << "Options:" << std::endl;
+    std::cout << " -r <dump_rate> how many correlator dumps per second [1]"
+              << std::endl;
+    std::cout << " -n <number of channels to average> how many adjacent "
+              << "channels to average " << std::endl;
+    std::cout << " -i <number of correlator dumps to average> how many "
+              << "correlator dumps to average " << std::endl;
+    std::cout << "It will take data from stdin. In this case you need to "
+              << "give it the start second of the dataset and the associated "
+              << "obsid." << std::endl;
 }
 
 void *manager(void *context) {
@@ -94,20 +99,21 @@ void *manager(void *context) {
     FILE *input = stdin;
 
     if (raw_buffer == NULL) {
-        syslog(LOG_CRIT, "mwac_offline::ERROR raw data buffer on start");
+        std::cerr << "error: raw data buffer on start" << endl;
         exit(EXIT_FAILURE);
     }
     
-    syslog(LOG_INFO, "Building lookup\n");
+    std::cout << "Building lookup... ";
     build_eight_bit_lookup();
-    syslog(LOG_INFO, "Ready...\n");
+    std::cout << "Ready" << endl;;
    
-    if (config->infile) {
-	input= fdopen(config->infile,"r");
+    if (config->infile)
+    {
+        input= fdopen( config->infile, "r" );
     }
  
-    while(1) {
-        
+    while(1)
+    {
         // we are getting data from stdin
         // lets just fill up a buffer
         
@@ -133,14 +139,15 @@ void *manager(void *context) {
         
         size_t nread = 0;
         size_t to_read = (ntime * (nchan-2*edge) * ninputs * ndim * nbit)/8;
-        syslog(LOG_INFO, "mwac_offline::Attempting to read in %lu bytes",to_read);
+        std::cout << "Attempting to read in "<< to_read << " bytes" << endl;
         char *raw_buffer_ptr = raw_buffer;
         
         if (nbit == 4) {
             nread = fread(raw_buffer_ptr,1,to_read,input);
             // check fred return status ... just in case
             if (nread != to_read) {
-                syslog(LOG_ERR,"Incomplete read on STDIN (%lu of %lu).Likely EOD\n",nread,to_read);
+                std::cerr << "error: incomplete read on STDIN (" << nread << " of " << to_read
+                          << "). Likely EOD" << std::endl;
                 config->ring->EOD = 1;
                 break;
             }
@@ -192,8 +199,10 @@ void *manager(void *context) {
         } else {
             nread = fread(buf,1,to_read,stdin);
             // check fred return status ... just in case
-            if (nread != to_read) {
-                syslog(LOG_ERR,"Incomplete read on STDIN. Likely EOD\n");
+            if (nread != to_read)
+            {
+                std::cerr << "error: incomplete read on STDIN (" << nread << " of " << to_read
+                          << "). Likely EOD" << std::endl;
             }
         }
         mark_buffer_filled(config->ring); // this marks the buffer full
@@ -214,14 +223,8 @@ int main(int argc, char **argv) {
     
     char *buf = 0x0;
 
-    extern char whoami[64];
-    
-    
     pthread_t buffer_handler;
     extern int buffer_handler_arg;
-    sprintf(whoami, "mwac_offline::");
-    openlog(whoami, LOG_PERROR, LOG_USER);
-    syslog(LOG_INFO, "MWA_CORRELATOR (OFFLINE) SERVER CODE VERSION %s", CORR_VERSION);
     
     char *obsid=NULL;
     char *in_file=NULL;    
@@ -260,7 +263,7 @@ int main(int argc, char **argv) {
     
     int arg = 0;
     
-    while ((arg = getopt(argc, argv, "b:c:d:e:i:n:r:o:s:f:h01234567")) != -1) {
+    while ((arg = getopt(argc, argv, "b:c:d:e:f:hi:n:o:r:s:V")) != -1) {
         
         switch (arg) {
             case 'b':
@@ -269,8 +272,15 @@ int main(int argc, char **argv) {
             case 'c':
                 coarse_chan = atoi(optarg);
                 break;
+            case 'd':
+                in_file = strdup(optarg);
+                break;
             case 'e':
                 edge = atoi(optarg);
+                break;
+            case 'f':
+                // number of channels to correlate per coarse
+                nfrequency = atoi(optarg);
                 break;
             case 'h':
                 usage();
@@ -279,37 +289,34 @@ int main(int argc, char **argv) {
                 // correlator dumps to sum
                 dumps_to_aver=atoi(optarg);
                 break;
-            case 'o':
-                offline = 1;
-                obsid = strdup(optarg);
-                break;
-            case 's':
-                starttime = (time_t) atol(optarg);
-                break;
-            case 'f':
-                // number of channels to correlate per coarse
-                nfrequency=atoi(optarg);
-                break;
             case 'n':
                 // number of channels to sum
                 chan_to_aver=atoi(optarg);
+                break;
+            case 'o':
+                offline = 1;
+                obsid = strdup(optarg);
                 break;
             case 'r':
                 // correlator dump rate
                 dumps_per_second = atoi(optarg);
                 break;
-	    case 'd':
-		in_file = strdup(optarg);
-		break;
+            case 's':
+                starttime = (time_t) atol(optarg);
+                break;
+            case 'V':
+                std::cout << "offline_correlator from VCS Tools v"
+                          << VERSION_BEAMFORMER << std::endl;
+                exit(EXIT_SUCCESS);
+                break;
         }
     }
     
-    if (argc == 1) {
+    if (argc == 1)
+    {
         usage();
         exit(EXIT_FAILURE);
     }
-    
-    syslog(LOG_INFO,"mwac_offline::Instantiating a correlator in offline mode");
     
     manager_t the_manager; // dropped the volatile
     
@@ -326,25 +333,27 @@ int main(int argc, char **argv) {
     the_manager.npol = 2;
     the_manager.dumps_per_sec = dumps_per_second;
     the_manager.infile = 0;
+
     if (in_file != NULL) {
-	// we have an input file
-	if ((the_manager.infile = open(in_file,O_RDONLY)) == -1) {
-		syslog(LOG_CRIT,"mwac_offline::Input (%s) file selected but cannot be opened\n",in_file);
-		exit(EXIT_FAILURE);
-	}
-	
+        // we have an input file
+        if ((the_manager.infile = open(in_file,O_RDONLY)) == -1)
+        {
+            std::cerr << "error: input (" << in_file << ") file selected but cannot be opened" < std::endl;
+            exit(EXIT_FAILURE);
+        }
     }
-	 
     
-    if (starttime < 0) {
+    if (starttime < 0)
+    {
         usage();
-        syslog(LOG_CRIT,"mwac_offline::Offline mode selected but no starttime on command line\n");
+        std::cerr << "error: offline mode selected but no starttime on command line" << std::endl;
         exit(EXIT_FAILURE);
     }
     
-    if (obsid < 0) {
+    if (obsid < 0)
+    {
         usage();
-        syslog(LOG_CRIT,"mwac_offline::Offline mode selected but no obsid on command line\n");
+        std::cerr << "error: offline mode selected but no obsid on command line" << std::endl;
         exit(EXIT_FAILURE);
     }
     
@@ -363,16 +372,22 @@ int main(int argc, char **argv) {
     // Get sizing info from library
     
     xgpuInfo(&xgpu_info);
-    if (npol != xgpu_info.npol) {
-        syslog(LOG_CRIT,"FATAL MISSMATCH between XGPU library and requested npol XGPU: %d REQUESTED: %d", xgpu_info.npol,npol);
+    if (npol != xgpu_info.npol)
+    {
+        std::cerr << "error: fatal missmatch between XGPU library and requested npol XGPU: "
+                  << xgpu_info.npol << ", REQUESTED: " << npol << std::endl;
         exit(EXIT_FAILURE);
     }
-    if (nstation != xgpu_info.nstation) {
-        syslog(LOG_CRIT,"FATAL MISSMATCH between XGPU library and requested nstation XGPU: %d REQUESTED: %d", xgpu_info.nstation,nstation);
+    if (nstation != xgpu_info.nstation)
+    {
+        std::cerr << "error: fatal missmatch between XGPU library and requested nstation XGPU: "
+                  << xgpu_info.nstation << ", REQUESTED: " << nstation << std::endl;
         exit(EXIT_FAILURE);
     }
-    if (nfrequency != xgpu_info.nfrequency){
-        syslog(LOG_CRIT,"FATAL MISSMATCH between XGPU library and requested channels XGPU: %d REQUESTED: %d", xgpu_info.nfrequency,nfrequency);
+    if (nfrequency != xgpu_info.nfrequency)
+    {
+        std::cerr << "error: fatal missmatch between XGPU library and requested channels XGPU: "
+                  << xgpu_info.nfrequency << ", REQUESTED: " << nfrequency << std::endl;
         exit(EXIT_FAILURE);
     }
     ntime = xgpu_info.ntime;
@@ -388,13 +403,14 @@ int main(int argc, char **argv) {
     
     size_t numbytes =(((ring_bufsz)+4095)/4096)*4096; // page size and page aligned
     
-    for (int i = 0; i <= RING_NBUFS; i++) {
-        syslog(LOG_INFO,"allocating buffer %d of %ld",i,numbytes);
+    for (int i = 0; i <= RING_NBUFS; i++)
+    {
+        std::cout << "allocating buffer " << i << " of " << numbytes << std::endl;
         
         cuda_buffers[i] = (char *) valloc(numbytes);
         
         if (cuda_buffers[i] == NULL) {
-            syslog(LOG_INFO,"FAILED TO allocate buffer %d",i);
+            std::cerr << "error: failed to allocate buffer " << i << std::endl;
             exit(EXIT_FAILURE);
         }
         
@@ -459,11 +475,11 @@ int main(int argc, char **argv) {
     
     if (pthread_create(&buffer_handler, NULL, manager,
                        (void *) &the_manager)) {
-        syslog(LOG_CRIT, "mwac_lite::Error launching manager thread");
+        std::cerr << "error: could not launch manager thread" << std::endl;
         exit(EXIT_FAILURE);
     }
     
-    syslog(LOG_INFO,"mwa_lite::Launched manager thread");
+    std::cout << "Launched manager thread" << std::endl;
     
     uint64_t blockSize = 0;
     int hdu_num = 0;
@@ -482,8 +498,7 @@ int main(int argc, char **argv) {
     
     assert(!(blockSize%2880));
     
-    syslog(LOG_INFO,"Correlating %llu stations with %llu signals, with %llu channels ",
-           nstation, npol , nfrequency);
+    std::cout << "Correlating " << nstations << " stations with " << npol << " signals, with " << nfrequency << " channels" << std::endl;
     
     // allocate the GPU X-engine memory
     XGPUContext context;
