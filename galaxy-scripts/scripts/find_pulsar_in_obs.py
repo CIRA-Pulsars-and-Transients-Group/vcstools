@@ -21,6 +21,7 @@ __date__ = '2016-03-21'
 
 #TODO: (BWM) might be worth trying to only load the necessary parts of modules rather than loading an ENTIRE module. The speed up will be minimal overall, but it's also just a bit neater.
 # You can also just load module/part of modules internally within functions. So if a module is only used once, just load it in the local function rather than up here (globally).
+import version
 import os
 import sys
 import math
@@ -871,278 +872,226 @@ def get_beam_power_obsforsource(obsid_data,
     return
 
 
-parser = argparse.ArgumentParser(description="""
-This code is used to list the sources within the beam of observations IDs or using --obs_for_source list all the observations for each source. The sources can be input serval ways: using a list of pulsar names (--pulsar), using a complete catalogue file of pulsars (--dl_PSRCAT) or RRATs (--RRAT and --dl_RRAT), using a compatable catalogue (--in_cat with the help of --names and --coordstype) or using a RA and DEC coordinate (--coords). The observation IDs can be input (--obsid) or gathered from a directory (--FITS_dir). The default is to search all observation IDs from http://mwa-metadata01.pawsey.org.au/metadata/ that have voltages and list every known pulsar from PSRCAT in each observation ID.
-""")
-parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source. For increased efficiency it will only search OBSIDs within the primary beam.')
-parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
-parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation that will be used. Options: "a" the analytic beam model (2012 model, fast and reasonably accurate), "d" the advanced beam model (2014 model, fast and slighty more accurate) or "e" the full EE model (2016 model, slow but accurate). " Default: "a"')
-parser.add_argument('-m','--min_power',type=float,help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3', default=0.3)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="""
+    This code is used to list the sources within the beam of observations IDs or using --obs_for_source list all the observations for each source. The sources can be input serval ways: using a list of pulsar names (--pulsar), using a complete catalogue file of pulsars (--dl_PSRCAT) or RRATs (--RRAT and --dl_RRAT), using a compatable catalogue (--in_cat with the help of --names and --coordstype) or using a RA and DEC coordinate (--coords). The observation IDs can be input (--obsid) or gathered from a directory (--FITS_dir). The default is to search all observation IDs from http://mwa-metadata01.pawsey.org.au/metadata/ that have voltages and list every known pulsar from PSRCAT in each observation ID.
+    """)
+    parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source. For increased efficiency it will only search OBSIDs within the primary beam.')
+    parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
+    parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation that will be used. Options: "a" the analytic beam model (2012 model, fast and reasonably accurate), "d" the advanced beam model (2014 model, fast and slighty more accurate) or "e" the full EE model (2016 model, slow but accurate). " Default: "a"')
+    parser.add_argument('-m','--min_power',type=float,help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3', default=0.3)
+    parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
+    #impliment an option for the accurate beam later on and maybe the old elipse approximation if I can make it accurate
 
-#impliment an option for the accurate beam later on and maybe the old elipse approximation if I can make it accurate
+    #source options
+    sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
+    sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"')
+    sourargs.add_argument('--RRAT',action='store_true',help='Searches for all known RRATs.')
+    sourargs.add_argument('--GC',action='store_true',help='Searches for all known Globular Clusters.')
+    sourargs.add_argument('--FRB',action='store_true',help='Searches for all known FRBs.')
+    #TODO Eventually impliment to search for FRBs and a search for all mode
+    sourargs.add_argument('--dl_RRAT',action='store_true',help='Download the RRATalog from http://astro.phys.wvu.edu/rratalog/ and uses this as the source catalogue.')
+    sourargs.add_argument('--dl_PSRCAT',action='store_true',help='Download the Puslar alog from http://www.atnf.csiro.au/research/pulsar/psrcat/ and uses this as the source catalogue.')
+    sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be readable by astropy.table.Table (i.e. csv, txt, votable, fits) . Default: for pulsars pulsaralog.csv from grab_pulsaralog.py and for RRATs rratalog.csv from grab_RRATalog.py')
+    sourargs.add_argument('--source_names',type=str,help='String containing the column name for the source names in the input catalogue (--in_cat). If there is no such column, use: --names=-1 and the output text file will be labelled using the coordinates in degrees: <longitudinal>_<latitudinal>.txt. Default: "Jname".')
+    sourargs.add_argument('--coord_names',type=str,help='String containing the two column labels of the source coordinates for the input catalouge (--in_cat). i.e.: "x,y" or "long,lat". If not provided, assumes that the coordinates are "Raj,Decj". Must be enterered as: "coord1,coord2".')
+    sourargs.add_argument('-c','--coords',type=str,help='String containing coordinates in "RA,DEC". This will list the OBS IDs that contain this coordinate. Must be enterered as: "hh:mm:ss.ss,+dd:mm:ss.ss".')
+    #finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
 
-#source options
-sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
-sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"')
-sourargs.add_argument('--RRAT',action='store_true',help='Searches for all known RRATs.')
-sourargs.add_argument('--GC',action='store_true',help='Searches for all known Globular Clusters.')
-sourargs.add_argument('--FRB',action='store_true',help='Searches for all known FRBs.')
-#TODO Eventually impliment to search for FRBs and a search for all mode
-sourargs.add_argument('--dl_RRAT',action='store_true',help='Download the RRATalog from http://astro.phys.wvu.edu/rratalog/ and uses this as the source catalogue.')
-sourargs.add_argument('--dl_PSRCAT',action='store_true',help='Download the Puslar alog from http://www.atnf.csiro.au/research/pulsar/psrcat/ and uses this as the source catalogue.')
-sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be readable by astropy.table.Table (i.e. csv, txt, votable, fits) . Default: for pulsars pulsaralog.csv from grab_pulsaralog.py and for RRATs rratalog.csv from grab_RRATalog.py')
-sourargs.add_argument('--source_names',type=str,help='String containing the column name for the source names in the input catalogue (--in_cat). If there is no such column, use: --names=-1 and the output text file will be labelled using the coordinates in degrees: <longitudinal>_<latitudinal>.txt. Default: "Jname".')
-sourargs.add_argument('--coord_names',type=str,help='String containing the two column labels of the source coordinates for the input catalouge (--in_cat). i.e.: "x,y" or "long,lat". If not provided, assumes that the coordinates are "Raj,Decj". Must be enterered as: "coord1,coord2".')
-sourargs.add_argument('-c','--coords',type=str,help='String containing coordinates in "RA,DEC". This will list the OBS IDs that contain this coordinate. Must be enterered as: "hh:mm:ss.ss,+dd:mm:ss.ss".')
-#finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
+    #observation options
+    obargs = parser.add_argument_group('Observation ID options', 'The different options to control which observation IDs are used. Default is all observation IDs with voltages.')
+    obargs.add_argument('--FITS_dir',type=str,help='Location of FITS files on system. If not chosen will search the database for metadata.')
+    obargs.add_argument('-o','--obsid',type=str,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
+    obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
+    args=parser.parse_args()
 
-#observation options
-obargs = parser.add_argument_group('Observation ID options', 'The different options to control which observation IDs are used. Default is all observation IDs with voltages.')
-obargs.add_argument('--FITS_dir',type=str,help='Location of FITS files on system. If not chosen will search the database for metadata.')
-obargs.add_argument('-o','--obsid',type=str,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
-obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
-args=parser.parse_args()
+    if args.version:
+        print version.__version__
+        sys.exit(0)
 
+    #Parser default control
+    if args.dl_RRAT:
+        grab_RRATalog()
 
-#Parser default control
-if args.dl_RRAT:
-    grab_RRATalog()
+    if args.dl_PSRCAT:
+        grab_pulsaralog()
 
-if args.dl_PSRCAT:
-    grab_pulsaralog()
-
-#defaults for the catalouge directory
-if args.in_cat:
-    catDIR = args.in_cat
-else:
-    if args.RRAT:
-        catDIR = 'rratalog.csv'
-    elif args.GC:
-        catDIR = 'gcalog.csv'
-    elif args.FRB:
-        catDIR = 'frbalog.ccsv'
-    elif args.pulsar:
-        if args.pulsar == None:
-            catDIR = 'pulsaralog.csv'
-        if (len(args.pulsar) ==1) and (not args.obs_for_source):
-            answer = raw_input('You are only searching for one pulsar so it is recommened that you use' +\
-                              ' --obs_for_source. Would you like to use --obs_for_source. (Y/n)')
-            if (answer == 'Y') or (answer == 'y') or (answer == 'yes') or (answer == ''):
-                args.obs_for_source = True
-                print "Using option --obs_for_source"
-            else:
-                print "Not using option --obs_for_source"
-        if args.pulsar != None:
-            #converts the list of pulsars into a string so they can be used as an agrument
-            jlist = args.pulsar
-            if args.RRAT:
-                grab_RRATalog(jlist)
-            else:
-                grab_pulsaralog(jlist)
-            catDIR = 'temp.csv'
+    #defaults for the catalouge directory
+    if args.in_cat:
+        catDIR = args.in_cat
     else:
-        catDIR = 'pulsaralog.csv'
-
-#defaults for the coords types
-if args.coord_names:
-    c1, c2 = args.coord_names.split(',')
-else:
-    if args.pulsar:
-        c1, c2 = ['Raj', 'Decj']
-    if args.RRAT or args.GC:
-        c1, c2 = ['RA','DEC']
-    else:
-        c1, c2 = ['Raj', 'Decj']
-
-#defaults for the fits dirs
-if args.FITS_dir:
-    fitsDIR = args.FITS_dir
-else:
-    fitsDIR = '/data_01/pulsar/fitsfiles/'
-
-#sets the column name for the sources in the catalouge defending on different defaults
-if args.source_names and args.source_names=='-1':
-    name_col='-1'
-elif args.source_names:
-    name_col = args.source_names
-else:
-    if args.RRAT:
-        name_col = 'Name'
-    elif args.pulsar:
-        name_col = 'Jname'
-    elif args.coords:
-        name_col = '-1'
-    elif args.GC:
-        name_col = 'ID'
-    elif args.FRB:
-        name_col = 'NAME'
-    else:
-        name_col = 'Jname'
-
-
-
-#main code
-#get cataloge
-if args.coords:
-    #creates a table for a single coordinate
-    racor, deccor = args.coords.split(',')
-    x,y = sex2deg(racor,deccor)
-    name = str(round(x,3))+'_'+str(round(y,3))
-    catalog = Table([[name],[racor], [deccor]], names=(name_col,c1, c2))
-else:
-    print "Creating catalogue from file", catDIR, "..."
-    try:
-        catalog = Table.read( catDIR)
-    except IOError as e:
-        print "No file {0} found. Using grab_pulsars.py to creat directory.".format( e.strerror)
         if args.RRAT:
-            grab_RRATalog()
-            catalog = Table.read('rratalog.csv')
+            catDIR = 'rratalog.csv'
         elif args.GC:
-            grab_GCalog()
-            catalog = Table.read('gcalog.csv')
+            catDIR = 'gcalog.csv'
         elif args.FRB:
-            grab_FRBalog()
-            catalog = Table.read('frbalog.csv')
-        else:
-            grab_pulsaralog()
-            catalog = Table.read('pulsaralog.csv')
-
-header = catalog.colnames
-
-
-#get obs IDs
-if args.obsid:
-    OBSID = args.obsid
-elif args.FITS_dir:
-    print "Creating list of observation IDs in given FITS directory"
-    obsIDs = os.walk( fitsDIR).next()[1]
-    if fitsDIR == '/data_01/pulsar/fitsfiles/':
-        obsIDs.remove('1133_drift')
-else:
-    #queries the database for a list of all the OBS IDs with voltages
-    #TODO for a one -p search limit the obsid list
-    OBSID = []
-    print "Obtaining list of observation IDs that have recorded voltages from http://mwa-metadata01.pawsey.org.au/metadata/"
-    if args.pulsar and (len(args.pulsar) ==1): #if there is a single pulsar simply search around it
-        ras, decs = sex2deg(catalog[c1][0],catalog[c2][0])
-        OBSID = singles_source_search(ras, decs)
-    elif args.coords and len(args.coords) == 1:
-        ras, decs = sex2deg(catalog[c1][0],catalog[c2][0])
-        OBSID = singles_source_search(ras, decs)
-    else:
-        temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000})
-        for row in temp:
-            OBSID.append(row[0])
-
-
-#for source in obs
-#gets all of the basic meta data for each observation ID
-#prepares metadata calls
-if args.all_volt: #drops the d.filetype = 11
-    sql_meta = ('select a.starttime, a.stoptime-a.starttime as duration, m.ra_pointing, m.dec_pointing, r.frequencies, d.filename from mwa_setting as a '
-                'inner join rf_stream as r on a.starttime = r.starttime '
-                'inner join schedule_metadata as m on a.starttime = m.observation_number '
-                'inner join data_files as d on a.starttime = d.observation_num '
-                'where a.starttime = %s')
-else:
-    sql_meta = ('select a.starttime, a.stoptime-a.starttime as duration, m.ra_pointing, m.dec_pointing, r.frequencies, d.filename from mwa_setting as a '
-                'inner join rf_stream as r on a.starttime = r.starttime '
-                'inner join schedule_metadata as m on a.starttime = m.observation_number '
-                'inner join data_files as d on a.starttime = d.observation_num '
-                'where (d.filetype = 11 or d.filetype = 15) and a.starttime = %s')
-
-sql_delay = ('select xdelaysetting from obsc_recv_cmds where observation_number = %s')
-
-#downloads password so only mwaops group can access the archive
-password_parser = SafeConfigParser()
-password_parser.read('/scratch2/mwaops/pulsar/incoh_census/beam_code/MWA_metadata.ini')
-
-cord = []
-delays = []
-try:
-    with closing(psycopg2.connect(database='mwa', user='mwa_ro', password=password_parser.get('MWA_admin','password') , host='mwa-metadata01', port='5432')) as conn:
-        print ' '
-except:#incase of file finding or permission errors use webservice
-    print 'Error using admin account. Using slower webservice instead.'
-    for ob in OBSID:
-        print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(ob)
-        beam_meta_data = getmeta(service='obs', params={'obs_id':ob})
-        ra = beam_meta_data[u'metadata'][u'ra_pointing']
-        dec = beam_meta_data[u'metadata'][u'dec_pointing']
-        time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
-        skytemp = beam_meta_data[u'metadata'][u'sky_temp']
-        delays = beam_meta_data[u'rfstreams'][u'0'][u'xdelays']
-
-        channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
-        minfreq = float(min(channels))
-        maxfreq = float(max(channels))
-        centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in Hz
-
-        #check for raw volatge files
-        filedata = beam_meta_data[u'files']
-        keys = filedata.keys()
-        check = False
-        for k in keys:
-            if '.dat' in k:
-                check = True
-        if check or args.all_volt:
-            if args.obs_for_source:
-                if args.obsid and (len(args.obsid) == 1):
-                    cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
+            catDIR = 'frbalog.ccsv'
+        elif args.pulsar:
+            if args.pulsar == None:
+                catDIR = 'pulsaralog.csv'
+            if (len(args.pulsar) ==1) and (not args.obs_for_source):
+                answer = raw_input('You are only searching for one pulsar so it is recommened that you use' +\
+                                  ' --obs_for_source. Would you like to use --obs_for_source. (Y/n)')
+                if (answer == 'Y') or (answer == 'y') or (answer == 'yes') or (answer == ''):
+                    args.obs_for_source = True
+                    print "Using option --obs_for_source"
                 else:
-                    cord.append([ob, ra, dec, time, delays,centrefreq, channels])
-            else:
-                cord = [ob, ra, dec, time, delays,centrefreq, channels]
-                if args.beam == 'e':
-                    get_beam_power(cord, catalog, c1, c2, name_col, dt=300,
-                                    centeronly=True, verbose=False, min_power=args.min_power, option = 'e')
-                elif args.beam == 'd':
-                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
-                                    centeronly=True, verbose=False, min_power=args.min_power, option = 'd')
-                elif args.beam == 'a':    #center only means it isn't in picket fence mode
-                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
-                                    min_power=args.min_power, verbose=False)
-                elif not args.beam: #TODO impliment a picket fence mode
-                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
-                                    min_power=args.min_power, verbose=False)
+                    print "Not using option --obs_for_source"
+            if args.pulsar != None:
+                #converts the list of pulsars into a string so they can be used as an agrument
+                jlist = args.pulsar
+                if args.RRAT:
+                    grab_RRATalog(jlist)
+                else:
+                    grab_pulsaralog(jlist)
+                catDIR = 'temp.csv'
         else:
-            print('No raw voltage files for %s' % ob)
+            catDIR = 'pulsaralog.csv'
 
-else:
-    with closing(psycopg2.connect(database='mwa', user='mwa_ro', password=password_parser.get('MWA_admin','password') , host='mwa-metadata01', port='5432')) as conn:
-        print 'Admin access to http://mwa-metadata01.pawsey.org.au/metadata/ obtained'
+    #defaults for the coords types
+    if args.coord_names:
+        c1, c2 = args.coord_names.split(',')
+    else:
+        if args.pulsar:
+            c1, c2 = ['Raj', 'Decj']
+        if args.RRAT or args.GC:
+            c1, c2 = ['RA','DEC']
+        else:
+            c1, c2 = ['Raj', 'Decj']
+
+    #defaults for the fits dirs
+    if args.FITS_dir:
+        fitsDIR = args.FITS_dir
+    else:
+        fitsDIR = '/data_01/pulsar/fitsfiles/'
+
+    #sets the column name for the sources in the catalouge defending on different defaults
+    if args.source_names and args.source_names=='-1':
+        name_col='-1'
+    elif args.source_names:
+        name_col = args.source_names
+    else:
+        if args.RRAT:
+            name_col = 'Name'
+        elif args.pulsar:
+            name_col = 'Jname'
+        elif args.coords:
+            name_col = '-1'
+        elif args.GC:
+            name_col = 'ID'
+        elif args.FRB:
+            name_col = 'NAME'
+        else:
+            name_col = 'Jname'
+
+
+
+    #main code
+    #get cataloge
+    if args.coords:
+        #creates a table for a single coordinate
+        racor, deccor = args.coords.split(',')
+        x,y = sex2deg(racor,deccor)
+        name = str(round(x,3))+'_'+str(round(y,3))
+        catalog = Table([[name],[racor], [deccor]], names=(name_col,c1, c2))
+    else:
+        print "Creating catalogue from file", catDIR, "..."
+        try:
+            catalog = Table.read( catDIR)
+        except IOError as e:
+            print "No file {0} found. Using grab_pulsars.py to creat directory.".format( e.strerror)
+            if args.RRAT:
+                grab_RRATalog()
+                catalog = Table.read('rratalog.csv')
+            elif args.GC:
+                grab_GCalog()
+                catalog = Table.read('gcalog.csv')
+            elif args.FRB:
+                grab_FRBalog()
+                catalog = Table.read('frbalog.csv')
+            else:
+                grab_pulsaralog()
+                catalog = Table.read('pulsaralog.csv')
+
+    header = catalog.colnames
+
+
+    #get obs IDs
+    if args.obsid:
+        OBSID = args.obsid
+    elif args.FITS_dir:
+        print "Creating list of observation IDs in given FITS directory"
+        obsIDs = os.walk( fitsDIR).next()[1]
+        if fitsDIR == '/data_01/pulsar/fitsfiles/':
+            obsIDs.remove('1133_drift')
+    else:
+        #queries the database for a list of all the OBS IDs with voltages
+        #TODO for a one -p search limit the obsid list
+        OBSID = []
+        print "Obtaining list of observation IDs that have recorded voltages from http://mwa-metadata01.pawsey.org.au/metadata/"
+        if args.pulsar and (len(args.pulsar) ==1): #if there is a single pulsar simply search around it
+            ras, decs = sex2deg(catalog[c1][0],catalog[c2][0])
+            OBSID = singles_source_search(ras, decs)
+        elif args.coords and len(args.coords) == 1:
+            ras, decs = sex2deg(catalog[c1][0],catalog[c2][0])
+            OBSID = singles_source_search(ras, decs)
+        else:
+            temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000})
+            for row in temp:
+                OBSID.append(row[0])
+
+
+    #for source in obs
+    #gets all of the basic meta data for each observation ID
+    #prepares metadata calls
+    if args.all_volt: #drops the d.filetype = 11
+        sql_meta = ('select a.starttime, a.stoptime-a.starttime as duration, m.ra_pointing, m.dec_pointing, r.frequencies, d.filename from mwa_setting as a '
+                    'inner join rf_stream as r on a.starttime = r.starttime '
+                    'inner join schedule_metadata as m on a.starttime = m.observation_number '
+                    'inner join data_files as d on a.starttime = d.observation_num '
+                    'where a.starttime = %s')
+    else:
+        sql_meta = ('select a.starttime, a.stoptime-a.starttime as duration, m.ra_pointing, m.dec_pointing, r.frequencies, d.filename from mwa_setting as a '
+                    'inner join rf_stream as r on a.starttime = r.starttime '
+                    'inner join schedule_metadata as m on a.starttime = m.observation_number '
+                    'inner join data_files as d on a.starttime = d.observation_num '
+                    'where (d.filetype = 11 or d.filetype = 15) and a.starttime = %s')
+
+    sql_delay = ('select xdelaysetting from obsc_recv_cmds where observation_number = %s')
+
+    #downloads password so only mwaops group can access the archive
+    password_parser = SafeConfigParser()
+    password_parser.read('/scratch2/mwaops/pulsar/incoh_census/beam_code/MWA_metadata.ini')
+
+    cord = []
+    delays = []
+    try:
+        with closing(psycopg2.connect(database='mwa', user='mwa_ro', password=password_parser.get('MWA_admin','password') , host='mwa-metadata01', port='5432')) as conn:
+            print ' '
+    except:#incase of file finding or permission errors use webservice
+        print 'Error using admin account. Using slower webservice instead.'
         for ob in OBSID:
             print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(ob)
-            with closing(conn.cursor()) as cur:
-                cur.execute(sql_meta, (ob,))
-                meta_result = cur.fetchall()
-                if not meta_result:
-                    if args.all_volt:
-                        print('Error reading metadata for %s' % ob)
-                        continue
-                    else:
-                        print('No raw voltage files for %s' % ob)
-                        continue
+            beam_meta_data = getmeta(service='obs', params={'obs_id':ob})
+            ra = beam_meta_data[u'metadata'][u'ra_pointing']
+            dec = beam_meta_data[u'metadata'][u'dec_pointing']
+            time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
+            skytemp = beam_meta_data[u'metadata'][u'sky_temp']
+            delays = beam_meta_data[u'rfstreams'][u'0'][u'xdelays']
 
-                cur.execute(sql_delay, (ob,))
-                delay_result = cur.fetchall()
-                if not delay_result:
-                    raise Exception('could not get delay meta data for %s' % ob)
-                ra = meta_result[0][2]
-                dec = meta_result[0][3]
-                time = meta_result[0][1] #duration
-                channels = meta_result[0][4]
-                try:
-                    delays = delay_result[0][0][0]
-                except TypeError:
-                    print "Delay error for OBS ID: " + str(ob)
-                minfreq = float(min(channels))
-                maxfreq = float(max(channels))
-                centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq) / 2) #in Hz
+            channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
+            minfreq = float(min(channels))
+            maxfreq = float(max(channels))
+            centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in Hz
 
-                #instead of downloading all of the obs id first, if not in obs_for_source mode,
-                #downlads one obs at a time
+            #check for raw volatge files
+            filedata = beam_meta_data[u'files']
+            keys = filedata.keys()
+            check = False
+            for k in keys:
+                if '.dat' in k:
+                    check = True
+            if check or args.all_volt:
                 if args.obs_for_source:
                     if args.obsid and (len(args.obsid) == 1):
                         cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
@@ -1150,33 +1099,89 @@ else:
                         cord.append([ob, ra, dec, time, delays,centrefreq, channels])
                 else:
                     cord = [ob, ra, dec, time, delays,centrefreq, channels]
-                    #print catalog
-                    if args.beam:
+                    if args.beam == 'e':
                         get_beam_power(cord, catalog, c1, c2, name_col, dt=300,
-                                        centeronly=True, verbose=False, min_power=args.min_power,
-                                        option = args.beam)
-                    else: #TODO impliment a picket fence mode
+                                        centeronly=True, verbose=False, min_power=args.min_power, option = 'e')
+                    elif args.beam == 'd':
                         get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
-                                        centeronly=True, min_power=args.min_power, verbose=False)
-
-#chooses the beam type and whether to list the source in each obs or the obs for each source
-#more options will be included later
-if args.obs_for_source:
-    if args.beam:
-        get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=300,
-                                        centeronly=True, verbose=False, min_power=args.min_power,
-                                        option=args.beam)
-    else:
-        get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
+                                        centeronly=True, verbose=False, min_power=args.min_power, option = 'd')
+                    elif args.beam == 'a':    #center only means it isn't in picket fence mode
+                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
                                         min_power=args.min_power, verbose=False)
+                    elif not args.beam: #TODO impliment a picket fence mode
+                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
+                                        min_power=args.min_power, verbose=False)
+            else:
+                print('No raw voltage files for %s' % ob)
+
+    else:
+        with closing(psycopg2.connect(database='mwa', user='mwa_ro', password=password_parser.get('MWA_admin','password') , host='mwa-metadata01', port='5432')) as conn:
+            print 'Admin access to http://mwa-metadata01.pawsey.org.au/metadata/ obtained'
+            for ob in OBSID:
+                print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(ob)
+                with closing(conn.cursor()) as cur:
+                    cur.execute(sql_meta, (ob,))
+                    meta_result = cur.fetchall()
+                    if not meta_result:
+                        if args.all_volt:
+                            print('Error reading metadata for %s' % ob)
+                            continue
+                        else:
+                            print('No raw voltage files for %s' % ob)
+                            continue
+
+                    cur.execute(sql_delay, (ob,))
+                    delay_result = cur.fetchall()
+                    if not delay_result:
+                        raise Exception('could not get delay meta data for %s' % ob)
+                    ra = meta_result[0][2]
+                    dec = meta_result[0][3]
+                    time = meta_result[0][1] #duration
+                    channels = meta_result[0][4]
+                    try:
+                        delays = delay_result[0][0][0]
+                    except TypeError:
+                        print "Delay error for OBS ID: " + str(ob)
+                    minfreq = float(min(channels))
+                    maxfreq = float(max(channels))
+                    centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq) / 2) #in Hz
+
+                    #instead of downloading all of the obs id first, if not in obs_for_source mode,
+                    #downlads one obs at a time
+                    if args.obs_for_source:
+                        if args.obsid and (len(args.obsid) == 1):
+                            cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
+                        else:
+                            cord.append([ob, ra, dec, time, delays,centrefreq, channels])
+                    else:
+                        cord = [ob, ra, dec, time, delays,centrefreq, channels]
+                        #print catalog
+                        if args.beam:
+                            get_beam_power(cord, catalog, c1, c2, name_col, dt=300,
+                                            centeronly=True, verbose=False, min_power=args.min_power,
+                                            option = args.beam)
+                        else: #TODO impliment a picket fence mode
+                            get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
+                                            centeronly=True, min_power=args.min_power, verbose=False)
+
+    #chooses the beam type and whether to list the source in each obs or the obs for each source
+    #more options will be included later
+    if args.obs_for_source:
+        if args.beam:
+            get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=300,
+                                            centeronly=True, verbose=False, min_power=args.min_power,
+                                            option=args.beam)
+        else:
+            get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
+                                            min_power=args.min_power, verbose=False)
 
 
 
-print "The code is complete and all results have been output to text files"
+    print "The code is complete and all results have been output to text files"
 
-#remove csv file
+    #remove csv file
 
-if args.pulsar != None:
-    os.system('rm -f temp.csv')
-else:
-    os.system( 'rm ' + catDIR)
+    if args.pulsar != None:
+        os.system('rm -f temp.csv')
+    else:
+        os.system( 'rm ' + catDIR)
