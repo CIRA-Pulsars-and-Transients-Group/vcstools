@@ -71,7 +71,7 @@ class RTScal(object):
         Whether to submit the created scripts to the SLURM queue. True = submit, False = don't submit.
     """
 
-    def __init__(self, rts_base, submit=False):
+    def __init__(self, rts_base, submit=True):
         """Initiliase the class attributes from the rts_base information
 
         Paramters
@@ -110,6 +110,7 @@ class RTScal(object):
         # boolean to control batch job submission. True = submit to queue, False = just write the files
         self.submit = submit
 
+
     def summary(self):
         """Print a nice looking summary of relevant attributes."""
         logger.debug("Summary of Calibration object contents:")
@@ -121,19 +122,23 @@ class RTScal(object):
         logger.debug("Is picket fence?            {0}".format(self.picket_fence))
         logger.debug("Submit jobs?                {0}".format(self.submit))
 
+
     def __summary(self):
         # debugging use only
         print self.__dict__
 
+
     def submit_true(self):
         """Set the submit flag to True, allowing sbatch queue submission."""
-        logger.info("Setting submit attribute to True")
+        logger.info("Setting submit attribute to True: allows job submission")
         self.submit = True
+
 
     def submit_false(self):
         """Set the submit flag to False, not allowing sbatch queue submission."""
-        logger.info("Setting submit attribute to False")
+        logger.info("Setting submit attribute to False: disallows job submission")
         self.submit = False
+
 
     def is_picket_fence(self):
         """Check whether the observed channels imply picket-fence or not. 
@@ -147,12 +152,14 @@ class RTScal(object):
             logger.info("This observation's channels are NOT consecutive: this is a picket-fence observation")
             self.picket_fence = True
 
+
     def sort_obs_channels(self):
         """Just sort the channels and split them into "high" and "low" channel lists."""
         self.hichans = [c for c in self.channels if c > 128]
         self.lochans = [c for c in self.channels if c <= 128]
         logger.debug("High channels: {0}".format(self.hichans))
         logger.debug("Low channels:  {0}".format(self.lochans))
+
 
     def construct_subbands(self):
         """Group the channels into consecutive subbands, being aware of the high channel ordering reversal.
@@ -178,6 +185,7 @@ class RTScal(object):
         logger.debug("Low channels  (grouped): {0}".format(lochan_groups))
 
         return hichan_groups, lochan_groups
+
 
     def write_cont_scripts(self):
         """Function to write RTS submission script in the case of a "standard" 
@@ -207,6 +215,7 @@ class RTScal(object):
         jobids.append(jobid)
 
         return jobids
+
 
     def get_subband_config(self, chan_groups, basepath, chan_type, count):
         """Function to make the appropriate changes to a base copy of the RTS configuration scripts.
@@ -335,6 +344,7 @@ class RTScal(object):
 
         return chan_file_dict, count
 
+
     def write_picket_fence_scripts(self):
         """Function to write RTS submission scripts in the case of a picket-fence
         observation. A significant amount of extra information needs to be 
@@ -383,6 +393,7 @@ class RTScal(object):
             jobids.append(jobid)
 
         return jobids
+
 
     def run(self):
         """Only function that needs to be called after creating the RTScal object.
@@ -575,6 +586,7 @@ class BaseRTSconfig(object):
             self.readDirect = 1
             logger.debug("Online correlation")
 
+
     def get_info_from_data_header(self):
         """Read information from the FITS file header to figure out calibration configuration.
         
@@ -645,6 +657,7 @@ class BaseRTSconfig(object):
         logger.info("Fine channel bandwidth (MHz): {0}".format(self.fine_cbw))
         logger.info("Integration time (s): {0}".format(self.corr_dump_time))
         logger.info("Number of correlator dumps to average: {0}".format(self.n_dumps_to_average))
+
 
     def construct_base_string(self):
         """Construct the basic string to be written to the RTS config file. 
@@ -792,6 +805,7 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
 
         return file_str
 
+
     def write_flag_files(self):
         """Given the output directory, write initial flagging files based on bad tiles in metafits and number
         of fine channels.
@@ -824,6 +838,7 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
                 for b in bad_chans:
                     fid.write("{0}\n".format(b))
 
+
     def run(self):
         """Run through the pipeline to produce the RTS file string and write the channel/tile flags to disk."""
         self.get_info_from_data_header()
@@ -831,10 +846,11 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
         self.write_flag_files()
 
 
+
 if __name__ == '__main__':
     # Option parsing
     parser = argparse.ArgumentParser(
-        description="Calibration script for creating RTS configuration files in the VCS pulsar pipeline")
+        description="Script for creating RTS configuration files and submitting relevant jobs in the VCS pulsar pipeline")
 
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target.", required=True)
 
@@ -856,7 +872,8 @@ if __name__ == '__main__':
     parser.add_argument("--offline", action='store_true',
                         help="Tell the RTS to read calibrator data in the offline correlated data format.")
 
-    parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
+    #parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
+    parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue")
 
     args = parser.parse_args()
 
@@ -879,7 +896,7 @@ if __name__ == '__main__':
 
     logger.info("Creating RTScal instance - determining specific config requirements for this observation")
     try:
-        calobj = RTScal(baseRTSconfig, args.submit)
+        calobj = RTScal(baseRTSconfig, args.nosubmit)
         jobs = calobj.run()
         logger.info("Job IDs: {0}".format(jobs))
     except CalibrationError as e:
