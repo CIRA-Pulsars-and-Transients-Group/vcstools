@@ -5,6 +5,7 @@
 
 * Remove deprecated code for the beamformer
 * Rename `make_beam_small` to `make_beam` 
+* `splice_psrfits` now overwrites existing output file instead of aborting if output file already exists
 
 ----
 ## v1.3.2 (2018-02-19)
