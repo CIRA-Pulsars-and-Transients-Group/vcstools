@@ -353,12 +353,11 @@ int main(int argc, char *argv[]) {
     sprintf(outfile, "%s_0001.fits", basefilename);
     FILE * foutfile;
 
-    if ((foutfile = fopen(outfile, "r"))) {
-
-        fclose(foutfile);
-        fprintf(stdout, "File %s already exists. Aborting. No output written.\n", basefilename);
-        exit(1);
-
+    if ((foutfile = fopen(outfile, "r")))
+    {
+        fclose( foutfile );
+        fprintf( stderr, "warning: File %s already exists. Overwriting.\n", basefilename);
+        remove( outfile );
     }
 
     // this sets up the filename of the output - note initially this sets the total to be
