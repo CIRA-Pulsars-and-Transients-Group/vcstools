@@ -761,6 +761,7 @@ class BaseRTSconfig(object):
         # make metafits file formatted for RTS
         self.metafits_RTSform = self.metafits.split("_metafits_ppds.fits")[0]
 
+        # create the final file string, expanding symlinks to real paths
         logger.info("Constructing base RTS configuration script content")
         file_str = """
 ReadAllFromSingleFile=
@@ -809,7 +810,7 @@ calShortBaselineTaper=40.0
 FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
                                self.readDirect,
                                self.useCorrInput,
-                               self.metafits_RTSform,
+                               os.path.realpath(self.metafits_RTSform),
                                self.freq_base,
                                self.JD,
                                self.PB_HA,
@@ -820,7 +821,7 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
                                self.corr_dump_time,
                                self.ArrayPositionLat,
                                self.ArrayPositionLong,
-                               self.source_list)
+                               os.path.realpath(self.source_list))
 
         return file_str
 
