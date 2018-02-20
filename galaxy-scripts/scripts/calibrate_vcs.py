@@ -20,6 +20,7 @@ from astropy.io import fits
 from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
 from mdir import mdir
 from mwa_metadb_utils import getmeta
+from mwapy import ephem_utils
 from itertools import groupby
 from operator import itemgetter
 import distutils.spawn
@@ -71,7 +72,7 @@ class RTScal(object):
         Whether to submit the created scripts to the SLURM queue. True = submit, False = don't submit.
     """
 
-    def __init__(self, rts_base, submit=False):
+    def __init__(self, rts_base, submit=True):
         """Initiliase the class attributes from the rts_base information
 
         Paramters
@@ -110,6 +111,7 @@ class RTScal(object):
         # boolean to control batch job submission. True = submit to queue, False = just write the files
         self.submit = submit
 
+
     def summary(self):
         """Print a nice looking summary of relevant attributes."""
         logger.debug("Summary of Calibration object contents:")
@@ -121,19 +123,23 @@ class RTScal(object):
         logger.debug("Is picket fence?            {0}".format(self.picket_fence))
         logger.debug("Submit jobs?                {0}".format(self.submit))
 
+
     def __summary(self):
         # debugging use only
         print self.__dict__
 
+
     def submit_true(self):
         """Set the submit flag to True, allowing sbatch queue submission."""
-        logger.info("Setting submit attribute to True")
+        logger.info("Setting submit attribute to True: allows job submission")
         self.submit = True
+
 
     def submit_false(self):
         """Set the submit flag to False, not allowing sbatch queue submission."""
-        logger.info("Setting submit attribute to False")
+        logger.info("Setting submit attribute to False: disallows job submission")
         self.submit = False
+
 
     def is_picket_fence(self):
         """Check whether the observed channels imply picket-fence or not. 
@@ -147,12 +153,14 @@ class RTScal(object):
             logger.info("This observation's channels are NOT consecutive: this is a picket-fence observation")
             self.picket_fence = True
 
+
     def sort_obs_channels(self):
         """Just sort the channels and split them into "high" and "low" channel lists."""
         self.hichans = [c for c in self.channels if c > 128]
         self.lochans = [c for c in self.channels if c <= 128]
         logger.debug("High channels: {0}".format(self.hichans))
         logger.debug("Low channels:  {0}".format(self.lochans))
+
 
     def construct_subbands(self):
         """Group the channels into consecutive subbands, being aware of the high channel ordering reversal.
@@ -178,6 +186,7 @@ class RTScal(object):
         logger.debug("Low channels  (grouped): {0}".format(lochan_groups))
 
         return hichan_groups, lochan_groups
+
 
     def write_cont_scripts(self):
         """Function to write RTS submission script in the case of a "standard" 
@@ -207,6 +216,7 @@ class RTScal(object):
         jobids.append(jobid)
 
         return jobids
+
 
     def get_subband_config(self, chan_groups, basepath, chan_type, count):
         """Function to make the appropriate changes to a base copy of the RTS configuration scripts.
@@ -335,6 +345,7 @@ class RTScal(object):
 
         return chan_file_dict, count
 
+
     def write_picket_fence_scripts(self):
         """Function to write RTS submission scripts in the case of a picket-fence
         observation. A significant amount of extra information needs to be 
@@ -383,6 +394,7 @@ class RTScal(object):
             jobids.append(jobid)
 
         return jobids
+
 
     def run(self):
         """Only function that needs to be called after creating the RTScal object.
@@ -489,7 +501,7 @@ class BaseRTSconfig(object):
         When there is a problem with some of the observation information and/or its manipulation.
     """
 
-    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir, outdir=None, offline=False):
+    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir=None, outdir=None, offline=False):
         self.obsid = obsid  # target observation ID
         self.cal_obsid = cal_obsid  # calibrator observation ID
         self.offline = offline  # switch to decide if offline correlated data or not
@@ -510,9 +522,13 @@ class BaseRTSconfig(object):
 
         # Check to make sure paths and files exist:
         # First, check that the actual data directory exists
-        if os.path.isdir(datadir):
+        if datadir is None:
+            # use the default data path
+            self.data_dir = "/group/mwaops/vcs/{0}/cal/{1}/vis".format(obsid, cal_obsid)
+            logger.info("Using default calibrator data path: {0}".format(self.data_dir))
+        elif os.path.isdir(datadir):
             self.data_dir = os.path.abspath(datadir)
-            logger.info("Checking data directory exists... Ok")
+            logger.info("Using the user specified data directory: {0}".format(datadir))
         else:
             errmsg = "Data directory ({0}) does not exists. Aborting.".format(datadir)
             logger.error(errmsg)
@@ -551,7 +567,7 @@ class BaseRTSconfig(object):
             logger.error(errmsg)
             raise CalibrationError(errmsg)
         else:
-            logger.info("Checking metafits file exists and is named correctly... Ok")
+            logger.info("Metafits file exists and is named correctly.")
             self.metafits = os.path.abspath(metafits)
 
         # the check that the source list exists
@@ -574,6 +590,7 @@ class BaseRTSconfig(object):
             self.useCorrInput = 0
             self.readDirect = 1
             logger.debug("Online correlation")
+
 
     def get_info_from_data_header(self):
         """Read information from the FITS file header to figure out calibration configuration.
@@ -617,7 +634,7 @@ class BaseRTSconfig(object):
             ngroups = len_files / 24
             fgrouped = np.array(np.array_split(files, ngroups))
             ndumps = 0
-            for item in fgrouped[:, 0]:
+            for item in fgrouped[:,0]:
                 # count how many units are present, subtract one (primary HDU)
                 ndumps += len(fits.open(item)) - 1
 
@@ -646,6 +663,7 @@ class BaseRTSconfig(object):
         logger.info("Integration time (s): {0}".format(self.corr_dump_time))
         logger.info("Number of correlator dumps to average: {0}".format(self.n_dumps_to_average))
 
+
     def construct_base_string(self):
         """Construct the basic string to be written to the RTS config file. 
         This string will then be edit with regexp to update the relevant details.
@@ -662,6 +680,7 @@ class BaseRTSconfig(object):
         """
         # get calibrator observation information from database
         # TODO: need to make this write a metafile so that we don't have to keep querying the database on every run
+        # TODO: actually, do we?
         logger.info("Querying metadata database for obsevation information...")
         obsinfo = getmeta(service='obs', params={'obs_id': str(self.cal_obsid)})
 
@@ -680,6 +699,9 @@ class BaseRTSconfig(object):
 
         # convert times using our timeconvert and get LST and JD 
         # TODO: need to make this not have to call an external script
+        #       we could do this by using the mwapy.ephem_utils 
+        #       (which timeconvert.py just wraps) or use astropy
+        """
         try:
             timeconvert = distutils.spawn.find_executable("timeconvert.py")
         except Exception:
@@ -703,7 +725,17 @@ class BaseRTSconfig(object):
 
             if "JD" in line:
                 jdflag, jd = line.split()
-
+        """
+        # use the same operations as in timeconvert.py for our specific need
+        logger.info("Converting times with mwapy.ephem_utils")
+        time = ephem_utils.MWATime()
+        time.datetimestring = self.utctime
+        lststring = time.LST.strftime('%H:%M:%S')
+        hh, mm, ss = lststring.split(":")
+        jd = time.MJD + 2400000.5
+        logger.info("   LST: {0}".format(lststring))
+        logger.info("   JD : {0}".format(jd))
+        
         lst_in_hours = float(hh) + float(mm) / 60.0 + float(ss) / 60.0 ** 2
 
         # set the HA of the image centre to the primary beam HA
@@ -729,6 +761,7 @@ class BaseRTSconfig(object):
         # make metafits file formatted for RTS
         self.metafits_RTSform = self.metafits.split("_metafits_ppds.fits")[0]
 
+        # create the final file string, expanding symlinks to real paths
         logger.info("Constructing base RTS configuration script content")
         file_str = """
 ReadAllFromSingleFile=
@@ -777,7 +810,7 @@ calShortBaselineTaper=40.0
 FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
                                self.readDirect,
                                self.useCorrInput,
-                               self.metafits_RTSform,
+                               os.path.realpath(self.metafits_RTSform),
                                self.freq_base,
                                self.JD,
                                self.PB_HA,
@@ -788,9 +821,10 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
                                self.corr_dump_time,
                                self.ArrayPositionLat,
                                self.ArrayPositionLong,
-                               self.source_list)
+                               os.path.realpath(self.source_list))
 
         return file_str
+
 
     def write_flag_files(self):
         """Given the output directory, write initial flagging files based on bad tiles in metafits and number
@@ -824,6 +858,7 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
                 for b in bad_chans:
                     fid.write("{0}\n".format(b))
 
+
     def run(self):
         """Run through the pipeline to produce the RTS file string and write the channel/tile flags to disk."""
         self.get_info_from_data_header()
@@ -831,10 +866,15 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
         self.write_flag_files()
 
 
+
 if __name__ == '__main__':
+
+    # convnience dictionary for choosing log-levels
+    loglevels = {"DEBUG":logging.DEBUG, "INFO":logging.INFO, "WARNING":logging.WARNING}
+
     # Option parsing
     parser = argparse.ArgumentParser(
-        description="Calibration script for creating RTS configuration files in the VCS pulsar pipeline")
+        description="Script for creating RTS configuration files and submitting relevant jobs in the VCS pulsar pipeline")
 
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target.", required=True)
 
@@ -847,7 +887,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list.", required=True)
 
-    parser.add_argument("--gpubox_dir", type=str, help="Where the *_gpubox*.fits files are located")
+    parser.add_argument("--gpubox_dir", type=str, help="Where the *_gpubox*.fits files are located", default=None)
 
     parser.add_argument("--rts_output_dir", type=str,
                         help="Parent directory where you want the /rts directory and /batch directory to be created."
@@ -856,14 +896,17 @@ if __name__ == '__main__':
     parser.add_argument("--offline", action='store_true',
                         help="Tell the RTS to read calibrator data in the offline correlated data format.")
 
-    parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
+    #parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
+    parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue.")
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: DEBUG.", 
+                        choices=loglevels.keys(), default="DEBUG")
 
     args = parser.parse_args()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(loglevels[args.loglvl])
     formatter = logging.Formatter('%(asctime)s %(thread)d  %(name)s  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
@@ -879,7 +922,7 @@ if __name__ == '__main__':
 
     logger.info("Creating RTScal instance - determining specific config requirements for this observation")
     try:
-        calobj = RTScal(baseRTSconfig, args.submit)
+        calobj = RTScal(baseRTSconfig, args.nosubmit)
         jobs = calobj.run()
         logger.info("Job IDs: {0}".format(jobs))
     except CalibrationError as e:
