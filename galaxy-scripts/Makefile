@@ -26,8 +26,7 @@ SCRIPT_TARGETS = bf_adjust_flags.py \
           run_rts.sh \
           test_mwacutils.sh \
           untar.sh \
-          vcs_obs_w_files.txt \
-          write_rts_in_file.py
+          vcs_obs_w_files.txt
 
 DATABASE_TARGETS = submit_to_database.py\
          database_vcs.py
