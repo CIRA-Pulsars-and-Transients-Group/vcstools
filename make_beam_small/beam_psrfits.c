@@ -118,7 +118,7 @@ void populate_psrfits_header(
     pf->hdr.scanlen = 1.0; // in sec
 
     strcpy(pf->hdr.frontend, "MWA-RECVR");
-    snprintf(pf->hdr.backend, 24*sizeof(char), "MWA Beamformer v%s", VERSION_BEAMFORMER );
+    snprintf(pf->hdr.backend, 24*sizeof(char), "vcstools %s", VERSION_BEAMFORMER );
 
     // Now let us finally get the time right
     strcpy(pf->hdr.date_obs,   time_utc);
