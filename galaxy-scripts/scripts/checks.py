@@ -27,7 +27,7 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
         files, suffix, required_size = get_files_and_sizes(obsID, data_type)
     except:
         return True
-    
+
     if not startsec:
         n_files_expected = len(files)
         command = "ls -l %s/*%s | ((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | " %(directory, suffix) + \
@@ -56,7 +56,7 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
                                                startsec=startsec, n_secs=n_files_expected, obsID=obsID)
         n_files_expected *= 2
         files_in_dir += n_ics
-        
+
 
     if not files_in_dir == n_files_expected:
         print "We have {0} files but expected {1}".format(files_in_dir, n_files_expected)
@@ -84,7 +84,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
     # we need to get the number of unique seconds from the file names
     files = np.array(getmeta(service='obs', params={'obs_id':obsID})['files'].keys())
     mask = np.array(['.dat' in file for file in files])
-    if not startsec:        
+    if not startsec:
         times = [time[11:21] for time in files[mask]]
         n_secs = len(set(times))
         command = "ls -l %s/*ch*.dat | ((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | " %(directory) + \

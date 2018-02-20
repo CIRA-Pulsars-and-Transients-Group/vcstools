@@ -1,5 +1,5 @@
-#! /usr/bin/env python 
- 
+#! /usr/bin/env python
+
 """
 Author: Nicholas Swainston
 Creation Date: /03/2016
@@ -47,40 +47,40 @@ from ConfigParser import SafeConfigParser
 def sex2deg( ra, dec):
     """
     Convert sexagesimal coordinates to degrees.
-    
+
     sex2deg( ra, dec)
     Args:
         ra: the right ascension in HH:MM:SS
         dec: the declination in DD:MM:SS
-    """ 
+    """
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.hourangle,u.deg))
-    
+
     # return RA and DEC in degrees in degrees
     return [c.ra.deg, c.dec.deg]
-    
+
 
 def deg2sex( ra, dec):
     """
     Convert decimal coordingates into sexagesimal strings, i.e. hh:mm:ss.ss and dd:mm:ss.ss
-    
+
     deg2sex( ra, dec)
     Args:
         ra: the right ascension in degrees
         dec: the declination in degrees
     """
-    
+
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.deg,u.deg))
     coords = c.to_string('hmsdms')
     coords = coords.replace('h',':').replace('d',':').replace('m',':').replace('s','')
-    
+
     # return RA and DEC in "hh:mm:ss.ssss dd:mm:ss.ssss" form
     return coords
 
-    
+
 def grab_FRBalog():
     """
     Creates a catalogue csv file using data from http://www.astronomy.swin.edu.au/pulsar/frbcat/table.php?format=html
-    
+
     grab_GCalog()
     """
     rratalog_website = 'http://www.astronomy.swin.edu.au/pulsar/frbcat/table.php?format=html'
@@ -96,8 +96,8 @@ def grab_FRBalog():
 
     with open(txt_file,"rb") as in_txt:
         lines = in_txt.readlines()
-        
-        header = ['NAME','Raj','Decj']    
+
+        header = ['NAME','Raj','Decj']
         data = []
         for l in lines[7:]:
             ltemp = l.strip('<td>').split('</td>')
@@ -108,25 +108,25 @@ def grab_FRBalog():
                 temp = [ltemp[0].lstrip('<td>')[:9],ratemp,dectemp]
                 print temp
                 data.append(temp)
-    
+
     #loop to format ra and dec
     for i in range(len(data)):
         data[i][0] = data[i][0].replace('*','')
 
         if data[i][1].endswith(":"):
             data[i][1]=data[i][1]+'00'
-    
+
         if len(data[i][1])==5:
             data[i][1]=data[i][1]+':00'
 
         if len(data[i][1])==7:
             data[i][1]=data[i][1]+'0'
-    
+
 
         if len(data[i][2])==2 or (len(data[i][2])==3 and \
                           data[i][2].startswith('-')):
             data[i][2]=data[i][2]+':00:00'
-    
+
         if len(data[i][2])==5 or len(data[i][2])==6:
             data[i][2]=data[i][2]+':00'
 
@@ -139,23 +139,23 @@ def grab_FRBalog():
 
         if len(data[i][2])==7 and data[i][2].endswith(':'):
             data[i][2]=data[i][2]+'00'
-            
+
         #error fix in the database
         if '.' in data[i][2][:7]:
             data[i][2] = data[i][2][:7].replace('.',':') + data[i][2][7:]
-    
+
     with open(csv_file,"wb") as out_csv:
         out_csv.write(','.join(header)+'\n')
         for d in data:
             out_csv.write(','.join(d)+'\n')
-    
+
     return
-    
+
 
 def grab_GCalog():
     """
     Creates a catalogue csv file using data from http://physwww.physics.mcmaster.ca/~harris/mwgc.dat
-    
+
     grab_GCalog()
     """
     rratalog_website = 'http://physwww.physics.mcmaster.ca/~harris/mwgc.dat'
@@ -172,8 +172,8 @@ def grab_GCalog():
     with open(txt_file,"rb") as in_txt:
         lines = in_txt.readlines()
         lines = lines[71:229] #TODO may have to check if this changes
-    
-        header = ['ID','RA','DEC']    
+
+        header = ['ID','RA','DEC']
         data = []
         for l in lines[1:]:
             ratemp = l[25:37].rstrip().replace(' ',':')
@@ -181,25 +181,25 @@ def grab_GCalog():
             temp = [l[1:10].rstrip(),ratemp,dectemp]
             print temp
             data.append(temp)
-    
+
     #loop to format ra and dec
     for i in range(len(data)):
         data[i][0] = data[i][0].replace('*','')
 
         if data[i][1].endswith(":"):
             data[i][1]=data[i][1]+'00'
-    
+
         if len(data[i][1])==5:
             data[i][1]=data[i][1]+':00'
 
         if len(data[i][1])==7:
             data[i][1]=data[i][1]+'0'
-    
+
 
         if len(data[i][2])==2 or (len(data[i][2])==3 and \
                           data[i][2].startswith('-')):
             data[i][2]=data[i][2]+':00:00'
-    
+
         if len(data[i][2])==5 or len(data[i][2])==6:
             data[i][2]=data[i][2]+':00'
 
@@ -212,19 +212,19 @@ def grab_GCalog():
 
         if len(data[i][2])==7 and data[i][2].endswith(':'):
             data[i][2]=data[i][2]+'00'
-    
+
     with open(csv_file,"wb") as out_csv:
         out_csv.write(','.join(header)+'\n')
         for d in data:
             out_csv.write(','.join(d)+'\n')
-    
+
     return
 
-    
+
 def grab_RRATalog(jlist=None):
     """
     Creates a catalogue csv file using data from http://astro.phys.wvu.edu/rratalog/rratalog.txt
-    
+
     grab_RRATalog()
     """
     rratalog_website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
@@ -243,13 +243,13 @@ def grab_RRATalog(jlist=None):
 
     with open(txt_file,"rb") as in_txt:
         lines = in_txt.readlines()
-    
+
         header = lines[0].strip().replace(" ", '\t').split('\t')
         htemp = []
         for h in header:
             if h != '':
                 htemp.append(h)
-        htemp[13] = 'PulseWidth'        
+        htemp[13] = 'PulseWidth'
         header = htemp[0:14]
         data = []
         for l in lines[1:]:
@@ -258,27 +258,27 @@ def grab_RRATalog(jlist=None):
             if jlist == None or (columns[0] in jlist):
                 for entry in columns:
                     if entry not in ['', ' ', '\t']:
-                        temp.append(entry.replace('--','')) 
+                        temp.append(entry.replace('--',''))
                 data.append(temp[0:14])
-    
+
     #loop to format ra and dec
     for i in range(len(data)):
         data[i][0] = data[i][0].replace('*','')
 
         if data[i][4].endswith(":"):
             data[i][4]=data[i][4]+'00'
-    
+
         if len(data[i][4])==5:
             data[i][4]=data[i][4]+':00'
 
         if len(data[i][4])==7:
             data[i][4]=data[i][4]+'0'
-    
+
 
         if len(data[i][5])==2 or (len(data[i][5])==3 and \
                           data[i][5].startswith('-')):
             data[i][5]=data[i][5]+':00:00'
-    
+
         if len(data[i][5])==5 or len(data[i][5])==6:
             data[i][5]=data[i][5]+':00'
 
@@ -291,27 +291,27 @@ def grab_RRATalog(jlist=None):
 
         if len(data[i][5])==7 and data[i][5].endswith(':'):
             data[i][5]=data[i][5]+'00'
-    
+
     with open(csv_file,"wb") as out_csv:
         out_csv.write(','.join(header)+'\n')
         for d in data:
             out_csv.write(','.join(d)+'\n')
     return
 
-    
+
 def grab_pulsaralog(jlist=None):
     """
-    Uses PSRCAT and returns every pulsar in the catalouge in a csv file with the requested 
+    Uses PSRCAT and returns every pulsar in the catalouge in a csv file with the requested
     paramaters. Removes pulsars without any RA or DEC recorded
-    
+
     grab_pulsaralog(jlist=None)
     Args:
-        jlist: A space seperated string of pulsar names eg: J0534+2200 J0538+2817. 
+        jlist: A space seperated string of pulsar names eg: J0534+2200 J0538+2817.
                (default: uses all pulsars)
     """
     params = ['Jname', 'Raj', 'Decj', 'P0', 'P1', 'DM']
     #If more paramaters are needed add them above
-    #The proper motion is not accounted for as it is assumed that the beam is not accurate 
+    #The proper motion is not accounted for as it is assumed that the beam is not accurate
     #enought to be necessary
     pulsars = [[]]
     for p in params:
@@ -326,7 +326,7 @@ def grab_pulsaralog(jlist=None):
             quit()
         temp = []
         lines = output.split('\n')
-        for l in lines[4:-1]: 
+        for l in lines[4:-1]:
             columns = l.split()
             if len(columns) > 1:
                 temp.append([columns[1]])
@@ -334,7 +334,7 @@ def grab_pulsaralog(jlist=None):
             pulsars=temp
         else:
             pulsars = [pulsars[x] + temp[x] for x in range(len(pulsars))]
-    
+
 
     i = 0
     while i < len(pulsars):
@@ -346,21 +346,21 @@ def grab_pulsaralog(jlist=None):
             pulsars[i][3] = pulsars[i][3].replace('*','')
             pulsars[i][4] = pulsars[i][4].replace('*','')
             pulsars[i][5] = pulsars[i][5].replace('*','')
-        
+
             if pulsars[i][1].endswith(":"):
                 pulsars[i][1]=pulsars[i][1]+'00'
-    
+
             if len(pulsars[i][1])==5:
                 pulsars[i][1]=pulsars[i][1]+':00'
-        
+
             if len(pulsars[i][1])==7:
                 pulsars[i][1]=pulsars[i][1]+'0'
-    
+
 
             if len(pulsars[i][2])==2 or (len(pulsars[i][2])==3 and \
                               pulsars[i][2].startswith('-')):
                 pulsars[i][2]=pulsars[i][2]+':00:00'
-    
+
             if len(pulsars[i][2])==5 or len(pulsars[i][2])==6:
                 pulsars[i][2]=pulsars[i][2]+':00'
 
@@ -373,7 +373,7 @@ def grab_pulsaralog(jlist=None):
 
             if len(pulsars[i][2])==7 and pulsars[i][2].endswith(':'):
                 pulsars[i][2]=pulsars[i][2]+'00'
-            
+
             i = i + 1
 
     if jlist != None:
@@ -399,7 +399,7 @@ def grab_pulsaralog(jlist=None):
 def calcFWHM(freq):
     """
     Calculate the FWHM for the beam assuming ideal response/gaussian-like profile. Will eventually be depricated.
-    
+
     calcFWHM(freq)
     Args:
         freq: observation frequency in MHz
@@ -408,7 +408,7 @@ def calcFWHM(freq):
     Dtile = 4.0                     # tile size (m) - incoherent beam
     freq = freq * 1e6               # convert from MHz to Hz
     fwhm = 1.2 * c / (Dtile * freq) # calculate FWHM using standard formula
- 
+
     return fwhm
 
 
@@ -416,7 +416,7 @@ def getmeta(service='obs', params=None):
     """
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
     a Python dictionary, return the RA and Dec in degrees from the Python dictionary.
-    
+
     getmeta(service='obs', params=None)
     """
     BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
@@ -441,12 +441,12 @@ def getmeta(service='obs', params=None):
         return
     #Return the result dictionary
     return result
-  
-    
+
+
 def singles_source_search(ra, dec):
     """
     Used to creates a 30 degree box around the source to make searching for obs_ids more efficient
-    
+
     singles_source_search(ra, dec)
     Args:
         ra: ra of source in degrees
@@ -456,17 +456,17 @@ def singles_source_search(ra, dec):
     dec = float(dec)
     box_size = 30.
     m_o_p = False # moved over (north or south) pole
-    
+
     dec_top = dec + box_size
     if dec_top > 90.:
         dec_top = 90.
         m_o_p = True
-        
+
     dec_bot = dec - box_size
     if dec_top < -90.:
         dec_top = -90.
         m_o_p = True
-        
+
     if m_o_p:
         OBSID = []
         temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
@@ -505,12 +505,12 @@ def singles_source_search(ra, dec):
             for row in temp:
                 OBSID.append(row[0])
     return OBSID
-  
-   
+
+
 def beam_enter_exit(min_power, powers, imax, dt, duration):
     """
-    Calculates when the source enters and exits the beam 
-    
+    Calculates when the source enters and exits the beam
+
     beam_enter_exit(min_power, powers, imax, dt):
         min_power: power cut off from get_bem_power(_obsforsource)
         powers: list of powers fo the duration every dt
@@ -521,20 +521,20 @@ def beam_enter_exit(min_power, powers, imax, dt, duration):
     file_num = duration / 200
     if (float(duration) % 200.) != 0.0:
         file_num = file_num + 1
-    
+
     #Creates cut offs around min_power
     low_limit = min_power - 0.02
     high_limit = min_power + 0.02
-    
+
     #creates lists of times before and after the max
     before_max = []
     for i in range(0,imax):
         before_max.append([powers[i],i*dt])
-    
+
     after_max = []
     for i in range(imax,len(powers)):
         after_max.append([powers[i],i*dt])
-        
+
     #Shortens the list to powers near min_power
     before_list = []
     before_check = False
@@ -542,15 +542,15 @@ def beam_enter_exit(min_power, powers, imax, dt, duration):
         if low_limit < b[0] < high_limit:
             before_list.append(b)
             before_check = True
-    
+
     after_list = []
     after_check = False
     for a in after_max:
         if low_limit < a[0] < high_limit:
             after_list.append(a)
             after_check = True
-    
-    
+
+
     #assumes min power is at start of before_list and end of after_list. Then extract the time and
     #covert it into a fraction of obs and adding a file either side incase of ccode error or bright sources
     if before_check:
@@ -562,21 +562,21 @@ def beam_enter_exit(min_power, powers, imax, dt, duration):
             enter = 0.0
     else:
         enter = 0.0
-        
+
     if after_check:
         after = after_list[-1]
         after_time = float(after[1])
-        
+
         if after_time < (float(duration) - 199.):
             exit = float((after_time + 200.)/float(duration))
         else:
             exit = 1.0
     else:
         exit = 1.0
-    
+
     return [enter,exit]
-    
-    
+
+
 def get_beam_power(obsid_data,
                    sources, coord1, coord2, names,
                    dt=296,
@@ -653,13 +653,13 @@ def get_beam_power(obsid_data,
         HAs = -RAs + LST_hours * 15
         Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
         # go from altitude to zenith angle
-        
+
         #Decide on beam model
         if option == 'a':
             beam_string = "analytic"
             theta=np.radians(90-Alts)
             phi=np.radians(Azs)
-            
+
             for ifreq in xrange(len(frequencies)):
                 rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
@@ -671,19 +671,19 @@ def get_beam_power(obsid_data,
             beam_string = "advanced"
             theta=np.array([np.radians(90-Alts)])
             phi=np.array([np.radians(Azs)])
-            
+
             for ifreq in xrange(len(frequencies)):
                 rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
                 PowersX[:,itime,ifreq]=rX
-                PowersY[:,itime,ifreq]=rY        
+                PowersY[:,itime,ifreq]=rY
         elif option == 'e':
             beam_string = "full_EE"
             theta=np.array([np.radians(90-Alts)])
             phi=np.array([np.radians(Azs)])
-            
+
             for ifreq in xrange(len(frequencies)):
                 rX,rY=primary_beam.MWA_Tile_full_EE(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
@@ -691,10 +691,10 @@ def get_beam_power(obsid_data,
                                                      power=True)
                 PowersX[:,itime,ifreq]=rX
                 PowersY[:,itime,ifreq]=rY
-            print '{0:.2f}'.format(100.*float(itime)/float(Ntimes))+"% complete for obsid: "+str(obsid)    
+            print '{0:.2f}'.format(100.*float(itime)/float(Ntimes))+"% complete for obsid: "+str(obsid)
     #Power [#sources, #times, #frequencies]
     Powers=0.5*(PowersX+PowersY)
-    
+
     outputfile = str(args.output)
     os.system( 'rm -f ' + outputfile + str(obsid) + '_' + beam_string + '_beam.txt')
     with open(outputfile + str(obsid) + '_' + beam_string + '_beam.txt',"wb") as out_list:
@@ -707,17 +707,17 @@ def get_beam_power(obsid_data,
         counter=0
         for sourc in Powers:
             counter = counter + 1
-            if max(sourc) > min_power:                
+            if max(sourc) > min_power:
                 for imax in range(len(sourc)):
                     if sourc[imax] == max(sourc):
                         max_time = midtimes[imax]
                         enter, exit = beam_enter_exit(min_power, sourc, imax, dt, time)
                         out_list.write(str(sources[names][counter - 1])  + ' ' + \
                                 str(int(max_time) - int(obsid)) + ' ' + str(enter) + ' ' + str(exit) +\
-                                ' ' + str(max(sourc)[0]) + "\n") 
+                                ' ' + str(max(sourc)[0]) + "\n")
         print "A list of sources for the observation ID: " + str(obsid) + \
-              " has been output to the text file: " + str(obsid) + '_' + beam_string + '_beam.txt'             
-    return 
+              " has been output to the text file: " + str(obsid) + '_' + beam_string + '_beam.txt'
+    return
 
 
 def get_beam_power_obsforsource(obsid_data,
@@ -730,7 +730,7 @@ def get_beam_power_obsforsource(obsid_data,
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
     the min_power then it outputs it to the text file.
-    
+
     get_beam_power(obsid_data,
                    sources, coord1, coord2, names,
                    dt=296,
@@ -752,13 +752,13 @@ def get_beam_power_obsforsource(obsid_data,
     Powers= []
     for ob in obsid_data:
         obsid,ra, dec, time, delays,centrefreq, channels = ob
-        
+
         starttimes=np.arange(0,time,dt)
         stoptimes=starttimes+dt
         stoptimes[stoptimes>time]=time
         Ntimes=len(starttimes)
         midtimes=float(obsid)+0.5*(starttimes+stoptimes)
-        
+
         mwa = ephem_utils.Obs[ephem_utils.obscode['MWA']]
         # determine the LST
         observer = ephem.Observer()
@@ -799,13 +799,13 @@ def get_beam_power_obsforsource(obsid_data,
             HAs = -RAs + LST_hours * 15
             Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
             # go from altitude to zenith angle
-            
+
             #Decide on beam model
             if option == 'a':
                 beam_string = "_analytic"
                 theta=np.radians(90-Alts)
                 phi=np.radians(Azs)
-                
+
                 for ifreq in xrange(len(frequencies)):
                     rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
                                                          freq=frequencies[ifreq], delays=delays,
@@ -817,19 +817,19 @@ def get_beam_power_obsforsource(obsid_data,
                 beam_string = "_advanced"
                 theta=np.array([np.radians(90-Alts)])
                 phi=np.array([np.radians(Azs)])
-                
+
                 for ifreq in xrange(len(frequencies)):
                     rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
                                                          freq=frequencies[ifreq], delays=delays,
                                                          zenithnorm=True,
                                                          power=True)
                     PowersX[:,itime,ifreq]=rX
-                    PowersY[:,itime,ifreq]=rY        
+                    PowersY[:,itime,ifreq]=rY
             elif option == 'e':
                 beam_string = "_full_EE"
                 theta=np.array([np.radians(90-Alts)])
                 phi=np.array([np.radians(Azs)])
-                
+
                 for ifreq in xrange(len(frequencies)):
                     rX,rY=primary_beam.MWA_Tile_full_EE(theta, phi,
                                                          freq=frequencies[ifreq], delays=delays,
@@ -838,7 +838,7 @@ def get_beam_power_obsforsource(obsid_data,
                     PowersX[:,itime,ifreq]=rX
                     PowersY[:,itime,ifreq]=rY
                 print '{0:.2f}'.format(100.*float(itime)/float(Ntimes))+"% complete for obsid: "\
-                                        +str(obsid)  
+                                        +str(obsid)
             #temp_power [#sources, #times, #frequencies]
         temp_power=0.5*(PowersX+PowersY)
         counter = 0
@@ -846,13 +846,13 @@ def get_beam_power_obsforsource(obsid_data,
             counter = counter + 1
             if max(sourc) > min_power:
                 print obsid
-                
+
                 for imax in range(len(sourc)):
                     if sourc[imax] == max(sourc):
                         max_time = float(midtimes[imax]) - float(obsid)
                         Powers.append([sources[names][counter-1], obsid, time, max_time, sourc, imax, max(sourc)])
-    
-    for sourc in sources:    
+
+    for sourc in sources:
         outputfile = str(args.output)
         os.system( 'rm -f ' + outputfile + str(sourc[names]) + beam_string + '_beam.txt')
         with open(outputfile + str(sourc[names]) + beam_string + '_beam.txt',"wb") as out_list:
@@ -865,10 +865,10 @@ def get_beam_power_obsforsource(obsid_data,
                     enter, exit = beam_enter_exit(min_power, p[4], p[5], dt, time)
                     out_list.write(str(p[1]) + ' ' + str(p[2]) + ' ' + str(p[3]) + ' ' + str(enter) +\
                                    ' ' + str(exit) + ' ' + str(p[6][0]) +"\n")
-           
+
     print "A list of observation IDs that containt: " + str(sourc[names]) + \
-              " has been output to the text file: " + str(sourc[names]) + beam_string + '_beam.txt'             
-    return 
+              " has been output to the text file: " + str(sourc[names]) + beam_string + '_beam.txt'
+    return
 
 
 parser = argparse.ArgumentParser(description="""
@@ -911,7 +911,7 @@ if args.dl_RRAT:
 if args.dl_PSRCAT:
     grab_pulsaralog()
 
-#defaults for the catalouge directory 
+#defaults for the catalouge directory
 if args.in_cat:
     catDIR = args.in_cat
 else:
@@ -952,7 +952,7 @@ else:
     if args.RRAT or args.GC:
         c1, c2 = ['RA','DEC']
     else:
-        c1, c2 = ['Raj', 'Decj'] 
+        c1, c2 = ['Raj', 'Decj']
 
 #defaults for the fits dirs
 if args.FITS_dir:
@@ -960,7 +960,7 @@ if args.FITS_dir:
 else:
     fitsDIR = '/data_01/pulsar/fitsfiles/'
 
-#sets the column name for the sources in the catalouge defending on different defaults 
+#sets the column name for the sources in the catalouge defending on different defaults
 if args.source_names and args.source_names=='-1':
     name_col='-1'
 elif args.source_names:
@@ -980,7 +980,7 @@ else:
         name_col = 'Jname'
 
 
-    
+
 #main code
 #get cataloge
 if args.coords:
@@ -1007,9 +1007,9 @@ else:
         else:
             grab_pulsaralog()
             catalog = Table.read('pulsaralog.csv')
-        
+
 header = catalog.colnames
-    
+
 
 #get obs IDs
 if args.obsid:
@@ -1070,7 +1070,7 @@ except:#incase of file finding or permission errors use webservice
         beam_meta_data = getmeta(service='obs', params={'obs_id':ob})
         ra = beam_meta_data[u'metadata'][u'ra_pointing']
         dec = beam_meta_data[u'metadata'][u'dec_pointing']
-        time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time 
+        time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
         skytemp = beam_meta_data[u'metadata'][u'sky_temp']
         delays = beam_meta_data[u'rfstreams'][u'0'][u'xdelays']
 
@@ -1078,11 +1078,11 @@ except:#incase of file finding or permission errors use webservice
         minfreq = float(min(channels))
         maxfreq = float(max(channels))
         centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in Hz
-        
+
         #check for raw volatge files
         filedata = beam_meta_data[u'files']
         keys = filedata.keys()
-        check = False 
+        check = False
         for k in keys:
             if '.dat' in k:
                 check = True
@@ -1095,10 +1095,10 @@ except:#incase of file finding or permission errors use webservice
             else:
                 cord = [ob, ra, dec, time, delays,centrefreq, channels]
                 if args.beam == 'e':
-                    get_beam_power(cord, catalog, c1, c2, name_col, dt=300, 
+                    get_beam_power(cord, catalog, c1, c2, name_col, dt=300,
                                     centeronly=True, verbose=False, min_power=args.min_power, option = 'e')
                 elif args.beam == 'd':
-                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100, 
+                    get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
                                     centeronly=True, verbose=False, min_power=args.min_power, option = 'd')
                 elif args.beam == 'a':    #center only means it isn't in picket fence mode
                     get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
@@ -1107,8 +1107,8 @@ except:#incase of file finding or permission errors use webservice
                     get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
                                     min_power=args.min_power, verbose=False)
         else:
-            print('No raw voltage files for %s' % ob) 
-            
+            print('No raw voltage files for %s' % ob)
+
 else:
     with closing(psycopg2.connect(database='mwa', user='mwa_ro', password=password_parser.get('MWA_admin','password') , host='mwa-metadata01', port='5432')) as conn:
         print 'Admin access to http://mwa-metadata01.pawsey.org.au/metadata/ obtained'
@@ -1119,12 +1119,12 @@ else:
                 meta_result = cur.fetchall()
                 if not meta_result:
                     if args.all_volt:
-                        print('Error reading metadata for %s' % ob) 
+                        print('Error reading metadata for %s' % ob)
                         continue
                     else:
-                        print('No raw voltage files for %s' % ob) 
+                        print('No raw voltage files for %s' % ob)
                         continue
-               
+
                 cur.execute(sql_delay, (ob,))
                 delay_result = cur.fetchall()
                 if not delay_result:
@@ -1140,8 +1140,8 @@ else:
                 minfreq = float(min(channels))
                 maxfreq = float(max(channels))
                 centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq) / 2) #in Hz
-            
-                #instead of downloading all of the obs id first, if not in obs_for_source mode, 
+
+                #instead of downloading all of the obs id first, if not in obs_for_source mode,
                 #downlads one obs at a time
                 if args.obs_for_source:
                     if args.obsid and (len(args.obsid) == 1):
@@ -1172,7 +1172,7 @@ if args.obs_for_source:
 
 
 
-print "The code is complete and all results have been output to text files"   
+print "The code is complete and all results have been output to text files"
 
 #remove csv file
 
