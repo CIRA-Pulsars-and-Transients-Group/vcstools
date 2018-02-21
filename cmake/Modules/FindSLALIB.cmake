@@ -10,21 +10,26 @@
 #  SLALIB_LIBRARIES    - the SLALIB libraries
 #                         (identical to SLALIB_LIBRARY)
 
+message("Finding SLALIB")
+
 set(SLALIB_ROOT_DIR $ENV{SLALIB_DIR})
 
 if(NOT DEFINED SLALIB_ROOT_DIR)
-	message("-- Warning SLALIB_ROOT_DIR not set: will try and find it ")
+	message(STATUS "Warning SLALIB_ROOT_DIR not set: will try and find it ")
 else(NOT DEFINED SLALIB_ROOT_DIR)
-	message("-- SLALIB_ROOT_DIR = ${SLALIB_ROOT_DIR}")
+	message(STATUS "SLALIB_ROOT_DIR = ${SLALIB_ROOT_DIR}")
 endif(NOT DEFINED SLALIB_ROOT_DIR)
 
 if(NOT SLALIB_FOUND)
 
-  find_path(SLALIB_INCLUDE_DIR slalib.h
-    HINTS ${SLALIB_ROOT_DIR} PATH_SUFFIXES include )
-  find_library(SLALIB_LIBRARY sla
-    HINTS ${SLALIB_ROOT_DIR} PATH_SUFFIXES lib )
-  mark_as_advanced(SLALIB_INCLUDE_DIR SLALIB_LIBRARY)
+#  find_path(SLALIB_INCLUDE_DIR slalib.h
+#      HINTS ${SLALIB_ROOT_DIR} PATH_SUFFIXES include NO_SYSTEM_ENVIRONMENT_PATH)
+#  find_library(SLALIB_LIBRARY sla
+#      HINTS ${SLALIB_ROOT_DIR} PATH_SUFFIXES lib)
+#  mark_as_advanced(SLALIB_INCLUDE_DIR SLALIB_LIBRARY NO_SYSTEM_ENVIRONMENT_PATH)
+
+  set(SLALIB_INCLUDE_DIR ${SLALIB_ROOT_DIR}/include)
+  set(SLALIB_LIBRARY ${SLALIB_ROOT_DIR}/lib/libsla.a)
 
   include(FindPackageHandleStandardArgs)
   find_package_handle_standard_args(SLALIB DEFAULT_MSG
@@ -36,7 +41,7 @@ if(NOT SLALIB_FOUND)
 endif(NOT SLALIB_FOUND)
 
 if (SLALIB_FOUND)
-	message("-- Found SLALIB --")
+    message(STATUS "Found SLALIB (${SLALIB_LIBRARIES})")
 endif (SLALIB_FOUND)
 
 

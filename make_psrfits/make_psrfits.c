@@ -60,7 +60,7 @@ void dec2hms(char *out, double in, int sflag) {
     sprintf(ptr, "%2.2d:%2.2d:%07.4f", h, m, s);
 }
 
-int main(int argc, char *argv[]) {
+int main() {
     int ii;
     double dtmp;
     struct psrfits pf;
@@ -657,7 +657,7 @@ int main(int argc, char *argv[]) {
         // as well as the pf.sub.data pointer
         //
 	    size_t readval = readn(fp, pf.sub.data, pf.sub.bytes_per_subint);
-	    if (readval == pf.sub.bytes_per_subint) {
+	    if ((int)readval == pf.sub.bytes_per_subint) {
 		    fprintf(stderr,"got %zu of %d\n",readval,pf.sub.bytes_per_subint);
 		    psrfits_write_subint(&pf);
 	    }

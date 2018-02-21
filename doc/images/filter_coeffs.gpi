@@ -1,0 +1,23 @@
+## Tested with Gnuplot v5.2.2
+
+set terminal pngcairo enhanced size 1000,400
+set output "filter_coeffs.png"
+
+unset key
+
+set xlabel "Coefficient number"
+set ylabel "Coefficient value"
+
+set xrange [*:*] noextend
+set yrange [*:*] noextend
+
+set xtics 128
+
+# Vertical lines
+set lt 2 dt 1 lc rgb "#808080"
+do for [i=1:11] {
+    X = i*128
+    set arrow i from first X, graph 0 to first X, graph 1 lt 2 nohead
+}
+
+plot 'filter_coeffs.txt' w l

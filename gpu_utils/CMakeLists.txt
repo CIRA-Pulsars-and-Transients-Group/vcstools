@@ -1,5 +1,9 @@
 
 cmake_minimum_required (VERSION 2.6)
+
+cmake_policy(SET CMP0012 NEW)
+cmake_policy(SET CMP0048 NEW)
+
 project (gpu_utils)
 
 find_package(CUDA)
@@ -21,6 +25,6 @@ endif ()
 
 CUDA_ADD_CUFFT_TO_TARGET(MWAC_GPU_Utils)
 
-install(FILES gpu_utils.h reduce.h cuda_error.h DESTINATION include)
-install(TARGETS MWAC_GPU_Utils LIBRARY DESTINATION lib)
+#install(FILES gpu_utils.h reduce.h cuda_error.h DESTINATION include)
+#install(TARGETS MWAC_GPU_Utils LIBRARY DESTINATION lib)
 

@@ -30,6 +30,8 @@
 #
 # $Id$
 
+message("Finding CFITSIO")
+
 set(CFITSIO_ROOT_DIR $ENV{CFITSIO_DIR})
 if(NOT CFITSIO_FOUND)
 
@@ -50,6 +52,6 @@ if(NOT CFITSIO_FOUND)
 endif(NOT CFITSIO_FOUND)
 
 if (CFITSIO_FOUND)
-	message("-- CFITSIO Found --")
+    message(STATUS "Found CFITSIO (${CFITSIO_LIBRARIES})")
 endif (CFITSIO_FOUND)
 

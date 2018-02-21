@@ -23,7 +23,7 @@ For the FITS-IDI format, see: http://www.aips.nrao.edu/FITS-IDI.html
 static int writeAntennaData(fitsfile *fptr, uvdata *data);
 void printHeader(fitsfile *fptr, int header_number);
 int readAntennaTable(fitsfile *fptr,uvdata *obj);
-int writeSourceData(fitsfile *fptr, uvdata *data);
+//int writeSourceData(fitsfile *fptr, uvdata *data);
 
 /* private global vars */
 static int debug=0;
@@ -572,9 +572,9 @@ int writeUVFITS(char *filename, uvdata *data) {
  !            data: uvdata struct with existing data.
  ! RETURNS:   integer. 0 success.
  **************************/
-int writeSourceData(fitsfile *fptr, uvdata *data) {
-  return 0;
-}
+//int writeSourceData(fitsfile *fptr, uvdata *data) {
+//  return 0;
+//}
 
 
 /**************************

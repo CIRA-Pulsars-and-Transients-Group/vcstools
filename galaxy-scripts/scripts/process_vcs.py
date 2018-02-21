@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 import subprocess
 import os
 import sys
@@ -228,7 +229,8 @@ def get_frequencies(metafits,resort=False):
 def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, args, ics=False, n_untar=2, keep=""):
         vcs_database_id = database_vcs.database_command(args, obsid)
         print "Downloading files from archive"
-        voltdownload = distutils.spawn.find_executable("voltdownload.py")
+        # voltdownload = distutils.spawn.find_executable("voltdownload.py") #Doesn't seem to be working on zeus for some reason
+        voltdownload = "voltdownload.py"
         obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
         data_format = obsinfo['dataquality']
         if data_format == 1:
@@ -273,9 +275,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                             body = []
                             untar = distutils.spawn.find_executable('untar.sh')
                             body.append(database_vcs.add_database_function())
-                            body.append('run "aprun -n 1 {0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
+                            body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
                             submit_slurm(tar_batch,body,batch_dir=batch_dir, slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
-                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
+                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="zeus")
                         checks = distutils.spawn.find_executable("checks.py")
                         # Write out the checks batch file but don't submit it
                         commands = []
@@ -291,7 +293,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         # if we have tarballs we send the untar jobs to the workq
                         if data_type == 16:
                             commands.append("else")
+                            #commands.append("ssh galaxy 'bash -s' << 'ENDSSH'")
                             commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
+                            #commands.append("ENDSSH")
                         commands.append("fi")
                         submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "workq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
                         
@@ -418,7 +422,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                 commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
                 commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
                 commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
-                commands.append('run "aprun -n {0} -N {1} python {2}" "-o {3} -s {4} -w {5} -e {6}" "{7}"'.format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,data_dir,recombine_binary, vcs_database_id))
+                commands.append('run "srun -n {0} -c {1} python {2}" "-o {3} -s {4} -w {5} -e {6}" "{7}"'.format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,data_dir,recombine_binary, vcs_database_id))
                 
                 submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
 
@@ -485,7 +489,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                                         t = Time(int(gpstime), format='gps', scale='utc')
                                         unix_time = int(t.unix)
         
-                                        body.append('run "aprun -n 1 -N 1 {0}" "-o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}" "{9}"'.format("mwac_offline",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file,vcs_database_id))
+                                        body.append('run "{0}" "-o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}" "{9}"'.format("mwac_offline",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file,vcs_database_id))
                                         to_corr += 1
                                         # with open(corr_batch, 'a') as batch_file:
                                         #     batch_file.write(corr_line)
@@ -660,7 +664,7 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
         rts_batch = "RTS_{0}".format(cal_obs_id)
         slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:20:00", "nodes":"{0}".format(nnodes)}
         commands = list(body) # make a copy of body to then extend
-        commands.append('run "aprun -n {0} -N 1  rts_gpu" "{1}" "{2}"'.format(nnodes,rts_in_file,vcs_database_id))
+        commands.append('run "srun -n {0} rts_gpu" "{1}" "{2}"'.format(nnodes,rts_in_file,vcs_database_id))
         submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
     else:
         # it is a picket fence observation, we need to do some magic
@@ -711,7 +715,7 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
             rts_batch = "RTS_{0}_{1}".format(cal_obs_id,channels)
             slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:45:00", "nodes":"{0}".format(nnodes)}
             commands = list(body) # make a copy of body to then extend
-            commands.append('run "aprun -n {0} -N 1  rts_gpu" "{1}" "{2}"'.format(nnodes,k,vcs_database_id))
+            commands.append('run "srun -n {0} rts_gpu" "{1}" "{2}"'.format(nnodes,k,vcs_database_id))
             submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
 
                         
@@ -839,8 +843,9 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile
             # The beamformer runs on all files within time range specified with
             # the -b and -e flags
             batch_file.write(openmp_line)
-            aprun_line = 'run "aprun -n 1 -d {0} {1}/make_beam" "-o {2} -b {3} -e {4} -a 128 -n 128 -N {5} -t 1 {6} -c phases.txt -w flags.txt -d {7}/combined -D {8}/ {9}" "{10}" \n'.format(n_omp_threads, execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format, vcs_database_id)
-            batch_file.write(aprun_line)
+            #aprun_line = 'run "aprun -n 1 -d {0} {1}/make_beam" "-o {2} -b {3} -e {4} -a 128 -n 128 -N {5} -t 1 {6} -c phases.txt -w flags.txt -d {7}/combined -D {8}/ {9}" "{10}" \n'.format(n_omp_threads, execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format, vcs_database_id)
+            srun_line = 'run "srun -n 1 -c {0} {1}/make_beam" "-o {2} -b {3} -e {4} -a 128 -n 128 -N {5} -t 1 {6} -c phases.txt -w flags.txt -d {7}/combined -D {8}/ {9}" "{10}" \n'.format(n_omp_threads, execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format, vcs_database_id)
+            batch_file.write(srun_line)
         
         submit_line = "sbatch --workdir={0} --partition={1} -d afterok:{2} --gid=mwaops --mail-user={3} {4} \n".format(pointing_dir, partition, dependsOn, e_mail, make_beam_batch)
         print submit_line
@@ -953,7 +958,7 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
         commands.append("module swap craype-ivybridge craype-sandybridge")
         commands.append(openmp_line)
         commands.append("cd {0}".format(pointing_dir))
-        commands.append("aprun -n 1 -d {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+        commands.append("srun -n 1 -c {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
                         "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
                         stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
         submit_slurm(make_beam_small_batch, commands, batch_dir=batch_dir,

@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
-#include <plot.h>
+//#include <plot.h>
 #include <math.h>
 #include <complex.h>
 #include <inttypes.h>
@@ -152,7 +152,7 @@ void conj2x2(complex double *M, complex double *Mout) {
         Mout[i] = conj(M[i]);
 }
 
-void invert_pfb(complex float *input, complex float *output, int nchan_in, int nchan_out, int npol_in, int npol_out,int mode,int last, void *fcontext) {
+void invert_pfb(complex float *input, complex float *output, int nchan_in, int nchan_out, int mode, int last, void *fcontext) {
     
     int edges = 0;
     int fftmode = 1;
@@ -353,7 +353,7 @@ void invert_pfb(complex float *input, complex float *output, int nchan_in, int n
                 // it is made of the sum of the products of the filter taps
                 // but rotate the convolution (ala shift theorem to place the RF in the correct spot
                 out_index = out_sample+(ch*nsamples);
-                if (out_index > (upsample_factor * nsamples)){
+                if ((int)out_index > (upsample_factor * nsamples)){
                     out_index = out_index - (upsample_factor * nsamples);
                 }
                 upsample_working[out_index] = upsample_working[out_index] + filter_dft_out[out_sample]*out[ch][out_sample];
@@ -514,7 +514,7 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
         fprintf(stderr, "Warning: Only the first interval in the calibration ");
         fprintf(stderr, "solution (%s) will be used\n", gains_file);
     }
-    if (antennaCount != nant) {
+    if ((int)antennaCount != nant) {
         fprintf(stderr, "Error: Calibration solution (%s) ", gains_file);
         fprintf(stderr, "contains a different number of antennas (%d) ", antennaCount);
         fprintf(stderr, "than specified (%d)\n", nant);
@@ -525,7 +525,7 @@ int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse
         fprintf(stderr, "contains a different number (%d) ", channelCount);
         fprintf(stderr, "than the expected (%d) channels. ", 24);
     }
-    if (channelCount <= coarse_chan) {
+    if ((int)channelCount <= coarse_chan) {
         fprintf(stderr, "Error: Requested channel number (%d) ", coarse_chan);
         fprintf(stderr, "is more than the number of channels (0-%d) ", channelCount-1);
         fprintf(stderr, "available in the calibration solution (%s)\n", gains_file);
@@ -721,7 +721,7 @@ int read_miriad_gains_file(char *gains_file, complex double **antenna_gain){
     fclose(fp);
     return nant;
 }
-int read_rts_file(complex double **G, complex double *Jref, int nant, double *amp,
+int read_rts_file(complex double **G, complex double *Jref, double *amp,
                       char *fname) {
     
     FILE *fp = NULL;
@@ -732,7 +732,7 @@ int read_rts_file(complex double **G, complex double *Jref, int nant, double *am
     }
     
     char line[BUFSIZE];
-    int index = 0, nscan;
+    int index = 0;
     double re0, im0, re1, im1, re2, im2, re3, im3;
     
     while ((fgets(line, BUFSIZE - 1, fp)) != NULL) {
@@ -745,9 +745,9 @@ int read_rts_file(complex double **G, complex double *Jref, int nant, double *am
         if (index == 0) {
             
             // read the amplitude and the Alignment Line
-            nscan = sscanf(line, "%lf", amp);
+            sscanf(line, "%lf", amp);
             fgets(line, BUFSIZE - 1, fp);
-            nscan = sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
+            sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
                            &im0, &re1, &im1, &re2, &im2, &re3, &im3);
             
             Jref[0] = re0 + im0 * I;
@@ -757,7 +757,7 @@ int read_rts_file(complex double **G, complex double *Jref, int nant, double *am
             
         }
         if (index > 0) {
-            nscan = sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
+            sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
                            &im0, &re1, &im1, &re2, &im2, &re3, &im3);
             G[index - 1][0] = re0 + im0 * I;
             G[index - 1][1] = re1 + im1 * I;
@@ -774,7 +774,7 @@ int read_rts_file(complex double **G, complex double *Jref, int nant, double *am
     
     return 0;
     
-} /* read_cal_file */
+} /* read_rts_file */
 
 int read_bandpass_file(
         complex double ***Jm, // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
@@ -1055,11 +1055,11 @@ int default_read_pfb_call(int in_fd, int out_fd, char *heap) {
     return 0;
 
 }
-int read_cal_file(complex double **G, int nant, double *amp) {
+int read_cal_file(complex double **G, double *amp) {
 
     FILE *fp = NULL;
     char line[BUFSIZE];
-    int index = 0, nscan;
+    int index = 0;
     double re0, im0, re1, im1, re2, im2, re3, im3;
     complex double A[4], invA[4], tmp[4];
 
@@ -1079,9 +1079,9 @@ int read_cal_file(complex double **G, int nant, double *amp) {
         if (index == 0) {
             
             // read the amplitude and the Alignment Line
-            nscan = sscanf(line, "%lf", amp);
+            sscanf(line, "%lf", amp);
             fgets(line, BUFSIZE - 1, fp);
-            nscan = sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
+            sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
                            &im0, &re1, &im1, &re2, &im2, &re3, &im3);
             
             A[0] = re0 + im0 * I;
@@ -1093,7 +1093,7 @@ int read_cal_file(complex double **G, int nant, double *amp) {
             
         }
         if (index > 0) {
-            nscan = sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
+            sscanf(line, "%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf", &re0,
                            &im0, &re1, &im1, &re2, &im2, &re3, &im3);
             tmp[0] = re0 + im0 * I;
             tmp[1] = re1 + im1 * I;
@@ -1229,7 +1229,7 @@ void get_baseline_lu(int st1, int st2, int pol1, int pol2, float complex *data,
 
 void get_baseline_r(int st1, int st2, int pol1, int pol2, complex float *data,
 		complex float *reorder,int npol, int nstation, int nfrequency,int true_st1,int true_st2,
-		int true_pol1,int true_pol2,int conjugate) {
+		int conjugate) {
 
 	int i=0;
 	complex float *in, *out;
@@ -1302,7 +1302,8 @@ void full_reorder(complex float *full_matrix_h, complex float *reordered)
 					}
 
 					get_baseline_r(the_mapping.stn1, the_mapping.stn2, the_mapping.pol1,
-							the_mapping.pol2, full_matrix_h, reordered,npol,nstation,nfrequency,conjugate,t1,t2,p1,p2);
+							the_mapping.pol2, full_matrix_h, reordered, npol, nstation,
+                            nfrequency, t1, t2, conjugate);
 
 				}
 			}

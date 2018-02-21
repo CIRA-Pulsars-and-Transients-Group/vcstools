@@ -55,8 +55,8 @@ extern "C" {
     double norm2x2(complex double *M, complex double *Mout);
     void conj2x2(complex double *M, complex double *Mout);
     
-    int read_cal_file(complex double **G, int ninp, double *amp);
-    int read_rts_file(complex double **G, complex double *M, int nant, double *amp, char *fname);
+    int read_cal_file(complex double **G, double *amp);
+    int read_rts_file(complex double **G, complex double *M, double *amp, char *fname);
     int read_bandpass_file(complex double ***Jm, complex double ***Jf, int chan_width, int nchan, int nant, char *filename);
     int read_offringa_gains_file(complex double **antenna_gain, int nant, int coarse_chan, char *gains_file, int *order);
     int read_miriad_gains_file(char *fname, complex double **gains);
@@ -77,14 +77,14 @@ extern "C" {
     
     
     void get_baseline_r(int st1, int st2, int pol1, int pol2, complex float * data,
-                        complex float * baseline, int npol,int nstation, int nfrequency,int true_st1,int true_st2,int true_pol1,int true_pol2,int conjugate);
+                        complex float * baseline, int npol,int nstation, int nfrequency,int true_st1,int true_st2,int conjugate);
     
     void extractMatrix(complex float *matrix, complex float * packed);
     void extractMatrix_slow(complex float *matrix, complex float * packed);
     void full_reorder(complex float *full_matrix_h, complex float *reordered);
     
     // for the beamformer
-    void invert_pfb(complex float * input, complex float *output, int nchan_in, int nchan_out, int npol_in, int npol_out,int mode,int last,void *context);
+    void invert_pfb(complex float * input, complex float *output, int nchan_in, int nchan_out, int mode, int last, void *context);
     int default_read_pfb_call(int in_fd, int out_fd, char *heap);
 
 #ifdef __cplusplus

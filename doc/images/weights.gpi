@@ -1,0 +1,30 @@
+set terminal pngcairo enhanced size 1000,400
+
+set xlabel "j"
+set ylabel "i"
+
+set xtics 128
+set ytics 32
+
+set xrange [*:*] noextend
+set yrange [*:*] noextend
+
+set colorbox
+unset key
+
+################################
+set output "weights_abs.png"
+
+set palette model RGB rgbformulae 34,35,36
+
+plot 'weights_abs.txt' matrix w image
+
+################################
+set output "weights_arg.png"
+
+set palette model HSV rgbformulae 3,2,2
+set cbrange [-pi:pi]
+set cbtics ("-π" -pi, "0" 0, "π" pi)
+
+plot 'weights_arg.txt' matrix w image
+

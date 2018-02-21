@@ -33,12 +33,14 @@
 # with the LOFAR software suite. If not, see <http://www.gnu.org/licenses/>.
 #
 
+message("Finding FFTW3")
+
 set(FFTW3_ROOT_DIR $ENV{FFTW3_DIR})
 
 if(NOT DEFINED FFTW3_ROOT_DIR)
-	message("-- Warning FFTW3_ROOT_DIR not set: will try and find it ")
+    message(STATUS "Warning FFTW3_ROOT_DIR not set: will try and find it ")
 else(NOT DEFINED FFTW3_ROOT_DIR)
-	message("-- FFTW3_ROOT_DIR = ${CPGPLOT_ROOT_DIR}")
+    message(STATUS "FFTW3_ROOT_DIR = ${FFTW3_ROOT_DIR}")
 endif(NOT DEFINED FFTW3_ROOT_DIR)
 
 set(_components double)
@@ -48,7 +50,7 @@ else()
   set(_components ${FFTW3_FIND_COMPONENTS})
 endif()
 
-message("-- FindFFTW3: finding ${_components}")
+message(STATUS "FindFFTW3: finding ${_components}")
 # Loop over each component.
 set(_libraries)
 foreach(_comp ${_components})
@@ -60,6 +62,8 @@ foreach(_comp ${_components})
     list(APPEND _libraries fftw3l)
   elseif(_comp STREQUAL "threads")
     set(_use_threads ON)
+  elseif(_comp STREQUAL "openmp")
+    list(APPEND _libraries fftw3_omp)
   else(_comp STREQUAL "single")
     message(FATAL_ERROR "FindFFTW3: unknown component `${_comp}' specified. "
       "Valid components are `single', `double', `long-double', and `threads'.")
@@ -101,5 +105,5 @@ include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(FFTW3 DEFAULT_MSG ${_check_list})
 
 if(FFTW3_FOUND)
-	message(" -- Found all requested FFTW --")
+    message(STATUS "Found all requested FFTW")
 endif(FFTW3_FOUND)
