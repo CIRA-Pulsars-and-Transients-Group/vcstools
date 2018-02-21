@@ -722,15 +722,16 @@ int main(int argc, char **argv) {
             
         
         
-            blockSize = blockSize + 2880; // header
-            blockSize = blockSize +  (n_visibilities * (uint64_t) xgpu_info.nfrequency * sizeof(Complex)/the_manager.chan_to_aver);; // sizeof a data cube
+            blockSize += 2880; // header
+            blockSize += n_visibilities * (uint64_t) xgpu_info.nfrequency *
+                         sizeof(Complex) / the_manager.chan_to_aver; // sizeof a data cube
             
             int remainder = (blockSize%2880); // pad out to the end of the HDU
-            blockSize = blockSize + (2880 - remainder);
+            blockSize += 2880 - remainder;
             hdu_num++; // hdu increment
         }
         
-        assert(!(blockSize%2880));
+        assert(!(blockSize % 2880));
         
         if (the_manager.integrate != 0) {
             std::cout << "Integrated " << dumps_integrated << " invocations" << std::endl;
@@ -739,7 +740,13 @@ int main(int argc, char **argv) {
         
         char *outbuffer = (char *) malloc(blockSize);
         
-        buildFITSBuffer(xgpu_info,full_matrix_h,blockSize,(void *) outbuffer,incremented_time_t,dumps_per_second,&the_manager);
+        buildFITSBuffer( xgpu_info,
+                         full_matrix_h,
+                         blockSize,
+                         (void *)outbuffer,
+                         incremented_time_t,
+                         dumps_per_second,
+                         &the_manager );
         
         
         std::cout << "FITS file built" << std::endl;
