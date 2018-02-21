@@ -15,6 +15,7 @@ set(DATABASE_TARGETS "${d}/submit_to_database.py;${d}/database_vcs.py")
 
 set(UTILITY_TARGETS "${u}/zapchan.py;${u}/calc_ephem.py;${u}/check_disk_usage.sh;${u}/check_quota.sh;${u}/plot_tilebeams.py;${u}/mdir.py;${u}/mwa_metadb_utils.py")
 
+file(WRITE ${CMAKE_INSTALL_PREFIX}/bin/version.py "__version__ = ${VCSTOOLS_VERSION}")
 
 install(PROGRAMS ${SCRIPT_TARGETS} DESTINATION bin)
 install(PROGRAMS ${DATABASE_TARGETS} DESTINATION bin)

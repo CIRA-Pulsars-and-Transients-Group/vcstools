@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-project(MWA_Beamformer VERSION 1.3.2)
+project(vcstools VERSION 1.3.2)
 
 # Set up version number
 execute_process(
@@ -13,7 +13,9 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-add_definitions( -DVERSION_BEAMFORMER="${PROJECT_VERSION}_${VERSION_GIT}" )
+set(VCSTOOLS_VERSION "${PROJECT_VERSION}_${VERSION_GIT}")
+
+add_definitions( -DVERSION_BEAMFORMER="${VCSTOOLS_VERSION}" )
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
