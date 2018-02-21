@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+import version
+import sys
 import os, datetime, logging
 import sqlite3 as lite
 from optparse import OptionParser #NB zeus does not have argparse!
@@ -78,7 +81,8 @@ if __name__ == '__main__':
     Script used to manage the VCS database by recording the scripts process_vcs.py uses and prints the databse
     """)
     parser.add_option("-m", "--mode", dest="mode", metavar="mode", default='v', type=str, help='This script has three modes: "vc" used to view the database commands, "vs" used to view the database scripts,, "s" used to start a record of a script on the database and "e" used to record the end time and error code of a script on the database. Default mode is v')
-    
+    parser.add_option("-V", "--version", action='store_true', help="Print version and quit")
+
     view_options = OptionGroup(parser, 'View Options')
     view_options.add_option("--recent", dest="recent", metavar="HOURS", default=None, type=float, help="print only jobs started in the last N hours")
     view_options.add_option("-n", "--number", dest="n", metavar="N", default=20, type=int, help="number of jobs to print [default=%default]")
@@ -101,7 +105,9 @@ if __name__ == '__main__':
     parser.add_option_group(end_options)
     (opts, args) = parser.parse_args()
     
-    
+    if opts.version:
+        print version.__version__
+        sys.exit(0)
     
     if opts.mode == "s":
         vcs_row = database_script_start(opts.vcs_id, opts.command, opts.argument)
