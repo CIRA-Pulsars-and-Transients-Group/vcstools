@@ -6,12 +6,12 @@ void getDeviceDimensions(int *nDevices)
     /* We need to know how many devices are available and its functionality. */
 
     printf("Querying system for device information --\n");
-    cudaGetDeviceCount(nDevices); // get CUDA to count GPUs
+    gpuErrchk( cudaGetDeviceCount(nDevices)); // get CUDA to count GPUs
 
     for (int i = 0; i < *nDevices; i++)
     {
         struct cudaDeviceProp prop; // create struct to store device info
-        cudaGetDeviceProperties(&prop, i); // populate prop for this device
+        gpuErrchk( cudaGetDeviceProperties(&prop, i)); // populate prop for this device
         printf("    Device number:                       %d\n", *nDevices-1);
         printf("    Device name:                         %s\n", prop.name);
         printf("    Total global memory available (MB):  %f\n", prop.totalGlobalMem/1e6);
@@ -52,27 +52,20 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
     // get info about avilable devices
     getDeviceDimensions(&nDevices);
     printf("Number of devices on system: %d\n", nDevices);
-    printf("Using device: %d\n",                nDevices-1);
-    cudaGetDeviceProperties(&prop, 0); 
+    printf("Using device: %d\n",                0);
+    gpuErrchk( cudaGetDeviceProperties(&prop, 0)); 
 
     // check how much FREE memory is available
-    res = cudaMemGetInfo(&freeMem, &totMem);
-    if (res == cudaSuccess)
-    {
-        printf("Free device memory: %.2f MB\n", (double)freeMem/1.0e6);
-    }
-    else
-    {
-        printf("%s\n", cudaGetErrorString(res));
-    }
+    gpuErrchk( cudaMemGetInfo(&freeMem, &totMem)); // will abort if not cudaSuccess
+    printf("Free device memory: %.2f MB\n", (double)freeMem/1.0e6);
     
     // get device max. threads per block
     *blockSize = prop.maxThreadsDim[0];
 
     // define the array sizes that will go onto the device
-    azzaMem    = 2 * (size/1.0e6)   * sizeof(double);          // az and za arrays
-    tileposMem = 3 * (ntiles/1.0e6) * sizeof(float);           // x,y,z positions of all tiles
-    afMem      =     (size/1.0e6)   * sizeof(cuDoubleComplex); // "array factor" array
+    azzaMem    = 2 * (size / 1.0e6)   * sizeof(double);          // az and za arrays
+    tileposMem = 3 * (ntiles / 1.0e6) * sizeof(float);           // x,y,z positions of all tiles
+    afMem      =     (size / 1.0e6)   * sizeof(cuDoubleComplex); // "array factor" array
     // misc. memory requirments (likely inconsequential)
 
     otherMem   = (7 * sizeof(double) + 
@@ -81,7 +74,7 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
                   sizeof(wavenums)) / 1.0e6;
     
     reqMem = azzaMem + tileposMem + afMem + otherMem; // total required memory in MB
-    devMem = (double)freeMem/1.0e6; // available memory in MB
+    devMem = (double)freeMem / 1.0e6; // available memory in MB
 
     printf("Memory required for:\n");
     printf("    Az,ZA arrays: %Lf MB\n",   azzaMem);
@@ -92,8 +85,10 @@ void requiredMemory(int size, int ntiles, int *niter, int *blockSize)
 
     if (reqMem < 0)
     {
-        fprintf(stderr, "Negative required memory (%Lf)!! Aborting.\n", reqMem);
-        exit(1);
+        fprintf(stderr, "Negative required memory (%Lf)!! "
+                        "Numerical overflow when calculating required memory. "
+                        "Aborting.\n", reqMem);
+        exit(EXIT_FAILURE);
     }
     else if ((tfrac*devMem) <= reqMem)
     {
@@ -119,7 +114,7 @@ void gpuAssert(cudaError_t code, const char *file, int line, bool abort)
 
     if (code != 0)
     {
-        fprintf(stderr, "GPUAssert:: %s - %s (%d)\n", cudaGetErrorString(code), file, line);
+        fprintf(stderr, "GPUAssert :: %s - %s (%d)\n", cudaGetErrorString(code), file, line);
         if (abort)
         {
             exit(code);
@@ -140,9 +135,9 @@ void utc2mjd(char *utc_str, double *intmjd, double *fracmjd)
     slaCaldj(year, month, day, intmjd, &jflag);
     if (jflag != 0) 
     {
-        fprintf(stderr,"Failed to calculate MJD\n");
+        fprintf(stderr, "Failed to calculate MJD\n");
     }
-    *fracmjd = (hour + (min/60.0) + (sec/3600.0))/24.0;
+    *fracmjd = (hour + (min / 60.0) + (sec / 3600.0)) / 24.0;
 }
 
 
