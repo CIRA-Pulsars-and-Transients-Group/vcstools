@@ -263,7 +263,7 @@ class BaseRTSconfig(object):
             # use all of the data to calibrate
             # TODO: the RTS currently (14 Nov 2017) dies when using more than 1 set of visibilities
             # Currently require that the number of dumps to average is a power of 2 <= calculated ndumps here (27 Feb 2018)
-            self.n_dumps_to_average = power_of_2_less_than(ndumps)
+            self.n_dumps_to_average = self.power_of_2_less_than(ndumps)
 
         else:
             # we have to figure out how much data has been correlated and what the frequency/time resolution is
@@ -279,7 +279,7 @@ class BaseRTSconfig(object):
             # for offline correlation, each file is one integration time - there has been no concatenation
             # TODO: this assumes that the offline correlator ALWAYS produces 1 second FITS files
             ndumps = len(fits.open(first_file)) * len_files / 24
-            self.n_dumps_to_average = power_of_2_less_than(ndumps)
+            self.n_dumps_to_average = self.power_of_2_less_than(ndumps)
 
         logger.info("Number of fine channels: {0}".format(self.nfine_chan))
         logger.info("Fine channel bandwidth (MHz): {0}".format(self.fine_cbw))
