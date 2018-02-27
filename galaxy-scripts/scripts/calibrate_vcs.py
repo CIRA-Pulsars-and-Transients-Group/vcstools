@@ -558,8 +558,8 @@ class RTScal(object):
 
         # setup the basic body for all SLURM scripts
         self.script_body = []
-        self.script_body.append("module load cudatoolkit")  # need CUDA for RTS
-        self.script_body.append("module load cfitsio")  # need cfitsio for reading fits files
+        #self.script_body.append("module load cudatoolkit")  # need CUDA for RTS
+        #self.script_body.append("module load cfitsio")  # need cfitsio for reading fits files
         self.script_body.append("cd {0}".format(self.rts_out_dir))  # change to output directory and run RTS there
 
         # boolean to control batch job submission. True = submit to queue, False = just write the files
@@ -660,7 +660,7 @@ class RTScal(object):
         jobids = []
         nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
-        slurm_kwargs = {"export": "ALL", "partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:20:00",
+        slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:20:00",
                 "nodes": "{0}".format(nnodes), "gres": "gpu:1", "ntasks-per-node": "1"}
         commands = list(self.script_body)  # make a copy of body to then extend
         commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, fname))
@@ -838,7 +838,7 @@ class RTScal(object):
             nnodes = v + 1
             chans = k.split('_')[-1].split(".")[0]
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
-            slurm_kwargs = {"export": "ALL", "partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:45:00",
+            slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:45:00",
                     "nodes": "{0}".format(nnodes), "gres": "gpu:1", "ntasks-per-node": "1"}
             commands = list(self.script_body)  # make a copy of body to then extend
             commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, k))
