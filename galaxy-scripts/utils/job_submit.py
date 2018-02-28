@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import subprocess
+
+
 SLURM_TMPL = """#!/bin/bash -l
 
 #SBATCH --export={export}
