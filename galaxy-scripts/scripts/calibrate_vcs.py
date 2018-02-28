@@ -17,17 +17,18 @@ import numpy as np
 import re
 import argparse
 from astropy.io import fits
+from itertools import groupby
+from operator import itemgetter
+import glob
+import logging
+#import distutils.spawn
+#import subprocess
+
 #from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
 from job_submit import submit_slurm
 from mdir import mdir
 from mwa_metadb_utils import getmeta
 from mwapy import ephem_utils
-from itertools import groupby
-from operator import itemgetter
-import distutils.spawn
-import subprocess
-import glob
-import logging
 
 logger = logging.getLogger(__name__)
 
