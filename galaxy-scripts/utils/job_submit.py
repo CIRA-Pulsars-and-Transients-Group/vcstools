@@ -17,12 +17,12 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
                     batch_dir="batch/", depend=None, submit=True, 
                     outfile=None, cluster="galaxy", export="NONE"):
     """
-    Making this function to cleanly submit slurm jobs using a simple template.
+    Making this function to cleanly submit SLURM jobs using a simple template.
 
     Parameters
     ----------
     name : str
-        The base name that is used to create the "`name.batch`" and "`name.out`" files.
+        The base name that is used to create the "`name`.batch" and "`name`.out" files.
 
     commands : list of strs
         The actual bash script commands you wnat to run. 
@@ -30,7 +30,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
 
     tmpl : str
         A template header string with format place holders: export, outfile, cluster, header and script.
-        This is used to create the final string to be written to the job script `outfile`.
+        This is used to create the final string to be written to the job script.
         For this function, it is required to be SLURM compliant. 
         Default: `SLURM_TMPL`
 
@@ -40,7 +40,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
 
     batch_dir : str [optional]
         The LOCAL directory where you want to write the batch scripts (i.e. it will write to `$PWD/batch_dir`).
-        Default: "`batch/`"
+        Default: "batch/"
 
     depend : int or None [optional]
         The job ID that the desired job depends on to finish with the "afterok" qualifier from SLURM.
@@ -52,16 +52,16 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         Default: `True`
 
     outfile : str [optional]
-        The output file name if "`name.out`" is not desirable.
-        Default: `None` (i.e. "`batch_dir/name.out`")
+        The output file name if "`name`.out" is not desirable.
+        Default: `None` (i.e. "`batch_dir`/`name`.out")
 
     cluster : str [optional]
         The compute cluster that the job is to run on.
-        Default: "`galaxy`"
+        Default: "galaxy"
 
     export : str [optional]
-        Switch that lets SLURM use your login environment on the compute nodes ("`ALL`") or not ("`NONE`").
-        Default: "`NONE`"
+        Switch that lets SLURM use your login environment on the compute nodes ("ALL") or not ("NONE").
+        Default: "NONE"
 
     Returns
     -------
