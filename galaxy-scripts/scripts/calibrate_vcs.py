@@ -17,7 +17,8 @@ import numpy as np
 import re
 import argparse
 from astropy.io import fits
-from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
+#from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
+from job_submit import submit_slurm
 from mdir import mdir
 from mwa_metadb_utils import getmeta
 from mwapy import ephem_utils
@@ -632,9 +633,7 @@ class RTScal(object):
             logger.info("A subband crosses the channel 129 boundary. This subband will be split on that boundary.")
 
         # create a list of lists with consecutive channels grouped within a list
-        hichan_groups = [map(itemgetter(1), g)[::-1] for k, g in
-                         groupby(enumerate(self.hichans), lambda (i, x): i - x)][
-                        ::-1]  # reversed order (both of internal lists and globally)
+        hichan_groups = [map(itemgetter(1), g)[::-1] for k, g in groupby(enumerate(self.hichans), lambda (i, x): i - x)][::-1]  # reversed order (both of internal lists and globally)
         lochan_groups = [map(itemgetter(1), g) for k, g in groupby(enumerate(self.lochans), lambda (i, x): i - x)]
         logger.debug("High channels (grouped): {0}".format(hichan_groups))
         logger.debug("Low channels  (grouped): {0}".format(lochan_groups))
@@ -660,13 +659,20 @@ class RTScal(object):
         jobids = []
         nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
-        slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:20:00",
-                "nodes": "{0}".format(nnodes), "gres": "gpu:1", "ntasks-per-node": "1"}
+        slurm_kwargs = {"partition": "gpuq",
+                        "workdir": "{0}".format(self.rts_out_dir),
+                        "time": "00:20:00",
+                        "nodes": "{0}".format(nnodes),
+                        "gres": "gpu:1",
+                        "ntasks-per-node": "1"}
         commands = list(self.script_body)  # make a copy of body to then extend
         commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, fname))
         #commands.append("srun rts_cpu {0}".format(fname))
-        jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir,
-                             submit=self.submit)
+        jobid = submit_slurm(rts_batch, commands, 
+                                slurm_kwargs=slurm_kwargs,
+                                batch_dir=self.batch_dir,
+                                submit=self.submit,
+                                export="ALL")
         jobids.append(jobid)
 
         return jobids
@@ -838,13 +844,20 @@ class RTScal(object):
             nnodes = v + 1
             chans = k.split('_')[-1].split(".")[0]
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
-            slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:45:00",
-                    "nodes": "{0}".format(nnodes), "gres": "gpu:1", "ntasks-per-node": "1"}
+            slurm_kwargs = {"partition": "gpuq",
+                            "workdir": "{0}".format(self.rts_out_dir),
+                            "time": "00:45:00",
+                            "nodes": "{0}".format(nnodes),
+                            "gres": "gpu:1",
+                            "ntasks-per-node": "1"}
             commands = list(self.script_body)  # make a copy of body to then extend
             commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, k))
             #commands.append("srun rts_cpu {0}".format(k))
-            jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir,
-                                 submit=self.submit)
+            jobid = submit_slurm(rts_batch, commands,
+                                    slurm_kwargs=slurm_kwargs,
+                                    batch_dir=self.batch_dir,
+                                    submit=self.submit,
+                                    export="ALL")
             jobids.append(jobid)
 
         return jobids
