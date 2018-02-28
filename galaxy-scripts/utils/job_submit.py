@@ -87,6 +87,10 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
             k = "-" + k + " "
         
         header.append("#SBATCH {0}{1}".format(k, v))
+
+    # check if there are dependencies, and if so include that in the header
+    if depend is not None:
+        header.append("#SBATCH --dependency=afterok:{0}".format(depend))
     
     # now join everything into one string
     header = "\n".join(header)
@@ -94,16 +98,11 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     tmpl = tmpl.format(script=commands, outfile=outfile, header=header, cluster=cluster, export=export)
 
     # write the formatted template to the job file for submission
-    with open(jobfile,"w") as fh:
+    with open(jobfile, "w") as fh:
         fh.write(tmpl)
 
-    # if there are dependencies, ensure they are taken into account on the command line
-    if depend is not None:
-        batch_submit_line = "sbatch --dependency=afterok:{0} {1}".format(depend, jobfile) # should this just be in the header?
-    else:
-        batch_submit_line = "sbatch {0}".format(jobfile)
-
     # submit the jobs
+    batch_submit_line = "sbatch {0}".format(jobfile)
     if submit:
         submit_cmd = subprocess.Popen(batch_submit_line, shell=True, stdout=subprocess.PIPE)
    
