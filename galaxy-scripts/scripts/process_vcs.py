@@ -84,14 +84,14 @@ def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", dep
         #                 (word1,word2,word3,jobid) = line.split()
         # return jobid
 
-        
-"""def getmeta(service='obs', params=None):
-    """
+"""
+def getmeta(service='obs', params=None):
+  
     Function to call a JSON web service and return a dictionary:
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
     a Python dictionary, return a Python dictionary xcontaining the result.
     Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
-    """
+    
     import urllib
     import urllib2
     import json
@@ -129,7 +129,8 @@ def is_number(s):
     except ValueError:
         return False
 
-"""def mdir(path,description, gid=30832):
+"""
+def mdir(path,description, gid=30832):
     # the default groupID is mwaops which is 30832 in numerical
     # we try and make sure all directories created by process_vcs
     # end up belonging to the user and the group mwaops
@@ -203,7 +204,8 @@ def create_link(data_dir, target_dir, product_dir, link):
         os.symlink(target_dir, link)
     
 
-"""def obs_max_min(obs_id):
+"""
+def obs_max_min(obs_id):
     
     Small function to query the database and returns the times of the first and last file
     :param obs_id:
