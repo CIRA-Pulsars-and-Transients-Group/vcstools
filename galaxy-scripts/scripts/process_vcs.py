@@ -15,7 +15,7 @@ import sqlite3 as lite
 from astropy.io import fits as pyfits
 from reorder_chans import *
 import database_vcs
-import mdir.mdir as mdir
+from mdir import mdir
 import mwa_metadb_utils as meta
 
 
