@@ -478,7 +478,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                                 body = []
                                 body.append(database_vcs.add_database_function())
                                 body.append("source /group/mwaops/PULSAR/psrBash.profile")
-                                body.append("module swap craype-ivybridge craype-sandybridge")
+                                #body.append("module swap craype-ivybridge craype-sandybridge")
         
                                 # with open(corr_batch, 'w') as batch_file:
                                 #     batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --account=mwaops\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
@@ -499,7 +499,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                                         #     to_corr = to_corr+1
         
                                 secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr)) # added factor two on 10 April 2017 as galaxy seemed really slow...
-                                submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq"}, batch_dir=batch_dir)
+                                submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq", "gres": "gpu:1"}, batch_dir=batch_dir)
                                 # batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
                                 # submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
                                 # jobid=""
