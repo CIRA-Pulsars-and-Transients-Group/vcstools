@@ -16,6 +16,7 @@ from astropy.io import fits as pyfits
 from reorder_chans import *
 import database_vcs
 from mdir import mdir
+from job_submit import submit_slurm
 import mwa_metadb_utils as meta
 
 
@@ -39,12 +40,12 @@ def tmp(suffix=".sh"):
     return t
 """
 def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", depend=0, submit=True, outfile=None, cluster="galaxy"):
-        """
+        
         Making this function to cleanly submit slurm jobs using a simple template.
         This will use the <name> to setup both the .batch and .out files into <batch_dir>
         <slurm_kwargs> should be a dictionary of keyword, value pairs of anything the template header is missing
         <commands> is the actual batch script you want to run, and is expecting a list with one entry per line
-        """
+        
         
         header = []
         if batch_dir[-1] is not "/":
@@ -83,6 +84,8 @@ def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", dep
         #         if "Submitted" in line:
         #                 (word1,word2,word3,jobid) = line.split()
         # return jobid
+
+"""
 
 """
 def getmeta(service='obs', params=None):
