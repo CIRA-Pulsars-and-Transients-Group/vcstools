@@ -50,7 +50,8 @@ int append(char **to_append, void *total, int n){
     /* last channel of the total */
 
     struct psrfits pf1,pf2;
-    struct psrfits *list,*pf;
+    struct psrfits *list;
+    struct psrfits *pf = NULL;
 
     // list of psrfits structures
     list = (struct psrfits *) calloc(n,sizeof(struct psrfits));
@@ -217,7 +218,6 @@ int append(char **to_append, void *total, int n){
         // nchan*npol blocks
         // loop over npol
 
-
         for (f=0;f<n;f++) {
 
             pf = &list[f]; // get the psrfits struct - it is already open
@@ -282,9 +282,7 @@ int append(char **to_append, void *total, int n){
                     bzero(output_pos,bytes_to_copy);
                     output_pos += bytes_to_copy;
 
-
                 //memcpy the channels
-
 
                     bytes_to_copy = pf->hdr.nchan;
 
@@ -305,6 +303,7 @@ int append(char **to_append, void *total, int n){
             }
         }
 	    // Now we need to get the MetaData for this subint
+	    pf_total->sub.feed_ang = pf->sub.feed_ang; // Feed angle at subint centre (deg)
 	    pf_total->sub.tsubint  = pf->sub.tsubint;  // Length of subintegration (sec)
 	    pf_total->sub.offs     = pf->sub.offs;     // Offset from Start of subint centre (sec)
 	    pf_total->sub.lst      = pf->sub.lst;      // LST at subint centre (sec)
@@ -312,10 +311,9 @@ int append(char **to_append, void *total, int n){
 	    pf_total->sub.dec      = pf->sub.dec;      // Dec (J2000) at subint centre (deg)
 	    pf_total->sub.glon     = pf->sub.glon;     // Gal longitude at subint centre (deg)
 	    pf_total->sub.glat     = pf->sub.glat;     // Gal latitude at subint centre (deg)
-	    pf_total->sub.feed_ang = pf->sub.feed_ang; // Feed angle at subint centre (deg)
-	    pf_total->sub.pos_ang  = pf->sub.pos_ang;  // Position angle of feed at subint centre (deg)
 	    pf_total->sub.par_ang  = pf->sub.par_ang;  // Parallactic angle at subint centre (deg)
 	    pf_total->sub.tel_az   = pf->sub.tel_az;   // Telescope azimuth at subint centre (deg)
+	    pf_total->sub.pos_ang  = pf->sub.pos_ang;  // Position angle of feed at subint centre (deg)
 	    pf_total->sub.tel_zen  = pf->sub.tel_zen;  // Telescope zenith angle at subint centre (deg)
 
         psrfits_write_subint(pf_total);

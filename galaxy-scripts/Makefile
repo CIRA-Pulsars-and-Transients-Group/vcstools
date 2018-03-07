@@ -2,6 +2,7 @@ INSTALL_DIR = /group/mwaops/PULSAR/bin/
 
 SCRIPT_TARGETS = bf_adjust_flags.py \
           build_mwacutils.sh \
+		  calibrate_vcs.py \
           checks.py \
           create_psrfits.sh \
           fetch_mwacutils.sh \
@@ -25,8 +26,7 @@ SCRIPT_TARGETS = bf_adjust_flags.py \
           run_rts.sh \
           test_mwacutils.sh \
           untar.sh \
-          vcs_obs_w_files.txt \
-          write_rts_in_file.py
+          vcs_obs_w_files.txt
 
 DATABASE_TARGETS = submit_to_database.py\
          database_vcs.py
@@ -37,7 +37,8 @@ UTILITY_TARGETS = zapchan.py\
 	check_quota.sh \
 	plot_tilebeams.py \
 	mdir.py \
-	mwa_metadb_utils.py
+	mwa_metadb_utils.py \
+	job_submit.py
 
 TARGETS = $(addprefix scripts/, $(SCRIPT_TARGETS)) $(addprefix database/, $(DATABASE_TARGETS)) $(addprefix utils/, $(UTILITY_TARGETS))
 

@@ -17,21 +17,478 @@ import numpy as np
 import re
 import argparse
 from astropy.io import fits
-from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
-from mdir import mdir
-from mwa_metadb_utils import getmeta
 from itertools import groupby
 from operator import itemgetter
-import distutils.spawn
-import subprocess
 import glob
 import logging
+#import distutils.spawn
+#import subprocess
+
+#from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
+from job_submit import submit_slurm
+from mdir import mdir
+from mwa_metadb_utils import getmeta
+from mwapy import ephem_utils
 
 logger = logging.getLogger(__name__)
 
 
 class CalibrationError(Exception):
     pass
+
+
+class BaseRTSconfig(object):
+    """A class to hold the base information for a given RTS configuration file.
+    
+    Parameters
+    ----------
+    obsid : int
+        The target observation ID.
+    cal_obsid : int
+        The calibrator observation ID.
+    metafits : str
+        Path to the metafits file for the calibrator observation.
+    srclist : str
+        Path to the source list created for this calibrator observation (using srclist_by_beam.py).
+    datadir : str
+        Path to visibility data to be used to produce a calibration solution.
+    outdir : str, optional
+        Path to write RTS configuration and relevant flagging information.
+    offline : str, optional
+        Whether the visibility data were produced with the offline correlator. Default is False.
+
+
+    Attributes
+    ----------
+    obsid : int
+        The target observation ID
+    cal_obsid : int
+        The calibrator observation ID
+    offline : bool
+        Whether the calibrator data was produced by the offline correlator.
+    utctime : str
+        The start UTC time (as YYYY-MM-DDThh:mm:ss.ss)
+    nfine_chan : int
+        The number of fine channels per coarse channel
+    channels : list of ints
+        The list of coarse channels recorded within a subband. Can range from length of 1-24.
+    fine_cbw : float
+        The fine channel bandwidth in MHz
+    corr_dump_time : float
+        The time scale on which the correlator dumped the visibilities (i.e. the integration time).
+    n_corr_dumps_to_average : int
+        The number of correlator dumps to use. 
+        Must be such that `corr_dump_time * n_corr_dumps_to_average` is <= than the total amount of data 
+        available for the calibrator observation.
+    PB_HA : float
+        The primary beam Hour Angle (in degrees)
+    PB_DEC : float
+        The primary beam Declination (in degrees)
+    freq_base :  float
+        The starting frequency from which to count the subband IDs (coarse channels)
+    JD : float
+        Julian day conversion of `utctime`
+    metafits_RTSform : str
+        A modified string of the user-define metafits file location. Truncates "_metafits_pdds.fits".
+    ArrayPositionLat : float
+        The MWA's latitude (in degrees)
+    ArrayPositionLong : float
+        The MWA's longitude (in degrees)
+    base_str : str
+        The basic RTS configuration skeleton script with some relevant information (built in BaseRTSconfig)
+    data_dir : str
+        Path to look for visibilities to use for calibration.
+    output_dir : str
+        Path to write RTS configuration and relevant flagging information.
+    batch_dir : str
+        Path to where the SLURM scripts and their output are to be written.    
+    metafits : str
+        Path to the original metafits file for the calibrator observation.
+    source_list: str 
+        Path to the source list created for this calibrator observation (using srclist_by_beam.py).
+    useCorrInput : int
+        Option value for RTS configuration regarding interpreting correlator streamed data.
+        For offline-correlated data, `useCorrInput=1` and `readDirect=0`.
+    readDirect : int
+        Option value for RTS configuration regarding reading data files from disk. 
+        For online-correlated data, `readDirect=1` and `useCorrInput=0`.
+
+    Raises
+    ------
+    CalibrationError
+        When there is a problem with some of the observation information and/or its manipulation.
+    """
+
+    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir=None, outdir=None, offline=False):
+        self.obsid = obsid  # target observation ID
+        self.cal_obsid = cal_obsid  # calibrator observation ID
+        self.offline = offline  # switch to decide if offline correlated data or not
+        self.utctime = None  # start UTC time
+        self.nfine_chan = None  # number of fine channels
+        self.channels = None  # actual channel numbers
+        self.fine_cbw = None  # fine channel bandwidth
+        self.corr_dump_time = None  # correlator dump times (i.e. integration time)
+        self.n_dumps_to_average = None  # number of integration times to use for calibration
+        self.PB_HA = None  # primary beam HA
+        self.PB_DEC = None  # primary beam Dec
+        self.freq_base = None  # frequency base for RTS
+        self.JD = None  # time base for RTS
+        self.metafits_RTSform = None  # modified metafits file name for RTS
+        self.ArrayPositionLat = -26.70331940  # MWA latitude
+        self.ArrayPositionLong = 116.6708152  # MWA longitude
+        self.base_str = None  # base string to be written to file, will be editted by RTScal
+
+        # Check to make sure paths and files exist:
+        # First, check that the actual data directory exists
+        if datadir is None:
+            # use the default data path
+            self.data_dir = "/group/mwaops/vcs/{0}/cal/{1}/vis".format(obsid, cal_obsid)
+            logger.info("Using default calibrator data path: {0}".format(self.data_dir))
+        elif os.path.isdir(datadir):
+            self.data_dir = os.path.abspath(datadir)
+            logger.info("Using the user specified data directory: {0}".format(datadir))
+        else:
+            errmsg = "Data directory ({0}) does not exists. Aborting.".format(datadir)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+
+        # Then check if the specified output and batch directories exists
+        if outdir is None:
+            # this is the default
+            logger.info("Assuming default directory structure...")
+            self.output_dir = "/group/mwaops/vcs/{0}/cal/{1}/rts".format(self.obsid, self.cal_obsid)
+            self.batch_dir = "/group/mwaops/vcs/{0}/batch".format(self.obsid)
+            logger.debug("RTS output directory is {0}".format(self.output_dir))
+            logger.debug("Batch directory is {0}".format(self.batch_dir))
+            mdir(self.output_dir, "RTS")
+            mdir(self.batch_dir, "Batch")
+        else:
+            # mdir handles if the directory already exists
+            self.output_dir = os.path.abspath(outdir + "/rts")
+            self.batch_dir = os.path.abspath(outdir + "/batch")
+            logger.warning("Non-standard RTS output path: {0}".format(self.output_dir))
+            logger.warning("Non-standard batch directory path: {0}".format(self.batch_dir))
+            mdir(self.output_dir, "RTS")
+            mdir(self.batch_dir, "Batch")
+
+        # Then check that the metafits file exists
+        if os.path.isfile(metafits) is False:
+            # file doesn't exist
+            errmsg = "Given metafits file ({0}) does not exist.".format(metafits)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+        elif "_ppds" not in metafits:
+            # file doesn't have the correct naming convention
+            errmsg = "Looks like you have an old-style metafits. " \
+                     "You'll need to download the new version, which is named like: " \
+                     "{0}_metafits_ppds.fits.".format(obsid)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+        else:
+            logger.info("Metafits file exists and is named correctly.")
+            self.metafits = os.path.abspath(metafits)
+
+        # the check that the source list exists
+        if os.path.isfile(srclist) is False:
+            # file doesn't exist
+            errmsg = "Given source list file ({0}) does not exist.".format(srclist)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+        else:
+            logger.info("Checking source list file exists... Ok")
+            self.source_list = os.path.abspath(srclist)
+
+        # set some RTS flags based on if we have offline correlated data or not
+        logger.info("Setting RTS data input flags...")
+        if self.offline:
+            self.useCorrInput = 1
+            self.readDirect = 0
+            logger.debug("Offline correlation")
+        else:
+            self.useCorrInput = 0
+            self.readDirect = 1
+            logger.debug("Online correlation")
+
+
+    def power_of_2_less_than(self, n):
+        """Return the largest power of 2 that is less than or equal to n"""
+        # using the magic of Python integers actually being objects
+        return 2**(int(n).bit_length() - 1)
+
+
+    def get_info_from_data_header(self):
+        """Read information from the FITS file header to figure out calibration configuration.
+        
+        Raises
+        ------
+        CalibrationError
+            When there is a problem with some of the observation information and/or its manipulation.
+        """
+        # first determine the UTC time from the file name
+        logger.info("Gathering information from data headers...")
+        file_glob = "{0}/*_gpubox*.fits".format(self.data_dir)
+        files = sorted(glob.glob(file_glob))
+        len_files = len(files)
+        if len_files == 0:
+            errmsg = "No *_gpubox*.fits files found in {0}.".format(self.data_dir)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+        elif len_files % 24 != 0:
+            errmsg = "Number of *_gpubox*.fits files is not divisible by 24!?"
+            logger.critical(errmsg)
+            raise CalibrationError(errmsg)
+
+        first_file = files[0]
+        self.utctime = os.path.splitext(os.path.basename(first_file))[0].split("_")[1]
+
+        if self.offline is False:
+            # now figure out how much data we have in total by counting the number of data HDUs
+            # then open the header to access the frequency spacing and inetgration times
+            hdulist = fits.open(first_file)
+            nfine_chan = int(hdulist[1].header['NAXIS2'])
+            inttime = float(hdulist[1].header['INTTIME'])
+
+            # coarse channel BW is 1.28 MHz
+            self.fine_cbw = 1.28 / nfine_chan
+            self.nfine_chan = nfine_chan
+
+            # the correlator dump time is whatever is in the header
+            self.corr_dump_time = inttime
+
+            ngroups = len_files / 24
+            fgrouped = np.array(np.array_split(files, ngroups))
+            ndumps = 0
+            for item in fgrouped[:,0]:
+                # count how many units are present, subtract one (primary HDU)
+                ndumps += len(fits.open(item)) - 1
+
+            # use all of the data to calibrate
+            # TODO: the RTS currently (14 Nov 2017) dies when using more than 1 set of visibilities
+            # Currently require that the number of dumps to average is a power of 2 <= calculated ndumps here (27 Feb 2018)
+            self.n_dumps_to_average = self.power_of_2_less_than(ndumps)
+
+        else:
+            # we have to figure out how much data has been correlated and what the frequency/time resolution is
+            # offline correlated data don't have a primary HDU, so we get the info from the first header
+            hdulist = fits.open(first_file)
+            nfine_chan = int(hdulist[0].header['NAXIS2'])
+            inttime = float(hdulist[0].header['INTTIME'])
+
+            self.fine_cbw = 1.28 / nfine_chan
+            self.nfine_chan = nfine_chan
+            self.corr_dump_time = inttime
+
+            # for offline correlation, each file is one integration time - there has been no concatenation
+            # TODO: this assumes that the offline correlator ALWAYS produces 1 second FITS files
+            ndumps = len(fits.open(first_file)) * len_files / 24
+            self.n_dumps_to_average = self.power_of_2_less_than(ndumps)
+
+        logger.info("Number of fine channels: {0}".format(self.nfine_chan))
+        logger.info("Fine channel bandwidth (MHz): {0}".format(self.fine_cbw))
+        logger.info("Integration time (s): {0}".format(self.corr_dump_time))
+        logger.info("Number of correlator dumps to average: {0}".format(self.n_dumps_to_average))
+
+
+    def construct_base_string(self):
+        """Construct the basic string to be written to the RTS config file. 
+        This string will then be edit with regexp to update the relevant details.
+
+        Returns
+        -------
+        file_str : str
+            The base string to be written to an RTS configuration srcipt after manipulation.
+
+        Raises
+        ------
+        CalibrationError
+            When there is a problem with some of the observation information and/or its manipulation.
+        """
+        # get calibrator observation information from database
+        # TODO: need to make this write a metafile so that we don't have to keep querying the database on every run
+        # TODO: actually, do we?
+        logger.info("Querying metadata database for obsevation information...")
+        obsinfo = getmeta(service='obs', params={'obs_id': str(self.cal_obsid)})
+
+        # quick check to make sure what's returned is actually real data
+        if len(obsinfo[u'logs']) == 0:
+            errmsg = "Metadata database error (logs empty). Maybe an invalid obs ID?"
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+
+        # get the RA/Dec pointing for the primary beam
+        ra_pointing_degs = obsinfo['metadata']['ra_pointing']
+        dec_pointing_degs = obsinfo['metadata']['dec_pointing']
+
+        # now get teh absolute channels
+        self.channels = obsinfo[u'rfstreams'][u"0"][u'frequencies']
+
+        # convert times using our timeconvert and get LST and JD 
+        # TODO: need to make this not have to call an external script
+        #       we could do this by using the mwapy.ephem_utils 
+        #       (which timeconvert.py just wraps) or use astropy
+        """
+        try:
+            timeconvert = distutils.spawn.find_executable("timeconvert.py")
+        except Exception:
+            errmsg = "Unable to access or find the executebale \"timeconvert.py\""
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+
+        cmd = "{0} --datetime={1}".format(timeconvert, self.utctime)
+        logger.debug(cmd)
+        time_cmd = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+
+        hh = 0
+        mm = 0
+        ss = 0
+        jd = 2451545.25  # 2001-01-01 18:00:00 UTC
+
+        for line in time_cmd.stdout:
+            if "LST" in line:
+                lststring, lstflag = line.split()
+                hh, mm, ss = lststring.split(":")
+
+            if "JD" in line:
+                jdflag, jd = line.split()
+        """
+        # use the same operations as in timeconvert.py for our specific need
+        logger.info("Converting times with mwapy.ephem_utils")
+        time = ephem_utils.MWATime()
+        time.datetimestring = self.utctime
+        lststring = time.LST.strftime('%H:%M:%S')
+        hh, mm, ss = lststring.split(":")
+        jd = time.MJD + 2400000.5
+        logger.info("   LST: {0}".format(lststring))
+        logger.info("   JD : {0}".format(jd))
+        
+        lst_in_hours = float(hh) + float(mm) / 60.0 + float(ss) / 60.0 ** 2
+
+        # set the HA of the image centre to the primary beam HA
+        logger.debug("Determining HA and DEC for primary beam")
+        self.JD = jd
+        pb_ha_hours = (ra_pointing_degs / 360.0) * 24.0
+        self.PB_HA = lst_in_hours - pb_ha_hours
+        self.PB_DEC = dec_pointing_degs
+
+        logger.debug("Primary beam: HA = {0} hrs, Dec = {1} deg".format(self.PB_HA, self.PB_DEC))
+        logger.debug("JD = {0}".format(self.JD))
+        logger.debug("LST = {0}:{1}:{2} = {3} hrs".format(hh, mm, ss, lst_in_hours))
+
+        # get the lowest frequency channel
+        freqs = obsinfo['rfstreams']['0']['frequencies']
+        start_channel = freqs[0]
+
+        self.freq_base = start_channel * 1.28e6 - 0.64e6 + 15e3  # frequency base in Hz
+        self.freq_base /= 1e6  # convert to MHz
+
+        logger.debug("Frequency lower edge = {0} MHz".format(self.freq_base))
+
+        # make metafits file formatted for RTS
+        self.metafits_RTSform = self.metafits.split("_metafits_ppds.fits")[0]
+
+        # create the final file string, expanding symlinks to real paths
+        logger.info("Constructing base RTS configuration script content")
+        file_str = """
+ReadAllFromSingleFile=
+BaseFilename={0}/*_gpubox
+ReadGpuboxDirect={1}
+UseCorrelatorInput={2}
+
+ReadMetafitsFile=1
+MetafitsFilename={3}
+
+DoCalibration=
+doMWArxCorrections=1
+doRawDataCorrections=1
+doRFIflagging=0
+useFastPrimaryBeamModels=1
+generateDIjones=1
+applyDIcalibration=1
+UsePacketInput=0
+UseThreadedVI=1
+
+ObservationFrequencyBase={4}
+ObservationTimeBase={5}
+ObservationPointCentreHA={6}
+ObservationPointCentreDec={7}
+ChannelBandwidth={8}
+NumberOfChannels={9}
+
+CorrDumpsPerCadence={10}
+CorrDumpTime={11}
+NumberOfIntegrationBins=3
+NumberOfIterations=1
+
+StartProcessingAt=0
+
+ArrayPositionLat={12}
+ArrayPositionLong={13}
+ArrayNumberOfStations=128
+
+ArrayFile=
+
+SourceCatalogueFile={14}
+NumberOfCalibrators=1
+NumberOfSourcesToPeel=0
+calBaselineMin=20.0
+calShortBaselineTaper=40.0
+FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
+                               self.readDirect,
+                               self.useCorrInput,
+                               os.path.realpath(self.metafits_RTSform),
+                               self.freq_base,
+                               self.JD,
+                               self.PB_HA,
+                               self.PB_DEC,
+                               self.fine_cbw,
+                               self.nfine_chan,
+                               self.n_dumps_to_average,
+                               self.corr_dump_time,
+                               self.ArrayPositionLat,
+                               self.ArrayPositionLong,
+                               os.path.realpath(self.source_list))
+
+        return file_str
+
+
+    def write_flag_files(self):
+        """Given the output directory, write initial flagging files based on bad tiles in metafits and number
+        of fine channels.
+        """
+        metafits = fits.open(self.metafits)  # read metafits file
+        bad_tiles = metafits[1].data['Flag'][::2]  # both polarisation recorded, so we just want every second value
+        bad_tiles = np.where(bad_tiles == 1)[0]
+        flagged_tiles = "{0}/flagged_tiles.txt".format(self.output_dir)
+
+        if os.path.isfile(flagged_tiles):
+            logger.warning("{0} already exists. Not overwriting.".format(flagged_tiles))
+        else:
+            with open(flagged_tiles, 'w') as fid:
+                for b in bad_tiles:
+                    fid.write("{0}\n".format(b))
+
+        # figure out how many edge channels to flag based on the fact that with 128, we flag the edge 8
+        ntoflag = int(8 * self.nfine_chan / 128.)
+        logger.debug("Flagging {0} edge channels".format(ntoflag))
+        chans = np.arange(self.nfine_chan)
+        start_chans = chans[:ntoflag]
+        end_chans = chans[-ntoflag:]
+        center_chan = [self.nfine_chan / 2]
+        bad_chans = np.hstack((start_chans, center_chan, end_chans))
+        flagged_channels = "{0}/flagged_channels.txt".format(self.output_dir)
+        if os.path.isfile(flagged_channels):
+            logger.warning("{0} already exists. Not overwriting.".format(flagged_channels))
+        else:
+            with open(flagged_channels, 'w') as fid:
+                for b in bad_chans:
+                    fid.write("{0}\n".format(b))
+
+
+    def run(self):
+        """Run through the pipeline to produce the RTS file string and write the channel/tile flags to disk."""
+        self.get_info_from_data_header()
+        self.base_str = self.construct_base_string()
+        self.write_flag_files()
 
 
 class RTScal(object):
@@ -71,7 +528,7 @@ class RTScal(object):
         Whether to submit the created scripts to the SLURM queue. True = submit, False = don't submit.
     """
 
-    def __init__(self, rts_base, submit=False):
+    def __init__(self, rts_base, submit=True):
         """Initiliase the class attributes from the rts_base information
 
         Paramters
@@ -103,12 +560,13 @@ class RTScal(object):
 
         # setup the basic body for all SLURM scripts
         self.script_body = []
-        self.script_body.append("module load cudatoolkit")  # need CUDA for RTS
-        self.script_body.append("module load cfitsio")  # need cfitsio for reading fits files
+        #self.script_body.append("module load cudatoolkit")  # need CUDA for RTS
+        #self.script_body.append("module load cfitsio")  # need cfitsio for reading fits files
         self.script_body.append("cd {0}".format(self.rts_out_dir))  # change to output directory and run RTS there
 
         # boolean to control batch job submission. True = submit to queue, False = just write the files
         self.submit = submit
+
 
     def summary(self):
         """Print a nice looking summary of relevant attributes."""
@@ -121,19 +579,23 @@ class RTScal(object):
         logger.debug("Is picket fence?            {0}".format(self.picket_fence))
         logger.debug("Submit jobs?                {0}".format(self.submit))
 
+
     def __summary(self):
         # debugging use only
         print self.__dict__
 
+
     def submit_true(self):
         """Set the submit flag to True, allowing sbatch queue submission."""
-        logger.info("Setting submit attribute to True")
+        logger.info("Setting submit attribute to True: allows job submission")
         self.submit = True
+
 
     def submit_false(self):
         """Set the submit flag to False, not allowing sbatch queue submission."""
-        logger.info("Setting submit attribute to False")
+        logger.info("Setting submit attribute to False: disallows job submission")
         self.submit = False
+
 
     def is_picket_fence(self):
         """Check whether the observed channels imply picket-fence or not. 
@@ -147,12 +609,14 @@ class RTScal(object):
             logger.info("This observation's channels are NOT consecutive: this is a picket-fence observation")
             self.picket_fence = True
 
+
     def sort_obs_channels(self):
         """Just sort the channels and split them into "high" and "low" channel lists."""
         self.hichans = [c for c in self.channels if c > 128]
         self.lochans = [c for c in self.channels if c <= 128]
         logger.debug("High channels: {0}".format(self.hichans))
         logger.debug("Low channels:  {0}".format(self.lochans))
+
 
     def construct_subbands(self):
         """Group the channels into consecutive subbands, being aware of the high channel ordering reversal.
@@ -170,14 +634,13 @@ class RTScal(object):
             logger.info("A subband crosses the channel 129 boundary. This subband will be split on that boundary.")
 
         # create a list of lists with consecutive channels grouped within a list
-        hichan_groups = [map(itemgetter(1), g)[::-1] for k, g in
-                         groupby(enumerate(self.hichans), lambda (i, x): i - x)][
-                        ::-1]  # reversed order (both of internal lists and globally)
+        hichan_groups = [map(itemgetter(1), g)[::-1] for k, g in groupby(enumerate(self.hichans), lambda (i, x): i - x)][::-1]  # reversed order (both of internal lists and globally)
         lochan_groups = [map(itemgetter(1), g) for k, g in groupby(enumerate(self.lochans), lambda (i, x): i - x)]
         logger.debug("High channels (grouped): {0}".format(hichan_groups))
         logger.debug("Low channels  (grouped): {0}".format(lochan_groups))
 
         return hichan_groups, lochan_groups
+
 
     def write_cont_scripts(self):
         """Function to write RTS submission script in the case of a "standard" 
@@ -197,16 +660,24 @@ class RTScal(object):
         jobids = []
         nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
-        slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:20:00",
-                        "nodes": "{0}".format(nnodes), "gres": "gpu:1"}
+        slurm_kwargs = {"partition": "gpuq",
+                        "workdir": "{0}".format(self.rts_out_dir),
+                        "time": "00:20:00",
+                        "nodes": "{0}".format(nnodes),
+                        "gres": "gpu:1",
+                        "ntasks-per-node": "1"}
         commands = list(self.script_body)  # make a copy of body to then extend
-        #commands.append("srun -n {0} -c 1  rts_gpu {1}".format(nnodes, fname))
-        commands.append("srun rts_cpu {0}".format(fname))
-        jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir,
-                             submit=self.submit)
+        commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, fname))
+        #commands.append("srun rts_cpu {0}".format(fname))
+        jobid = submit_slurm(rts_batch, commands, 
+                                slurm_kwargs=slurm_kwargs,
+                                batch_dir=self.batch_dir,
+                                submit=self.submit,
+                                export="ALL")
         jobids.append(jobid)
 
         return jobids
+
 
     def get_subband_config(self, chan_groups, basepath, chan_type, count):
         """Function to make the appropriate changes to a base copy of the RTS configuration scripts.
@@ -335,6 +806,7 @@ class RTScal(object):
 
         return chan_file_dict, count
 
+
     def write_picket_fence_scripts(self):
         """Function to write RTS submission scripts in the case of a picket-fence
         observation. A significant amount of extra information needs to be 
@@ -373,16 +845,24 @@ class RTScal(object):
             nnodes = v + 1
             chans = k.split('_')[-1].split(".")[0]
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
-            slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:45:00",
-                            "nodes": "{0}".format(nnodes), "gres": "gpu:1"}
+            slurm_kwargs = {"partition": "gpuq",
+                            "workdir": "{0}".format(self.rts_out_dir),
+                            "time": "00:45:00",
+                            "nodes": "{0}".format(nnodes),
+                            "gres": "gpu:1",
+                            "ntasks-per-node": "1"}
             commands = list(self.script_body)  # make a copy of body to then extend
-            #commands.append("srun -n {0} -c 1  rts_gpu {1}".format(nnodes, k))
-            commands.append("srun rts_cpu {0}".format(k))
-            jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir,
-                                 submit=self.submit)
+            commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, k))
+            #commands.append("srun rts_cpu {0}".format(k))
+            jobid = submit_slurm(rts_batch, commands,
+                                    slurm_kwargs=slurm_kwargs,
+                                    batch_dir=self.batch_dir,
+                                    submit=self.submit,
+                                    export="ALL")
             jobids.append(jobid)
 
         return jobids
+
 
     def run(self):
         """Only function that needs to be called after creating the RTScal object.
@@ -407,434 +887,16 @@ class RTScal(object):
         return jobids
 
 
-class BaseRTSconfig(object):
-    """A class to hold the base information for a given RTS configuration file.
-    
-    Parameters
-    ----------
-    obsid : int
-        The target observation ID.
-    cal_obsid : int
-        The calibrator observation ID.
-    metafits : str
-        Path to the metafits file for the calibrator observation.
-    srclist : str
-        Path to the source list created for this calibrator observation (using srclist_by_beam.py).
-    datadir : str
-        Path to visibility data to be used to produce a calibration solution.
-    outdir : str, optional
-        Path to write RTS configuration and relevant flagging information.
-    offline : str, optional
-        Whether the visibility data were produced with the offline correlator. Default is False.
-
-
-    Attributes
-    ----------
-    obsid : int
-        The target observation ID
-    cal_obsid : int
-        The calibrator observation ID
-    offline : bool
-        Whether the calibrator data was produced by the offline correlator.
-    utctime : str
-        The start UTC time (as YYYY-MM-DDThh:mm:ss.ss)
-    nfine_chan : int
-        The number of fine channels per coarse channel
-    channels : list of ints
-        The list of coarse channels recorded within a subband. Can range from length of 1-24.
-    fine_cbw : float
-        The fine channel bandwidth in MHz
-    corr_dump_time : float
-        The time scale on which the correlator dumped the visibilities (i.e. the integration time).
-    n_corr_dumps_to_average : int
-        The number of correlator dumps to use. 
-        Must be such that `corr_dump_time * n_corr_dumps_to_average` is <= than the total amount of data 
-        available for the calibrator observation.
-    PB_HA : float
-        The primary beam Hour Angle (in degrees)
-    PB_DEC : float
-        The primary beam Declination (in degrees)
-    freq_base :  float
-        The starting frequency from which to count the subband IDs (coarse channels)
-    JD : float
-        Julian day conversion of `utctime`
-    metafits_RTSform : str
-        A modified string of the user-define metafits file location. Truncates "_metafits_pdds.fits".
-    ArrayPositionLat : float
-        The MWA's latitude (in degrees)
-    ArrayPositionLong : float
-        The MWA's longitude (in degrees)
-    base_str : str
-        The basic RTS configuration skeleton script with some relevant information (built in BaseRTSconfig)
-    data_dir : str
-        Path to look for visibilities to use for calibration.
-    output_dir : str
-        Path to write RTS configuration and relevant flagging information.
-    batch_dir : str
-        Path to where the SLURM scripts and their output are to be written.    
-    metafits : str
-        Path to the original metafits file for the calibrator observation.
-    source_list: str 
-        Path to the source list created for this calibrator observation (using srclist_by_beam.py).
-    useCorrInput : int
-        Option value for RTS configuration regarding interpreting correlator streamed data.
-        For offline-correlated data, `useCorrInput=1` and `readDirect=0`.
-    readDirect : int
-        Option value for RTS configuration regarding reading data files from disk. 
-        For online-correlated data, `readDirect=1` and `useCorrInput=0`.
-
-    Raises
-    ------
-    CalibrationError
-        When there is a problem with some of the observation information and/or its manipulation.
-    """
-
-    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir, outdir=None, offline=False):
-        self.obsid = obsid  # target observation ID
-        self.cal_obsid = cal_obsid  # calibrator observation ID
-        self.offline = offline  # switch to decide if offline correlated data or not
-        self.utctime = None  # start UTC time
-        self.nfine_chan = None  # number of fine channels
-        self.channels = None  # actual channel numbers
-        self.fine_cbw = None  # fine channel bandwidth
-        self.corr_dump_time = None  # correlator dump times (i.e. integration time)
-        self.n_dumps_to_average = None  # number of integration times to use for calibration
-        self.PB_HA = None  # primary beam HA
-        self.PB_DEC = None  # primary beam Dec
-        self.freq_base = None  # frequency base for RTS
-        self.JD = None  # time base for RTS
-        self.metafits_RTSform = None  # modified metafits file name for RTS
-        self.ArrayPositionLat = -26.70331940  # MWA latitude
-        self.ArrayPositionLong = 116.6708152  # MWA longitude
-        self.base_str = None  # base string to be written to file, will be editted by RTScal
-
-        # Check to make sure paths and files exist:
-        # First, check that the actual data directory exists
-        if os.path.isdir(datadir):
-            self.data_dir = os.path.abspath(datadir)
-            logger.info("Checking data directory exists... Ok")
-        else:
-            errmsg = "Data directory ({0}) does not exists. Aborting.".format(datadir)
-            logger.error(errmsg)
-            raise CalibrationError(errmsg)
-
-        # Then check if the specified output and batch directories exists
-        if outdir is None:
-            # this is the default
-            logger.info("Assuming default directory structure...")
-            self.output_dir = "/group/mwaops/vcs/{0}/cal/{1}/rts".format(self.obsid, self.cal_obsid)
-            self.batch_dir = "/group/mwaops/vcs/{0}/batch".format(self.obsid)
-            logger.debug("RTS output directory is {0}".format(self.output_dir))
-            logger.debug("Batch directory is {0}".format(self.batch_dir))
-            mdir(self.output_dir, "RTS")
-            mdir(self.batch_dir, "Batch")
-        else:
-            # mdir handles if the directory already exists
-            self.output_dir = os.path.abspath(outdir + "/rts")
-            self.batch_dir = os.path.abspath(outdir + "/batch")
-            logger.warning("Non-standard RTS output path: {0}".format(self.output_dir))
-            logger.warning("Non-standard batch directory path: {0}".format(self.batch_dir))
-            mdir(self.output_dir, "RTS")
-            mdir(self.batch_dir, "Batch")
-
-        # Then check that the metafits file exists
-        if os.path.isfile(metafits) is False:
-            # file doesn't exist
-            errmsg = "Given metafits file ({0}) does not exist.".format(metafits)
-            logger.error(errmsg)
-            raise CalibrationError(errmsg)
-        elif "_ppds" not in metafits:
-            # file doesn't have the correct naming convention
-            errmsg = "Looks like you have an old-style metafits. " \
-                     "You'll need to download the new version, which is named like: " \
-                     "{0}_metafits_ppds.fits.".format(obsid)
-            logger.error(errmsg)
-            raise CalibrationError(errmsg)
-        else:
-            logger.info("Checking metafits file exists and is named correctly... Ok")
-            self.metafits = os.path.abspath(metafits)
-
-        # the check that the source list exists
-        if os.path.isfile(srclist) is False:
-            # file doesn't exist
-            errmsg = "Given source list file ({0}) does not exist.".format(srclist)
-            logger.error(errmsg)
-            raise CalibrationError(errmsg)
-        else:
-            logger.info("Checking source list file exists... Ok")
-            self.source_list = os.path.abspath(srclist)
-
-        # set some RTS flags based on if we have offline correlated data or not
-        logger.info("Setting RTS data input flags...")
-        if self.offline:
-            self.useCorrInput = 1
-            self.readDirect = 0
-            logger.debug("Offline correlation")
-        else:
-            self.useCorrInput = 0
-            self.readDirect = 1
-            logger.debug("Online correlation")
-
-    def get_info_from_data_header(self):
-        """Read information from the FITS file header to figure out calibration configuration.
-        
-        Raises
-        ------
-        CalibrationError
-            When there is a problem with some of the observation information and/or its manipulation.
-        """
-        # first determine the UTC time from the file name
-        logger.info("Gathering information from data headers...")
-        file_glob = "{0}/*_gpubox*.fits".format(self.data_dir)
-        files = sorted(glob.glob(file_glob))
-        len_files = len(files)
-        if len_files == 0:
-            errmsg = "No *_gpubox*.fits files found in {0}.".format(self.data_dir)
-            logger.error(errmsg)
-            raise CalibrationError(errmsg)
-        elif len_files % 24 != 0:
-            errmsg = "Number of *_gpubox*.fits files is not divisible by 24!?"
-            logger.critical(errmsg)
-            raise CalibrationError(errmsg)
-
-        first_file = files[0]
-        self.utctime = os.path.splitext(os.path.basename(first_file))[0].split("_")[1]
-
-        if self.offline is False:
-            # now figure out how much data we have in total by counting the number of data HDUs
-            # then open the header to access the frequency spacing and inetgration times
-            hdulist = fits.open(first_file)
-            nfine_chan = int(hdulist[1].header['NAXIS2'])
-            inttime = float(hdulist[1].header['INTTIME'])
-
-            # coarse channel BW is 1.28 MHz
-            self.fine_cbw = 1.28 / nfine_chan
-            self.nfine_chan = nfine_chan
-
-            # the correlator dump time is whatever is in the header
-            self.corr_dump_time = inttime
-
-            ngroups = len_files / 24
-            fgrouped = np.array(np.array_split(files, ngroups))
-            ndumps = 0
-            for item in fgrouped[:, 0]:
-                # count how many units are present, subtract one (primary HDU)
-                ndumps += len(fits.open(item)) - 1
-
-            # use all of the data to calibrate
-            # TODO: the RTS currently (14 Nov 2017) dies when using more than 1 set of visibilities
-            self.n_dumps_to_average = ndumps
-
-        else:
-            # we have to figure out how much data has been correlated and what the frequency/time resolution is
-            # offline correlated data don't have a primary HDU, so we get the info from the first header
-            hdulist = fits.open(first_file)
-            nfine_chan = int(hdulist[0].header['NAXIS2'])
-            inttime = float(hdulist[0].header['INTTIME'])
-
-            self.fine_cbw = 1.28 / nfine_chan
-            self.nfine_chan = nfine_chan
-            self.corr_dump_time = inttime
-
-            # for offline correlation, each file is one integration time - there has been no concatenation
-            # TODO: this assumes that the offline correlator ALWAYS produces 1 second FITS files
-            ndumps = len(fits.open(first_file)) * len_files / 24
-            self.n_dumps_to_average = ndumps
-
-        logger.info("Number of fine channels: {0}".format(self.nfine_chan))
-        logger.info("Fine channel bandwidth (MHz): {0}".format(self.fine_cbw))
-        logger.info("Integration time (s): {0}".format(self.corr_dump_time))
-        logger.info("Number of correlator dumps to average: {0}".format(self.n_dumps_to_average))
-
-    def construct_base_string(self):
-        """Construct the basic string to be written to the RTS config file. 
-        This string will then be edit with regexp to update the relevant details.
-
-        Returns
-        -------
-        file_str : str
-            The base string to be written to an RTS configuration srcipt after manipulation.
-
-        Raises
-        ------
-        CalibrationError
-            When there is a problem with some of the observation information and/or its manipulation.
-        """
-        # get calibrator observation information from database
-        # TODO: need to make this write a metafile so that we don't have to keep querying the database on every run
-        logger.info("Querying metadata database for obsevation information...")
-        obsinfo = getmeta(service='obs', params={'obs_id': str(self.cal_obsid)})
-
-        # quick check to make sure what's returned is actually real data
-        if len(obsinfo[u'logs']) == 0:
-            errmsg = "Metadata database error (logs empty). Maybe an invalid obs ID?"
-            logger.error(errmsg)
-            raise CalibrationError(errmsg)
-
-        # get the RA/Dec pointing for the primary beam
-        ra_pointing_degs = obsinfo['metadata']['ra_pointing']
-        dec_pointing_degs = obsinfo['metadata']['dec_pointing']
-
-        # now get teh absolute channels
-        self.channels = obsinfo[u'rfstreams'][u"0"][u'frequencies']
-
-        # convert times using our timeconvert and get LST and JD 
-        # TODO: need to make this not have to call an external script
-        try:
-            timeconvert = distutils.spawn.find_executable("timeconvert.py")
-        except Exception:
-            errmsg = "Unable to access or find the executebale \"timeconvert.py\""
-            logger.error(errmsg)
-            raise CalibrationError(errmsg)
-
-        cmd = "{0} --datetime={1}".format(timeconvert, self.utctime)
-        logger.debug(cmd)
-        time_cmd = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-
-        hh = 0
-        mm = 0
-        ss = 0
-        jd = 2451545.25  # 2001-01-01 18:00:00 UTC
-
-        for line in time_cmd.stdout:
-            if "LST" in line:
-                lststring, lstflag = line.split()
-                hh, mm, ss = lststring.split(":")
-
-            if "JD" in line:
-                jdflag, jd = line.split()
-
-        lst_in_hours = float(hh) + float(mm) / 60.0 + float(ss) / 60.0 ** 2
-
-        # set the HA of the image centre to the primary beam HA
-        logger.debug("Determining HA and DEC for primary beam")
-        self.JD = jd
-        pb_ha_hours = (ra_pointing_degs / 360.0) * 24.0
-        self.PB_HA = lst_in_hours - pb_ha_hours
-        self.PB_DEC = dec_pointing_degs
-
-        logger.debug("Primary beam: HA = {0} hrs, Dec = {1} deg".format(self.PB_HA, self.PB_DEC))
-        logger.debug("JD = {0}".format(self.JD))
-        logger.debug("LST = {0}:{1}:{2} = {3} hrs".format(hh, mm, ss, lst_in_hours))
-
-        # get the lowest frequency channel
-        freqs = obsinfo['rfstreams']['0']['frequencies']
-        start_channel = freqs[0]
-
-        self.freq_base = start_channel * 1.28e6 - 0.64e6 + 15e3  # frequency base in Hz
-        self.freq_base /= 1e6  # convert to MHz
-
-        logger.debug("Frequency lower edge = {0} MHz".format(self.freq_base))
-
-        # make metafits file formatted for RTS
-        self.metafits_RTSform = self.metafits.split("_metafits_ppds.fits")[0]
-
-        logger.info("Constructing base RTS configuration script content")
-        file_str = """
-ReadAllFromSingleFile=
-BaseFilename={0}/*_gpubox
-ReadGpuboxDirect={1}
-UseCorrelatorInput={2}
-
-ReadMetafitsFile=1
-MetafitsFilename={3}
-
-DoCalibration=
-doMWArxCorrections=1
-doRawDataCorrections=1
-doRFIflagging=0
-useFastPrimaryBeamModels=1
-generateDIjones=1
-applyDIcalibration=1
-UsePacketInput=0
-UseThreadedVI=1
-
-ObservationFrequencyBase={4}
-ObservationTimeBase={5}
-ObservationPointCentreHA={6}
-ObservationPointCentreDec={7}
-ChannelBandwidth={8}
-NumberOfChannels={9}
-
-CorrDumpsPerCadence={10}
-CorrDumpTime={11}
-NumberOfIntegrationBins=3
-NumberOfIterations=1
-
-StartProcessingAt=0
-
-ArrayPositionLat={12}
-ArrayPositionLong={13}
-ArrayNumberOfStations=128
-
-ArrayFile=
-
-SourceCatalogueFile={14}
-NumberOfCalibrators=1
-NumberOfSourcesToPeel=0
-calBaselineMin=20.0
-calShortBaselineTaper=40.0
-FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
-                               self.readDirect,
-                               self.useCorrInput,
-                               self.metafits_RTSform,
-                               self.freq_base,
-                               self.JD,
-                               self.PB_HA,
-                               self.PB_DEC,
-                               self.fine_cbw,
-                               self.nfine_chan,
-                               self.n_dumps_to_average,
-                               self.corr_dump_time,
-                               self.ArrayPositionLat,
-                               self.ArrayPositionLong,
-                               self.source_list)
-
-        return file_str
-
-    def write_flag_files(self):
-        """Given the output directory, write initial flagging files based on bad tiles in metafits and number
-        of fine channels.
-        """
-        metafits = fits.open(self.metafits)  # read metafits file
-        bad_tiles = metafits[1].data['Flag'][::2]  # both polarisation recorded, so we just want every second value
-        bad_tiles = np.where(bad_tiles == 1)[0]
-        flagged_tiles = "{0}/flagged_tiles.txt".format(self.output_dir)
-
-        if os.path.isfile(flagged_tiles):
-            logger.warning("{0} already exists. Not overwriting.".format(flagged_tiles))
-        else:
-            with open(flagged_tiles, 'w') as fid:
-                for b in bad_tiles:
-                    fid.write("{0}\n".format(b))
-
-        # figure out how many edge channels to flag based on the fact that with 128, we flag the edge 8
-        ntoflag = int(8 * self.nfine_chan / 128.)
-        logger.debug("Flagging {0} edge channels".format(ntoflag))
-        chans = np.arange(self.nfine_chan)
-        start_chans = chans[:ntoflag]
-        end_chans = chans[-ntoflag:]
-        center_chan = [self.nfine_chan / 2]
-        bad_chans = np.hstack((start_chans, center_chan, end_chans))
-        flagged_channels = "{0}/flagged_channels.txt".format(self.output_dir)
-        if os.path.isfile(flagged_channels):
-            logger.warning("{0} already exists. Not overwriting.".format(flagged_channels))
-        else:
-            with open(flagged_channels, 'w') as fid:
-                for b in bad_chans:
-                    fid.write("{0}\n".format(b))
-
-    def run(self):
-        """Run through the pipeline to produce the RTS file string and write the channel/tile flags to disk."""
-        self.get_info_from_data_header()
-        self.base_str = self.construct_base_string()
-        self.write_flag_files()
 
 
 if __name__ == '__main__':
+
+    # convnience dictionary for choosing log-levels
+    loglevels = {"DEBUG":logging.DEBUG, "INFO":logging.INFO, "WARNING":logging.WARNING}
+
     # Option parsing
     parser = argparse.ArgumentParser(
-        description="Calibration script for creating RTS configuration files in the VCS pulsar pipeline")
+        description="Script for creating RTS configuration files and submitting relevant jobs in the VCS pulsar pipeline")
 
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target.", required=True)
 
@@ -847,7 +909,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list.", required=True)
 
-    parser.add_argument("--gpubox_dir", type=str, help="Where the *_gpubox*.fits files are located")
+    parser.add_argument("--gpubox_dir", type=str, help="Where the *_gpubox*.fits files are located", default=None)
 
     parser.add_argument("--rts_output_dir", type=str,
                         help="Parent directory where you want the /rts directory and /batch directory to be created."
@@ -856,14 +918,17 @@ if __name__ == '__main__':
     parser.add_argument("--offline", action='store_true',
                         help="Tell the RTS to read calibrator data in the offline correlated data format.")
 
-    parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
+    #parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
+    parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue.")
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: DEBUG.", 
+                        choices=loglevels.keys(), default="DEBUG")
 
     args = parser.parse_args()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(loglevels[args.loglvl])
     formatter = logging.Formatter('%(asctime)s %(thread)d  %(name)s  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
@@ -879,7 +944,7 @@ if __name__ == '__main__':
 
     logger.info("Creating RTScal instance - determining specific config requirements for this observation")
     try:
-        calobj = RTScal(baseRTSconfig, args.submit)
+        calobj = RTScal(baseRTSconfig, args.nosubmit)
         jobs = calobj.run()
         logger.info("Job IDs: {0}".format(jobs))
     except CalibrationError as e:
