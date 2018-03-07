@@ -37,7 +37,7 @@ def tmp(suffix=".sh"):
     t = tempfile.mktemp(suffix=suffix)
     atexit.register(os.unlink, t)
     return t
-
+"""
 def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", depend=0, submit=True, outfile=None, cluster="galaxy"):
         """
         Making this function to cleanly submit slurm jobs using a simple template.
