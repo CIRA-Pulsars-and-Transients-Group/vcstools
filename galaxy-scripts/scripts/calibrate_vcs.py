@@ -201,7 +201,6 @@ class RTScal(object):
                         "nodes": "{0}".format(nnodes), "gres": "gpu:1"}
         commands = list(self.script_body)  # make a copy of body to then extend
         #commands.append("srun -n {0} -c 1  rts_gpu {1}".format(nnodes, fname))
-        commands.append("source /group/mwaops/PULSAR/psrBash.profile")
         commands.append("srun rts_cpu {0}".format(fname))
         jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir,
                              submit=self.submit)
