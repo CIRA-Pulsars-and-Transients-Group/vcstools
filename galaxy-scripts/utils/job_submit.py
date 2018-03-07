@@ -18,7 +18,7 @@ SLURM_TMPL = """#!/bin/bash -l
 
 def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, 
                     batch_dir="batch/", depend=None, submit=True, 
-                    outfile=None, cluster="galaxy", export="NONE"):
+                    outfile=None, cluster="galaxy", export="ALL"):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
