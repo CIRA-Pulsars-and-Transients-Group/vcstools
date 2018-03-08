@@ -216,12 +216,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.gps and not args.utc:
-        time = Time(args.gps, scale="utc", format="gps")
+        time = Time(args.gps, format="gps")
     elif args.utc and not args.gps:
         time = Time(args.utc, scale="utc", format="isot")
     elif args.gps and arg.utc:
         print "You supplied GPS and UTC times: only using GPS time"
-        time = Time(args.gps, scale="utc", format="gps")
+        time = Time(args.gps, format="gps")
     else:
         time = None
 

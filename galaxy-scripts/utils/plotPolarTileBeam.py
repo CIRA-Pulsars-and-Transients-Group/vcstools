@@ -227,17 +227,17 @@ if __name__ == "__main__":
     parser.add_argument("--dec", type=str, help="Target DEC (J2000)")
     parser.add_argument("--cal_ra", type=str, help="Calibrator RA (J2000)")
     parser.add_argument("--cal_dec", type=str, help="Calibrator DEC (J2000)")
-    parser.add_argument("--gps", type=str, help="Time at which to evaluate target/calibrator position (GPS seconds)")
+    parser.add_argument("--gps", type=int, help="Time at which to evaluate target/calibrator position (GPS seconds)")
     parser.add_argument("--utc", type=str, help="Time at which to evaluate target/calibrator position (YYYY-MM-DDThh:mm:ss.ss UTC)")
     args = parser.parse_args()
     
     if args.gps and not args.utc:
-        time = Time(args.gps, scale="utc", format="gps")
+        time = Time(args.gps, format="gps")
     elif args.utc and not args.gps:
         time = Time(args.utc, scale="utc", format="isot")
     elif args.gps and arg.utc:
         print "You supplied GPS and UTC times: only using GPS time"
-        time = Time(args.gps, scale="utc", format="gps")
+        time = Time(args.gps, format="gps")
     else:
         time = None
 
