@@ -5,8 +5,9 @@ from astropy.coordinates import EarthLocation, SkyCoord, AltAz
 from astropy import units as u
 from astropy.time import Time
 
-import matplotlib as mpl
+#import matplotlib as mpl
 #mpl.rc("text", usetex=True)
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
@@ -109,7 +110,7 @@ def log_normalise(data, vmin, vmax):
     return result
 
 
-def plot_beam(obs, target, cal, freq, time):
+def plot_beam(obs, target, cal, freq):
 
     metadata = get_obs_metadata(obs)
 
@@ -126,6 +127,8 @@ def plot_beam(obs, target, cal, freq, time):
     fig = plt.figure(figsize=(10,8))
     ax = fig.add_subplot(111, polar=True, aspect='auto')
     
+
+
     # filled contour setup
     lower_contour = 7e-3
     upper_contour = beam.max()
@@ -161,41 +164,49 @@ def plot_beam(obs, target, cal, freq, time):
     cbarCC.add_lines(cs)
 
     # plot the pointing centre of the tile beam
-    ax.plot(np.radians(metadata["az"]), np.radians(metadata["za"]), ls="", marker="+", ms=8, color='cyan', zorder=1002, label="pointing centre")
+    ax.plot(np.radians(metadata["az"]), np.radians(metadata["za"]), ls="", marker="+", ms=8, color='C3', zorder=1002, label="pointing centre")
 
     if target is not None:
-        target_az = target.altaz.az.rad
-        target_za = np.pi/2 - target.altaz.alt.rad
-
-        # get beam power for target
-        bpt_x, bpt_y = pb.MWA_Tile_full_EE([[target_za]], [[target_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
-        bpt = (bpt_x + bpt_y) / 2.0
-        lognormbpt = log_normalise(bpt, cc_levels.min(), beam.max())
-        print "Beam power @ source:",bpt[0][0]
-        print "log-normalised:",lognormbpt[0][0]
-        
-        # plot the target position on sky
-        ax.plot(target_az, target_za, ls="", marker="o", color='C3', zorder=1002, label="target ({0:.2f})".format(bpt[0][0]))
-        
-        # plot the target on the color bar
-        cbarCC.ax.plot(0.5, lognormbpt, color='C3', marker="o")
+        # color map for tracking target positions
+        target_colors = cm.viridis(np.linspace(0, 1, len(target.obstime.gps)))
+        print len(target.obstime.gps)
+        for t,color in zip(target, target_colors):
+            target_az = t.altaz.az.rad
+            target_za = np.pi/2 - t.altaz.alt.rad
+            
+            # get beam power for target
+            bpt_x, bpt_y = pb.MWA_Tile_full_EE([[target_za]], [[target_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
+            bpt = (bpt_x + bpt_y) / 2.0
+            lognormbpt = log_normalise(bpt, cc_levels.min(), beam.max())
+            print "Beam power @ source @ {0}: {1:.3f}".format(t.obstime.gps, bpt[0][0])
+            print "     log-normalised: {0:.3f}".format(lognormbpt[0][0])
+            
+            # plot the target position on sky
+            ax.plot(target_az, target_za, ls="", marker="o", color=color, zorder=1002, label="target @ {0} ({1:.2f})".format(t.obstime.gps, bpt[0][0]))
+            
+            # plot the target on the color bar
+            cbarCC.ax.plot(0.5, lognormbpt, color=color, marker="o")
 
     if cal is not None:
-        cal_az = cal.altaz.az.rad
-        cal_za = np.pi/2 - cal.altaz.alt.rad
-        
-        # get the beam power for calibrator
-        bpc_x, bpc_y = pb.MWA_Tile_full_EE([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
-        bpc = (bpc_x + bpc_y) / 2.0
-        lognormbpc = log_normalise(bpc, cc_levels.min(), beam.max())
-        print "Beam power @ calibrtor:",bpc[0][0]
-        print "log-normalised:",lognormbpc[0][0]
-        
-        # plot the calibrator position on sky
-        ax.plot(cal_az, cal_za, ls="", marker="o", color='C2', zorder=1002, label="calibrator ({0:.2f})".format(bpc[0][0]))
+        # color map for tracking calibrator position
+        calibrator_colors = cm.viridis(np.linspace(0, 1, len(cal.obstime.gps)))
 
-        # plot the calibrator on the color bar
-        cbarCC.ax.plot(0.5, lognormbpc, color='C2', marker="o")
+        for c,color in zip(cal, calibrator_colors):
+            cal_az = c.altaz.az.rad
+            cal_za = np.pi/2 - c.altaz.alt.rad
+            
+            # get the beam power for calibrator
+            bpc_x, bpc_y = pb.MWA_Tile_full_EE([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
+            bpc = (bpc_x + bpc_y) / 2.0
+            lognormbpc = log_normalise(bpc, cc_levels.min(), beam.max())
+            print "Beam power @ calibrator @ {0}: {1:.3f}".format(c.obstime.gps, bpc[0][0])
+            print "     log-normalised: {0:.3f}".format(lognormbpc[0][0])
+            
+            # plot the calibrator position on sky
+            ax.plot(cal_az, cal_za, ls="", marker="^", color=color, zorder=1002, label="cal @ {0} ({1:.2f})".format(c.obstime.gps, bpc[0][0]))
+
+            # plot the calibrator on the color bar
+            cbarCC.ax.plot(0.5, lognormbpc, color=color, marker="^")
 
     # draw grid
     ax.grid(color='k', ls="--", lw=0.5)
@@ -210,9 +221,9 @@ def plot_beam(obs, target, cal, freq, time):
     ax.set_yticklabels([r"${0:d}^\circ$".format(int(np.ceil(x))) for x in np.degrees(ax.get_yticks())], color='k')
 
     # Title
-    ax.set_title("MWA Tile beam (FEE)\naz = {0:.2f}, za = {1:.2f}, freq = {2:.2f}MHz\n{3}".format(metadata["az"], metadata["za"], freq, time.iso))
+    ax.set_title("MWA Tile beam (FEE)\naz = {0:.2f}, za = {1:.2f}, freq = {2:.2f}MHz\nobsid = {3}".format(metadata["az"], metadata["za"], freq, obs))
 
-    plt.legend(bbox_to_anchor=(1.05,1.05))
+    plt.legend(bbox_to_anchor=(0.95,-0.05), ncol=2)
     #plt.savefig("{0}_{1:.2f}MHz_tile.eps".format(obs, freq), bbox_inches="tight", format="eps")
     plt.savefig("{0}_{1:.2f}MHz_tile.png".format(obs, freq), bbox_inches="tight")
 
@@ -227,8 +238,8 @@ if __name__ == "__main__":
     parser.add_argument("--dec", type=str, help="Target DEC (J2000)")
     parser.add_argument("--cal_ra", type=str, help="Calibrator RA (J2000)")
     parser.add_argument("--cal_dec", type=str, help="Calibrator DEC (J2000)")
-    parser.add_argument("--gps", type=int, help="Time at which to evaluate target/calibrator position (GPS seconds)")
-    parser.add_argument("--utc", type=str, help="Time at which to evaluate target/calibrator position (YYYY-MM-DDThh:mm:ss.ss UTC)")
+    parser.add_argument("--gps", type=int, nargs="+", help="Time(s) at which to evaluate target/calibrator position (GPS seconds)")
+    parser.add_argument("--utc", type=str, nargs="+", help="Time(s) at which to evaluate target/calibrator position (YYYY-MM-DDThh:mm:ss.ss)")
     args = parser.parse_args()
     
     if args.gps and not args.utc:
@@ -255,4 +266,4 @@ if __name__ == "__main__":
      
 
         
-    plot_beam(args.obsid, target, calibrator, args.freq, time)
+    plot_beam(args.obsid, target, calibrator, args.freq)
