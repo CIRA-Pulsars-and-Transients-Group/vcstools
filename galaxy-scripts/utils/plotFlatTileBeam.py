@@ -111,7 +111,7 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
 	axZA.set_xscale('log')
 
 
-	plt.savefig("{0}_{1:.2f}MHz_tilebeam.png".format(obsid,obsfreq/1.e6),bbox_inches='tight')
+	plt.savefig("{0}_{1:.2f}MHz_flattile.png".format(obsid,obsfreq/1.e6),bbox_inches='tight')
 
 
 
