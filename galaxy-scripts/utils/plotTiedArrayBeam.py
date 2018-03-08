@@ -197,7 +197,9 @@ def plot_beam(obs, fname, target, freq, time):
     ax.set_title("MWA tied-array beam\naz = {0:.2f}, za = {1:.2f}, freq = {2:.2f}MHz\n{3}".format(metadata["az"], metadata["za"], freq, time.iso))
 
     print "saving figure"
-    plt.savefig("{0}_{1:.2f}MHz_tabeam.eps".format(obs, freq), bbox_inches="tight", format="eps")
+    #plt.savefig("{0}_{1:.2f}MHz_tabeam.eps".format(obs, freq), bbox_inches="tight", format="eps")
+    plt.savefig("{0}_{1:.2f}MHz_tabeam.png".format(obs, freq), bbox_inches="tight")
+
 
 
 
