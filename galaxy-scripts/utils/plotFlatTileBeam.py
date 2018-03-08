@@ -38,7 +38,7 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
 
 	print "obs pointing: ({0}, {1})".format(ptAZ,ptZA)
 
-	xp,yp = pb.MWA_Tile_full_EE(np.radians(za), np.radians(az), obsfreq, delays=[xdelays,ydelays], zenithnorm=True, interp=True)
+	xp,yp = pb.MWA_Tile_full_EE(np.radians(za), np.radians(az), obsfreq*1e6, delays=[xdelays,ydelays], zenithnorm=True, interp=True)
 	pattern = np.sqrt(xp**2+yp**2) # sum to get "total intensity"
 	pmax = pattern.max()
 	hpp = 0.5 * pmax # half-power point
@@ -59,7 +59,7 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
 	track_lines = []
 	print "beam power at target track points:"
 	for ta,tz in zip(targetAZ, targetZA):
-		xp, yp = pb.MWA_Tile_full_EE(np.radians([[tz]]), np.radians([[ta]]), obsfreq, delays=[xdelays,ydelays], zenithnorm=True, interp=False)
+		xp, yp = pb.MWA_Tile_full_EE(np.radians([[tz]]), np.radians([[ta]]), obsfreq*1e6, delays=[xdelays,ydelays], zenithnorm=True, interp=False)
 		bp = (xp + yp) / 2
 		track_lines.append(bp[0])
 		print "({0:.2f},{1:.2f}) = {2:.3f}".format(ta, tz, bp[0][0])
@@ -79,7 +79,7 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     Frequency: {1:.2f}MHz
     Beam Pmax: {2:.3f}
     Beam half-Pmax: {3:.3f}
-    """.format(obsid,obsfreq/1.e6,pmax,hpp)
+    """.format(obsid, obsfreq, pmax,hpp)
 	axtxt.text(0.01, 0.5, infostr, verticalalignment='center')
 
 	# plot the actual beam patter over sky
@@ -117,13 +117,13 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
 	axZA.set_yticklabels([])
 	axZA.set_xscale('log')
 
-	plt.savefig("{0}_{1:.2f}MHz_flattile.png".format(obsid,obsfreq/1.e6),bbox_inches='tight')
+	plt.savefig("{0}_{1:.2f}MHz_flattile.png".format(obsid, obsfreq), bbox_inches='tight')
 
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-o", "--obsid", type=int, help="Observation ID")
-parser.add_argument("-f", "--freq", type=float, help="Observing frequency (Hz)")
+parser.add_argument("-f", "--freq", type=float, help="Observing frequency (MHz)")
 parser.add_argument("-t", "--times", type=int, nargs='+', help="GPS seconds to evaluate target positions. For multiple values, provide a space-separated list.")
 parser.add_argument("-c", "--cutoff", type=float, help="Cut-off value for beam pattern [default: 0.1]", default=0.1)
 parser.add_argument("--ra", type=str, help="RAJ2000 of target")
