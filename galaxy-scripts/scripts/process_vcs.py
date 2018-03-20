@@ -283,7 +283,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                             body.append(database_vcs.add_database_function())
                             body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
                             submit_slurm(tar_batch,body,batch_dir=batch_dir, slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
-                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="zeus")
+                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
                         checks = distutils.spawn.find_executable("checks.py")
                         # Write out the checks batch file but don't submit it
                         commands = []
@@ -299,11 +299,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         # if we have tarballs we send the untar jobs to the workq
                         if data_type == 16:
                             commands.append("else")
-                            #commands.append("ssh galaxy 'bash -s' << 'ENDSSH'")
                             commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
-                            #commands.append("ENDSSH")
                         commands.append("fi")
-                        submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "workq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
+                        submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "workq"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus", export="NONE")
                         
                         # Write out the tar batch file if in mode 15
                         #if format == 16:
