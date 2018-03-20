@@ -31,7 +31,7 @@ include(FindOpenMP)
 find_package(SLALIB)
 find_package(CFITSIO)
 find_package(PSRFITS_UTILS)
-#find_package(FFTW3 COMPONENTS single openmp)
+find_package(FFTW3 COMPONENTS single openmp)
 find_package(XGPU)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
