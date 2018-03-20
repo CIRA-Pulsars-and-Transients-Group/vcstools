@@ -301,7 +301,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                             commands.append("else")
                             commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
                         commands.append("fi")
-                        submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "workq"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
+                        submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "workq"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus", export="NONE")
                         
                         # Write out the tar batch file if in mode 15
                         #if format == 16:
