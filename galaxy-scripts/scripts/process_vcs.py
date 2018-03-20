@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import version
+
 import subprocess
 import os
 import sys
@@ -1045,9 +1045,15 @@ if __name__ == '__main__':
     (opts, args) = parser.parse_args()
     
     if opts.version:
-        print version.__version__
-        sys.exit(0)
-
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
+        
     if opts.all and (opts.begin or opts.end):
         print "Please specify EITHER (-b,-e) OR -a"
         quit()

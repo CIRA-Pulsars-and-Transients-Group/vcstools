@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
-import version
 import subprocess, os, sys
 import urllib
 import urllib2
@@ -262,8 +261,14 @@ if __name__ == '__main__':
     work_dir_base = '/astro/mwaops/vcs/' + str(args.obsID)
 
     if args.version:
-        print version.__version__
-        sys.exit(0)
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
 
     if (args.mode is None) or (args.obsID is None):
         print "ERROR: You must specify BOTH a mode and observation ID"

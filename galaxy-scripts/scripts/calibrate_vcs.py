@@ -11,7 +11,6 @@ Author: Bradley Meyers
 Date: 18-December-2017 (v0.9)
 """
 
-import version
 import os
 import sys
 import numpy as np
@@ -906,8 +905,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.version:
-        print version.__version__
-        sys.exit(0)
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
 
     # set up the logger for stand-alone execution
     logger.setLevel(loglevels[args.loglvl])

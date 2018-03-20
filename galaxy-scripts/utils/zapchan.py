@@ -8,7 +8,6 @@ Originally created: 6 Nov 2016
 Updated: 10 Nov 2017 (BWM)
 """
 
-import version
 import sys
 import argparse
 import numpy as np
@@ -208,8 +207,15 @@ if __name__ == '__main__':
 
 
     if args.version:
-        print version.__version__
-        sys.exit(0)
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
+
        
     # check to make sure that the channels variable is formatted correctly, 
     # no matter the input (should be a tuple/iterable)

@@ -21,7 +21,6 @@ __date__ = '2016-03-21'
 
 #TODO: (BWM) might be worth trying to only load the necessary parts of modules rather than loading an ENTIRE module. The speed up will be minimal overall, but it's also just a bit neater.
 # You can also just load module/part of modules internally within functions. So if a module is only used once, just load it in the local function rather than up here (globally).
-import version
 import os
 import sys
 import math
@@ -906,8 +905,14 @@ if __name__ == "__main__":
     args=parser.parse_args()
 
     if args.version:
-        print version.__version__
-        sys.exit(0)
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
 
     #Parser default control
     if args.dl_RRAT:

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import version
 import sys
 import os, datetime, logging
 import sqlite3 as lite
@@ -106,9 +105,17 @@ if __name__ == '__main__':
     (opts, args) = parser.parse_args()
     
     if opts.version:
-        print version.__version__
-        sys.exit(0)
-    
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
+
+        
+
     if opts.mode == "s":
         vcs_row = database_script_start(opts.vcs_id, opts.command, opts.argument)
         print vcs_row
