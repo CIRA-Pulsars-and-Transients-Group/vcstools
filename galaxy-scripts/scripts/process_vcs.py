@@ -970,7 +970,7 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
                         "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
                         stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
         submit_slurm(make_beam_small_batch, commands, batch_dir=batch_dir,
-                     slurm_kwargs={"time": secs_to_run, "partition": partition}, submit=True)
+                slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1"}, submit=True)
 
 def database_command(args, obsid):
     DB_FILE = os.environ['CMD_VCS_DB_FILE']
