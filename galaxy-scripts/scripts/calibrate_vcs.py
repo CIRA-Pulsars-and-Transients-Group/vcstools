@@ -17,406 +17,24 @@ import numpy as np
 import re
 import argparse
 from astropy.io import fits
-from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
+from itertools import groupby
+from operator import itemgetter
+import glob
+import logging
+#import distutils.spawn
+#import subprocess
+
+#from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
+from job_submit import submit_slurm
 from mdir import mdir
 from mwa_metadb_utils import getmeta
 from mwapy import ephem_utils
-from itertools import groupby
-from operator import itemgetter
-import distutils.spawn
-import subprocess
-import glob
-import logging
 
 logger = logging.getLogger(__name__)
 
 
 class CalibrationError(Exception):
     pass
-
-
-class RTScal(object):
-    """Class to contain calibration information, create and submit RTS calibration jobs.
-    It is able to distinguish picket-fence and "normal" observations, and write the 
-    appropriate RTS configuration files and batch scripts for each circumstance.
-
-    The "run()" method ensures that information is gathered in order and that the 
-    correct methods are called at the appropriate time. It should be the only method 
-    call after initialising a RTScal object.
-
-
-    Attributes
-    ----------
-    obsid : int
-        The target observation ID
-    cal_obsid : int
-        The calibrator observation ID
-    channels : list of ints
-        The list of coarse channels recorded within a subband. Can range from length of 1-24.
-    hichans : list of ints
-        The coarse channel numbers >= 129, where the PFB begins to use frequencies in reverse order (i.e. channel 129 is
-        higher in real-frequency than channel 130)"
-    lochans : list of ints
-        The coarse channel numbers < 129
-    picketfence : bool
-        True is the observation is picket fence (i.e. one or more subbands are not adjacent).
-    rts_out_dir : str
-        Path to where to write the relevant files to disk (i.e. RTS configuration files and flagging information)
-    batch_dir : str
-        Path to where the SLURM scripts and their output are to be written.
-    base_str : str
-        The basic RTS configuration skeleton script with some relevant information (built in BaseRTSconfig)
-    script_body : list of strs
-        Each element is a line to be written into the SBATCH script which will run the job on the compute nodes.
-    submit : bool
-        Whether to submit the created scripts to the SLURM queue. True = submit, False = don't submit.
-    """
-
-    def __init__(self, rts_base, submit=True):
-        """Initiliase the class attributes from the rts_base information
-
-        Paramters
-        ---------
-        rts_base : BaseRTSconfig
-            An instance of BaseRTSconfig which has been initialised to contain the basic observation information.
-        submit : boolean
-            Whether to submit the created scripts to the SLURM queue. True = submit, False = don't submit.
-        """
-        # initilaise class attributes with user-specified options
-        self.obsid = rts_base.obsid
-        self.cal_obsid = rts_base.cal_obsid
-
-        # initilaise attributes to None and then assign values later
-        self.channels = None
-        self.hichans = None
-        self.lochans = None
-        self.picket_fence = None
-
-        # Set up the product directory according to options passed
-        self.rts_out_dir = rts_base.output_dir
-        self.batch_dir = rts_base.batch_dir
-
-        # use the channels from rts_base rather than re-query the database
-        self.channels = rts_base.channels
-
-        # use the base string from RTS base as a template
-        self.base_str = rts_base.base_str
-
-        # setup the basic body for all SLURM scripts
-        self.script_body = []
-        self.script_body.append("module load cudatoolkit")  # need CUDA for RTS
-        self.script_body.append("module load cfitsio")  # need cfitsio for reading fits files
-        self.script_body.append("cd {0}".format(self.rts_out_dir))  # change to output directory and run RTS there
-
-        # boolean to control batch job submission. True = submit to queue, False = just write the files
-        self.submit = submit
-
-
-    def summary(self):
-        """Print a nice looking summary of relevant attributes."""
-        logger.debug("Summary of Calibration object contents:")
-        logger.debug("Observation ID:             {0}".format(self.obsid))
-        logger.debug("Calibrator Observation ID:  {0}".format(self.cal_obsid))
-        logger.debug("RTS output directory:       {0}".format(self.rts_out_dir))
-        logger.debug("Batch directory:            {0}".format(self.batch_dir))
-        logger.debug("Observed absolute channels: {0}".format(self.channels))
-        logger.debug("Is picket fence?            {0}".format(self.picket_fence))
-        logger.debug("Submit jobs?                {0}".format(self.submit))
-
-
-    def __summary(self):
-        # debugging use only
-        print self.__dict__
-
-
-    def submit_true(self):
-        """Set the submit flag to True, allowing sbatch queue submission."""
-        logger.info("Setting submit attribute to True: allows job submission")
-        self.submit = True
-
-
-    def submit_false(self):
-        """Set the submit flag to False, not allowing sbatch queue submission."""
-        logger.info("Setting submit attribute to False: disallows job submission")
-        self.submit = False
-
-
-    def is_picket_fence(self):
-        """Check whether the observed channels imply picket-fence or not. 
-        Set boolean attribute in either case.
-        """
-        ch_offset = self.channels[-1] - self.channels[0]
-        if ch_offset == len(self.channels) - 1:
-            logger.info("This observation's channels are consecutive: this is a normal observation")
-            self.picket_fence = False
-        else:
-            logger.info("This observation's channels are NOT consecutive: this is a picket-fence observation")
-            self.picket_fence = True
-
-
-    def sort_obs_channels(self):
-        """Just sort the channels and split them into "high" and "low" channel lists."""
-        self.hichans = [c for c in self.channels if c > 128]
-        self.lochans = [c for c in self.channels if c <= 128]
-        logger.debug("High channels: {0}".format(self.hichans))
-        logger.debug("Low channels:  {0}".format(self.lochans))
-
-
-    def construct_subbands(self):
-        """Group the channels into consecutive subbands, being aware of the high channel ordering reversal.
-        If a subband is split across the channel 129 boundary, it is split into a "low" and "high" sub-subband.
-
-        Returns
-        -------
-        hichan_groups, lochan_groups : list of lists of ints (combined size = 24)
-            Each item will be a list containing 1 or more coarse channel numbers (>1 if the channels are consecutive).
-        """
-        logger.info("Grouping individual channels into consecutive chunks (if possible)")
-
-        # check if the 128,129 channel pair exists and note to user that the subband will be divided on that boundary
-        if any([128, 129] == self.channels[i:i + 2] for i in xrange(len(self.channels) - 1)):
-            logger.info("A subband crosses the channel 129 boundary. This subband will be split on that boundary.")
-
-        # create a list of lists with consecutive channels grouped within a list
-        hichan_groups = [map(itemgetter(1), g)[::-1] for k, g in
-                         groupby(enumerate(self.hichans), lambda (i, x): i - x)][
-                        ::-1]  # reversed order (both of internal lists and globally)
-        lochan_groups = [map(itemgetter(1), g) for k, g in groupby(enumerate(self.lochans), lambda (i, x): i - x)]
-        logger.debug("High channels (grouped): {0}".format(hichan_groups))
-        logger.debug("Low channels  (grouped): {0}".format(lochan_groups))
-
-        return hichan_groups, lochan_groups
-
-
-    def write_cont_scripts(self):
-        """Function to write RTS submission script in the case of a "standard" 
-        contiguous bandwidth observation. This is relatively simple and just
-        requires us to use the standard format RTS configuration file.
-
-        Returns
-        -------
-        jobids : list of ints
-            A list of all the job IDs submitted to the system compute queue.
-        """
-        logger.info("Writing RTS configuration script for contiguous bandwith observation")
-        fname = "{0}/rts_{1}.in".format(self.rts_out_dir, self.cal_obsid)  # output file name to write
-        with open(fname, 'wb') as f:
-            f.write(self.base_str)
-
-        jobids = []
-        nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
-        rts_batch = "RTS_{0}".format(self.cal_obsid)
-        slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:20:00",
-                        "nodes": "{0}".format(nnodes), "gres": "gpu:1"}
-        commands = list(self.script_body)  # make a copy of body to then extend
-        #commands.append("srun -n {0} -c 1  rts_gpu {1}".format(nnodes, fname))
-        commands.append("srun rts_cpu {0}".format(fname))
-        jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir,
-                             submit=self.submit)
-        jobids.append(jobid)
-
-        return jobids
-
-
-    def get_subband_config(self, chan_groups, basepath, chan_type, count):
-        """Function to make the appropriate changes to a base copy of the RTS configuration scripts.
-        This will interrogate the channels and decide on the "subbandIDs" and 
-        "ObservationBaseFrequency" that are appropriate for each subband.
-
-        Parameters
-        ----------
-        chan_groups : list of lists of ints, or list of ints
-            The list of coarse channels to be used when creating the RTS configuration information.
-        basepath : str
-            Path to where the script will eventually be written.
-        chan_type : str
-            "low" is coarse channels are <129, "high" if coarse channels are >=129
-        count : int
-            Counter variable that keeps track of re-ordering of channels.
-
-        Returns
-        -------
-        chan_file_dict : dict
-            Dictionary containing the number of nodes required for each subband and the appropriate filename. 
-            Key = filename, value = number of nodes required.
-        
-        count : int
-            Counter variable that keeps track of re-ordering of channels.
-
-        Raises
-        ------
-        CalibrationError
-            When there is a problem with some of the observation information and/or its manipulation.
-        """
-        chan_file_dict = {}  # used to keep track of which file needs how many nodes
-
-        cc = 0
-        logger.info("Looping over {0} channel groups...".format(chan_type))
-        for c in chan_groups:
-            if len(c) == 1:
-                # single channel group, write its own RTS config file
-                subid = str(count + 1)
-
-                if chan_type == "low":
-                    # offset is just how many channels along we are in the list
-                    offset = cc
-                elif chan_type == "high":
-                    # offset is now how many subbandsIDs away from 24 we are
-                    offset = 24 - int(subid)
-                else:
-                    errmsg = "Invalid channel group type: must be \"low\" or \"high\"."
-                    logger.error(errmsg)
-                    raise CalibrationError(errmsg)
-
-                # the base frequency is then
-                basefreq = 1.28 * (c[0] - offset) - 0.625
-
-                # and the coarse channel centre frequency is
-                cfreq = 1.28 * c[0] - 0.625
-
-                string = self.base_str
-                # find the pattern and select the entire line for replacement
-                string = re.sub("ObservationFrequencyBase=.*\n", "ObservationFrequencyBase={0}\n".format(basefreq),
-                                string)
-                # include the SubBandIDs tag 
-                string = re.sub("StartProcessingAt=0\n", "StartProcessingAt=0\nSubBandIDs={0}\n\n".format(subid),
-                                string)
-
-                fname = "{0}/rts_{1}_chan{2}.in".format(basepath, self.cal_obsid, c[0])
-                chan_file_dict[fname] = 1  # this particular subband consists of only 1 channel
-
-                with open(fname, 'wb') as f:
-                    f.write(string)
-
-                logger.debug(
-                    "Single channel :: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2})".format(subid, c[0], cfreq))
-
-                count += 1
-                cc += 1
-
-            elif len(c) > 1:
-                # multiple consecutive channels
-                subids = [str(count + i + 1) for i in range(len(c))]
-
-                # as with single channels, compute the offset
-                if chan_type == "low":
-                    offset = cc
-                elif chan_type == "high":
-                    # for high channels, there is now multiple offsets
-                    offset = np.array([24 - int(x) for x in subids])
-                else:
-                    errmsg = "Invalid channel group type: must be \"low\" or \"high\"."
-                    logger.error(errmsg)
-                    raise CalibrationError(errmsg)
-
-                # basefreq is then the minmium of the calculated quantities
-                basefreq = min(1.28 * (np.array(c) - offset) - 0.625)
-
-                # multiple coarse channel centre frequencies
-                cfreqs = 1.28 * np.array(c) - 0.625
-
-                string = self.base_str
-                # find the pattern and select the entire line for replacement
-                string = re.sub("ObservationFrequencyBase=.*\n", "ObservationFrequencyBase={0}\n".format(basefreq),
-                                string)
-                # include the SubBandIDs tag 
-                string = re.sub("StartProcessingAt=0\n",
-                                "StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)), string)
-
-                logger.debug("Multiple channels :: (subband ids, abs. chans, abs. freqs) = {0}".format(
-                    ", ".join("({0}, {1}, {2})".format(i, j, k) for i, j, k in zip(subids, c, cfreqs))))
-
-                if chan_type == "low":
-                    fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath, self.cal_obsid, min(c), max(c))
-                elif chan_type == "high":
-                    fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath, self.cal_obsid, max(c), min(c))
-
-                chan_file_dict[fname] = len(c)
-                with open(fname, 'wb') as f:
-                    f.write(string)
-
-                count += len(c)
-                cc += len(c)
-
-            else:
-                errmsg = "Reached a channel group with no entries!?"
-                logger.error(errmsg)
-                raise CalibrationError(errmsg)
-
-        return chan_file_dict, count
-
-
-    def write_picket_fence_scripts(self):
-        """Function to write RTS submission scripts in the case of a picket-fence
-        observation. A significant amount of extra information needs to be 
-        determined and placed in the RTS configuration files. There will be:
-            
-            1 RTS configuration file per set of adjacent single channels (subband)
-        
-        The only exception to that rule is where the 129 boundary is crossed, 
-        in which case that subband will be split in two.
-
-        Returns
-        -------
-        jobids : list of ints
-            A list of all the job IDs submitted to the system compute queue. 
-        """
-        logger.info("Sorting picket-fence channels and determining subband info...")
-        self.sort_obs_channels()
-        hichan_groups, lochan_groups = self.construct_subbands()
-
-        # write out the RTS config files and keep track of the number of nodes required for each
-        count = 0
-        lodict, count = self.get_subband_config(lochan_groups, self.rts_out_dir, "low", count)
-        hidict, count = self.get_subband_config(hichan_groups, self.rts_out_dir, "high", count)
-        chan_file_dict = lodict.copy()
-        chan_file_dict.update(hidict)
-
-        # lolengths = set([len(l) for l in lochan_groups])  # figure out the unique lengths
-        # hilengths = set([len(h) for h in hichan_groups])
-        # lengths = lolengths.union(hilengths)  # combine the sets
-
-        # Now submit the RTS jobs
-        logger.info("Writing individual subband RTS config scripts")
-
-        jobids = []
-        for k, v in chan_file_dict.iteritems():
-            nnodes = v + 1
-            chans = k.split('_')[-1].split(".")[0]
-            rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
-            slurm_kwargs = {"partition": "gpuq", "workdir": "{0}".format(self.rts_out_dir), "time": "00:45:00",
-                            "nodes": "{0}".format(nnodes), "gres": "gpu:1"}
-            commands = list(self.script_body)  # make a copy of body to then extend
-            #commands.append("srun -n {0} -c 1  rts_gpu {1}".format(nnodes, k))
-            commands.append("srun rts_cpu {0}".format(k))
-            jobid = submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=self.batch_dir,
-                                 submit=self.submit)
-            jobids.append(jobid)
-
-        return jobids
-
-
-    def run(self):
-        """Only function that needs to be called after creating the RTScal object.
-        Ensures functions are called in correct order to update/evaluate attributes and
-        produce the RTS channel-specific files if required.
-
-        Returns
-        -------
-        jobids : list of ints
-            A list of all the job IDs submitted to the system compute queue.
-        """
-        # self.get_obs_channels() # fetch channels
-        self.is_picket_fence()  # determine if picket-fence obs or not
-        self.summary()
-
-        if self.picket_fence:
-            jobids = self.write_picket_fence_scripts()
-        else:
-            jobids = self.write_cont_scripts()
-
-        logger.info("Done!")
-        return jobids
 
 
 class BaseRTSconfig(object):
@@ -592,6 +210,12 @@ class BaseRTSconfig(object):
             logger.debug("Online correlation")
 
 
+    def power_of_2_less_than(self, n):
+        """Return the largest power of 2 that is less than or equal to n"""
+        # using the magic of Python integers actually being objects
+        return 2**(int(n).bit_length() - 1)
+
+
     def get_info_from_data_header(self):
         """Read information from the FITS file header to figure out calibration configuration.
         
@@ -640,7 +264,8 @@ class BaseRTSconfig(object):
 
             # use all of the data to calibrate
             # TODO: the RTS currently (14 Nov 2017) dies when using more than 1 set of visibilities
-            self.n_dumps_to_average = ndumps
+            # Currently require that the number of dumps to average is a power of 2 <= calculated ndumps here (27 Feb 2018)
+            self.n_dumps_to_average = self.power_of_2_less_than(ndumps)
 
         else:
             # we have to figure out how much data has been correlated and what the frequency/time resolution is
@@ -656,7 +281,7 @@ class BaseRTSconfig(object):
             # for offline correlation, each file is one integration time - there has been no concatenation
             # TODO: this assumes that the offline correlator ALWAYS produces 1 second FITS files
             ndumps = len(fits.open(first_file)) * len_files / 24
-            self.n_dumps_to_average = ndumps
+            self.n_dumps_to_average = self.power_of_2_less_than(ndumps)
 
         logger.info("Number of fine channels: {0}".format(self.nfine_chan))
         logger.info("Fine channel bandwidth (MHz): {0}".format(self.fine_cbw))
@@ -864,6 +489,403 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
         self.get_info_from_data_header()
         self.base_str = self.construct_base_string()
         self.write_flag_files()
+
+
+class RTScal(object):
+    """Class to contain calibration information, create and submit RTS calibration jobs.
+    It is able to distinguish picket-fence and "normal" observations, and write the 
+    appropriate RTS configuration files and batch scripts for each circumstance.
+
+    The "run()" method ensures that information is gathered in order and that the 
+    correct methods are called at the appropriate time. It should be the only method 
+    call after initialising a RTScal object.
+
+
+    Attributes
+    ----------
+    obsid : int
+        The target observation ID
+    cal_obsid : int
+        The calibrator observation ID
+    channels : list of ints
+        The list of coarse channels recorded within a subband. Can range from length of 1-24.
+    hichans : list of ints
+        The coarse channel numbers >= 129, where the PFB begins to use frequencies in reverse order (i.e. channel 129 is
+        higher in real-frequency than channel 130)"
+    lochans : list of ints
+        The coarse channel numbers < 129
+    picketfence : bool
+        True is the observation is picket fence (i.e. one or more subbands are not adjacent).
+    rts_out_dir : str
+        Path to where to write the relevant files to disk (i.e. RTS configuration files and flagging information)
+    batch_dir : str
+        Path to where the SLURM scripts and their output are to be written.
+    base_str : str
+        The basic RTS configuration skeleton script with some relevant information (built in BaseRTSconfig)
+    script_body : list of strs
+        Each element is a line to be written into the SBATCH script which will run the job on the compute nodes.
+    submit : bool
+        Whether to submit the created scripts to the SLURM queue. True = submit, False = don't submit.
+    """
+
+    def __init__(self, rts_base, submit=True):
+        """Initiliase the class attributes from the rts_base information
+
+        Paramters
+        ---------
+        rts_base : BaseRTSconfig
+            An instance of BaseRTSconfig which has been initialised to contain the basic observation information.
+        submit : boolean
+            Whether to submit the created scripts to the SLURM queue. True = submit, False = don't submit.
+        """
+        # initilaise class attributes with user-specified options
+        self.obsid = rts_base.obsid
+        self.cal_obsid = rts_base.cal_obsid
+
+        # initilaise attributes to None and then assign values later
+        self.channels = None
+        self.hichans = None
+        self.lochans = None
+        self.picket_fence = None
+
+        # Set up the product directory according to options passed
+        self.rts_out_dir = rts_base.output_dir
+        self.batch_dir = rts_base.batch_dir
+
+        # use the channels from rts_base rather than re-query the database
+        self.channels = rts_base.channels
+
+        # use the base string from RTS base as a template
+        self.base_str = rts_base.base_str
+
+        # setup the basic body for all SLURM scripts
+        self.script_body = []
+        #self.script_body.append("module load cudatoolkit")  # need CUDA for RTS
+        #self.script_body.append("module load cfitsio")  # need cfitsio for reading fits files
+        self.script_body.append("cd {0}".format(self.rts_out_dir))  # change to output directory and run RTS there
+
+        # boolean to control batch job submission. True = submit to queue, False = just write the files
+        self.submit = submit
+
+
+    def summary(self):
+        """Print a nice looking summary of relevant attributes."""
+        logger.debug("Summary of Calibration object contents:")
+        logger.debug("Observation ID:             {0}".format(self.obsid))
+        logger.debug("Calibrator Observation ID:  {0}".format(self.cal_obsid))
+        logger.debug("RTS output directory:       {0}".format(self.rts_out_dir))
+        logger.debug("Batch directory:            {0}".format(self.batch_dir))
+        logger.debug("Observed absolute channels: {0}".format(self.channels))
+        logger.debug("Is picket fence?            {0}".format(self.picket_fence))
+        logger.debug("Submit jobs?                {0}".format(self.submit))
+
+
+    def __summary(self):
+        # debugging use only
+        print self.__dict__
+
+
+    def submit_true(self):
+        """Set the submit flag to True, allowing sbatch queue submission."""
+        logger.info("Setting submit attribute to True: allows job submission")
+        self.submit = True
+
+
+    def submit_false(self):
+        """Set the submit flag to False, not allowing sbatch queue submission."""
+        logger.info("Setting submit attribute to False: disallows job submission")
+        self.submit = False
+
+
+    def is_picket_fence(self):
+        """Check whether the observed channels imply picket-fence or not. 
+        Set boolean attribute in either case.
+        """
+        ch_offset = self.channels[-1] - self.channels[0]
+        if ch_offset == len(self.channels) - 1:
+            logger.info("This observation's channels are consecutive: this is a normal observation")
+            self.picket_fence = False
+        else:
+            logger.info("This observation's channels are NOT consecutive: this is a picket-fence observation")
+            self.picket_fence = True
+
+
+    def sort_obs_channels(self):
+        """Just sort the channels and split them into "high" and "low" channel lists."""
+        self.hichans = [c for c in self.channels if c > 128]
+        self.lochans = [c for c in self.channels if c <= 128]
+        logger.debug("High channels: {0}".format(self.hichans))
+        logger.debug("Low channels:  {0}".format(self.lochans))
+
+
+    def construct_subbands(self):
+        """Group the channels into consecutive subbands, being aware of the high channel ordering reversal.
+        If a subband is split across the channel 129 boundary, it is split into a "low" and "high" sub-subband.
+
+        Returns
+        -------
+        hichan_groups, lochan_groups : list of lists of ints (combined size = 24)
+            Each item will be a list containing 1 or more coarse channel numbers (>1 if the channels are consecutive).
+        """
+        logger.info("Grouping individual channels into consecutive chunks (if possible)")
+
+        # check if the 128,129 channel pair exists and note to user that the subband will be divided on that boundary
+        if any([128, 129] == self.channels[i:i + 2] for i in xrange(len(self.channels) - 1)):
+            logger.info("A subband crosses the channel 129 boundary. This subband will be split on that boundary.")
+
+        # create a list of lists with consecutive channels grouped within a list
+        hichan_groups = [map(itemgetter(1), g)[::-1] for k, g in groupby(enumerate(self.hichans), lambda (i, x): i - x)][::-1]  # reversed order (both of internal lists and globally)
+        lochan_groups = [map(itemgetter(1), g) for k, g in groupby(enumerate(self.lochans), lambda (i, x): i - x)]
+        logger.debug("High channels (grouped): {0}".format(hichan_groups))
+        logger.debug("Low channels  (grouped): {0}".format(lochan_groups))
+
+        return hichan_groups, lochan_groups
+
+
+    def write_cont_scripts(self):
+        """Function to write RTS submission script in the case of a "standard" 
+        contiguous bandwidth observation. This is relatively simple and just
+        requires us to use the standard format RTS configuration file.
+
+        Returns
+        -------
+        jobids : list of ints
+            A list of all the job IDs submitted to the system compute queue.
+        """
+        logger.info("Writing RTS configuration script for contiguous bandwith observation")
+        fname = "{0}/rts_{1}.in".format(self.rts_out_dir, self.cal_obsid)  # output file name to write
+        with open(fname, 'wb') as f:
+            f.write(self.base_str)
+
+        jobids = []
+        nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
+        rts_batch = "RTS_{0}".format(self.cal_obsid)
+        slurm_kwargs = {"partition": "gpuq",
+                        "workdir": "{0}".format(self.rts_out_dir),
+                        "time": "00:20:00",
+                        "nodes": "{0}".format(nnodes),
+                        "gres": "gpu:1",
+                        "ntasks-per-node": "1"}
+        commands = list(self.script_body)  # make a copy of body to then extend
+        commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, fname))
+        #commands.append("srun rts_cpu {0}".format(fname))
+        jobid = submit_slurm(rts_batch, commands, 
+                                slurm_kwargs=slurm_kwargs,
+                                batch_dir=self.batch_dir,
+                                submit=self.submit,
+                                export="ALL")
+        jobids.append(jobid)
+
+        return jobids
+
+
+    def get_subband_config(self, chan_groups, basepath, chan_type, count):
+        """Function to make the appropriate changes to a base copy of the RTS configuration scripts.
+        This will interrogate the channels and decide on the "subbandIDs" and 
+        "ObservationBaseFrequency" that are appropriate for each subband.
+
+        Parameters
+        ----------
+        chan_groups : list of lists of ints, or list of ints
+            The list of coarse channels to be used when creating the RTS configuration information.
+        basepath : str
+            Path to where the script will eventually be written.
+        chan_type : str
+            "low" is coarse channels are <129, "high" if coarse channels are >=129
+        count : int
+            Counter variable that keeps track of re-ordering of channels.
+
+        Returns
+        -------
+        chan_file_dict : dict
+            Dictionary containing the number of nodes required for each subband and the appropriate filename. 
+            Key = filename, value = number of nodes required.
+        
+        count : int
+            Counter variable that keeps track of re-ordering of channels.
+
+        Raises
+        ------
+        CalibrationError
+            When there is a problem with some of the observation information and/or its manipulation.
+        """
+        chan_file_dict = {}  # used to keep track of which file needs how many nodes
+
+        cc = 0
+        logger.info("Looping over {0} channel groups...".format(chan_type))
+        for c in chan_groups:
+            if len(c) == 1:
+                # single channel group, write its own RTS config file
+                subid = str(count + 1)
+
+                if chan_type == "low":
+                    # offset is just how many channels along we are in the list
+                    offset = cc
+                elif chan_type == "high":
+                    # offset is now how many subbandsIDs away from 24 we are
+                    offset = 24 - int(subid)
+                else:
+                    errmsg = "Invalid channel group type: must be \"low\" or \"high\"."
+                    logger.error(errmsg)
+                    raise CalibrationError(errmsg)
+
+                # the base frequency is then
+                basefreq = 1.28 * (c[0] - offset) - 0.625
+
+                # and the coarse channel centre frequency is
+                cfreq = 1.28 * c[0] - 0.625
+
+                string = self.base_str
+                # find the pattern and select the entire line for replacement
+                string = re.sub("ObservationFrequencyBase=.*\n", "ObservationFrequencyBase={0}\n".format(basefreq),
+                                string)
+                # include the SubBandIDs tag 
+                string = re.sub("StartProcessingAt=0\n", "StartProcessingAt=0\nSubBandIDs={0}\n\n".format(subid),
+                                string)
+
+                fname = "{0}/rts_{1}_chan{2}.in".format(basepath, self.cal_obsid, c[0])
+                chan_file_dict[fname] = 1  # this particular subband consists of only 1 channel
+
+                with open(fname, 'wb') as f:
+                    f.write(string)
+
+                logger.debug(
+                    "Single channel :: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2})".format(subid, c[0], cfreq))
+
+                count += 1
+                cc += 1
+
+            elif len(c) > 1:
+                # multiple consecutive channels
+                subids = [str(count + i + 1) for i in range(len(c))]
+
+                # as with single channels, compute the offset
+                if chan_type == "low":
+                    offset = cc
+                elif chan_type == "high":
+                    # for high channels, there is now multiple offsets
+                    offset = np.array([24 - int(x) for x in subids])
+                else:
+                    errmsg = "Invalid channel group type: must be \"low\" or \"high\"."
+                    logger.error(errmsg)
+                    raise CalibrationError(errmsg)
+
+                # basefreq is then the minmium of the calculated quantities
+                basefreq = min(1.28 * (np.array(c) - offset) - 0.625)
+
+                # multiple coarse channel centre frequencies
+                cfreqs = 1.28 * np.array(c) - 0.625
+
+                string = self.base_str
+                # find the pattern and select the entire line for replacement
+                string = re.sub("ObservationFrequencyBase=.*\n", "ObservationFrequencyBase={0}\n".format(basefreq),
+                                string)
+                # include the SubBandIDs tag 
+                string = re.sub("StartProcessingAt=0\n",
+                                "StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)), string)
+
+                logger.debug("Multiple channels :: (subband ids, abs. chans, abs. freqs) = {0}".format(
+                    ", ".join("({0}, {1}, {2})".format(i, j, k) for i, j, k in zip(subids, c, cfreqs))))
+
+                if chan_type == "low":
+                    fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath, self.cal_obsid, min(c), max(c))
+                elif chan_type == "high":
+                    fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath, self.cal_obsid, max(c), min(c))
+
+                chan_file_dict[fname] = len(c)
+                with open(fname, 'wb') as f:
+                    f.write(string)
+
+                count += len(c)
+                cc += len(c)
+
+            else:
+                errmsg = "Reached a channel group with no entries!?"
+                logger.error(errmsg)
+                raise CalibrationError(errmsg)
+
+        return chan_file_dict, count
+
+
+    def write_picket_fence_scripts(self):
+        """Function to write RTS submission scripts in the case of a picket-fence
+        observation. A significant amount of extra information needs to be 
+        determined and placed in the RTS configuration files. There will be:
+            
+            1 RTS configuration file per set of adjacent single channels (subband)
+        
+        The only exception to that rule is where the 129 boundary is crossed, 
+        in which case that subband will be split in two.
+
+        Returns
+        -------
+        jobids : list of ints
+            A list of all the job IDs submitted to the system compute queue. 
+        """
+        logger.info("Sorting picket-fence channels and determining subband info...")
+        self.sort_obs_channels()
+        hichan_groups, lochan_groups = self.construct_subbands()
+
+        # write out the RTS config files and keep track of the number of nodes required for each
+        count = 0
+        lodict, count = self.get_subband_config(lochan_groups, self.rts_out_dir, "low", count)
+        hidict, count = self.get_subband_config(hichan_groups, self.rts_out_dir, "high", count)
+        chan_file_dict = lodict.copy()
+        chan_file_dict.update(hidict)
+
+        # lolengths = set([len(l) for l in lochan_groups])  # figure out the unique lengths
+        # hilengths = set([len(h) for h in hichan_groups])
+        # lengths = lolengths.union(hilengths)  # combine the sets
+
+        # Now submit the RTS jobs
+        logger.info("Writing individual subband RTS config scripts")
+
+        jobids = []
+        for k, v in chan_file_dict.iteritems():
+            nnodes = v + 1
+            chans = k.split('_')[-1].split(".")[0]
+            rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
+            slurm_kwargs = {"partition": "gpuq",
+                            "workdir": "{0}".format(self.rts_out_dir),
+                            "time": "00:45:00",
+                            "nodes": "{0}".format(nnodes),
+                            "gres": "gpu:1",
+                            "ntasks-per-node": "1"}
+            commands = list(self.script_body)  # make a copy of body to then extend
+            commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, k))
+            #commands.append("srun rts_cpu {0}".format(k))
+            jobid = submit_slurm(rts_batch, commands,
+                                    slurm_kwargs=slurm_kwargs,
+                                    batch_dir=self.batch_dir,
+                                    submit=self.submit,
+                                    export="ALL")
+            jobids.append(jobid)
+
+        return jobids
+
+
+    def run(self):
+        """Only function that needs to be called after creating the RTScal object.
+        Ensures functions are called in correct order to update/evaluate attributes and
+        produce the RTS channel-specific files if required.
+
+        Returns
+        -------
+        jobids : list of ints
+            A list of all the job IDs submitted to the system compute queue.
+        """
+        # self.get_obs_channels() # fetch channels
+        self.is_picket_fence()  # determine if picket-fence obs or not
+        self.summary()
+
+        if self.picket_fence:
+            jobids = self.write_picket_fence_scripts()
+        else:
+            jobids = self.write_cont_scripts()
+
+        logger.info("Done!")
+        return jobids
+
 
 
 

@@ -16,6 +16,9 @@ import sqlite3 as lite
 from astropy.io import fits as pyfits
 from reorder_chans import *
 import database_vcs
+from mdir import mdir
+from job_submit import submit_slurm
+import mwa_metadb_utils as meta
 
 
 TMPL = """#!/bin/bash
@@ -36,14 +39,14 @@ def tmp(suffix=".sh"):
     t = tempfile.mktemp(suffix=suffix)
     atexit.register(os.unlink, t)
     return t
-
+"""
 def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", depend=0, submit=True, outfile=None, cluster="galaxy"):
-        """
+        
         Making this function to cleanly submit slurm jobs using a simple template.
         This will use the <name> to setup both the .batch and .out files into <batch_dir>
         <slurm_kwargs> should be a dictionary of keyword, value pairs of anything the template header is missing
         <commands> is the actual batch script you want to run, and is expecting a list with one entry per line
-        """
+        
         
         header = []
         if batch_dir[-1] is not "/":
@@ -83,16 +86,16 @@ def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", dep
         #                 (word1,word2,word3,jobid) = line.split()
         # return jobid
 
-        
+"""
 
-
+"""
 def getmeta(service='obs', params=None):
-    """
+  
     Function to call a JSON web service and return a dictionary:
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
     a Python dictionary, return a Python dictionary xcontaining the result.
     Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
-    """
+    
     import urllib
     import urllib2
     import json
@@ -122,7 +125,7 @@ def getmeta(service='obs', params=None):
         return
 
     return result
-
+"""
 def is_number(s):
     try:
         int(s)
@@ -130,6 +133,7 @@ def is_number(s):
     except ValueError:
         return False
 
+"""
 def mdir(path,description, gid=30832):
     # the default groupID is mwaops which is 30832 in numerical
     # we try and make sure all directories created by process_vcs
@@ -146,6 +150,7 @@ def mdir(path,description, gid=30832):
             print "{0} Directory Already Exists\n".format(description)
         else:
             sys.exit()
+"""
 
 def get_user_email():
     command="echo `ldapsearch -x \"uid=$USER\" mail |grep \"^mail\"|cut -f2 -d' '`"
@@ -203,12 +208,13 @@ def create_link(data_dir, target_dir, product_dir, link):
         os.symlink(target_dir, link)
     
 
+"""
 def obs_max_min(obs_id):
-    """
+    
     Small function to query the database and returns the times of the first and last file
     :param obs_id:
     :return:
-    """
+    
     from file_maxmin import getmeta
 
     obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
@@ -216,7 +222,7 @@ def obs_max_min(obs_id):
     obs_start = int(min(times))
     obs_end = int(max(times))
     return obs_start, obs_end
-
+"""
 def get_frequencies(metafits,resort=False):
     # TODO: for robustness, this should force the entries to be 3-digit numbers
     hdulist    = pyfits.open(metafits)
@@ -232,7 +238,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
         print "Downloading files from archive"
         # voltdownload = distutils.spawn.find_executable("voltdownload.py") #Doesn't seem to be working on zeus for some reason
         voltdownload = "voltdownload.py"
-        obsinfo = getmeta(service='obs', params={'obs_id':str(obsid)})
+        obsinfo = meta.getmeta(service='obs', params={'obs_id':str(obsid)})
         data_format = obsinfo['dataquality']
         if data_format == 1:
                 target_dir = link = '/raw'
@@ -278,7 +284,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                             body.append(database_vcs.add_database_function())
                             body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
                             submit_slurm(tar_batch,body,batch_dir=batch_dir, slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
-                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="zeus")
+                                             submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
                         checks = distutils.spawn.find_executable("checks.py")
                         # Write out the checks batch file but don't submit it
                         commands = []
@@ -294,11 +300,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         # if we have tarballs we send the untar jobs to the workq
                         if data_type == 16:
                             commands.append("else")
-                            #commands.append("ssh galaxy 'bash -s' << 'ENDSSH'")
                             commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
-                            #commands.append("ENDSSH")
                         commands.append("fi")
-                        submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "workq", "clusters":"zeus"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus")
+                        submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "workq"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus", export="NONE")
                         
                         # Write out the tar batch file if in mode 15
                         #if format == 16:
@@ -423,9 +427,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                 commands.append("sed -i -e \"s/newcount=${{oldcount}}/newcount=${{newcount}}/\" {0}".format(batch_dir+check_batch+".batch"))
                 commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
                 commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
-                commands.append('run "srun -n {0} -c {1} python {2}" "-o {3} -s {4} -w {5} -e {6}" "{7}"'.format(process_nsecs,jobs_per_node,recombine,obsid,time_to_get,data_dir,recombine_binary, vcs_database_id))
+                commands.append('run "srun python {0}" "-o {1} -s {2} -w {3} -e {4}" "{5}"'.format(recombine,obsid,time_to_get,data_dir,recombine_binary, vcs_database_id))
                 
-                submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
+                submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq", "ntasks-per-node": jobs_per_node}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
 
@@ -476,7 +480,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                                 body = []
                                 body.append(database_vcs.add_database_function())
                                 body.append("source /group/mwaops/PULSAR/psrBash.profile")
-                                body.append("module swap craype-ivybridge craype-sandybridge")
+                                #body.append("module swap craype-ivybridge craype-sandybridge")
         
                                 # with open(corr_batch, 'w') as batch_file:
                                 #     batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --account=mwaops\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
@@ -490,14 +494,14 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                                         t = Time(int(gpstime), format='gps', scale='utc')
                                         unix_time = int(t.unix)
         
-                                        body.append('run "{0}" "-o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}" "{9}"'.format("mwac_offline",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file,vcs_database_id))
+                                        body.append('run "{0}" "-o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}" "{9}"'.format("offline_correlator",corr_dir,obsid,unix_time,num_frames,integrations,int(ft_res[0]/10),gpubox_label,file,vcs_database_id))
                                         to_corr += 1
                                         # with open(corr_batch, 'a') as batch_file:
                                         #     batch_file.write(corr_line)
                                         #     to_corr = to_corr+1
         
                                 secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr)) # added factor two on 10 April 2017 as galaxy seemed really slow...
-                                submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq"}, batch_dir=batch_dir)
+                                submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq", "gres": "gpu:1"}, batch_dir=batch_dir)
                                 # batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
                                 # submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
                                 # jobid=""
@@ -507,7 +511,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                         else:
                                 print "Couldn't find any recombine files. Aborting here."
 
-
+"""
 def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,count=0):
     import re
     import numpy as np
@@ -641,7 +645,7 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
     
     if metafile_exists == False:
         print "Querying the database for calibrator obs ID {0}...".format(cal_obs_id)
-        obs_info = getmeta(service='obs', params={'obs_id':str(cal_obs_id)})
+        obs_info = meta.getmeta(service='obs', params={'obs_id':str(cal_obs_id)})
         channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
         with open(metafile,"wb") as m:
             m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(cal_obs_id))
@@ -718,7 +722,7 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
             commands = list(body) # make a copy of body to then extend
             commands.append('run "srun -n {0} rts_gpu" "{1}" "{2}"'.format(nnodes,k,vcs_database_id))
             submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
-
+"""
                         
 
 def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing,
@@ -868,7 +872,8 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
     """
     vcs_database_id = database_command(args, obs_id)  # why is this being calculated here? (SET)
     # Print relevant version numbers to screen
-    make_beam_version_cmd = "{0}/make_beam_small -V".format(execpath)
+    #make_beam_version_cmd = "{0}/make_beam_small -V".format(execpath)
+    make_beam_version_cmd = "make_beam_small -V"
     make_beam_version = subprocess.Popen(make_beam_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
     tested_version = "?.?.?"
     print "Current version of make_beam_small = {0}".format(make_beam_version.strip())
@@ -891,7 +896,7 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
     # Grabbing this from the calibrate section for now. This should be streamlined to call an external function (SET)
     if metafile_exists == False:
         print "Querying the database for calibrator obs ID {0}...".format(obs_id)
-        obs_info = getmeta(service='obs', params={'obs_id': str(obs_id)})
+        obs_info = meta.getmeta(service='obs', params={'obs_id': str(obs_id)})
         channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
         with open(metafile, "wb") as m:
             m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(obs_id))
@@ -959,11 +964,14 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
         commands.append("module swap craype-ivybridge craype-sandybridge")
         commands.append(openmp_line)
         commands.append("cd {0}".format(pointing_dir))
-        commands.append("srun -n 1 -c {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+        #commands.append("srun -n 1 -c {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+        #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
+        #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
+        commands.append("srun -n 1 -c {0} make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
                         "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
                         stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
         submit_slurm(make_beam_small_batch, commands, batch_dir=batch_dir,
-                     slurm_kwargs={"time": secs_to_run, "partition": partition}, submit=True)
+                slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1"}, submit=True)
 
 def database_command(args, obsid):
     DB_FILE = os.environ['CMD_VCS_DB_FILE']
@@ -1058,7 +1066,7 @@ if __name__ == '__main__':
         print "Please specify EITHER (-b,-e) OR -a"
         quit()
     elif opts.all:
-        opts.begin, opts.end = obs_max_min(opts.cal_obs if opts.mode == 'download_cal' else opts.obs)
+        opts.begin, opts.end = meta.obs_max_min(opts.cal_obs if opts.mode == 'download_cal' else opts.obs)
     # make sure we can process increments smaller than 64 seconds when not in calibration related mode
     if opts.mode not in ['download_cal','calibrate']:
         if opts.end - opts.begin +1 < opts.increment:

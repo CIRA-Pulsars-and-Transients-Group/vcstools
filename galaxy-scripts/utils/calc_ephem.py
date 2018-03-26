@@ -13,7 +13,7 @@ Author: Bradley Meyers
 """
 
 import matplotlib.pyplot as plt
-from matplotlib import dates
+from matplotlib.dates import date2num, DateFormatter
 import numpy as np
 from astropy.coordinates import EarthLocation, SkyCoord, AltAz
 from astropy import units as u
@@ -76,9 +76,10 @@ class Observatory(object):
         self.utcoffsetStr = None
 
 
-    def compute_target_position(self, ra, dec, times, tz):
-        if ra and dec and times:
-            self.target = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
+    def compute_target_position(self, coords, times, tz):
+        if coords and times:
+            #self.target = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
+            self.target = coords
             self.altaz = self.target.transform_to(AltAz(obstime=times, location=self.location))
             self.alt = self.altaz.alt.deg
 
@@ -86,8 +87,8 @@ class Observatory(object):
             self.altmax = self.alt[self.altmaxidx]
             self.maxtimeUTC = times[self.altmaxidx]
             self.maxtimeLST = self.maxtimeUTC.sidereal_time(('apparent'), "{0}d".format(self.longitude))
-            self.maxtimeLocalStr = str(self.maxtimeUTC.to_datetime(timezone=tz))
-            self.utcoffsetStr = self.maxtimeLocalStr[-6:] 
+            self.maxtimeLocalStr = str(self.maxtimeUTC.to_datetime(timezone=tz))[:-6]
+            self.utcoffsetStr = str(self.maxtimeUTC.to_datetime(timezone=tz))[-6:]
         else:
             print "The RA, DEC or time was not provided and so we cannot calculate the altaz of the target. Aborting."
             sys.exit(1)
@@ -97,21 +98,11 @@ class Observatory(object):
 def plot_ephem(ax, times, obs):
     """ Given an axis object, the times (x) and observed ephemeris (y), plot the source track."""
 
-    ax.plot_date(times, obs.alt, color='r', lw=2, alpha=0.6)
+    eph = ax.plot_date(times, obs.alt, xdate=True, ls="-", lw=2, marker='', alpha=0.6, label="{0}".format(obs.name))
     ax.axhline(0, ls="--", color='k')
-    ax.axvline(dates.date2num(obs.maxtimeUTC.datetime), ls="--", color='r', lw=2)
-    if ax.get_ylim()[1] > 90:
-	    ax.set_ylim(None, 90)
-	
-    ylims = ax.get_ylim()
+    ax.axvline(date2num(obs.maxtimeUTC.datetime), ls="--", lw=2, color=eph[0].get_color())
     
-    #zero = np.zeros(len(obs.alt))
-    ax.fill_between(times, [ax.get_ylim()[0]]*len(times), interpolate=True, color='gray')
-
-    coords = obs.target.to_string('hmsdms')
-    ax.set_title("Source: {0}\n{1} UTC{2}".format(coords, obs.maxtimeLocalStr, obs.utcoffsetStr))
-    ax.set_xlabel("Time (UTC)")
-    ax.set_ylabel("Elevation  [deg]")
+    return "{0}: {1} UTC{2}".format(obs.name, obs.maxtimeLocalStr, obs.utcoffsetStr)
     
 
 
@@ -120,26 +111,47 @@ def calculate_ephem(ra, dec, date, tzoffset, site, center):
     
     # first, let's set up the times we want to evaluate the source position for
     year, month, day = date.split("/")
-    hours = np.arange(0,24,0.01)
+    hours = np.arange(0, 24, 0.01)
     hr = [int(i) for i in hours]
-    mi = [int((hours[i]-hr[i])*60) for i in range(len(hours))]
+    mi = [int((hours[i]-hr[i]) * 60) for i in range(len(hours))]
     se = [0]*len(hours)
     t = [datetime(int(year), int(month), int(day), h, m, s) for h,m,s in zip(hr,mi,se)]
  
     times = Time(t, scale='utc', format='datetime') # list of Time objects at which the ephemeris is computed
     tz = TimezoneInfo(utc_offset=tzoffset * u.hour) # timezone object to convert times
-    plttimes = dates.date2num([t for t in times.datetime]) # times in plottable format
+    plttimes = date2num([t for t in times.datetime]) # times in plottable format
 
     # set up figure for plot
     fig = plt.figure(figsize=(10,8))
     ax = fig.add_subplot(111)
 
     # site can be a list, so we need to create an Observatory for each
+    site_max = []
+    coords = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
+    
     for s in site:
         o = Observatory(s)
-        o.compute_target_position(ra, dec, times, tz)
-        plot_ephem(ax, plttimes, o)
-    
+        o.compute_target_position(coords, times, tz)
+        site_max.append(plot_ephem(ax, plttimes, o))
+
+    ax.set_xlim(min(plttimes), max(plttimes))
+    if ax.get_ylim()[1] > 90:
+        ax.set_ylim(-20, 90)
+    else:
+        ax.set_ylim(-20, None)
+        
+    ys = [ax.get_ylim()[0]]*len(plttimes)
+    ax.fill_between(plttimes, ys, interpolate=True, color='gray')
+
+    title_str = "Target :: {0}\n{1}".format(coords.to_string('hmsdms'), "\n".join(site_max))
+    ax.set_title(title_str)
+    ax.set_xlabel("Time (UTC)")
+    ax.set_ylabel("Elevation  [deg]")
+
+    ax.xaxis.set_major_formatter(DateFormatter("%m/%d %H:%M"))
+    plt.xticks(rotation=30, ha="right")
+    ax.legend()
+    plt.tight_layout()
     plt.show()
    
     # TODO: need to re-implement this in a consistent way...   
