@@ -428,7 +428,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                 commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
                 commands.append('run "srun python {0}" "-o {1} -s {2} -w {3} -e {4}" "{5}"'.format(recombine,obsid,time_to_get,data_dir,recombine_binary, vcs_database_id))
                 
-                submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq"}, outfile=batch_dir+recombine_batch+"_1.out")
+                submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq", "ntasks-per-node": jobs_per_node}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
 
