@@ -510,7 +510,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                         else:
                                 print "Couldn't find any recombine files. Aborting here."
 
-
+"""
 def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,count=0):
     import re
     import numpy as np
@@ -721,7 +721,7 @@ def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=N
             commands = list(body) # make a copy of body to then extend
             commands.append('run "srun -n {0} rts_gpu" "{1}" "{2}"'.format(nnodes,k,vcs_database_id))
             submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
-
+"""
                         
 
 def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing,
@@ -871,7 +871,7 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
     """
     vcs_database_id = database_command(args, obs_id)  # why is this being calculated here? (SET)
     # Print relevant version numbers to screen
-    make_beam_version_cmd = "{0}/make_beam_small -V".format(execpath)
+    #make_beam_version_cmd = "{0}/make_beam_small -V".format(execpath)
     make_beam_version_cmd = "make_beam_small -V"
     make_beam_version = subprocess.Popen(make_beam_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
     tested_version = "?.?.?"
