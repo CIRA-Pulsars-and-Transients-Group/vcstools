@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-project(vcstools VERSION 1.3.2)
+project(vcstools VERSION 1.4.0)
 
 # Set up version number
 execute_process(
@@ -43,14 +43,6 @@ endif()
 add_subdirectory(make_beam_small)
 add_subdirectory(make_psrfits)
 add_subdirectory(galaxy-scripts)
-
-## The following are deprecated:
-#add_subdirectory(mwac_utils)
-#add_subdirectory(read_mwac)
-#add_subdirectory(read_pfb)
-#add_subdirectory(get_delays)
-#add_subdirectory(gpu_utils)    
-#add_subdirectory(make_beam)
 
 INCLUDE(InstallRequiredSystemLibraries)
 
