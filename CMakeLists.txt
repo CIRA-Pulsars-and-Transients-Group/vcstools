@@ -3,9 +3,19 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-project(MWA_Beamformer VERSION 1.3.2)
+project(vcstools VERSION 1.4.0)
 
-add_definitions( -DVERSION_BEAMFORMER="${PROJECT_VERSION}" )
+# Set up version number
+execute_process(
+  COMMAND git log -1 --format=%h
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE VERSION_GIT
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+set(VCSTOOLS_VERSION "${PROJECT_VERSION}_${VERSION_GIT}")
+
+add_definitions( -DVERSION_BEAMFORMER="${VCSTOOLS_VERSION}" )
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
@@ -19,8 +29,8 @@ message("Finding OpenMP")
 include(FindOpenMP)
 
 find_package(SLALIB)
-find_package(PSRFITS_UTILS)
 find_package(CFITSIO)
+find_package(PSRFITS_UTILS)
 find_package(FFTW3 COMPONENTS single openmp)
 find_package(XGPU)
 
@@ -32,14 +42,7 @@ if (XGPU_FOUND)
 endif()
 add_subdirectory(make_beam_small)
 add_subdirectory(make_psrfits)
-
-## The following are deprecated:
-#add_subdirectory(mwac_utils)
-#add_subdirectory(read_mwac)
-#add_subdirectory(read_pfb)
-#add_subdirectory(get_delays)
-#add_subdirectory(gpu_utils)    
-#add_subdirectory(make_beam)
+add_subdirectory(galaxy-scripts)
 
 INCLUDE(InstallRequiredSystemLibraries)
 

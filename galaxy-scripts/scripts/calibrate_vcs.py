@@ -898,16 +898,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Script for creating RTS configuration files and submitting relevant jobs in the VCS pulsar pipeline")
 
-    parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target.", required=True)
+    parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target.", default=None)
 
     parser.add_argument("-O", "--cal_obsid", type=int,
                         help="Calibrator observation ID for the target observation. "
-                             "Can be the same as --obs if using in-beam visibilities.", required=True)
+                             "Can be the same as --obs if using in-beam visibilities.", default=None)
 
     parser.add_argument("-m", "--metafits", type=str,
-                        help="Path to the relevant calibration observation metafits file.", required=True)
+                        help="Path to the relevant calibration observation metafits file.", default=None)
 
-    parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list.", required=True)
+    parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list.", default=None)
 
     parser.add_argument("--gpubox_dir", type=str, help="Where the *_gpubox*.fits files are located", default=None)
 
@@ -922,8 +922,19 @@ if __name__ == '__main__':
     parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue.")
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: DEBUG.", 
                         choices=loglevels.keys(), default="DEBUG")
+    parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
 
     args = parser.parse_args()
+
+    if args.version:
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
 
     # set up the logger for stand-alone execution
     logger.setLevel(loglevels[args.loglvl])
@@ -932,6 +943,11 @@ if __name__ == '__main__':
     formatter = logging.Formatter('%(asctime)s %(thread)d  %(name)s  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+
+    if (args.obsid is None) or (args.cal_obsid is None) or (args.metafits is None) or (args.srclist is None):
+        print "You need to specify all of the follow arguments:"
+        print "-o/--obsid\n-O/--cal_obsid\n-m/--metafits\n-s/--srclist"
+        sys.exit(1)
 
     logger.info("Creating BaseRTSconfig instance - setting up basic information for RTS configuration scripts")
     try:

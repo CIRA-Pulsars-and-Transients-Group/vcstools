@@ -170,9 +170,9 @@ def calculate_ephem(ra, dec, date, tzoffset, site, center):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Determine ephemeris for source object over 24hrs.")
-    parser.add_argument('--ra',      type=str,   metavar="RAJ2000",  help="RAJ2000 coordinate of target source (hh:mm:ss.ss)",  required=True)
-    parser.add_argument('--dec',     type=str,   metavar="DECJ2000", help="DECJ2000 coordinate of target source (dd:mm:ss.ss)", required=True)
-    parser.add_argument('--utcdate', type=str,   metavar="date",     help="Desired ephemeris UTC date (YYYY/MM/DD)",            required=True)
+    parser.add_argument('--ra',      type=str,   metavar="RAJ2000",  help="RAJ2000 coordinate of target source (hh:mm:ss.ss)", default=None)
+    parser.add_argument('--dec',     type=str,   metavar="DECJ2000", help="DECJ2000 coordinate of target source (dd:mm:ss.ss)", default=None)
+    parser.add_argument('--utcdate', type=str,   metavar="date",     help="Desired ephemeris UTC date (YYYY/MM/DD)", default=None)
     parser.add_argument('--utcoff',  type=float, metavar="offset",   help="Hour offset from UTC [default = 0]", default=0)
     parser.add_argument('--site',    type=str,   metavar="name", nargs='+', 
                             choices=site_dict.keys(), help="Common radio telescope sites to use as observer position. "
@@ -180,7 +180,25 @@ if __name__ == "__main__":
 
     # TODO: need to allow any number of manually defined observing positions, but for now just use those in the site_dict
     #parser.add_argument('--observer', type=float, nargs=3, metavar=("lat", "lon", "elev"), help="Latitude (deg), longitude (deg) and elevation (m) of observer. No default.",default=(None,None,None))
-    parser.add_argument('-c', '--center', action='store_true', help='Center the time of maximum elevation on the plot')
+    parser.add_argument('-c', '--center', action='store_true', help="Center the time of maximum elevation on the plot")
+    parser.add_argument('-V', '--version', action='store_true', help="Print version and quit")
     args = parser.parse_args()
+
+    if args.version:
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
+    
+    if (args.ra is None) or (args.dec is None) or (args.utcdate is None):
+        print "ERROR: You must specify a RA, Dec and UTC date to plote the ephemeris"
+    
+    if args.site is None:
+        print "WARNING: You didn't provide a site, assuming MWA..."
+        args.site = ["MWA"]
 
     calculate_ephem(args.ra, args.dec, args.utcdate, args.utcoff, args.site, args.center)

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
+
 import subprocess, os, sys
 import urllib
 import urllib2
@@ -219,29 +220,27 @@ def get_files_and_sizes(obsID, mode):
         return
 
 def opt_parser():
-    parser=argparse.ArgumentParser(description="scripts to check sanity of downloads and recombine.")
+    parser = argparse.ArgumentParser(description="scripts to check sanity of downloads and recombine.")
     parser.add_argument("-m", "--mode", type=str, choices=['download','recombine'],\
-                          help="Mode you want to run: download, recombine", required=True,
-                        dest='mode')
+                          help="Mode you want to run: download, recombine", dest='mode', default=None)
     parser.add_argument("-d", "--data_type", type=str, choices=['11','15','16', 'raw','ics','tar_ics'],\
                           help="Only necessary when checking downloads. Types refer to those as definded " + \
                             "in voltdownload.py: 11 = Raw, 15 = ICS only, 16 = ICS and tarballs of recombined data.", \
-                            required=False,dest='data_type', default=None)
+                            dest='data_type', default=None)
     parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, dest='obsID',\
-                            help="Observation ID you want to process [no default]",\
-                            required=True)
+                            help="Observation ID you want to process [no default]", default=None)
     parser.add_argument("-b", "--begin", metavar="start", type=int, dest='begin',\
                             help="gps time of first file to ckeck on [default=%(default)s]",\
-                            required=False, default=None)
+                            default=None)
     parser.add_argument("-e", "--end", metavar="stop", type=int, dest='end',\
                             help="gps time of last file to ckeck on [default=%(default)s]",\
-                            required=False, default=None)
+                            default=None)
     parser.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%(default)s]")
     parser.add_argument("-i", "--increment", metavar="time increment", type=int, \
                             dest='increment',\
                             help="Effectively the number of seconds to ckeck for " +\
                             "starting at start time [default=%(default)s]",\
-                            required=False, default=None)
+                            default=None)
     parser.add_argument("-s", "--size", type=int, dest='size',\
                           help="The files size in bytes that you expect all files" +\
                           " to have. Per default will figure this out from files on he archive" +\
@@ -254,11 +253,26 @@ def opt_parser():
                             help="Directory " + \
                             "to check the files in. Default is /astro/mwaops/vcs/" + \
                             "[obsID]/[raw,combined]")
+    parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = opt_parser()
     work_dir_base = '/astro/mwaops/vcs/' + str(args.obsID)
+
+    if args.version:
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
+
+    if (args.mode is None) or (args.obsID is None):
+        print "ERROR: You must specify BOTH a mode and observation ID"
+        sys.exit(1)
 
     if args.all:
         from process_vcs import obs_max_min

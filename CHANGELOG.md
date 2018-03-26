@@ -3,8 +3,15 @@
 ----
 ## Unreleased
 
-* Remove deprecated code for the beamformer
 * Rename `make_beam_small` to `make_beam` 
+
+----
+## v1.4.0 (2018-03-26)
+
+* Remove deprecated code for the beamformer
+* Make `splice_psrfits` overwrite existing output file instead of aborting if output file already exists
+* Include the (abbreviated) git hash of the current build in the version number
+* Add a -V option (version) to all programs and scripts within VCS Tools
 
 ----
 ## v1.3.2 (2018-02-19)

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+
 import subprocess
 import os
 import sys
@@ -1043,6 +1044,7 @@ if __name__ == '__main__':
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
     parser.add_option("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.[default=%default]")
+    parser.add_option("-V", "--version", action="store_true", help="Print version and quit")
     parser.add_option_group(group_download)
     parser.add_option_group(group_correlate)
     parser.add_option_group(group_calibrate)
@@ -1050,6 +1052,16 @@ if __name__ == '__main__':
 
     (opts, args) = parser.parse_args()
     
+    if opts.version:
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
+        
     if opts.all and (opts.begin or opts.end):
         print "Please specify EITHER (-b,-e) OR -a"
         quit()
