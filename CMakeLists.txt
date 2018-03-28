@@ -40,7 +40,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}
 if (XGPU_FOUND)
     add_subdirectory(offline_correlator)
 endif()
-add_subdirectory(make_beam_small)
+add_subdirectory(make_beam)
 add_subdirectory(make_psrfits)
 add_subdirectory(galaxy-scripts)
 

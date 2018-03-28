@@ -3,7 +3,7 @@
 ----
 ## Unreleased
 
-* Rename `make_beam_small` to `make_beam` 
+* Rename `make_beam` to `make_beam` 
 
 ----
 ## v1.4.0 (2018-03-26)

@@ -872,12 +872,12 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
     """
     vcs_database_id = database_command(args, obs_id)  # why is this being calculated here? (SET)
     # Print relevant version numbers to screen
-    #make_beam_version_cmd = "{0}/make_beam_small -V".format(execpath)
-    make_beam_version_cmd = "make_beam_small -V"
+    #make_beam_version_cmd = "{0}/make_beam -V".format(execpath)
+    make_beam_version_cmd = "make_beam -V"
     make_beam_version = subprocess.Popen(make_beam_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
     tested_version = "?.?.?"
-    print "Current version of make_beam_small = {0}".format(make_beam_version.strip())
-    print "Tested version of make_beam_small = {0}".format(tested_version.strip())
+    print "Current version of make_beam = {0}".format(make_beam_version.strip())
+    print "Tested version of make_beam = {0}".format(tested_version.strip())
 
     metafile = "{0}/{1}.meta".format(product_dir, obs_id)
     metafile_exists = False
@@ -916,12 +916,12 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
     RA = pointing[0]
     Dec = pointing[1]
 
-    # make_beam_small requires the start time in UTC, get it from the start
+    # make_beam requires the start time in UTC, get it from the start
     # GPS time as is done in timeconvert.py
     t = ephem_utils.MWATime(gpstime=float(start))
     utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
 
-    print "Running make_beam_small"
+    print "Running make_beam"
     P_dir = product_dir+"/pointings"
     mdir(P_dir, "Pointings")
     pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
@@ -958,19 +958,19 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
             print "Please an accepted calibratin type. Aborting here."
             quit()
 
-        make_beam_small_batch = "mbs_{0}_{1}_ch{2}".format(RA, Dec, coarse_chan)
+        make_beam_batch = "mbs_{0}_{1}_ch{2}".format(RA, Dec, coarse_chan)
         commands = []
         commands.append("source /group/mwaops/PULSAR/psrBash.profile")
         commands.append("module swap craype-ivybridge craype-sandybridge")
         commands.append(openmp_line)
         commands.append("cd {0}".format(pointing_dir))
-        #commands.append("srun -n 1 -c {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+        #commands.append("srun -n 1 -c {0} {1}/make_beam -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
         #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
         #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
-        commands.append("srun -n 1 -c {0} make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+        commands.append("srun -n 1 -c {0} make_beam -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
                         "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
                         stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
-        submit_slurm(make_beam_small_batch, commands, batch_dir=batch_dir,
+        submit_slurm(make_beam_batch, commands, batch_dir=batch_dir,
                 slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1"}, submit=True)
 
 def database_command(args, obsid):
@@ -1022,7 +1022,7 @@ if __name__ == '__main__':
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
     group_beamform.add_option("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) " +\
                                   "or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
-    group_beamform.add_option("--bf_new", action="store_true", default=False, help="Run the new beamformer (make_beam_small). [default=%default]")
+    group_beamform.add_option("--bf_new", action="store_true", default=False, help="Run the new beamformer (make_beam). [default=%default]")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. [default=%default]".format(bf_out_modes), default='psrfits')
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
     group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
