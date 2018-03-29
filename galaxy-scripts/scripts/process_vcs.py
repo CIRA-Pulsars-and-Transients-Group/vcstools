@@ -604,7 +604,7 @@ if __name__ == '__main__':
         print "Starting time is after end time"
         quit()
     if (opts.mode == "beamform" or opts.incoh):
-    bf_format = ""
+        bf_format = ""
         if not opts.pointing:
             print "Pointing (-p) required in beamformer mode"
             quit()
