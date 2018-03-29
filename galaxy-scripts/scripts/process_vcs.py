@@ -545,7 +545,7 @@ if __name__ == '__main__':
     group_beamform.add_option("--incoh", action="store_true", default=False, help="Add this flag if you want to form an incoherent sum as well. [default=%default]")
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. [default=%default]")
     group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
-    group_beamform.add_option("-E", "--execpath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
+    group_beamform.add_option("-E", "--execpath", type="string", default=None, help="Add this option if you explicitly want to run files from a different location for testing")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
