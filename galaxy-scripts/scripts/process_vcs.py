@@ -602,14 +602,14 @@ if __name__ == '__main__':
         if not opts.pointing:
             print "Pointing (-p) required in beamformer mode"
             quit()
-        if (opts.bf_out_format == ('psrfits' or 'both')):
-            bf_format.append(" -p")
+        if (opts.bf_out_format == 'psrfits' or opts.bf_out_format == 'both'):
+            bf_format +=" -p"
             print "Writing out PSRFITS."
-        elif  (opts.bf_out_format == ('vdif' or 'both')):
-            bf_format.append(" -u")
+        if  (opts.bf_out_format == 'vdif' or opts.bf_out_format == 'both'):
+            bf_format += " -u"
             print "Writing out upsampled VDIF."
-        elif (opts.incoh):
-            bf_format = " -i"
+        if (opts.incoh):
+            bf_format += " -i"
             print "Writing out incoherent sum."
 
         if opts.execpath:
