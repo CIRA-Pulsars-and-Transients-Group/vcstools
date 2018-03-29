@@ -390,9 +390,9 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, batch_di
     """
     vcs_database_id = database_command(args, obs_id)  # why is this being calculated here? (SET)
     # Print relevant version numbers to screen
-    #make_beam_version_cmd = "{0}/make_beam_small -V".format(execpath)
     from mwapy import ephem_utils
-    make_beam_version_cmd = "make_beam -V"
+    make_beam_version_cmd = "{0}/make_beam -V".format(execpath)
+    #make_beam_version_cmd = "make_beam -V"
     make_beam_version = subprocess.Popen(make_beam_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
     tested_version = "?.?.?"
     print "Current version of make_beam = {0}".format(make_beam_version.strip())
@@ -486,7 +486,7 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, batch_di
         #commands.append("srun -n 1 -c {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
         #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
         #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
-        commands.append("srun -n 1 -c {0} make_beam -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+        commands.append("srun -n 1 -c {0} {1}make_beam -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
                         "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12}".format(n_omp_threads, execpath, obs_id, start,
                         stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats))  # check these
         submit_slurm(make_beam_small_batch, commands, batch_dir=batch_dir,
