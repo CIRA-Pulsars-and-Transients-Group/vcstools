@@ -561,7 +561,6 @@ if __name__ == '__main__':
     parser.add_option("-V", "--version", action="store_true", help="Print version and quit")
     parser.add_option_group(group_download)
     parser.add_option_group(group_correlate)
-    parser.add_option_group(group_calibrate)
     parser.add_option_group(group_beamform)
 
     (opts, args) = parser.parse_args()
