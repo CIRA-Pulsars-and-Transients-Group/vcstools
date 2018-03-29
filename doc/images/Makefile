@@ -19,4 +19,4 @@ filter_coeffs.png: filter_coeffs.gpi
 	gnuplot $<
 
 filter.h filter.c:
-	ln -s ../../make_beam_small/$@ .
+	ln -s ../../make_beam/$@ .

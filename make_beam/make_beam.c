@@ -19,7 +19,7 @@
 #include "beam_common.h"
 #include "beam_psrfits.h"
 #include "beam_vdif.h"
-#include "make_beam_small.h"
+#include "make_beam.h"
 #include "vdifio.h"
 #include "filter.h"
 #include "psrfits.h"
@@ -362,7 +362,7 @@ int main(int argc, char **argv)
 
 void usage() {
     fprintf(stderr, "\n");
-    fprintf(stderr, "usage: make_beam_small [OPTIONS]\n");
+    fprintf(stderr, "usage: make_beam [OPTIONS]\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "REQUIRED OPTIONS\n");

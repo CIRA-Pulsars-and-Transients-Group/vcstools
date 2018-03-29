@@ -21,136 +21,19 @@ from job_submit import submit_slurm
 import mwa_metadb_utils as meta
 
 
-TMPL = """#!/bin/bash
-
-#SBATCH --export=NONE
-#SBATCH --output={outfile}
-#SBATCH --account=mwaops
-#SBATCH --gid=mwaops
-#SBATCH --clusters={cluster}
-#
-{header}
-
-{script}
-"""
 
 
 def tmp(suffix=".sh"):
     t = tempfile.mktemp(suffix=suffix)
     atexit.register(os.unlink, t)
     return t
-"""
-def submit_slurm(name,commands,slurm_kwargs={},tmpl=TMPL,batch_dir="batch/", depend=0, submit=True, outfile=None, cluster="galaxy"):
-        
-        Making this function to cleanly submit slurm jobs using a simple template.
-        This will use the <name> to setup both the .batch and .out files into <batch_dir>
-        <slurm_kwargs> should be a dictionary of keyword, value pairs of anything the template header is missing
-        <commands> is the actual batch script you want to run, and is expecting a list with one entry per line
-        
-        
-        header = []
-        if batch_dir[-1] is not "/":
-                batch_dir += "/"
 
-        if not outfile:
-                outfile=batch_dir+name+".out"
-        for k, v in slurm_kwargs.iteritems():
-                if len(k) > 1:
-                        k = "--" + k + "="
-                else:
-                        k = "-" + k + " "
-                header.append("#SBATCH {0}{1}".format(k, v))
-        header = "\n".join(header)
-        
-        commands = "\n".join(commands)
-        
-        tmpl = tmpl.format(script=commands,outfile=outfile, header=header, cluster=cluster)
-        
-
-        fh = open(batch_dir+name+".batch","w")
-        fh.write(tmpl)
-        fh.close()
-        
-        if depend:
-                batch_submit_line = "sbatch --dependency=afterok:{0} {1}".format(depend,batch_dir+name+".batch") # should this just be in the header?
-        else:
-                batch_submit_line = "sbatch {0}".format(batch_dir+name+".batch")
-        
-        if submit:
-                submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
-        # submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
-        # 
-        # jobid=""
-        # for line in submit_cmd.stdout:
-        #         if "Submitted" in line:
-        #                 (word1,word2,word3,jobid) = line.split()
-        # return jobid
-
-"""
-
-"""
-def getmeta(service='obs', params=None):
-  
-    Function to call a JSON web service and return a dictionary:
-    Given a JSON web service ('obs', find, or 'con') and a set of parameters as
-    a Python dictionary, return a Python dictionary xcontaining the result.
-    Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
-    
-    import urllib
-    import urllib2
-    import json
-
-    # Append the service name to this base URL, eg 'con', 'obs', etc.
-    BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
-
-
-    if params:
-        data = urllib.urlencode(params)  # Turn the dictionary into a string with encoded 'name=value' pairs
-    else:
-        data = ''
-
-    if service.strip().lower() in ['obs', 'find', 'con']:
-        service = service.strip().lower()
-    else:
-        print "invalid service name: %s" % service
-        return
-
-    try:
-        result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
-    except urllib2.HTTPError as error:
-        print "HTTP error from server: code=%d, response:\n %s" % (error.code, error.read())
-        return
-    except urllib2.URLError as error:
-        print "URL or network error: %s" % error.reason
-        return
-
-    return result
-"""
 def is_number(s):
     try:
         int(s)
         return True
     except ValueError:
         return False
-
-"""
-def mdir(path,description, gid=30832):
-    # the default groupID is mwaops which is 30832 in numerical
-    # we try and make sure all directories created by process_vcs
-    # end up belonging to the user and the group mwaops
-    # with rwx permissions and the sticky bit set for both user and group
-    try:
-        os.makedirs(path)
-        # we leave the uid unchanged but change gid to mwaops
-        os.chown(path,-1,gid)
-        os.chmod(path,0771)
-        os.system("chmod -R g+s {0}".format(path))
-    except:
-        if (os.path.exists(path)):
-            print "{0} Directory Already Exists\n".format(description)
-        else:
-            sys.exit()
-"""
 
 def get_user_email():
     command="echo `ldapsearch -x \"uid=$USER\" mail |grep \"^mail\"|cut -f2 -d' '`"
@@ -206,23 +89,7 @@ def create_link(data_dir, target_dir, product_dir, link):
         #needs to point at vis on scratch for gpubox files
         print "Trying to link {0} against {1}".format(link, target_dir)
         os.symlink(target_dir, link)
-    
 
-"""
-def obs_max_min(obs_id):
-    
-    Small function to query the database and returns the times of the first and last file
-    :param obs_id:
-    :return:
-    
-    from file_maxmin import getmeta
-
-    obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
-    times=[file[11:21] for file in obsinfo['files'] if is_number(file[11:21])] #Make a list of gps times excluding non-numbers from list
-    obs_start = int(min(times))
-    obs_end = int(max(times))
-    return obs_start, obs_end
-"""
 def get_frequencies(metafits,resort=False):
     # TODO: for robustness, this should force the entries to be 3-digit numbers
     hdulist    = pyfits.open(metafits)
@@ -511,373 +378,25 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                         else:
                                 print "Couldn't find any recombine files. Aborting here."
 
-"""
-def write_rts_in_files(chan_groups,basepath,rts_in_file,chan_type,cal_obs_id,count=0):
-    import re
-    import numpy as np
-    chan_file_dict = {} # used to keep track of which file needs how many nodes
-    
-    cc = 0
-    for c in chan_groups:
-        if len(c)==1:
-            #single channel group, write its own rts_in file
-            subid = str(count+1)
 
-            # NOTE: we've already re-ordered the channels respectively, so no need to do any weird counting
-            #if chan_type == "low":
-            #    subid = str(count+1)
-            #elif chan_type == "high":
-            #        subid = str(count+1)
-            #else:
-            #        print "No channel group given, assuming low"
-            #        subid = str(count+1)
-         
-            if chan_type == "low":
-                offset = cc
-            elif chan_type == "high":
-                offset = 24-int(subid)
-            else:
-                print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
-                sys.exit(1)
-
-            basefreq = 1.28*(c[0]-offset)-0.625
-
-            # use re.compile to make search expressions
-            with open(rts_in_file,'rb') as f:
-                string = f.read()
-                # find the pattern and select the entire line for replacement
-                string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq),string)
-                # include the SubBandIDs tag 
-                string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(subid),string)
-
-            fname = "{0}/rts_{1}_chan{2}.in".format(basepath,cal_obs_id,c[0])
-            chan_file_dict[fname] = 1 # this particular rts_in file has only 1 channel
-            with open(fname,'wb') as f:
-                f.write(string)
-            
-            print "Single channel:: (subband id, abs. chan, abs. freq) = ({0}, {1}, {2}) {3}".format(subid,c[0],basefreq,cc)
-
-            count += 1
-            cc += 1
-        elif len(c)>1:
-            # multiple consecutive channels
-            subids = [str(count+i+1) for i in range(len(c))]
-            
-            #if chan_type == "low":
-            #    subids = [str(count+i+1) for i in range(len(c))]
-            #elif chan_type == "high":
-            #        subids = [str(count+i+1) for i in range(len(c))]
-            #else:
-            #        print "No channel group given, assuming low"
-            #    subid = [str(count+i+1) for i in range(len(c))]
-        
-            if chan_type == "low":
-                offset = cc
-            elif chan_type == "high":
-                offset = np.array([24-int(x) for x in subids])
-            else:
-                print "Invalid channel group type: must be \"low\" or \"high\". Aborting!"
-                sys.exit(1)
-  
-            freqs = 1.28*(np.array(c)-offset)-0.625
-            basefreq = min(freqs)
-
-            # use re.compile to make search expressions
-            with open(rts_in_file,'rb') as f:
-                string = f.read()
-                # find the pattern and select the entire line for replacement
-                string = re.sub("ObservationFrequencyBase=.*\n","ObservationFrequencyBase={0}\n".format(basefreq),string)
-                # include the SubBandIDs tag
-                string = re.sub("StartProcessingAt=0\n","StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)),string)
-            
-            print "Multiple channels:: (subband ids, abs. chans, abs. freqs) = {0}".format(", ".join("({0}, {1}, {2})".format(i,j,k) for i,j,k in zip(subids,c,freqs)))
-
-            if chan_type == "low":
-                fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,min(c),max(c))
-            elif chan_type == "high":
-                fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,max(c),min(c))
-            else:
-                print "No channel group given, assuming low"
-                fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath,cal_obs_id,min(c),max(c))
-
-            chan_file_dict[fname] = len(c)
-            with open(fname,'wb') as f:
-                f.write(string)
-
-            count += len(c)
-            cc += len(c)
-        else:
-            print "Reached a channel group with no entries!? Aborting."
-            sys.exit(1)
-
-
-    return chan_file_dict,count
-
-
-def run_rts(obs_id, cal_obs_id, product_dir, rts_in_file, args, rts_output_dir=None):
-    rts_run_file = distutils.spawn.find_executable('run_rts.sh')
-    vcs_database_id = database_vcs.database_command(args, obs_id)
-    #[BWM] Re-written to incorporate picket-fence mode of calibration (21/02/2017)
-    
-    batch_dir = product_dir+"/batch"
-    if rts_output_dir:
-        product_dir = os.path.abspath(rts_output_dir)
-    else:
-        # as with the other functions product_dir should come as /group/mwaops/obs_id
-        product_dir = "{0}/{1}/{2}/{3}".format(product_dir,'cal', cal_obs_id,'rts')
-    mdir(product_dir,'RTS output')
-  
-    # check if the meta-file has already been created, in which case don't query the database again
-    metafile = "{0}/{1}.meta".format(product_dir,cal_obs_id)
-    metafile_exists = False
-    if os.path.isfile(metafile):
-        print "Found observation metafile: {0}".format(metafile)
-        channels = None
-        with open(metafile,'rb') as m:
-            for line in m.readlines():
-                if line.startswith("channels"):
-                    channels = line.strip().split(",")[1:]
-        if channels == None :
-            print "Channels keyword not found in metafile. Re-querying the database."
-        else:
-            metafile_exists = True
-            channels = [int(c) for c in channels]
-    
-    if metafile_exists == False:
-        print "Querying the database for calibrator obs ID {0}...".format(cal_obs_id)
-        obs_info = meta.getmeta(service='obs', params={'obs_id':str(cal_obs_id)})
-        channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
-        with open(metafile,"wb") as m:
-            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(cal_obs_id))
-            m.write("channels,{0}".format(",".join([str(c) for c in channels])))
-
-
-    #define some of the header/body text to go into the slurm submission script
-    body = []
-    body.append(database_vcs.add_database_function())
-    body.append("module load cudatoolkit")
-    body.append("module load cfitsio")
-
-    body.append("cd {0}".format(product_dir))
-
-    # from the channels, first figure out if they are all consecutive
-    if channels[-1]-channels[0] == len(channels)-1: #TODO: this assumes also ascending order: is that always true??
-        # the channels are consecutive and this is a normal observation
-        # submit the jobs as normal
-        print "The channels are consecutive: this is a normal observation"
-        nnodes = 25 
-        rts_batch = "RTS_{0}".format(cal_obs_id)
-        slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:20:00", "nodes":"{0}".format(nnodes)}
-        commands = list(body) # make a copy of body to then extend
-        commands.append('run "srun -n {0} rts_gpu" "{1}" "{2}"'.format(nnodes,rts_in_file,vcs_database_id))
-        submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
-    else:
-        # it is a picket fence observation, we need to do some magic
-        # will use the given rts_in file as a base format
-        # ** THIS ASSUMES THAT THE ORIGINAL RTS_IN FILE HAS BEEN EDITTED TO APPROPRIATELY REPRESENT THE CORRELATOR SETUP **
-        #    e.g. the channel width, number of channels, correlator dump times, etc.
-        print "The channels are NOT consecutive: this is a picket-fence observation"
-        # figure out whether channels are "high" or "low"
-        hichans = [c for c in channels if c>128]
-        lochans = [c for c in channels if c<=128]
-        print "High channels:",hichans
-        print "Low channels:",lochans
-
-        # get the consecutive chunks within each channel subselection
-        print "Grouping individual channels into consecutive chunks (if possible)"
-        from itertools import groupby
-        from operator import itemgetter
-        # create a list of lists with consecutive channels grouped wihtin a list
-        hichan_groups = [map(itemgetter(1),g)[::-1] for k,g in groupby(enumerate(hichans), lambda (i, x): i-x)][::-1] # reversed order (both of internal lists and globally)
-        lochan_groups = [map(itemgetter(1),g) for k,g in groupby(enumerate(lochans), lambda (i, x): i-x)]
-        print "High channels (grouped):",hichan_groups
-        print "Low channels (grouped):",lochan_groups
-
-        # for each group of channels, we need to write 1 rts_in file
-        print "Mapping GPU box numbers to coarse channels..."
-        basepath = os.path.dirname(rts_in_file)
-
-        # write out the RTS in files and keep track of the number of nodes required for each
-        count = 0
-        lodict,count = write_rts_in_files(lochan_groups,basepath,rts_in_file,"low",cal_obs_id,count)
-        hidict,count = write_rts_in_files(hichan_groups,basepath,rts_in_file,"high",cal_obs_id,count)
-        chan_file_dict = lodict.copy()
-        chan_file_dict.update(hidict)
-
-        #print "Editting run_rts.sh script for group sizes... (creating temporary copies)"
-        # the new, channel-based rts_in files should now be in the same location as the original rts_in file
-        # we need to now adjust the run_rts.sh script to work for each of the groups
-        lolengths = set([len(l) for l in lochan_groups]) # figure out the unique lengths 
-        hilengths = set([len(h) for h in hichan_groups])
-        lengths = lolengths.union(hilengths) # combine the sets
-    
-        # Now submit the RTS jobs
-        print "Writing and submitting RTS jobs"
-        
-        for k,v in chan_file_dict.iteritems():
-            nnodes = v + 1
-            channels = k.split('_')[-1].split(".")[0]
-            rts_batch = "RTS_{0}_{1}".format(cal_obs_id,channels)
-            slurm_kwargs = {"partition":"gpuq", "workdir":"{0}".format(product_dir), "time":"00:45:00", "nodes":"{0}".format(nnodes)}
-            commands = list(body) # make a copy of body to then extend
-            commands.append('run "srun -n {0} rts_gpu" "{1}" "{2}"'.format(nnodes,k,vcs_database_id))
-            submit_slurm(rts_batch, commands, slurm_kwargs=slurm_kwargs, batch_dir=batch_dir,submit=True)
-"""
-                        
-
-def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, metafile, nfine_chan, pointing,
-                 args, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None, calibration_type='rts'):
-    vcs_database_id = database_vcs.database_command(args, obs_id)
-    # Print relevant version numbers to screen
-    mwacutils_version_cmd = "{0}/make_beam -V".format(execpath)
-    mwacutils_version = subprocess.Popen(mwacutils_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
-    tested_version  = "0.9.0"
-    print "Current version of MWACUtils = {0}".format(mwacutils_version.strip())
-    print "Tested  version of MWACUtils = {0}".format(tested_version.strip())
-
-    # Need to run get_delays and then the beamformer on each desired coarse channel
-    if not DI_dir:
-        print "You need to specify the path to the calibrator files, either where the DIJs are or where the offringe calibration_solution.bin file is. Aborting here."
-        quit()
-    DI_dir = os.path.abspath(DI_dir)
-    RA = pointing[0]
-    Dec = pointing[1]
-
-    # get_delays requires the start time in UTC, get it from the start GPS time
-    # as is done in timeconvert.py
-    t=ephem_utils.MWATime(gpstime=float(start))
-    utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
-
-    print "Running get_delays"
-    P_dir = product_dir+"/pointings"
-    mdir(P_dir, "Pointings")
-    pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
-    mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
-
-    startjobs = True
-    chan_index = 0
-    get_delays_batch = "{0}/batch/gd_{1}_{2}.batch".format(product_dir,start, stop)
-    bf_adjust_flags = distutils.spawn.find_executable("bf_adjust_flags.py")
-    with open(get_delays_batch,'w') as batch_file:
-        batch_line = "#!/bin/bash -l\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n#SBATCH --output={0}/batch/gd_{1}_{2}.out\n#SBATCH --mail-type=ALL\n".format(product_dir,start,stop)
-        batch_file.write(batch_line)
-        batch_file.write(database_vcs.add_database_function())
-        batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
-        batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
-        for gpubox in ["{0:0>2}".format(i) for i in range(1,25)]:
-            #DI_file = "{0}/{1}".format(DI_dir, ?) # Need to finish file path
-            pointing_chan_dir = "{0}/{1}".format(pointing_dir,gpubox)
-            mdir(pointing_chan_dir, "Pointing {0} {1} gpubox {2}".format(RA, Dec, gpubox))
-
-            if calibration_type == 'rts':
-                chan_list = get_frequencies(metafits_file, resort=True)
-                DI_file = "{0}/DI_JonesMatrices_node0{1}.dat".format(DI_dir, gpubox)
-                jones_option = "-R {0}".format(DI_file)
-            elif calibration_type == 'offringa':
-                chan_list = get_frequencies(metafits_file, resort=False)
-                DI_file = "{0}/calibration_solution.bin".format(DI_dir)
-                jones_option = "-O {0} -C {1}".format(DI_file, int(gpubox)-1)
-            channel_file = "{0}/channel".format(pointing_chan_dir)
-            with open(channel_file,"w") as ch_file:
-                ch_line = "{0}".format(chan_list[chan_index]);
-                ch_file.write(ch_line)
-
-            #ASSUMES 10kHz channels <beware>
-
-            basefreq = int(chan_list[chan_index]) * 1.28e6 - 5e3 - 640e3  + 5e3
-        
-            if (os.path.isfile(DI_file)):
-                ch_dir_line = "cd {0}\n".format(pointing_chan_dir)
-                batch_file.write(ch_dir_line)
-                delays_line = 'run "{0}/get_delays" "-a {1} -b {2} {3} -m {4} -c -i -p -z {5} -o {6} -f {7} -n {8} -w 10000 -r {9} -d {10}" "{11}"\n'.format(execpath, pointing_chan_dir, stop-start+1, jones_option, metafile, utctime, obs_id, basefreq, nfine_chan, RA, Dec, vcs_database_id) 
-                batch_file.write(delays_line)
-                if rts_flag_file:
-                    flags_file = "{0}/flags.txt".format(pointing_chan_dir)
-                    flag_line='run "{0}" "{1} {2}" "{3}"\n'.format(bf_adjust_flags, rts_flag_file, flags_file, vcs_database_id)
-                    batch_file.write(flag_line)
-            else:
-                print "WARNING: No Calibration Found for Channel {0}! Could not find file {1}".format(gpubox, DI_file)
-                startjobs = False
-
-            chan_index = chan_index+1
-    submit_line = "sbatch --account=mwaops --time={0} --workdir={1} --partition=gpuq --gid=mwaops --mail-user={2} {3}\n".format("00:45:00", pointing_dir, e_mail, get_delays_batch)
-    print submit_line;
-    if startjobs:
-        output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
-        # output is something like this: Submitted batch job 245521 on cluster zeus
-        # as the beamformer can only run once delays are computed need to put in dependency on get_delay jobs.
-        dependsOn = output.split(" ")[3].strip()
-        #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-        print "Forming coherent beam. \n"
-        print "starts once Job {0} is done.\n".format(dependsOn)
-    else:
-        print "Not submitted. \n"
- 
- 
-    # Run make_beam
-    seconds_to_run = 60*(stop-start+1)
-    if seconds_to_run > 86399.:
-        secs_to_run = datetime.timedelta(seconds=86399)
-    else:
-        secs_to_run = datetime.timedelta(seconds=60*(stop-start+1))
-
-    # VDIF needs gpu for inverting the pfb, otherwise cpu nodes are fine
-    if bf_format == " -v psrfits_header.txt" or bf_format == " -v psrfits_header.txt -f psrfits_header.txt":
-        partition = "gpuq"
-        n_omp_threads = 8
-    else:
-        partition = "workq"
-        n_omp_threads = 20
-    openmp_line = "export OMP_NUM_THREADS={0}\n".format(n_omp_threads)
-
-    # Run one coarse channel per node
-    for coarse_chan in range(24):
-        make_beam_batch = "{0}/batch/mb_{1}_{2}_ch{3}.batch".format(product_dir, RA, Dec, coarse_chan)
-        make_beam_batch_out = make_beam_batch.replace('.batch','.out')
-        with open(make_beam_batch, 'w') as batch_file:
-            batch_file.write("#!/bin/bash -l\n")
-            nodes_line = "#SBATCH --nodes=1\n#SBATCH --export=NONE\n#SBATCH --account=mwaops\n" 
-            batch_file.write(nodes_line)
-            output_line = "#SBATCH --output={0}\n".format(make_beam_batch_out)
-            batch_file.write(output_line)
-            time_line = "#SBATCH --time=%s\n" % (str(secs_to_run))
-            batch_file.write(database_vcs.add_database_function())
-            batch_file.write(time_line)
-            batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
-            batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
-            # The beamformer runs on all files within time range specified with
-            # the -b and -e flags
-            batch_file.write(openmp_line)
-            #aprun_line = 'run "aprun -n 1 -d {0} {1}/make_beam" "-o {2} -b {3} -e {4} -a 128 -n 128 -N {5} -t 1 {6} -c phases.txt -w flags.txt -d {7}/combined -D {8}/ {9}" "{10}" \n'.format(n_omp_threads, execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format, vcs_database_id)
-            srun_line = 'run "srun -n 1 -c {0} {1}/make_beam" "-o {2} -b {3} -e {4} -a 128 -n 128 -N {5} -t 1 {6} -c phases.txt -w flags.txt -d {7}/combined -D {8}/ {9}" "{10}" \n'.format(n_omp_threads, execpath, obs_id, start, stop, coarse_chan, jones, data_dir, pointing_dir, bf_format, vcs_database_id)
-            batch_file.write(srun_line)
-        
-        submit_line = "sbatch --workdir={0} --partition={1} -d afterok:{2} --gid=mwaops --mail-user={3} {4} \n".format(pointing_dir, partition, dependsOn, e_mail, make_beam_batch)
-        print submit_line
-        if startjobs:
-            output = subprocess.Popen(submit_line, stdout=subprocess.PIPE, shell=True).communicate()[0]
-            jobID = output.split(" ")[3].strip()
-            #submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-            print "Submitted as job {0}".format(jobID)
-        else:
-            print "Not submitted. \n"
-
-
-def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batch_dir, metafits_file, nfine_chan, pointing,
-                      args, rts_flag_file=None, bf_format=' -f psrfits_header.txt', DI_dir=None,
+def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, batch_dir, metafits_file, nfine_chan, pointing,
+                      args, rts_flag_file=None, bf_formats=None, DI_dir=None,
                       calibration_type='rts'):
     """
     This function runs the new version of the beamformer. It is modelled after the old function above and will likely
     be able to be streamlined after working implementation (SET)
+    
+    Streamlining underway, as well as full replacement of the old function (SET March 28, 2018)
     """
     vcs_database_id = database_command(args, obs_id)  # why is this being calculated here? (SET)
     # Print relevant version numbers to screen
-    #make_beam_version_cmd = "{0}/make_beam_small -V".format(execpath)
-    make_beam_version_cmd = "make_beam_small -V"
+    from mwapy import ephem_utils
+    make_beam_version_cmd = "{0}/make_beam -V".format(execpath)
+    #make_beam_version_cmd = "make_beam -V"
     make_beam_version = subprocess.Popen(make_beam_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
     tested_version = "?.?.?"
-    print "Current version of make_beam_small = {0}".format(make_beam_version.strip())
-    print "Tested version of make_beam_small = {0}".format(tested_version.strip())
+    print "Current version of make_beam = {0}".format(make_beam_version.strip())
+    print "Tested version of make_beam = {0}".format(tested_version.strip())
 
     metafile = "{0}/{1}.meta".format(product_dir, obs_id)
     metafile_exists = False
@@ -921,7 +440,7 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
     t = ephem_utils.MWATime(gpstime=float(start))
     utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
 
-    print "Running make_beam_small"
+    print "Running make_beam"
     P_dir = product_dir+"/pointings"
     mdir(P_dir, "Pointings")
     pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
@@ -958,7 +477,7 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
             print "Please an accepted calibratin type. Aborting here."
             quit()
 
-        make_beam_small_batch = "mbs_{0}_{1}_ch{2}".format(RA, Dec, coarse_chan)
+        make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(RA, Dec, coarse_chan)
         commands = []
         commands.append("source /group/mwaops/PULSAR/psrBash.profile")
         commands.append("module swap craype-ivybridge craype-sandybridge")
@@ -967,9 +486,9 @@ def coherent_beam_new(obs_id, start, stop, execpath, data_dir, product_dir, batc
         #commands.append("srun -n 1 -c {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
         #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
         #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
-        commands.append("srun -n 1 -c {0} make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
-                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
-                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
+        commands.append("srun -n 1 -c {0} {1}make_beam -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12}".format(n_omp_threads, execpath, obs_id, start,
+                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats))  # check these
         submit_slurm(make_beam_small_batch, commands, batch_dir=batch_dir,
                 slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1"}, submit=True)
 
@@ -992,7 +511,7 @@ def database_command(args, obsid):
 
 if __name__ == '__main__':
 
-    modes=['download', 'download_ics', 'download_cal', 'recombine','correlate','calibrate', 'beamform']
+    modes=['download', 'download_ics', 'download_cal', 'recombine','correlate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
@@ -1013,20 +532,15 @@ if __name__ == '__main__':
     group_correlate = OptionGroup(parser, 'Correlator Options')
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
-    group_calibrate = OptionGroup(parser, 'Calibration Options')
-    group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.", default=None)
-    group_calibrate.add_option('--rts_output_dir', help="Working directory for RTS -- all RTS output files will end up here. "+\
-                                   "Default is /group/mwaops/[obsID]/cal/cal_obsID/.", default=None)
-
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
     group_beamform.add_option("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) " +\
                                   "or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
-    group_beamform.add_option("--bf_new", action="store_true", default=False, help="Run the new beamformer (make_beam_small). [default=%default]")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. [default=%default]".format(bf_out_modes), default='psrfits')
-    group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used to adjust flags.txt as output by get_delays. [default=%default]")
+    group_beamform.add_option("--incoh", action="store_true", default=False, help="Add this flag if you want to form an incoherent sum as well. [default=%default]")
+    group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. [default=%default]")
     group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
-    group_beamform.add_option("-E", "--execpath", type="string", default='/group/mwaops/PULSAR/bin/', help=SUPPRESS_HELP)
+    group_beamform.add_option("-E", "--execpath", type="string", default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -1047,7 +561,6 @@ if __name__ == '__main__':
     parser.add_option("-V", "--version", action="store_true", help="Print version and quit")
     parser.add_option_group(group_download)
     parser.add_option_group(group_correlate)
-    parser.add_option_group(group_calibrate)
     parser.add_option_group(group_beamform)
 
     (opts, args) = parser.parse_args()
@@ -1084,17 +597,20 @@ if __name__ == '__main__':
     if opts.begin > opts.end:
         print "Starting time is after end time"
         quit()
-    if opts.mode == "beamform":
+    if (opts.mode == "beamform" or opts.incoh):
+        bf_format = ""
         if not opts.pointing:
             print "Pointing (-p) required in beamformer mode"
             quit()
-        if (opts.bf_out_format == 'psrfits'):
-            bf_format = " -f psrfits_header.txt"
-        elif  (opts.bf_out_format == 'vdif'):
-            bf_format = " -v psrfits_header.txt"
-        elif (opts.bf_out_format == 'both'):
-            bf_format = " -v psrfits_header.txt -f psrfits_header.txt"
-            print "Writing out both psrfits and vdif."
+        if (opts.bf_out_format == 'psrfits' or opts.bf_out_format == 'both'):
+            bf_format +=" -p"
+            print "Writing out PSRFITS."
+        if  (opts.bf_out_format == 'vdif' or opts.bf_out_format == 'both'):
+            bf_format += " -u"
+            print "Writing out upsampled VDIF."
+        if (opts.incoh):
+            bf_format += " -i"
+            print "Writing out incoherent sum."
 
         if opts.execpath:
             execpath = opts.execpath
@@ -1139,23 +655,7 @@ if __name__ == '__main__':
         data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
         mdir(data_dir, "Calibrator Data")
         download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head)
-    elif opts.mode == 'calibrate':
-        print opts.mode
-        if not opts.rts_in_file:
-            print "You have to provide the full path to the setup file for the RTS. Aborting here."
-            quit()
-        if not os.path.isfile(opts.rts_in_file):
-            print "Your are not pointing at a file with your input to --rts_in_file. Aboring here as the RTS will not run..."
-            quit()
-        if not opts.cal_obs:
-            print "You need to also pass the calibrator observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
-            quit()
-        # turn whatever path we got into an absolute path 
-        rts_in_file = os.path.abspath(opts.rts_in_file)
-        if opts.rts_output_dir:
-            rts_output_dir = os.path.abspath(opts.rts_output_dir)
-        run_rts(opts.obs, opts.cal_obs, product_dir, rts_in_file, sys.argv, opts.rts_output_dir)
-    elif opts.mode == 'beamform':
+    elif opts.mode == ('beamform' or 'incoh'):
         print opts.mode
         if not opts.DI_dir:
             print "You need to specify the path to either where the DIJs are or where the offringe calibration_solution.bin file is. Aborting here."
@@ -1163,18 +663,13 @@ if __name__ == '__main__':
         if opts.flagged_tiles:
             flagged_tiles_file = os.path.abspath(opts.flagged_tiles)
             if not os.path.isfile(opts.flagged_tiles):
-                print "Your are not pointing at a file with your input to --flagged_tiles. Aboring here as the beamformer will not run..."
+                print "Your are not pointing at a file with your input to --flagged_tiles. Aborting here as the beamformer will not run..."
                 quit()
         else:
             flagged_tiles_file = None
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        from mwapy import ephem_utils
-        if opts.bf_new:
-            coherent_beam_new(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, batch_dir, metafits_file,
-                      opts.nfine_chan, opts.pointing, sys.argv, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
-        else:
-            coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, metafits_file,
-                      opts.nfine_chan, opts.pointing, sys.argv, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
+        coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, batch_dir, metafits_file,
+                  opts.nfine_chan, opts.pointing, sys.argv, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()

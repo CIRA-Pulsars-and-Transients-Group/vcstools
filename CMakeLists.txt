@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-project(vcstools VERSION 1.4.0)
+project(vcstools VERSION 1.4.1)
 
 # Set up version number
 execute_process(
@@ -40,7 +40,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}
 if (XGPU_FOUND)
     add_subdirectory(offline_correlator)
 endif()
-add_subdirectory(make_beam_small)
+add_subdirectory(make_beam)
 add_subdirectory(make_psrfits)
 add_subdirectory(galaxy-scripts)
 
