@@ -511,7 +511,7 @@ def database_command(args, obsid):
 
 if __name__ == '__main__':
 
-    modes=['download', 'download_ics', 'download_cal', 'recombine','correlate','calibrate', 'beamform']
+    modes=['download', 'download_ics', 'download_cal', 'recombine','correlate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08","ch09","ch10","ch11","ch12","ch13","ch14","ch15","ch16","ch17","ch18","ch19","ch20","ch21","ch22","ch23","ch24"]
@@ -532,11 +532,6 @@ if __name__ == '__main__':
     group_correlate = OptionGroup(parser, 'Correlator Options')
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
-    group_calibrate = OptionGroup(parser, 'Calibration Options')
-    group_calibrate.add_option('--rts_in_file', type='string', help="Either relative or absolute path (including file name) to setup file for the RTS.", default=None)
-    group_calibrate.add_option('--rts_output_dir', help="Working directory for RTS -- all RTS output files will end up here. "+\
-                                   "Default is /group/mwaops/[obsID]/cal/cal_obsID/.", default=None)
-
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
     group_beamform.add_option("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) " +\
@@ -545,7 +540,7 @@ if __name__ == '__main__':
     group_beamform.add_option("--incoh", action="store_true", default=False, help="Add this flag if you want to form an incoherent sum as well. [default=%default]")
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. [default=%default]")
     group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
-    group_beamform.add_option("-E", "--execpath", type="string", default=None, help="Add this option if you explicitly want to run files from a different location for testing")
+    group_beamform.add_option("-E", "--execpath", type="string", default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -661,22 +656,6 @@ if __name__ == '__main__':
         data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
         mdir(data_dir, "Calibrator Data")
         download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head)
-    elif opts.mode == 'calibrate':
-        print opts.mode
-        if not opts.rts_in_file:
-            print "You have to provide the full path to the setup file for the RTS. Aborting here."
-            quit()
-        if not os.path.isfile(opts.rts_in_file):
-            print "Your are not pointing at a file with your input to --rts_in_file. Aboring here as the RTS will not run..."
-            quit()
-        if not opts.cal_obs:
-            print "You need to also pass the calibrator observation ID (GPS seconds), otherwise we can't query the database. Aborting here."
-            quit()
-        # turn whatever path we got into an absolute path 
-        rts_in_file = os.path.abspath(opts.rts_in_file)
-        if opts.rts_output_dir:
-            rts_output_dir = os.path.abspath(opts.rts_output_dir)
-        run_rts(opts.obs, opts.cal_obs, product_dir, rts_in_file, sys.argv, opts.rts_output_dir)
     elif opts.mode == ('beamform' or 'incoh'):
         print opts.mode
         if not opts.DI_dir:
