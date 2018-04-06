@@ -379,8 +379,8 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                                 print "Couldn't find any recombine files. Aborting here."
 
 
-def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, batch_dir, metafits_file, nfine_chan, pointing,
-                      args, rts_flag_file=None, bf_formats=None, DI_dir=None,
+def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafits_file, nfine_chan, pointing,
+                      args, rts_flag_file=None, bf_formats=None, DI_dir=None, execpath=None,
                       calibration_type='rts'):
     """
     This function runs the new version of the beamformer. It is modelled after the old function above and will likely
@@ -389,9 +389,16 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, batch_di
     Streamlining underway, as well as full replacement of the old function (SET March 28, 2018)
     """
     vcs_database_id = database_command(args, obs_id)  # why is this being calculated here? (SET)
-    # Print relevant version numbers to screen
-    from mwapy import ephem_utils
-    make_beam_version_cmd = "{0}/make_beam -V".format(execpath)
+
+    # If execpath is given, change the make_beam executable command 
+    # otherwise, it should be on the PATH if vcstools has been installed
+    if execpath:
+        make_beam_cmd = "{0}/make_beam".format(execpath)
+        make_beam_version_cmd = "{0}/make_beam -V".format(execpath)
+    else:
+        make_beam_cmd = "make_beam"
+        make_beam_version_cmd = "make_beam -V"
+
     #make_beam_version_cmd = "make_beam -V"
     make_beam_version = subprocess.Popen(make_beam_version_cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
     tested_version = "?.?.?"
@@ -437,6 +444,7 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, batch_di
 
     # make_beam_small requires the start time in UTC, get it from the start
     # GPS time as is done in timeconvert.py
+    from mwapy import ephem_utils
     t = ephem_utils.MWATime(gpstime=float(start))
     utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
 
@@ -486,11 +494,15 @@ def coherent_beam(obs_id, start, stop, execpath, data_dir, product_dir, batch_di
         #commands.append("srun -n 1 -c {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
         #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
         #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
-        commands.append("srun -n 1 -c {0} {1}make_beam -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
-                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12}".format(n_omp_threads, execpath, obs_id, start,
+        commands.append("srun -n 1 -c {0} {1} -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12}".format(n_omp_threads, make_beam_cmd, obs_id, start,
                         stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats))  # check these
-        submit_slurm(make_beam_small_batch, commands, batch_dir=batch_dir,
-                slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1"}, submit=True)
+        
+        submit_slurm(make_beam_small_batch, commands,
+                batch_dir=batch_dir,
+                slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1"},
+                submit=True)
+
 
 def database_command(args, obsid):
     DB_FILE = os.environ['CMD_VCS_DB_FILE']
@@ -540,7 +552,7 @@ if __name__ == '__main__':
     group_beamform.add_option("--incoh", action="store_true", default=False, help="Add this flag if you want to form an incoherent sum as well. [default=%default]")
     group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. [default=%default]")
     group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
-    group_beamform.add_option("-E", "--execpath", type="string", default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing")
+    group_beamform.add_option("-E", "--execpath", type="string", default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
 
     parser.add_option("-m", "--mode", type="choice", choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
@@ -612,8 +624,10 @@ if __name__ == '__main__':
             bf_format += " -i"
             print "Writing out incoherent sum."
 
-        if opts.execpath:
-            execpath = opts.execpath
+        # This isn't necessary as checks for execpath are done in beamforming function (BWM 6/4/18)
+        #if opts.execpath:
+        #    execpath = opts.execpath
+
     if opts.work_dir:
         print "YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!"
         time.sleep(5)
@@ -668,8 +682,11 @@ if __name__ == '__main__':
         else:
             flagged_tiles_file = None
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        coherent_beam(opts.obs, opts.begin, opts.end, opts.execpath, data_dir, product_dir, batch_dir, metafits_file,
-                  opts.nfine_chan, opts.pointing, sys.argv, flagged_tiles_file, bf_format, opts.DI_dir, opts.cal_type)
+        coherent_beam(opts.obs, opts.begin, opts.end, 
+                data_dir, product_dir, batch_dir,
+                metafits_file, opts.nfine_chan, opts.pointing, sys.argv,
+                rts_flag_file=flagged_tiles_file, bf_formats=bf_format, DI_dir=opts.DI_dir, calibration_type=opts.cal_type,
+                execpath=opts.execpath)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
         quit()
