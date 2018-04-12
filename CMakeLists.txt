@@ -25,7 +25,7 @@ if (CUDA_FOUND)
     if(DEFINED ENV{PAWSEY_CLUSTER})
         if("$ENV{PAWSEY_CLUSTER}" STREQUAL "athena")
             set(CUDA_ARCH "sm_60")
-        else
+        else()
             set(CUDA_ARCH "sm_35")
         endif()
     endif()
