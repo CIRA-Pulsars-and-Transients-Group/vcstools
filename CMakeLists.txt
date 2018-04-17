@@ -29,7 +29,7 @@ if (CUDA_FOUND)
             set(CUDA_ARCH "sm_35")
         endif()
     endif()
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=${CUDA_ARCH}")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -lineinfo -arch=${CUDA_ARCH}")
 endif()
 
 message("Finding OpenMP")
