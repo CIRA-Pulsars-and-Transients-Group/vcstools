@@ -178,109 +178,92 @@ void destroy_metafits_info( struct metafits_info *mi ) {
 
 void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *scales, float *offsets) {
 
-  // the code is only ever called with these options so they are not options
-  // thus we just put them here instead
-  int new_var = 32;
-  int iscomplex = 0;
-  int normalise = 1;
-  int update = 1;
-  int clear = 1;
-  int shutdown = 0;
-    // putpose is to generate a mean value for each channel/polaridation
+    // nstep -> ? number of time steps (ie 10,000 per 1 second of data)
+    // nchan -> number of (fine) channels (128)
+    // npol -> number of polarisations (1 for icoh or 4 for coh)
+
+    // the code is only ever called with these options so they are not options
+    // thus we just put them here instead
+    int new_var = 32;
+    //int iscomplex = 0;
+    //int normalise = 1;
+    //int update = 1;
+    //int clear = 1;
+    //int shutdown = 0;
+
+    // purpose is to generate a mean value for each channel/polaridation
 
     int i=0, j=0;
     int p=0;
     float *data_ptr = NULL;
 
-    static float **band;
+    // make these not static since we only run once.
+    float **band;
+    float **chan_min;
+    float **chan_max;
+ 
 
-    static float **chan_min;
-
-    static float **chan_max;
-
-
-    static int setup = 0;
-
-    if (setup == 0) {
-        band = (float **) calloc (npol, sizeof(float *));
-        chan_min = (float **) calloc (npol, sizeof(float *));
-        chan_max = (float **) calloc (npol, sizeof(float *));
-        for (i=0;i<npol;i++) {
-            band[i] = (float *) calloc(nchan, sizeof(float));
-            chan_min[i] = (float *) calloc(nchan, sizeof(float));
-            chan_max[i] = (float *) calloc(nchan, sizeof(float));
-        }
-        setup = 1;
+    band = (float **) calloc (npol, sizeof(float *));
+    chan_min = (float **) calloc (npol, sizeof(float *));
+    chan_max = (float **) calloc (npol, sizeof(float *));
+    for (i=0;i<npol;i++) {
+      band[i] = (float *) calloc(nchan, sizeof(float));
+      chan_min[i] = (float *) calloc(nchan, sizeof(float));
+      chan_max[i] = (float *) calloc(nchan, sizeof(float));
     }
 
-    if (update) {
-        for (p = 0;p<npol;p++) {
-            for (j=0;j<nchan;j++){
-
-                band[p][j] = 0.0;
-            }
+    // initialise the band array
+    for (p = 0;p<npol;p++) {
+        for (j=0;j<nchan;j++){
+            band[p][j] = 0.0;
         }
-
-        if (iscomplex == 0) {
-            data_ptr = (float *) data;
-
-            for (i=0;i<nstep;i++) {
-                for (p = 0;p<npol;p++) {
-                    for (j=0;j<nchan;j++){
+    }
 
 
-                        if (i==0) {
-                            chan_min[p][j] = *data_ptr;
-                            chan_max[p][j] = *data_ptr;
-                        }
-                        band[p][j] += fabsf(*data_ptr);
-                        if (*data_ptr < chan_min[p][j]) {
-                            chan_min[p][j] = *data_ptr;
-                        }
-                        else if (*data_ptr > chan_max[p][j]) {
-                            chan_max[p][j] = *data_ptr;
-                        }
-                        data_ptr++;
-                    }
+    // accumulate abs(data) over all time samples and save into band
+    // track the min/max of the data per pol and per chan
+    data_ptr = (float *) data;
+    for (i=0;i<nstep;i++) { // time steps
+        for (p = 0;p<npol;p++) { // pols
+            for (j=0;j<nchan;j++){ // channels
+                if (i==0) {
+                    chan_min[p][j] = *data_ptr;
+                    chan_max[p][j] = *data_ptr;
                 }
-
-            }
-        }
-        else {
-            ComplexDouble *data_ptr = (ComplexDouble *) data;
-            for (i = 0; i < nstep; i++) {
-                for (p = 0; p < npol; p++) {
-                    for (j = 0; j < nchan; j++){
-                        band[p][j] += CAbsd(*data_ptr);
-                        data_ptr++;
-                    }
+                band[p][j] += fabsf(*data_ptr);
+                if (*data_ptr < chan_min[p][j]) {
+                    chan_min[p][j] = *data_ptr;
                 }
-
+                else if (*data_ptr > chan_max[p][j]) {
+                    chan_max[p][j] = *data_ptr;
+                }
+                data_ptr++;
             }
-
         }
 
     }
+
     // set the offsets and scales - even if we are not updating ....
 
-    float *out=scales;
+    float *out = scales;
     float *off = offsets;
     for (p = 0;p<npol;p++) {
         for (j=0;j<nchan;j++){
 
             // current mean
-            *out = ((band[p][j]/nstep))/new_var; // removed a divide by 32 here ....
-            //fprintf(stderr, "Channel %d pol %d mean: %f normaliser %f (max-min) %f\n", j, p, (band[p][j]/nstep), *out, (chan_max[p][j] - chan_min[p][j]));
+            *out = ((band[p][j]/nstep))/new_var;
             out++;
-            *off = 0.0;
 
+            // this is never set to something other than zero and could be removed ?
+            *off = 0.0;
             off++;
 
         }
     }
-    // apply them to the data
 
-    if (normalise) {
+    // apply offset and scale to the data
+
+    {
 
         data_ptr = (float *) data;
 
@@ -291,7 +274,6 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
                 for (j=0;j<nchan;j++){
 
                     *data_ptr = ((*data_ptr) - (*off))/(*normaliser); // 0 mean normalised to 1
-                    //fprintf(stderr, "%f %f %f\n", *data_ptr, *off, *normaliser);
                     off++;
                     data_ptr++;
                     normaliser++;
@@ -303,7 +285,7 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
 
     // clear the weights if required
 
-    if (clear) {
+    {
 
         float *out=scales;
         float *off = offsets;
@@ -325,19 +307,15 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
     }
 
     // free the memory
-    if (shutdown) {
-        for (i=0;i<npol;i++) {
-            free(band[i]);
-            free(chan_min[i]);
-            free(chan_max[i]);
-        }
-
-
-        free(band);
-        free(chan_min);
-        free(chan_max);
-        setup = 0;
+    for (i=0;i<npol;i++) {
+        free(band[i]);
+        free(chan_min[i]);
+        free(chan_max[i]);
     }
+    free(band);
+    free(chan_min);
+    free(chan_max);
+
 }
  
 
