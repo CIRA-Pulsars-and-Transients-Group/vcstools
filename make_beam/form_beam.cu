@@ -54,11 +54,11 @@ __global__ void beamform_kernel( uint8_t *data,
  */
 {
     // Translate GPU block/thread numbers into meaningful names
-    int s  = blockIdx.x;
-    int nc = blockDim.x;
-    int c  = threadIdx.x;
+    int s  = blockIdx.x;  /* The (s)ample number */
+    int nc = blockDim.x;  /* The (n)umber of (c)hannels (=128) */
+    int c  = threadIdx.x; /* The (c)hannel number */
 
-    int ant;
+    int ant;              /* The (ant)enna number */
 
     // Calculate the beam and the noise floor
     ComplexDouble Bx, By;
@@ -72,8 +72,10 @@ __global__ void beamform_kernel( uint8_t *data,
        unintialised variables very differently */
     Bx  = CMaked( 0.0, 0.0 );
     By  = CMaked( 0.0, 0.0 );
+
     Dx  = CMaked( 0.0, 0.0 );
     Dy  = CMaked( 0.0, 0.0 );
+
     WDx = CMaked( 0.0, 0.0 );
     WDy = CMaked( 0.0, 0.0 );
 
@@ -86,8 +88,8 @@ __global__ void beamform_kernel( uint8_t *data,
     Bd[B_IDX(s,c,0,nc)] = CMaked( 0.0, 0.0 );
     Bd[B_IDX(s,c,1,nc)] = CMaked( 0.0, 0.0 );
 
-    // Initialise beams and noise floor to zero
 
+    // Calculate beamform products for each antenna, and then add them together
     for (ant = 0; ant < NSTATION; ant++)
     {
         // Calculate the coherent beam (B = J*W*D)
@@ -101,8 +103,8 @@ __global__ void beamform_kernel( uint8_t *data,
         I[I_IDX(s,c,nc)] = DETECT(Dx) + DETECT(Dy);
 
         Bx = CAddd( CMuld( J[J_IDX(c,ant,0,0,nc)], WDx ),
-                    CMuld( J[J_IDX(c,ant,0,1,nc)], WDy ) );
-        By = CAddd( CMuld( J[J_IDX(c,ant,1,0,nc)], WDx ),
+                    CMuld( J[J_IDX(c,ant,1,0,nc)], WDy ) );
+        By = CAddd( CMuld( J[J_IDX(c,ant,0,1,nc)], WDx ),
                     CMuld( J[J_IDX(c,ant,1,1,nc)], WDy ) );
 
         // Detect the coherent beam
@@ -119,8 +121,11 @@ __global__ void beamform_kernel( uint8_t *data,
     // Form the stokes parameters for the coherent beam
     float bnXX = DETECT(Bd[B_IDX(s,c,0,nc)]) - CReald(Nxx);
     float bnYY = DETECT(Bd[B_IDX(s,c,1,nc)]) - CReald(Nyy);
-    ComplexDouble bnXY = CSubd( CMuld( Bd[B_IDX(s,c,0,nc)], CConjd( Bd[B_IDX(s,c,1,nc)] ) ),
-                                Nxy );
+    ComplexDouble bnXY = CSubd(
+                             CMuld(
+                                 Bd[B_IDX(s,c,0,nc)],
+                                 CConjd( Bd[B_IDX(s,c,1,nc)] ) ),
+                             Nxy );
 
     // Stokes I, Q, U, V:
     C[C_IDX(s,c,0,nc)] = invw*(bnXX + bnYY);

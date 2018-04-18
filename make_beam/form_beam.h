@@ -8,9 +8,9 @@
 #define NREC  16
 #define NINC  4
 
-#define ANT2PFB(ant)    ((ant)>>5)               /* pfb = ant/32           */
-#define ANT2INC(ant)    (((ant)>>3)&0x03)        /* inc = (ant/8) % 4      */
-#define AP2REC(ant,pol) (((ant)<<1+(pol))&0x0F)  /* rec = (2*ant+pol) % 16 */
+#define ANT2PFB(ant)    ((ant)>>5)                 /* pfb = ant/32           */
+#define ANT2INC(ant)    (((ant)>>3)&0x03)          /* inc = (ant/8) % 4      */
+#define AP2REC(ant,pol) ((((ant)<<1)+(pol))&0x0F)  /* rec = (2*ant+pol) % 16 */
 
 /* Calculating array indices for GPU inputs and outputs */
 
