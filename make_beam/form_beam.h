@@ -8,6 +8,55 @@
 #define NREC  16
 #define NINC  4
 
+#define ANT2PFB(ant)    ((ant)>>5)               /* pfb = ant/32           */
+#define ANT2INC(ant)    (((ant)>>3)&0x03)        /* inc = (ant/8) % 4      */
+#define AP2REC(ant,pol) (((ant)<<1+(pol))&0x0F)  /* rec = (2*ant+pol) % 16 */
+
+/* Calculating array indices for GPU inputs and outputs */
+
+#define D_IDX(s,c,a,p,nc)  ((s)         * (NINC*NREC*NPFB*(nc)) + \
+                            (c)         * (NINC*NREC*NPFB)      + \
+                            ANT2PFB(a)  * (NINC*NREC)           + \
+                            AP2REC(a,p) * (NINC)                + \
+                            ANT2INC(a))
+
+#define W_IDX(c,a,p,nc)   ((a) * (NPOL*(nc)) + \
+                           (c) * (NPOL)      + \
+                           (p))
+
+#define J_IDX(c,a,p1,p2,nc)   ((a)  * (NPOL*NPOL*(nc)) + \
+                               (c)  * (NPOL*NPOL)      + \
+                               (p1) * (NPOL)           + \
+                               (p2))
+
+#define B_IDX(s,c,p,nc)  ((s)  * (NPOL*(nc)) + \
+                          (c)  * (NPOL)      + \
+                          (p))
+ 
+#define C_IDX(s,c,st,nc)  ((s)  * (nc*NSTOKES) + \
+                           (st) * (nc)         + \
+                           (c))
+
+#define I_IDX(s,c,nc)  ((s)*(nc) + (c))
+
+
+
+
+#define W_FLAT_IDX(ch,ant,pol)   (((ch) <<8)         + \
+                                 (((ant)<<1) & 0xC0) + \
+                                 (((ant)<<2) & 0x38) + \
+                                 (((ant)>>3) & 0x03) + \
+                                 (((pol)<<2)))
+#define J_FLAT_IDX(ch,ant,p1,p2) (((ch) <<9)          + \
+                                 (((ant)<<2) & 0x180) + \
+                                 (((ant)<<3) & 0x70)  + \
+                                 (((ant)>>2) & 0x06)  + \
+                                 (((p1 )<<3)))
+
+
+
+/* Converting from 4+4 complex to full-blown complex doubles */
+
 #define REAL_NIBBLE_TO_UINT8(X)  ((X) & 0xf)
 #define IMAG_NIBBLE_TO_UINT8(X)  (((X) >> 4) & 0xf)
 #define UINT8_TO_INT(X)          ((X) >= 0x8 ? (signed int)(X) - 0x10 : (signed int)(X))

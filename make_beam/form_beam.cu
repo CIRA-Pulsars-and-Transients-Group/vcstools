@@ -54,127 +54,79 @@ __global__ void beamform_kernel( uint8_t *data,
  */
 {
     // Translate GPU block/thread numbers into meaningful names
-    int sample = blockIdx.x;
-    int nchan  = blockDim.x;
-    int ch     = threadIdx.x;
+    int s  = blockIdx.x;
+    int nc = blockDim.x;
+    int c  = threadIdx.x;
 
-    // Calculate the indices for the input arrays
-    int Di[NSTATION][NPOL];
-    int Wi[NSTATION][NPOL];
-    int Ji[NSTATION][NPOL][NPOL];
-
-    int ant, pol, pol2, st;
-    int pfb, rec, inc;
-    for (ant = 0; ant < NSTATION; ant++)
-    {
-        pfb = ant / 32;
-        inc = (ant / 8) % 4;
-        for (pol = 0; pol < NPOL; pol++)
-        {
-            rec = (2*ant+pol) % 16;
-
-            Di[ant][pol] = sample * (NINC*NREC*NPFB*nchan) +
-                           ch     * (NINC*NREC*NPFB)       +
-                           pfb    * (NINC*NREC)            +
-                           rec    * (NINC)                 +
-                           inc;
-
-            Wi[ant][pol] = ant * (NPOL*nchan) +
-                           ch  * (NPOL)       +
-                           pol;
-
-            for (pol2 = 0; pol2 < NPOL; pol2++)
-            {
-                Ji[ant][pol][pol2] = ant  * (NPOL*NPOL*nchan) +
-                                     ch   * (NPOL*NPOL)       +
-                                     pol  * (NPOL)            +
-                                     pol2;
-            }
-        }
-    }
-
-    // Calculate the indices for the output arrays
-    int Bdi[NPOL];
-    int Ci[NSTOKES];
-    int Ii;
-
-    for (pol = 0; pol < NPOL; pol++)
-        Bdi[pol] = sample * (NPOL*nchan) +
-                   ch     * (NPOL)       +
-                   pol;
-
-    for (st = 0; st < NSTOKES; st++)
-        Ci[st] = sample * (nchan*NSTOKES) +
-                 st     * (nchan)         +
-                 ch;
-
-    Ii = sample*nchan + ch;
+    int ant;
 
     // Calculate the beam and the noise floor
-    ComplexDouble B[NPOL];
-    ComplexDouble D[NPOL];
-    ComplexDouble WD[NPOL];
-    ComplexDouble N[NPOL][NPOL];
+    ComplexDouble Bx, By;
+    ComplexDouble Dx, Dy;
+    ComplexDouble WDx, WDy;
+    ComplexDouble Nxx, Nxy, Nyx, Nyy;
 
 
     /* Fix from Maceij regarding NaNs in output when running on Athena, 13 April 2018.
        Apparently the different compilers and architectures are treating what were 
        unintialised variables very differently */
-    for(pol = 0; pol < NPOL; pol++)
+    Bx  = CMaked( 0.0, 0.0 );
+    By  = CMaked( 0.0, 0.0 );
+    Dx  = CMaked( 0.0, 0.0 );
+    Dy  = CMaked( 0.0, 0.0 );
+    WDx = CMaked( 0.0, 0.0 );
+    WDy = CMaked( 0.0, 0.0 );
+
+    Nxx = CMaked( 0.0, 0.0 );
+    Nxy = CMaked( 0.0, 0.0 );
+    Nyx = CMaked( 0.0, 0.0 );
+    Nyy = CMaked( 0.0, 0.0 );
+
+    I[I_IDX(s,c,nc)] = 0.0;
+    Bd[B_IDX(s,c,0,nc)] = CMaked( 0.0, 0.0 );
+    Bd[B_IDX(s,c,1,nc)] = CMaked( 0.0, 0.0 );
+
+    // Initialise beams and noise floor to zero
+
+    for (ant = 0; ant < NSTATION; ant++)
     {
-        B[pol]  = CMaked( 0.0, 0.0 );
-        D[pol]  = CMaked( 0.0, 0.0 );
-        WD[pol] = CMaked( 0.0, 0.0 );
-    }
+        // Calculate the coherent beam (B = J*W*D)
+        Dx  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,0,nc)]);
+        Dy  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,1,nc)]);
 
+        WDx = CMuld( W[W_IDX(c,ant,0,nc)], Dx );
+        WDy = CMuld( W[W_IDX(c,ant,1,nc)], Dy );
 
-    I[Ii] = 0.0;
-    for (pol = 0; pol < NPOL; pol++)
-    {
-        // Initialise beams and noise floor to zero
-        Bd[Bdi[pol]] = CMaked( 0.0, 0.0 );
-        for (pol2 = 0; pol2 < NPOL; pol2++)
-            N[pol][pol2] = CMaked( 0.0, 0.0 );
+        // (... and along the way, calculate the incoherent beam...)
+        I[I_IDX(s,c,nc)] = DETECT(Dx) + DETECT(Dy);
 
-        for (ant = 0; ant < NSTATION; ant++)
-        {
-            // Calculate the coherent beam (B = J*W*D)
-            B[pol]  = CMaked( 0.0, 0.0 );
-            D[pol]  = UCMPLX4_TO_CMPLX_FLT(data[Di[ant][pol]]);
-            WD[pol] = CMuld( W[Wi[ant][pol]], D[pol] );
+        Bx = CAddd( CMuld( J[J_IDX(c,ant,0,0,nc)], WDx ),
+                    CMuld( J[J_IDX(c,ant,0,1,nc)], WDy ) );
+        By = CAddd( CMuld( J[J_IDX(c,ant,1,0,nc)], WDx ),
+                    CMuld( J[J_IDX(c,ant,1,1,nc)], WDy ) );
 
-            // (... and along the way, calculate the incoherent beam...)
-            I[Ii] += DETECT(D[pol]);
+        // Detect the coherent beam
+        Bd[B_IDX(s,c,0,nc)] = CAddd( Bd[B_IDX(s,c,0,nc)], Bx );
+        Bd[B_IDX(s,c,1,nc)] = CAddd( Bd[B_IDX(s,c,1,nc)], By );
 
-            for (pol2 = 0; pol2 < NPOL; pol2++)
-            {
-                B[pol] = CAddd( B[pol], CMuld( J[Ji[ant][pol][pol2]],
-                                               WD[pol2] ) );
-            }
-
-            // Detect the coherent beam
-            Bd[Bdi[pol]] = CAddd( Bd[Bdi[pol]], B[pol] );
-
-            // Calculate the noise floor (N = B*B')
-            for (pol2 = 0; pol2 < NPOL; pol2++)
-            {
-                N[pol][pol2] = CAddd( N[pol][pol2],
-                                      CMuld( B[pol], CConjd( B[pol2] ) ) );
-            }
-        }
+        // Calculate the noise floor (N = B*B')
+        Nxx = CAddd( Nxx, CMuld( Bx, CConjd(Bx) ) );
+        Nxy = CAddd( Nxy, CMuld( Bx, CConjd(By) ) );
+        Nyx = CAddd( Nyx, CMuld( By, CConjd(Bx) ) );
+        Nyy = CAddd( Nyy, CMuld( By, CConjd(By) ) );
     }
 
     // Form the stokes parameters for the coherent beam
-    float bnXX = DETECT(Bd[Bdi[0]]) - CReald(N[0][0]);
-    float bnYY = DETECT(Bd[Bdi[1]]) - CReald(N[1][1]);
-    ComplexDouble bnXY = CSubd( CMuld( Bd[Bdi[0]], CConjd( Bd[Bdi[1]] ) ),
-                                N[0][1] );
+    float bnXX = DETECT(Bd[B_IDX(s,c,0,nc)]) - CReald(Nxx);
+    float bnYY = DETECT(Bd[B_IDX(s,c,1,nc)]) - CReald(Nyy);
+    ComplexDouble bnXY = CSubd( CMuld( Bd[B_IDX(s,c,0,nc)], CConjd( Bd[B_IDX(s,c,1,nc)] ) ),
+                                Nxy );
 
     // Stokes I, Q, U, V:
-    C[Ci[0]] = invw*(bnXX + bnYY);
-    C[Ci[1]] = invw*(bnXX - bnYY);
-    C[Ci[2]] =  2.0*invw*CReald( bnXY );
-    C[Ci[3]] = -2.0*invw*CImagd( bnXY );
+    C[C_IDX(s,c,0,nc)] = invw*(bnXX + bnYY);
+    C[C_IDX(s,c,1,nc)] = invw*(bnXX - bnYY);
+    C[C_IDX(s,c,2,nc)] =  2.0*invw*CReald( bnXY );
+    C[C_IDX(s,c,3,nc)] = -2.0*invw*CImagd( bnXY );
 
     __syncthreads();
 }
