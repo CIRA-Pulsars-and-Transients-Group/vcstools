@@ -105,21 +105,8 @@ void destroy_metafits_info( struct metafits_info *mi );
 
 void int8_to_uint8(int n, int shift, char * to_convert);
 void float2int8_trunc(float *f, int n, float min, float max, int8_t *i);
-void flatten_bandpass(
-        int nstep,
-        int nchan,
-        int npol,
-        void *data,
-        float *scales,
-        float *offsets,
-        int new_var,
-        int iscomplex,
-        int normalise,
-        int update,
-        int clear,
-        int shutdown );
 
-void flatten_bandpass_short(
+void flatten_bandpass(
         int nstep,
         int nchan,
         int npol,

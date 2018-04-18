@@ -280,8 +280,7 @@ void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
 {
     int8_t *out_buffer_8 = (int8_t *)malloc( outpol*nchan*pf->hdr.nsblk * sizeof(int8_t) );
 
-    flatten_bandpass_short( pf->hdr.nsblk, nchan, outpol,
-                      data_buffer);//, pf->sub.dat_scales, pf->sub.dat_offsets); //, 32, 0, 1, 1, 1, 0 );
+    flatten_bandpass( pf->hdr.nsblk, nchan, outpol, data_buffer);
 
     float2int8_trunc( data_buffer, pf->hdr.nsblk * nchan * outpol,
                       -126.0, 127.0, out_buffer_8 );
