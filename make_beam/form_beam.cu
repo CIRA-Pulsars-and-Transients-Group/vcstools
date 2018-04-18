@@ -119,19 +119,70 @@ __global__ void beamform_kernel( uint8_t *data,
 
     // Detect the coherent beam
     __syncthreads();
-    for (unsigned int stride = NSTATION/2; stride > 0; stride >>= 1)
+    if (ant < 64)
     {
-        if (ant < stride)
-        {
-            Bx[ant] = CAddd( Bx[ant], Bx[ant+stride] );
-            By[ant] = CAddd( By[ant], By[ant+stride] );
-            Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+stride] );
-            Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+stride] );
-            Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+stride] );
-            Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+stride] );
-        }
-        __syncthreads();
+        Bx[ant] = CAddd( Bx[ant], Bx[ant+64] );
+        By[ant] = CAddd( By[ant], By[ant+64] );
+        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+64] );
+        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+64] );
+        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+64] );
+        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+64] );
     }
+    if (ant < 32)
+    {
+        Bx[ant] = CAddd( Bx[ant], Bx[ant+32] );
+        By[ant] = CAddd( By[ant], By[ant+32] );
+        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+32] );
+        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+32] );
+        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+32] );
+        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+32] );
+    }
+    if (ant < 16)
+    {
+        Bx[ant] = CAddd( Bx[ant], Bx[ant+16] );
+        By[ant] = CAddd( By[ant], By[ant+16] );
+        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+16] );
+        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+16] );
+        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+16] );
+        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+16] );
+    }
+    if (ant < 8)
+    {
+        Bx[ant] = CAddd( Bx[ant], Bx[ant+8] );
+        By[ant] = CAddd( By[ant], By[ant+8] );
+        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+8] );
+        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+8] );
+        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+8] );
+        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+8] );
+    }
+    if (ant < 4)
+    {
+        Bx[ant] = CAddd( Bx[ant], Bx[ant+4] );
+        By[ant] = CAddd( By[ant], By[ant+4] );
+        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+4] );
+        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+4] );
+        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+4] );
+        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+4] );
+    }
+    if (ant < 2)
+    {
+        Bx[ant] = CAddd( Bx[ant], Bx[ant+2] );
+        By[ant] = CAddd( By[ant], By[ant+2] );
+        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+2] );
+        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+2] );
+        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+2] );
+        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+2] );
+    }
+    if (ant < 1)
+    {
+        Bx[ant] = CAddd( Bx[ant], Bx[ant+1] );
+        By[ant] = CAddd( By[ant], By[ant+1] );
+        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+1] );
+        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+1] );
+        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+1] );
+        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+1] );
+    }
+    __syncthreads();
 
     // Form the stokes parameters for the coherent beam
     float bnXX = DETECT(Bx[0]) - CReald(Nxx[0]);
