@@ -66,6 +66,8 @@ __global__ void beamform_kernel( uint8_t *data,
     ComplexDouble WDx, WDy;
     ComplexDouble Nxx, Nxy, Nyx, Nyy;
 
+    ComplexDouble Bxsum, Bysum;
+
 
     /* Fix from Maceij regarding NaNs in output when running on Athena, 13 April 2018.
        Apparently the different compilers and architectures are treating what were 
@@ -85,8 +87,10 @@ __global__ void beamform_kernel( uint8_t *data,
     Nyy = CMaked( 0.0, 0.0 );
 
     I[I_IDX(s,c,nc)] = 0.0;
-    Bd[B_IDX(s,c,0,nc)] = CMaked( 0.0, 0.0 );
-    Bd[B_IDX(s,c,1,nc)] = CMaked( 0.0, 0.0 );
+    Bxsum = CMaked( 0.0, 0.0 );
+    Bysum = CMaked( 0.0, 0.0 );
+    //Bd[B_IDX(s,c,0,nc)] = CMaked( 0.0, 0.0 );
+    //Bd[B_IDX(s,c,1,nc)] = CMaked( 0.0, 0.0 );
 
 
     // Calculate beamform products for each antenna, and then add them together
@@ -108,8 +112,8 @@ __global__ void beamform_kernel( uint8_t *data,
                     CMuld( J[J_IDX(c,ant,1,1,nc)], WDy ) );
 
         // Detect the coherent beam
-        Bd[B_IDX(s,c,0,nc)] = CAddd( Bd[B_IDX(s,c,0,nc)], Bx );
-        Bd[B_IDX(s,c,1,nc)] = CAddd( Bd[B_IDX(s,c,1,nc)], By );
+        Bxsum = CAddd( Bxsum, Bx );
+        Bysum = CAddd( Bysum, By );
 
         // Calculate the noise floor (N = B*B')
         Nxx = CAddd( Nxx, CMuld( Bx, CConjd(Bx) ) );
@@ -133,7 +137,9 @@ __global__ void beamform_kernel( uint8_t *data,
     C[C_IDX(s,c,2,nc)] =  2.0*invw*CReald( bnXY );
     C[C_IDX(s,c,3,nc)] = -2.0*invw*CImagd( bnXY );
 
-    __syncthreads();
+    Bd[B_IDX(s,c,0,nc)] = Bxsum;
+    Bd[B_IDX(s,c,1,nc)] = Bysum;
+
 }
 
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
