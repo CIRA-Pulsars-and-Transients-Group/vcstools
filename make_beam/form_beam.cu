@@ -69,19 +69,19 @@ __global__ void beamform_kernel( uint8_t *data,
     int ant = threadIdx.x; /* The (ant)enna number */
 
     // Calculate the beam and the noise floor
-    ComplexDouble Bx, By;
+    __shared__ ComplexDouble Bx[NSTATION], By[NSTATION];
     ComplexDouble Dx, Dy;
     ComplexDouble WDx, WDy;
 
-    __shared__ ComplexDouble Nxx, Nxy, Nyx, Nyy;
-    __shared__ ComplexDouble Bxsum, Bysum;
+    __shared__ ComplexDouble Nxx[NSTATION], Nxy[NSTATION],
+                             Nyx[NSTATION], Nyy[NSTATION];
 
 
     /* Fix from Maceij regarding NaNs in output when running on Athena, 13 April 2018.
        Apparently the different compilers and architectures are treating what were 
        unintialised variables very differently */
-    Bx  = CMaked( 0.0, 0.0 );
-    By  = CMaked( 0.0, 0.0 );
+    Bx[ant]  = CMaked( 0.0, 0.0 );
+    By[ant]  = CMaked( 0.0, 0.0 );
 
     Dx  = CMaked( 0.0, 0.0 );
     Dy  = CMaked( 0.0, 0.0 );
@@ -89,16 +89,12 @@ __global__ void beamform_kernel( uint8_t *data,
     WDx = CMaked( 0.0, 0.0 );
     WDy = CMaked( 0.0, 0.0 );
 
-    Nxx = CMaked( 0.0, 0.0 );
-    Nxy = CMaked( 0.0, 0.0 );
-    Nyx = CMaked( 0.0, 0.0 );
-    Nyy = CMaked( 0.0, 0.0 );
+    Nxx[ant] = CMaked( 0.0, 0.0 );
+    Nxy[ant] = CMaked( 0.0, 0.0 );
+    Nyx[ant] = CMaked( 0.0, 0.0 );
+    Nyy[ant] = CMaked( 0.0, 0.0 );
 
     I[I_IDX(s,c,nc)] = 0.0;
-    Bxsum = CMaked( 0.0, 0.0 );
-    Bysum = CMaked( 0.0, 0.0 );
-    //Bd[B_IDX(s,c,0,nc)] = CMaked( 0.0, 0.0 );
-    //Bd[B_IDX(s,c,1,nc)] = CMaked( 0.0, 0.0 );
 
     // Calculate beamform products for each antenna, and then add them together
     // Calculate the coherent beam (B = J*W*D)
@@ -111,27 +107,38 @@ __global__ void beamform_kernel( uint8_t *data,
     // (... and along the way, calculate the incoherent beam...)
     I[I_IDX(s,c,nc)] = DETECT(Dx) + DETECT(Dy);
 
-    Bx = CAddd( CMuld( J[J_IDX(c,ant,0,0,nc)], WDx ),
-                CMuld( J[J_IDX(c,ant,1,0,nc)], WDy ) );
-    By = CAddd( CMuld( J[J_IDX(c,ant,0,1,nc)], WDx ),
-                CMuld( J[J_IDX(c,ant,1,1,nc)], WDy ) );
+    Bx[ant] = CAddd( CMuld( J[J_IDX(c,ant,0,0,nc)], WDx ),
+                     CMuld( J[J_IDX(c,ant,1,0,nc)], WDy ) );
+    By[ant] = CAddd( CMuld( J[J_IDX(c,ant,0,1,nc)], WDx ),
+                     CMuld( J[J_IDX(c,ant,1,1,nc)], WDy ) );
+
+    Nxx[ant] = CMuld( Bx[ant], CConjd(Bx[ant]) );
+    Nxy[ant] = CMuld( Bx[ant], CConjd(By[ant]) );
+    Nyx[ant] = CMuld( By[ant], CConjd(Bx[ant]) );
+    Nyy[ant] = CMuld( By[ant], CConjd(By[ant]) );
 
     // Detect the coherent beam
-    CatomicAdd( &Bxsum, Bx );
-    CatomicAdd( &Bysum, By );
-
-    // Calculate the noise floor (N = B*B')
-    CatomicAdd( &Nxx, CMuld( Bx, CConjd(Bx) ) );
-    CatomicAdd( &Nxy, CMuld( Bx, CConjd(By) ) );
-    CatomicAdd( &Nyx, CMuld( By, CConjd(Bx) ) );
-    CatomicAdd( &Nyy, CMuld( By, CConjd(By) ) );
+    __syncthreads();
+    for (unsigned int stride = NSTATION/2; stride > 0; stride >>= 1)
+    {
+        if (ant < stride)
+        {
+            Bx[ant] = CAddd( Bx[ant], Bx[ant+stride] );
+            By[ant] = CAddd( By[ant], By[ant+stride] );
+            Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+stride] );
+            Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+stride] );
+            Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+stride] );
+            Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+stride] );
+        }
+        __syncthreads();
+    }
 
     // Form the stokes parameters for the coherent beam
-    float bnXX = DETECT(Bxsum) - CReald(Nxx);
-    float bnYY = DETECT(Bysum) - CReald(Nyy);
+    float bnXX = DETECT(Bx[0]) - CReald(Nxx[0]);
+    float bnYY = DETECT(By[0]) - CReald(Nyy[0]);
     ComplexDouble bnXY = CSubd(
-                             CMuld( Bxsum, CConjd( Bysum ) ),
-                             Nxy );
+                             CMuld( Bx[0], CConjd( By[0] ) ),
+                             Nxy[0] );
 
     // Stokes I, Q, U, V:
     C[C_IDX(s,c,0,nc)] = invw*(bnXX + bnYY);
@@ -139,8 +146,8 @@ __global__ void beamform_kernel( uint8_t *data,
     C[C_IDX(s,c,2,nc)] =  2.0*invw*CReald( bnXY );
     C[C_IDX(s,c,3,nc)] = -2.0*invw*CImagd( bnXY );
 
-    Bd[B_IDX(s,c,0,nc)] = Bxsum;
-    Bd[B_IDX(s,c,1,nc)] = Bysum;
+    Bd[B_IDX(s,c,0,nc)] = Bx[0];
+    Bd[B_IDX(s,c,1,nc)] = By[0];
 
 }
 
