@@ -123,9 +123,7 @@ void flatten_bandpass_short(
         int nstep,
         int nchan,
         int npol,
-        void *data,
-        float *scales,
-        float *offsets);
+        void *data);
 
 void read_data( char *filename, uint8_t *data, int nbytes );
 int read_rts_file(ComplexDouble **G, ComplexDouble *Jref,
