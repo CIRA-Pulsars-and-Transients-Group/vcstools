@@ -581,11 +581,12 @@ void float2int8_trunc(float *f, int n, float min, float max, int8_t *i)
 void float_to_unit8(float * in, int n, int8_t *out)
 {
     int j;
-    // convert the float to a int8_t
     float min = -128.0; // -126.0 and -128.0 give the same result on test data
     float max = 127.0;
+    // use a temp var so we don't modify the input data
     float scratch;
     for (j = 0; j < n; j++) {
+        // the if branching and ternary updates seem to be equivalent execution time
         if (in[j]> max) {
             scratch = max;
         } else if (in[j] < min) {
