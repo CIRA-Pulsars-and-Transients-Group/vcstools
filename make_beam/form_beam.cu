@@ -36,6 +36,15 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 #define NSTOKES   4
 
 
+__device__ void CatomicAdd( ComplexDouble *a, const ComplexDouble &b )
+{
+    double *x = (double *)a;
+    double *y = x+1;
+    atomicAdd(x, CReald(b));
+    atomicAdd(y, CImagd(b));
+}
+
+
 __global__ void beamform_kernel( uint8_t *data,
                                  ComplexDouble *W,
                                  ComplexDouble *J,
@@ -54,19 +63,18 @@ __global__ void beamform_kernel( uint8_t *data,
  */
 {
     // Translate GPU block/thread numbers into meaningful names
-    int s  = blockIdx.x;  /* The (s)ample number */
-    int nc = blockDim.x;  /* The (n)umber of (c)hannels (=128) */
-    int c  = threadIdx.x; /* The (c)hannel number */
-
-    int ant;              /* The (ant)enna number */
+    int s   = blockIdx.x;  /* The (s)ample number */
+    int c   = blockIdx.y;  /* The (c)hannel number */
+    int nc  = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
+    int ant = threadIdx.x; /* The (ant)enna number */
 
     // Calculate the beam and the noise floor
     ComplexDouble Bx, By;
     ComplexDouble Dx, Dy;
     ComplexDouble WDx, WDy;
-    ComplexDouble Nxx, Nxy, Nyx, Nyy;
 
-    ComplexDouble Bxsum, Bysum;
+    __shared__ ComplexDouble Nxx, Nxy, Nyx, Nyy;
+    __shared__ ComplexDouble Bxsum, Bysum;
 
 
     /* Fix from Maceij regarding NaNs in output when running on Athena, 13 April 2018.
@@ -92,43 +100,37 @@ __global__ void beamform_kernel( uint8_t *data,
     //Bd[B_IDX(s,c,0,nc)] = CMaked( 0.0, 0.0 );
     //Bd[B_IDX(s,c,1,nc)] = CMaked( 0.0, 0.0 );
 
-
     // Calculate beamform products for each antenna, and then add them together
-    for (ant = 0; ant < NSTATION; ant++)
-    {
-        // Calculate the coherent beam (B = J*W*D)
-        Dx  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,0,nc)]);
-        Dy  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,1,nc)]);
+    // Calculate the coherent beam (B = J*W*D)
+    Dx  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,0,nc)]);
+    Dy  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,1,nc)]);
 
-        WDx = CMuld( W[W_IDX(c,ant,0,nc)], Dx );
-        WDy = CMuld( W[W_IDX(c,ant,1,nc)], Dy );
+    WDx = CMuld( W[W_IDX(c,ant,0,nc)], Dx );
+    WDy = CMuld( W[W_IDX(c,ant,1,nc)], Dy );
 
-        // (... and along the way, calculate the incoherent beam...)
-        I[I_IDX(s,c,nc)] = DETECT(Dx) + DETECT(Dy);
+    // (... and along the way, calculate the incoherent beam...)
+    I[I_IDX(s,c,nc)] = DETECT(Dx) + DETECT(Dy);
 
-        Bx = CAddd( CMuld( J[J_IDX(c,ant,0,0,nc)], WDx ),
-                    CMuld( J[J_IDX(c,ant,1,0,nc)], WDy ) );
-        By = CAddd( CMuld( J[J_IDX(c,ant,0,1,nc)], WDx ),
-                    CMuld( J[J_IDX(c,ant,1,1,nc)], WDy ) );
+    Bx = CAddd( CMuld( J[J_IDX(c,ant,0,0,nc)], WDx ),
+                CMuld( J[J_IDX(c,ant,1,0,nc)], WDy ) );
+    By = CAddd( CMuld( J[J_IDX(c,ant,0,1,nc)], WDx ),
+                CMuld( J[J_IDX(c,ant,1,1,nc)], WDy ) );
 
-        // Detect the coherent beam
-        Bxsum = CAddd( Bxsum, Bx );
-        Bysum = CAddd( Bysum, By );
+    // Detect the coherent beam
+    CatomicAdd( &Bxsum, Bx );
+    CatomicAdd( &Bysum, By );
 
-        // Calculate the noise floor (N = B*B')
-        Nxx = CAddd( Nxx, CMuld( Bx, CConjd(Bx) ) );
-        Nxy = CAddd( Nxy, CMuld( Bx, CConjd(By) ) );
-        Nyx = CAddd( Nyx, CMuld( By, CConjd(Bx) ) );
-        Nyy = CAddd( Nyy, CMuld( By, CConjd(By) ) );
-    }
+    // Calculate the noise floor (N = B*B')
+    CatomicAdd( &Nxx, CMuld( Bx, CConjd(Bx) ) );
+    CatomicAdd( &Nxy, CMuld( Bx, CConjd(By) ) );
+    CatomicAdd( &Nyx, CMuld( By, CConjd(Bx) ) );
+    CatomicAdd( &Nyy, CMuld( By, CConjd(By) ) );
 
     // Form the stokes parameters for the coherent beam
-    float bnXX = DETECT(Bd[B_IDX(s,c,0,nc)]) - CReald(Nxx);
-    float bnYY = DETECT(Bd[B_IDX(s,c,1,nc)]) - CReald(Nyy);
+    float bnXX = DETECT(Bxsum) - CReald(Nxx);
+    float bnYY = DETECT(Bysum) - CReald(Nyy);
     ComplexDouble bnXY = CSubd(
-                             CMuld(
-                                 Bd[B_IDX(s,c,0,nc)],
-                                 CConjd( Bd[B_IDX(s,c,1,nc)] ) ),
+                             CMuld( Bxsum, CConjd( Bysum ) ),
                              Nxy );
 
     // Stokes I, Q, U, V:
@@ -234,7 +236,8 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     gpuErrchk(cudaMemcpy( d_J,    J,    J_size,    cudaMemcpyHostToDevice ));
 
     // Call the kernel
-    beamform_kernel<<<opts->sample_rate, nchan>>>(
+    dim3 sc(opts->sample_rate, nchan);
+    beamform_kernel<<<sc, NSTATION>>>(
             d_data, d_W, d_J, invw, d_Bd, d_coh, d_incoh );
     cudaDeviceSynchronize();
 
