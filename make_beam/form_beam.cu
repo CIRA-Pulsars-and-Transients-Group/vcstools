@@ -104,9 +104,6 @@ __global__ void beamform_kernel( uint8_t *data,
     WDx = CMuld( W[W_IDX(c,ant,0,nc)], Dx );
     WDy = CMuld( W[W_IDX(c,ant,1,nc)], Dy );
 
-    // (... and along the way, calculate the incoherent beam...)
-    I[I_IDX(s,c,nc)] = DETECT(Dx) + DETECT(Dy);
-
     Bx[ant] = CAddd( CMuld( J[J_IDX(c,ant,0,0,nc)], WDx ),
                      CMuld( J[J_IDX(c,ant,1,0,nc)], WDy ) );
     By[ant] = CAddd( CMuld( J[J_IDX(c,ant,0,1,nc)], WDx ),
@@ -128,6 +125,7 @@ __global__ void beamform_kernel( uint8_t *data,
         Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+64] );
         Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+64] );
     }
+    __syncthreads();
     if (ant < 32)
     {
         Bx[ant] = CAddd( Bx[ant], Bx[ant+32] );
@@ -185,21 +183,27 @@ __global__ void beamform_kernel( uint8_t *data,
     __syncthreads();
 
     // Form the stokes parameters for the coherent beam
-    float bnXX = DETECT(Bx[0]) - CReald(Nxx[0]);
-    float bnYY = DETECT(By[0]) - CReald(Nyy[0]);
-    ComplexDouble bnXY = CSubd(
-                             CMuld( Bx[0], CConjd( By[0] ) ),
-                             Nxy[0] );
+    if (ant == 0)
+    {
+        float bnXX = DETECT(Bx[0]) - CReald(Nxx[0]);
+        float bnYY = DETECT(By[0]) - CReald(Nyy[0]);
+        ComplexDouble bnXY = CSubd(
+                                 CMuld( Bx[0], CConjd( By[0] ) ),
+                                 Nxy[0] );
 
-    // Stokes I, Q, U, V:
-    C[C_IDX(s,c,0,nc)] = invw*(bnXX + bnYY);
-    C[C_IDX(s,c,1,nc)] = invw*(bnXX - bnYY);
-    C[C_IDX(s,c,2,nc)] =  2.0*invw*CReald( bnXY );
-    C[C_IDX(s,c,3,nc)] = -2.0*invw*CImagd( bnXY );
+        // The incoherent beam
+        I[I_IDX(s,c,nc)] = DETECT(Dx) + DETECT(Dy);
 
-    Bd[B_IDX(s,c,0,nc)] = Bx[0];
-    Bd[B_IDX(s,c,1,nc)] = By[0];
+        // Stokes I, Q, U, V:
+        C[C_IDX(s,c,0,nc)] = invw*(bnXX + bnYY);
+        C[C_IDX(s,c,1,nc)] = invw*(bnXX - bnYY);
+        C[C_IDX(s,c,2,nc)] =  2.0*invw*CReald( bnXY );
+        C[C_IDX(s,c,3,nc)] = -2.0*invw*CImagd( bnXY );
 
+        // The beamformed products
+        Bd[B_IDX(s,c,0,nc)] = Bx[0];
+        Bd[B_IDX(s,c,1,nc)] = By[0];
+    }
 }
 
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
