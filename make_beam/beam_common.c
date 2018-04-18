@@ -196,7 +196,7 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
     int i=0, j=0;
     int p=0;
 
-    float *out = (float *) scales;
+    float *norm = (float *) scales;
     float *data_ptr = (float *) data;
 
     // make these not static since we only run once.
@@ -247,22 +247,22 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
 
     // set the offsets and scales - even if we are not updating ....
 
-    out = scales;
+    norm = scales;
     for (p = 0;p<npol;p++) {
         for (j=0;j<nchan;j++){
             // current mean
-            *out = ((band[p][j]/nstep))/new_var;
-            out++;
+            *norm = ((band[p][j]/nstep))/new_var;
+            norm++;
         }
     }
 
     // apply offset and scale to the data
     data_ptr = data;
     for (i=0;i<nstep;i++) {
-        float *normaliser = scales;
+        norm = scales;
         for (p = 0;p<npol;p++) {
             for (j=0;j<nchan;j++){
-                *data_ptr = ((*data_ptr))/(*normaliser); // 0 mean normalised to 1
+                *data_ptr = ((*data_ptr))/(*norm); // 0 mean normalised to 1
                 data_ptr++;
                 normaliser++;
             }
@@ -271,13 +271,12 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
     }
 
 
-    // clear the weights if required
-    out = scales;
+    // reset the weights
+    norm = scales;
     for (p = 0;p<npol;p++) {
         for (j=0;j<nchan;j++){
-            // reset
-            *out = 1.0;
-            out++;
+            *norm = 1.0;
+            norm++;
         }
     }
 
