@@ -195,7 +195,9 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
 
     int i=0, j=0;
     int p=0;
-    float *data_ptr = NULL;
+
+    float *out = (float *) scales;
+    float *data_ptr = (float *) data;
 
     // make these not static since we only run once.
     float **band;
@@ -222,7 +224,7 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
 
     // accumulate abs(data) over all time samples and save into band
     // track the min/max of the data per pol and per chan
-    data_ptr = (float *) data;
+    data_ptr = data;
     for (i=0;i<nstep;i++) { // time steps
         for (p = 0;p<npol;p++) { // pols
             for (j=0;j<nchan;j++){ // channels
@@ -245,66 +247,40 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
 
     // set the offsets and scales - even if we are not updating ....
 
-    float *out = scales;
-    float *off = offsets;
+    out = scales;
     for (p = 0;p<npol;p++) {
         for (j=0;j<nchan;j++){
-
             // current mean
             *out = ((band[p][j]/nstep))/new_var;
             out++;
-
-            // this is never set to something other than zero and could be removed ?
-            *off = 0.0;
-            off++;
-
         }
     }
 
     // apply offset and scale to the data
-
-    {
-
-        data_ptr = (float *) data;
-
-        for (i=0;i<nstep;i++) {
-            float *normaliser = scales;
-            float *off  = offsets;
-            for (p = 0;p<npol;p++) {
-                for (j=0;j<nchan;j++){
-
-                    *data_ptr = ((*data_ptr) - (*off))/(*normaliser); // 0 mean normalised to 1
-                    off++;
-                    data_ptr++;
-                    normaliser++;
-                }
-            }
-
-        }
-    }
-
-    // clear the weights if required
-
-    {
-
-        float *out=scales;
-        float *off = offsets;
+    data_ptr = data;
+    for (i=0;i<nstep;i++) {
+        float *normaliser = scales;
         for (p = 0;p<npol;p++) {
             for (j=0;j<nchan;j++){
-
-                // reset
-                *out = 1.0;
-
-
-
-                out++;
-                *off = 0.0;
-
-                off++;
-
+                *data_ptr = ((*data_ptr))/(*normaliser); // 0 mean normalised to 1
+                data_ptr++;
+                normaliser++;
             }
         }
+
     }
+
+
+    // clear the weights if required
+    out = scales;
+    for (p = 0;p<npol;p++) {
+        for (j=0;j<nchan;j++){
+            // reset
+            *out = 1.0;
+            out++;
+        }
+    }
+
 
     // free the memory
     for (i=0;i<npol;i++) {
