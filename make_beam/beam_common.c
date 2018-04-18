@@ -209,7 +209,6 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data)
 
 
     // accumulate abs(data) over all time samples and save into band
-    // track the min/max of the data per pol and per chan
     data_ptr = data;
     for (i=0;i<nstep;i++) { // time steps
         for (p = 0;p<npol;p++) { // pols
