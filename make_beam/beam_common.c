@@ -176,42 +176,28 @@ void destroy_metafits_info( struct metafits_info *mi ) {
 }
 
 
-void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *scales, float *offsets) {
+void flatten_bandpass_short(int nstep, int nchan, int npol, void *data)
+{
 
     // nstep -> ? number of time steps (ie 10,000 per 1 second of data)
     // nchan -> number of (fine) channels (128)
     // npol -> number of polarisations (1 for icoh or 4 for coh)
 
-    // the code is only ever called with these options so they are not options
-    // thus we just put them here instead
+    // magical mystery normalisation constant
     int new_var = 32;
-    //int iscomplex = 0;
-    //int normalise = 1;
-    //int update = 1;
-    //int clear = 1;
-    //int shutdown = 0;
 
     // purpose is to generate a mean value for each channel/polaridation
 
     int i=0, j=0;
     int p=0;
 
-    float *norm = (float *) scales;
     float *data_ptr = (float *) data;
-
-    // make these not static since we only run once.
     float **band;
-    float **chan_min;
-    float **chan_max;
  
 
     band = (float **) calloc (npol, sizeof(float *));
-    chan_min = (float **) calloc (npol, sizeof(float *));
-    chan_max = (float **) calloc (npol, sizeof(float *));
     for (i=0;i<npol;i++) {
       band[i] = (float *) calloc(nchan, sizeof(float));
-      chan_min[i] = (float *) calloc(nchan, sizeof(float));
-      chan_max[i] = (float *) calloc(nchan, sizeof(float));
     }
 
     // initialise the band array
@@ -228,69 +214,30 @@ void flatten_bandpass_short(int nstep, int nchan, int npol, void *data, float *s
     for (i=0;i<nstep;i++) { // time steps
         for (p = 0;p<npol;p++) { // pols
             for (j=0;j<nchan;j++){ // channels
-                if (i==0) {
-                    chan_min[p][j] = *data_ptr;
-                    chan_max[p][j] = *data_ptr;
-                }
                 band[p][j] += fabsf(*data_ptr);
-                if (*data_ptr < chan_min[p][j]) {
-                    chan_min[p][j] = *data_ptr;
-                }
-                else if (*data_ptr > chan_max[p][j]) {
-                    chan_max[p][j] = *data_ptr;
-                }
                 data_ptr++;
             }
         }
 
     }
 
-    // set the offsets and scales - even if we are not updating ....
-
-    norm = scales;
-    for (p = 0;p<npol;p++) {
-        for (j=0;j<nchan;j++){
-            // current mean
-            *norm = ((band[p][j]/nstep))/new_var;
-            norm++;
-        }
-    }
-
-    // apply offset and scale to the data
+    // calculate and apply the normalisation to the data
     data_ptr = data;
     for (i=0;i<nstep;i++) {
-        norm = scales;
         for (p = 0;p<npol;p++) {
             for (j=0;j<nchan;j++){
-                *data_ptr = ((*data_ptr))/(*norm); // 0 mean normalised to 1
+                *data_ptr = (*data_ptr)/( (band[p][j]/nstep)/new_var );
                 data_ptr++;
-                normaliser++;
             }
         }
 
     }
-
-
-    // reset the weights
-    norm = scales;
-    for (p = 0;p<npol;p++) {
-        for (j=0;j<nchan;j++){
-            *norm = 1.0;
-            norm++;
-        }
-    }
-
 
     // free the memory
     for (i=0;i<npol;i++) {
         free(band[i]);
-        free(chan_min[i]);
-        free(chan_max[i]);
     }
     free(band);
-    free(chan_min);
-    free(chan_max);
-
 }
  
 
