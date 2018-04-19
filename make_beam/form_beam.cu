@@ -206,6 +206,64 @@ __global__ void beamform_kernel( uint8_t *data,
     }
 }
 
+__global__ void flatten_bandpass_I_kernel(float *I,
+                                     int nstep)/* uint8_t *Iout ) */
+{
+    // For just doing stokes I
+    // One block
+    // 128 threads each thread will do one channel
+    // (we have already summed over all ant)
+
+    // For doing the C array (I,Q,U,V)
+    // ... figure it out later.
+
+    // Translate GPU block/thread numbers into meaningful names
+    int chan = threadIdx.x; /* The (c)hannel number */
+    int nchan = 128; /* The total number of channels */
+    float band;
+
+    int new_var = 32; /* magic number */
+    int i;
+
+    float *data_ptr;
+
+    // initialise the band 'array'
+    band = 0.0;
+
+    // accumulate abs(data) over all time samples and save into band
+    data_ptr = I + chan;
+    for (i=0;i<nstep;i++) { // time steps
+        band += fabsf(*data_ptr);
+        data_ptr+=nchan;
+    }
+
+    // now normalise the incoherent beam
+    data_ptr = I + chan;
+    for (i=0;i<nstep;i++) { // time steps
+        *data_ptr = (*data_ptr)/( (band/nstep)/new_var );
+        data_ptr+=nchan;
+    }
+
+//    float scratch;
+//    float min = -126.0;
+//    float max = 127.0;
+//
+//    // now convert float -> unit8_t
+//    data_ptr = I + chan;
+//    Iout += chan;
+//    for (i=0;i<nstep;i++) {
+//        scratch = (*data_ptr > max) ? (max) : *data_ptr;
+//        scratch = (*data_ptr < min) ? (min) : scratch;
+//        *Iout = (uint8_t)( (int8_t)rint(scratch) + 128);
+//        Iout += nchan;
+//        data_ptr += nchan;
+//    }
+
+}
+
+
+
+
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
                    ComplexDouble ***complex_weights_array,
                    ComplexDouble ****invJi, int file_no, int nstation, int nchan,
@@ -304,9 +362,14 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     cudaDeviceSynchronize();
 
     // Copy the results back into host memory
-    gpuErrchk(cudaMemcpy( coh,   d_coh,   coh_size,   cudaMemcpyDeviceToHost ));
-    gpuErrchk(cudaMemcpy( incoh, d_incoh, incoh_size, cudaMemcpyDeviceToHost ));
     gpuErrchk(cudaMemcpy( Bd,    d_Bd,    Bd_size,    cudaMemcpyDeviceToHost ));
+
+    flatten_bandpass_I_kernel<<<nchan, NSTATION>>>(d_incoh, nchan);
+    cudaDeviceSynchronize();
+
+    gpuErrchk(cudaMemcpy( incoh, d_incoh, incoh_size, cudaMemcpyDeviceToHost ));
+
+    gpuErrchk(cudaMemcpy( coh,   d_coh,   coh_size,   cudaMemcpyDeviceToHost ));
 
     // Copy the data back from Bd back into the detected_beam array
     // Make sure we put it back into the correct half of the array, depending
