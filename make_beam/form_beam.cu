@@ -69,6 +69,7 @@ __global__ void beamform_kernel( uint8_t *data,
     int ant = threadIdx.x; /* The (ant)enna number */
 
     // Calculate the beam and the noise floor
+    __shared__ double Ia[NSTATION];
     __shared__ ComplexDouble Bx[NSTATION], By[NSTATION];
     ComplexDouble Dx, Dy;
     ComplexDouble WDx, WDy;
@@ -94,12 +95,14 @@ __global__ void beamform_kernel( uint8_t *data,
     Nyx[ant] = CMaked( 0.0, 0.0 );
     Nyy[ant] = CMaked( 0.0, 0.0 );
 
-    I[I_IDX(s,c,nc)] = 0.0;
+    Ia[ant] = 0.0;
 
     // Calculate beamform products for each antenna, and then add them together
     // Calculate the coherent beam (B = J*W*D)
     Dx  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,0,nc)]);
     Dy  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,1,nc)]);
+
+    Ia[ant] = DETECT(Dx) + DETECT(Dy);
 
     WDx = CMuld( W[W_IDX(c,ant,0,nc)], Dx );
     WDy = CMuld( W[W_IDX(c,ant,1,nc)], Dy );
@@ -118,6 +121,7 @@ __global__ void beamform_kernel( uint8_t *data,
     __syncthreads();
     if (ant < 64)
     {
+        Ia[ant] += Ia[ant+64];
         Bx[ant] = CAddd( Bx[ant], Bx[ant+64] );
         By[ant] = CAddd( By[ant], By[ant+64] );
         Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+64] );
@@ -128,6 +132,7 @@ __global__ void beamform_kernel( uint8_t *data,
     __syncthreads();
     if (ant < 32)
     {
+        Ia[ant] += Ia[ant+32];
         Bx[ant] = CAddd( Bx[ant], Bx[ant+32] );
         By[ant] = CAddd( By[ant], By[ant+32] );
         Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+32] );
@@ -137,6 +142,7 @@ __global__ void beamform_kernel( uint8_t *data,
     }
     if (ant < 16)
     {
+        Ia[ant] += Ia[ant+16];
         Bx[ant] = CAddd( Bx[ant], Bx[ant+16] );
         By[ant] = CAddd( By[ant], By[ant+16] );
         Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+16] );
@@ -146,6 +152,7 @@ __global__ void beamform_kernel( uint8_t *data,
     }
     if (ant < 8)
     {
+        Ia[ant] += Ia[ant+8];
         Bx[ant] = CAddd( Bx[ant], Bx[ant+8] );
         By[ant] = CAddd( By[ant], By[ant+8] );
         Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+8] );
@@ -155,6 +162,7 @@ __global__ void beamform_kernel( uint8_t *data,
     }
     if (ant < 4)
     {
+        Ia[ant] += Ia[ant+4];
         Bx[ant] = CAddd( Bx[ant], Bx[ant+4] );
         By[ant] = CAddd( By[ant], By[ant+4] );
         Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+4] );
@@ -164,6 +172,7 @@ __global__ void beamform_kernel( uint8_t *data,
     }
     if (ant < 2)
     {
+        Ia[ant] += Ia[ant+2];
         Bx[ant] = CAddd( Bx[ant], Bx[ant+2] );
         By[ant] = CAddd( By[ant], By[ant+2] );
         Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+2] );
@@ -173,6 +182,7 @@ __global__ void beamform_kernel( uint8_t *data,
     }
     if (ant < 1)
     {
+        Ia[ant] += Ia[ant+1];
         Bx[ant] = CAddd( Bx[ant], Bx[ant+1] );
         By[ant] = CAddd( By[ant], By[ant+1] );
         Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+1] );
@@ -192,7 +202,7 @@ __global__ void beamform_kernel( uint8_t *data,
                                  Nxy[0] );
 
         // The incoherent beam
-        I[I_IDX(s,c,nc)] = DETECT(Dx) + DETECT(Dy);
+        I[I_IDX(s,c,nc)] = Ia[0];
 
         // Stokes I, Q, U, V:
         C[C_IDX(s,c,0,nc)] = invw*(bnXX + bnYY);
