@@ -241,33 +241,18 @@ __global__ void flatten_bandpass_I_kernel(float *I,
     band = 0.0;
 
     // accumulate abs(data) over all time samples and save into band
-    data_ptr = I + chan;
+    data_ptr = I + I_IDX(0, chan, nchan);
     for (i=0;i<nstep;i++) { // time steps
         band += fabsf(*data_ptr);
-        data_ptr+=nchan;
+        data_ptr = I + I_IDX(i,chan,nchan);
     }
 
     // now normalise the incoherent beam
-    data_ptr = I + chan;
+    data_ptr = I + I_IDX(0, chan, nchan);
     for (i=0;i<nstep;i++) { // time steps
         *data_ptr = (*data_ptr)/( (band/nstep)/new_var );
-        data_ptr+=nchan;
+        data_ptr = I + I_IDX(i,chan,nchan);
     }
-
-//    float scratch;
-//    float min = -126.0;
-//    float max = 127.0;
-//
-//    // now convert float -> unit8_t
-//    data_ptr = I + chan;
-//    Iout += chan;
-//    for (i=0;i<nstep;i++) {
-//        scratch = (*data_ptr > max) ? (max) : *data_ptr;
-//        scratch = (*data_ptr < min) ? (min) : scratch;
-//        *Iout = (uint8_t)( (int8_t)rint(scratch) + 128);
-//        Iout += nchan;
-//        data_ptr += nchan;
-//    }
 
 }
 
@@ -300,7 +285,7 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     band = 0.0;
 
     // accumulate abs(data) over all time samples and save into band
-    data_ptr = C + nstokes*chan + stokes;
+    data_ptr = C + stokes*nchan + chan;
     for (i=0;i<nstep;i++) { // time steps
         band += fabsf(*data_ptr);
         data_ptr += nstokes*nchan;
