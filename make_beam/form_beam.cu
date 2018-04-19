@@ -219,7 +219,7 @@ __global__ void flatten_bandpass_I_kernel(float *I,
 
     // Translate GPU block/thread numbers into meaningful names
     int chan = threadIdx.x; /* The (c)hannel number */
-    int nchan = 128; /* The total number of channels */
+    int nchan = blockDim.x; /* The total number of channels */
     float band;
 
     int new_var = 32; /* magic number */
@@ -261,6 +261,49 @@ __global__ void flatten_bandpass_I_kernel(float *I,
 
 }
 
+
+__global__ void flatten_bandpass_C_kernel(float *C,
+                                          int nstep)/* uint8_t *Iout ) */
+{
+    // For just doing stokes I
+    // One block
+    // 128 threads each thread will do one channel
+    // (we have already summed over all ant)
+
+    // For doing the C array (I,Q,U,V)
+    // ... figure it out later.
+
+    // Translate GPU block/thread numbers into meaningful names
+    int chan = threadIdx.x; /* The (c)hannel number */
+    int nchan = blockDim.x; /* The total number of channels */
+    int stokes = threadIdx.y;
+    int nstokes = blockDim.y;
+
+    float band;
+
+    int new_var = 32; /* magic number */
+    int i;
+
+    float *data_ptr;
+
+    // initialise the band 'array'
+    band = 0.0;
+
+    // accumulate abs(data) over all time samples and save into band
+    data_ptr = C + nstokes*chan + stokes;
+    for (i=0;i<nstep;i++) { // time steps
+        band += fabsf(*data_ptr);
+        data_ptr += nstokes*nchan;
+    }
+
+    // now normalise the coherent beam
+    data_ptr = C + nstokes*chan + stokes;
+    for (i=0;i<nstep;i++) { // time steps
+        *data_ptr = (*data_ptr)/( (band/nstep)/new_var );
+        data_ptr += nstokes*nchan;
+    }
+
+}
 
 
 
@@ -356,19 +399,23 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     gpuErrchk(cudaMemcpy( d_J,    J,    J_size,    cudaMemcpyHostToDevice ));
 
     // Call the kernel
-    dim3 sc(opts->sample_rate, nchan);
-    beamform_kernel<<<sc, NSTATION>>>(
+    dim3 samples_chan(opts->sample_rate, nchan);
+    beamform_kernel<<<samples_chan, NSTATION>>>(
             d_data, d_W, d_J, invw, d_Bd, d_coh, d_incoh );
     cudaDeviceSynchronize();
 
     // Copy the results back into host memory
     gpuErrchk(cudaMemcpy( Bd,    d_Bd,    Bd_size,    cudaMemcpyDeviceToHost ));
 
-    flatten_bandpass_I_kernel<<<nchan, NSTATION>>>(d_incoh, nchan);
+    // 1 block per pointing direction, hence the 1 for now
+    flatten_bandpass_I_kernel<<<1, NSTATION>>>(d_incoh, nchan);
     cudaDeviceSynchronize();
-
     gpuErrchk(cudaMemcpy( incoh, d_incoh, incoh_size, cudaMemcpyDeviceToHost ));
 
+    // now do the same for the coherent beam
+    dim3 chan_stokes(NSTATION, npol);
+    flatten_bandpass_C_kernel<<<nchan, chan_stokes>>>(d_coh, nchan);
+    cudaDeviceSynchronize();
     gpuErrchk(cudaMemcpy( coh,   d_coh,   coh_size,   cudaMemcpyDeviceToHost ));
 
     // Copy the data back from Bd back into the detected_beam array
