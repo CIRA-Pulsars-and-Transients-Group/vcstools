@@ -403,12 +403,12 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     // we are using the "default" stream since we don't specify any stream id
 
     // 1 block per pointing direction, hence the 1 for now
-    flatten_bandpass_I_kernel<<<1, NSTATION>>>(d_incoh, nchan);
+    flatten_bandpass_I_kernel<<<1, nchan>>>(d_incoh, opts->sample_rate);
     //cudaDeviceSynchronize();
 
     // now do the same for the coherent beam
-    dim3 chan_stokes(NSTATION, npol);
-    flatten_bandpass_C_kernel<<<nchan, chan_stokes>>>(d_coh, nchan);
+    dim3 chan_stokes(nchan, npol);
+    flatten_bandpass_C_kernel<<<1, chan_stokes>>>(d_coh, opts->sample_rate);
 
     //cudaDeviceSynchronize(); // Memcpy acts as a synchronize step so don't sync here
     // Copy the results back into host memory
