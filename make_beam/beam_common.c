@@ -585,6 +585,7 @@ void float_to_unit8(float * in, int n, int8_t *out)
     // use a temp var so we don't modify the input data
     float scratch;
     for (j = 0; j < n; j++) {
+        // TODO: count the number of samples that were clipped, store that and put it in the psrfits header
         // the if branching and ternary updates seem to be equivalent execution time
         if (in[j]> max) {
             scratch = max;
