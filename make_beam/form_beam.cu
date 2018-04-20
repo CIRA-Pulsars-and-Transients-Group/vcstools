@@ -285,17 +285,17 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     band = 0.0;
 
     // accumulate abs(data) over all time samples and save into band
-    data_ptr = C + C_IDX(0,chan,stokes,nchan);
+    //data_ptr = C + C_IDX(0,chan,stokes,nchan);
     for (i=0;i<nstep;i++) { // time steps
-        band += fabsf(*data_ptr);
         data_ptr = C + C_IDX(i,chan,stokes,nchan);
+        band += fabsf(*data_ptr);
     }
 
     // now normalise the coherent beam
-    data_ptr = C + C_IDX(0,chan,stokes,nchan);
+    //data_ptr = C + C_IDX(0,chan,stokes,nchan);
     for (i=0;i<nstep;i++) { // time steps
-        *data_ptr = (*data_ptr)/( (band/nstep)/new_var );
         data_ptr = C + C_IDX(i,chan,stokes,nchan);
+        *data_ptr = (*data_ptr)/( (band/nstep)/new_var );
     }
 
 }
