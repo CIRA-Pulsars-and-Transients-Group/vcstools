@@ -393,24 +393,27 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     gpuErrchk(cudaMemcpy( d_W,    W,    W_size,    cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( d_J,    J,    J_size,    cudaMemcpyHostToDevice ));
 
-    // Call the kernel
+    // Call the kernels
     dim3 samples_chan(opts->sample_rate, nchan);
     beamform_kernel<<<samples_chan, NSTATION>>>(
             d_data, d_W, d_J, invw, d_Bd, d_coh, d_incoh );
-    cudaDeviceSynchronize();
-
-    // Copy the results back into host memory
-    gpuErrchk(cudaMemcpy( Bd,    d_Bd,    Bd_size,    cudaMemcpyDeviceToHost ));
+    //cudaDeviceSynchronize();
+    // sync not required between kernel queues since each stream acts like a FIFO queue
+    // so all instances of the above kernel will complete before we move to the next
+    // we are using the "default" stream since we don't specify any stream id
 
     // 1 block per pointing direction, hence the 1 for now
     flatten_bandpass_I_kernel<<<1, NSTATION>>>(d_incoh, nchan);
-    cudaDeviceSynchronize();
-    gpuErrchk(cudaMemcpy( incoh, d_incoh, incoh_size, cudaMemcpyDeviceToHost ));
+    //cudaDeviceSynchronize();
 
     // now do the same for the coherent beam
     dim3 chan_stokes(NSTATION, npol);
     flatten_bandpass_C_kernel<<<nchan, chan_stokes>>>(d_coh, nchan);
-    cudaDeviceSynchronize();
+
+    //cudaDeviceSynchronize(); // Memcpy acts as a synchronize step so don't sync here
+    // Copy the results back into host memory
+    gpuErrchk(cudaMemcpy( Bd,    d_Bd,    Bd_size,    cudaMemcpyDeviceToHost ));
+    gpuErrchk(cudaMemcpy( incoh, d_incoh, incoh_size, cudaMemcpyDeviceToHost ));
     gpuErrchk(cudaMemcpy( coh,   d_coh,   coh_size,   cudaMemcpyDeviceToHost ));
 
     // Copy the data back from Bd back into the detected_beam array
