@@ -33,7 +33,7 @@
                           (c)  * (NPOL)      + \
                           (p))
  
-#define C_IDX(s,c,st,nc)  ((s)  * (nc*NSTOKES) + \
+#define C_IDX(s,c,st,nc)  ((s)  * ((nc)*NSTOKES) + \
                            (st) * (nc)         + \
                            (c))
 
