@@ -272,7 +272,7 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     int chan = threadIdx.x; /* The (c)hannel number */
     int nchan = blockDim.x; /* The total number of channels */
     int stokes = threadIdx.y;
-    int nstokes = blockDim.y;
+//    int nstokes = blockDim.y;
 
     float band;
 
@@ -407,7 +407,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     //cudaDeviceSynchronize();
 
     // now do the same for the coherent beam
-    dim3 chan_stokes(nchan, npol);
+    dim3 chan_stokes(nchan, outpol_coh);
     flatten_bandpass_C_kernel<<<1, chan_stokes>>>(d_coh, opts->sample_rate);
 
     //cudaDeviceSynchronize(); // Memcpy acts as a synchronize step so don't sync here
