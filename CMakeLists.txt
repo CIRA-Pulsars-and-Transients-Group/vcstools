@@ -49,6 +49,7 @@ if (XGPU_FOUND)
 endif()
 add_subdirectory(make_beam)
 add_subdirectory(make_psrfits)
+add_subdirectory(read_mwac)
 add_subdirectory(galaxy-scripts)
 
 INCLUDE(InstallRequiredSystemLibraries)
