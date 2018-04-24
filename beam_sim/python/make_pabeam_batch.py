@@ -6,7 +6,7 @@ import argparse
 import sys
 import os
 
-def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,eff,flaggedtiles,write,odir):
+def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,eff,flaggedtiles,maploc,write,odir):
 
     times = np.arange(tmin,tmax,step=step)
     times = np.append(times,tmax)
@@ -20,7 +20,8 @@ def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,ef
         onamebase = "{0}_{1}_{2:.2f}MHz_{3}_{4}".format(obsid,float(times[i]),freq/1e6,ra,dec)
         with open(fname,'w') as f:
             f.write("#!/bin/bash -l\n\n")
-            f.write("#SBATCH --account=mwaops\n#SBATCH --partition=workq\n#SBATCH --nodes={0}\n".format(nnodes))
+            f.write("#SBATCH --account=mwaops\n#SBATCH --gid=mwaops\n#SBATCH --cluster=galaxy\n#SBATCH --partition=workq\n")
+            f.write("#SBATCH --nodes={0}\n".format(nnodes))
             f.write("#SBATCH --time=12:00:00\n#SBATCH --output={0}\n\n".format(fname.replace(".batch",".out")))
             f.write("nprocesses={0}\nobsid={1}\nfreq={2}\neff={3}\n".format(nprocesses,obsid,freq,eff))
             f.write('ra=\'"{0}"\'\ndec=\'"{1}"\'\nflags="{2}"\ntres={3}\npres={4}\n'.format(ra,dec,flags,thetares,phires))
@@ -28,11 +29,11 @@ def write_batch_files(tmin,tmax,step,thetares,phires,nnodes,ra,dec,obsid,freq,ef
             # submit the next script with a dependency on this one
             f.write("sbatch --depend=afterany:{0} {1}\n".format("${SLURM_JOB_ID}","make_pabeam_{0}_{1}MHz.batch".format(times[i+1],freq/1e6)))  
             if write:
-                f.write('echo "aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write"\n')
-                f.write("aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write\n\n")
+                f.write('echo "srun -u -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write"\n')
+                f.write("srun -u -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write\n\n")
             else:
-                f.write('echo "aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
-                f.write("aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
+                f.write('echo "srun -u -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
+                f.write("srun -u -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
 
             # write the concatenation bash commands
             concatstr= """
@@ -73,17 +74,18 @@ fi\n""".format(onamebase, onamebase+".dat")
     onamebase = "{0}_{1}_{2:.2f}MHz_{3}_{4}".format(obsid,float(times[-1]),freq/1e6,ra,dec)
     with open(fname,'w') as f:
         f.write("#!/bin/bash -l\n\n")
-        f.write("#SBATCH --account=mwaops\n#SBATCH --partition=workq\n#SBATCH --nodes={0}\n".format(nnodes))
+        f.write("#SBATCH --account=mwaops\n#SBATCH --gid=mwaops\n#SBATCH --cluster=galaxy\n#SBATCH --partition=workq\n")
+        f.write("#SBATCH --nodes={0}\n".format(nnodes))
         f.write("#SBATCH --time=12:00:00\n#SBATCH --output={0}\n\n".format(fname.replace(".batch",".out")))
         f.write("nprocesses={0}\nobsid={1}\nfreq={2}\neff={3}\n".format(nprocesses,obsid,freq,eff))
         f.write('ra=\'"{0}"\'\ndec=\'"{1}"\'\nflags="{2}"\ntres={3}\npres={4}\n'.format(ra,dec,flags,thetares,phires))
         f.write('obstime={0}\nodir="{1}"\n\n'.format(times[-1],odir))
         if write:
-            f.write('echo "aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write"\n')
-            f.write("aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write\n\n")
+            f.write('echo "srun -u -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write"\n')
+            f.write("srun -u -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --write\n\n")
         else:
-            f.write('echo "aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
-            f.write("aprun -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
+            f.write('echo "srun -u -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"\n')
+            f.write("srun -u -n ${nprocesses} pabeam.py -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}\n\n")
         
         # write the concatenation bash commands
         concatstr= """
@@ -114,10 +116,10 @@ fi\n""".format(onamebase, onamebase+".dat")
         f.write("rm {0}\n".format(onamebase+".*.dat"))
 
         # Now write the showspec batch for this time
-        write_showspec_batch(times[-1],obsid,ra,dec,freq,(90/thetares)+1,360/phires,onamebase+".dat")
+        write_showspec_batch(times[-1],obsid,ra,dec,freq,(90/thetares)+1,360/phires,onamebase+".dat",maploc)
 
 
-def write_showspec_batch(time,obsid,ra,dec,freq,ntheta,nphi,out):
+def write_showspec_batch(time,obsid,ra,dec,freq,ntheta,nphi,out,maploc):
     fname = "showspec_{0}_{1:.2f}MHz.batch".format(time,freq/1e6)
     oname = fname.replace(".batch",".out")
     
@@ -132,7 +134,7 @@ def write_showspec_batch(time,obsid,ra,dec,freq,ntheta,nphi,out):
     with open(fname,'w') as f:
         f.write("#!/bin/bash -l\n\n#SBATCH --account=mwaops\n#SBATCH --cluster=galaxy\n#SBATCH --partition=workq\n#SBATCH --nodes=1\n#SBATCH --time=3:00:00\n")
         f.write("#SBATCH --output={0}\n\n".format(oname))
-        f.write("maploc=/group/mwaops/PULSAR/src/gsm/skymaps\nshowspec=/group/mwaops/PULSAR/src/showspec/showspec\ncreatemap=/group/mwaops/PULSAR/src/gsm/create_skymap.sh\n\n")
+        f.write("maploc={0}\nshowspec=`which showspec`\ncreatemap=`which create_skymap.sh`\n\n".format(maploc))
         
         infostr = """
 obsid={0}    # observation ID
@@ -150,8 +152,8 @@ file={8}            # output beam pattern file name\n\n""".format(obsid, unix, t
 
         checkstr = """
 # if the skymap doesn't already exist for the required frequency, make it...
-if [ ! -f ${maploc}/gsm_${freq}MHz_ni${freq}.out ]; then
-    $createmap $freq
+if [ ! -f ${maploc}/skymaps/gsm_${freq}MHz_ni${freq}.out ]; then
+    $createmap $freq $maploc
 fi\n\n"""
 
         f.write(checkstr)
@@ -186,6 +188,8 @@ parser.add_argument("--flagged",nargs='+',help="Flagged tiles (as in RTS flagged
 parser.add_argument("--ra",type=str,help="RAJ2000 of target")
 parser.add_argument("--dec",type=str,help="DECJ2000 of target (use = to assign option)") # only because of the old version of argparse Galaxy has can't handle negative arguments...
 
+parser.add_argument("--maploc",type=str,help="Path to directory where skymaps/ exists, within which there are GSM temp. maps.", default="$PWD")
+
 parser.add_argument("--write",action='store_true',help="Write output files to disk")
 parser.add_argument("--odir",type=str,help="Output directory")
 
@@ -194,4 +198,4 @@ args = parser.parse_args()
 
 ra = args.ra
 dec = args.dec
-write_batch_files(args.tmin,args.tmax,args.step,args.thetares,args.phires,args.nodes,ra,dec,args.obsid,args.freq,args.eff,args.flagged,args.write,args.odir)
+write_batch_files(args.tmin,args.tmax,args.step,args.thetares,args.phires,args.nodes,ra,dec,args.obsid,args.freq,args.eff,args.flagged,args.maploc,args.write,args.odir)
