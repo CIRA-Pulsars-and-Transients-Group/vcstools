@@ -95,9 +95,9 @@ fi
 """
 
 showspec_base_cmd = """
-echo "$showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q save_map_fits=0 -q map_file_base=${{ux}}_ -q save_map_at_freq=${{freq}} -q freq_start=${{freq_start}} -q freq_end=${{freq_end}} -q cache_on=0 -q ant_cache_on=1 -q site=mwa -q ant_eff=0 -q binary_input=1 -q ant_rotation_deg=0.00 -q save_pattern_map_db=0 -p $maploc -q max_feko_theta=90 -q bradley=1 -q sources=1 -q MAX_THETA_COUNT={ntheta} -q MAX_PHI_COUNT={nphi} -q phi_column_index={azcol} -q theta_column_index={zacol} -q gain_column_index={gaincol}"
+echo "$showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q save_map_fits=0 -q map_file_base=${{ux}}_ -q save_map_at_freq=${{freq}} -q freq_start=${{freq_start}} -q freq_end=${{freq_end}} -q cache_on=0 -q ant_cache_on=1 -q site=mwa -q ant_eff=0 -q binary_input=1 -q ant_rotation_deg=0.00 -q save_pattern_map_db=0 -p $maploc/skymaps -q max_feko_theta=90 -q bradley=1 -q sources=1 -q MAX_THETA_COUNT={ntheta} -q MAX_PHI_COUNT={nphi} -q phi_column_index={azcol} -q theta_column_index={zacol} -q gain_column_index={gaincol}"
 
-$showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q save_map_fits=0 -q map_file_base=${{ux}}_ -q save_map_at_freq=${{freq}} -q freq_start=${{freq_start}} -q freq_end=${{freq_end}} -q cache_on=0 -q ant_cache_on=1 -q site=mwa -q ant_eff=0 -q binary_input=1 -q ant_rotation_deg=0.00 -q save_pattern_map_db=0 -p $maploc -q max_feko_theta=90 -q bradley=1 -q sources=1 -q MAX_THETA_COUNT={ntheta} -q MAX_PHI_COUNT={nphi} -q phi_column_index={azcol} -q theta_column_index={zacol} -q gain_column_index={gaincol}
+$showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q save_map_fits=0 -q map_file_base=${{ux}}_ -q save_map_at_freq=${{freq}} -q freq_start=${{freq_start}} -q freq_end=${{freq_end}} -q cache_on=0 -q ant_cache_on=1 -q site=mwa -q ant_eff=0 -q binary_input=1 -q ant_rotation_deg=0.00 -q save_pattern_map_db=0 -p $maploc/skymaps -q max_feko_theta=90 -q bradley=1 -q sources=1 -q MAX_THETA_COUNT={ntheta} -q MAX_PHI_COUNT={nphi} -q phi_column_index={azcol} -q theta_column_index={zacol} -q gain_column_index={gaincol}
 """
 
 
