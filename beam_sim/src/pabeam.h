@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 #include "utils.h"
+#include "pabeam_kernal.h"
+
 
 // MWA tile beam
 #include "FEE2016/beam2016implementation.h"
@@ -16,11 +18,6 @@
 
 
 void usage();
-
-
-void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn);
-
-void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza);
 
 int getNumTiles(const char *metafits);
 
