@@ -116,6 +116,18 @@ __global__ void beamform_kernel( uint8_t *data,
     ComplexDouble WD[NPOL];
     ComplexDouble N[NPOL][NPOL];
 
+
+    /* Fix from Maceij regarding NaNs in output when running on Athena, 13 April 2018.
+       Apparently the different compilers and architectures are treating what were 
+       unintialised variables very differently */
+    for(pol = 0; pol < NPOL; pol++)
+    {
+        B[pol]  = CMaked( 0.0, 0.0 );
+        D[pol]  = CMaked( 0.0, 0.0 );
+        WD[pol] = CMaked( 0.0, 0.0 );
+    }
+
+
     I[Ii] = 0.0;
     for (pol = 0; pol < NPOL; pol++)
     {

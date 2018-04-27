@@ -15,7 +15,7 @@ Option are:\n
 \t\t if run outside mpirun/aprun should at least be 2 to make sure \n
 \t\t script works (script itself counts as job outside mpirun/aprun)\n
 \t -w \t working directory that contains the tarballs \n
-\t\t (default: /scratch2/mwaops/vcs/\${obsID}/combined)\n
+\t\t (default: /astro/mwaops/vcs/\${obsID}/combined)\n
 \t -b \t gpstime of first tarball\n
 \t -e \t gpstime of last tarball (by default all tarballs in ${workdir} will be untarred.)\n
 \t -k \t if supplied: tarballs will be kept, else deleted after unpacking\n
@@ -55,7 +55,7 @@ if [[ -z $maxjobs ]];then
     maxjobs=1
 fi
 if [[ -z $workdir ]];then
-    workdir=/scratch2/mwaops/vcs/${obsid}/combined/
+    workdir=/astro/mwaops/vcs/${obsid}/combined/
 fi
 if [ ! -d "${workdir}" ];then
     echo "working directory ${workdir} does not exist."
@@ -101,15 +101,21 @@ for gpstime in `seq $start $stop`;do
 	echo "${file} does not exist."
 	continue
     fi
-    tar xf ${file} &
-    pwait $maxjobs
+    if [[ $keep -eq 0 ]];then
+        (tar xvf ${file} && rm -rfv ${file}) &
+        pwait $maxjobs
+    else
+        tar xvf $file &
+        pwait $maxjobs
+    fi
 done
 wait
+echo "Finished untarring this set of tar balls."
 
 # if -k is NOT supplied the tar balls will be deleted:
-if [[ $keep -eq 0 ]];then
-    for gpstime in `seq $start $stop`;do
-	rm -rf ${obsid}_${gpstime}_combined.tar
-    done
-fi
+#if [[ $keep -eq 0 ]];then
+#    for gpstime in `seq $start $stop`;do
+#	rm -rf ${obsid}_${gpstime}_combined.tar
+#    done
+#fi
 
