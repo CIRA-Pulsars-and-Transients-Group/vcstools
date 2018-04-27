@@ -68,7 +68,7 @@ showspec_sbatch_header = """#!/bin/bash -l
 #SBATCH --partition=workq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --mem-per-cpu=58000
+#SBATCH --mem=58000
 #SBATCH --time=3:00:00
 #SBATCH --output={outfile}
 """
