@@ -115,7 +115,7 @@ def load_data(fname):
 
 def plot_beam(obs, fname, target, freq, time):
 
-    metadata = get_metadata(obs)
+    metadata = get_obs_metadata(obs)
     
     theta, phi, beam = load_data(fname)
     
@@ -219,7 +219,7 @@ if __name__ == "__main__":
         time = Time(args.gps, format="gps")
     elif args.utc and not args.gps:
         time = Time(args.utc, scale="utc", format="isot")
-    elif args.gps and arg.utc:
+    elif args.gps and args.utc:
         print "You supplied GPS and UTC times: only using GPS time"
         time = Time(args.gps, format="gps")
     else:
@@ -232,4 +232,4 @@ if __name__ == "__main__":
         target = None
 
 
-    plot_beam(args.obsid, target, args.freq, time)
+    plot_beam(args.obsid, args.file, target, args.freq, time)
