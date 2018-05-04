@@ -63,7 +63,8 @@ def get_obs_metadata(obs):
     
     return {"channels":channels,
             "frequencies":freqs,
-            "delays":xdelays,
+            "xdelays":xdelays,
+            "ydelays":ydelays,
             "az":pointing_AZ,
             "za":pointing_ZA
             }
@@ -121,7 +122,8 @@ def plot_beam(obs, target, cal, freq):
     az, za = np.meshgrid(np.radians(phi), np.radians(theta))
         
     # compute beam and plot
-    gx, gy = pb.MWA_Tile_full_EE(za, az, freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
+    delays = [metadata["xdelays"], metadata["ydelays"]]
+    gx, gy = pb.MWA_Tile_full_EE(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
     beam = (gx + gy) / 2.0
 
     fig = plt.figure(figsize=(10,8))
