@@ -56,11 +56,13 @@ def get_obs_metadata(obs):
     channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
     freqs = [float(c)*1.28 for c in channels]
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
     pointing_AZ, pointing_EL, pointing_ZA = mwa_dbQ.get_beam_pointing(obs)
 
     return {"channels":channels,
             "frequencies":freqs,
-            "delays":xdelays,
+            "xdelays":xdelays,
+            "ydelays":ydelays,
             "az":pointing_AZ,
             "za":pointing_ZA
             }
@@ -123,7 +125,7 @@ def plot_beam(obs, fname, target, freq, time):
     
     print "Re-normalising beam-pattern"
     az, za = np.meshgrid(np.radians(sorted(set(phi))), np.radians(sorted(set(theta))))
-    delays = get_delay_steps(obsid)[4]
+    delays = [metadata['xdelays'], metadata['ydelays']]
     gx, gy = pb.MWA_Tile_full_EE(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
     tile_beam = (gx + gy) / 2.0
 
@@ -132,7 +134,9 @@ def plot_beam(obs, fname, target, freq, time):
     beam /= beam.max()
     beam *= np.ravel(tile_beam)
 
-    print "Plotting..."
+
+
+    # start setup for plotting
     lower_contour = 1e-2
     upper_contour = beam.max()
     
@@ -146,17 +150,25 @@ def plot_beam(obs, fname, target, freq, time):
     ax = fig.add_subplot(111, polar=True, aspect='equal')
 
     # plot the beam pattern
-    print "plotting beam pattern"
-    cf_levels = np.logspace(np.log10(lower_contour), np.log10(upper_contour), num=20)
+    print "Plotting beam pattern (this may take a while, too...)"
+    cf_levels = np.linspace(lower_contour, upper_contour, num=20)
+    cf_levels_log = np.logspace(np.log10(lower_contour), np.log10(upper_contour), num=20)
+    print "     contour levels: max,min = ", cf_levels.max(), cf_levels.min()
     cf_cmap = plt.get_cmap('gray_r')
+    print "     beam levels: max,min = ", beam.max(), beam.min()
     
-    cf_norm = LogNorm(vmin=cf_levels.min(), vmax=beam.max())
-    cf = ax.tricontourf(np.radians(phi), np.radians(theta), beam, cmap=cf_cmap, norm=cf_norm, levels=cf_levels)
+    #sys.exit()
+    print "     plotting tied-array beam pattern contours"
+    #cf_norm = LogNorm(vmin=cf_levels.min(), vmax=beam.max())
+    #cf = ax.tricontourf(np.radians(phi), np.radians(theta), beam, cmap=cf_cmap, norm=cf_norm, levels=cf_levels)
+    cf = ax.tricontourf(np.radians(phi), np.radians(theta), beam, cmap=cf_cmap, levels=cf_levels)
     cf.cmap.set_over('k')
     cf.cmap.set_under('white')
 
     # color bar setup
-    cbar_levels = np.logspace(np.log10(fill_min), np.log10(fill_max), num=6)
+    print "     assigning colorbar"
+    cbar_levels = np.linspace(fill_min, fill_max, num=6)
+    cbar_levels_log = np.logspace(np.log10(fill_min), np.log10(fill_max), num=6)
     cbar = plt.colorbar(cf, shrink=0.9, pad=0.08)
     cbar.set_label(label="zenith normalised power", size=20, labelpad=20)
     cbar.set_ticks(cbar_levels)
@@ -164,17 +176,19 @@ def plot_beam(obs, fname, target, freq, time):
     cbar.ax.tick_params(labelsize=18)
    
     # plot the pointing centre
+    print "     plotting observation pointing centre"
     ax.plot(np.radians(metadata["az"]), np.radians(metadata["za"]), ls="", marker="+", ms=8, color='cyan', zorder=1002, label="pointing centre")
 
     # plot the target position on sky
     if target is not None:
+        print "     plotting target position"
         target_az = target.altaz.az.rad
         target_za = np.pi/2 - target.altaz.alt.rad
 
         # get beam power for target
-        bpt_x, bpt_y = pb.MWA_Tile_full_EE([[target_za]], [[target_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
+        bpt_x, bpt_y = pb.MWA_Tile_full_EE([[target_za]], [[target_az]], freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
         bpt = (bpt_x + bpt_y) / 2.0
-        lognormbpt = log_normalise(bpt, cc_levels.min(), beam.max())
+        lognormbpt = log_normalise(bpt, cf_levels.min(), beam.max())
         print "Beam power @ source:",bpt[0][0]
         print "log-normalised:",lognormbpt[0][0]
 
@@ -182,7 +196,7 @@ def plot_beam(obs, fname, target, freq, time):
         ax.plot(target_az, target_za, ls="", marker="o", color='C3', zorder=1002, label="target ({0:.2f})".format(bpt[0][0]))
 
         # plot the target on the color bar
-        cbarCC.ax.plot(0.5, lognormbpt, color='C3', marker="o")
+        cbar.ax.plot(0.5, lognormbpt, color='C3', marker="o")
 
     # draw grid
     ax.grid(color='k', ls="--", lw=0.5)
