@@ -115,10 +115,13 @@ def load_data(fname):
 
 def plot_beam(obs, fname, target, freq, time):
 
+    print "Getting observation metadata"
     metadata = get_obs_metadata(obs)
     
+    print "Loading data from file (this may take a while...)"
     theta, phi, beam = load_data(fname)
     
+    print "Re-normalising beam-pattern"
     az, za = np.meshgrid(np.radians(sorted(set(phi))), np.radians(sorted(set(theta))))
     delays = get_delay_steps(obsid)[4]
     gx, gy = pb.MWA_Tile_full_EE(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
@@ -129,6 +132,7 @@ def plot_beam(obs, fname, target, freq, time):
     beam /= beam.max()
     beam *= np.ravel(tile_beam)
 
+    print "Plotting..."
     lower_contour = 1e-2
     upper_contour = beam.max()
     
@@ -196,7 +200,7 @@ def plot_beam(obs, fname, target, freq, time):
     # title
     ax.set_title("MWA tied-array beam\naz = {0:.2f}, za = {1:.2f}, freq = {2:.2f}MHz\n{3}".format(metadata["az"], metadata["za"], freq, time.iso))
 
-    print "saving figure"
+    print "Saving figure"
     #plt.savefig("{0}_{1:.2f}MHz_tabeam.eps".format(obs, freq), bbox_inches="tight", format="eps")
     plt.savefig("{0}_{1:.2f}MHz_tabeam.png".format(obs, freq), bbox_inches="tight")
 
