@@ -145,7 +145,7 @@ class BaseRTSconfig(object):
             self.data_dir = "/group/mwaops/vcs/{0}/cal/{1}/vis".format(obsid, cal_obsid)
             logger.info("Using default calibrator data path: {0}".format(self.data_dir))
         elif os.path.isdir(datadir):
-            self.data_dir = os.path.abspath(datadir)
+            self.data_dir = os.path.realpath(datadir)
             logger.info("Using the user specified data directory: {0}".format(datadir))
         else:
             errmsg = "Data directory ({0}) does not exists. Aborting.".format(datadir)
@@ -164,8 +164,8 @@ class BaseRTSconfig(object):
             mdir(self.batch_dir, "Batch")
         else:
             # mdir handles if the directory already exists
-            self.output_dir = os.path.abspath(outdir + "/rts")
-            self.batch_dir = os.path.abspath(outdir + "/batch")
+            self.output_dir = os.path.realpath(outdir + "/rts")
+            self.batch_dir = os.path.realpath(outdir + "/batch")
             logger.warning("Non-standard RTS output path: {0}".format(self.output_dir))
             logger.warning("Non-standard batch directory path: {0}".format(self.batch_dir))
             mdir(self.output_dir, "RTS")
@@ -186,7 +186,8 @@ class BaseRTSconfig(object):
             raise CalibrationError(errmsg)
         else:
             logger.info("Metafits file exists and is named correctly.")
-            self.metafits = os.path.abspath(metafits)
+            self.metafits = os.path.realpath(metafits)
+            logger.debug("    {0}".format(self.metafits))
 
         # the check that the source list exists
         if os.path.isfile(srclist) is False:
@@ -196,7 +197,7 @@ class BaseRTSconfig(object):
             raise CalibrationError(errmsg)
         else:
             logger.info("Checking source list file exists... Ok")
-            self.source_list = os.path.abspath(srclist)
+            self.source_list = os.path.realpath(srclist)
 
         # set some RTS flags based on if we have offline correlated data or not
         logger.info("Setting RTS data input flags...")
@@ -385,6 +386,7 @@ class BaseRTSconfig(object):
 
         # make metafits file formatted for RTS
         self.metafits_RTSform = self.metafits.split("_metafits_ppds.fits")[0]
+        logger.debug("RTS form metafits location: {0}".format(self.metafits_RTSform))
 
         # create the final file string, expanding symlinks to real paths
         logger.info("Constructing base RTS configuration script content")
