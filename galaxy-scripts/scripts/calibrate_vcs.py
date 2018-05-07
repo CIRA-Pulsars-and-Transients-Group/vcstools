@@ -434,10 +434,10 @@ NumberOfCalibrators=1
 NumberOfSourcesToPeel=0
 calBaselineMin=20.0
 calShortBaselineTaper=40.0
-FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
+FieldOfViewDegrees=1""".format(self.data_dir,
                                self.readDirect,
                                self.useCorrInput,
-                               os.path.realpath(self.metafits_RTSform),
+                               self.metafits_RTSform,
                                self.freq_base,
                                self.JD,
                                self.PB_HA,
@@ -448,7 +448,7 @@ FieldOfViewDegrees=1""".format(os.path.realpath(self.data_dir),
                                self.corr_dump_time,
                                self.ArrayPositionLat,
                                self.ArrayPositionLong,
-                               os.path.realpath(self.source_list))
+                               self.source_list)
 
         return file_str
 
