@@ -189,8 +189,8 @@ if __name__ == "__main__":
     parser.add_argument("--eff", type=float, help="Radiation efficiency [default: 1.0]", default=1.0)
     parser.add_argument("--flagged", nargs='+', help="Flagged tiles (as in RTS flagged_tiles.txt)")
 
-    parser.add_argument("--ra", type=str, help="RAJ2000 of target")
-    parser.add_argument("--dec", type=str, help="DECJ2000 of target (use = to assign option)") # only because argparse can't handle negative arguments...
+    parser.add_argument("--ra", type=str, help="RAJ2000 of target in hh:mm:ss.ss (use = to assign option)")
+    parser.add_argument("--dec", type=str, help="DECJ2000 of target in dd:mm:ss.ss (use = to assign option)") # only because argparse can't handle negative arguments...
 
     parser.add_argument("--maploc", type=str, help="Path to directory where skymaps/ exists (or is to be created). The GSM temp. maps exist there or will be created.", default="$PWD")
 
