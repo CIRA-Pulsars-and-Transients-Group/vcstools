@@ -24,21 +24,24 @@ import sys
 import argparse
 
 
-# Radio telescope sites: Name, latitude, longitude, elevation
-site_dict = {'MWA':(-26.7033, 116.671, 377.827),
-		     'PKS':(-32.999944, 148.262306, 372),
-		     'ATCA':(-30.312778, 149.550278, 209),
-		     'ASKAP':(-26.696, 116.637, 372),
-		     'MOST':(-35.370707, 149.424658, 737),
-		     'GMRT':(19.096517, 74.049742, 656),
-		     'LWA':(34.07, -107.63, 2124),
-		     'GBT':(38.4331, -79.8397, 807),
-		     'VLA':(34.078749, -107.618283, 2124),
-		     'Arecibo':(18.34417, -66.75278, 323),
-		     'LOFAR':(52.90889, 6.86889, 6),
-		     'JodrellBank':(53.23625, -2.307139, 77),
-		     'Effelsberg':(50.5247, 6.8828, 346),
-             'MeerKAT':(-30.721, 21.411, 1300)}
+# Radio telescope dictionary, formatted as:
+#       Name:(latitude, longitude, elevation)
+site_dict = {
+"MWA":         (-26.7033, 116.671, 377.827),
+"PKS":         (-32.999944, 148.262306, 372),
+"ATCA":        (-30.312778, 149.550278, 209),
+"ASKAP":       (-26.696, 116.637, 372),
+"MOST":        (-35.370707, 149.424658, 737),
+"GMRT":        (19.096517, 74.049742, 656),
+"LWA":         (34.07, -107.63, 2124),
+"GBT":         (38.4331, -79.8397, 807),
+"VLA":         (34.078749, -107.618283, 2124),
+"Arecibo":     (18.34417, -66.75278, 323),
+"LOFAR":       (52.90889, 6.86889, 6),
+"JodrellBank": (53.23625, -2.307139, 77),
+"Effelsberg":  (50.5247, 6.8828, 346),
+"MeerKAT":     (-30.721, 21.411, 1300)
+}
 
 
 class Observatory(object):
@@ -177,7 +180,7 @@ if __name__ == "__main__":
     parser.add_argument('--utcoff',  type=float, metavar="offset",   help="Hour offset from UTC [default = 0]", default=0)
     parser.add_argument('--site',    type=str,   metavar="name", nargs='+', 
                             choices=site_dict.keys(), help="Common radio telescope sites to use as observer position. "
-                            "Choose from: {0}. Or use --observer option. No default.".format(site_dict.keys()), default=None)
+                            "Choose from: {0}. No default.".format(site_dict.keys()), default=None)
 
     # TODO: need to allow any number of manually defined observing positions, but for now just use those in the site_dict
     #parser.add_argument('--observer', type=float, nargs=3, metavar=("lat", "lon", "elev"), help="Latitude (deg), longitude (deg) and elevation (m) of observer. No default.",default=(None,None,None))
