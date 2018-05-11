@@ -134,13 +134,13 @@ def write_batch_files(tmin, tmax, step, thetares, phires, nnodes, ra, dec, obsid
             f.write("{0}\n\n".format(pabeam_run_cmd))
 
             # Write the concatenation bash commands
-            f.write(pabeam_concat_cmd.format(onamebase, onamebase+".dat"))
+            f.write(pabeam_concat_cmd.format(onamebase, onamebase + ".dat"))
             
             # Remove the partial beam pattern files written by processes
             f.write("rm {0}\n".format(onamebase + ".*.dat"))
 
-            # Now write the showspec batch for this time
-            write_showspec_batch(times[i], obsid, ra, dec, freq, (90/thetares)+1, 360/phires, onamebase+".dat", maploc)
+        # Now write the showspec batch for this time
+        write_showspec_batch(times[i], obsid, ra, dec, freq, (90/thetares)+1, 360/phires, onamebase+".dat", maploc)
 
 
 
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     parser.add_argument("--ra", type=str, help="RAJ2000 of target in hh:mm:ss.ss (use = to assign option)")
     parser.add_argument("--dec", type=str, help="DECJ2000 of target in dd:mm:ss.ss (use = to assign option)") # only because argparse can't handle negative arguments...
 
-    parser.add_argument("--maploc", type=str, help="Path to directory where skymaps/ exists (or is to be created). The GSM temp. maps exist there or will be created.", default="$PWD")
+    parser.add_argument("--maploc", type=str, help="Path to directory where skymaps/ exists (or is to be created). The GSM temperature maps exist there or will be created.", default="$PWD")
 
     parser.add_argument("--write", action='store_true', help="Write output files to disk")
     parser.add_argument("--odir", type=str, help="Output directory")
