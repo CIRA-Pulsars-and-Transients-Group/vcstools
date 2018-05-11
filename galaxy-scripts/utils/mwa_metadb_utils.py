@@ -43,13 +43,22 @@ def getmeta(service='obs', params=None):
     return result
 
 
+def is_number(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+
 def obs_max_min(obs_id):
     """
     Small function to query the database and return the times of the first and last file
     """
-    obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
+    obsinfo = getmeta(service='obs', params={'obs_id':obs_id})
+    
     # Make a list of gps times excluding non-numbers from list
-    times = [file[11:21] for file in obsinfo['files'] if (file[11:21]).isdigit()]
+    times = [f[11:21] for f in obsinfo['files'].keys() if is_number(f[11:21])]
     obs_start = int(min(times))
     obs_end = int(max(times))
     return obs_start, obs_end

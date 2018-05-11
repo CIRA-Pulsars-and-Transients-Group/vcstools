@@ -4,13 +4,16 @@
 #include <math.h>
 #include "psrfits.h"
 
-void usage() {
-    fprintf(stderr,"psrfits_splice <file 1> <file 2> ..... <basefilename>\n");
-    fprintf(stderr,"Utility to splice psrfits files together providing they have the same start time\n");
-    fprintf(stderr,"The output will get written to \"[basefilename]_0001.fits\". This file must not already exist.\n");
+void usage()
+{
+    printf( "splice_psrfits from VCSTools v%s\n", VERSION_BEAMFORMER );
+    printf( "usage: splice_psrfits <file 1> <file 2> ..... <basefilename>\n\n" );
+    printf( "Utility to splice psrfits files together providing they have the same start time\n" );
+    printf( "The output will get written to \"[basefilename]_0001.fits\". This file must not already exist.\n" );
 }
 
-int prep_data(void *to_load) {
+int prep_data(void *to_load)
+{
     struct psrfits *pf = (struct psrfits *) to_load;
     int rv = 0;
     pf->sub.dat_freqs = (float *)malloc(sizeof(float) * pf->hdr.nchan);
@@ -23,7 +26,8 @@ int prep_data(void *to_load) {
     return rv;
 }
 
-int cleanup(void *to_clean) {
+int cleanup(void *to_clean)
+{
     struct psrfits *pf = (struct psrfits *) to_clean;
     free(pf->sub.dat_freqs);
     free(pf->sub.dat_weights);
@@ -114,15 +118,23 @@ int append(char **to_append, void *total, int n){
     int chans_to_pad = 0;
 
     if (diff_freq != df){
-        fprintf(stderr,"WARNING: Channels are not contiguous-attempting to pad.\n");
-        fprintf(stderr,"will try to append channel %f to channel %f.\n",first_chan_of_to_append,last_chan_of_total);
+        fprintf( stderr, "warning: channels are not contiguous; attempting "
+                         "to pad\n" );
+        fprintf( stderr, "         trying to append channel %f to channel %f.\n",
+                 first_chan_of_to_append,
+                 last_chan_of_total );
+
         chans_to_pad = rint((diff_freq-df)/df);
-        if (chans_to_pad < 0) {
-            fprintf(stderr,"Error %d pads required -- channel order switched - check file order\n",chans_to_pad);
+
+        if (chans_to_pad < 0)
+        {
+            fprintf( stderr, "error: %d pads required -- channel order "
+                             "switched - check file order\n", chans_to_pad );
             return(-1);
         }
-        else {
-            fprintf(stderr,"%d pads required\n",chans_to_pad);
+        else
+        {
+            fprintf( stderr, "%d pads required\n", chans_to_pad );
         }
     }
 
@@ -174,9 +186,8 @@ int append(char **to_append, void *total, int n){
     pf_total->sub.rawdata = pf_total->sub.data;
 
 
-    fprintf(stdout,"Build combined dat_weights array\n");
-    fprintf(stdout,"Build combined scales and offsets\n");
-
+    printf( "Build combined dat_weights array\n" );
+    printf( "Build combined scales and offsets\n" );
 
     for (ii = 0 ; ii < pf_total->hdr.nchan * pf_total->hdr.npol ; ii++) {
 
@@ -327,12 +338,28 @@ int main(int argc, char *argv[]) {
 
     int i=0;
 
-    if (argc < 3) {
-        usage();
-        exit(-1);
+    // If "-V" appears in any of the arguments, give the version number
+    // and exit
+    int a;
+    for (a = 0; a < argc; a++)
+    {
+        if (strcmp( argv[a], "-V" ) == 0)
+        {
+            printf( "splice_psrfits from VCS Tools v%s\n",
+                    VERSION_BEAMFORMER );
+            exit(EXIT_SUCCESS);
+        }
     }
-    else {
-        fprintf(stdout,"There are %d files to append\n",argc-2);
+
+    // Otherwise there must be at least 2 arguments
+    if (argc < 3)
+    {
+        usage();
+        exit(EXIT_FAILURE);
+    }
+    else
+    {
+        printf( "There are %d files to append\n", argc-2 );
     }
 
     // output file psrfits structure
@@ -353,12 +380,11 @@ int main(int argc, char *argv[]) {
     sprintf(outfile, "%s_0001.fits", basefilename);
     FILE * foutfile;
 
-    if ((foutfile = fopen(outfile, "r"))) {
-
-        fclose(foutfile);
-        fprintf(stdout, "File %s already exists. Aborting. No output written.\n", basefilename);
-        exit(1);
-
+    if ((foutfile = fopen(outfile, "r")))
+    {
+        fclose( foutfile );
+        fprintf( stderr, "warning: File %s already exists. Overwriting.\n", basefilename);
+        remove( outfile );
     }
 
     // this sets up the filename of the output - note initially this sets the total to be
@@ -381,14 +407,16 @@ int main(int argc, char *argv[]) {
     if (rv) { fits_report_error(stderr, rv); exit(-1);}
 
     sprintf(pf_total.basefilename, "%s", basefilename);
-    fprintf(stdout,"Will append %d files to %s\n",argc-2, outfile);
+    printf( "Will append %d files to %s\n", argc-2, outfile );
 
 
     rv = append(filenames,(void *)&pf_total,argc-2);
     // append reopens the file so we must close it again
-    if (rv) {psrfits_close(&pf_total);}
+    if (rv)
+    {
+        psrfits_close(&pf_total);
+    }
 
-
-    fprintf(stdout,"Done\n");
+    printf( "Done\n" );
 
 }

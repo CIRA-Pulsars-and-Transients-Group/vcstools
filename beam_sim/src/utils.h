@@ -54,5 +54,9 @@ void utc2mjd(char *utc_str, double *intmjd, double *fracmjd);
 
 void mjd2lst(double mjd, double *lst);
 
+void calcWaveNumber(double lambda, double az, double za, wavenums *p_wn);
+
+void calcTargetAZZA(char *ra_hhmmss, char *dec_ddmmss, char *time_utc, tazza *p_tazza);
+
 #endif
 

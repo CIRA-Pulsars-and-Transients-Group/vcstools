@@ -8,13 +8,15 @@ Originally created: 6 Nov 2016
 Updated: 10 Nov 2017 (BWM)
 """
 
-
 import sys
 import argparse
 import numpy as np
 from itertools import groupby
 from operator import itemgetter
 
+
+class ZapchanError(Exception):
+    pass
 
 
 def write_paz_file(ctf, fname):
@@ -26,8 +28,9 @@ def write_paz_file(ctf, fname):
                 if chan is not None:
                    fileobj.write("{0}\n".format(chan))
     except IOError as err:
-        print "Couldn't open a file to write to"
-        raise
+        errmsg = "Couldn't open file to write to: {0}".format(fname)
+        print errmsg
+        raise ZapchanError(errmsg)
 
 
 
@@ -121,7 +124,7 @@ def zap(r, p, channels, zapedges=False, nzap=20, zapmid=False, zaps=None, debug=
     r_ctf = ""
     for g in groups:
         if len(g) > 1:
-            r_ctf += "{0}:{1},".format(min(g), max(g))
+            r_ctf += "{0}:{1},".format(str(min(g)), str(max(g)))
         else:
             r_ctf += "{0},".format(str(g[0]))
 
@@ -160,39 +163,58 @@ def zap(r, p, channels, zapedges=False, nzap=20, zapmid=False, zaps=None, debug=
 
 if __name__ == '__main__':
     ## SETUP OPTIONS ##
-    parser = argparse.ArgumentParser(description="""Output the correctly formated MWA band edge channels and user-defined channels to remove for aliasing/RFI excision.\
-                             If no options are given, returns an empty string.""",\
-                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description="""Output the correctly formated MWA band edge channels and 
+                                    user-defined channels to remove for aliasing/RFI excision.
+                                    If no options are given, returns an empty string.""", \
+                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # there should be two options for the channels, either:
     # give me the total number of fine channels (and I'll assume there's 128 fine channels per coarse channel)
     # OR 
     # give me the number of coarse channels and the number of fine channels and I'll use that information to then calculate the intervals appropriate.
-    parser.add_argument("-N", "--nchans", action='store', type=int, metavar='Nchan', help="TOTAL number of frequency channels in data set. Assumes 128 fine channels  per coarse channel.", default=None)
-    parser.add_argument("-C", "--n_coarse_fine", action='store', type=int, nargs=2, metavar="Nchan", help="Number of coarse channels followed by the number of fine channels per coarse channel. This options overrides --nchans.", default=None)
+    parser.add_argument("-N", "--nchans", type=int, metavar='Nchan', \
+                        help="TOTAL number of frequency channels in data set. Assumes 128 fine channels  per coarse channel.", default=None)
+    parser.add_argument("-C", "--n_coarse_fine", type=int, nargs=2, metavar="Nchan", \
+                        help="Number of coarse channels followed by the number of fine channels per coarse channel." \
+                        "This options overrides --nchans.", default=None)
 
     # zap the edge fine channels?
     parser.add_argument("-Z", "--zapedges", action='store_true', help="Zap the fine channel edges of the coarse channels.")
 
     # if so, how many?
-    parser.add_argument("-n", "--nzap", type=int, action='store', metavar="Nedge", help="Number of edge channels to remove from each side of a coarse channel. If given, but --zapedges is not then this argument is ignored.", default=20)
+    parser.add_argument("-n", "--nzap", type=int, metavar="Nedge", \
+                        help="Number of edge channels to remove from each side of a coarse channel." \
+                             "If given, but --zapedges is not then this argument is ignored.", default=20)
 
     # zap the middle channels?
     parser.add_argument("-m", "--middle", action='store_true', help="Flag the center fine channels for each coarse channel?")
 
     # user-defined channels to zap (will be prioritised over edge channel zapping)
-    parser.add_argument("-z", type=str, action='store', metavar="chan", nargs="+", help="Individual channels to zap")
+    parser.add_argument("-z", type=str, metavar="chan", nargs="+", help="Individual channels to zap")
 
     # what version of output do you want? PRESTO and/or PSRCHIVE
-    parser.add_argument("-r", "--rfifind", action='store_true', help="Output to screen the edge channels in a format readable by the PRESTO rfifind routine", default=False)
-    parser.add_argument("-p", "--paz", action='store', metavar="filename", type=str, help="Output channels for PSRCHIVE paz routine into the given file, using paz's '-k filename' option")
+    parser.add_argument("-r", "--rfifind", action='store_true', \
+                        help="Output to screen the edge channels in a format readable by the PRESTO rfifind routine", default=False)
+    parser.add_argument("-p", "--paz", metavar="filename", type=str, \
+                        help="Output channels for PSRCHIVE paz routine into the given file, using paz's '-k filename' option")
 
     # be verbose about the actions takens
-    #parser.add_argument("-v", "--verbose", action='store_true', help="Use verbose mode: will tell you each step what I'm doing, but this will mean you can't easily just pipe the ouput with back-ticks")
-    parser.add_argument("--debug", action='store_true', help="Debug mode. Provides additional information on top of normal output (mainly for hunting down errors).")
+    parser.add_argument("--debug", action='store_true', \
+                        help="Debug mode. Provides additional information on top of normal output (mainly for hunting down errors).")
 
+    parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
     args = parser.parse_args()
 
+
+    if args.version:
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
 
        
     # check to make sure that the channels variable is formatted correctly, 
@@ -206,6 +228,7 @@ if __name__ == '__main__':
             print "assuming values from -C argument and ignoring -N value"
         channels = args.n_coarse_fine
 
+    # TODO: should look at moving some of these exit failures to within the function and raise a ZapchanError
     # check to make sure we can actually figure out how many channels we have and
     # how they are split up
     if channels is None:

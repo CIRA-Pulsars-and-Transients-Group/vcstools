@@ -40,6 +40,7 @@ void printerror( int status)
     
     exit( status );       /* terminate the program, returning error status */
 }
+
 inline void integrate(char * output,uint8_t *input, int factor, int nint,int nfreq) {
     
     /*      integrates by adding samples together -- assumes single pol
@@ -67,23 +68,27 @@ inline void integrate(char * output,uint8_t *input, int factor, int nint,int nfr
 }
 
 
-void buildFITSBuffer(XGPUInfo xgpu_info, Complex *full_matrix_h, size_t blockSize, void *out, time_t current_time_t, int dumps_per_second,manager_t *manager){
-                     
-    /*
-	 * the purpose of this is to re-order the output array and build the binary FITS table
-	 * somethings only have to be done once (like the mapping) other things have to be done every time
-	 *
-	 * The nice thing about this is we will have a full self describing output file that can be read by any fits reader
-	 *
-	 * The format is a FITS image extension nbaselines (cols) by nchan (rows)
-	 * This ordering allows easy appending of multi-channel data
-	 * The FITS file is created in memory and not written out.
-	 *
-	 *
-	 */
+void buildFITSBuffer( XGPUInfo xgpu_info,
+                      Complex *full_matrix_h,
+                      size_t blockSize,
+                      void *out,
+                      time_t current_time_t,
+                      int dumps_per_second,
+                      manager_t *manager )
 
+/* The purpose of this is to re-order the output array and build the binary
+ * FITS table. Somethings only have to be done once (like the mapping) other
+ * things have to be done every time.
+ *
+ * The nice thing about this is we will have a full self describing output
+ * file that can be read by any fits reader.
+ *
+ * The format is a FITS image extension nbaselines (cols) by nchan (rows)
+ * This ordering allows easy appending of multi-channel data.
+ * The FITS file is created in memory and not written out.
+ */
 
-
+{
     int chans_to_aver = manager->chan_to_aver;
    
     int marker = manager->marker;
