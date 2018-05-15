@@ -215,6 +215,13 @@ int main(int argc, char **argv)
     data_buffer_vdif  = create_data_buffer_vdif( &vf );
     data_buffer_uvdif = create_data_buffer_vdif( &uvf );
 
+    /* Allocate host and device memory for the use of the cu_form_beam function */
+    struct gpu_formbeam_arrays g;
+#ifdef HAVE_CUDA
+    malloc_formbeam( &g, opts.sample_rate, nstation, nchan, npol,
+            outpol_coh, outpol_incoh );
+#endif
+
     int file_no = 0;
 
     printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
@@ -250,7 +257,7 @@ int main(int argc, char **argv)
 
 #ifdef HAVE_CUDA
         cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                      nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
+                      nstation, nchan, npol, outpol_coh, invw, &g,
                       detected_beam, data_buffer_coh, data_buffer_incoh );
 #else
         form_beam( data, &opts, complex_weights_array, invJi, file_no,
@@ -350,6 +357,10 @@ int main(int argc, char **argv)
         free( uvf.b_scales  );
         free( uvf.b_offsets );
     }
+
+#ifdef HAVE_CUDA
+    free_formbeam( &g );
+#endif
 
 #ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
