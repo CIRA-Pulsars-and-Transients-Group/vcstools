@@ -280,15 +280,11 @@ void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
 {
     int8_t *out_buffer_8 = (int8_t *)malloc( outpol*nchan*pf->hdr.nsblk * sizeof(int8_t) );
 
-    flatten_bandpass( pf->hdr.nsblk, nchan, outpol,
-                      data_buffer, pf->sub.dat_scales,
-                      pf->sub.dat_offsets, 32, 0, 1, 1, 1, 0 );
+//    if (outpol>1) { // only do this for the coherent beams
+//        flatten_bandpass(pf->hdr.nsblk, nchan, outpol, data_buffer);
+//    }
 
-    float2int8_trunc( data_buffer, pf->hdr.nsblk * nchan * outpol,
-                      -126.0, 127.0, out_buffer_8 );
-
-    int8_to_uint8( pf->hdr.nsblk * nchan * outpol, 128,
-                   (char *) out_buffer_8 );
+    float_to_unit8(data_buffer, pf->hdr.nsblk * nchan * outpol, out_buffer_8);
 
     memcpy( pf->sub.data, out_buffer_8, pf->sub.bytes_per_subint );
 
