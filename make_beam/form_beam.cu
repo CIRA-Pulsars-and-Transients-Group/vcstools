@@ -36,14 +36,6 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 #define NSTOKES   4
 
 
-__device__ void CatomicAdd( ComplexDouble *a, const ComplexDouble &b )
-{
-    double *x = (double *)a;
-    double *y = x+1;
-    atomicAdd(x, CReald(b));
-    atomicAdd(y, CImagd(b));
-}
-
 
 __global__ void beamform_kernel( uint8_t *data,
                                  ComplexDouble *W,

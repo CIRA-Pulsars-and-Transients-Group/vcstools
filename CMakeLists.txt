@@ -21,16 +21,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
 message("Finding CUDA")
 find_package(CUDA)
-if (CUDA_FOUND)
-    if(DEFINED ENV{PAWSEY_CLUSTER})
-        if($ENV{PAWSEY_CLUSTER} MATCHES "athena")
-            set(CUDA_ARCH "sm_60")
-        else()
-            set(CUDA_ARCH "sm_35")
-        endif()
-    endif()
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -g -lineinfo -arch=${CUDA_ARCH}")
-endif()
 
 message("Finding OpenMP")
 include(FindOpenMP)
@@ -41,7 +31,7 @@ find_package(PSRFITS_UTILS)
 find_package(FFTW3 COMPONENTS single openmp)
 find_package(XGPU)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -g -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
 
 # Add the subdirectories for the three target projects
 if (XGPU_FOUND)
@@ -49,6 +39,7 @@ if (XGPU_FOUND)
 endif()
 add_subdirectory(make_beam)
 add_subdirectory(make_psrfits)
+add_subdirectory(read_mwac)
 add_subdirectory(galaxy-scripts)
 
 INCLUDE(InstallRequiredSystemLibraries)
