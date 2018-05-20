@@ -215,6 +215,20 @@ int main(int argc, char **argv)
     data_buffer_vdif  = create_data_buffer_vdif( &vf );
     data_buffer_uvdif = create_data_buffer_vdif( &uvf );
 
+    /* Allocate host and device memory for the use of the cu_form_beam function */
+    struct gpu_formbeam_arrays gf;
+    struct gpu_ipfb_arrays gi;
+#ifdef HAVE_CUDA
+    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol,
+            outpol_coh, outpol_incoh );
+
+    if (opts.out_uvdif)
+    {
+        malloc_ipfb( &gi, ntaps, opts.sample_rate, nchan, npol, fil_size );
+        cu_load_filter( fil_ramps, &gi, nchan );
+    }
+#endif
+
     int file_no = 0;
 
     printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
@@ -250,7 +264,7 @@ int main(int argc, char **argv)
 
 #ifdef HAVE_CUDA
         cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                      nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
+                      nstation, nchan, npol, outpol_coh, invw, &gf,
                       detected_beam, data_buffer_coh, data_buffer_incoh );
 #else
         form_beam( data, &opts, complex_weights_array, invJi, file_no,
@@ -262,10 +276,9 @@ int main(int argc, char **argv)
         if (opts.out_vdif)
         {
             printf("[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
-#ifdef HAVE_CUDA
-            // cu_invert_pfb_ifft( ... ) // YET_TO_IMPLEMENT
-#else
-            invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan, npol, data_buffer_vdif );
+#ifndef HAVE_CUDA
+            invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan,
+                    npol, data_buffer_vdif );
 #endif
         }
 
@@ -273,9 +286,11 @@ int main(int argc, char **argv)
         {
             printf("[%f]  Inverting the PFB (full)\n", NOW-begintime);
 #ifdef HAVE_CUDA
-            cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, fil_size, data_buffer_uvdif );
+            cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate,
+                    nchan, npol, &gi, data_buffer_uvdif );
 #else
-            invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan, npol, fil_ramps, fil_size, data_buffer_uvdif );
+            invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan,
+                    npol, fil_ramps, fil_size, data_buffer_uvdif );
 #endif
         }
 
@@ -350,6 +365,12 @@ int main(int argc, char **argv)
         free( uvf.b_scales  );
         free( uvf.b_offsets );
     }
+
+#ifdef HAVE_CUDA
+    free_formbeam( &gf );
+    if (opts.out_uvdif)
+        free_ipfb( &gi );
+#endif
 
 #ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
