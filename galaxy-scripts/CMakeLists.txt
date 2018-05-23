@@ -13,7 +13,7 @@ set(SCRIPT_TARGETS "${s}/bf_adjust_flags.py;${s}/checks.py;${s}/calibrate_vcs.py
 
 set(DATABASE_TARGETS "${d}/submit_to_database.py;${d}/database_vcs.py")
 
-set(UTILITY_TARGETS "${u}/zapchan.py;${u}/calc_ephem.py;${u}/check_disk_usage.sh;${u}/check_quota.sh;${u}/plot_tilebeams.py;${u}/mdir.py;${u}/mwa_metadb_utils.py")
+set(UTILITY_TARGETS "${u}/zapchan.py;${u}/calc_ephem.py;${u}/check_disk_usage.sh;${u}/check_quota.sh;${u}/mdir.py;${u}/mwa_metadb_utils.py;${u}/job_submit.py;${u}/plotFlatTileBeam.py;${u}/plotPolarTileBeam.py;${u}/plotTiedArrayBeam.py")
 
 file(WRITE ${CMAKE_INSTALL_PREFIX}/bin/version.py "__version__ = \"${VCSTOOLS_VERSION}\"")
 

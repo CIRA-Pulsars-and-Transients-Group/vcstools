@@ -105,19 +105,13 @@ void destroy_metafits_info( struct metafits_info *mi );
 
 void int8_to_uint8(int n, int shift, char * to_convert);
 void float2int8_trunc(float *f, int n, float min, float max, int8_t *i);
+void float_to_unit8(float * in, int n, int8_t *out);
+
 void flatten_bandpass(
         int nstep,
         int nchan,
         int npol,
-        void *data,
-        float *scales,
-        float *offsets,
-        int new_var,
-        int iscomplex,
-        int normalise,
-        int update,
-        int clear,
-        int shutdown );
+        void *data);
 
 void read_data( char *filename, uint8_t *data, int nbytes );
 int read_rts_file(ComplexDouble **G, ComplexDouble *Jref,

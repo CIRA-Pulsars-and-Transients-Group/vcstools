@@ -176,162 +176,69 @@ void destroy_metafits_info( struct metafits_info *mi ) {
 }
 
 
-void flatten_bandpass(int nstep, int nchan, int npol, void *data, float *scales, float *offsets, int new_var, int iscomplex, int normalise, int update, int clear, int shutdown) {
-    // putpose is to generate a mean value for each channel/polaridation
+void flatten_bandpass(int nstep, int nchan, int npol, void *data)
+{
+
+    // nstep -> ? number of time steps (ie 10,000 per 1 second of data)
+    // nchan -> number of (fine) channels (128)
+    // npol -> number of polarisations (1 for icoh or 4 for coh)
+
+    // magical mystery normalisation constant
+    int new_var = 32;
+
+    // purpose is to generate a mean value for each channel/polaridation
 
     int i=0, j=0;
     int p=0;
-    float *data_ptr = NULL;
 
-    static float **band;
+    float *data_ptr = (float *) data;
+    float **band;
+ 
 
-    static float **chan_min;
-
-    static float **chan_max;
-
-
-    static int setup = 0;
-
-    if (setup == 0) {
-        band = (float **) calloc (npol, sizeof(float *));
-        chan_min = (float **) calloc (npol, sizeof(float *));
-        chan_max = (float **) calloc (npol, sizeof(float *));
-        for (i=0;i<npol;i++) {
-            band[i] = (float *) calloc(nchan, sizeof(float));
-            chan_min[i] = (float *) calloc(nchan, sizeof(float));
-            chan_max[i] = (float *) calloc(nchan, sizeof(float));
-        }
-        setup = 1;
+    band = (float **) calloc (npol, sizeof(float *));
+    for (i=0;i<npol;i++) {
+      band[i] = (float *) calloc(nchan, sizeof(float));
     }
 
-    if (update) {
-        for (p = 0;p<npol;p++) {
-            for (j=0;j<nchan;j++){
-
-                band[p][j] = 0.0;
-            }
-        }
-
-        if (iscomplex == 0) {
-            data_ptr = (float *) data;
-
-            for (i=0;i<nstep;i++) {
-                for (p = 0;p<npol;p++) {
-                    for (j=0;j<nchan;j++){
-
-
-                        if (i==0) {
-                            chan_min[p][j] = *data_ptr;
-                            chan_max[p][j] = *data_ptr;
-                        }
-                        band[p][j] += fabsf(*data_ptr);
-                        if (*data_ptr < chan_min[p][j]) {
-                            chan_min[p][j] = *data_ptr;
-                        }
-                        else if (*data_ptr > chan_max[p][j]) {
-                            chan_max[p][j] = *data_ptr;
-                        }
-                        data_ptr++;
-                    }
-                }
-
-            }
-        }
-        else {
-            ComplexDouble *data_ptr = (ComplexDouble *) data;
-            for (i = 0; i < nstep; i++) {
-                for (p = 0; p < npol; p++) {
-                    for (j = 0; j < nchan; j++){
-                        band[p][j] += CAbsd(*data_ptr);
-                        data_ptr++;
-                    }
-                }
-
-            }
-
-        }
-
-    }
-    // set the offsets and scales - even if we are not updating ....
-
-    float *out=scales;
-    float *off = offsets;
+    // initialise the band array
     for (p = 0;p<npol;p++) {
         for (j=0;j<nchan;j++){
-
-            // current mean
-            *out = ((band[p][j]/nstep))/new_var; // removed a divide by 32 here ....
-            //fprintf(stderr, "Channel %d pol %d mean: %f normaliser %f (max-min) %f\n", j, p, (band[p][j]/nstep), *out, (chan_max[p][j] - chan_min[p][j]));
-            out++;
-            *off = 0.0;
-
-            off++;
-
+            band[p][j] = 0.0;
         }
     }
-    // apply them to the data
 
-    if (normalise) {
 
-        data_ptr = (float *) data;
-
-        for (i=0;i<nstep;i++) {
-            float *normaliser = scales;
-            float *off  = offsets;
-            for (p = 0;p<npol;p++) {
-                for (j=0;j<nchan;j++){
-
-                    *data_ptr = ((*data_ptr) - (*off))/(*normaliser); // 0 mean normalised to 1
-                    //fprintf(stderr, "%f %f %f\n", *data_ptr, *off, *normaliser);
-                    off++;
-                    data_ptr++;
-                    normaliser++;
-                }
+    // accumulate abs(data) over all time samples and save into band
+    data_ptr = data;
+    for (i=0;i<nstep;i++) { // time steps
+        for (p = 0;p<npol;p++) { // pols
+            for (j=0;j<nchan;j++){ // channels
+                band[p][j] += fabsf(*data_ptr);
+                data_ptr++;
             }
-
         }
+
     }
 
-    // clear the weights if required
-
-    if (clear) {
-
-        float *out=scales;
-        float *off = offsets;
+    // calculate and apply the normalisation to the data
+    data_ptr = data;
+    for (i=0;i<nstep;i++) {
         for (p = 0;p<npol;p++) {
             for (j=0;j<nchan;j++){
-
-                // reset
-                *out = 1.0;
-
-
-
-                out++;
-                *off = 0.0;
-
-                off++;
-
+                *data_ptr = (*data_ptr)/( (band[p][j]/nstep)/new_var );
+                data_ptr++;
             }
         }
+
     }
 
     // free the memory
-    if (shutdown) {
-        for (i=0;i<npol;i++) {
-            free(band[i]);
-            free(chan_min[i]);
-            free(chan_max[i]);
-        }
-
-
-        free(band);
-        free(chan_min);
-        free(chan_max);
-        setup = 0;
+    for (i=0;i<npol;i++) {
+        free(band[i]);
     }
+    free(band);
 }
-
-
+ 
 void read_data( char *filename, uint8_t *data, int nbytes ) {
 
     // Open the file for reading
@@ -670,6 +577,29 @@ void float2int8_trunc(float *f, int n, float min, float max, int8_t *i)
     }
 }
 
+void float_to_unit8(float * in, int n, int8_t *out)
+{
+    int j;
+    float min = -128.0; // -126.0 and -128.0 give the same result on test data
+    float max = 127.0;
+    // use a temp var so we don't modify the input data
+    float scratch;
+    for (j = 0; j < n; j++) {
+        // TODO: count the number of samples that were clipped, store that and put it in the psrfits header
+        // the if branching and ternary updates seem to be equivalent execution time
+        if (in[j]> max) {
+            scratch = max;
+        } else if (in[j] < min) {
+            scratch = min;
+        } else {
+            scratch = in[j];
+        }
+//        scratch = (in[j] > max) ? (max) : in[j];
+//        scratch = (in[j] < min) ? (min) : scratch;
+        out[j] = (uint8_t)( (int8_t)rint(scratch) + 128);
+    }
+
+}
 
 void cp2x2(ComplexDouble *Min, ComplexDouble *Mout)
 {

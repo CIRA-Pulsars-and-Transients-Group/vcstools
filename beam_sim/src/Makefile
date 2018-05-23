@@ -53,19 +53,26 @@ TARGETS = pabeam_gpu
 
 BIN_DIR = ../bin
 
+
+
 all: $(TARGETS)
 
 
 pabeam_gpu: $(OBJECTS)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-
+# not entirely sure this takes care of the dependcies properly now
 %.o: %.cu
 	$(CC) $(CFLAGS) -c $@ $< $(INCFLAGS)
 
 
 FEE2016/%.o:
 	@$(MAKE) -C $(@D) $(@F)
+
+
+install:
+	mkdir -p $(BIN_DIR)
+	cp $(TARGETS) $(BIN_DIR)
 
 
 clean:
@@ -82,7 +89,3 @@ dist-clean:
 	$(RM) pabeam_gpu
 	$(RM) pabeam_cpu
 	@$(MAKE) -C FEE2016/ clean
-
-install:
-	mkdir -p $(BIN_DIR)
-	cp $(TARGETS) $(BIN_DIR)
