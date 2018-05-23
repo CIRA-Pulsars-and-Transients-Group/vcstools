@@ -1,15 +1,30 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-groupUsage=`lfs quota -u $USER /group | tail -1 | awk '{print $2/1e9}'`
-astroUsage=`lfs quota -u $USER /astro | tail -1 | awk '{print $2/1e9}'`
-echo "=== Stats for user ${USER} ==="
-echo "You're using ${groupUsage} TB on /group"
-echo "You're using ${astroUsage} TB on /astro"
+# NOTE: lfs quota returns the quota in kilobytes...
+#       To convert this to terabytes: multiply by 1024, divide by 1000^4
 
-echo ""
 
-groupUsage=`lfs quota -g mwaops /group | tail -1 | awk '{print $2/1e9}'`
-astroUsage=`lfs quota -g mwaops /astro | tail -1 | awk '{print $2/1e9}'`
-echo "=== Stats for the group mwaops ==="
-echo "${groupUsage} TB on /group"
-echo "${astroUsage} TB on /astro"
+# Disk space used on /group and /astro by $USER, in terabytes
+groupUsage=$(lfs quota -q -u $USER /group | awk '{print $2*1024/1000000000000}')
+astroUsage=$(lfs quota -q -u $USER /astro | awk '{print $2*1024/1000000000000}')
+echo "==== Disk usage for user: ${USER} ===="
+echo "  Used on /group: $(printf "%7.3f" "$groupUsage") TB"
+echo "  Used on /astro: $(printf "%7.3f" "$astroUsage") TB"
+echo
+
+
+# Quotas for /group and /astro, in terabytes
+groupQuota=$(lfs quota -q -g mwaops /group | awk '{print $3*1024/1000000000000}')
+astroQuota=$(lfs quota -q -g mwaops /astro | awk '{print $3*1024/1000000000000}')
+
+# Disk space used on /group and /astro for the mwaops group, in terabytes
+groupUsage=$(lfs quota -q -g mwaops /group | awk '{print $2*1024/1000000000000}')
+astroUsage=$(lfs quota -q -g mwaops /astro | awk '{print $2*1024/1000000000000}')
+
+# Percentage of quota filled
+groupPercent=$(printf "%.2f" $(bc -l <<< "100*${groupUsage}/${groupQuota}"))
+astroPercent=$(printf "%.2f" $(bc -l <<< "100*${astroUsage}/${astroQuota}"))
+echo "==== Total disk usage for group: mwaops ===="
+echo "  Used on /group: $(printf "%7.3f / %7.3f TB (%.2f%%)" ${groupUsage} ${groupQuota} ${groupPercent})"
+echo "  Used on /astro: $(printf "%7.3f / %7.3f TB (%.2f%%)" ${astroUsage} ${astroQuota} ${astroPercent})"
+echo
