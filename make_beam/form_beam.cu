@@ -1,3 +1,9 @@
+/********************************************************
+ *                                                      *
+ * Licensed under the Academic Free License version 3.0 *
+ *                                                      *
+ ********************************************************/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>

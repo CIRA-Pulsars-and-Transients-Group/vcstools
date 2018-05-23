@@ -1,3 +1,9 @@
+/********************************************************
+ *                                                      *
+ * Licensed under the Academic Free License version 3.0 *
+ *                                                      *
+ ********************************************************/
+
 #ifndef MAKE_BEAM_SMALL_H
 #define MAKE_BEAM_SMALL_H
 

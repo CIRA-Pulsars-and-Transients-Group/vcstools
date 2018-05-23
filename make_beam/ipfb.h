@@ -1,3 +1,9 @@
+/********************************************************
+ *                                                      *
+ * Licensed under the Academic Free License version 3.0 *
+ *                                                      *
+ ********************************************************/
+
 #ifndef IPFB_H
 #define IPFB_H
 

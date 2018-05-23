@@ -1,3 +1,9 @@
+/********************************************************
+ *                                                      *
+ * Licensed under the Academic Free License version 3.0 *
+ *                                                      *
+ ********************************************************/
+
 #ifndef BEAM_VDIF_H
 #define BEAM_VDIF_H
 

@@ -1,3 +1,9 @@
+/********************************************************
+ *                                                      *
+ * Licensed under the Academic Free License version 3.0 *
+ *                                                      *
+ ********************************************************/
+
 #ifndef BEAM_PSRFITS_H
 #define BEAM_PSRFITS_H
 
