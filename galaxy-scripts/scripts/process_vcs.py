@@ -73,7 +73,7 @@ def create_link(data_dir, target_dir, product_dir, link):
     link = link.replace(product_dir, '') # just in case...
     link = product_dir + '/' + link
     target_dir = target_dir.replace(data_dir,'')
-    if target_dir.startswith("/") : target_dir = target_dir[1:]
+    if (target_dir.startswith("/") or data_dir.endswith("/")) : target_dir = target_dir[1:]
     target_dir = data_dir + '/' + target_dir
     # check if link exists and whether it already points to where we'd like it to
     if os.path.exists(link):
