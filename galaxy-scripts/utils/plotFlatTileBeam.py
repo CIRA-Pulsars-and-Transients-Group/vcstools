@@ -87,7 +87,7 @@ Beam half-Pmax: {3:.3f}
     axP.scatter(_az[fwhm_az_idx], _za[fwhm_za_idx], marker='.', s=1, color='r') # plot the fwhm border
     axP.plot(ptAZ, ptZA, marker="+", ms=8, ls="", color='C0') # plot the tile beam pointing
     for ta,tz,c in zip(targetAZ, targetZA, colours):
-        axP.plot(ta, tz, marker="x", s=8, ls="", color=c) # plot the target track through the beam
+        axP.plot(ta, tz, marker="x", ms=8, ls="", color=c) # plot the target track through the beam
     axP.set_xlim(0, 360)
     axP.set_ylim(0, 90)
     axP.set_xticks(np.arange(0, 361, 60))
@@ -121,15 +121,17 @@ Beam half-Pmax: {3:.3f}
 
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--obsid", type=int, help="Observation ID")
-parser.add_argument("-f", "--freq", type=float, help="Observing frequency (MHz)")
-parser.add_argument("-t", "--times", type=int, nargs='+', help="GPS seconds to evaluate target positions. For multiple values, provide a space-separated list.")
-parser.add_argument("-c", "--cutoff", type=float, help="Cut-off value for beam pattern [default: 0.1]", default=0.1)
-parser.add_argument("--ra", type=str, help="RAJ2000 of target")
-parser.add_argument("--dec", type=str, help="DECJ2000 of target")
 
-args = parser.parse_args()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-o", "--obsid", type=int, help="Observation ID")
+    parser.add_argument("-f", "--freq", type=float, help="Observing frequency (MHz)")
+    parser.add_argument("-t", "--times", type=int, nargs='+', help="GPS seconds to evaluate target positions. For multiple values, provide a space-separated list.")
+    parser.add_argument("-c", "--cutoff", type=float, help="Cut-off value for beam pattern [default: 0.1]", default=0.1)
+    parser.add_argument("--ra", type=str, help="RAJ2000 of target")
+    parser.add_argument("--dec", type=str, help="DECJ2000 of target")
 
-# do the things
-plot_beam_pattern(args.obsid, args.freq, args.times, args.ra, args.dec, args.cutoff)
+    args = parser.parse_args()
+
+    # do the things
+    plot_beam_pattern(args.obsid, args.freq, args.times, args.ra, args.dec, args.cutoff)
