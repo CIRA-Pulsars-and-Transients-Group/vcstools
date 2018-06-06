@@ -41,6 +41,7 @@ from mwapy import ephem_utils,metadata
 import psycopg2
 from contextlib import closing
 from ConfigParser import SafeConfigParser
+import mwa_metadb_utils as meta
 
 
 
@@ -412,37 +413,6 @@ def calcFWHM(freq):
     return fwhm
 
 
-def getmeta(service='obs', params=None):
-    """
-    Given a JSON web service ('obs', find, or 'con') and a set of parameters as
-    a Python dictionary, return the RA and Dec in degrees from the Python dictionary.
-
-    getmeta(service='obs', params=None)
-    """
-    BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
-    if params:
-        data = urllib.urlencode(params)  # Turn the dictionary into a string with encoded 'name=value' pairs
-    else:
-        data = ''
-    #Validate the service name
-    if service.strip().lower() in ['obs', 'find', 'con']:
-        service = service.strip().lower()
-    else:
-        print "invalid service name: %s" % service
-        return
-    #Get the data
-    try:
-        result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
-    except urllib2.HTTPError as error:
-        print "HTTP error from server: code=%d, response:\n %s" % (error.code, error.read())
-        return
-    except urllib2.URLError as error:
-        print "URL or network error: %s" % error.reason
-        return
-    #Return the result dictionary
-    return result
-
-
 def singles_source_search(ra, dec):
     """
     Used to creates a 30 degree box around the source to make searching for obs_ids more efficient
@@ -469,7 +439,7 @@ def singles_source_search(ra, dec):
 
     if m_o_p:
         OBSID = []
-        temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
+        temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
                                                'maxra':360.,'mindec':dec_bot,'maxdec':dec_top})
         for row in temp:
             OBSID.append(row[0])
@@ -479,28 +449,28 @@ def singles_source_search(ra, dec):
         if ra_low < 0.:
             ra_new = 360 + ra_low
             OBSID = []
-            temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':ra_new,\
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':ra_new,\
                                                'maxra':360.,'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
-            temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
                                                'maxra':ra_high,'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
         elif ra_high > 360:
             ra_new = ra_high - 360
             OBSID = []
-            temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':ra_low,\
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':ra_low,\
                                                'maxra':360.,'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
-            temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
                                                'maxra':ra_new,'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
         else:
             OBSID =[]
-            temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':ra_low,\
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':ra_low,\
                                                'maxra':ra_high,'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
@@ -1037,11 +1007,11 @@ if __name__ == "__main__":
         if args.pulsar and (len(args.pulsar) ==1): #if there is a single pulsar simply search around it
             ras, decs = sex2deg(catalog[c1][0],catalog[c2][0])
             OBSID = singles_source_search(ras, decs)
-        elif args.coords and len(args.coords) == 1:
+        elif args.coords:
             ras, decs = sex2deg(catalog[c1][0],catalog[c2][0])
             OBSID = singles_source_search(ras, decs)
         else:
-            temp = getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000})
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000})
             for row in temp:
                 OBSID.append(row[0])
 
@@ -1077,7 +1047,7 @@ if __name__ == "__main__":
         print 'Error using admin account. Using slower webservice instead.'
         for ob in OBSID:
             print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(ob)
-            beam_meta_data = getmeta(service='obs', params={'obs_id':ob})
+            beam_meta_data = meta.getmeta(service='obs', params={'obs_id':ob})
             ra = beam_meta_data[u'metadata'][u'ra_pointing']
             dec = beam_meta_data[u'metadata'][u'dec_pointing']
             time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
