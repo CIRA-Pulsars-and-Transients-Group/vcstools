@@ -159,7 +159,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         checks = distutils.spawn.find_executable("checks.py")
                         # Write out the checks batch file but don't submit it
                         commands = []
-                        commapnds.append("module load numpy")
+                        commands.append("module load numpy")
                         commands.append(database_vcs.add_database_function())
                         commands.append("newcount=0")
                         commands.append("let oldcount=$newcount-1")
