@@ -150,7 +150,7 @@ int main(int argc, char **argv)
         while (!feof(flagfile))
         {
             // Read in next item
-            nitems = fscanf( flagfile, "%d", ant );
+            nitems = fscanf( flagfile, "%d", &ant );
             if (nitems != 1 && !feof(flagfile))
             {
                 fprintf( stderr, "error: couldn't parse flag file \"%s\"\n",

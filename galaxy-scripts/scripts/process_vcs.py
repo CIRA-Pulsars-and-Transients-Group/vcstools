@@ -500,8 +500,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
         #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
         #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
         commands.append("srun -n 1 -c {0} {1} -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
-                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12}".format(n_omp_threads, make_beam_cmd, obs_id, start,
-                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats))  # check these
+                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(n_omp_threads, make_beam_cmd, obs_id, start,
+                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
         
         submit_slurm(make_beam_small_batch, commands,
                 batch_dir=batch_dir,
