@@ -9,7 +9,7 @@ set(s "${PROJECT_SOURCE_DIR}/scripts")
 set(d "${PROJECT_SOURCE_DIR}/database")
 set(u "${PROJECT_SOURCE_DIR}/utils")
 
-set(SCRIPT_TARGETS "${s}/checks.py;${s}/calibrate_vcs.py;${s}/create_psrfits.sh;${s}/file_maxmin.py;${s}/find_pulsar_in_obs.p;${s}/obs_query.py;${s}/process_vcs.py;${s}/recombine.py;${s}/rename_corr_output.py;${s}/reorder_chans.py;${s}/rts2ao.py;${s}/run_rts.sh;${s}/untar.sh")
+set(SCRIPT_TARGETS "${s}/checks.py;${s}/calibrate_vcs.py;${s}/create_psrfits.sh;${s}/file_maxmin.py;${s}/find_pulsar_in_obs.py;${s}/obs_query.py;${s}/process_vcs.py;${s}/recombine.py;${s}/rename_corr_output.py;${s}/reorder_chans.py;${s}/rts2ao.py;${s}/run_rts.sh;${s}/untar.sh")
 
 set(DATABASE_TARGETS "${d}/submit_to_database.py;${d}/database_vcs.py")
 
