@@ -51,6 +51,20 @@ def remove_raw(obs):
         munlink_files(combined_folder, "*ics.dat")
         
 def remove_beamformed(obs,pointing=None):
+    pointing_folder = "/group/mwaops/vcs/{0}/pointings".format(obs) # TODO: Replace this with proper config file
+    if not pointing:
+        authority = ('No pointing specified, would you like to remove all pointings for this observation?')
+        if (authority == "Y") or (authority == "y"):
+            pointings = glob.glob("{0}/*:*:*:*:*")
+            if not pointings:
+                print "No valid pointings in {0}. Exiting..."
+                sys.exit(0)
+            else:
+                for pointing in pointings:
+                    print "Checking if pointing {0} has been uploaded to MWA Pulsar Database...".format(pointing)
+                    
+            # Upload to MWA Pulsar Database if not there already
+            # Remove each pointing
     return
 
 
