@@ -393,7 +393,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
     
     Streamlining underway, as well as full replacement of the old function (SET March 28, 2018)
     """
-    vcs_database_id = database_command(args, obs_id)  # why is this being calculated here? (SET)
+    vcs_database_id = database_vcs.database_command(args, obs_id)  # why is this being calculated here? (SET)
 
     # If execpath is given, change the make_beam executable command 
     # otherwise, it should be on the PATH if vcstools has been installed
@@ -477,6 +477,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
 
     # Run one coarse channel per node
     #for coarse_chan in range(24):
+    job_id_list = []
     for gpubox, coarse_chan in enumerate(ordered_channels, 1):
         if calibration_type == 'rts':
             #chan_list = get_frequencies(metafits_file, resort=True)
@@ -503,11 +504,17 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
                         "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12}".format(n_omp_threads, make_beam_cmd, obs_id, start,
                         stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats))  # check these
         
-        submit_slurm(make_beam_small_batch, commands,
-                batch_dir=batch_dir,
-                slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1"},
-                submit=True)
-
+        job_id = submit_slurm(make_beam_small_batch, commands,
+                    batch_dir=batch_dir,
+                    slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1"},
+                    submit=True)
+        job_id_list.append(job_id)
+    #TODO This can be returned as a job id string that can be slapped right on for dependancies
+    #job_id_str = ""
+    #for i in job_id_list:
+    #    job_id_str += ":" + str(i)
+    #return job_id_str
+    return job_id_list
 
 def database_command(args, obsid):
     DB_FILE = os.environ['CMD_VCS_DB_FILE']
