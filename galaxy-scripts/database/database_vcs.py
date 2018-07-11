@@ -21,8 +21,11 @@ def database_command(options, obsid):
                 if not a == options[0]:
                         opts_string = opts_string + str(a) + " "
         except TypeError:
+            print options
+            print vars(options)
             for a in vars(options):
-                opts_string = opts_string + str(a) + " "
+                if vars(options)[a] != None:
+                    opts_string += "--" + str(a) + " " + str(vars(options)[a]) + " "
                         
         con = lite.connect(DB_FILE)
         con.isolation_level = 'EXCLUSIVE'
