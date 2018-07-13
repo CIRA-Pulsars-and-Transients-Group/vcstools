@@ -159,7 +159,7 @@ def write_showspec_batch(time, obsid, ra, dec, freq, ntheta, nphi, infile, maplo
     with open(fname,'w') as f:
 
         header_str = showspec_sbatch_header.format(outfile=oname)
-        params_str = showspec_params.format(maploc=maploc, obsid=obsid, unixtime=unix, gpstime=time,
+        params_str = showspec_params.format(maploc=maploc+"/skymaps", obsid=obsid, unixtime=unix, gpstime=time,
                                              ra=ra, dec=dec, freq=freq/1e6, freq_start=fstart, freq_end=fend,
                                              infile=infile)
         run_str = showspec_base_cmd.format(ntheta=int(ntheta), nphi=int(nphi), azcol=azcol, zacol=zacol, gaincol=gaincol)
