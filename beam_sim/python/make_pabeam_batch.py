@@ -15,7 +15,6 @@ pabeam_sbatch_header = """#!/bin/bash -l
 #SBATCH --nodes={nodes}
 #SBATCH --ntasks={nprocesses}
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=58000
 #SBATCH --time=12:00:00
 #SBATCH --output=make_pabeam_{obsid}_{time}_{freq:.2f}MHz_%j.out
 """
@@ -68,7 +67,6 @@ showspec_sbatch_header = """#!/bin/bash -l
 #SBATCH --partition=workq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --mem=58000
 #SBATCH --time=3:00:00
 #SBATCH --output={outfile}
 """
