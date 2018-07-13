@@ -22,7 +22,8 @@ def database_command(options, obsid):
                         opts_string = opts_string + str(a) + " "
         except TypeError:
             for a in vars(options):
-                opts_string = opts_string + str(a) + " "
+                if vars(options)[a] != None:
+                    opts_string += "--" + str(a) + " " + str(vars(options)[a]) + " "
                         
         con = lite.connect(DB_FILE)
         con.isolation_level = 'EXCLUSIVE'
