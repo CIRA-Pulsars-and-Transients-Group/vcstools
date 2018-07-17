@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     opts.nchan         = 128;    // The number of fine channels (per coarse channel)
     opts.chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
     opts.sample_rate   = 10000;  // The VCS sample rate (Hz)
-    opts.custom_flags  = NULL;   // Use custom list for flagging antennas
+    opts.use_ant_flags = 0;      // Use flags in metafits file?
 
     // Output options
     opts.out_incoh     = 0;  // Default = PSRFITS (incoherent) output turned OFF
@@ -127,59 +127,10 @@ int main(int argc, char **argv)
     if (opts.cal.cal_type == RTS_BANDPASS)
         opts.cal.nchan = (nchan * opts.chan_width) / opts.cal.chan_width;
 
-    // If a custom flag file has been provided, use that instead of the metafits flags
     int i;
-    if (opts.custom_flags != NULL)
-    {
-        // Reset the weights to 1
+    if (!opts.use_ant_flags)
         for (i = 0; i < nstation*npol; i++)
             mi.weights_array[i] = 1.0;
-
-        // Open custom flag file for reading
-        FILE *flagfile = fopen( opts.custom_flags, "r" );
-        if (flagfile == NULL)
-        {
-            fprintf( stderr, "error: couldn't open flag file \"%s\" for "
-                             "reading\n", opts.custom_flags );
-            exit(EXIT_FAILURE);
-        }
-
-        // Read in flags from file
-        int nitems;
-        int flag, ant;
-        while (!feof(flagfile))
-        {
-            // Read in next item
-            nitems = fscanf( flagfile, "%d", &ant );
-            if (nitems != 1 && !feof(flagfile))
-            {
-                fprintf( stderr, "error: couldn't parse flag file \"%s\"\n",
-                        opts.custom_flags );
-                exit(EXIT_FAILURE);
-            }
-
-            // Flag both polarisations of the antenna in question
-            flag = ant*2;
-            mi.weights_array[flag]   = 0.0;
-            mi.weights_array[flag+1] = 0.0;
-        }
-
-        // Close file
-        fclose( flagfile );
-    }
-
-    // Issue warnings if any antennas are being used which are flagged in the metafits file
-    for (i = 0; i < nstation*npol; i++)
-    {
-        if (mi.weights_array[i] != 0.0 &&
-            mi.flag_array[i]    != 0.0)
-        {
-            fprintf( stderr, "warning: antenna %3d, pol %d is included even "
-                             "though it is flagged in the metafits file\n",
-                             i / npol,
-                             i % npol );
-        }
-    }
 
     double wgt_sum = 0;
     for (i = 0; i < nstation*npol; i++)
@@ -387,7 +338,6 @@ int main(int argc, char **argv)
     free( opts.metafits     );
     free( opts.rec_channel  );
     free( opts.cal.filename );
-    free( opts.custom_flags );
 
     if (opts.out_coh)
     {
@@ -503,11 +453,11 @@ void usage() {
     fprintf(stderr, "the observation, which is not necessarily the same as that of\n");
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "the VCS. Hence the necessity of this option.)\n");
-    fprintf(stderr, "\t-F, --custom-flags=file   ");
-    fprintf(stderr, "Flag the antennas listed in file instead of those flagged in the ");
-    fprintf(stderr, "[default: none]\n");
+    fprintf(stderr, "\t-F, --use-ant-flags       ");
+    fprintf(stderr, "Only include those antennas in the beamformer that have not      ");
+    fprintf(stderr, "[default: off]\n");
     fprintf(stderr, "\t                          ");
-    fprintf(stderr, "metafits file given by the -m option.\n");
+    fprintf(stderr, "been flagged in the metafits file given by the -m option.\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "CALIBRATION OPTIONS (RTS)\n");
@@ -589,7 +539,7 @@ void make_beam_parse_cmdline(
                 {"num-fine-chans",  required_argument, 0, 'n'},
                 {"fine-chan-width", required_argument, 0, 'w'},
                 {"sample-rate",     required_argument, 0, 'r'},
-                {"custom-flags",    required_argument, 0, 'F'},
+                {"use-ant-flags",   no_argument,       0, 'F'},
                 {"dijones-file",    required_argument, 0, 'J'},
                 {"bandpass-file",   required_argument, 0, 'B'},
                 {"rts-chan-width",  required_argument, 0, 'W'},
@@ -636,7 +586,7 @@ void make_beam_parse_cmdline(
                     opts->frequency = atoi(optarg) * 1.28e6 - 640e3;
                     break;
                 case 'F':
-                    opts->custom_flags = strdup(optarg);
+                    opts->use_ant_flags = 1;
                     break;
                 case 'h':
                     usage();

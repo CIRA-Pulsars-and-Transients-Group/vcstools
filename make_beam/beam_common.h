@@ -73,7 +73,7 @@ struct make_beam_opts {
     int                nchan;         // The number of fine channels (per coarse channel)
     unsigned int       chan_width;    // The bandwidth of an individual fine chanel (Hz)
     unsigned int       sample_rate;   // The VCS sample rate (Hz)
-    char              *custom_flags;  // Use custom list for flagging antennas
+    int                use_ant_flags; // Use flags in metafits file?
 
     // Output options
     int                out_incoh;     // Default = PSRFITS (incoherent) output turned OFF
