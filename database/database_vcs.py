@@ -16,9 +16,14 @@ def dict_factory(cursor, row):
 def database_command(options, obsid):
         DB_FILE = os.environ['CMD_VCS_DB_FILE']
         opts_string = ""
-        for a in options:
+        try:
+            for a in options:
                 if not a == options[0]:
                         opts_string = opts_string + str(a) + " "
+        except TypeError:
+            for a in vars(options):
+                if vars(options)[a] != None:
+                    opts_string += "--" + str(a) + " " + str(vars(options)[a]) + " "
                         
         con = lite.connect(DB_FILE)
         con.isolation_level = 'EXCLUSIVE'
@@ -160,28 +165,29 @@ if __name__ == '__main__':
             print '--------------------------------------------------------------------------------------------------'
 
             for row in rows:
-                print '%-5s' % (str(row['Rownum']).rjust(4)),
-                print '%-12s' % (row['Obsid']),
-                print '%-22s' % (row['Started'][:19]),
-                print '%-13s' % (row['UserId'].ljust(10)),
-                print row['Arguments']
-                print "\n"
+                if not ( (row['Rownum'] is None) or (row['Obsid'] is None) or (row['Started'] is None) or\
+                         (row['UserId'] is None) or (row['Arguments'] is None) ):
+                    print '%-5s' % (str(row['Rownum']).rjust(4)),
+                    print '%-12s' % (row['Obsid']),
+                    print '%-22s' % (row['Started'][:19]),
+                    print '%-13s' % (row['UserId'].ljust(10)),
+                    print row['Arguments']
+                    print "\n"
         if opts.mode == "vs":
             print 'VCS# ','Command             ','Started               ','Ended                 ','Exit_Code','Arguments'
             print '--------------------------------------------------------------------------------------------------'
 
-            printalbe_table =[]
             for row in rows:
-                printalbe_table.append([str(row['trackvcs']).rjust(4), row['Command'], row['Started'][:19],
-                                         row['Ended'], row['Exit'], row['Arguments']])
-                
-                print '%-5s' % (str(row['trackvcs']).rjust(4)),
-                print '%-20s' % (row['Command']),
-                print '%-22s' % (row['Started'][:19]),
-                if row['Ended'] is None:
-                    print '%-22s' % (row['Ended']),
-                else:
-                    print '%-22s' % (row['Ended'][:19]),
-                print '%-5s' % (row['Exit']),
-                print row['Arguments'],
-                print "\n"
+                if not ( (row['trackvcs'] is None) or (row['Command'] is None) or\
+                         (row['Started'] is None) or (row['Ended'] is None) or\
+                         (row['Exit'] is None) or (row['Arguments'] is None) ):
+                    print '%-5s' % (str(row['trackvcs']).rjust(4)),
+                    print '%-20s' % (row['Command']),
+                    print '%-22s' % (row['Started'][:19]),
+                    if row['Ended'] is None:
+                        print '%-22s' % (row['Ended']),
+                    else:
+                        print '%-22s' % (row['Ended'][:19]),
+                    print '%-5s' % (row['Exit']),
+                    print row['Arguments'],
+                    print "\n"

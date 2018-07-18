@@ -275,7 +275,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if args.all:
-        from process_vcs import obs_max_min
+        from mwa_metadb_utils import obs_max_min
         args.begin, args.end = obs_max_min(args.obsID)
     if args.end:
         if not args.begin:

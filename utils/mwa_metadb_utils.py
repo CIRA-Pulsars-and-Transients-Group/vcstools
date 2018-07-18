@@ -32,7 +32,7 @@ def getmeta(service='obs', params=None):
         return
 
     try:
-        result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
+        result = json.load(urllib2.urlopen(BASEURL + service + '?' + data + "&nocache"))
     except urllib2.HTTPError as error:
         print "HTTP error from server: code=%d, response:\n %s" % (error.code, error.read())
         return
