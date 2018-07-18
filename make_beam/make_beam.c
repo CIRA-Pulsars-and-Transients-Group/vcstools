@@ -1,3 +1,9 @@
+/********************************************************
+ *                                                      *
+ * Licensed under the Academic Free License version 3.0 *
+ *                                                      *
+ ********************************************************/
+
 // TODO: Remove superfluous #includes
 #include <stdio.h>
 #include <stdlib.h>
