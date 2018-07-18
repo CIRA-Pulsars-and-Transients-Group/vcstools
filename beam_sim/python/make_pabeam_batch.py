@@ -15,7 +15,6 @@ pabeam_sbatch_header = """#!/bin/bash -l
 #SBATCH --nodes={nodes}
 #SBATCH --ntasks={nprocesses}
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=58000
 #SBATCH --time=12:00:00
 #SBATCH --output=make_pabeam_{obsid}_{time}_{freq:.2f}MHz_%j.out
 """
@@ -68,7 +67,6 @@ showspec_sbatch_header = """#!/bin/bash -l
 #SBATCH --partition=workq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --mem=58000
 #SBATCH --time=3:00:00
 #SBATCH --output={outfile}
 """
@@ -161,7 +159,7 @@ def write_showspec_batch(time, obsid, ra, dec, freq, ntheta, nphi, infile, maplo
     with open(fname,'w') as f:
 
         header_str = showspec_sbatch_header.format(outfile=oname)
-        params_str = showspec_params.format(maploc=maploc, obsid=obsid, unixtime=unix, gpstime=time,
+        params_str = showspec_params.format(maploc=maploc+"/skymaps", obsid=obsid, unixtime=unix, gpstime=time,
                                              ra=ra, dec=dec, freq=freq/1e6, freq_start=fstart, freq_end=fend,
                                              infile=infile)
         run_str = showspec_base_cmd.format(ntheta=int(ntheta), nphi=int(nphi), azcol=azcol, zacol=zacol, gaincol=gaincol)

@@ -21,10 +21,7 @@ from itertools import groupby
 from operator import itemgetter
 import glob
 import logging
-#import distutils.spawn
-#import subprocess
 
-#from process_vcs import submit_slurm  # need to get this moved out of process_vcs.py
 from job_submit import submit_slurm
 from mdir import mdir
 from mwa_metadb_utils import getmeta
@@ -144,11 +141,15 @@ class BaseRTSconfig(object):
             # use the default data path
             self.data_dir = "/group/mwaops/vcs/{0}/cal/{1}/vis".format(obsid, cal_obsid)
             logger.info("Using default calibrator data path: {0}".format(self.data_dir))
+            if os.path.exists(os.path.realpath(self.data_dir)) is False:
+                errmsg = "Default data directory ({0}) does not exist. Aborting.".format(self.data_dir)
+                logger.error(errmsg)
+                raise CalibrationError(errmsg)
         elif os.path.isdir(datadir):
             self.data_dir = os.path.realpath(datadir)
             logger.info("Using the user specified data directory: {0}".format(datadir))
         else:
-            errmsg = "Data directory ({0}) does not exists. Aborting.".format(datadir)
+            errmsg = "Data directory ({0}) does not exist. Aborting.".format(datadir)
             logger.error(errmsg)
             raise CalibrationError(errmsg)
 
@@ -562,8 +563,6 @@ class RTScal(object):
 
         # setup the basic body for all SLURM scripts
         self.script_body = []
-        #self.script_body.append("module load cudatoolkit")  # need CUDA for RTS
-        #self.script_body.append("module load cfitsio")  # need cfitsio for reading fits files
         self.script_body.append("cd {0}".format(self.rts_out_dir))  # change to output directory and run RTS there
 
         # boolean to control batch job submission. True = submit to queue, False = just write the files
@@ -629,7 +628,7 @@ class RTScal(object):
         hichan_groups, lochan_groups : list of lists of ints (combined size = 24)
             Each item will be a list containing 1 or more coarse channel numbers (>1 if the channels are consecutive).
         """
-        logger.info("Grouping individual channels into consecutive chunks (if possible)")
+        logger.info("Grouping individual channels into consecutive subbands (if possible)")
 
         # check if the 128,129 channel pair exists and note to user that the subband will be divided on that boundary
         if any([128, 129] == self.channels[i:i + 2] for i in xrange(len(self.channels) - 1)):
@@ -654,7 +653,7 @@ class RTScal(object):
         jobids : list of ints
             A list of all the job IDs submitted to the system compute queue.
         """
-        logger.info("Writing RTS configuration script for contiguous bandwith observation")
+        logger.info("Writing RTS configuration script for contiguous bandwidth observation")
         fname = "{0}/rts_{1}.in".format(self.rts_out_dir, self.cal_obsid)  # output file name to write
         with open(fname, 'wb') as f:
             f.write(self.base_str)
@@ -670,7 +669,6 @@ class RTScal(object):
                         "ntasks-per-node": "1"}
         commands = list(self.script_body)  # make a copy of body to then extend
         commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, fname))
-        #commands.append("srun rts_cpu {0}".format(fname))
         jobid = submit_slurm(rts_batch, commands, 
                                 slurm_kwargs=slurm_kwargs,
                                 batch_dir=self.batch_dir,
@@ -835,12 +833,8 @@ class RTScal(object):
         chan_file_dict = lodict.copy()
         chan_file_dict.update(hidict)
 
-        # lolengths = set([len(l) for l in lochan_groups])  # figure out the unique lengths
-        # hilengths = set([len(h) for h in hichan_groups])
-        # lengths = lolengths.union(hilengths)  # combine the sets
-
         # Now submit the RTS jobs
-        logger.info("Writing individual subband RTS config scripts")
+        logger.info("Writing individual subband RTS configuration scripts")
 
         jobids = []
         for k, v in chan_file_dict.iteritems():
@@ -855,7 +849,6 @@ class RTScal(object):
                             "ntasks-per-node": "1"}
             commands = list(self.script_body)  # make a copy of body to then extend
             commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, k))
-            #commands.append("srun rts_cpu {0}".format(k))
             jobid = submit_slurm(rts_batch, commands,
                                     slurm_kwargs=slurm_kwargs,
                                     batch_dir=self.batch_dir,
@@ -876,7 +869,6 @@ class RTScal(object):
         jobids : list of ints
             A list of all the job IDs submitted to the system compute queue.
         """
-        # self.get_obs_channels() # fetch channels
         self.is_picket_fence()  # determine if picket-fence obs or not
         self.summary()
 
@@ -893,8 +885,10 @@ class RTScal(object):
 
 if __name__ == '__main__':
 
-    # convnience dictionary for choosing log-levels
-    loglevels = {"DEBUG":logging.DEBUG, "INFO":logging.INFO, "WARNING":logging.WARNING}
+    # Dictionary for choosing log-levels
+    loglevels = {"DEBUG": logging.DEBUG, 
+                 "INFO": logging.INFO, 
+                 "WARNING": logging.WARNING}
 
     # Option parsing
     parser = argparse.ArgumentParser(
@@ -911,19 +905,22 @@ if __name__ == '__main__':
 
     parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list.", default=None)
 
-    parser.add_argument("--gpubox_dir", type=str, help="Where the *_gpubox*.fits files are located", default=None)
+    parser.add_argument("--gpubox_dir", type=str, 
+                        help="Where the *_gpubox*.fits files are located. " 
+                             "(ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.)", default=None)
 
     parser.add_argument("--rts_output_dir", type=str,
-                        help="Parent directory where you want the /rts directory and /batch directory to be created."
-                             " ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.", default=None)
+                        help="Parent directory where you want the /rts directory and /batch directory to be created. "
+                             "(ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.)", default=None)
 
     parser.add_argument("--offline", action='store_true',
                         help="Tell the RTS to read calibrator data in the offline correlated data format.")
 
-    #parser.add_argument("--submit", action='store_true', help="Switch to allow SLURM job submission")
     parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue.")
+    
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: DEBUG.", 
-                        choices=loglevels.keys(), default="DEBUG")
+                        choices=loglevels.keys(), default="INFO")
+
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
 
     args = parser.parse_args()
@@ -942,7 +939,7 @@ if __name__ == '__main__':
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
     ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s %(thread)d  %(name)s  %(levelname)-9s :: %(message)s')
+    formatter = logging.Formatter('%(asctime)s  %(name)s  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
@@ -951,7 +948,7 @@ if __name__ == '__main__':
         print "-o/--obsid\n-O/--cal_obsid\n-m/--metafits\n-s/--srclist"
         sys.exit(1)
 
-    logger.info("Creating BaseRTSconfig instance - setting up basic information for RTS configuration scripts")
+    logger.info("Creating BaseRTSconfig instance - compiling basic RTS configuration script")
     try:
         baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist, args.gpubox_dir,
                                       args.rts_output_dir, args.offline)
@@ -960,7 +957,7 @@ if __name__ == '__main__':
         logger.critical("Caught CalibrationError: {0}".format(e))
         sys.exit(1)
 
-    logger.info("Creating RTScal instance - determining specific config requirements for this observation")
+    logger.info("Creating RTScal instance - determining specific configuration for this observation")
     try:
         calobj = RTScal(baseRTSconfig, args.nosubmit)
         jobs = calobj.run()

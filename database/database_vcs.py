@@ -16,9 +16,14 @@ def dict_factory(cursor, row):
 def database_command(options, obsid):
         DB_FILE = os.environ['CMD_VCS_DB_FILE']
         opts_string = ""
-        for a in options:
+        try:
+            for a in options:
                 if not a == options[0]:
                         opts_string = opts_string + str(a) + " "
+        except TypeError:
+            for a in vars(options):
+                if vars(options)[a] != None:
+                    opts_string += "--" + str(a) + " " + str(vars(options)[a]) + " "
                         
         con = lite.connect(DB_FILE)
         con.isolation_level = 'EXCLUSIVE'

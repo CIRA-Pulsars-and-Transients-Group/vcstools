@@ -106,15 +106,17 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
 
     # submit the jobs
     batch_submit_line = "sbatch {0}".format(jobfile)
+    jobid = None
     if submit:
         submit_cmd = subprocess.Popen(batch_submit_line, shell=True, stdout=subprocess.PIPE)
-   
-        # the standard output to stdout after submitting a job is:
-        #   Submitted batch job [jobid] on cluster [cluster]
-        # thus the 4th "word" is the job ID
-        # TODO: confirm and then uncomment
-#        for line in submit_cmd.stdout:
-#            if "Submitted" in line:
-#                jobid = str(line.split(" ")[3])
-
-#    return jobid
+        for line in submit_cmd.stdout:
+            if "Submitted" in line:
+                jobid = str(line.split(" ")[3])
+        if jobid is None:
+            print batch_submit_line
+            print submit_cmd.stdout
+            return
+        else:
+            return jobid
+    else:
+        return
