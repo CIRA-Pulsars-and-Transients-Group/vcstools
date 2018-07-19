@@ -1,0 +1,56 @@
+\documentclass[tikz, multi, border=5pt]{standalone}
+\usepackage[edges]{forest}
+\usetikzlibrary{arrows.meta}
+
+\newcommand{\indev}{top color=gray!70, bottom color=gray!70} % planned, but not yet included
+\newcommand{\notmaintained}{top color=red!50, bottom color=red!50} % included, but not maintained
+\newcommand{\responsible}[1]{{\footnotesize ({#1})}} % the primary people responsible for this part of VCStools
+
+\begin{document}
+\tikzset{
+  treenode/.style = {align=center, minimum width=2cm, text centered, font=\sffamily},
+  block/.style = {treenode, rectangle, white, font=\sffamily\bfseries, draw=black, fill=black}
+}
+
+\begin{forest}
+  for tree={
+    draw, block,
+    text badly centered,
+    inner sep = 1mm,
+    edge = {draw, -Stealth},
+    parent anchor = south,
+    child anchor = north,
+    grow = south,
+    forked edge,
+    fork sep = 6mm,
+    l sep = 12mm,
+    align = center
+  },
+  [{\Large VCStools\\\responsible{ST \& BM}}
+    [{doc\\\responsible{all}}
+      [{images}]
+      [{ipfb}]
+    ]
+    [{cmake\\\responsible{SM \& BM}}]
+    [{make\_beam\\\responsible{SM \& NS}}]
+    [{make\_psrfits}, \notmaintained]
+    [{offline\_correlator\\\responsible{SM \& ST}}]
+    [{database\\\responsible{NS \& MX}}
+        [{pulsar}]
+        [{processing}]
+    ]
+    [{scripts\\\responsible{ST \& BM}}]
+    [{utils\\\responsible{NS \& FK?}}]
+    [{beam\_sim\\\responsible{BM \& MX}}
+        [{python}]
+        [{src}
+            [{FEE2016}]
+        ]
+    ]
+    [{TOAs\\\responsible{RB \& DK}}, \indev]
+    [{read\_mwac}, \notmaintained]
+  ]
+\end{forest}
+
+
+\end{document}
