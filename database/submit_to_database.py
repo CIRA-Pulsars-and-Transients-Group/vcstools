@@ -28,8 +28,140 @@ from mwapy import ephem_utils
 import requests.packages.urllib3
 requests.packages.urllib3.disable_warnings()
 
+from mwapy.pb import primary_beam
 from mwa_pulsar_client import client
-from mwapy.pb import get_Tsys 
+import mwa_metadb_utils as meta
+
+def get_beam_power(obsid_data,sources, start, stop,
+                     dt=100,centeronly=True,verbose=False,option='e'):
+    """
+    obsid_data = [obsid,ra, dec, time, delays,centrefreq, channels]
+    sources=[names,coord1,coord2] #astropy table coloumn names
+
+    Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
+    the min_power then it outputs it to the text file.
+
+    """
+    obsid,ra, dec, time, delays,centrefreq, channels = obsid_data
+
+    starttimes=np.arange(start,stop,dt)
+    #starttimes=np.arange(0,time,dt)
+    stoptimes=starttimes+dt
+    stoptimes[stoptimes>time]=time
+    Ntimes=len(starttimes)
+    midtimes=float(obsid)+0.5*(starttimes+stoptimes)
+
+    mwa = ephem_utils.Obs[ephem_utils.obscode['MWA']]
+    # determine the LST
+    observer = ephem.Observer()
+    # make sure no refraction is included
+    observer.pressure = 0
+    observer.long = mwa.long / ephem_utils.DEG_IN_RADIAN
+    observer.lat = mwa.lat / ephem_utils.DEG_IN_RADIAN
+    observer.elevation = mwa.elev
+
+    if not centeronly:
+        PowersX=np.zeros((len(sources),
+                             Ntimes,
+                             len(channels)))
+        PowersY=np.zeros((len(sources),
+                             Ntimes,
+                             len(channels)))
+        # in Hz
+        frequencies=np.array(channels)*1.28e6
+    else:
+        PowersX=np.zeros((len(sources),
+                             Ntimes,1))
+        PowersY=np.zeros((len(sources),
+                             Ntimes,1))
+        frequencies=[centrefreq]
+    print 'Pulsar RA,DEC ',sources
+    RAs, Decs = sex2deg(sources[0][0],sources[0][1])
+    theta=[]
+    phi=[]
+    for itime in xrange(Ntimes):
+        obstime = Time(midtimes[itime],format='gps',scale='utc')
+        observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
+        LST_hours = observer.sidereal_time() * ephem_utils.HRS_IN_RADIAN
+
+        HAs = -RAs + LST_hours * 15
+        Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
+        # go from altitude to zenith angle
+        # go from altitude to zenith angle
+
+        if option == 'a':
+            beam_string = "analytic"
+            theta=np.radians(90-Alts)
+            phi=np.radians(Azs)
+
+            for ifreq in xrange(len(frequencies)):
+                rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
+                                                     freq=frequencies[ifreq], delays=delays,
+                                                     zenithnorm=True,
+                                                     power=True)
+                PowersX[:,itime,ifreq]=rX
+                PowersY[:,itime,ifreq]=rY
+
+        if option == 'd':
+            beam_string = "advanced"
+            theta=np.array([np.radians(90-Alts)])
+            phi=np.array([np.radians(Azs)])
+
+            for ifreq in xrange(len(frequencies)):
+                rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
+                                                     freq=frequencies[ifreq], delays=delays,
+                                                     zenithnorm=True,
+                                                     power=True)
+                PowersX[:,itime,ifreq]=rX
+                PowersY[:,itime,ifreq]=rY
+
+        if option == 'e':
+            beam_string = "full_EE"
+            #theta=np.radians(90-Alts)
+            #phi=np.radians(Azs)
+            theta.append(np.radians(90-Alts))
+            phi.append(np.radians(Azs))
+            #h5filepath='/group/mwaops/PULSAR/src/MWA_Tools/mwapy/pb/mwa_full_embedded_element_pattern.h5'
+    if option == 'e':
+        theta = np.array([theta])
+        phi = np.array([phi])
+        PowersX = []
+        PowersY = []
+        for ifreq in frequencies:
+            rX,rY=primary_beam.MWA_Tile_full_EE(theta,phi,freq=ifreq,
+                                                delays=delays,zenithnorm=True,power=True)
+            PowersX.append(rX[0])
+            PowersY.append(rY[0])
+
+        bandPowersX = np.mean(np.vstack(PowersX),axis=0)
+        bandPowersY = np.mean(np.vstack(PowersY),axis=0)
+        #print bandPowersX,bandPowersY
+        bandPowers = 0.5*(bandPowersX + bandPowersY)
+        print bandPowers
+        return bandPowers
+
+
+def get_obs_metadata(obs):
+    """
+    Gets needed meta data from http://mwa-metadata01.pawsey.org.au/metadata/
+    """
+    print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obs)
+    #for line in txtfile:
+    beam_meta_data = meta.getmeta(service='obs', params={'obs_id':obs})
+    #obn = beam_meta_data[u'obsname']
+    ra = beam_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
+    dec = beam_meta_data[u'metadata'][u'dec_pointing']
+    dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
+    #mode = beam_meta_data[u'mode']
+    Tsky = beam_meta_data[u'metadata'][u'sky_temp']
+    xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+
+    minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
+    maxfreq = float(max(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
+    channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
+    centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
+
+    return [obs,ra,dec,dura,xdelays,centrefreq,channels]
 
 
 def psrcat(addr, auth, pulsar):
@@ -229,6 +361,33 @@ def get_pulsar_ra_dec(pulsar):
     return [ra, dec]
 
 
+def from_power_to_gain(powers,cfreq,n,incoh=False):
+    from astropy.constants import c,k_B
+
+    obswl = c.value/cfreq
+    #for incoherent
+    if incoh:
+        coeff = obswl**2*16*sqrt(n)/(4*np.pi*k_B.value) #TODO add a coherent option
+    else:
+        coeff = obswl**2*16*n/(4*np.pi*k_B.value)
+    print "Wavelength",obswl,"m"
+    print "Gain coefficient:",coeff
+    SI_to_Jy = 1e-26
+    return (powers*coeff)*SI_to_Jy
+
+
+def get_Trec(tab,obsfreq):
+    Trec = 0.0
+    for r in range(len(tab)):
+        if tab[r][0]==obsfreq:
+            Trec = tab[r][1]
+        elif tab[r][0] < obsfreq < tab[r+1][0]:
+            Trec = ((tab[r][1] + tab[r+1][1])/2)
+    if Trec == 0.0:
+        print "ERROR getting Trec"
+    return Trec
+
+
 class SmartFormatter(argparse.HelpFormatter):
 
     def _split_lines(self, text, width):
@@ -347,7 +506,7 @@ if args.pulsar or args.bestprof:
     
 
 #get meta data from obsid
-obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = get_Tsys.get_obs_metadata(obsid)
+obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = get_obs_metadata(obsid)
 minfreq = float(min(channels))
 maxfreq = float(max(channels))
 
@@ -447,13 +606,14 @@ if args.bestprof:
     tdt=100
     
     print "Calculating beam power..."
-    bandpowers = get_Tsys.get_beam_power(params,[[pul_ra, pul_dec]],enter,exit,
+    bandpowers = get_beam_power(params,[[pul_ra, pul_dec]],enter,exit,
                                 centeronly=True,dt=tdt,option="e") #TODO CHANGE TRUE TO FALSE
     print "Converting to gain from power..."
-    gains = get_Tsys.from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,incoh)
+    gains = from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,incoh)
     print 'Frequency',centrefreq*1e6,'Hz'
-    tant = pbl.make_primarybeammap(float(obsid),delays,frequency=centrefreq*1e6,model='full_EE')
-    t_sys_table = tant + get_Tsys.get_Trec(trec_table,centrefreq)
+    #tant = pbl.make_primarybeammap(float(obsid),delays,frequency=centrefreq*1e6,model='full_EE')
+    tant = pbl.make_primarybeammap(int(float(obsid)),delays,frequency=centrefreq*1e6)
+    t_sys_table = tant + get_Trec(trec_table,centrefreq)
     
     gain_interpolator = InterpolatedUnivariateSpline(np.arange(len(gains))*tdt, gains)
     time = np.arange(0,obsdur,100e-6)
