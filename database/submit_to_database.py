@@ -550,9 +550,10 @@ if args.bestprof:
             exit = float(exit)
         else: #if there isn't assume that it's an autofold obs
             #check for a complete analytic beam output
-            if os.path.isfile('/scratch2/mwaops/pulsar/incoh_census/'+obsid+'/'+obsid+'_analytic_beam.txt'):
-                beam_list=open('/scratch2/mwaops/pulsar/incoh_census/'+obsid+'/'+obsid+\
-                              '_analytic_beam.txt').readlines()
+            if os.path.isfile('/astro/mwaops/pulsar/incoh_census/{0}/{0}_analytic_beam.txt'\
+                              .format(obsid)):
+                beam_list=open('/astro/mwaops/pulsar/incoh_census/{0}/{0}_analytic_beam.txt'\
+                               .format(obsid)).readlines()
                 for line in beam_list:
                     if line.startswith(str(pulsar)):
                         psrline=line.split()
@@ -561,8 +562,9 @@ if args.bestprof:
                         #times by obs duration to turn into seconds
                         exit=float(psrline[3]) * float(time_obs)   
             else: #create file if there isn't one
-                os.system('find_pulsar_in_obs.py -p '+pulsar+' Jfake -o '+obsid+' --all_volt --output ./')
-                beam_list=open(obsid+'_analytic_beam.txt').readlines()
+                os.system('find_pulsar_in_obs.py -p {0} -o {1} --all_volt --output ./'.\
+                          format(pulsar, obsid))
+                beam_list=open('{0}_analytic_beam.txt'.format(obsid)).readlines()
                 for line in beam_list:
                     if line.startswith(str(pulsar)):
                         psrline=line.split()
