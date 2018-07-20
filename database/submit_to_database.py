@@ -44,7 +44,7 @@ def get_obs_metadata(obs):
     ra = beam_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
     dec = beam_meta_data[u'metadata'][u'dec_pointing']
     dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
-    #mode = beam_meta_data[u'mode']
+    print beam_meta_data[ u'bftemps']
     Tsky = beam_meta_data[u'metadata'][u'sky_temp']
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
     minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
