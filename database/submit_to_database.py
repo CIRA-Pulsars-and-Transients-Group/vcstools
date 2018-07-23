@@ -29,6 +29,7 @@ import requests.packages.urllib3
 requests.packages.urllib3.disable_warnings()
 
 from mwapy.pb import primary_beam
+from mwapy.pb import primarybeammap_tant as pbtant
 from mwa_pulsar_client import client
 import mwa_metadb_utils as meta
 
@@ -44,7 +45,6 @@ def get_obs_metadata(obs):
     ra = beam_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
     dec = beam_meta_data[u'metadata'][u'dec_pointing']
     dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
-    print beam_meta_data[ u'bftemps']
     Tsky = beam_meta_data[u'metadata'][u'sky_temp']
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
     minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
@@ -505,21 +505,29 @@ if args.bestprof:
     print "Converting to gain from power..."
     gains = from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,incoh)
     print 'Frequency',centrefreq*1e6,'Hz'
+    
+    #Work out tsys from tant and trec
     #tant = pbl.make_primarybeammap(float(obsid),delays,frequency=centrefreq*1e6,model='full_EE')
-    time = Time(obsid, format='gps')
-    time.format = 'iso'
-    time = str(time)[:-4].replace(" ","").replace("-","").replace(":","")
-    print time
-    tant = pbl.make_primarybeammap(time,delays,frequency=centrefreq*1e6)
+    #time = Time(obsid, format='gps')
+    #time.format = 'iso'
+    #time = str(time)[:-4].replace(" ","").replace("-","").replace(":","")
+    #tant = pbl.make_primarybeammap(time,delays,frequency=centrefreq*1e6)
+    beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
+     beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
+     pbtant.make_primarybeammap(obsid, delays, centrefreq, 'analytic')
+    
+    tant = np.mean((Tant_XX + Tant_YY) /2.)
     print tant
     print get_Trec(trec_table,centrefreq)
     t_sys_table = tant + get_Trec(trec_table,centrefreq)
     
-    gain_interpolator = InterpolatedUnivariateSpline(np.arange(len(gains))*tdt, gains)
-    time = np.arange(0,obsdur,100e-6)
-    gmodel = gain_interpolator(time)
+    #print gains 
+    #gain_interpolator = InterpolatedUnivariateSpline(np.arange(len(gains))*tdt, gains)
+    #time = np.arange(0,obsdur,100e-6)
+    #gmodel = gain_interpolator(time)
     
-    gain = np.mean(gmodel)
+    #gain = np.mean(gmodel)
+    gain = gains
     t_sys = np.mean(t_sys_table)
     avg_power = np.mean(bandpowers)
     
