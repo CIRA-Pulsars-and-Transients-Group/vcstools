@@ -314,6 +314,7 @@ calcargs = parser.add_argument_group('Detection Calculation Options', 'All the v
 calcargs.add_argument('-b','--bestprof',type=str,help='The location of the .bestprof file. Using this option will cause the code to calculate the needed paramters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputing the obsid and pulsar.')
 calcargs.add_argument('--start',type=str,help='The start time of the detection in seconds. For example: 0')
 calcargs.add_argument('--stop',type=str,help='The stop time of the detection in seconds. For example: 1000')
+calcargs.add_argument('--trcvr',type=str,help='File location of the reciever temperatures to be used',default = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv")
 
 uploadargs = parser.add_argument_group('Upload options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
 uploadargs.add_argument('-a','--archive',type=str,help="The dspsr archive file location to be uploaded to the database. Expects a single file that is the output of dspsr using the pulsar's ephemeris.")
@@ -465,6 +466,8 @@ if args.bestprof:
                 enter *= float(time_obs) 
                 exit *= float(time_obs)
                 os.remove('temp.csv')
+                if os.path.exists("{0}_analytic_beam.txt".format(obsid)):
+                    os.remove("{0}_analytic_beam.txt".format(obsid))
                 input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
             print "Input detection time does not equal the dectetion time of the .bestprof file"
@@ -489,7 +492,7 @@ if args.bestprof:
     from scipy.interpolate import InterpolatedUnivariateSpline
     import mwapy.pb.primarybeammap_local as pbl
     
-    trec_table = Table.read("/group/mwaops/PULSAR/src/MWA_Tools/mwapy/pb/MWA_Trcvr_tile_56.csv",format="csv")
+    trec_table = Table.read(args.trcvr,format="csv")
 
     print "Grabbing obs parameters..."
     params = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
