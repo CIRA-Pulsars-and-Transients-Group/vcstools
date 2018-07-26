@@ -20,6 +20,7 @@ import subprocess
 import sys
 from shutil import copyfile as cp
 import matplotlib.pyplot as plt
+from astropy.table import Table
 
 import ephem
 from mwapy import ephem_utils
@@ -32,7 +33,7 @@ from mwapy.pb import primary_beam
 from mwapy.pb import primarybeammap_tant as pbtant
 from mwa_pulsar_client import client
 import mwa_metadb_utils as meta
-
+import find_pulsar_in_obs
 
 def get_obs_metadata(obs):
     """
@@ -454,19 +455,17 @@ if args.bestprof:
                         #times by obs duration to turn into seconds
                         exit=float(psrline[3]) * float(time_obs)   
             else: #create file if there isn't one
-                os.system('find_pulsar_in_obs.py -p {0} -o {1} --all_volt --output ./'.\
-                          format(pulsar, obsid))
-                beam_list=open('{0}_analytic_beam.txt'.format(obsid)).readlines()
-                for line in beam_list:
-                    if line.startswith(str(pulsar)):
-                        psrline=line.split()
-                        #fraction of obs when the pulsar enters the beam
-                        enter=float(psrline[2]) * float(time_obs) 
-                        exit=float(psrline[3]) * float(time_obs) 
-                        if 0. < (time_detection - exit) < 199.: #same bad metadata correction as above
-                            exit = time_detection
-                #os.remove(obsid+'_analytic_beam.txt')
-        input_detection_time = exit - enter
+                #find_pulsar_in_obs wrapping to use it to find start and end
+                find_pulsar_in_obs.grab_pulsaralog([args.pulsar])
+                catDIR = 'temp.csv'
+                catalog = Table.read(catDIR)
+                enter, exit = find_pulsar_in_obs.get_beam_power([obsid,ra_obs,dec_obs,
+                                               time_obs,delays, centrefreq,channels],
+                                               catalog)
+                enter *= float(time_obs) 
+                exit *= float(time_obs)
+                os.remove('temp.csv')
+                input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
             print "Input detection time does not equal the dectetion time of the .bestprof file"
             print "Input time: " + str(input_detection_time)
@@ -507,17 +506,12 @@ if args.bestprof:
     print 'Frequency',centrefreq*1e6,'Hz'
     
     #Work out tsys from tant and trec
-    #tant = pbl.make_primarybeammap(float(obsid),delays,frequency=centrefreq*1e6,model='full_EE')
-    #time = Time(obsid, format='gps')
-    #time.format = 'iso'
-    #time = str(time)[:-4].replace(" ","").replace("-","").replace(":","")
-    #tant = pbl.make_primarybeammap(time,delays,frequency=centrefreq*1e6)
+    print "Calculating antena temperature..."
     beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
      beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
-     pbtant.make_primarybeammap(obsid, delays, centrefreq, 'analytic')
-    
-    tant = np.mean((Tant_XX + Tant_YY) /2.)
-    print tant
+     pbtant.make_primarybeammap(obsid, delays, centrefreq*1e6, 'analytic', plottype='None')
+    tant = (Tant_XX + Tant_YY) /2.
+    print "Tant: " + str(tant)
     print get_Trec(trec_table,centrefreq)
     t_sys_table = tant + get_Trec(trec_table,centrefreq)
     
