@@ -87,7 +87,7 @@ def grab_FRBalog():
     rratalog_website = 'http://www.astronomy.swin.edu.au/pulsar/frbcat/table.php?format=html'
 
     print "Retrieveing base FRBalog from {0}".format(rratalog_website)
-    os.system( 'rm table.php?format=html')
+    os.remove('table.php?format=html')
     os.system( 'wget {0}'.format( rratalog_website))
 
     print "Converting to CSV format for easier use..."
@@ -162,7 +162,7 @@ def grab_GCalog():
     rratalog_website = 'http://physwww.physics.mcmaster.ca/~harris/mwgc.dat'
 
     print "Retrieveing base GCalog from {0}".format( rratalog_website)
-    os.system( 'rm mwgc.dat')
+    os.remove('mwgc.dat')
     os.system( 'wget {0}'.format( rratalog_website))
 
     print "Converting to CSV format for easier use..."
@@ -231,7 +231,7 @@ def grab_RRATalog(jlist=None):
     rratalog_website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
 
     print "Retrieveing base RRATalog from {0}".format( rratalog_website)
-    os.system( 'rm rratalog.txt')
+    os.remove('rratalog.txt')
     os.system( 'wget {0}'.format( rratalog_website))
 
     print "Converting to CSV format for easier use..."
@@ -386,7 +386,8 @@ def grab_pulsaralog(jlist=None):
                 out_csv.write(r[-1])
                 out_csv.write("\n")
     else:
-        os.system( 'rm -f pulsaralog.csv')
+        if os.path.exists('pulsaralog.csv'):
+            os.remove('pulsaralog.csv')
         with open('pulsaralog.csv',"wb") as out_csv:
             out_csv.write(','.join(params)+'\n')
             for r in pulsars:
@@ -548,12 +549,16 @@ def beam_enter_exit(min_power, powers, imax, dt, duration):
 
 
 def get_beam_power(obsid_data,
-                   sources, coord1, coord2, names,
+                   sources, 
+                   coord1 = 'Raj',
+                   coord2 = 'Decj',
+                   names = 'Jname',
                    dt=296,
                    centeronly=True,
                    verbose=False,
                    min_power=0.3,
-                   option = 'a'):
+                   option = 'e',
+                   output = "./"):
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
     the min_power then it outputs it to the text file.
@@ -665,8 +670,10 @@ def get_beam_power(obsid_data,
     #Power [#sources, #times, #frequencies]
     Powers=0.5*(PowersX+PowersY)
 
-    outputfile = str(args.output)
-    os.system( 'rm -f ' + outputfile + str(obsid) + '_' + beam_string + '_beam.txt')
+    outputfile = output
+    primary_beam_output_file = outputfile + str(obsid) + '_' + beam_string + '_beam.txt'
+    if os.path.exists(primary_beam_output_file):
+        os.remove(primary_beam_output_file)
     with open(outputfile + str(obsid) + '_' + beam_string + '_beam.txt',"wb") as out_list:
         out_list.write('All of the sources that the ' + beam_string + ' beam model calculated a power of '\
                        + str(min_power) + ' or greater for observation ID: ' + str(obsid) + '\n' +\
@@ -687,16 +694,20 @@ def get_beam_power(obsid_data,
                                 ' ' + str(max(sourc)[0]) + "\n")
         print "A list of sources for the observation ID: " + str(obsid) + \
               " has been output to the text file: " + str(obsid) + '_' + beam_string + '_beam.txt'
-    return
+    return enter, exit
 
 
 def get_beam_power_obsforsource(obsid_data,
-                   sources, coord1, coord2, names,
+                   sources,
+                   coord1 = 'Raj',
+                   coord2 = 'Decj',
+                   names = 'Jname',
                    dt=296,
                    centeronly=True,
                    verbose=False,
                    min_power=0.3,
-                   option = 'a'):
+                   option = 'a',
+                   output = "./"):
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
     the min_power then it outputs it to the text file.
@@ -823,8 +834,10 @@ def get_beam_power_obsforsource(obsid_data,
                         Powers.append([sources[names][counter-1], obsid, time, max_time, sourc, imax, max(sourc)])
 
     for sourc in sources:
-        outputfile = str(args.output)
-        os.system( 'rm -f ' + outputfile + str(sourc[names]) + beam_string + '_beam.txt')
+        outputfile = output
+        primary_beam_output_file = outputfile + str(sourc[names]) + beam_string + '_beam.txt'
+        if os.path.exists(primary_beam_output_file):
+            os.remove(primary_beam_output_file)
         with open(outputfile + str(sourc[names]) + beam_string + '_beam.txt',"wb") as out_list:
             out_list.write('All of the observation IDs that the ' + beam_string + ' beam model calculated a power of '\
                            + str(min_power) + ' or greater for the source: ' + str(sourc[names]) + '\n' +\
@@ -847,7 +860,7 @@ if __name__ == "__main__":
     """)
     parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source. For increased efficiency it will only search OBSIDs within the primary beam.')
     parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
-    parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation that will be used. Options: "a" the analytic beam model (2012 model, fast and reasonably accurate), "d" the advanced beam model (2014 model, fast and slighty more accurate) or "e" the full EE model (2016 model, slow but accurate). " Default: "a"')
+    parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation that will be used. Options: "a" the analytic beam model (2012 model, fast and reasonably accurate), "d" the advanced beam model (2014 model, fast and slighty more accurate) or "e" the full EE model (2016 model, slow but accurate). " Default: "a"',default = "a")
     parser.add_argument('-m','--min_power',type=float,help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3', default=0.3)
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     #impliment an option for the accurate beam later on and maybe the old elipse approximation if I can make it accurate
@@ -1074,18 +1087,14 @@ if __name__ == "__main__":
                         cord.append([ob, ra, dec, time, delays,centrefreq, channels])
                 else:
                     cord = [ob, ra, dec, time, delays,centrefreq, channels]
+                    
                     if args.beam == 'e':
-                        get_beam_power(cord, catalog, c1, c2, name_col, dt=300,
-                                        centeronly=True, verbose=False, min_power=args.min_power, option = 'e')
-                    elif args.beam == 'd':
-                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
-                                        centeronly=True, verbose=False, min_power=args.min_power, option = 'd')
-                    elif args.beam == 'a':    #center only means it isn't in picket fence mode
-                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
-                                        min_power=args.min_power, verbose=False)
-                    elif not args.beam: #TODO impliment a picket fence mode
-                        get_beam_power(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
-                                        min_power=args.min_power, verbose=False)
+                        dt = 300
+                    else:
+                        dt = 100
+                    get_beam_power(cord, catalog, coord1 = c1, coord2 = c2, names = name_col,
+                                   dt=300, centeronly=True, verbose=False, min_power=args.min_power,
+                                   option = args.beam, output = args.output)
             else:
                 print('No raw voltage files for %s' % ob)
 
@@ -1132,23 +1141,29 @@ if __name__ == "__main__":
                         cord = [ob, ra, dec, time, delays,centrefreq, channels]
                         #print catalog
                         if args.beam:
-                            get_beam_power(cord, catalog, c1, c2, name_col, dt=300,
-                                            centeronly=True, verbose=False, min_power=args.min_power,
-                                            option = args.beam)
+                            get_beam_power(cord, catalog, coord1 = c1, coord2 = c2, 
+                                           names = name_col, dt=300, centeronly=True,
+                                           verbose=False, min_power=args.min_power,
+                                           option = args.beam, output = args.output)
                         else: #TODO impliment a picket fence mode
-                            get_beam_power(cord, catalog, c1, c2, name_col, dt=100,
-                                            centeronly=True, min_power=args.min_power, verbose=False)
+                            get_beam_power(cord, catalog, coord1 = c1, coord2 = c2,
+                                           names = name_col, dt=100, centeronly=True,
+                                           verbose=False, min_power=args.min_power,
+                                           output = args.output)
 
     #chooses the beam type and whether to list the source in each obs or the obs for each source
     #more options will be included later
     if args.obs_for_source:
         if args.beam:
-            get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=300,
-                                            centeronly=True, verbose=False, min_power=args.min_power,
-                                            option=args.beam)
+            get_beam_power_obsforsource(cord, catalog, coord1 = c1, coord2 = c2, 
+                                        names = name_col, dt=300, centeronly=True,
+                                        verbose=False, min_power=args.min_power,
+                                        option=args.beam, output = args.output)
         else:
-            get_beam_power_obsforsource(cord, catalog, c1, c2, name_col, dt=100,centeronly=True,
-                                            min_power=args.min_power, verbose=False)
+            get_beam_power_obsforsource(cord, catalog, coord1 = c1, coord2 = c2, 
+                                        names = name_col, dt=100,centeronly=True,
+                                        verbose=False, min_power=args.min_power,
+                                        output = args.output)
 
 
 
@@ -1157,6 +1172,8 @@ if __name__ == "__main__":
     #remove csv file
 
     if args.pulsar != None:
-        os.system('rm -f temp.csv')
+        if os.path.exists('temp.csv'):
+            os.remove('temp.csv')
     else:
-        os.system( 'rm ' + catDIR)
+        if os.path.exists(catDIR):
+            os.remove(catDIR)

@@ -19,7 +19,11 @@ import numpy as np
 import subprocess
 import sys
 from shutil import copyfile as cp
+import math
+from scipy.interpolate import InterpolatedUnivariateSpline
 import matplotlib.pyplot as plt
+from astropy.table import Table
+from astropy.time import Time
 
 import ephem
 from mwapy import ephem_utils
@@ -28,8 +32,34 @@ from mwapy import ephem_utils
 import requests.packages.urllib3
 requests.packages.urllib3.disable_warnings()
 
+from mwapy.pb import primary_beam
+from mwapy.pb import primarybeammap_tant as pbtant
+import mwapy.pb.primarybeammap as pbl
 from mwa_pulsar_client import client
-from mwapy.pb import get_Tsys 
+import mwa_metadb_utils as meta
+import find_pulsar_in_obs
+
+
+def get_obs_metadata(obs):
+    """
+    Gets needed meta data from http://mwa-metadata01.pawsey.org.au/metadata/
+    """
+    print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obs)
+    #for line in txtfile:
+    beam_meta_data = meta.getmeta(service='obs', params={'obs_id':obs})
+    #obn = beam_meta_data[u'obsname']
+    ra = beam_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
+    dec = beam_meta_data[u'metadata'][u'dec_pointing']
+    dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
+    Tsky = beam_meta_data[u'metadata'][u'sky_temp']
+    xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
+    maxfreq = float(max(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
+    channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
+    centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
+    
+
+    return [obs,ra,dec,dura,xdelays,centrefreq,channels]
 
 
 def psrcat(addr, auth, pulsar):
@@ -229,6 +259,33 @@ def get_pulsar_ra_dec(pulsar):
     return [ra, dec]
 
 
+def from_power_to_gain(powers,cfreq,n,incoh=False):
+    from astropy.constants import c,k_B
+
+    obswl = c.value/cfreq
+    #for incoherent
+    if incoh:
+        coeff = obswl**2*16*sqrt(n)/(4*np.pi*k_B.value) #TODO add a coherent option
+    else:
+        coeff = obswl**2*16*n/(4*np.pi*k_B.value)
+    print "Wavelength",obswl,"m"
+    print "Gain coefficient:",coeff
+    SI_to_Jy = 1e-26
+    return (powers*coeff)*SI_to_Jy
+
+
+def get_Trec(tab,obsfreq):
+    Trec = 0.0
+    for r in range(len(tab)-1):
+        if tab[r][0]==obsfreq:
+            Trec = tab[r][1]
+        elif tab[r][0] < obsfreq < tab[r+1][0]:
+            Trec = ((tab[r][1] + tab[r+1][1])/2)
+    if Trec == 0.0:
+        print "ERROR getting Trec"
+    return Trec
+
+
 class SmartFormatter(argparse.HelpFormatter):
 
     def _split_lines(self, text, width):
@@ -262,6 +319,7 @@ calcargs = parser.add_argument_group('Detection Calculation Options', 'All the v
 calcargs.add_argument('-b','--bestprof',type=str,help='The location of the .bestprof file. Using this option will cause the code to calculate the needed paramters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputing the obsid and pulsar.')
 calcargs.add_argument('--start',type=str,help='The start time of the detection in seconds. For example: 0')
 calcargs.add_argument('--stop',type=str,help='The stop time of the detection in seconds. For example: 1000')
+calcargs.add_argument('--trcvr',type=str,help='File location of the reciever temperatures to be used',default = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv")
 
 uploadargs = parser.add_argument_group('Upload options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
 uploadargs.add_argument('-a','--archive',type=str,help="The dspsr archive file location to be uploaded to the database. Expects a single file that is the output of dspsr using the pulsar's ephemeris.")
@@ -347,7 +405,7 @@ if args.pulsar or args.bestprof:
     
 
 #get meta data from obsid
-obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = get_Tsys.get_obs_metadata(obsid)
+obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = get_obs_metadata(obsid)
 minfreq = float(min(channels))
 maxfreq = float(max(channels))
 
@@ -391,9 +449,10 @@ if args.bestprof:
             exit = float(exit)
         else: #if there isn't assume that it's an autofold obs
             #check for a complete analytic beam output
-            if os.path.isfile('/scratch2/mwaops/pulsar/incoh_census/'+obsid+'/'+obsid+'_analytic_beam.txt'):
-                beam_list=open('/scratch2/mwaops/pulsar/incoh_census/'+obsid+'/'+obsid+\
-                              '_analytic_beam.txt').readlines()
+            if os.path.isfile('/astro/mwaops/pulsar/incoh_census/{0}/{0}_analytic_beam.txt'\
+                              .format(obsid)):
+                beam_list=open('/astro/mwaops/pulsar/incoh_census/{0}/{0}_analytic_beam.txt'\
+                               .format(obsid)).readlines()
                 for line in beam_list:
                     if line.startswith(str(pulsar)):
                         psrline=line.split()
@@ -402,18 +461,19 @@ if args.bestprof:
                         #times by obs duration to turn into seconds
                         exit=float(psrline[3]) * float(time_obs)   
             else: #create file if there isn't one
-                os.system('find_pulsar_in_obs.py -p '+pulsar+' Jfake -o '+obsid+' --all_volt --output ./')
-                beam_list=open(obsid+'_analytic_beam.txt').readlines()
-                for line in beam_list:
-                    if line.startswith(str(pulsar)):
-                        psrline=line.split()
-                        #fraction of obs when the pulsar enters the beam
-                        enter=float(psrline[2]) * float(time_obs) 
-                        exit=float(psrline[3]) * float(time_obs) 
-                        if 0. < (time_detection - exit) < 199.: #same bad metadata correction as above
-                            exit = time_detection
-                #os.remove(obsid+'_analytic_beam.txt')
-        input_detection_time = exit - enter
+                #find_pulsar_in_obs wrapping to use it to find start and end
+                find_pulsar_in_obs.grab_pulsaralog([args.pulsar])
+                catDIR = 'temp.csv'
+                catalog = Table.read(catDIR)
+                enter, exit = find_pulsar_in_obs.get_beam_power([obsid,ra_obs,dec_obs,
+                                               time_obs,delays, centrefreq,channels],
+                                               catalog)
+                enter *= float(time_obs) 
+                exit *= float(time_obs)
+                os.remove('temp.csv')
+                if os.path.exists("{0}_analytic_beam.txt".format(obsid)):
+                    os.remove("{0}_analytic_beam.txt".format(obsid))
+                input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
             print "Input detection time does not equal the dectetion time of the .bestprof file"
             print "Input time: " + str(input_detection_time)
@@ -431,13 +491,8 @@ if args.bestprof:
 
 
     #Gain calc
-    import math
-    from astropy.time import Time
-    from astropy.table import Table
-    from scipy.interpolate import InterpolatedUnivariateSpline
-    import mwapy.pb.primarybeammap_local as pbl
-    
-    trec_table = Table.read("/group/mwaops/PULSAR/src/MWA_Tools/mwapy/pb/MWA_Trcvr_tile_56.csv",format="csv")
+        
+    trec_table = Table.read(args.trcvr,format="csv")
 
     print "Grabbing obs parameters..."
     params = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
@@ -447,29 +502,36 @@ if args.bestprof:
     tdt=100
     
     print "Calculating beam power..."
-    bandpowers = get_Tsys.get_beam_power(params,[[pul_ra, pul_dec]],enter,exit,
+    bandpowers = get_beam_power(params,enter,exit, [[pul_ra, pul_dec]],
                                 centeronly=True,dt=tdt,option="e") #TODO CHANGE TRUE TO FALSE
     print "Converting to gain from power..."
-    gains = get_Tsys.from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,incoh)
+    gains = from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,incoh)
     print 'Frequency',centrefreq*1e6,'Hz'
-    tant = pbl.make_primarybeammap(float(obsid),delays,frequency=centrefreq*1e6,model='full_EE')
-    t_sys_table = tant + get_Tsys.get_Trec(trec_table,centrefreq)
     
-    gain_interpolator = InterpolatedUnivariateSpline(np.arange(len(gains))*tdt, gains)
-    time = np.arange(0,obsdur,100e-6)
-    gmodel = gain_interpolator(time)
+    #Work out tsys from tant and trec
+    print "Calculating antena temperature..."
+    beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
+     beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
+     pbtant.make_primarybeammap(obsid, delays, centrefreq*1e6, 'analytic', plottype='None')
+    tant = (Tant_XX + Tant_YY) /2.
+    print "Tant: " + str(tant)
+    print get_Trec(trec_table,centrefreq)
+    t_sys_table = tant + get_Trec(trec_table,centrefreq)
     
-    gain = np.mean(gmodel)
+    #print gains 
+    #gain_interpolator = InterpolatedUnivariateSpline(np.arange(len(gains))*tdt, gains)
+    #time = np.arange(0,obsdur,100e-6)
+    #gmodel = gain_interpolator(time)
+    
+    #gain = np.mean(gmodel)
+    gain = gains
     t_sys = np.mean(t_sys_table)
     avg_power = np.mean(bandpowers)
     
     
     #remove unwanted files from get_Tsys and scripts within
-    from glob import glob
     #os.remove("{0}_gains_{1:.2f}.png".format(obsid,centrefreq))
-    files_to_remove = glob("{0}.0_{1:.2f}MHz_*_full_EE.*".format(obsid,centrefreq))
-    for f in files_to_remove:
-        os.remove(f)
+    os.remove("{0}_full_EE_beam.txt".format(obsid))
 
     
     
