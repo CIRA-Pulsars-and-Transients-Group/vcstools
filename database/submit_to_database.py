@@ -503,7 +503,7 @@ if args.bestprof:
     
     print "Calculating beam power..."
     bandpowers = get_beam_power(params,enter,exit, [[pul_ra, pul_dec]],
-                                centeronly=True,dt=tdt,option="e") #TODO CHANGE TRUE TO FALSE
+                                centeronly=True,dt=tdt,option="a") #TODO CHANGE TRUE TO FALSE
     print "Converting to gain from power..."
     gains = from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,incoh)
     print 'Frequency',centrefreq*1e6,'Hz'
@@ -514,6 +514,7 @@ if args.bestprof:
      beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
      pbtant.make_primarybeammap(obsid, delays, centrefreq*1e6, 'analytic', plottype='None')
     tant = (Tant_XX + Tant_YY) /2.
+    #TODO can be inaccurate for coherent but is too difficult to simulate
     print "Tant: " + str(tant)
     print get_Trec(trec_table,centrefreq)
     t_sys_table = tant + get_Trec(trec_table,centrefreq)
@@ -531,7 +532,6 @@ if args.bestprof:
     
     #remove unwanted files from get_Tsys and scripts within
     #os.remove("{0}_gains_{1:.2f}.png".format(obsid,centrefreq))
-    os.remove("{0}_full_EE_beam.txt".format(obsid))
 
     
     

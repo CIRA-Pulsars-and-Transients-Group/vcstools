@@ -557,7 +557,7 @@ def get_beam_power(obsid_data,
                    centeronly=True,
                    verbose=False,
                    min_power=0.3,
-                   option = 'e',
+                   option = 'a',
                    output = "./"):
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
@@ -674,7 +674,7 @@ def get_beam_power(obsid_data,
     primary_beam_output_file = outputfile + str(obsid) + '_' + beam_string + '_beam.txt'
     if os.path.exists(primary_beam_output_file):
         os.remove(primary_beam_output_file)
-    with open(outputfile + str(obsid) + '_' + beam_string + '_beam.txt',"wb") as out_list:
+    with open(primary_beam_output_file,"wb") as out_list:
         out_list.write('All of the sources that the ' + beam_string + ' beam model calculated a power of '\
                        + str(min_power) + ' or greater for observation ID: ' + str(obsid) + '\n' +\
                        'Observation data :RA(deg): ' + str(ra) + ' DEC(deg): ' + str(dec)+' Duration(s): ' \
