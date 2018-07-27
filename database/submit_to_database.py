@@ -19,8 +19,11 @@ import numpy as np
 import subprocess
 import sys
 from shutil import copyfile as cp
+import math
+from scipy.interpolate import InterpolatedUnivariateSpline
 import matplotlib.pyplot as plt
 from astropy.table import Table
+from astropy.time import Time
 
 import ephem
 from mwapy import ephem_utils
@@ -31,9 +34,11 @@ requests.packages.urllib3.disable_warnings()
 
 from mwapy.pb import primary_beam
 from mwapy.pb import primarybeammap_tant as pbtant
+import mwapy.pb.primarybeammap as pbl
 from mwa_pulsar_client import client
 import mwa_metadb_utils as meta
 import find_pulsar_in_obs
+
 
 def get_obs_metadata(obs):
     """
@@ -486,12 +491,7 @@ if args.bestprof:
 
 
     #Gain calc
-    import math
-    from astropy.time import Time
-    from astropy.table import Table
-    from scipy.interpolate import InterpolatedUnivariateSpline
-    import mwapy.pb.primarybeammap_local as pbl
-    
+        
     trec_table = Table.read(args.trcvr,format="csv")
 
     print "Grabbing obs parameters..."
@@ -530,11 +530,8 @@ if args.bestprof:
     
     
     #remove unwanted files from get_Tsys and scripts within
-    from glob import glob
     #os.remove("{0}_gains_{1:.2f}.png".format(obsid,centrefreq))
-    files_to_remove = glob("{0}.0_{1:.2f}MHz_*_full_EE.*".format(obsid,centrefreq))
-    for f in files_to_remove:
-        os.remove(f)
+    os.remove("{0}_full_EE_beam.txt".format(obsid))
 
     
     
