@@ -294,6 +294,34 @@ class SmartFormatter(argparse.HelpFormatter):
         # this is the RawTextHelpFormatter._split_lines
         return argparse.HelpFormatter._split_lines(self, text, width)
 
+
+def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
+    x = np.copy(data)
+    oldstd = np.nanstd(x)
+    
+    for trial in range(ntrials):
+        median = np.nanmedian(x)
+
+        lolim = median - alpha * oldstd
+        hilim = median + alpha * oldstd
+        print lolim/max(data),hilim/max(data)
+        x[x<lolim] = np.nan
+        x[x>hilim] = np.nan
+
+        newstd = np.nanstd(x)
+        tollvl = (oldstd - newstd) / newstd
+
+        if tollvl <= tol:
+            print "Took {0} trials to reach tolerance".format(trial+1)
+            return oldstd, x
+
+        if trial == ntrials:
+            print "Reached number of trials without reaching tolerance level"
+            return oldstd, x
+
+        oldstd = newstd
+
+
 def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = None):
     """
     time_detection: the time in seconds of the dectection from the bestprof file
@@ -434,6 +462,9 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
         shiftby = shiftby + int(num_bins)
     profile = np.append(profile[shiftby:], profile[:shiftby])
 
+    sigma, flagged_profile  = sigmaClip(profile, alpha=2.5, tol=0.05, ntrials=10)
+    
+    """
     #plot the profile so the pulse width can be determined by eye
     print 'Please examine the plot by eye to determine the pulse width'
     plt.plot(profile)
@@ -448,39 +479,35 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     pulse_width_bins = float(max_bin)-float(min_bin)+1.0 #in bins
     off_pulse_width_bins = float(num_bins)-pulse_width_bins
     pulse_width_frac = pulse_width_bins/float(num_bins)
-
-
-    #calc off-pulse average
-    off_pulse_total = 0.
-    for o in range(len(profile)):
-        if not (int(min_bin) < o < int(max_bin)):
-            off_pulse_total = off_pulse_total + float(profile[o])
-    off_pulse_mean = off_pulse_total / off_pulse_width_bins
+    """
 
     #adjust profile to be around the off-pulse mean
-    for p in range(len(profile)):
-        profile[p] = profile[p] - off_pulse_mean
+    off_pulse_mean = np.nanmean(flagged_profile)   
+    profile -= off_pulse_mean
+    flagged_profile -= off_pulse_mean
 
     profile_uncert = 500. #uncertainty approximation as none is given
-        
-    #calc off-pulse sigma and it's uncertainty
-    sigma_total = 0.
-    u_sigma_total = 0.
-    for o in range(len(profile)):
-        if not (int(min_bin) < o < int(max_bin)):
-            sigma_total = sigma_total + math.pow(float(profile[o]),2)
-            u_sigma_total = u_sigma_total + 2 * float(profile[o]) * profile_uncert
-    sigma = math.sqrt(abs(sigma_total / off_pulse_width_bins))
-    u_sigma = profile_uncert / (2 * math.sqrt(abs(sigma_total * off_pulse_width_bins)))
 
-    #calc area under the pulse in it's input arbritatry units from here on denoted as p.
+    #calc off-pulse sigma uncertainty
+    pulse_width_bins = 1
+    off_pulse_width_bins = 1
     p_total = 0.
     u_p_total = 0. #p uncertainty
+    sigma_total = 0.
+    u_sigma_total = 0.
     for p in range(len(profile)):
-        if int(min_bin) <= p <= int(max_bin):
+        if math.isnan(flagged_profile[p]):
+            pulse_width_bins += 1    
             p_total = p_total + profile[p]
             u_p_total = math.sqrt(math.pow(u_p_total,2) + math.pow(profile_uncert,2))
-            
+        else:
+            off_pulse_width_bins += 1
+            sigma_total = sigma_total + math.pow(float(profile[p]),2)
+            u_sigma_total = u_sigma_total + 2 * float(profile[p]) * profile_uncert
+
+    u_sigma = profile_uncert / (2 * math.sqrt(abs(sigma_total * off_pulse_width_bins)))
+    profile_uncert = 500. #uncertainty approximation as none is given
+        
     #the equivalent width (assumes top hat pulsar) in bins and it's uncertainty
     w_equiv_bins = p_total / max(profile)
     w_equiv_ms = w_equiv_bins / float(num_bins) * float(period) # in ms
