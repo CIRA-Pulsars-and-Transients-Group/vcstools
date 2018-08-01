@@ -304,7 +304,6 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
 
         lolim = median - alpha * oldstd
         hilim = median + alpha * oldstd
-        print lolim/max(data),hilim/max(data)
         x[x<lolim] = np.nan
         x[x>hilim] = np.nan
 
