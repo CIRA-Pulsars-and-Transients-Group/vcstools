@@ -8,6 +8,7 @@ import os
 
 
 pabeam_sbatch_header = """#!/bin/bash -l
+#SBATCH --export=NONE
 #SBATCH --account=mwaops
 #SBATCH --gid=mwaops
 #SBATCH --cluster=galaxy
@@ -17,6 +18,12 @@ pabeam_sbatch_header = """#!/bin/bash -l
 #SBATCH --cpus-per-task=1
 #SBATCH --time=12:00:00
 #SBATCH --output=make_pabeam_{obsid}_{time}_{freq:.2f}MHz_%j.out
+
+module load argparse
+module load numpy
+module load scipy
+module load astropy
+module load mpi4py
 """
 
 pabeam_params = """nprocesses={nprocesses}
@@ -30,7 +37,7 @@ tres={tres}
 pres={pres}
 obstime={time}
 odir="{odir}"
-pabeam=`which pabeam.py`
+pabeam=/group/mwa/software/vcstools/vcstools/beam_sim/python/pabeam.py
 """
 
 pabeam_base_cmd = """srun -u -n ${nprocesses} python ${pabeam} -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"""
@@ -60,7 +67,7 @@ fi
 
 
 showspec_sbatch_header = """#!/bin/bash -l
-
+#SBATCH --export=NONE
 #SBATCH --account=mwaops
 #SBATCH --gid=mwaops
 #SBATCH --cluster=galaxy
@@ -69,6 +76,9 @@ showspec_sbatch_header = """#!/bin/bash -l
 #SBATCH --ntasks=1
 #SBATCH --time=3:00:00
 #SBATCH --output={outfile}
+
+module load gsm
+module load showspec
 """
 
 showspec_params = """maploc={maploc}
@@ -159,7 +169,7 @@ def write_showspec_batch(time, obsid, ra, dec, freq, ntheta, nphi, infile, maplo
     with open(fname,'w') as f:
 
         header_str = showspec_sbatch_header.format(outfile=oname)
-        params_str = showspec_params.format(maploc=maploc+"/skymaps", obsid=obsid, unixtime=unix, gpstime=time,
+        params_str = showspec_params.format(maploc=maploc, obsid=obsid, unixtime=unix, gpstime=time,
                                              ra=ra, dec=dec, freq=freq/1e6, freq_start=fstart, freq_end=fend,
                                              infile=infile)
         run_str = showspec_base_cmd.format(ntheta=int(ntheta), nphi=int(nphi), azcol=azcol, zacol=zacol, gaincol=gaincol)
