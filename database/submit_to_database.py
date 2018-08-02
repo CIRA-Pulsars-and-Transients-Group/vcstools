@@ -22,6 +22,7 @@ from shutil import copyfile as cp
 import math
 from scipy.interpolate import InterpolatedUnivariateSpline
 import matplotlib.pyplot as plt
+import glob
 from astropy.table import Table
 from astropy.time import Time
 
@@ -456,13 +457,10 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     u_gain = gain * u_gain_per #assumed to be 10% 
         
     #then centers it around the max flux (hopefully the centre of the pulse
-    shiftby=int(np.argmax(profile))-int(num_bins)/2 
-    if shiftby < 0.0:
-        shiftby = shiftby + int(num_bins)
-    profile = np.append(profile[shiftby:], profile[:shiftby])
+    shiftby=-int(np.argmax(profile))+int(num_bins)/2 
+    profile = np.roll(profile,shiftby)
 
-    sigma, flagged_profile  = sigmaClip(profile, alpha=2.5, tol=0.05, ntrials=10)
-    
+    sigma, flagged_profile  = sigmaClip(profile, alpha=3, tol=0.05, ntrials=10)
     """
     #plot the profile so the pulse width can be determined by eye
     print 'Please examine the plot by eye to determine the pulse width'
@@ -496,6 +494,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     u_sigma_total = 0.
     for p in range(len(profile)):
         if math.isnan(flagged_profile[p]):
+            #May increase the pulse width if there are large noise spikes
             pulse_width_bins += 1    
             p_total = p_total + profile[p]
             u_p_total = math.sqrt(math.pow(u_p_total,2) + math.pow(profile_uncert,2))
@@ -674,11 +673,11 @@ if __name__ == "__main__":
     uploadargs.add_argument('-c','--calibration',type=str,help='The calibration solution file location to be uploaded to the database. Expects a single file so please zip or tar up the bandpass calibrations, the DI Jones matrices, the flagged_channels.txt file, the flagged_tiles.txt file, the rts.in file and the source file.')
 
     dspsrargs = parser.add_argument_group('Dspsr Calculation Options', "Requires the --fits_files. These options will send off dspsr jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the dspsr scripts are tested more") #TODO remove when I'm confident with dspsr
-    dspsrargs.add_argument('--u_archive',action='store_true',help='The archive to be processed with dspsr and then uploaded to the database')
-    dspsrargs.add_argument('--u_single_pulse_series',action='store_true',help='The single pulse series to be processed with dspsr and then uploaded to the database')
-    dspsrargs.add_argument('--u_ppps',type=str,help="The Presto Prepfold PostScript file will be process by sending off PRESTO jobs.")
-    dspsrargs.add_argument('--u_ippd',type=str,help="The Intergrates Pulse Profile file will be process by sending off DSPSR jobs.")
-    dspsrargs.add_argument('--u_waterfall',type=str,help="A waterfall plot of pulse phase vs frequency file will be process by sending off DSPSR jobs.")
+    dspsrargs.add_argument('--u_archive', action='store_true',help='The archive to be processed with dspsr and then uploaded to the database')
+    dspsrargs.add_argument('--u_single_pulse_series', action='store_true',help='The single pulse series to be processed with dspsr and then uploaded to the database')
+    dspsrargs.add_argument('--u_ppps', action='store_true', help="The Presto Prepfold PostScript file will be process by sending off PRESTO jobs.")
+    dspsrargs.add_argument('--u_ippd', action='store_true', help="The Intergrates Pulse Profile file will be process by sending off DSPSR jobs.")
+    dspsrargs.add_argument('--u_waterfall', action='store_true', help="A waterfall plot of pulse phase vs frequency file will be process by sending off DSPSR jobs.")
     args=parser.parse_args()
 
 
@@ -697,12 +696,17 @@ if __name__ == "__main__":
         else:
             calibrator_type = 2
 
+    if args.fits_files:
+        fits_files_loc = args.fits_files
+    else:
+        fits_files_loc = '/scratch2/mwaops/vcs/'+str(obsid)+'/fits/*.fits'
+
     #get info from .bestprof file
     if args.bestprof:
         bestprof_data = get_from_bestprof(args.bestprof)
         obsid, pulsar, dm, period, period_uncer, time_detection, profile, num_bins = bestprof_data
     elif args.obsid and args.pulsar:
-        num_bins = 128
+        num_bins = 128 #used in dspsr calculations
         obsid = args.obsid
         pulsar = args.pulsar
     elif args.obsid and args.calibration and not (args.archive or args.single_pulse_series or args.ppps or args.ippd  or args.waterfall or args.u_archive or args.u_single_pulse_series or args.u_ppps or args.u_ippd  or args.u_waterfall):
@@ -918,71 +922,54 @@ if __name__ == "__main__":
 
 
     if args.u_archive or args.u_single_pulse_series or args.u_ppps or args.u_ippd  or args.u_waterfall:
+        if not glob.glob(fits_files_loc):
+            print "No fits files in given location. Use -f to provide file location."
+            quit()
+        
         #runs all needed jobs to create all files
-        with open(str(obsid) + '_' + str(pulsar) + '.batch','w') as batch_file:
-            batch_line = "#!/bin/bash -l\n" +\
-                         "#SBATCH --job-name=submit_to_databse\n" +\
-                         "#SBATCH --output=" + str(obsid) + '_' + str(pulsar) + ".out\n" +\
-                         "#SBATCH --export=NONE\n" +\
-                         "#SBATCH --partition=workq\n" +\
-                         "#SBATCH --time=6:50:00\n" +\
-                         "#SBATCH --gid=mwaops\n" +\
-                         "#SBATCH --account=mwaops\n" +\
-                         "#SBATCH --nodes=1\n" +\
-                         "ncpus=20\n"+\
-                         "export OMP_NUM_THREADS=$ncpus\n"  +\
-                         "psrcat -e " + str(pulsar) + " > " +str(pulsar) + ".par\n" +\
-                         "obsid={0}\n".format(obsid) +\
-                         "fits=(" + args.fits_files + ")\n"
-            batch_file.write(batch_line)            
-            if args.archive:
-                batch_line = "ar_loc=" + str(args.archive)[:-3] + "\n"
-                batch_file.write(batch_line)
-            elif args.single_pulse_series:
-                batch_line = "ar_loc=" + str(args.single_pulse_series)[:-3] + "\n"
-                batch_file.write(batch_line)
-            elif args.u_ippd  or args.u_waterfall or args.u_archive:
-                batch_line = "aprun -b -cc none -d $ncpus dspsr -E " +\
-                                str(pulsar) + ".par -b " + str(num_bins) + " -A -cont -O "+\
-                                str(obsid) + "_" + str(pulsar) + " " + "${fits}\n" +\
-                             'psraddstring="psradd -o '+ str(obsid) + "_" + str(pulsar) + '.ar "\n' +\
-                             'for ((i=0;i<${#fits[@]};i++)); do psraddstring=${psraddstring}" "' +\
-                                str(obsid) + "_" + str(pulsar) + '_$(expr $i).ar ; done\n' +\
-                             "aprun -b -cc none -d $ncpus $psraddstring\n" +\
-                             "rm " + str(obsid) + "_" + str(pulsar) + "_[0-9].ar\n" +\
-                             "rm " + str(obsid) + "_" + str(pulsar) + "_[0-9][0-9].ar\n" +\
-                             "ar_loc=" + str(obsid) + "_" + str(pulsar) + "\n"
-                batch_file.write(batch_line)
-            
-            if args.u_ippd:
-                batch_line = "pav -CDFTp -N1,1 -g " + str(obsid) + "_" + str(pulsar) + ".prof.ps/cps " +\
-                                 "${ar_loc}.ar\n"
-                batch_file.write(batch_line)
-            if args.u_waterfall:
-                batch_line = 'psrplot -pG -jCDTp -j "B ' +str(num_bins) + '" -D '+ str(obsid) + "_" +\
-                                 str(pulsar) + ".freq.vs.phase.ps/cps ${ar_loc}.ar\n" 
-                batch_file.write(batch_line)
-            if args.u_ppps:
-                batch_line = "psrcat -e " + str(pulsar) + " > " + str(pulsar) + ".eph\n" +\
-                             "aprun -b -cc none -d $ncpus prepfold -ncpus $ncpus -o "+ str(obsid) +\
-                                " -topo -runavg -noclip -par " + str(pulsar) + ".eph -nsub 256 ${fits}\n"
-                batch_file.write(batch_line)
-            if args.u_single_pulse_series:
-                batch_line = "aprun -b -cc none -d $ncpus dspsr -E " + str(pulsar) + ".par -b " + str(num_bins)\
-                                + " -cont -s -K ${fits}\n" +\
-                             'psraddstring="psradd -o '+ str(obsid) + "_" + str(pulsar) + '.ts.ar "\n' +\
-                             "ts=(pulse*.ar)\n" +\
-                             'for ((i=0;i<${#ts[@]};i++)); do psraddstring=${psraddstring}" "' +\
-                                '${ts[i]} ; done\n' +\
-                             "aprun -b -cc none -d $ncpus $psraddstring\n" +\
-                             "rm pulse*.ar\n" 
-                batch_file.write(batch_line)
-            
-        submit_line = 'sbatch ' + str(obsid) + '_' + str(pulsar) + '.batch'
-        submit_cmd = subprocess.Popen(submit_line,shell=True,stdout=subprocess.PIPE)
-        #TODO upload to database automatically once I'm confident and work out if there's an easier way then just running the script once the jobs are done, maybe add some checks
-
-
+        from job_submit import submit_slurm
+        dspsr_batch = "{0}_{1}".format(obsid, pulsar)
+        commands = []
+        n_omp_threads = 20
+        commands.append("ncpus={0}".format(n_omp_threads))
+        commands.append("export OMP_NUM_THREADS={0}".format(n_omp_threads))
+        commands.append("psrcat -e {0} > {0}.par".format(pulsar))
+        commands.append("fits=({0})".format(fits_files_loc))
+        if args.archive:
+            commands.append("ar_loc=" + str(args.archive)[:-3])
+        elif args.single_pulse_series:
+            commands.append("ar_loc=" + str(args.single_pulse_series)[:-3])
+        elif args.u_ippd  or args.u_waterfall or args.u_archive:
+            commands.append("srun -n 1 -c $ncpus dspsr -U 600 -E {0}.par -b {1} -A -cont -O {2}_{0} ".format(pulsar, num_bins, obsid) + "${fits}")
+            commands.append('psraddstring="psradd -o {0}_{1}.ar "'.format(obsid,pulsar))
+            commands.append('for ((i=0;i<${{#fits[@]}};i++)); do psraddstring=${{psraddstring}}" "{0}_{1}_$(expr $i).ar ; done'.format(obsid,pulsar))
+            commands.append("srun -n 1 -c $ncpus $psraddstring")
+            commands.append("rm {0}_{1}_[0-9].ar".format(obsid,pulsar))
+            commands.append("rm {0}_{1}_[0-9][0-9].ar".format(obsid,pulsar))
+            commands.append("ar_loc={0}_{1}".format(obsid,pulsar))
+        if args.u_ippd:
+            commands.append("pav -CDFTp -N1,1 -g {0}_{1}.prof.ps/cps ".format(obsid,pulsar) +\
+                                "${ar_loc}.ar")
+        if args.u_waterfall:
+            commands.append('psrplot -pG -jCDTp -j "B {0}" -D {1}_{2}.freq.vs.phase.ps/cps '.\
+                                format(num_bins,obsid,pulsar)+ "${ar_loc}.ar") 
+        if args.u_ppps:
+            commands.append("psrcat -e {0} > {0}.eph".format(pulsar))
+            commands.append("srun -n 1 -c $ncpus prepfold -ncpus $ncpus -o {0} -topo -runavg -noclip -par {1}.eph -nsub 256 ".format(obsid, pulsar) + "${fits}")
+            commands.append("{0}.eph".format(pulsar))
+        if args.u_single_pulse_series:
+            commands.append("srun -n 1 -c $ncpus dspsr -U 600 -E {0}.par -b {1} -cont -s -K ".\
+                                format(pulsar,num_bins) + "${fits}")
+            commands.append('psraddstring="psradd -o {0}_{1}.ts.ar "'.format(obsid,pulsar))
+            commands.append("ts=(pulse*.ar)")
+            commands.append('for ((i=0;i<${#ts[@]};i++)); do psraddstring=${psraddstring}" "${ts[i]} ; done')
+            commands.append("srun -n 1 -c $ncpus $psraddstring")
+            commands.append("rm pulse*.ar")
+        commands.append("{0}.par".format(pulsar))
+        job_id = submit_slurm(dspsr_batch, commands,
+                              batch_dir="./",
+                              slurm_kwargs={"time": "6:50:00", "partition": "workq"},
+                              submit=True)
     """
     Program tests:
     python submit_to_database.py  ../1120799848/fold/1120799848_PSR_0837-4135.pfd.bestprof
