@@ -24,6 +24,7 @@ module load numpy
 module load scipy
 module load astropy
 module load mpi4py
+module load MWA_Tools/mwa-sci  # for tile beam models
 """
 
 pabeam_params = """nprocesses={nprocesses}
