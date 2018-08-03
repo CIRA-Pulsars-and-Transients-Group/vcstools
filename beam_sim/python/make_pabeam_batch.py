@@ -8,6 +8,7 @@ import os
 
 
 pabeam_sbatch_header = """#!/bin/bash -l
+#SBATCH --export=NONE
 #SBATCH --account=mwaops
 #SBATCH --gid=mwaops
 #SBATCH --cluster=galaxy
@@ -17,6 +18,15 @@ pabeam_sbatch_header = """#!/bin/bash -l
 #SBATCH --cpus-per-task=1
 #SBATCH --time=12:00:00
 #SBATCH --output=make_pabeam_{obsid}_{time}_{freq:.2f}MHz_%j.out
+
+module load python/2.7.14
+module load argparse
+module load numpy
+module load astropy
+module load mpi4py
+module use /group/mwa/software/modulefiles
+module load MWA_Tools/mwa-sci  # for tile beam models
+module load vcstools/master
 """
 
 pabeam_params = """nprocesses={nprocesses}
@@ -30,10 +40,10 @@ tres={tres}
 pres={pres}
 obstime={time}
 odir="{odir}"
-pabeam=`which pabeam.py`
+pabeam=/group/mwa/software/vcstools/vcstools/beam_sim/python/pabeam.py
 """
 
-pabeam_base_cmd = """srun -u -n ${nprocesses} python ${pabeam} -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"""
+pabeam_base_cmd = """srun --export=all -u -n ${nprocesses} python ${pabeam} -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"""
 
 pabeam_concat_cmd= """BASENAME={0} # base name of the output files (everything before the .[rank].dat)
 FNAME={1} # name of output file
@@ -60,7 +70,7 @@ fi
 
 
 showspec_sbatch_header = """#!/bin/bash -l
-
+#SBATCH --export=NONE
 #SBATCH --account=mwaops
 #SBATCH --gid=mwaops
 #SBATCH --cluster=galaxy
@@ -69,6 +79,10 @@ showspec_sbatch_header = """#!/bin/bash -l
 #SBATCH --ntasks=1
 #SBATCH --time=3:00:00
 #SBATCH --output={outfile}
+
+module use /group/mwa/software/modulefiles
+module load gsm
+module load showspec
 """
 
 showspec_params = """maploc={maploc}
@@ -95,7 +109,7 @@ fi
 showspec_base_cmd = """
 echo "$showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q save_map_fits=0 -q map_file_base=${{ux}}_ -q save_map_at_freq=${{freq}} -q freq_start=${{freq_start}} -q freq_end=${{freq_end}} -q cache_on=0 -q ant_cache_on=1 -q site=mwa -q ant_eff=0 -q binary_input=1 -q ant_rotation_deg=0.00 -q save_pattern_map_db=0 -p $maploc/skymaps -q max_feko_theta=90 -q bradley=1 -q sources=1 -q MAX_THETA_COUNT={ntheta} -q MAX_PHI_COUNT={nphi} -q phi_column_index={azcol} -q theta_column_index={zacol} -q gain_column_index={gaincol}"
 
-$showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q save_map_fits=0 -q map_file_base=${{ux}}_ -q save_map_at_freq=${{freq}} -q freq_start=${{freq_start}} -q freq_end=${{freq_end}} -q cache_on=0 -q ant_cache_on=1 -q site=mwa -q ant_eff=0 -q binary_input=1 -q ant_rotation_deg=0.00 -q save_pattern_map_db=0 -p $maploc/skymaps -q max_feko_theta=90 -q bradley=1 -q sources=1 -q MAX_THETA_COUNT={ntheta} -q MAX_PHI_COUNT={nphi} -q phi_column_index={azcol} -q theta_column_index={zacol} -q gain_column_index={gaincol}
+srun --export=all -u $showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b $file -q sun=0 -q save_map_fits=0 -q map_file_base=${{ux}}_ -q save_map_at_freq=${{freq}} -q freq_start=${{freq_start}} -q freq_end=${{freq_end}} -q cache_on=0 -q ant_cache_on=1 -q site=mwa -q ant_eff=0 -q binary_input=1 -q ant_rotation_deg=0.00 -q save_pattern_map_db=0 -p $maploc/skymaps -q max_feko_theta=90 -q bradley=1 -q sources=1 -q MAX_THETA_COUNT={ntheta} -q MAX_PHI_COUNT={nphi} -q phi_column_index={azcol} -q theta_column_index={zacol} -q gain_column_index={gaincol}
 """
 
 
@@ -159,7 +173,7 @@ def write_showspec_batch(time, obsid, ra, dec, freq, ntheta, nphi, infile, maplo
     with open(fname,'w') as f:
 
         header_str = showspec_sbatch_header.format(outfile=oname)
-        params_str = showspec_params.format(maploc=maploc+"/skymaps", obsid=obsid, unixtime=unix, gpstime=time,
+        params_str = showspec_params.format(maploc=maploc, obsid=obsid, unixtime=unix, gpstime=time,
                                              ra=ra, dec=dec, freq=freq/1e6, freq_start=fstart, freq_end=fend,
                                              infile=infile)
         run_str = showspec_base_cmd.format(ntheta=int(ntheta), nphi=int(nphi), azcol=azcol, zacol=zacol, gaincol=gaincol)
