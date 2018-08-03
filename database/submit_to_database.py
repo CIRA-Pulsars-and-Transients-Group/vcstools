@@ -940,12 +940,7 @@ if __name__ == "__main__":
         elif args.single_pulse_series:
             commands.append("ar_loc=" + str(args.single_pulse_series)[:-3])
         elif args.u_ippd  or args.u_waterfall or args.u_archive:
-            commands.append("srun -n 1 -c $ncpus dspsr -U 600 -E {0}.par -b {1} -A -cont -O {2}_{0} ".format(pulsar, num_bins, obsid) + "${fits}")
-            commands.append('psraddstring="psradd -o {0}_{1}.ar "'.format(obsid,pulsar))
-            commands.append('for ((i=0;i<${{#fits[@]}};i++)); do psraddstring=${{psraddstring}}" "{0}_{1}_$(expr $i).ar ; done'.format(obsid,pulsar))
-            commands.append("srun -n 1 -c $ncpus $psraddstring")
-            commands.append("rm {0}_{1}_[0-9].ar".format(obsid,pulsar))
-            commands.append("rm {0}_{1}_[0-9][0-9].ar".format(obsid,pulsar))
+            commands.append("srun -n 1 -c $ncpus dspsr -U 600 -E {0}.par -b {1} -A -cont -O {2}_{0} {3}".format(pulsar, num_bins, obsid, fits_files_loc))
             commands.append("ar_loc={0}_{1}".format(obsid,pulsar))
         if args.u_ippd:
             commands.append("pav -CDFTp -N1,1 -g {0}_{1}.prof.ps/cps ".format(obsid,pulsar) +\
@@ -956,16 +951,16 @@ if __name__ == "__main__":
         if args.u_ppps:
             commands.append("psrcat -e {0} > {0}.eph".format(pulsar))
             commands.append("srun -n 1 -c $ncpus prepfold -ncpus $ncpus -o {0} -topo -runavg -noclip -par {1}.eph -nsub 256 ".format(obsid, pulsar) + "${fits}")
-            commands.append("{0}.eph".format(pulsar))
+            commands.append("rm {0}.eph".format(pulsar))
         if args.u_single_pulse_series:
-            commands.append("srun -n 1 -c $ncpus dspsr -U 600 -E {0}.par -b {1} -cont -s -K ".\
+            commands.append("srun -n 1 dspsr -U 600 -E {0}.par -b {1} -cont -s -K ".\
                                 format(pulsar,num_bins) + "${fits}")
             commands.append('psraddstring="psradd -o {0}_{1}.ts.ar "'.format(obsid,pulsar))
             commands.append("ts=(pulse*.ar)")
             commands.append('for ((i=0;i<${#ts[@]};i++)); do psraddstring=${psraddstring}" "${ts[i]} ; done')
             commands.append("srun -n 1 -c $ncpus $psraddstring")
             commands.append("rm pulse*.ar")
-        commands.append("{0}.par".format(pulsar))
+        commands.append("rm {0}.par".format(pulsar))
         job_id = submit_slurm(dspsr_batch, commands,
                               batch_dir="./",
                               slurm_kwargs={"time": "6:50:00", "partition": "workq"},
