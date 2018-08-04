@@ -12,16 +12,17 @@ Date: 2016-12-8
 
 # numerical and maths modules
 import numpy as np
-from astropy.coordinates import SkyCoord,EarthLocation,AltAz
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz
 from astropy.time import Time
 from astropy.io import fits
 import astropy.units as u
-from astropy.constants import c,k_B
+from astropy.constants import c, k_B
 # use updated astropy ephemerides
 from astropy.utils import iers
 
 #utility and processing modules
-import os,sys
+import os
+import sys
 from mpi4py import MPI
 import argparse
 #from mwapy import ephem_utils,metadata
@@ -42,7 +43,7 @@ def get_delay_steps(obs):
     minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
     maxfreq = float(max(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
     channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
-    centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
+    centrefreq = 1.28 * (minfreq + (maxfreq - minfreq) / 2)
 
     return  obs, ra, dec, duration, xdelays, centrefreq, channels
 
@@ -62,7 +63,7 @@ def getTileLocations(obsid, flags=[], fdir="."):
         list[2] = a list of tile heights about sea-level 
 	"""
 
-    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(fdir,obsid))		
+    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(fdir, obsid))		
     
     east = f[1].data['East'][::2]
     north = f[1].data['North'][::2]
@@ -77,10 +78,10 @@ def getTileLocations(obsid, flags=[], fdir="."):
     north = np.delete(north,flags)
     height = np.delete(height,flags)
 			
-    return east,north,height
+    return east, north, height
 
 
-def get_obstime_duration(obsid,fdir="."):
+def get_obstime_duration(obsid, fdir="."):
     """
     Funciton to grab the recorded start-time and duration of the observation
 	
@@ -94,12 +95,12 @@ def get_obstime_duration(obsid,fdir="."):
 	"""
 
     # metafits file will already have been downloaded
-    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(obsid,fdir))
+    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(obsid, fdir))
 	
     return [f[0].header['DATE-OBS'], f[0].header['EXPOSURE']]
 
 
-def getTargetAZZA(ra,dec,time,lat=-26.7033,lon=116.671,height=377.827):
+def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827):
     """
     Function to get the target position in alt/az at a given EarthLocation and Time.
 	
@@ -135,7 +136,7 @@ def getTargetAZZA(ra,dec,time,lat=-26.7033,lon=116.671,height=377.827):
     az = altaz.az.rad 
     azdeg = altaz.az.deg
 	 
-    za = np.pi/2 - altaz.alt.rad
+    za = np.pi / 2 - altaz.alt.rad
     zadeg = 90 - altaz.alt.deg
 	
 
@@ -223,54 +224,56 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
     obswl = obsfreq / c.value
 
     # calculate the target (kx,ky,kz)
-    target_kx, target_ky, target_kz = calcWaveNumbers(obswl, (np.pi/2)-targetAZ, targetZA)
+    target_kx, target_ky, target_kz = calcWaveNumbers(obswl, (np.pi / 2) - targetAZ, targetZA)
 
 
     results = []
 
     # is this the last process?
-    lastrank = rank == size-1
+    lastrank = rank == size - 1
 
     # we will also calculate the beam area contribution of this part of the sky
     omega_A = 0
     array_factor_max = -1
 
+    # TODO: this is the important bit, and I'm sure we are doing this the dumb, slow way...
     # for each ZA "pixel", 90deg inclusive
     for za in za_chunk:
         # for each Az "pixel", 360deg not included
-        for az in genAZZA(0, 2*np.pi, np.radians(phi_res)):
+        for az in genAZZA(0, 2 * np.pi, np.radians(phi_res)):
 			
             # calculate the relevent wavenumber for (theta,phi)
-            kx, ky, kz = calcWaveNumbers(obswl, (np.pi/2)-az, za)
+            kx, ky, kz = calcWaveNumbers(obswl, (np.pi / 2) - az, za)
             array_factor = 0 + 0.j
 
             # determine the interference pattern seen for each tile
             for x, y, z in zip(xpos, ypos, zpos):
-                ph = kx*x + ky*y + kz*z
-                ph_target = target_kx*x + target_ky*y + target_kz*z
-                array_factor += np.cos(ph-ph_target) + 1.j*np.sin(ph-ph_target)
+                ph = kx * x + ky * y + kz * z
+                ph_target = target_kx * x + target_ky * y + target_kz * z
+                array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
 			
             # normalise to unity at pointing position
             array_factor /= len(xpos)
-			
+			array_factor_power = np.abs(array_factor)**2
+
             # keep track of maximum value calculated
-            if (np.abs(array_factor)**2 > array_factor_max):
-                array_factor_max = np.abs(array_factor)**2
+            if (array_factor_power > array_factor_max):
+                array_factor_max = array_factor_power
 	
             # calculate the tile beam at the given Az,ZA pixel
             #tile_xpol,tile_ypol = pb.MWA_Tile_full_EE([[za]],[[az]],freq=obsfreq,delays=[delays,delays],power=True,zenithnorm=True,interp=False)
             tile_xpol, tile_ypol = pb.MWA_Tile_analytic(za, az, freq=obsfreq, delays=delays, power=True, zenithnorm=True)
-            tile_pattern = (tile_xpol + tile_ypol)/2.0
+            tile_pattern = (tile_xpol + tile_ypol) / 2.0
 			
             # calculate the phased array power pattern 
-            phased_array_pattern = tile_pattern * np.abs(array_factor)**2			
+            phased_array_pattern = tile_pattern * array_factor_power
             #phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
 		
             # append results to a reference list for later	
             results.append([np.degrees(za), np.degrees(az), phased_array_pattern])
 		
             # add this contribution to the beam solid angle
-            omega_A += np.sin(za) * np.abs(array_factor)**2 * np.radians(theta_res) * np.radians(phi_res)
+            omega_A += np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
 
     print "worker {0}, array factor maximum = {1}".format(rank, array_factor_max)
 
@@ -369,7 +372,7 @@ args = parse_options(comm)
 ra = str(args.target[0]).replace('"', '').replace("'", "")
 dec = args.target[1].replace('"', '').replace("'", "")
 tres, pres = args.grid_res
-ntheta, nphi = 90/tres, 360/pres
+ntheta, nphi = 90 / tres, 360 / pres
 
 if args.flagged_tiles is None:
     flags = []
@@ -390,10 +393,6 @@ if rank == 0:
         delays = [0] * 16
     else:
         delays = get_delay_steps(args.obsid)[4]
-
-    # download most recent IERS table if necessary
-    #print "updating astropy IERS table"
-    #iers_table = iers.IERS_A.open(iers.IERS_A_URL, cache=True)
 
     # same for obs time, master reads and then distributes
     print "getting times"
@@ -421,7 +420,7 @@ comm.barrier()
 
 
 # figure out how many chunks to split up ZA into
-totalZAevals = ((np.pi/2) / np.radians(tres)) + 1 #total number of ZA evaluations required
+totalZAevals = ((np.pi / 2) / np.radians(tres)) + 1 # total number of ZA evaluations required
 assert totalZAevals >= size, "Total number of ZA evalutions must be >= the number of processors available"
 
 
@@ -430,9 +429,19 @@ if rank == 0:
     za_array = np.array_split(np.radians(np.linspace(0, 90, ntheta + 1)), size)
     
     # create the object that contains all the data from master
-    data = {'delays':delays, 'time':time, 'x':xpos, 'y':ypos, 'z':zpos, 'za_arr':za_array,
-            'targetRA':ra, 'targetDec':dec, 'targetAz':srcAz, 'targetZA':srcZA, 
-            'targetAz_deg':srcAz_deg, 'targetZA_deg':srcZA_deg}
+    data = {'delays':delays, 
+            'time':time, 
+            'x':xpos, 
+            'y':ypos, 
+            'z':zpos, 
+            'za_arr':za_array,
+            'targetRA':ra, 
+            'targetDec':dec, 
+            'targetAz':srcAz, 
+            'targetZA':srcZA, 
+            'targetAz_deg':srcAz_deg, 
+            'targetZA_deg':srcZA_deg
+            }
 else:
     # create the data object, but leave it empty (will be filled by bcast call)
     data = None
@@ -457,11 +466,10 @@ else:
     comm.Abort(errorcode=1)
 
 # wait for all processes to have recieved the data
-comm.barrier()	
+comm.barrier()
 
 # set the base output file name (will be editted based on the worker rank)
-# TODO: make this more generic - maybe as an option for what directory?
-oname = "{0}/{1}_{2}_{3:.2f}MHz_{4}_{5}.dat".format(args.out_dir, args.obsid, time.gps, args.freq/1e6, ra, dec)
+oname = "{0}/{1}_{2}_{3:.2f}MHz_{4}_{5}.dat".format(args.out_dir, args.obsid, time.gps, args.freq / 1e6, ra, dec)
 	
 
 # create array factor for given ZA band and write to file
