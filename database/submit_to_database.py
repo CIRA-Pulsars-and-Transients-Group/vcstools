@@ -356,14 +356,12 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
             print "Input detection time does not equal the dectetion time of the .bestprof file"
             print "Input time: " + str(input_detection_time)
             print "Bestprof time: " + str(time_detection)
-            option = raw_input("Would you like to continue the program with possibliy incorrect values" +\
-                               " (yes) or exit the program (no). (y/n)")
-            if ('y' in option) or ('Y' in option) or (option == ''):
+            option = find_pulsar_in_obs.yes_no("Would you like to continue the program with "+\
+                               "possibliy incorrect values (yes) or exit the program (no). (y/n)")
+            if option:
                 print "Program will continue"
-            elif ('n' in option) or ('N' in option):
-                quit()
             else:
-                print "Unknown input so program is exiting"
+                print "Programing exiting"
                 quit()
     return enter, exit
 

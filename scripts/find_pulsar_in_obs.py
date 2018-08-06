@@ -44,6 +44,19 @@ from ConfigParser import SafeConfigParser
 import mwa_metadb_utils as meta
 
 
+def yes_no(answer):
+    yes = set(['Y','yes','y', 'ye', ''])
+    no = set(['N','no','n'])
+     
+    while True:
+        choice = raw_input(answer).lower()
+        if choice in yes:
+           return True
+        elif choice in no:
+           return False
+        else:
+           print "Please respond with 'yes' or 'no'\n"
+
 
 def sex2deg( ra, dec):
     """
@@ -968,10 +981,10 @@ if __name__ == "__main__":
             if args.pulsar == None:
                 catDIR = 'pulsaralog.csv'
             if (len(args.pulsar) ==1) and (not args.obs_for_source):
-                answer = raw_input('You are only searching for one pulsar so it is recommened that you use' +\
-                                  ' --obs_for_source. Would you like to use --obs_for_source. (Y/n)')
-                if (answer == 'Y') or (answer == 'y') or (answer == 'yes') or (answer == ''):
-                    args.obs_for_source = True
+                args.obs_for_source = yes_no('You are only searching for one pulsar so it is '+\
+                                             'recommened that you use --obs_for_source. Would '+\
+                                             'you like to use --obs_for_source. (Y/n)')
+                if args.obs_for_source:
                     print "Using option --obs_for_source"
                 else:
                     print "Not using option --obs_for_source"
@@ -1078,7 +1091,10 @@ if __name__ == "__main__":
             for row in temp:
                 OBSID.append(row[0])
 
-
+    if args.beam == 'e':
+        dt = 300
+    else:
+        dt = 100
     #for source in obs
     #gets all of the basic meta data for each observation ID
     #prepares metadata calls
@@ -1103,12 +1119,8 @@ if __name__ == "__main__":
             else:
                 cord = beam_meta_data
                 
-                if args.beam == 'e':
-                    dt = 300
-                else:
-                    dt = 100
                 get_beam_power(cord, catalog, coord1 = c1, coord2 = c2, names = name_col,
-                               dt=300, centeronly=True, verbose=False, min_power=args.min_power,
+                               dt=dt, centeronly=True, verbose=False, min_power=args.min_power,
                                option = args.beam, output = args.output,
                                cal_check = args.cal_check)
         else:
@@ -1117,17 +1129,11 @@ if __name__ == "__main__":
     #chooses the beam type and whether to list the source in each obs or the obs for each source
     #more options will be included later
     if args.obs_for_source:
-        if args.beam:
-            get_beam_power_obsforsource(cord, catalog, coord1 = c1, coord2 = c2, 
-                                        names = name_col, dt=300, centeronly=True,
-                                        verbose=False, min_power=args.min_power,
-                                        option=args.beam, output = args.output,
-                                        cal_check = args.cal_check)
-        else:
-            get_beam_power_obsforsource(cord, catalog, coord1 = c1, coord2 = c2, 
-                                        names = name_col, dt=100,centeronly=True,
-                                        verbose=False, min_power=args.min_power,
-                                        output = args.output, cal_check = args.cal_check)
+        get_beam_power_obsforsource(cord, catalog, coord1 = c1, coord2 = c2, 
+                                    names = name_col, dt=dt, centeronly=True,
+                                    verbose=False, min_power=args.min_power,
+                                    option=args.beam, output = args.output,
+                                    cal_check = args.cal_check)
 
 
 
