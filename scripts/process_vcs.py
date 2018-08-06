@@ -386,7 +386,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
 
 def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafits_file, nfine_chan, pointing,
                       args, rts_flag_file=None, bf_formats=None, DI_dir=None, execpath=None,
-                      calibration_type='rts'):
+                      calibration_type='rts', nice=0):
     """
     This function runs the new version of the beamformer. It is modelled after the old function above and will likely
     be able to be streamlined after working implementation (SET)
@@ -462,7 +462,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
 
 
     # set up SLURM requirements
-    seconds_to_run = 60 * (stop - start + 1)  # This should be able to be reduced after functional testing
+    seconds_to_run = 10 * (stop - start + 1)  # This should be able to be reduced after functional testing
     if seconds_to_run > 86399.:
         secs_to_run = datetime.timedelta(seconds=86399)
     else:
@@ -506,7 +506,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
         
         job_id = submit_slurm(make_beam_small_batch, commands,
                     batch_dir=batch_dir,
-                    slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1"},
+                    slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1",
+                                  "nice" : nice},
                     submit=True)
         job_id_list.append(job_id)
     #TODO This can be returned as a job id string that can be slapped right on for dependancies
@@ -583,6 +584,7 @@ if __name__ == '__main__':
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
     parser.add_option("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.[default=%default]")
     parser.add_option("-V", "--version", action="store_true", help="Print version and quit")
+    parser.add_option("--nice", type="int", default=0, help="Reduces your priority of Slurm Jobs. [default=%default]")
     parser.add_option_group(group_download)
     parser.add_option_group(group_correlate)
     parser.add_option_group(group_beamform)
@@ -697,7 +699,8 @@ if __name__ == '__main__':
         coherent_beam(opts.obs, opts.begin, opts.end, 
                 data_dir, product_dir, batch_dir,
                 metafits_file, opts.nfine_chan, opts.pointing, sys.argv,
-                rts_flag_file=flagged_tiles_file, bf_formats=bf_format, DI_dir=opts.DI_dir, calibration_type=opts.cal_type,
+                rts_flag_file=flagged_tiles_file, bf_formats=bf_format, DI_dir=opts.DI_dir, 
+                calibration_type=opts.cal_type, nice = args.nice,
                 execpath=opts.execpath)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
