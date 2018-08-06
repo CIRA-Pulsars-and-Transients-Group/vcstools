@@ -1081,126 +1081,46 @@ if __name__ == "__main__":
     #for source in obs
     #gets all of the basic meta data for each observation ID
     #prepares metadata calls
-    if args.all_volt: #drops the d.filetype = 11
-        sql_meta = ('select a.starttime, a.stoptime-a.starttime as duration, m.ra_pointing, m.dec_pointing, r.frequencies, d.filename from mwa_setting as a '
-                    'inner join rf_stream as r on a.starttime = r.starttime '
-                    'inner join schedule_metadata as m on a.starttime = m.observation_number '
-                    'inner join data_files as d on a.starttime = d.observation_num '
-                    'where a.starttime = %s')
-    else:
-        sql_meta = ('select a.starttime, a.stoptime-a.starttime as duration, m.ra_pointing, m.dec_pointing, r.frequencies, d.filename from mwa_setting as a '
-                    'inner join rf_stream as r on a.starttime = r.starttime '
-                    'inner join schedule_metadata as m on a.starttime = m.observation_number '
-                    'inner join data_files as d on a.starttime = d.observation_num '
-                    'where (d.filetype = 11 or d.filetype = 15) and a.starttime = %s')
+    for ob in OBSID:
+        print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(ob)
+        beam_meta_data = meta.getmeta(service='obs', params={'obs_id':ob})
+        ra = beam_meta_data[u'metadata'][u'ra_pointing']
+        dec = beam_meta_data[u'metadata'][u'dec_pointing']
+        time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
+        skytemp = beam_meta_data[u'metadata'][u'sky_temp']
+        delays = beam_meta_data[u'rfstreams'][u'0'][u'xdelays']
 
-    sql_delay = ('select xdelaysetting from obsc_recv_cmds where observation_number = %s')
+        channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
+        minfreq = float(min(channels))
+        maxfreq = float(max(channels))
+        centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in Hz
 
-    #downloads password so only mwaops group can access the archive
-    password_parser = SafeConfigParser()
-    password_parser.read('/scratch2/mwaops/pulsar/incoh_census/beam_code/MWA_metadata.ini')
-
-    cord = []
-    delays = []
-    try:
-        with closing(psycopg2.connect(database='mwa', user='mwa_ro', password=password_parser.get('MWA_admin','password') , host='mwa-metadata01', port='5432')) as conn:
-            print ' '
-    except:#incase of file finding or permission errors use webservice
-        print 'Error using admin account. Using slower webservice instead.'
-        for ob in OBSID:
-            print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(ob)
-            beam_meta_data = meta.getmeta(service='obs', params={'obs_id':ob})
-            ra = beam_meta_data[u'metadata'][u'ra_pointing']
-            dec = beam_meta_data[u'metadata'][u'dec_pointing']
-            time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
-            skytemp = beam_meta_data[u'metadata'][u'sky_temp']
-            delays = beam_meta_data[u'rfstreams'][u'0'][u'xdelays']
-
-            channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
-            minfreq = float(min(channels))
-            maxfreq = float(max(channels))
-            centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in Hz
-
-            #check for raw volatge files
-            filedata = beam_meta_data[u'files']
-            keys = filedata.keys()
-            check = False
-            for k in keys:
-                if '.dat' in k:
-                    check = True
-            if check or args.all_volt:
-                if args.obs_for_source:
-                    if args.obsid and (len(args.obsid) == 1):
-                        cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
-                    else:
-                        cord.append([ob, ra, dec, time, delays,centrefreq, channels])
+        #check for raw volatge files
+        filedata = beam_meta_data[u'files']
+        keys = filedata.keys()
+        check = False
+        for k in keys:
+            if '.dat' in k:
+                check = True
+        if check or args.all_volt:
+            if args.obs_for_source:
+                if args.obsid and (len(args.obsid) == 1):
+                    cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
                 else:
-                    cord = [ob, ra, dec, time, delays,centrefreq, channels]
-                    
-                    if args.beam == 'e':
-                        dt = 300
-                    else:
-                        dt = 100
-                    get_beam_power(cord, catalog, coord1 = c1, coord2 = c2, names = name_col,
-                                   dt=300, centeronly=True, verbose=False, min_power=args.min_power,
-                                   option = args.beam, output = args.output,
-                                   cal_check = args.cal_check)
+                    cord.append([ob, ra, dec, time, delays,centrefreq, channels])
             else:
-                print('No raw voltage files for %s' % ob)
-
-    else:
-        with closing(psycopg2.connect(database='mwa', user='mwa_ro', password=password_parser.get('MWA_admin','password') , host='mwa-metadata01', port='5432')) as conn:
-            print 'Admin access to http://mwa-metadata01.pawsey.org.au/metadata/ obtained'
-            for ob in OBSID:
-                print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(ob)
-                with closing(conn.cursor()) as cur:
-                    cur.execute(sql_meta, (ob,))
-                    meta_result = cur.fetchall()
-                    if not meta_result:
-                        if args.all_volt:
-                            print('Error reading metadata for %s' % ob)
-                            continue
-                        else:
-                            print('No raw voltage files for %s' % ob)
-                            continue
-
-                    cur.execute(sql_delay, (ob,))
-                    delay_result = cur.fetchall()
-                    if not delay_result:
-                        raise Exception('could not get delay meta data for %s' % ob)
-                    ra = meta_result[0][2]
-                    dec = meta_result[0][3]
-                    time = meta_result[0][1] #duration
-                    channels = meta_result[0][4]
-                    try:
-                        delays = delay_result[0][0][0]
-                    except TypeError:
-                        print "Delay error for OBS ID: " + str(ob)
-                    minfreq = float(min(channels))
-                    maxfreq = float(max(channels))
-                    centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq) / 2) #in Hz
-
-                    #instead of downloading all of the obs id first, if not in obs_for_source mode,
-                    #downlads one obs at a time
-                    if args.obs_for_source:
-                        if args.obsid and (len(args.obsid) == 1):
-                            cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
-                        else:
-                            cord.append([ob, ra, dec, time, delays,centrefreq, channels])
-                    else:
-                        cord = [ob, ra, dec, time, delays,centrefreq, channels]
-                        #print catalog
-                        if args.beam:
-                            get_beam_power(cord, catalog, coord1 = c1, coord2 = c2, 
-                                           names = name_col, dt=300, centeronly=True,
-                                           verbose=False, min_power=args.min_power,
-                                           option = args.beam, output = args.output, 
-                                           cal_check = args.cal_check)
-                        else: #TODO impliment a picket fence mode
-                            get_beam_power(cord, catalog, coord1 = c1, coord2 = c2,
-                                           names = name_col, dt=100, centeronly=True,
-                                           verbose=False, min_power=args.min_power,
-                                           output = args.output, cal_check = args.cal_check)
+                cord = [ob, ra, dec, time, delays,centrefreq, channels]
+                
+                if args.beam == 'e':
+                    dt = 300
+                else:
+                    dt = 100
+                get_beam_power(cord, catalog, coord1 = c1, coord2 = c2, names = name_col,
+                               dt=300, centeronly=True, verbose=False, min_power=args.min_power,
+                               option = args.beam, output = args.output,
+                               cal_check = args.cal_check)
+        else:
+            print('No raw voltage files for %s' % ob)
 
     #chooses the beam type and whether to list the source in each obs or the obs for each source
     #more options will be included later
