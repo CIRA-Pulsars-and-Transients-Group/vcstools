@@ -607,6 +607,7 @@ def get_beam_power(obsid_data,
         min_power: minimum power that the code will print a text file for (default (0.3)
     """
     print "Calculating beam power"
+    print obsid_data
     obsid,ra, dec, time, delays,centrefreq, channels = obsid_data
     starttimes=np.arange(0,time,dt)
     stoptimes=starttimes+dt
@@ -1081,22 +1082,13 @@ if __name__ == "__main__":
     #for source in obs
     #gets all of the basic meta data for each observation ID
     #prepares metadata calls
+    cord = []
     for ob in OBSID:
-        print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(ob)
-        beam_meta_data = meta.getmeta(service='obs', params={'obs_id':ob})
-        ra = beam_meta_data[u'metadata'][u'ra_pointing']
-        dec = beam_meta_data[u'metadata'][u'dec_pointing']
-        time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
-        skytemp = beam_meta_data[u'metadata'][u'sky_temp']
-        delays = beam_meta_data[u'rfstreams'][u'0'][u'xdelays']
-
-        channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
-        minfreq = float(min(channels))
-        maxfreq = float(max(channels))
-        centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in Hz
+        beam_meta_data, full_meta = meta.get_common_obs_metadata(ob, return_all = True)
+        #obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
 
         #check for raw volatge files
-        filedata = beam_meta_data[u'files']
+        filedata = full_meta[u'files']
         keys = filedata.keys()
         check = False
         for k in keys:
@@ -1105,11 +1097,11 @@ if __name__ == "__main__":
         if check or args.all_volt:
             if args.obs_for_source:
                 if args.obsid and (len(args.obsid) == 1):
-                    cord = [[ob, ra, dec, time, delays,centrefreq, channels]]
+                    cord = beam_meta_data
                 else:
-                    cord.append([ob, ra, dec, time, delays,centrefreq, channels])
+                    cord.append(beam_meta_data)
             else:
-                cord = [ob, ra, dec, time, delays,centrefreq, channels]
+                cord = beam_meta_data
                 
                 if args.beam == 'e':
                     dt = 300

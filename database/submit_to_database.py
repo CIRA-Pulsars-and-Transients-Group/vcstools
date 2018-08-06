@@ -43,28 +43,6 @@ import find_pulsar_in_obs
 web_address = 'mwa-pawsey-volt01.pawsey.ivec.org'
 auth = ('mwapulsar','veovys9OUTY=')
 
-def get_obs_metadata(obs):
-    """
-    Gets needed meta data from http://mwa-metadata01.pawsey.org.au/metadata/
-    """
-    print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obs)
-    #for line in txtfile:
-    beam_meta_data = meta.getmeta(service='obs', params={'obs_id':obs})
-    #obn = beam_meta_data[u'obsname']
-    ra = beam_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
-    dec = beam_meta_data[u'metadata'][u'dec_pointing']
-    dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
-    Tsky = beam_meta_data[u'metadata'][u'sky_temp']
-    xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
-    minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
-    maxfreq = float(max(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
-    channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
-    centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
-    
-
-    return [obs,ra,dec,dura,xdelays,centrefreq,channels]
-
-
 def psrcat(addr, auth, pulsar):
     """
     Return the pulsar details from psrcat.
@@ -741,7 +719,7 @@ if __name__ == "__main__":
         
 
     #get meta data from obsid
-    metadata = get_obs_metadata(obsid)
+    metadata = meta.get_common_obs_metadata(obsid)
     obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = metadata
     minfreq = float(min(channels))
     maxfreq = float(max(channels))
