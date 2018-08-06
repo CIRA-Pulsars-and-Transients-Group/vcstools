@@ -548,6 +548,31 @@ def beam_enter_exit(min_power, powers, imax, dt, duration):
     return [enter,exit]
 
 
+def cal_on_database_check(obsid):
+    from mwa_pulsar_client import client
+    web_address = 'mwa-pawsey-volt01.pawsey.ivec.org'
+    auth = ('mwapulsar','veovys9OUTY=')
+    detection_list = client.detection_list(web_address, auth)
+    
+    cal_used = False
+    cal_avail = False
+    for d in detection_list:
+        if int(d[u'observationid']) == int(obsid):
+            if d[u'calibrator'] is not None:
+                cal_used = True
+                #TODO add a check if there is a cal file option
+    
+    #No cal
+    check_result = 'N'
+    if cal_avail:
+        #Cal available
+        check_result = 'A'
+    elif cal_used:
+        #Cal used
+        check_result = 'U'
+    
+    return check_result
+
 def get_beam_power(obsid_data,
                    sources, 
                    coord1 = 'Raj',
@@ -558,7 +583,8 @@ def get_beam_power(obsid_data,
                    verbose=False,
                    min_power=0.3,
                    option = 'a',
-                   output = "./"):
+                   output = "./",
+                   cal_check = False):
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
     the min_power then it outputs it to the text file.
@@ -678,8 +704,14 @@ def get_beam_power(obsid_data,
         out_list.write('All of the sources that the ' + beam_string + ' beam model calculated a power of '\
                        + str(min_power) + ' or greater for observation ID: ' + str(obsid) + '\n' +\
                        'Observation data :RA(deg): ' + str(ra) + ' DEC(deg): ' + str(dec)+' Duration(s): ' \
-                       + str(time) + '\n' + \
-                       'Source  Time of max power in observation    File number source entered the '\
+                       + str(time) + '\n')
+        if cal_check:
+            #checks the MWA Pulsar Database to see if the obsid has been 
+            #used or has been calibrated
+            print "Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid)
+            cal_check_result = cal_on_database_check(obsid)
+            out_list.write("Calibrator Availability: {0}\n".format(cal_check_result))
+        out_list.write('Source  Time of max power in observation    File number source entered the '\
                        + 'beam    File number source exited the beam       Max Power \n')
         counter=0
         for sourc in Powers:
@@ -707,7 +739,8 @@ def get_beam_power_obsforsource(obsid_data,
                    verbose=False,
                    min_power=0.3,
                    option = 'a',
-                   output = "./"):
+                   output = "./",
+                   cal_check = False):
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
     the min_power then it outputs it to the text file.
@@ -842,12 +875,26 @@ def get_beam_power_obsforsource(obsid_data,
             out_list.write('All of the observation IDs that the ' + beam_string + ' beam model calculated a power of '\
                            + str(min_power) + ' or greater for the source: ' + str(sourc[names]) + '\n' +\
                            'Obs ID   Duration  Time during observation that the power was at a'+\
-                           ' maximum    File number source entered    File number source exited  Max power\n')
+                           ' maximum    File number source entered    File number source exited  Max power')
+            if cal_check:
+                out_list.write("   Cal\n")
+            else:
+                out_list.write("\n")
+                
             for p in Powers:
                 if str(p[0]) == str(sourc[names]):
                     enter, exit = beam_enter_exit(min_power, p[4], p[5], dt, time)
                     out_list.write(str(p[1]) + ' ' + str(p[2]) + ' ' + str(p[3]) + ' ' + str(enter) +\
-                                   ' ' + str(exit) + ' ' + str(p[6][0]) +"\n")
+                                   ' ' + str(exit) + ' ' + str(p[6][0]))
+                    if cal_check:
+                        #checks the MWA Pulsar Database to see if the obsid has been 
+                        #used or has been calibrated
+                        print "Checking the MWA Pulsar Databse for the obsid: {0}".format(p[1])
+                        cal_check_result = cal_on_database_check(p[1])
+                        out_list.write(" {0}\n".format(cal_check_result))
+                    else:
+                        out_list.write("\n")
+
 
     print "A list of observation IDs that containt: " + str(sourc[names]) + \
               " has been output to the text file: " + str(sourc[names]) + beam_string + '_beam.txt'
@@ -885,7 +932,9 @@ if __name__ == "__main__":
     obargs.add_argument('--FITS_dir',type=str,help='Location of FITS files on system. If not chosen will search the database for metadata.')
     obargs.add_argument('-o','--obsid',type=str,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
     obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
+    obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
     args=parser.parse_args()
+
 
     if args.version:
         try:
@@ -1094,7 +1143,8 @@ if __name__ == "__main__":
                         dt = 100
                     get_beam_power(cord, catalog, coord1 = c1, coord2 = c2, names = name_col,
                                    dt=300, centeronly=True, verbose=False, min_power=args.min_power,
-                                   option = args.beam, output = args.output)
+                                   option = args.beam, output = args.output,
+                                   cal_check = args.cal_check)
             else:
                 print('No raw voltage files for %s' % ob)
 
@@ -1144,12 +1194,13 @@ if __name__ == "__main__":
                             get_beam_power(cord, catalog, coord1 = c1, coord2 = c2, 
                                            names = name_col, dt=300, centeronly=True,
                                            verbose=False, min_power=args.min_power,
-                                           option = args.beam, output = args.output)
+                                           option = args.beam, output = args.output, 
+                                           cal_check = args.cal_check)
                         else: #TODO impliment a picket fence mode
                             get_beam_power(cord, catalog, coord1 = c1, coord2 = c2,
                                            names = name_col, dt=100, centeronly=True,
                                            verbose=False, min_power=args.min_power,
-                                           output = args.output)
+                                           output = args.output, cal_check = args.cal_check)
 
     #chooses the beam type and whether to list the source in each obs or the obs for each source
     #more options will be included later
@@ -1158,12 +1209,13 @@ if __name__ == "__main__":
             get_beam_power_obsforsource(cord, catalog, coord1 = c1, coord2 = c2, 
                                         names = name_col, dt=300, centeronly=True,
                                         verbose=False, min_power=args.min_power,
-                                        option=args.beam, output = args.output)
+                                        option=args.beam, output = args.output,
+                                        cal_check = args.cal_check)
         else:
             get_beam_power_obsforsource(cord, catalog, coord1 = c1, coord2 = c2, 
                                         names = name_col, dt=100,centeronly=True,
                                         verbose=False, min_power=args.min_power,
-                                        output = args.output)
+                                        output = args.output, cal_check = args.cal_check)
 
 
 
