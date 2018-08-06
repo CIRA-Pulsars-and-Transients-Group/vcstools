@@ -91,324 +91,168 @@ def deg2sex( ra, dec):
     return coords
 
 
-def grab_FRBalog():
+def get_psrcat_ra_dec(pulsar_list = None):
     """
-    Creates a catalogue csv file using data from http://www.astronomy.swin.edu.au/pulsar/frbcat/table.php?format=html
+    Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
+    Removes pulsars without any RA or DEC recorded
+    If no pulsar_list given then returns all pulsar on the catalogue
 
-    grab_GCalog()
-    """
-    rratalog_website = 'http://www.astronomy.swin.edu.au/pulsar/frbcat/table.php?format=html'
-
-    print "Retrieveing base FRBalog from {0}".format(rratalog_website)
-    os.remove('table.php?format=html')
-    os.system( 'wget {0}'.format( rratalog_website))
-
-    print "Converting to CSV format for easier use..."
-    txt_file = "table.php?format=html"
-    csv_file = "frbalog.csv"
-
-
-    with open(txt_file,"rb") as in_txt:
-        lines = in_txt.readlines()
-
-        header = ['NAME','Raj','Decj']
-        data = []
-        for l in lines[7:]:
-            ltemp = l.strip('<td>').split('</td>')
-            #print ltemp
-            if len(ltemp) > 2:
-                ratemp = ltemp[7].lstrip('<td>')
-                dectemp = ltemp[8].lstrip('<td>')
-                temp = [ltemp[0].lstrip('<td>')[:9],ratemp,dectemp]
-                print temp
-                data.append(temp)
-
-    #loop to format ra and dec
-    for i in range(len(data)):
-        data[i][0] = data[i][0].replace('*','')
-
-        if data[i][1].endswith(":"):
-            data[i][1]=data[i][1]+'00'
-
-        if len(data[i][1])==5:
-            data[i][1]=data[i][1]+':00'
-
-        if len(data[i][1])==7:
-            data[i][1]=data[i][1]+'0'
-
-
-        if len(data[i][2])==2 or (len(data[i][2])==3 and \
-                          data[i][2].startswith('-')):
-            data[i][2]=data[i][2]+':00:00'
-
-        if len(data[i][2])==5 or len(data[i][2])==6:
-            data[i][2]=data[i][2]+':00'
-
-        if len(data[i][2])==3 and data[i][2].endswith(':'):
-            data[i][2]=data[i][2]+'00:00'
-
-        if data[i][2].startswith('-') and data[i][2].endswith(':0'):
-            data[i][2]=data[i][2]+'0'
-            print data[i][2]
-
-        if len(data[i][2])==7 and data[i][2].endswith(':'):
-            data[i][2]=data[i][2]+'00'
-
-        #error fix in the database
-        if '.' in data[i][2][:7]:
-            data[i][2] = data[i][2][:7].replace('.',':') + data[i][2][7:]
-
-    with open(csv_file,"wb") as out_csv:
-        out_csv.write(','.join(header)+'\n')
-        for d in data:
-            out_csv.write(','.join(d)+'\n')
-
-    return
-
-
-def grab_GCalog():
-    """
-    Creates a catalogue csv file using data from http://physwww.physics.mcmaster.ca/~harris/mwgc.dat
-
-    grab_GCalog()
-    """
-    rratalog_website = 'http://physwww.physics.mcmaster.ca/~harris/mwgc.dat'
-
-    print "Retrieveing base GCalog from {0}".format( rratalog_website)
-    os.remove('mwgc.dat')
-    os.system( 'wget {0}'.format( rratalog_website))
-
-    print "Converting to CSV format for easier use..."
-    txt_file = "mwgc.dat"
-    csv_file = "gcalog.csv"
-
-
-    with open(txt_file,"rb") as in_txt:
-        lines = in_txt.readlines()
-        lines = lines[71:229] #TODO may have to check if this changes
-
-        header = ['ID','RA','DEC']
-        data = []
-        for l in lines[1:]:
-            ratemp = l[25:37].rstrip().replace(' ',':')
-            dectemp = l[38:51].rstrip().replace(' ',':')
-            temp = [l[1:10].rstrip(),ratemp,dectemp]
-            print temp
-            data.append(temp)
-
-    #loop to format ra and dec
-    for i in range(len(data)):
-        data[i][0] = data[i][0].replace('*','')
-
-        if data[i][1].endswith(":"):
-            data[i][1]=data[i][1]+'00'
-
-        if len(data[i][1])==5:
-            data[i][1]=data[i][1]+':00'
-
-        if len(data[i][1])==7:
-            data[i][1]=data[i][1]+'0'
-
-
-        if len(data[i][2])==2 or (len(data[i][2])==3 and \
-                          data[i][2].startswith('-')):
-            data[i][2]=data[i][2]+':00:00'
-
-        if len(data[i][2])==5 or len(data[i][2])==6:
-            data[i][2]=data[i][2]+':00'
-
-        if len(data[i][2])==3 and data[i][2].endswith(':'):
-            data[i][2]=data[i][2]+'00:00'
-
-        if data[i][2].startswith('-') and data[i][2].endswith(':0'):
-            data[i][2]=data[i][2]+'0'
-            print data[i][2]
-
-        if len(data[i][2])==7 and data[i][2].endswith(':'):
-            data[i][2]=data[i][2]+'00'
-
-    with open(csv_file,"wb") as out_csv:
-        out_csv.write(','.join(header)+'\n')
-        for d in data:
-            out_csv.write(','.join(d)+'\n')
-
-    return
-
-
-def grab_RRATalog(jlist=None):
-    """
-    Creates a catalogue csv file using data from http://astro.phys.wvu.edu/rratalog/rratalog.txt
-
-    grab_RRATalog()
-    """
-    rratalog_website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
-
-    print "Retrieveing base RRATalog from {0}".format( rratalog_website)
-    os.remove('rratalog.txt')
-    os.system( 'wget {0}'.format( rratalog_website))
-
-    print "Converting to CSV format for easier use..."
-    txt_file = "rratalog.txt"
-    if jlist==None:
-        csv_file = "rratalog.csv"
-    else:
-        csv_file = "temp.csv"
-
-
-    with open(txt_file,"rb") as in_txt:
-        lines = in_txt.readlines()
-
-        header = lines[0].strip().replace(" ", '\t').split('\t')
-        htemp = []
-        for h in header:
-            if h != '':
-                htemp.append(h)
-        htemp[13] = 'PulseWidth'
-        header = htemp[0:14]
-        data = []
-        for l in lines[1:]:
-            columns = l.strip().replace(" ", '\t').split('\t')
-            temp = []
-            if jlist == None or (columns[0] in jlist):
-                for entry in columns:
-                    if entry not in ['', ' ', '\t']:
-                        temp.append(entry.replace('--',''))
-                data.append(temp[0:14])
-
-    #loop to format ra and dec
-    for i in range(len(data)):
-        data[i][0] = data[i][0].replace('*','')
-
-        if data[i][4].endswith(":"):
-            data[i][4]=data[i][4]+'00'
-
-        if len(data[i][4])==5:
-            data[i][4]=data[i][4]+':00'
-
-        if len(data[i][4])==7:
-            data[i][4]=data[i][4]+'0'
-
-
-        if len(data[i][5])==2 or (len(data[i][5])==3 and \
-                          data[i][5].startswith('-')):
-            data[i][5]=data[i][5]+':00:00'
-
-        if len(data[i][5])==5 or len(data[i][5])==6:
-            data[i][5]=data[i][5]+':00'
-
-        if len(data[i][5])==3 and data[i][5].endswith(':'):
-            data[i][5]=data[i][5]+'00:00'
-
-        if data[i][5].startswith('-') and data[i][5].endswith(':0'):
-            data[i][5]=data[i][5]+'0'
-            print data[i][5]
-
-        if len(data[i][5])==7 and data[i][5].endswith(':'):
-            data[i][5]=data[i][5]+'00'
-
-    with open(csv_file,"wb") as out_csv:
-        out_csv.write(','.join(header)+'\n')
-        for d in data:
-            out_csv.write(','.join(d)+'\n')
-    return
-
-
-def grab_pulsaralog(jlist=None):
-    """
-    Uses PSRCAT and returns every pulsar in the catalouge in a csv file with the requested
-    paramaters. Removes pulsars without any RA or DEC recorded
-
-    grab_pulsaralog(jlist=None)
+    get_psrcat_ra_dec(pulsar_list = None)
     Args:
-        jlist: A space seperated string of pulsar names eg: J0534+2200 J0538+2817.
+        pulsar_list: A space list of pulsar names eg: [J0534+2200, J0538+2817].
                (default: uses all pulsars)
+    return [[Jname, RAJ, DecJ]]
     """
-    params = ['Jname', 'Raj', 'Decj', 'P0', 'P1', 'DM']
-    #If more paramaters are needed add them above
-    #The proper motion is not accounted for as it is assumed that the beam is not accurate
-    #enought to be necessary
-    pulsars = [[]]
+    params = ['Jname', 'Raj', 'Decj']
+    
     for p in params:
         #Gets the output of PSRCAT for each pparameter for each pulsar as a list
         cmd = ['psrcat', '-c', p]
-        if jlist != None:
-            for j in jlist:
-                cmd.append(j)
+        #If input pulsar list add them all to the psrcat command
+        if pulsar_list != None:
+            for input_pulsar in pulsar_list:
+                cmd.append(input_pulsar)
         output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
         if output.startswith("WARNING: PSR"):
-            print "Pulsar not on psrcat. Please use the --RRAT option if it's an RRAT or -c to use a position"
+            print "Pulsar not on psrcat."
             quit()
         temp = []
-        lines = output.split('\n')
-        for l in lines[4:-1]:
-            columns = l.split()
-            if len(columns) > 1:
-                temp.append([columns[1]])
+        
+        #process output to extract parameters
+        pulsars = output.split('\n')
+        for pulsar in pulsars[4:-1]:
+            data = pulsar.split()
+            #skip empty rows
+            if len(data) > 1:
+                temp.append([data[1]])
         if p == params[0]:
-            pulsars=temp
+            pulsar_ra_dec=temp
         else:
-            pulsars = [pulsars[x] + temp[x] for x in range(len(pulsars))]
+            pulsar_ra_dec = [pulsar_ra_dec[x] + temp[x] for x in range(len(pulsar_ra_dec))]
+    return pulsar_ra_dec
 
 
-    i = 0
-    while i < len(pulsars):
-        if '*' in pulsars[i][1]:
-            pulsars.remove(pulsars[i][:])
-        if '*' in pulsars[i][2]:
-            pulsars.remove(pulsars[i][:])
+def grab_source_alog(source_type = 'Pulsar', pulsar_list = None):
+    """
+    Creates a csv file of source names, RAs and Decs using web catalogues for ['Pulsar', 'FRB', 'GC', 'RRATs'].
+    """
+    modes = ['Pulsar', 'FRB', 'GC', 'RRATs']
+    if source_type not in modes:
+        print "Input source type not in known catalogues types. Please choose from: {0}".format(modes)
+
+    #Download the catalogue from the respective website
+    if source_type == 'FRB':
+        website = ' http://www.frbcat.org/frbcat.csv'
+        web_table = 'frbcat.csv'
+    elif source_type == 'GC':
+        website = 'http://physwww.physics.mcmaster.ca/~harris/mwgc.dat'
+        web_table = 'mwgc.dat'
+    elif source_type == 'RRATs':
+        website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
+        web_table = 'rratalog.txt'
+    if source_type !='Pulsar':
+        print "Downloading {0} catalogue from {1}".format(source_type, website)
+        os.system('wget {0}'.format(website))
+
+    #Get each source type into the format [[name, ra, dec]]
+    name_ra_dec = []
+    if source_type == 'Pulsar':
+        name_ra_dec = get_psrcat_ra_dec(pulsar_list)
+    elif source_type == 'FRB':
+        #TODO it's changed and currently not working atm
+        with open(web_table,"rb") as in_txt:
+            lines = in_txt.readlines()
+            data = []
+            for l in lines[7:]:
+                ltemp = l.strip('<td>').split('</td>')
+                print ltemp
+                if len(ltemp) > 2:
+                    ratemp = ltemp[7].lstrip('<td>')
+                    dectemp = ltemp[8].lstrip('<td>')
+                    name_ra_dec.append([ltemp[0].lstrip('<td>')[:9],ratemp,dectemp])
+    elif source_type == 'GC':
+        with open(web_table,"rb") as in_txt:
+            lines = in_txt.readlines()
+            lines = lines[71:]
+            data = []
+            for l in lines[1:]:
+                ratemp = l[25:37].rstrip().replace(' ',':')
+                dectemp = l[38:51].rstrip().replace(' ',':')
+                temp = [l[1:10].rstrip(),ratemp,dectemp]
+                
+                name_ra_dec.append(temp)
+                if l.startswith('______'):
+                    name_ra_dec = name_ra_dec[:-2]
+                    break
+    elif source_type == 'RRATs':
+        with open(web_table,"rb") as in_txt:
+            lines = in_txt.readlines()
+            data = []
+            for l in lines[1:]:
+                columns = l.strip().replace(" ", '\t').split('\t')
+                temp = []
+                if pulsar_list == None or (columns[0] in pulsar_list):
+                    for entry in columns:
+                        if entry not in ['', ' ', '\t']:
+                            temp.append(entry.replace('--',''))
+                    name_ra_dec.append([temp[0], temp[4], temp[5]])
+    
+    #remove web catalogue tables
+    if source_type !='Pulsar':
+        os.remove(web_table)
+
+    #format the ra and dec
+    name_ra_dec = format_ra_dec(name_ra_dec, ra_col = 1, dec_col = 2)
+    return name_ra_dec
+
+
+def format_ra_dec(ra_dec_list, ra_col = 0, dec_col = 1):
+    """
+    Will format a list of lists containing RAs and Decs to uniform strings.  eg 00:00:00.00 -00:00:00.00. 
+    An example input:
+    format_ra_dec([[name,ra,dec]], ra_col = 1, dec_col = 2)
+    """
+    for i in range(len(ra_dec_list)):
+        #make sure there are two digits in the HH slot for RA or DD for Dec
+        if len(ra_dec_list[i][ra_col].split(':')[0]) == 1:
+            ra_dec_list[i][ra_col] = '0' + ra_dec_list[i][ra_col]
+        if ra_dec_list[i][dec_col][0].isdigit():
+            if len(ra_dec_list[i][dec_col].split(':')[0]) == 1:
+                ra_dec_list[i][dec_col] = '0' + ra_dec_list[i][dec_col]
         else:
-            pulsars[i][3] = pulsars[i][3].replace('*','')
-            pulsars[i][4] = pulsars[i][4].replace('*','')
-            pulsars[i][5] = pulsars[i][5].replace('*','')
+            if len(ra_dec_list[i][dec_col].split(':')[0]) == 2:
+                ra_dec_list[i][dec_col] = ra_dec_list[i][dec_col][0] + '0' +\
+                                          ra_dec_list[i][dec_col][1:]
 
-            if pulsars[i][1].endswith(":"):
-                pulsars[i][1]=pulsars[i][1]+'00'
+        #make sure there is a + on positive Decs
+        if not ra_dec_list[i][dec_col].startswith('-') and\
+           not ra_dec_list[i][dec_col].startswith('+'):
+               ra_dec_list[i][dec_col] = '+' + ra_dec_list[i][dec_col]
 
-            if len(pulsars[i][1])==5:
-                pulsars[i][1]=pulsars[i][1]+':00'
+        #since the ra a dec are the same except the +- in the dec just loop over it
+        #and change the length
+        ra_dec_col = [ra_col, dec_col]
+        for n in range(2):
+            if len(ra_dec_list[i][ra_dec_col[n]]) == int(2 + n):
+                ra_dec_list[i][ra_dec_col[n]] += ':00:00.00'
+            elif len(ra_dec_list[i][ra_dec_col[n]]) == 3 + n:
+                ra_dec_list[i][ra_dec_col[n]] += '00:00.00'
+            elif len(ra_dec_list[i][ra_dec_col[n]]) == 4 + n:
+                ra_dec_list[i][ra_dec_col[n]] += '0:00.00'
+            elif len(ra_dec_list[i][ra_dec_col[n]]) == 5 + n:
+                ra_dec_list[i][ra_dec_col[n]] += ':00.00'
+            elif len(ra_dec_list[i][ra_dec_col[n]]) == 6 + n:
+                ra_dec_list[i][ra_dec_col[n]] += '00.00'
+            elif len(ra_dec_list[i][ra_dec_col[n]]) == 7 + n:
+                ra_dec_list[i][ra_dec_col[n]] += '0.00'
+            elif len(ra_dec_list[i][ra_dec_col[n]]) == 8 + n:
+                ra_dec_list[i][ra_dec_col[n]] += '.00'
+            elif len(ra_dec_list[i][ra_dec_col[n]]) == 9 + n:
+                ra_dec_list[i][ra_dec_col[n]] += '00'
+            elif len(ra_dec_list[i][ra_dec_col[n]]) == 10 + n:
+                ra_dec_list[i][ra_dec_col[n]] += '0'
 
-            if len(pulsars[i][1])==7:
-                pulsars[i][1]=pulsars[i][1]+'0'
-
-
-            if len(pulsars[i][2])==2 or (len(pulsars[i][2])==3 and \
-                              pulsars[i][2].startswith('-')):
-                pulsars[i][2]=pulsars[i][2]+':00:00'
-
-            if len(pulsars[i][2])==5 or len(pulsars[i][2])==6:
-                pulsars[i][2]=pulsars[i][2]+':00'
-
-            if len(pulsars[i][2])==3 and pulsars[i][2].endswith(':'):
-                pulsars[i][2]=pulsars[i][2]+'00:00'
-
-            if pulsars[i][2].startswith('-') and pulsars[i][2].endswith(':0'):
-                pulsars[i][2]=pulsars[i][2]+'0'
-                print pulsars[i][5]
-
-            if len(pulsars[i][2])==7 and pulsars[i][2].endswith(':'):
-                pulsars[i][2]=pulsars[i][2]+'00'
-
-            i = i + 1
-
-    if jlist != None:
-        with open('temp.csv',"wb") as out_csv:
-            out_csv.write(','.join(params)+'\n')
-            for r in pulsars:
-                for c in r[:-1]:
-                    out_csv.write(c + ",")
-                out_csv.write(r[-1])
-                out_csv.write("\n")
-    else:
-        if os.path.exists('pulsaralog.csv'):
-            os.remove('pulsaralog.csv')
-        with open('pulsaralog.csv',"wb") as out_csv:
-            out_csv.write(','.join(params)+'\n')
-            for r in pulsars:
-                for c in r[:-1]:
-                    out_csv.write(c + ",")
-                out_csv.write(r[-1])
-                out_csv.write("\n")
-    return
+    return ra_dec_list
 
 
 def calcFWHM(freq):
@@ -453,8 +297,9 @@ def singles_source_search(ra, dec):
 
     if m_o_p:
         OBSID = []
-        temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
-                                               'maxra':360.,'mindec':dec_bot,'maxdec':dec_top})
+        temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+                                                    'minra':0., 'maxra':360.,
+                                                    'mindec':dec_bot,'maxdec':dec_top})
         for row in temp:
             OBSID.append(row[0])
     else:
@@ -463,29 +308,34 @@ def singles_source_search(ra, dec):
         if ra_low < 0.:
             ra_new = 360 + ra_low
             OBSID = []
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':ra_new,\
-                                               'maxra':360.,'mindec':dec_bot,'maxdec':dec_top})
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+                                                        'minra':ra_new, 'maxra':360.,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
-                                               'maxra':ra_high,'mindec':dec_bot,'maxdec':dec_top})
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+                                                        'minra':0.,'maxra':ra_high,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
         elif ra_high > 360:
             ra_new = ra_high - 360
             OBSID = []
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':ra_low,\
-                                               'maxra':360.,'mindec':dec_bot,'maxdec':dec_top})
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+                                                        'minra':ra_low, 'maxra':360.,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':0.,\
-                                               'maxra':ra_new,'mindec':dec_bot,'maxdec':dec_top})
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+                                                        'minra':0., 'maxra':ra_new,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
         else:
             OBSID =[]
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,'minra':ra_low,\
-                                               'maxra':ra_high,'mindec':dec_bot,'maxdec':dec_top})
+            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+                                                        'minra':ra_low, 'maxra':ra_high,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
             for row in temp:
                 OBSID.append(row[0])
     return OBSID
@@ -929,12 +779,7 @@ if __name__ == "__main__":
     #source options
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
     sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"')
-    sourargs.add_argument('--RRAT',action='store_true',help='Searches for all known RRATs.')
-    sourargs.add_argument('--GC',action='store_true',help='Searches for all known Globular Clusters.')
-    sourargs.add_argument('--FRB',action='store_true',help='Searches for all known FRBs.')
-    #TODO Eventually impliment to search for FRBs and a search for all mode
-    sourargs.add_argument('--dl_RRAT',action='store_true',help='Download the RRATalog from http://astro.phys.wvu.edu/rratalog/ and uses this as the source catalogue.')
-    sourargs.add_argument('--dl_PSRCAT',action='store_true',help='Download the Puslar alog from http://www.atnf.csiro.au/research/pulsar/psrcat/ and uses this as the source catalogue.')
+    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue. [default=%default]")
     sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be readable by astropy.table.Table (i.e. csv, txt, votable, fits) . Default: for pulsars pulsaralog.csv from grab_pulsaralog.py and for RRATs rratalog.csv from grab_RRATalog.py')
     sourargs.add_argument('--source_names',type=str,help='String containing the column name for the source names in the input catalogue (--in_cat). If there is no such column, use: --names=-1 and the output text file will be labelled using the coordinates in degrees: <longitudinal>_<latitudinal>.txt. Default: "Jname".')
     sourargs.add_argument('--coord_names',type=str,help='String containing the two column labels of the source coordinates for the input catalouge (--in_cat). i.e.: "x,y" or "long,lat". If not provided, assumes that the coordinates are "Raj,Decj". Must be enterered as: "coord1,coord2".')
@@ -949,7 +794,8 @@ if __name__ == "__main__":
     obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
     args=parser.parse_args()
 
-
+    grab_source_alog(args.source_type)
+    quit()
     if args.version:
         try:
             import version
