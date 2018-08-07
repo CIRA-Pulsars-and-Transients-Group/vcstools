@@ -203,7 +203,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None):
 
     #format the ra and dec
     name_ra_dec = format_ra_dec(name_ra_dec, ra_col = 1, dec_col = 2)
-    return name_ra_dec
+    return np.array(name_ra_dec)
 
 
 def format_ra_dec(ra_dec_list, ra_col = 0, dec_col = 1):
@@ -778,12 +778,10 @@ if __name__ == "__main__":
 
     #source options
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
-    sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"')
+    sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"', default = None)
     sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue. [default=%default]")
-    sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be readable by astropy.table.Table (i.e. csv, txt, votable, fits) . Default: for pulsars pulsaralog.csv from grab_pulsaralog.py and for RRATs rratalog.csv from grab_RRATalog.py')
-    sourargs.add_argument('--source_names',type=str,help='String containing the column name for the source names in the input catalogue (--in_cat). If there is no such column, use: --names=-1 and the output text file will be labelled using the coordinates in degrees: <longitudinal>_<latitudinal>.txt. Default: "Jname".')
-    sourargs.add_argument('--coord_names',type=str,help='String containing the two column labels of the source coordinates for the input catalouge (--in_cat). i.e.: "x,y" or "long,lat". If not provided, assumes that the coordinates are "Raj,Decj". Must be enterered as: "coord1,coord2".')
-    sourargs.add_argument('-c','--coords',type=str,help='String containing coordinates in "RA,DEC". This will list the OBS IDs that contain this coordinate. Must be enterered as: "hh:mm:ss.ss,+dd:mm:ss.ss".')
+    sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
+    sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing coordinates in "RA,DEC". This will list the OBS IDs that contain this coordinate. Must be enterered as: "hh:mm:ss.ss,+dd:mm:ss.ss".')
     #finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
 
     #observation options
@@ -794,8 +792,6 @@ if __name__ == "__main__":
     obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
     args=parser.parse_args()
 
-    grab_source_alog(args.source_type)
-    quit()
     if args.version:
         try:
             import version
@@ -806,6 +802,17 @@ if __name__ == "__main__":
             print("ImportError: {0}".format(ie))
             sys.exit(0)
 
+    #Parse source options
+    if args.in_cat and args.coords:
+        print "Can't use --in_cat and --coords. Please input your cooridantes using one method"
+    if args.in_cat:
+        names_ra_dec = []
+        with open(args.in_cat,"r") as input_catalogue:
+            reader = csv.reader(input_catalogue)
+            for row in reader:
+                names_ra_dec.append(row)
+
+    names_ra_dec = grab_source_alog(source_type = args.source_type, pulsar_list = args.pulsar)
     #Parser default control
     if args.dl_RRAT:
         grab_RRATalog()
