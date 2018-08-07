@@ -461,23 +461,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     profile = np.roll(profile,shiftby)
 
     sigma, flagged_profile  = sigmaClip(profile, alpha=3, tol=0.05, ntrials=10)
-    """
-    #plot the profile so the pulse width can be determined by eye
-    print 'Please examine the plot by eye to determine the pulse width'
-    plt.plot(profile)
-    plt.axis([0, num_bins, 0, max(profile)])
-    plt.title(pulsar)
-    plt.show(block=False)
-    #width min and max input
-    min_bin = raw_input("Input the first bin of the pulse:  ")
-    max_bin = raw_input("Input the last bin of the pulse:  ")
-    plt.close()
-    #calc pulse width
-    pulse_width_bins = float(max_bin)-float(min_bin)+1.0 #in bins
-    off_pulse_width_bins = float(num_bins)-pulse_width_bins
-    pulse_width_frac = pulse_width_bins/float(num_bins)
-    """
-
+    
     #adjust profile to be around the off-pulse mean
     off_pulse_mean = np.nanmean(flagged_profile)   
     profile -= off_pulse_mean
@@ -638,7 +622,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                    dm = float(dm))
                                
         print "Observation submitted to database"
-    return
+    return subbands
 
 
 if __name__ == "__main__":
@@ -757,7 +741,7 @@ if __name__ == "__main__":
 
     if args.bestprof:
         #Does the flux calculation and submits the results to the MWA pulsar database
-        flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+        subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, incoh,
                             start = args.start, stop = args.stop, trcvr = args.trcvr)
 
