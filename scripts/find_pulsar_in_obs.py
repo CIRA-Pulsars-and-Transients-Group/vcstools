@@ -764,7 +764,8 @@ def get_beam_power_obsforsource(obsid_data,
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="""
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    description="""
     This code is used to list the sources within the beam of observations IDs or using --obs_for_source list all the observations for each source. The sources can be input serval ways: using a list of pulsar names (--pulsar), using a complete catalogue file of pulsars (--dl_PSRCAT) or RRATs (--RRAT and --dl_RRAT), using a compatable catalogue (--in_cat with the help of --names and --coordstype) or using a RA and DEC coordinate (--coords). The observation IDs can be input (--obsid) or gathered from a directory (--FITS_dir). The default is to search all observation IDs from http://mwa-metadata01.pawsey.org.au/metadata/ that have voltages and list every known pulsar from PSRCAT in each observation ID.
     """)
     parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source. For increased efficiency it will only search OBSIDs within the primary beam.')
@@ -777,14 +778,14 @@ if __name__ == "__main__":
     #source options
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
     sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"', default = None)
-    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue. [default=%default]")
+    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue.")
     sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
     sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing coordinates in "RA,DEC". This will list the OBS IDs that contain this coordinate. Must be enterered as: "hh:mm:ss.ss,+dd:mm:ss.ss".')
     #finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
 
     #observation options
     obargs = parser.add_argument_group('Observation ID options', 'The different options to control which observation IDs are used. Default is all observation IDs with voltages.')
-    obargs.add_argument('--FITS_dir',type=str,help='Location of FITS files on system. If not chosen will search the database for metadata.')
+    obargs.add_argument('--FITS_dir',type=str,help='Instead of searching all OBS IDs, only searchs for the obsids in the given directory. Does not check if the .fits files are within the directory. Default = /group/mwaops/vcs')
     obargs.add_argument('-o','--obsid',type=str,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
     obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
     obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
@@ -820,8 +821,8 @@ if __name__ == "__main__":
     names_ra_dec = format_ra_dec(names_ra_dec, ra_col = 1, dec_col = 2)
     names_ra_dec = np.array(names_ra_dec)
     
-    """
-    if (len(args.pulsar) ==1) and (not args.obs_for_source):
+    #Check if the user wants to use --obs for source
+    if (len(names_ra_dec) ==1) and (not args.obs_for_source):
         args.obs_for_source = yes_no('You are only searching for one pulsar so it is '+\
                                      'recommened that you use --obs_for_source. Would '+\
                                      'you like to use --obs_for_source. (Y/n)')
@@ -829,38 +830,29 @@ if __name__ == "__main__":
             print "Using option --obs_for_source"
         else:
             print "Not using option --obs_for_source"
-    """
-    #defaults for the fits dirs
-    if args.FITS_dir:
-        fitsDIR = args.FITS_dir
-    else:
-        fitsDIR = '/data_01/pulsar/fitsfiles/'
-
+    
    
     #get obs IDs
+    if args.obsid and args.FITS_dir:
+        print "Can't use --obsid and --FITS_dir at the same time. Exiting"
+        quit()
     if args.obsid:
-        OBSID = args.obsid
+        obsid_list = args.obsid
     elif args.FITS_dir:
         print "Creating list of observation IDs in given FITS directory"
-        obsIDs = os.walk( fitsDIR).next()[1]
-        if fitsDIR == '/data_01/pulsar/fitsfiles/':
-            obsIDs.remove('1133_drift')
+        obsid_list = os.walk(args.FITS_dir).next()[1]
+    elif len(names_ra_dec) ==1:
+        #if there is a single pulsar simply use nearby obsids
+        ob_ra, ob_dec = sex2deg(names_ra_dec[0][1],names_ra_dec[0][2])
+        obsid_list = singles_source_search(ob_ra, ob_dec)
     else:
-        #queries the database for a list of all the OBS IDs with voltages
-        #TODO for a one -p search limit the obsid list
-        OBSID = []
-        print "Obtaining list of observation IDs that have recorded voltages from http://mwa-metadata01.pawsey.org.au/metadata/"
-        if args.pulsar and (len(args.pulsar) ==1): #if there is a single pulsar simply search around it
-            ras, decs = sex2deg(catalog[c1][0],catalog[c2][0])
-            OBSID = singles_source_search(ras, decs)
-        elif args.coords:
-            ras, decs = sex2deg(catalog[c1][0],catalog[c2][0])
-            OBSID = singles_source_search(ras, decs)
-        else:
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000})
-            for row in temp:
-                OBSID.append(row[0])
-
+        temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000})
+        obsid_list = []
+        for row in temp:
+            obsid_list.append(row[0])
+    print obsid_list
+    
+    
     if args.beam == 'e':
         dt = 300
     else:
@@ -869,8 +861,8 @@ if __name__ == "__main__":
     #gets all of the basic meta data for each observation ID
     #prepares metadata calls
     cord = []
-    for ob in OBSID:
-        beam_meta_data, full_meta = meta.get_common_obs_metadata(ob, return_all = True)
+    for obsid in obsid_list:
+        beam_meta_data, full_meta = meta.get_common_obs_metadata(obsid, return_all = True)
         #obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
 
         #check for raw volatge files
