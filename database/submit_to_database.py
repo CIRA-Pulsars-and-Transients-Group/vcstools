@@ -375,18 +375,9 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
                 os.remove("{0}_analytic_beam.txt".format(obsid))
             input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
-            print "Input detection time does not equal the dectetion time of the .bestprof file"
-            print "Input time: " + str(input_detection_time)
+            print "WARNING: Input detection time does not equal the dectetion time of the .bestprof file"
+            print "Input (metadata) time: " + str(input_detection_time)
             print "Bestprof time: " + str(time_detection)
-            option = raw_input("Would you like to continue the program with possibliy incorrect values" +\
-                               " (yes) or exit the program (no). (y/n)")
-            if ('y' in option) or ('Y' in option) or (option == ''):
-                print "Program will continue"
-            elif ('n' in option) or ('N' in option):
-                quit()
-            else:
-                print "Unknown input so program is exiting"
-                quit()
     return enter, exit
 
 
