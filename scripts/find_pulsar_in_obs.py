@@ -42,7 +42,7 @@ import psycopg2
 from contextlib import closing
 from ConfigParser import SafeConfigParser
 import mwa_metadb_utils as meta
-
+import csv
 
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
@@ -201,8 +201,6 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None):
     if source_type !='Pulsar':
         os.remove(web_table)
 
-    #format the ra and dec
-    name_ra_dec = format_ra_dec(name_ra_dec, ra_col = 1, dec_col = 2)
     return np.array(name_ra_dec)
 
 
@@ -811,115 +809,34 @@ if __name__ == "__main__":
             reader = csv.reader(input_catalogue)
             for row in reader:
                 names_ra_dec.append(row)
-
-    names_ra_dec = grab_source_alog(source_type = args.source_type, pulsar_list = args.pulsar)
-    #Parser default control
-    if args.dl_RRAT:
-        grab_RRATalog()
-
-    if args.dl_PSRCAT:
-        grab_pulsaralog()
-
-    #defaults for the catalouge directory
-    if args.in_cat:
-        catDIR = args.in_cat
+    elif args.coords:
+        names_ra_dec = []
+        for cn, c in enumerate(args.coords):
+            names_ra_dec.append(['source_{0}'.format(cn+1),c.split(',')[0],c.split(',')[1]])
     else:
-        if args.RRAT:
-            catDIR = 'rratalog.csv'
-        elif args.GC:
-            catDIR = 'gcalog.csv'
-        elif args.FRB:
-            catDIR = 'frbalog.ccsv'
-        elif args.pulsar:
-            if args.pulsar == None:
-                catDIR = 'pulsaralog.csv'
-            if (len(args.pulsar) ==1) and (not args.obs_for_source):
-                args.obs_for_source = yes_no('You are only searching for one pulsar so it is '+\
-                                             'recommened that you use --obs_for_source. Would '+\
-                                             'you like to use --obs_for_source. (Y/n)')
-                if args.obs_for_source:
-                    print "Using option --obs_for_source"
-                else:
-                    print "Not using option --obs_for_source"
-            if args.pulsar != None:
-                #converts the list of pulsars into a string so they can be used as an agrument
-                jlist = args.pulsar
-                if args.RRAT:
-                    grab_RRATalog(jlist)
-                else:
-                    grab_pulsaralog(jlist)
-                catDIR = 'temp.csv'
+        names_ra_dec = grab_source_alog(source_type = args.source_type, pulsar_list = args.pulsar)
+    
+    #format ra and dec
+    names_ra_dec = format_ra_dec(names_ra_dec, ra_col = 1, dec_col = 2)
+    names_ra_dec = np.array(names_ra_dec)
+    
+    """
+    if (len(args.pulsar) ==1) and (not args.obs_for_source):
+        args.obs_for_source = yes_no('You are only searching for one pulsar so it is '+\
+                                     'recommened that you use --obs_for_source. Would '+\
+                                     'you like to use --obs_for_source. (Y/n)')
+        if args.obs_for_source:
+            print "Using option --obs_for_source"
         else:
-            catDIR = 'pulsaralog.csv'
-
-    #defaults for the coords types
-    if args.coord_names:
-        c1, c2 = args.coord_names.split(',')
-    else:
-        if args.pulsar:
-            c1, c2 = ['Raj', 'Decj']
-        if args.RRAT or args.GC:
-            c1, c2 = ['RA','DEC']
-        else:
-            c1, c2 = ['Raj', 'Decj']
-
+            print "Not using option --obs_for_source"
+    """
     #defaults for the fits dirs
     if args.FITS_dir:
         fitsDIR = args.FITS_dir
     else:
         fitsDIR = '/data_01/pulsar/fitsfiles/'
 
-    #sets the column name for the sources in the catalouge defending on different defaults
-    if args.source_names and args.source_names=='-1':
-        name_col='-1'
-    elif args.source_names:
-        name_col = args.source_names
-    else:
-        if args.RRAT:
-            name_col = 'Name'
-        elif args.pulsar:
-            name_col = 'Jname'
-        elif args.coords:
-            name_col = '-1'
-        elif args.GC:
-            name_col = 'ID'
-        elif args.FRB:
-            name_col = 'NAME'
-        else:
-            name_col = 'Jname'
-
-
-
-    #main code
-    #get cataloge
-    if args.coords:
-        #creates a table for a single coordinate
-        racor, deccor = args.coords.split(',')
-        x,y = sex2deg(racor,deccor)
-        name = str(round(x,3))+'_'+str(round(y,3))
-        catalog = Table([[name],[racor], [deccor]], names=(name_col,c1, c2))
-    else:
-        print "Creating catalogue from file", catDIR, "..."
-        try:
-            catalog = Table.read( catDIR)
-        except IOError as e:
-            print "No file {0} found. Using grab_pulsars.py to creat directory.".format( e.strerror)
-            if args.RRAT:
-                grab_RRATalog()
-                catalog = Table.read('rratalog.csv')
-            elif args.GC:
-                grab_GCalog()
-                catalog = Table.read('gcalog.csv')
-            elif args.FRB:
-                grab_FRBalog()
-                catalog = Table.read('frbalog.csv')
-            else:
-                grab_pulsaralog()
-                catalog = Table.read('pulsaralog.csv')
-
-    header = catalog.colnames
-
-
+   
     #get obs IDs
     if args.obsid:
         OBSID = args.obsid
