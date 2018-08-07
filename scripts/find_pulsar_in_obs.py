@@ -350,77 +350,35 @@ def beam_enter_exit(powers, dt, duration, min_power = 0.3):
         min_power: zenith normalised power cut off 
     """
     from scipy.interpolate import UnivariateSpline
-    print dt, duration 
     time_steps = range(0, duration, dt) 
 
     #For each time step record the min power so even if the source is in 
     #one freq channel it's recorded
     powers_freq_min = []
     for p in powers:
-        powers_freq_min.append(min(p))
+        powers_freq_min.append(float(min(p) - min_power))
 
-    spline = UnivariateSpline(time_steps, powers_freq_min - min_power, s=0)
-    print spline.roots()
-    r1, r2 = spline.roots()
-    FWHM = abs(r1-r2)
-    #calc num of files inn obs
-    file_num = duration / 200
-    if (float(duration) % 200.) != 0.0:
-        file_num = file_num + 1
-
-    #Creates cut offs around min_power
-    low_limit = min_power - 0.02
-    high_limit = min_power + 0.02
-
-    #creates lists of times before and after the max
-    before_max = []
-    for i in range(0,imax):
-        before_max.append([powers[i],i*dt])
-
-    after_max = []
-    for i in range(imax,len(powers)):
-        after_max.append([powers[i],i*dt])
-
-    #Shortens the list to powers near min_power
-    before_list = []
-    before_check = False
-    for b in before_max:
-        if low_limit < b[0] < high_limit:
-            before_list.append(b)
-            before_check = True
-
-    after_list = []
-    after_check = False
-    for a in after_max:
-        if low_limit < a[0] < high_limit:
-            after_list.append(a)
-            after_check = True
-
-
-    #assumes min power is at start of before_list and end of after_list. Then extract the time and
-    #covert it into a fraction of obs and adding a file either side incase of ccode error or bright sources
-    if before_check:
-        before = before_list[0]
-        before_time = float(before[1])
-        if before_time > 199.:
-            enter = float((before_time - 200.)/float(duration))
-        else:
-            enter = 0.0
+    if min(powers_freq_min) > 0.:
+        enter = 0.
+        exit = 1.
     else:
-        enter = 0.0
-
-    if after_check:
-        after = after_list[-1]
-        after_time = float(after[1])
-
-        if after_time < (float(duration) - 199.):
-            exit = float((after_time + 200.)/float(duration))
+        spline = UnivariateSpline(time_steps, powers_freq_min , s=0)
+        if len(spline.roots()) == 2: 
+            enter, exit = spline.roots()
+            enter /= duration
+            exit /= duration
+        elif len(spline.roots()) == 1:
+            if powers_freq_min[0] > powers_freq_min[-1]:
+                #power declines so starts in beem then exits
+                enter = 0.
+                exit = spline.roots()/duration
+            else:
+                enter = spline.roots()/duration
+                exit = 0.
         else:
-            exit = 1.0
-    else:
-        exit = 1.0
-
-    return [enter,exit]
+            enter = 0.
+            exit = 1.
+    return enter, exit
 
 
 def cal_on_database_check(obsid):
@@ -773,11 +731,54 @@ if __name__ == "__main__":
     #chooses whether to list the source in each obs or the obs for each source
     if args.obs_for_source:
         for sn, source in enumerate(names_ra_dec):
-            for on, obsid in enumerate(obsid_list):
-                source_ob_power = powers[on][sn]
-                if max(source_ob_power) > args.min_power:
-                    enter, exit = beam_enter_exit(args.min_power, powers[on][sn],
-                                                  dt, obsid_meta[on][3]) 
+            out_name = "{0}_{1}_beam.txt".format(source[0],args.beam)
+            with open(out_name,"wb") as output_file:
+                output_file.write('#All of the observation IDs that the {0} beam model calculated a power of {1} or greater for the source: {2}\n'.format(args.beam,args.min_power, source[0])) 
+                output_file.write('#Obs ID,   Duration,   Obs fraction source entered,    Obs fractiong source exited,  Max power')
+                if args.cal_check:
+                    output_file.write("   Cal\n")
+                else:
+                    output_file.write('\n')
+
+                for on, obsid in enumerate(obsid_list):
+                    source_ob_power = powers[on][sn]
+                    if max(source_ob_power) > args.min_power:
+                        print source_ob_power
+                        duration = obsid_meta[on][3]
+                        enter, exit = beam_enter_exit(source_ob_power, dt,
+                                                      duration, min_power = args.min_power) 
+                        output_file.write('{0} {1} {2} {3} {4}'.format(obsid,duration, enter, exit, max(source_ob_power)[0]))
+                        if args.cal_check:
+                            #checks the MWA Pulsar Database to see if the obsid has been 
+                            #used or has been calibrated
+                            print "Checking the MWA Pulsar Databse for the obsid: {0}".format(p[1])
+                            cal_check_result = cal_on_database_check(p[1])
+                            output_file.write(" {0}\n".format(cal_check_result))
+                        else:
+                            output_file.write("\n")
+    else:
+        #output a list of sorces foreach obs
+        for on, obsid in enumerate(obsid_list):
+            out_name = "{0}_{1}_beam.txt".format(obsid,args.beam)
+            duration = obsid_meta[on][3]
+            with open(out_name,"wb") as out_list:
+                out_list.write('#All of the sources that the {0} beam model calculated a power of {1} or greater for observation ID: {2}\n'.format(args.beam, args.min_power,obsid))
+                out_list.write('#Observation data :RA(deg): {0} DEC(deg): {1} Duration(s): {2}\n'.format(obsid_meta[on][1],obsid_meta[on][2],duration))
+                if args.cal_check:
+                    #checks the MWA Pulsar Database to see if the obsid has been 
+                    #used or has been calibrated
+                    print "Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid)
+                    cal_check_result = cal_on_database_check(obsid)
+                    out_list.write("Calibrator Availability: {0}\n".format(cal_check_result))
+                out_list.write('#Source,  Obs frac source entered the '\
+                               + 'beam,    Obs frac source exited the beam,    Max Power \n')
+                for sn, source in enumerate(names_ra_dec):
+                    source_ob_power = powers[on][sn]
+                    if max(source_ob_power) > args.min_power:
+                        enter, exit = beam_enter_exit(source_ob_power, dt,
+                                                      duration, min_power = args.min_power)
+                        out_list.write('{0} {1} {2} {3} \n'.format(source[0],enter,exit,max(source_ob_power)[0]))
+
 
     print "The code is complete and all results have been output to text files"
 
