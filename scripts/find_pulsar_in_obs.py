@@ -339,16 +339,30 @@ def singles_source_search(ra, dec):
     return OBSID
 
 
-def beam_enter_exit(min_power, powers, imax, dt, duration):
+def beam_enter_exit(powers, dt, duration, min_power = 0.3):
     """
     Calculates when the source enters and exits the beam
 
     beam_enter_exit(min_power, powers, imax, dt):
-        min_power: power cut off from get_bem_power(_obsforsource)
-        powers: list of powers fo the duration every dt
-        imax: an int that will give the max power of the file (max = powers[imax])
+        powers: list of powers fo the duration every dt and freq powers[times][freqs]
         dt: the time interval of how often powers are calculated
+        duration: duration of the observation according to the metadata in seconds
+        min_power: zenith normalised power cut off 
     """
+    from scipy.interpolate import UnivariateSpline
+    print dt, duration 
+    time_steps = range(0, duration, dt) 
+
+    #For each time step record the min power so even if the source is in 
+    #one freq channel it's recorded
+    powers_freq_min = []
+    for p in powers:
+        powers_freq_min.append(min(p))
+
+    spline = UnivariateSpline(time_steps, powers_freq_min - min_power, s=0)
+    print spline.roots()
+    r1, r2 = spline.roots()
+    FWHM = abs(r1-r2)
     #calc num of files inn obs
     file_num = duration / 200
     if (float(duration) % 200.) != 0.0:
@@ -585,132 +599,9 @@ def get_beam_power(obsid_data,
 def get_beam_power_obsforsource(obsid_data,
                    sources,
                    coord1 = 'Raj',
-                   coord2 = 'Decj',
-                   names = 'Jname',
-                   dt=296,
-                   centeronly=True,
-                   verbose=False,
-                   min_power=0.3,
-                   option = 'a',
-                   output = "./",
-                   cal_check = False):
-    """
-    Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
-    the min_power then it outputs it to the text file.
-
-    get_beam_power(obsid_data,
-                   sources, coord1, coord2, names,
-                   dt=296,
-                   centeronly=True,
-                   verbose=False,
-                   min_power=0.3)
-    Args:
-        obsid_data: [obsid,ra, dec, time, delays,centrefreq, channels] 
-                    obsid metadata from meta.get_common_obs_metadata
-        sources: astropy table catalogue of sources
-        coord1: the coordinate type for sources (usualy RA)
-        coord2: the coordinate type for sources (usualy Dec)
-        names: the name given to the sources (usualy JName)
-        dt: time step in seconds for power calculations (default 296)
-        centeronly: only calculates for the centre frequency (default True)
-        verbose: prints extra data to (default False)
-        min_power: minimum power that the code will print a text file for (default (0.3)
-    """
-    print "Calculating beam power"
-    Powers= []
-    for ob in obsid_data:
-        obsid,ra, dec, time, delays,centrefreq, channels = ob
-
-        starttimes=np.arange(0,time,dt)
-        stoptimes=starttimes+dt
-        stoptimes[stoptimes>time]=time
-        Ntimes=len(starttimes)
-        midtimes=float(obsid)+0.5*(starttimes+stoptimes)
-
-        mwa = ephem_utils.Obs[ephem_utils.obscode['MWA']]
-        # determine the LST
-        observer = ephem.Observer()
-        # make sure no refraction is included
-        observer.pressure = 0
-        observer.long = mwa.long / ephem_utils.DEG_IN_RADIAN
-        observer.lat = mwa.lat / ephem_utils.DEG_IN_RADIAN
-        observer.elevation = mwa.elev
-
-        if not centeronly:
-            PowersX=np.zeros((len(sources),
-                                 Ntimes,
-                                 len(channels)))
-            PowersY=np.zeros((len(sources),
-                                 Ntimes,
-                                 len(channels)))
-            # in Hz
-            frequencies=np.array(channels)*1.28e6
-        else:
-            PowersX=np.zeros((len(sources),
-                                 Ntimes,1))
-            PowersY=np.zeros((len(sources),
-                                 Ntimes,1))
-            frequencies=[centrefreq]
-
-        RAs, Decs = sex2deg(sources[coord1],sources[coord2])
-        if len(RAs)==0:
-            sys.stderr.write('Must supply >=1 source positions\n')
-            return None
-        if not len(RAs)==len(Decs):
-            sys.stderr.write('Must supply equal numbers of RAs and Decs\n')
-            return None
-        for itime in xrange(Ntimes):
-            obstime = Time(midtimes[itime],format='gps',scale='utc')
-            observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
-            LST_hours = observer.sidereal_time() * ephem_utils.HRS_IN_RADIAN
-
-            HAs = -RAs + LST_hours * 15
-            Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
-            # go from altitude to zenith angle
-
-            #Decide on beam model
-            if option == 'a':
-                beam_string = "_analytic"
-                theta=np.radians(90-Alts)
-                phi=np.radians(Azs)
-
-                for ifreq in xrange(len(frequencies)):
-                    rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
-                                                         freq=frequencies[ifreq], delays=delays,
-                                                         zenithnorm=True,
-                                                         power=True)
-                    PowersX[:,itime,ifreq]=rX
-                    PowersY[:,itime,ifreq]=rY
-            elif option == 'd':
-                beam_string = "_advanced"
-                theta=np.array([np.radians(90-Alts)])
-                phi=np.array([np.radians(Azs)])
-
-                for ifreq in xrange(len(frequencies)):
-                    rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
-                                                         freq=frequencies[ifreq], delays=delays,
-                                                         zenithnorm=True,
-                                                         power=True)
-                    PowersX[:,itime,ifreq]=rX
-                    PowersY[:,itime,ifreq]=rY
-            elif option == 'e':
-                beam_string = "_full_EE"
-                theta=np.array([np.radians(90-Alts)])
-                phi=np.array([np.radians(Azs)])
-
-                for ifreq in xrange(len(frequencies)):
-                    rX,rY=primary_beam.MWA_Tile_full_EE(theta, phi,
-                                                         freq=frequencies[ifreq], delays=delays,
-                                                         zenithnorm=True,
-                                                         power=True)
-                    PowersX[:,itime,ifreq]=rX
-                    PowersY[:,itime,ifreq]=rY
-                print '{0:.2f}'.format(100.*float(itime)/float(Ntimes))+"% complete for obsid: "\
-                                        +str(obsid)
-            #temp_power [#sources, #times, #frequencies]
-        temp_power=0.5*(PowersX+PowersY)
-        counter = 0
-        for sourc in temp_power:
+                   coord2 = 'Decj'):
+    counter = 0
+    for sourc in temp_power:
             counter = counter + 1
             if max(sourc) > min_power:
                 print obsid
@@ -854,6 +745,7 @@ if __name__ == "__main__":
     #prepares metadata calls and calculates power
     powers = []
     #powers[obsid][source][time][freq]
+    obsid_meta = []
     for obsid in obsid_list:
         beam_meta_data, full_meta = meta.get_common_obs_metadata(obsid, return_all = True)
         #beam_meta_data = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
@@ -869,19 +761,23 @@ if __name__ == "__main__":
             powers.append(get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                     dt=dt, centeronly=True, verbose=False, 
                                     option = args.beam))
+            obsid_meta.append(beam_meta_data)
         else:
-            print('No raw voltage files for %s' % ob)
+            print('No raw voltage files for %s' % obsid)
+            obsid_list.remove(obsid)
+
+    print "power len: " + str(len(powers))
+    print "obs len: " + str(len(obsid_list))
     print powers
+
     #chooses whether to list the source in each obs or the obs for each source
-    #more options will be included later
     if args.obs_for_source:
-        get_beam_power_obsforsource(cord, catalog, coord1 = c1, coord2 = c2, 
-                                    names = name_col, dt=dt, centeronly=True,
-                                    verbose=False, min_power=args.min_power,
-                                    option=args.beam, output = args.output,
-                                    cal_check = args.cal_check)
-
-
+        for sn, source in enumerate(names_ra_dec):
+            for on, obsid in enumerate(obsid_list):
+                source_ob_power = powers[on][sn]
+                if max(source_ob_power) > args.min_power:
+                    enter, exit = beam_enter_exit(args.min_power, powers[on][sn],
+                                                  dt, obsid_meta[on][3]) 
 
     print "The code is complete and all results have been output to text files"
 
