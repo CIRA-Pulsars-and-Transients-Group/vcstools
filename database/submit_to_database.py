@@ -375,18 +375,9 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
                 os.remove("{0}_analytic_beam.txt".format(obsid))
             input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
-            print "Input detection time does not equal the dectetion time of the .bestprof file"
-            print "Input time: " + str(input_detection_time)
+            print "WARNING: Input detection time does not equal the dectetion time of the .bestprof file"
+            print "Input (metadata) time: " + str(input_detection_time)
             print "Bestprof time: " + str(time_detection)
-            option = raw_input("Would you like to continue the program with possibliy incorrect values" +\
-                               " (yes) or exit the program (no). (y/n)")
-            if ('y' in option) or ('Y' in option) or (option == ''):
-                print "Program will continue"
-            elif ('n' in option) or ('N' in option):
-                quit()
-            else:
-                print "Unknown input so program is exiting"
-                quit()
     return enter, exit
 
 
@@ -461,23 +452,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     profile = np.roll(profile,shiftby)
 
     sigma, flagged_profile  = sigmaClip(profile, alpha=3, tol=0.05, ntrials=10)
-    """
-    #plot the profile so the pulse width can be determined by eye
-    print 'Please examine the plot by eye to determine the pulse width'
-    plt.plot(profile)
-    plt.axis([0, num_bins, 0, max(profile)])
-    plt.title(pulsar)
-    plt.show(block=False)
-    #width min and max input
-    min_bin = raw_input("Input the first bin of the pulse:  ")
-    max_bin = raw_input("Input the last bin of the pulse:  ")
-    plt.close()
-    #calc pulse width
-    pulse_width_bins = float(max_bin)-float(min_bin)+1.0 #in bins
-    off_pulse_width_bins = float(num_bins)-pulse_width_bins
-    pulse_width_frac = pulse_width_bins/float(num_bins)
-    """
-
+    
     #adjust profile to be around the off-pulse mean
     off_pulse_mean = np.nanmean(flagged_profile)   
     profile -= off_pulse_mean
@@ -638,7 +613,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                    dm = float(dm))
                                
         print "Observation submitted to database"
-    return
+    return subbands
 
 
 if __name__ == "__main__":
@@ -757,7 +732,7 @@ if __name__ == "__main__":
 
     if args.bestprof:
         #Does the flux calculation and submits the results to the MWA pulsar database
-        flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+        subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, incoh,
                             start = args.start, stop = args.stop, trcvr = args.trcvr)
 
@@ -940,12 +915,7 @@ if __name__ == "__main__":
         elif args.single_pulse_series:
             commands.append("ar_loc=" + str(args.single_pulse_series)[:-3])
         elif args.u_ippd  or args.u_waterfall or args.u_archive:
-            commands.append("srun -n 1 -c $ncpus dspsr -U 600 -E {0}.par -b {1} -A -cont -O {2}_{0} ".format(pulsar, num_bins, obsid) + "${fits}")
-            commands.append('psraddstring="psradd -o {0}_{1}.ar "'.format(obsid,pulsar))
-            commands.append('for ((i=0;i<${{#fits[@]}};i++)); do psraddstring=${{psraddstring}}" "{0}_{1}_$(expr $i).ar ; done'.format(obsid,pulsar))
-            commands.append("srun -n 1 -c $ncpus $psraddstring")
-            commands.append("rm {0}_{1}_[0-9].ar".format(obsid,pulsar))
-            commands.append("rm {0}_{1}_[0-9][0-9].ar".format(obsid,pulsar))
+            commands.append("srun -n 1 -c $ncpus dspsr -U 600 -E {0}.par -b {1} -A -cont -O {2}_{0} {3}".format(pulsar, num_bins, obsid, fits_files_loc))
             commands.append("ar_loc={0}_{1}".format(obsid,pulsar))
         if args.u_ippd:
             commands.append("pav -CDFTp -N1,1 -g {0}_{1}.prof.ps/cps ".format(obsid,pulsar) +\
@@ -956,16 +926,16 @@ if __name__ == "__main__":
         if args.u_ppps:
             commands.append("psrcat -e {0} > {0}.eph".format(pulsar))
             commands.append("srun -n 1 -c $ncpus prepfold -ncpus $ncpus -o {0} -topo -runavg -noclip -par {1}.eph -nsub 256 ".format(obsid, pulsar) + "${fits}")
-            commands.append("{0}.eph".format(pulsar))
+            commands.append("rm {0}.eph".format(pulsar))
         if args.u_single_pulse_series:
-            commands.append("srun -n 1 -c $ncpus dspsr -U 600 -E {0}.par -b {1} -cont -s -K ".\
+            commands.append("srun -n 1 dspsr -U 600 -E {0}.par -b {1} -cont -s -K ".\
                                 format(pulsar,num_bins) + "${fits}")
             commands.append('psraddstring="psradd -o {0}_{1}.ts.ar "'.format(obsid,pulsar))
             commands.append("ts=(pulse*.ar)")
             commands.append('for ((i=0;i<${#ts[@]};i++)); do psraddstring=${psraddstring}" "${ts[i]} ; done')
             commands.append("srun -n 1 -c $ncpus $psraddstring")
             commands.append("rm pulse*.ar")
-        commands.append("{0}.par".format(pulsar))
+        commands.append("rm {0}.par".format(pulsar))
         job_id = submit_slurm(dspsr_batch, commands,
                               batch_dir="./",
                               slurm_kwargs={"time": "6:50:00", "partition": "workq"},
