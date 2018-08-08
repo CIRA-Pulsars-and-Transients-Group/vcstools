@@ -104,7 +104,7 @@ def get_frequencies(metafits,resort=False):
     else:
         return freq_array
 
-def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, args, ics=False, n_untar=2, keep=""):
+def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, args, ics=False, n_untar=2, keep="", nice = 0):
         vcs_database_id = database_vcs.database_command(args, obsid)
         print "Downloading files from archive"
         # voltdownload = distutils.spawn.find_executable("voltdownload.py") #Doesn't seem to be working on zeus for some reason
@@ -154,7 +154,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                             untar = distutils.spawn.find_executable('untar.sh')
                             body.append(database_vcs.add_database_function())
                             body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
-                            submit_slurm(tar_batch,body,batch_dir=batch_dir, slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq"}, \
+                            submit_slurm(tar_batch,body,batch_dir=batch_dir, slurm_kwargs={"time":str(tar_secs_to_run), "partition":"workq", "nice" : nice}, \
                                              submit=False, outfile=batch_dir+tar_batch+".out", cluster="galaxy")
                         checks = distutils.spawn.find_executable("checks.py")
                         # Write out the checks batch file but don't submit it
@@ -174,7 +174,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                             commands.append("else")
                             commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
                         commands.append("fi")
-                        submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "workq"}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus", export="NONE")
+                        submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : check_secs_to_run, "partition" : "workq", "nice" : nice}, submit=False, outfile=batch_dir+check_batch+"_0.out", cluster="zeus", export="NONE")
                         
                         # Write out the tar batch file if in mode 15
                         #if format == 16:
@@ -196,7 +196,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         body.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".format(batch_dir+check_batch+".batch"))
                         body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch"))
                         body.append('run "{0}" "--obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}" "{7}"'.format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir, vcs_database_id))
-                        submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus"}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
+                        submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, slurm_kwargs={"time" : str(volt_secs_to_run), "partition" : "copyq", "clusters":"zeus", "nice" : nice}, outfile=batch_dir+voltdownload_batch+"_1.out", cluster="zeus")
                         
                         # submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
                         continue
@@ -208,7 +208,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         sys.exit()
 
 
-def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False):
+def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False, nice = 0):
     vcs_database_id = database_vcs.database_command(args, obs_id)
     batch_dir = product_dir + '/batch/'
     product_dir = '{0}/cal/{1}'.format(product_dir,cal_obs_id)
@@ -250,10 +250,10 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False):
         commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
         commands.append(make_link)
         commands.append('rm obscrt.crt obskey.key')
-        submit_slurm(obsdownload_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : secs_to_run, "partition" : "copyq"}, cluster="zeus")
+        submit_slurm(obsdownload_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : secs_to_run, "partition" : "copyq", "nice" : nice}, cluster="zeus")
 
 
-def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args):
+def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args, nice = 0):
         vcs_database_id = database_vcs.database_command(args, obsid)
         print "Running recombine on files"
         jobs_per_node = 8
@@ -284,7 +284,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                 commands.append("if [ $? -eq 1 ];then")
                 commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))  
                 commands.append("fi")
-                submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "15:00", "partition" : "gpuq"}, submit=False, outfile=batch_dir+check_batch+"_0.out")
+                submit_slurm(check_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "15:00", "partition" : "gpuq", "nice" : nice}, submit=False, outfile=batch_dir+check_batch+"_0.out")
                 
                 commands = []
                 commands.append(database_vcs.add_database_function())
@@ -301,11 +301,11 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                 commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".format(batch_dir+check_batch+".batch")) #TODO: Add iterations?
                 commands.append('run "srun python {0}" "-o {1} -s {2} -w {3} -e {4}" "{5}"'.format(recombine,obsid,time_to_get,data_dir,recombine_binary, vcs_database_id))
                 
-                submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq", "ntasks-per-node": jobs_per_node}, outfile=batch_dir+recombine_batch+"_1.out")
+                submit_slurm(recombine_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : "06:00:00", "nodes" : str(nodes), "partition" : "gpuq", "ntasks-per-node": jobs_per_node, "nice" : nice}, outfile=batch_dir+recombine_batch+"_1.out")
 
 
 
-def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args, metafits):
+def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args, metafits, nice = 0):
         vcs_database_id = database_vcs.database_command(args, obsid)
         print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
         from astropy.time import Time
@@ -373,7 +373,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                                         #     to_corr = to_corr+1
         
                                 secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr)) # added factor two on 10 April 2017 as galaxy seemed really slow...
-                                submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq", "gres": "gpu:1"}, batch_dir=batch_dir)
+                                submit_slurm(corr_batch,body,slurm_kwargs={"time" : secs_to_run, "partition" : "gpuq", "gres": "gpu:1", "nice" : nice}, batch_dir=batch_dir)
                                 # batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
                                 # submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
                                 # jobid=""
@@ -660,18 +660,18 @@ if __name__ == '__main__':
 
     if opts.mode == 'download_ics':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, ics=True)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, ics=Truei, nice = args.nice)
     elif opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "")
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "", nice = args.nice)
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv, nice = args.nice)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file, nice = args.nice)
     elif opts.mode == 'download_cal':
         print opts.mode
         if not opts.cal_obs:
@@ -682,7 +682,7 @@ if __name__ == '__main__':
             quit()
         data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
         mdir(data_dir, "Calibrator Data")
-        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head)
+        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head, nice = args.nice)
     elif opts.mode == ('beamform' or 'incoh'):
         print opts.mode
         if not opts.DI_dir:
