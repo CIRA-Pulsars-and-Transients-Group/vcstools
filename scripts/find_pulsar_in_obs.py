@@ -211,6 +211,11 @@ def format_ra_dec(ra_dec_list, ra_col = 0, dec_col = 1):
     format_ra_dec([[name,ra,dec]], ra_col = 1, dec_col = 2)
     """
     for i in range(len(ra_dec_list)):
+        #catching errors in old psrcat RAs
+        if len(ra_dec_list[i][ra_col]) >5:    
+            if  ra_dec_list[i][ra_col][5] == '.':
+                ra_dec_list[i][ra_col] = ra_dec_list[i][ra_col][:5] + ":" +\
+                        str(int(float('0'+ra_dec_list[i][ra_col][5:])*60.))
         #make sure there are two digits in the HH slot for RA or DD for Dec
         if len(ra_dec_list[i][ra_col].split(':')[0]) == 1:
             ra_dec_list[i][ra_col] = '0' + ra_dec_list[i][ra_col]
@@ -371,9 +376,9 @@ def beam_enter_exit(powers, dt, duration, min_power = 0.3):
             if powers_freq_min[0] > powers_freq_min[-1]:
                 #power declines so starts in beem then exits
                 enter = 0.
-                exit = spline.roots()/duration
+                exit = spline.roots()[0]/duration
             else:
-                enter = spline.roots()/duration
+                enter = spline.roots()[0]/duration
                 exit = 0.
         else:
             enter = 0.
@@ -409,13 +414,13 @@ def cal_on_database_check(obsid):
 
 def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                              dt=296, centeronly=True, verbose=False, 
-                             option = 'a'):
+                             option = 'analytic'):
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source over time.
 
     get_beam_power_over_time(beam_meta_data, names_ra_dec,
-                             dt=dt, centeronly=True, verbose=False,          
-                             option = 'a', output = './')
+                             dt=296, centeronly=True, verbose=False,          
+                             option = 'analytic')
     Args:
         beam_meta_data: [obsid,ra, dec, time, delays,centrefreq, channels] 
                         obsid metadata obtained from meta.get_common_obs_metadata
@@ -423,7 +428,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         dt: time step in seconds for power calculations (default 296)
         centeronly: only calculates for the centre frequency (default True)
         verbose: prints extra data to (default False)
-        option: primary beam model ['a','d','e']: analytical, advanced, full_EE
+        option: primary beam model [analytic, advanced, full_EE]
     """
     obsid,ra, dec, time, delays,centrefreq, channels = beam_meta_data
     print "Calculating beam power for OBS ID: {0}".format(obsid)
@@ -478,7 +483,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         phi=np.radians(Azs)
 
         #Decide on beam model
-        if option == 'a':
+        if option == 'analytic':
             for ifreq in xrange(len(frequencies)):
                 rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
@@ -486,7 +491,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                                      power=True)
                 PowersX[:,itime,ifreq]=rX
                 PowersY[:,itime,ifreq]=rY
-        elif option == 'd':
+        elif option == 'advanced':
             for ifreq in xrange(len(frequencies)):
                 rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
@@ -494,7 +499,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                                      power=True)
                 PowersX[:,itime,ifreq]=rX
                 PowersY[:,itime,ifreq]=rY
-        elif option == 'e':
+        elif option == 'full_EE':
             for ifreq in xrange(len(frequencies)):
                 rX,rY=primary_beam.MWA_Tile_full_EE(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
@@ -507,114 +512,114 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     return Powers
 
 
+def find_sources_in_obs(obsid_list, names_ra_dec, 
+                        obs_for_source = False, dt = 296, beam = 'analytic',
+                        min_power = 0.3, cal_check = False, all_volt = False):
+    """
+    Either creates text files for each MWA obs ID of each source within it or a text file for each source with each MWA obs is that the source is in.
+    Args:
+        obsid_list: list of MWA obs IDs
+        names_ra_dec: [[source_name, ra, dec]]
+        dt: the time step in seconds to do power calculations
+        beam: beam simulation type ['analytic', 'advanced', 'full_EE']
+        min_power: if above the minium power assumes it's in the beam
+        cal_check: checks the MWA pulsar database if there is a calibration for the obsid
+    """
+    #prepares metadata calls and calculates power
+    powers = []
+    #powers[obsid][source][time][freq]
+    obsid_meta = []
+    obsid_to_remove = []
+    print "obs len: " + str(len(obsid_list))
 
-def get_beam_power(obsid_data,
-                   sources, 
-                   coord1 = 'Raj',
-                   coord2 = 'Decj',
-                   names = 'Jname',
-                   dt=296,
-                   centeronly=True,
-                   verbose=False,
-                   min_power=0.3,
-                   option = 'a',
-                   output = "./",
-                   cal_check = False):
-      
-    outputfile = output
-    primary_beam_output_file = outputfile + str(obsid) + '_' + beam_string + '_beam.txt'
-    if os.path.exists(primary_beam_output_file):
-        os.remove(primary_beam_output_file)
-    with open(primary_beam_output_file,"wb") as out_list:
-        out_list.write('All of the sources that the ' + beam_string + ' beam model calculated a power of '\
-                       + str(min_power) + ' or greater for observation ID: ' + str(obsid) + '\n' +\
-                       'Observation data :RA(deg): ' + str(ra) + ' DEC(deg): ' + str(dec)+' Duration(s): ' \
-                       + str(time) + '\n')
-        if cal_check:
-            #checks the MWA Pulsar Database to see if the obsid has been 
-            #used or has been calibrated
-            print "Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid)
-            cal_check_result = cal_on_database_check(obsid)
-            out_list.write("Calibrator Availability: {0}\n".format(cal_check_result))
-        out_list.write('Source  Time of max power in observation    File number source entered the '\
-                       + 'beam    File number source exited the beam       Max Power \n')
-        counter=0
-        for sourc in Powers:
-            counter = counter + 1
-            if max(sourc) > min_power:
-                for imax in range(len(sourc)):
-                    if sourc[imax] == max(sourc):
-                        max_time = midtimes[imax]
-                        enter, exit = beam_enter_exit(min_power, sourc, imax, dt, time)
-                        out_list.write(str(sources[names][counter - 1])  + ' ' + \
-                                str(int(max_time) - int(obsid)) + ' ' + str(enter) + ' ' + str(exit) +\
-                                ' ' + str(max(sourc)[0]) + "\n")
-        print "A list of sources for the observation ID: " + str(obsid) + \
-              " has been output to the text file: " + str(obsid) + '_' + beam_string + '_beam.txt'
-    return enter, exit
+    for obsid in obsid_list:
+        beam_meta_data, full_meta = meta.get_common_obs_metadata(obsid, return_all = True)
+        #beam_meta_data = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
 
+        #check for raw volatge files
+        filedata = full_meta[u'files']
+        keys = filedata.keys()
+        check = False
+        for k in keys:
+            if '.dat' in k: #TODO check if is still robust
+                check = True
+        if check or all_volt:
+            powers.append(get_beam_power_over_time(beam_meta_data, names_ra_dec,
+                                    dt=dt, centeronly=True, verbose=False, 
+                                    option = beam))
+            obsid_meta.append(beam_meta_data)
+        else:
+            print('No raw voltage files for %s' % obsid)
+            obsid_to_remove.append(obsid)
+    for otr in obsid_to_remove:
+        obsid_list.remove(otr)
 
-def get_beam_power_obsforsource(obsid_data,
-                   sources,
-                   coord1 = 'Raj',
-                   coord2 = 'Decj'):
-    counter = 0
-    for sourc in temp_power:
-            counter = counter + 1
-            if max(sourc) > min_power:
-                print obsid
+    print "power len: " + str(len(powers))
+    print "obs len: " + str(len(obsid_list))
 
-                for imax in range(len(sourc)):
-                    if sourc[imax] == max(sourc):
-                        max_time = float(midtimes[imax]) - float(obsid)
-                        Powers.append([sources[names][counter-1], obsid, time, max_time, sourc, imax, max(sourc)])
+    #chooses whether to list the source in each obs or the obs for each source
+    if obs_for_source:
+        for sn, source in enumerate(names_ra_dec):
+            out_name = "{0}_{1}_beam.txt".format(source[0],beam)
+            with open(out_name,"wb") as output_file:
+                output_file.write('#All of the observation IDs that the {0} beam model calculated a power of {1} or greater for the source: {2}\n'.format(beam,min_power, source[0])) 
+                output_file.write('#Obs ID,   Duration,   Obs fraction source entered,    Obs fractiong source exited,  Max power')
+                if cal_check:
+                    output_file.write("   Cal\n")
+                else:
+                    output_file.write('\n')
 
-    for sourc in sources:
-        outputfile = output
-        primary_beam_output_file = outputfile + str(sourc[names]) + beam_string + '_beam.txt'
-        if os.path.exists(primary_beam_output_file):
-            os.remove(primary_beam_output_file)
-        with open(outputfile + str(sourc[names]) + beam_string + '_beam.txt',"wb") as out_list:
-            out_list.write('All of the observation IDs that the ' + beam_string + ' beam model calculated a power of '\
-                           + str(min_power) + ' or greater for the source: ' + str(sourc[names]) + '\n' +\
-                           'Obs ID   Duration  Time during observation that the power was at a'+\
-                           ' maximum    File number source entered    File number source exited  Max power')
-            if cal_check:
-                out_list.write("   Cal\n")
-            else:
-                out_list.write("\n")
-                
-            for p in Powers:
-                if str(p[0]) == str(sourc[names]):
-                    enter, exit = beam_enter_exit(min_power, p[4], p[5], dt, time)
-                    out_list.write(str(p[1]) + ' ' + str(p[2]) + ' ' + str(p[3]) + ' ' + str(enter) +\
-                                   ' ' + str(exit) + ' ' + str(p[6][0]))
-                    if cal_check:
-                        #checks the MWA Pulsar Database to see if the obsid has been 
-                        #used or has been calibrated
-                        print "Checking the MWA Pulsar Databse for the obsid: {0}".format(p[1])
-                        cal_check_result = cal_on_database_check(p[1])
-                        out_list.write(" {0}\n".format(cal_check_result))
-                    else:
-                        out_list.write("\n")
+                for on, obsid in enumerate(obsid_list):
+                    source_ob_power = powers[on][sn]
+                    if max(source_ob_power) > min_power:
+                        duration = obsid_meta[on][3]
+                        enter, exit = beam_enter_exit(source_ob_power, dt,
+                                                      duration, min_power = min_power) 
+                        output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}'.format(obsid,duration, enter, exit, max(source_ob_power)[0]))
+                        if cal_check:
+                            #checks the MWA Pulsar Database to see if the obsid has been 
+                            #used or has been calibrated
+                            print "Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid)
+                            cal_check_result = cal_on_database_check(obsid)
+                            output_file.write(" {0}\n".format(cal_check_result))
+                        else:
+                            output_file.write("\n")
+    else:
+        #output a list of sorces foreach obs
+        for on, obsid in enumerate(obsid_list):
+            out_name = "{0}_{1}_beam.txt".format(obsid,beam)
+            duration = obsid_meta[on][3]
+            with open(out_name,"wb") as out_list:
+                out_list.write('#All of the sources that the {0} beam model calculated a power of {1} or greater for observation ID: {2}\n'.format(beam, min_power,obsid))
+                out_list.write('#Observation data :RA(deg): {0} DEC(deg): {1} Duration(s): {2}\n'.format(obsid_meta[on][1],obsid_meta[on][2],duration))
+                if cal_check:
+                    #checks the MWA Pulsar Database to see if the obsid has been 
+                    #used or has been calibrated
+                    print "Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid)
+                    cal_check_result = cal_on_database_check(obsid)
+                    out_list.write("#Calibrator Availability: {0}\n".format(cal_check_result))
+                out_list.write('#Source,  Obs frac source entered the '\
+                               + 'beam,    Obs frac source exited the beam,    Max Power \n')
+                for sn, source in enumerate(names_ra_dec):
+                    source_ob_power = powers[on][sn]
+                    if max(source_ob_power) > min_power:
+                        enter, exit = beam_enter_exit(source_ob_power, dt,
+                                                      duration, min_power = min_power)
+                        out_list.write('{} {:1.3f} {:1.3f} {:1.3f} \n'.format(source[0],enter,exit,max(source_ob_power)[0]))
 
-
-    print "A list of observation IDs that containt: " + str(sourc[names]) + \
-              " has been output to the text file: " + str(sourc[names]) + beam_string + '_beam.txt'
-    return
 
 
 if __name__ == "__main__":
+    beam_models = ['analytic', 'advanced', 'full_EE']
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     description="""
     This code is used to list the sources within the beam of observations IDs or using --obs_for_source list all the observations for each source. The sources can be input serval ways: using a list of pulsar names (--pulsar), using a complete catalogue file of pulsars (--dl_PSRCAT) or RRATs (--RRAT and --dl_RRAT), using a compatable catalogue (--in_cat with the help of --names and --coordstype) or using a RA and DEC coordinate (--coords). The observation IDs can be input (--obsid) or gathered from a directory (--FITS_dir). The default is to search all observation IDs from http://mwa-metadata01.pawsey.org.au/metadata/ that have voltages and list every known pulsar from PSRCAT in each observation ID.
     """)
     parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source. For increased efficiency it will only search OBSIDs within the primary beam.')
     parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
-    parser.add_argument('-b','--beam',type=str,help='Decides the beam approximation that will be used. Options: "a" the analytic beam model (2012 model, fast and reasonably accurate), "d" the advanced beam model (2014 model, fast and slighty more accurate) or "e" the full EE model (2016 model, slow but accurate). " Default: "a"',default = "a")
+    parser.add_argument('-b','--beam',type=str, default = 'analytic', help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
     parser.add_argument('-m','--min_power',type=float,help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3', default=0.3)
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
-    #impliment an option for the accurate beam later on and maybe the old elipse approximation if I can make it accurate
 
     #source options
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
@@ -642,9 +647,17 @@ if __name__ == "__main__":
             print("ImportError: {0}".format(ie))
             sys.exit(0)
 
-    #Parse source options
+    #Parse options
     if args.in_cat and args.coords:
-        print "Can't use --in_cat and --coords. Please input your cooridantes using one method"
+        print "Can't use --in_cat and --coords. Please input your cooridantes using one method. Exiting."
+        quit()
+    if args.obsid and args.FITS_dir:
+        print "Can't use --obsid and --FITS_dir at the same time. Exiting."
+        quit()
+    if args.beam not in beam_models:
+        print "Unknown beam model. Please use one of {0}. Exiting.".format(beam_models)
+        quit()
+
     print "Gathering sources"
     if args.in_cat:
         names_ra_dec = []
@@ -655,7 +668,7 @@ if __name__ == "__main__":
     elif args.coords:
         names_ra_dec = []
         for cn, c in enumerate(args.coords):
-            names_ra_dec.append(['source_{0}'.format(cn+1),c.split(',')[0],c.split(',')[1]])
+            names_ra_dec.append(['{0}_{1}'.format(c.split(',')[0],c.split(',')[1]),c.split(',')[0],c.split(',')[1]])
     else:
         names_ra_dec = grab_source_alog(source_type = args.source_type, pulsar_list = args.pulsar)
     
@@ -675,9 +688,6 @@ if __name__ == "__main__":
     
    
     #get obs IDs
-    if args.obsid and args.FITS_dir:
-        print "Can't use --obsid and --FITS_dir at the same time. Exiting"
-        quit()
     print "Gathering observation IDs"
     if args.obsid:
         obsid_list = args.obsid
@@ -695,91 +705,15 @@ if __name__ == "__main__":
             obsid_list.append(row[0])
     
     
-    if args.beam == 'e':
+    if args.beam == 'full_EE':
         dt = 300
     else:
         dt = 100
     
-    #prepares metadata calls and calculates power
-    powers = []
-    #powers[obsid][source][time][freq]
-    obsid_meta = []
-    for obsid in obsid_list:
-        beam_meta_data, full_meta = meta.get_common_obs_metadata(obsid, return_all = True)
-        #beam_meta_data = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
-
-        #check for raw volatge files
-        filedata = full_meta[u'files']
-        keys = filedata.keys()
-        check = False
-        for k in keys:
-            if '.dat' in k: #TODO check if is still robust
-                check = True
-        if check or args.all_volt:
-            powers.append(get_beam_power_over_time(beam_meta_data, names_ra_dec,
-                                    dt=dt, centeronly=True, verbose=False, 
-                                    option = args.beam))
-            obsid_meta.append(beam_meta_data)
-        else:
-            print('No raw voltage files for %s' % obsid)
-            obsid_list.remove(obsid)
-
-    print "power len: " + str(len(powers))
-    print "obs len: " + str(len(obsid_list))
-    print powers
-
-    #chooses whether to list the source in each obs or the obs for each source
-    if args.obs_for_source:
-        for sn, source in enumerate(names_ra_dec):
-            out_name = "{0}_{1}_beam.txt".format(source[0],args.beam)
-            with open(out_name,"wb") as output_file:
-                output_file.write('#All of the observation IDs that the {0} beam model calculated a power of {1} or greater for the source: {2}\n'.format(args.beam,args.min_power, source[0])) 
-                output_file.write('#Obs ID,   Duration,   Obs fraction source entered,    Obs fractiong source exited,  Max power')
-                if args.cal_check:
-                    output_file.write("   Cal\n")
-                else:
-                    output_file.write('\n')
-
-                for on, obsid in enumerate(obsid_list):
-                    source_ob_power = powers[on][sn]
-                    if max(source_ob_power) > args.min_power:
-                        print source_ob_power
-                        duration = obsid_meta[on][3]
-                        enter, exit = beam_enter_exit(source_ob_power, dt,
-                                                      duration, min_power = args.min_power) 
-                        output_file.write('{0} {1} {2} {3} {4}'.format(obsid,duration, enter, exit, max(source_ob_power)[0]))
-                        if args.cal_check:
-                            #checks the MWA Pulsar Database to see if the obsid has been 
-                            #used or has been calibrated
-                            print "Checking the MWA Pulsar Databse for the obsid: {0}".format(p[1])
-                            cal_check_result = cal_on_database_check(p[1])
-                            output_file.write(" {0}\n".format(cal_check_result))
-                        else:
-                            output_file.write("\n")
-    else:
-        #output a list of sorces foreach obs
-        for on, obsid in enumerate(obsid_list):
-            out_name = "{0}_{1}_beam.txt".format(obsid,args.beam)
-            duration = obsid_meta[on][3]
-            with open(out_name,"wb") as out_list:
-                out_list.write('#All of the sources that the {0} beam model calculated a power of {1} or greater for observation ID: {2}\n'.format(args.beam, args.min_power,obsid))
-                out_list.write('#Observation data :RA(deg): {0} DEC(deg): {1} Duration(s): {2}\n'.format(obsid_meta[on][1],obsid_meta[on][2],duration))
-                if args.cal_check:
-                    #checks the MWA Pulsar Database to see if the obsid has been 
-                    #used or has been calibrated
-                    print "Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid)
-                    cal_check_result = cal_on_database_check(obsid)
-                    out_list.write("Calibrator Availability: {0}\n".format(cal_check_result))
-                out_list.write('#Source,  Obs frac source entered the '\
-                               + 'beam,    Obs frac source exited the beam,    Max Power \n')
-                for sn, source in enumerate(names_ra_dec):
-                    source_ob_power = powers[on][sn]
-                    if max(source_ob_power) > args.min_power:
-                        enter, exit = beam_enter_exit(source_ob_power, dt,
-                                                      duration, min_power = args.min_power)
-                        out_list.write('{0} {1} {2} {3} \n'.format(source[0],enter,exit,max(source_ob_power)[0]))
-
-
+    find_sources_in_obs(obsid_list, names_ra_dec, 
+                        obs_for_source = args.obs_for_source, dt = dt, beam = args.beam,
+                        min_power = args.min_power, cal_check = args.cal_check, all_volt = args.all_volt)
+    
     print "The code is complete and all results have been output to text files"
 
 
