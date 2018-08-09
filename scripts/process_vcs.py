@@ -104,7 +104,7 @@ def get_frequencies(metafits,resort=False):
     else:
         return freq_array
 
-def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, args, ics=False, n_untar=2, keep="", nice = 0):
+def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, product_dir, parallel, args, ics=False, n_untar=2, keep="", nice=0):
         vcs_database_id = database_vcs.database_command(args, obsid)
         print "Downloading files from archive"
         # voltdownload = distutils.spawn.find_executable("voltdownload.py") #Doesn't seem to be working on zeus for some reason
@@ -208,7 +208,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         sys.exit()
 
 
-def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False, nice = 0):
+def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False, nice=0):
     vcs_database_id = database_vcs.database_command(args, obs_id)
     batch_dir = product_dir + '/batch/'
     product_dir = '{0}/cal/{1}'.format(product_dir,cal_obs_id)
@@ -253,7 +253,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False, ni
         submit_slurm(obsdownload_batch,commands,batch_dir=batch_dir, slurm_kwargs={"time" : secs_to_run, "partition" : "copyq", "nice" : nice}, cluster="zeus")
 
 
-def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args, nice = 0):
+def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args, nice=0):
         vcs_database_id = database_vcs.database_command(args, obsid)
         print "Running recombine on files"
         jobs_per_node = 8
@@ -305,7 +305,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 
 
 
-def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args, metafits, nice = 0):
+def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args, metafits, nice=0):
         vcs_database_id = database_vcs.database_command(args, obsid)
         print "Correlating files at {0} kHz and {1} milliseconds".format(ft_res[0], ft_res[1])
         from astropy.time import Time
@@ -462,7 +462,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
 
 
     # set up SLURM requirements
-    seconds_to_run = 10 * (stop - start + 1)  # This should be able to be reduced after functional testing
+    seconds_to_run = 15 * (stop - start + 1)  # This should be able to be reduced after functional testing
     if seconds_to_run > 86399.:
         secs_to_run = datetime.timedelta(seconds=86399)
     else:
@@ -660,18 +660,18 @@ if __name__ == '__main__':
 
     if opts.mode == 'download_ics':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, ics=Truei, nice = args.nice)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, ics=True, nice=args.nice)
     elif opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "", nice = args.nice)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "", nice=args.nice)
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv, nice = args.nice)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv, nice=args.nice)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file, nice = args.nice)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file, nice=args.nice)
     elif opts.mode == 'download_cal':
         print opts.mode
         if not opts.cal_obs:
@@ -682,7 +682,7 @@ if __name__ == '__main__':
             quit()
         data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
         mdir(data_dir, "Calibrator Data")
-        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head, nice = args.nice)
+        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head, nice=args.nice)
     elif opts.mode == ('beamform' or 'incoh'):
         print opts.mode
         if not opts.DI_dir:
@@ -700,7 +700,7 @@ if __name__ == '__main__':
                 data_dir, product_dir, batch_dir,
                 metafits_file, opts.nfine_chan, opts.pointing, sys.argv,
                 rts_flag_file=flagged_tiles_file, bf_formats=bf_format, DI_dir=opts.DI_dir, 
-                calibration_type=opts.cal_type, nice = args.nice,
+                calibration_type=opts.cal_type, nice=args.nice,
                 execpath=opts.execpath)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
