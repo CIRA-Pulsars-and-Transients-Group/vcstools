@@ -379,7 +379,7 @@ def beam_enter_exit(powers, dt, duration, min_power = 0.3):
                 exit = spline.roots()[0]/duration
             else:
                 enter = spline.roots()[0]/duration
-                exit = 0.
+                exit = 1.
         else:
             enter = 0.
             exit = 1.
@@ -414,7 +414,7 @@ def cal_on_database_check(obsid):
 
 def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                              dt=296, centeronly=True, verbose=False, 
-                             option = 'analytic'):
+                             option = 'analytic', degrees = False):
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source over time.
 
@@ -463,8 +463,13 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         PowersY=np.zeros((len(names_ra_dec),
                              Ntimes,1))
         frequencies=[centrefreq]
-    
-    RAs, Decs = sex2deg(names_ra_dec[:,1],names_ra_dec[:,2])
+
+    if degrees:
+        RAs = names_ra_dec[:,1]
+        Decs = names_ra_dec[:,2]
+    else:
+        RAs, Decs = sex2deg(names_ra_dec[:,1],names_ra_dec[:,2])
+
     if len(RAs)==0:
         sys.stderr.write('Must supply >=1 source positions\n')
         return None
@@ -489,25 +494,21 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
-                PowersX[:,itime,ifreq]=rX
-                PowersY[:,itime,ifreq]=rY
         elif option == 'advanced':
             for ifreq in xrange(len(frequencies)):
                 rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
-                PowersX[:,itime,ifreq]=rX
-                PowersY[:,itime,ifreq]=rY
         elif option == 'full_EE':
             for ifreq in xrange(len(frequencies)):
                 rX,rY=primary_beam.MWA_Tile_full_EE(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
-                PowersX[:,itime,ifreq]=rX
-                PowersY[:,itime,ifreq]=rY
-            #print '{0:.2f}'.format(100.*float(itime)/float(Ntimes))+"% complete for obsid: "+str(obsid)
+            
+        PowersX[:,itime,ifreq]=rX
+        PowersY[:,itime,ifreq]=rY
     Powers=0.5*(PowersX+PowersY)
     return Powers
 
@@ -585,7 +586,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                         else:
                             output_file.write("\n")
     else:
-        #output a list of sorces foreach obs
+        #output a list of sorces for each obs
         for on, obsid in enumerate(obsid_list):
             out_name = "{0}_{1}_beam.txt".format(obsid,beam)
             duration = obsid_meta[on][3]
@@ -603,6 +604,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                 for sn, source in enumerate(names_ra_dec):
                     source_ob_power = powers[on][sn]
                     if max(source_ob_power) > min_power:
+                        #print source[0], source_ob_power
                         enter, exit = beam_enter_exit(source_ob_power, dt,
                                                       duration, min_power = min_power)
                         out_list.write('{} {:1.3f} {:1.3f} {:1.3f} \n'.format(source[0],enter,exit,max(source_ob_power)[0]))
