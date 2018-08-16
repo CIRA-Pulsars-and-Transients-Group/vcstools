@@ -21,28 +21,28 @@ __date__ = '2016-03-21'
 
 #TODO: (BWM) might be worth trying to only load the necessary parts of modules rather than loading an ENTIRE module. The speed up will be minimal overall, but it's also just a bit neater.
 # You can also just load module/part of modules internally within functions. So if a module is only used once, just load it in the local function rather than up here (globally).
+
+#comon
 import os
 import sys
 import math
 import argparse
-import urllib
-import urllib2
-import json
 import subprocess
 import numpy as np
+import ephem
+import csv
+
+#astropy 
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.table import Table
 from astropy.time import Time
-from mwapy.pb import primary_beam
-import ephem
+
+#MWA scripts
+from mwa_pb import primary_beam
 from mwapy import ephem_utils,metadata
-import psycopg2
-from contextlib import closing
-from ConfigParser import SafeConfigParser
 import mwa_metadb_utils as meta
-import csv
 
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
@@ -274,6 +274,23 @@ def calcFWHM(freq):
     return fwhm
 
 
+def find_obsids_meta_pages(params={'mode':'VOLTAGE_START'}):
+    """
+    Loops over pages for each page for MWA metadata calls
+    """
+    obsid_list = []
+    temp =[]
+    page = 1
+    #need to ask for a page of results at a time
+    while len(temp) == 200 or page == 1:
+        params['page'] = page
+        temp = meta.getmeta(service='find', params=params)
+        for row in temp:
+            obsid_list.append(row[0])
+        page += 1
+
+    return obsid_list
+
 def singles_source_search(ra, dec):
     """
     Used to creates a 30 degree box around the source to make searching for obs_ids more efficient
@@ -299,49 +316,37 @@ def singles_source_search(ra, dec):
         m_o_p = True
 
     if m_o_p:
-        OBSID = []
-        temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+        obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
                                                     'minra':0., 'maxra':360.,
                                                     'mindec':dec_bot,'maxdec':dec_top})
-        for row in temp:
-            OBSID.append(row[0])
     else:
         ra_low = ra - 30. - box_size #30 is the how far an obs would drift in 2 hours(used as a max)
         ra_high = ra + box_size
         if ra_low < 0.:
             ra_new = 360 + ra_low
-            OBSID = []
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
                                                         'minra':ra_new, 'maxra':360.,
                                                         'mindec':dec_bot,'maxdec':dec_top})
-            for row in temp:
-                OBSID.append(row[0])
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
-                                                        'minra':0.,'maxra':ra_high,
-                                                        'mindec':dec_bot,'maxdec':dec_top})
-            for row in temp:
-                OBSID.append(row[0])
+            temp_obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                             'minra':0.,'maxra':ra_high,
+                                                             'mindec':dec_bot,'maxdec':dec_top})
+            for row in temp_obsid_list:
+                obsid_list.append(row[0])
         elif ra_high > 360:
             ra_new = ra_high - 360
-            OBSID = []
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
                                                         'minra':ra_low, 'maxra':360.,
                                                         'mindec':dec_bot,'maxdec':dec_top})
-            for row in temp:
-                OBSID.append(row[0])
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
-                                                        'minra':0., 'maxra':ra_new,
-                                                        'mindec':dec_bot,'maxdec':dec_top})
-            for row in temp:
-                OBSID.append(row[0])
+            temp_obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                             'minra':0., 'maxra':ra_new,
+                                                             'mindec':dec_bot,'maxdec':dec_top})
+            for row in temp_obsid_list:
+                obsid_list.append(row[0])
         else:
-            OBSID =[]
-            temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000,
+            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
                                                         'minra':ra_low, 'maxra':ra_high,
                                                         'mindec':dec_bot,'maxdec':dec_top})
-            for row in temp:
-                OBSID.append(row[0])
-    return OBSID
+    return obsid_list
 
 
 def beam_enter_exit(powers, dt, duration, min_power = 0.3):
@@ -362,6 +367,9 @@ def beam_enter_exit(powers, dt, duration, min_power = 0.3):
     powers_freq_min = []
     for p in powers:
         powers_freq_min.append(float(min(p) - min_power))
+
+    print powers
+    print powers_freq_min
 
     if min(powers_freq_min) > 0.:
         enter = 0.
@@ -688,24 +696,20 @@ if __name__ == "__main__":
         else:
             print "Not using option --obs_for_source"
     
-   
     #get obs IDs
     print "Gathering observation IDs"
     if args.obsid:
         obsid_list = args.obsid
     elif args.FITS_dir:
         obsid_list = os.walk(args.FITS_dir).next()[1]
-    elif len(names_ra_dec) ==1:
+    elif len(names_ra_dec) == 1:
         #if there is a single pulsar simply use nearby obsids
         ob_ra, ob_dec = sex2deg(names_ra_dec[0][1],names_ra_dec[0][2])
         obsid_list = singles_source_search(ob_ra, ob_dec)
     else:
         #use all obsids
-        temp = meta.getmeta(service='find', params={'mode':'VOLTAGE_START','limit':10000})
-        obsid_list = []
-        for row in temp:
-            obsid_list.append(row[0])
-    
+        obsid_list = find_obsids_meta_pages({'mode':'VOLTAGE_START'})
+
     
     if args.beam == 'full_EE':
         dt = 300
