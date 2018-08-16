@@ -368,9 +368,6 @@ def beam_enter_exit(powers, dt, duration, min_power = 0.3):
     for p in powers:
         powers_freq_min.append(float(min(p) - min_power))
 
-    print powers
-    print powers_freq_min
-
     if min(powers_freq_min) > 0.:
         enter = 0.
         exit = 1.
@@ -470,7 +467,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                              Ntimes,1))
         PowersY=np.zeros((len(names_ra_dec),
                              Ntimes,1))
-        frequencies=[centrefreq]
+        frequencies=np.array([centrefreq])*1e6
 
     if degrees:
         RAs = names_ra_dec[:,1]
@@ -494,22 +491,20 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         # go from altitude to zenith angle
         theta=np.radians(90.-Alts)
         phi=np.radians(Azs)
-
-        #Decide on beam model
-        if option == 'analytic':
-            for ifreq in xrange(len(frequencies)):
+    
+        for ifreq in xrange(len(frequencies)):
+            #Decide on beam model
+            if option == 'analytic':
                 rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
-        elif option == 'advanced':
-            for ifreq in xrange(len(frequencies)):
+            elif option == 'advanced':
                 rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
-        elif option == 'full_EE':
-            for ifreq in xrange(len(frequencies)):
+            elif option == 'full_EE':
                 rX,rY=primary_beam.MWA_Tile_full_EE(theta, phi,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
@@ -518,7 +513,6 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         PowersX[:,itime,ifreq]=rX
         PowersY[:,itime,ifreq]=rY
     Powers=0.5*(PowersX+PowersY)
-    print Powers
     return Powers
 
 
@@ -526,7 +520,8 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                         obs_for_source = False, dt = 296, beam = 'analytic',
                         min_power = 0.3, cal_check = False, all_volt = False):
     """
-    Either creates text files for each MWA obs ID of each source within it or a text file for each source with each MWA obs is that the source is in.
+    Either creates text files for each MWA obs ID of each source within it or a text
+    file for each source with each MWA obs is that the source is in.
     Args:
         obsid_list: list of MWA obs IDs
         names_ra_dec: [[source_name, ra, dec]]
@@ -540,7 +535,6 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
     #powers[obsid][source][time][freq]
     obsid_meta = []
     obsid_to_remove = []
-    print "obs len: " + str(len(obsid_list))
 
     for obsid in obsid_list:
         beam_meta_data, full_meta = meta.get_common_obs_metadata(obsid, return_all = True)
@@ -563,9 +557,6 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
             obsid_to_remove.append(obsid)
     for otr in obsid_to_remove:
         obsid_list.remove(otr)
-
-    print "power len: " + str(len(powers))
-    print "obs len: " + str(len(obsid_list))
 
     #chooses whether to list the source in each obs or the obs for each source
     if obs_for_source:
@@ -610,14 +601,15 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                     out_list.write("#Calibrator Availability: {0}\n".format(cal_check_result))
                 out_list.write('#Source,  Obs frac source entered the '\
                                + 'beam,    Obs frac source exited the beam,    Max Power \n')
+                
                 for sn, source in enumerate(names_ra_dec):
                     source_ob_power = powers[on][sn]
                     if max(source_ob_power) > min_power:
                         #print source[0], source_ob_power
                         enter, exit = beam_enter_exit(source_ob_power, dt,
                                                       duration, min_power = min_power)
-                        out_list.write('{} {:1.3f} {:1.3f} {:1.3f} \n'.format(source[0],enter,exit,max(source_ob_power)[0]))
-
+                        out_list.write('{:10} {:1.3f} {:1.3f} {:1.3f} \n'.format(source[0],enter,exit,max(source_ob_power)[0]))
+    return
 
 
 if __name__ == "__main__":
