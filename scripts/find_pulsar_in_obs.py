@@ -518,6 +518,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         PowersX[:,itime,ifreq]=rX
         PowersY[:,itime,ifreq]=rY
     Powers=0.5*(PowersX+PowersY)
+    print Powers
     return Powers
 
 
