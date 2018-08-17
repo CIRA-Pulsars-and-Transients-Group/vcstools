@@ -139,6 +139,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None):
     modes = ['Pulsar', 'FRB', 'GC', 'RRATs']
     if source_type not in modes:
         print "Input source type not in known catalogues types. Please choose from: {0}".format(modes)
+        return None
 
     #Download the catalogue from the respective website
     if source_type == 'FRB':
@@ -150,7 +151,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None):
     elif source_type == 'RRATs':
         website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
         web_table = 'rratalog.txt'
-    if source_type !='Pulsar':
+    if source_type != 'Pulsar':
         print "Downloading {0} catalogue from {1}".format(source_type, website)
         os.system('wget {0}'.format(website))
 

@@ -40,7 +40,7 @@ from mwa_pulsar_client import client
 import mwa_metadb_utils as meta
 import find_pulsar_in_obs as fpio
 
-web_address = 'mwa-pawsey-volt01.pawsey.ivec.org'
+web_address = 'mwa-pawsey-volt01.pawsey.org.au'
 auth = ('mwapulsar','veovys9OUTY=')
 
 def psrcat(addr, auth, pulsar):
@@ -340,7 +340,7 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
             exit = float(exit)
         else:
             #find_pulsar_in_obs wrapping to use it to find start and end
-            names_ra_dec = fpio.grab_source_alog([args.pulsar])
+            names_ra_dec = fpio.grab_source_alog(pulsar_list=[args.pulsar])
             source_ob_power = fpio.get_beam_power_over_time([obsid,ra_obs,dec_obs,time_obs,delays,
                                                              centrefreq,channels], names_ra_dec)
             enter, exit = fpio.beam_enter_exit(source_ob_power[0], time_obs)
