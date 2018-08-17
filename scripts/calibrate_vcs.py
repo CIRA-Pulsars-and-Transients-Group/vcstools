@@ -668,12 +668,15 @@ class RTScal(object):
                         "gres": "gpu:1",
                         "ntasks-per-node": "1"}
         commands = list(self.script_body)  # make a copy of body to then extend
-        commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, fname))
+        commands.append("module use /group/mwa/software/modulefiles")
+        commands.append("module load RTS/master")
+        commands.append("module load vcstools/master")
+        commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, fname))
         jobid = submit_slurm(rts_batch, commands, 
                                 slurm_kwargs=slurm_kwargs,
                                 batch_dir=self.batch_dir,
                                 submit=self.submit,
-                                export="ALL")
+                                export="NONE")
         jobids.append(jobid)
 
         return jobids
@@ -848,12 +851,15 @@ class RTScal(object):
                             "gres": "gpu:1",
                             "ntasks-per-node": "1"}
             commands = list(self.script_body)  # make a copy of body to then extend
-            commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, k))
+            commands.append("module use /group/mwa/software/modulefiles")
+            commands.append("module load RTS/master")
+            commands.append("module load vcstools/master")
+            commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, k))
             jobid = submit_slurm(rts_batch, commands,
                                     slurm_kwargs=slurm_kwargs,
                                     batch_dir=self.batch_dir,
                                     submit=self.submit,
-                                    export="ALL")
+                                    export="NONE")
             jobids.append(jobid)
 
         return jobids
