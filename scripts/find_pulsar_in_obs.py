@@ -470,8 +470,8 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         frequencies=np.array([centrefreq])*1e6
 
     if degrees:
-        RAs = names_ra_dec[:,1]
-        Decs = names_ra_dec[:,2]
+        RAs = np.array(names_ra_dec[:,1],dtype=float)
+        Decs = np.array(names_ra_dec[:,2],dtype=float)
     else:
         RAs, Decs = sex2deg(names_ra_dec[:,1],names_ra_dec[:,2])
 
@@ -518,7 +518,8 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
 
 def find_sources_in_obs(obsid_list, names_ra_dec, 
                         obs_for_source = False, dt = 296, beam = 'analytic',
-                        min_power = 0.3, cal_check = False, all_volt = False):
+                        min_power = 0.3, cal_check = False, all_volt = False,
+                        degrees_check = False):
     """
     Either creates text files for each MWA obs ID of each source within it or a text
     file for each source with each MWA obs is that the source is in.
@@ -529,6 +530,9 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         beam: beam simulation type ['analytic', 'advanced', 'full_EE']
         min_power: if above the minium power assumes it's in the beam
         cal_check: checks the MWA pulsar database if there is a calibration for the obsid
+        all_volt: Use all voltages observations including some inital test data 
+                  with incorrect formats
+        degrees_check: if false ra and dec is in hms, if true in degrees
     """
     #prepares metadata calls and calculates power
     powers = []
@@ -550,7 +554,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         if check or all_volt:
             powers.append(get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                     dt=dt, centeronly=True, verbose=False, 
-                                    option = beam))
+                                    option=beam, degrees=degrees_check))
             obsid_meta.append(beam_meta_data)
         else:
             print('No raw voltage files for %s' % obsid)
@@ -629,7 +633,7 @@ if __name__ == "__main__":
     sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"', default = None)
     sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue.")
     sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
-    sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing coordinates in "RA,DEC". This will list the OBS IDs that contain this coordinate. Must be enterered as: "hh:mm:ss.ss,+dd:mm:ss.ss".')
+    sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing the source\'s coordinates to be searched for in the format "RA,DEC" "RA,DEC". Must be enterered as either: "hh:mm:ss.ss,+dd:mm:ss.ss" or "deg,-deg". Please only use one format.')
     #finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
 
     #observation options
@@ -662,6 +666,7 @@ if __name__ == "__main__":
         quit()
 
     print "Gathering sources"
+    degrees_check = False
     if args.in_cat:
         names_ra_dec = []
         with open(args.in_cat,"r") as input_catalogue:
@@ -671,12 +676,16 @@ if __name__ == "__main__":
     elif args.coords:
         names_ra_dec = []
         for cn, c in enumerate(args.coords):
-            names_ra_dec.append(['{0}_{1}'.format(c.split(',')[0],c.split(',')[1]),c.split(',')[0],c.split(',')[1]])
+            names_ra_dec.append(['{0}_{1}'.format(c.split(',')[0],c.split(',')[1]),
+                                c.split(',')[0],c.split(',')[1]])
+            if ":" not in c:
+                degrees_check = True
     else:
         names_ra_dec = grab_source_alog(source_type = args.source_type, pulsar_list = args.pulsar)
     
     #format ra and dec
-    names_ra_dec = format_ra_dec(names_ra_dec, ra_col = 1, dec_col = 2)
+    if not degrees_check:
+        names_ra_dec = format_ra_dec(names_ra_dec, ra_col = 1, dec_col = 2)
     names_ra_dec = np.array(names_ra_dec)
     
     #Check if the user wants to use --obs for source
@@ -697,7 +706,11 @@ if __name__ == "__main__":
         obsid_list = os.walk(args.FITS_dir).next()[1]
     elif len(names_ra_dec) == 1:
         #if there is a single pulsar simply use nearby obsids
-        ob_ra, ob_dec = sex2deg(names_ra_dec[0][1],names_ra_dec[0][2])
+        if degrees_check:
+            ob_ra = names_ra_dec[0][1]
+            ob_dec = names_ra_dec[0][2]
+        else:
+            ob_ra, ob_dec = sex2deg(names_ra_dec[0][1],names_ra_dec[0][2])
         obsid_list = singles_source_search(ob_ra, ob_dec)
     else:
         #use all obsids
@@ -711,7 +724,8 @@ if __name__ == "__main__":
     
     find_sources_in_obs(obsid_list, names_ra_dec, 
                         obs_for_source = args.obs_for_source, dt = dt, beam = args.beam,
-                        min_power = args.min_power, cal_check = args.cal_check, all_volt = args.all_volt)
+                        min_power = args.min_power, cal_check = args.cal_check,
+                        all_volt = args.all_volt, degrees_check = degrees_check)
     
     print "The code is complete and all results have been output to text files"
 
