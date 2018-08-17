@@ -349,7 +349,7 @@ def singles_source_search(ra, dec):
     return obsid_list
 
 
-def beam_enter_exit(powers, dt, duration, min_power = 0.3):
+def beam_enter_exit(powers, duration, dt = 296, min_power = 0.3):
     """
     Calculates when the source enters and exits the beam
 
@@ -578,8 +578,8 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                     source_ob_power = powers[on][sn]
                     if max(source_ob_power) > min_power:
                         duration = obsid_meta[on][3]
-                        enter, exit = beam_enter_exit(source_ob_power, dt,
-                                                      duration, min_power = min_power) 
+                        enter, exit = beam_enter_exit(source_ob_power,duration,
+                                                      dt=dt, min_power=min_power) 
                         output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}'.format(obsid,duration, enter, exit, max(source_ob_power)[0]))
                         if cal_check:
                             #checks the MWA Pulsar Database to see if the obsid has been 
@@ -610,8 +610,8 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                     source_ob_power = powers[on][sn]
                     if max(source_ob_power) > min_power:
                         #print source[0], source_ob_power
-                        enter, exit = beam_enter_exit(source_ob_power, dt,
-                                                      duration, min_power = min_power)
+                        enter, exit = beam_enter_exit(source_ob_power, duration,
+                                                      dt=dt, min_power=min_power)
                         out_list.write('{:10} {:1.3f} {:1.3f} {:1.3f} \n'.format(source[0],enter,exit,max(source_ob_power)[0]))
     return
 

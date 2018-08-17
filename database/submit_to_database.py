@@ -38,7 +38,7 @@ from mwapy.pb import primarybeammap_tant as pbtant
 import mwapy.pb.primarybeammap as pbl
 from mwa_pulsar_client import client
 import mwa_metadb_utils as meta
-import find_pulsar_in_obs
+import find_pulsar_in_obs as fpio
 
 web_address = 'mwa-pawsey-volt01.pawsey.ivec.org'
 auth = ('mwapulsar','veovys9OUTY=')
@@ -340,17 +340,12 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
             exit = float(exit)
         else:
             #find_pulsar_in_obs wrapping to use it to find start and end
-            find_pulsar_in_obs.grab_pulsaralog([args.pulsar])
-            catDIR = 'temp.csv'
-            catalog = Table.read(catDIR)
-            enter, exit = find_pulsar_in_obs.get_beam_power([obsid,ra_obs,dec_obs,
-                                           time_obs,delays, centrefreq,channels],
-                                           catalog)
+            names_ra_dec = fpio.grab_source_alog([args.pulsar])
+            source_ob_power = fpio.get_beam_power_over_time([obsid,ra_obs,dec_obs,time_obs,delays,
+                                                             centrefreq,channels], names_ra_dec)
+            enter, exit = fpio.beam_enter_exit(source_ob_power[0], time_obs)
             enter *= float(time_obs) 
             exit *= float(time_obs)
-            os.remove('temp.csv')
-            if os.path.exists("{0}_analytic_beam.txt".format(obsid)):
-                os.remove("{0}_analytic_beam.txt".format(obsid))
             input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
             print "WARNING: Input detection time does not equal the dectetion time of the .bestprof file"
