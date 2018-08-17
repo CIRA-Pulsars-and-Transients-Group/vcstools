@@ -394,7 +394,7 @@ def beam_enter_exit(powers, duration, dt = 296, min_power = 0.3):
 
 def cal_on_database_check(obsid):
     from mwa_pulsar_client import client
-    web_address = 'mwa-pawsey-volt01.pawsey.ivec.org'
+    web_address = 'mwa-pawsey-volt01.pawsey.org.au'
     auth = ('mwapulsar','veovys9OUTY=')
     detection_list = client.detection_list(web_address, auth)
     
