@@ -700,7 +700,7 @@ if __name__ == '__main__':
                 data_dir, product_dir, batch_dir,
                 metafits_file, opts.nfine_chan, opts.pointing, sys.argv,
                 rts_flag_file=flagged_tiles_file, bf_formats=bf_format, DI_dir=opts.DI_dir, 
-                calibration_type=opts.cal_type, nice=args.nice,
+                calibration_type=opts.cal_type, nice=opts.nice,
                 execpath=opts.execpath)
     else:
         print "Somehow your non-standard mode snuck through. Try again with one of {0}".format(modes)
