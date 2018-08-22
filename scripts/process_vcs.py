@@ -660,18 +660,18 @@ if __name__ == '__main__':
 
     if opts.mode == 'download_ics':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, ics=True, nice=args.nice)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, ics=True, nice=opts.nice)
     elif opts.mode == 'download':
         print opts.mode
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "", nice=args.nice)
+        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head, data_dir, product_dir, opts.parallel_dl, sys.argv, n_untar=opts.untar_jobs, keep='-k' if opts.keep_tarball else "", nice=opts.nice)
     elif opts.mode == 'recombine':
         print opts.mode
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv, nice=args.nice)
+        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, sys.argv, nice=opts.nice)
     elif opts.mode == 'correlate':
         print opts.mode 
         ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file, nice=args.nice)
+        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir, product_dir, opts.ft_res, sys.argv, metafits_file, nice=opts.nice)
     elif opts.mode == 'download_cal':
         print opts.mode
         if not opts.cal_obs:
@@ -682,7 +682,7 @@ if __name__ == '__main__':
             quit()
         data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
         mdir(data_dir, "Calibrator Data")
-        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head, nice=args.nice)
+        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, opts.head, nice=opts.nice)
     elif opts.mode == ('beamform' or 'incoh'):
         print opts.mode
         if not opts.DI_dir:
