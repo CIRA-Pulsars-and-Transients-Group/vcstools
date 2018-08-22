@@ -38,51 +38,11 @@ from mwapy.pb import primarybeammap_tant as pbtant
 import mwapy.pb.primarybeammap as pbl
 from mwa_pulsar_client import client
 import mwa_metadb_utils as meta
-import find_pulsar_in_obs
+import find_pulsar_in_obs as fpio
 
-web_address = 'mwa-pawsey-volt01.pawsey.ivec.org'
+web_address = 'mwa-pawsey-volt01.pawsey.org.au'
 auth = ('mwapulsar','veovys9OUTY=')
 
-def get_obs_metadata(obs):
-    """
-    Gets needed meta data from http://mwa-metadata01.pawsey.org.au/metadata/
-    """
-    print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obs)
-    #for line in txtfile:
-    beam_meta_data = meta.getmeta(service='obs', params={'obs_id':obs})
-    #obn = beam_meta_data[u'obsname']
-    ra = beam_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
-    dec = beam_meta_data[u'metadata'][u'dec_pointing']
-    dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
-    Tsky = beam_meta_data[u'metadata'][u'sky_temp']
-    xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
-    minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
-    maxfreq = float(max(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
-    channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
-    centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
-    
-
-    return [obs,ra,dec,dura,xdelays,centrefreq,channels]
-
-
-def psrcat(addr, auth, pulsar):
-    """
-    Return the pulsar details from psrcat.
-    Args:
-        pulsar: name of the pulsar.
-    Returns:
-        psrcat details as a python dict.
-    Exception:
-        pulsar not found or bad input.
-    """
-    import requests
-    path = 'https://{0}/{1}/'.format(addr, 'psrcat')
-    payload = {'name': pulsar, 'format': 'json'}
-    r = requests.post(url = path, auth = auth, data = payload)
-    r.raise_for_status()
-    return r.json()
-
-    
 def sex2deg( ra, dec):
     """
     sex2deg( ra, dec)
@@ -125,138 +85,6 @@ def get_from_bestprof(file_loc):
             profile[p] = orig_profile[p] - min_prof
         #maybe centre it around the pulse later        
     return [obsid, pulsar, dm, period, period_uncer,obslength, profile, bin_num]
-
-
-def get_beam_power(obsid_data,
-                   start,
-                   stop,
-                   sources,
-                   dt=100,
-                   centeronly=True,
-                   verbose=False, option='a'):
-    """
-    obsid_data = [obsid,ra, dec, time, delays,centrefreq, channels]
-    sources=[names,coord1,coord2] #astropy table coloumn names
-
-    Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
-    the min_power then it outputs it to the text file.
-
-    """
-    from mwapy.pb import primary_beam
-    from astropy.time import Time
-    obsid,ra, dec, time, delays,centrefreq, channels = obsid_data
-    
-    starttimes=np.arange(start,stop,dt)
-    stoptimes=starttimes+dt
-    stoptimes[stoptimes>time]=time
-    Ntimes=len(starttimes)
-    midtimes=float(obsid)+0.5*(starttimes+stoptimes)
-
-    mwa = ephem_utils.Obs[ephem_utils.obscode['MWA']]
-    # determine the LST
-    observer = ephem.Observer()
-    # make sure no refraction is included
-    observer.pressure = 0
-    observer.long = mwa.long / ephem_utils.DEG_IN_RADIAN
-    observer.lat = mwa.lat / ephem_utils.DEG_IN_RADIAN
-    observer.elevation = mwa.elev
-
-    if not centeronly:
-        PowersX=np.zeros((len(sources),
-                             Ntimes,
-                             len(channels)))
-        PowersY=np.zeros((len(sources),
-                             Ntimes,
-                             len(channels)))
-        # in Hz
-        frequencies=np.array(channels)*1.28e6
-    else:
-        PowersX=np.zeros((len(sources),
-                             Ntimes,1))
-        PowersY=np.zeros((len(sources),
-                             Ntimes,1))
-        frequencies=[centrefreq]
-
-    RAs, Decs = sex2deg(sources[0][0],sources[0][1])
-    theta=[]
-    phi=[]
-    for itime in xrange(Ntimes):
-        obstime = Time(midtimes[itime],format='gps',scale='utc')
-        observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
-        LST_hours = observer.sidereal_time() * ephem_utils.HRS_IN_RADIAN
-
-        HAs = -RAs + LST_hours * 15
-        Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
-        # go from altitude to zenith angle
-        # go from altitude to zenith angle
-        if option == 'a':
-            beam_string = "analytic"
-            theta=np.radians(90-Alts)
-            phi=np.radians(Azs)
-            
-            for ifreq in xrange(len(frequencies)):
-                rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
-                                                     freq=frequencies[ifreq], delays=delays,
-                                                     zenithnorm=True,
-                                                     power=True)
-                PowersX[:,itime,ifreq]=rX
-                PowersY[:,itime,ifreq]=rY
-                
-        if option == 'd':
-            beam_string = "advanced"
-            theta=np.array([np.radians(90-Alts)])
-            phi=np.array([np.radians(Azs)])
-            
-            for ifreq in xrange(len(frequencies)):
-                rX,rY=primary_beam.MWA_Tile_advanced(theta, phi,
-                                                     freq=frequencies[ifreq], delays=delays,
-                                                     zenithnorm=True,
-                                                     power=True)
-                PowersX[:,itime,ifreq]=rX
-                PowersY[:,itime,ifreq]=rY
-        
-        if option == 'e':
-            beam_string = "full_EE"
-            #theta=np.radians(90-Alts)
-            #phi=np.radians(Azs)
-            theta.append(np.radians(90-Alts))
-            phi.append(np.radians(Azs))
-            #h5filepath='/group/mwaops/PULSAR/src/MWA_Tools/mwapy/pb/mwa_full_embedded_element_pattern.h5'
-            
-    if option == 'e':
-        theta = np.array([theta])
-        phi = np.array([phi])
-        rX,rY=primary_beam.MWA_Tile_full_EE(theta, phi,
-                                             freq=frequencies[0], delays=delays,
-                                             zenithnorm=True,
-                                             power=True)
-        PowersX=rX
-        PowersY=rY
-
-    #Power [#sources, #times, #frequencies]
-    Powers=0.5*(PowersX+PowersY)
-    avg_power = np.mean(Powers)
-    return avg_power
-
-def get_pulsar_ra_dec(pulsar):
-    #Gets the ra and dec from the output of PSRCAT
-    cmd = ['psrcat', '-c', 'Raj', pulsar]
-    output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
-    temp = []
-    lines = output.split('\n')
-    for l in lines[4:-1]: 
-        columns = l.split()
-        if len(columns) > 1:
-            ra = columns[1]
-    cmd = ['psrcat', '-c', 'Decj', pulsar]
-    output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
-    temp = []
-    lines = output.split('\n')
-    for l in lines[4:-1]: 
-        columns = l.split()
-        if len(columns) > 1:
-            dec = columns[1]
-    return [ra, dec]
 
 
 def from_power_to_gain(powers,cfreq,n,incoh=False):
@@ -362,17 +190,12 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
             exit = float(exit)
         else:
             #find_pulsar_in_obs wrapping to use it to find start and end
-            find_pulsar_in_obs.grab_pulsaralog([args.pulsar])
-            catDIR = 'temp.csv'
-            catalog = Table.read(catDIR)
-            enter, exit = find_pulsar_in_obs.get_beam_power([obsid,ra_obs,dec_obs,
-                                           time_obs,delays, centrefreq,channels],
-                                           catalog)
+            names_ra_dec = fpio.grab_source_alog(pulsar_list=[args.pulsar])
+            source_ob_power = fpio.get_beam_power_over_time([obsid,ra_obs,dec_obs,time_obs,delays,
+                                                             centrefreq,channels], names_ra_dec)
+            enter, exit = fpio.beam_enter_exit(source_ob_power[0], time_obs)
             enter *= float(time_obs) 
             exit *= float(time_obs)
-            os.remove('temp.csv')
-            if os.path.exists("{0}_analytic_beam.txt".format(obsid)):
-                os.remove("{0}_analytic_beam.txt".format(obsid))
             input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
             print "WARNING: Input detection time does not equal the dectetion time of the .bestprof file"
@@ -396,7 +219,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     trcvr: the file location of antena temperatures
     """
     #calculate the start and stop time of the detection
-    enter, exit = enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = None)
+    enter, exit = enter_exit_calc(time_detection, time_obs, metadata, start=start, stop=stop)
     obsdur = enter - exit
 
     #unpack data
@@ -411,8 +234,9 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     ntiles = 128#TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
     
     print "Calculating beam power and antena temperature..."
-    bandpowers = get_beam_power(metadata,enter,exit, [[pul_ra, pul_dec]],
-                                centeronly=False,dt=100,option="a") 
+    bandpowers = fpio.get_beam_power_over_time(metadata, np.array([["source",pul_ra, pul_dec]]),
+                                               dt=100)
+    bandpowers = np.mean(bandpowers)
     
     beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
      beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
@@ -698,16 +522,16 @@ if __name__ == "__main__":
             pul_list_str = pul_list_str + p[u'name']
         if pulsar in pul_list_str:
             print 'This pulsar is already on the database'
-            #gets Ra and DEC from database (gets last one which is incorrect)
-            #pul_ra = p[u'ra']
-            #pul_dec = p[u'dec']
             
             #gets Ra and DEC from PSRCAT
-            pul_ra , pul_dec = get_pulsar_ra_dec(pulsar)
+            pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
+            pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
         else:
             print 'Congratulations you have detected ' + pulsar + ' for the first time with the MWA'
             #gets Ra and DEC from PSRCAT
-            pul_ra , pul_dec = get_pulsar_ra_dec(pulsar)
+            pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
+            pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
+
             #then adds it to the database
             client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)  
         
@@ -716,7 +540,7 @@ if __name__ == "__main__":
         
 
     #get meta data from obsid
-    metadata = get_obs_metadata(obsid)
+    metadata = meta.get_common_obs_metadata(obsid)
     obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = metadata
     minfreq = float(min(channels))
     maxfreq = float(max(channels))

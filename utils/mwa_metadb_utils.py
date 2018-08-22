@@ -4,6 +4,28 @@
 Collection of database related utilities that are used throughout the VCS processing pipeline
 """
 
+def get_common_obs_metadata(obs, return_all = False):
+    """
+    Gets needed comon meta data from http://mwa-metadata01.pawsey.org.au/metadata/
+    """
+    print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obs)
+    #for line in txtfile:
+    beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
+    #obn = beam_meta_data[u'obsname']
+    ra = beam_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
+    dec = beam_meta_data[u'metadata'][u'dec_pointing']
+    dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
+    xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
+    maxfreq = float(max(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
+    channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
+    centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
+
+    if return_all:
+        return [obs,ra,dec,dura,xdelays,centrefreq,channels],beam_meta_data
+    else:
+        return [obs,ra,dec,dura,xdelays,centrefreq,channels]
+
 def getmeta(service='obs', params=None):
     """
     Function to call a JSON web service and return a dictionary:
