@@ -35,6 +35,7 @@ def get_beam_power(obsid_data, sources, dt=296, beam_model="analytic", centeronl
     Ntimes = len(starttimes)
     midtimes = float(obsid) + 0.5 * (starttimes + stoptimes)
 
+
     # Make an EarthLocation for the MWA
     MWA_LAT = -26.7033   # degrees
     MWA_LON = 116.671    # degrees
@@ -68,7 +69,7 @@ def get_beam_power(obsid_data, sources, dt=296, beam_model="analytic", centeronl
     # Make times to feed to Alt/Az conversion
     obstimes = Time(midtimes, format='gps', scale='utc')
 
-    print "Converting RA and DEC to Alt/Az and computing beam pattern for {0} time steps".format(Ntimes)
+    print "Converting RA and DEC to Alt/Az and computing beam pattern..."
     for t, time in enumerate(obstimes):
         # Convert to Alt/Az given MWA position and observing time
         altaz = coords.transform_to(AltAz(obstime=time, location=mwa_location))
@@ -111,7 +112,7 @@ def read_data(fname, delim=",", format="csv", coords=True):
     
 
 
-def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False, show_mwa_unique=False):
+def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False, show_mwa_unique=False):
 
 
     fig = plt.figure()
@@ -124,16 +125,16 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         # Make a patch that is transformable through axis projection
         # and highlight the visible sky for the MWA
         Path = mpath.Path
-        newra_s = -np.pi
-        newra_e = np.pi
-        newdec_s = -np.pi / 2
-        newdec_e = np.radians(mwa_dec_lim)
+        ra_start = -np.pi
+        ra_end = np.pi
+        dec_start = -np.pi / 2
+        dec_end = np.radians(mwa_dec_lim)
         path_data = [
-                    (Path.MOVETO, (newra_s, newdec_s)),
-                    (Path.LINETO, (newra_s, newdec_e)),
-                    (Path.LINETO, (newra_e, newdec_e)),
-                    (Path.LINETO, (newra_e, newdec_s)),
-                    (Path.CLOSEPOLY, (newra_e, newdec_s)),
+                    (Path.MOVETO, (ra_start, dec_start)),
+                    (Path.LINETO, (ra_start, dec_end)),
+                    (Path.LINETO, (ra_end, dec_end)),
+                    (Path.LINETO, (ra_end, dec_start)),
+                    (Path.CLOSEPOLY, (ra_end, dec_start)),
                     ]   
         codes, verts = zip(*path_data)
         path = mpath.Path(verts, codes)
@@ -143,16 +144,16 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
     if show_mwa_unique:
         # Make a patch that is transformable through axis projection
         # and highlight the part of the sky ONLY visible to the MWA
-        newra_s = -np.pi
-        newra_e = np.pi
-        newdec_s = -np.pi / 2
-        newdec_e = np.radians(mwa_only_dec_lim)
+        ra_start = -np.pi
+        ra_end = np.pi
+        dec_start = -np.pi / 2
+        dec_end = np.radians(mwa_only_dec_lim)
         path_data = [
-                    (Path.MOVETO, (newra_s, newdec_s)),
-                    (Path.LINETO, (newra_s, newdec_e)),
-                    (Path.LINETO, (newra_e, newdec_e)),
-                    (Path.LINETO, (newra_e, newdec_s)),
-                    (Path.CLOSEPOLY, (newra_e, newdec_s)),
+                    (Path.MOVETO, (ra_start, dec_start)),
+                    (Path.LINETO, (ra_start, dec_end)),
+                    (Path.LINETO, (ra_end, dec_end)),
+                    (Path.LINETO, (ra_end, dec_start)),
+                    (Path.CLOSEPOLY, (ra_end, dec_start)),
                     ]   
         codes, verts = zip(*path_data)
         path = mpath.Path(verts, codes)
@@ -177,8 +178,8 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         psrcat_dec_bad = psrcat_coords.dec.wrap_at(180*u.deg).rad[maskBad]
 
         # Now plot the pulsar locations
-        ax.scatter(-psrcat_ra_good, psrcat_dec_good, 0.01, marker='x', color='0.4', zorder=1.4)
-        ax.scatter(-psrcat_ra_bad, psrcat_dec_bad, 0.01, marker='x', color='0.8', zorder=1.4)
+        ax.scatter(-psrcat_ra_good, psrcat_dec_good, 0.01, marker="x", color="0.4", zorder=1.4)
+        ax.scatter(-psrcat_ra_bad, psrcat_dec_bad, 0.01, marker="x", color="0.8", zorder=1.4)
 
 
 
@@ -214,7 +215,7 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         x = []
         y = []
         
-        # TODO: This bit needs documentation...
+        # TODO: This next section, until the tricontour command, needs documentation...
         for i in range(-87, 88, 3):
             for j in range(0, 361, 3):
                 Dec.append(i)
@@ -222,8 +223,9 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
 
         print "Creating beam patterns..."
         powout = get_beam_power(cord, zip(RA,Dec), dt=600)
-        print powout.shape
 
+        # TODO: this currently just stretches the beam pattern as calculated in the middle of the observation from the start to finish times
+        # We need to double check that this is doing the right thing...
         for i in range(len(RA)):
             temppower = powout[i, 0, 0]
             for t in range(0, (time + 361)/720):
@@ -255,9 +257,8 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
     target_coords = read_data(targetfile)
     print "Plotting target source positions..."
     ax.scatter(-target_coords.ra.wrap_at(180*u.deg).rad, target_coords.dec.wrap_at(180*u.deg).rad, 10, marker="x", color="red", zorder=1.6, label="Target sources")
-
     
-    xtick_labels = ['10h', '8h', '6h', '4h', '2h', '0h', '22h', '20h', '18h', '16h', '14h']
+    xtick_labels = ["10h", "8h", "6h", "4h", "2h", "0h", "22h", "20h", "18h", "16h", "14h"]
     ax.set_xticklabels(xtick_labels, color="0.2")
     ax.set_xlabel("Right Ascension")
     ax.set_ylabel("Declination")
@@ -277,7 +278,7 @@ if __name__ == "__main__":
     
     parser.add_argument("-t", "--targetfile", type=str, help="File containing a list of target sources, with positions in columns labelled 'RAJ' and 'DECJ'")
     
-    parser.add_argument("--oname", type=str, help="Output file name [default: skymap.eps]", default="skymap.eps")
+    parser.add_argument("--oname", type=str, help="Output EPS file name [default: skymap.eps]", default="skymap.eps")
 
     parser.add_argument("--show_psrcat", action="store_true", help="Whether to show background pulsars on map (assumes psrcat is on PATH)")
     parser.add_argument("--show_mwa_sky", action="store_true", help="Whether to split the sky based on MWA visibility")
@@ -285,4 +286,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    plotFigure(args.obsfile, args.targetfile, args.oname, args.show_psrcat, args.show_mwa_sky, args.show_mwa_unique)
+    plotSkyMap(args.obsfile, args.targetfile, args.oname, args.show_psrcat, args.show_mwa_sky, args.show_mwa_unique)
