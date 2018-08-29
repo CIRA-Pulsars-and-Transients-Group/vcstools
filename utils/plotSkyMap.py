@@ -7,13 +7,13 @@ import subprocess
 import numpy as np
 
 import astropy.units as u
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz
 from astropy.table import Table
 from astropy.time import Time
 
 from mwapy.pb import primary_beam
-import ephem
-from mwapy import ephem_utils,metadata
+#import ephem
+#from mwapy import ephem_utils,metadata
 
 import matplotlib.pyplot as plt
 import matplotlib.path as mpath
@@ -24,45 +24,35 @@ import matplotlib.patches as mpatches
 from mwa_metadb_utils import getmeta
 
 
-def get_beam_power(obsid_data, sources, dt=296, min_power=0.6, centeronly=True, verbose=False):
-    """
-    obsid_data = [obsid, ra, dec, time, delays, centrefreq, channels]
-    sources = [names, coord1, coord2] #astropy table coloumn names
-
-    Calulates the power (gain at coordinate/gain at zenith) for each source and if it is above
-    the min_power then it outputs it to the text file.
-
-    """
+def get_beam_power(obsid_data, sources, dt=296, beam_model="analytic", centeronly=True):
     
-    #TODO: this whole function needs a clean and update. It's also used in multiple places within 
-    # vcstools scripts, so should probably be moved to a more general utility.
-    obsid, ra, dec, time, delays, centrefreq, channels = obsid_data
+    obsid, ra, dec, duration, delays, centrefreq, channels = obsid_data
     
-    starttimes = np.arange(0, time, time)
+    # Figure out GPS times to evaluate the beam in order to map the drift scan
+    starttimes = np.arange(0, duration, duration)
     stoptimes = starttimes + dt
-    stoptimes[stoptimes > time] = time
+    stoptimes[stoptimes > duration] = duration
     Ntimes = len(starttimes)
     midtimes = float(obsid) + 0.5 * (starttimes + stoptimes)
 
-    mwa = ephem_utils.Obs[ephem_utils.obscode['MWA']]
-    # determine the LST
-    observer = ephem.Observer()
-    # make sure no refraction is included
-    observer.pressure = 0
-    observer.long = mwa.long / ephem_utils.DEG_IN_RADIAN
-    observer.lat = mwa.lat / ephem_utils.DEG_IN_RADIAN
-    observer.elevation = mwa.elev
+    # Make an EarthLocation for the MWA
+    MWA_LAT = -26.7033   # degrees
+    MWA_LON = 116.671    # degrees
+    MWA_HEIGHT = 377.827 # metres
+    mwa_location = EarthLocation(lat=MWA_LAT*u.deg, lon=MWA_LON*u.deg, height=MWA_HEIGHT*u.m)
 
+    # Pre-allocate arrays for the beam patterns
     if not centeronly:
         PowersX = np.zeros((len(sources), Ntimes, len(channels)))
         PowersY = np.zeros((len(sources), Ntimes, len(channels)))
-        # in Hz
         frequencies = np.array(channels) * 1.28e6
     else:
         PowersX = np.zeros((len(sources), Ntimes, 1))
         PowersY = np.zeros((len(sources), Ntimes, 1))
         frequencies = [centrefreq]
 
+    # Create arrays of the RAs and DECs to be sampled (already in degrees)
+    print "Constructing RA and DEC arrays for beam model..."
     RAs = np.array([x[0] for x in sources])
     Decs = np.array([x[1] for x in sources])
     if len(RAs) == 0:
@@ -71,31 +61,42 @@ def get_beam_power(obsid_data, sources, dt=296, min_power=0.6, centeronly=True, 
     if not len(RAs) == len(Decs):
         sys.stderr.write('Must supply equal numbers of RAs and Decs\n')
         return None
-    for itime in xrange(Ntimes):
-        obstime = Time(midtimes[itime], format='gps', scale='utc')
-        observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
-        LST_hours = observer.sidereal_time() * ephem_utils.HRS_IN_RADIAN
 
-        HAs = -RAs + LST_hours * 15
-        Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
-        # go from altitude to zenith angle
-        theta = np.radians(90 - Alts)
-        phi = np.radians(Azs)
+    # Turn RAs and DECs into SkyCoord objects that are to be fed to Alt/Az conversion
+    coords = SkyCoord(RAs, Decs, unit=(u.deg, u.deg))
+    
+    # Make times to feed to Alt/Az conversion
+    obstimes = Time(midtimes, format='gps', scale='utc')
+
+    print "Converting RA and DEC to Alt/Az and computing beam pattern for {0} time steps".format(Ntimes)
+    for t, time in enumerate(obstimes):
+        # Convert to Alt/Az given MWA position and observing time
+        altaz = coords.transform_to(AltAz(obstime=time, location=mwa_location))
+
+        # Change Altitude to Zenith Angle
+        theta = np.pi / 2 - altaz.alt.rad
+        phi = altaz.az.rad
         
-        for ifreq in xrange(len(frequencies)):
-            rX, rY = primary_beam.MWA_Tile_analytic(theta, phi, freq=frequencies[ifreq], delays=delays, zenithnorm=True, power=True)
-            PowersX[:, itime, ifreq] = rX
-            PowersY[:, itime, ifreq] = rY
-
-    #Power [#sources, #times, #frequencies]
+        # Calcualte beam pattern for each frequency, and store the results in a ndarray
+        for f, freq in enumerate(frequencies):
+            if beam_model == "analytic":
+                rX, rY = primary_beam.MWA_Tile_analytic(theta, phi, freq=freq, delays=delays, zenithnorm=True, power=True)
+            elif beam_model == "FEE":
+                rX, rY = primary_beam.MWA_Tile_full_EE(theta, phi, freq=freq, delays=delays, zenithnorm=True, power=True)
+            else:
+                print "Unrecognised beam model '{0}'. Defaulting to 'analytic'."
+                rX, rY = primary_beam.MWA_Tile_analytic(theta, phi, freq=freq, delays=delays, zenithnorm=True, power=True)
+                
+            PowersX[:, t, f] = rX
+            PowersY[:, t, f] = rY
+    
+    # Convert X and Y powers into total intensity
     Powers = 0.5 * (PowersX + PowersY)
                  
     return Powers
 
 
 def read_data(fname, delim=",", format="csv", coords=True):
-
-
     print "reading from", fname
     # Read the data file as an Astropy Table
     tab = Table.read(fname, delimiter=delim, format=format)
@@ -189,7 +190,7 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
 
     obsids = read_data(obsfile, coords=False)["OBSID"]
     for obsid in obsids:
-        print "Computing beam pattern for observation {0}".format(obsid)
+        print "Accessing database for observation: {0}".format(obsid)
 
         # TODO: I think this process is now implemented in a function in mwa_metadb_utils, need to double check
         beam_meta_data = getmeta(service='obs', params={'obs_id': obsid})
@@ -219,7 +220,10 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
                 Dec.append(i)
                 RA.append(j)
 
+        print "Creating beam patterns..."
         powout = get_beam_power(cord, zip(RA,Dec), dt=600)
+        print powout.shape
+
         for i in range(len(RA)):
             temppower = powout[i, 0, 0]
             for t in range(0, (time + 361)/720):
@@ -238,7 +242,7 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
             y.append(np.radians(Dec[i]))
 
 
-        print "Now plotting..."
+        print "Plotting beam pattern contours..."
         # Set vmin and vmax to ensure the beam patterns are on the same color scale
         # and plot the beam pattern contours on the map
         c = ax.tricontour(x, y, z, levels=levels, cmap=cmap, vmin=levels.min(), vmax=levels.max(), zorder=1.3)
@@ -249,6 +253,7 @@ def plotFigure(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
 
     # Plot the target positions
     target_coords = read_data(targetfile)
+    print "Plotting target source positions..."
     ax.scatter(-target_coords.ra.wrap_at(180*u.deg).rad, target_coords.dec.wrap_at(180*u.deg).rad, 10, marker="x", color="red", zorder=1.6, label="Target sources")
 
     
