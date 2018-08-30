@@ -221,22 +221,17 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         print "Creating beam patterns..."
         dt = 600
         powout = get_beam_power(cord, zip(RA,Dec))
-        print 'len(powout)',len(powout)
 
         # TODO: this currently just rotate the sky on the beam pattern as calculated in the middle of the observation from the start to finish times
         # We need to double check that this is doing the right thing...
         for i in range(len(RA)): # for each point in the sky meshgrid
-            #print 'i', i
             temppower = powout[i, 0, 0]
 
             # implement earth rotating effect during the observation
             # by rorate powout array
-            max_t = time / dt
-            for t in range(0, max_t):
-                if i % max_t >= t:
-                    power_ra = powout[i - t, 0, 0] #ra+t*15./3600 3deg
-                else:
-                    power_ra = powout[i - t + max_t, 0, 0]
+            for t in range(0, time / dt): #ra+t*15./3600 3deg
+                pow_rot = np.roll(powout, t)
+                power_ra =  pow_rot[i, 0, 0]
                 if power_ra > temppower:
                     temppower = power_ra
 
