@@ -4,6 +4,7 @@ import os
 import sys
 import argparse
 import subprocess
+
 import numpy as np
 
 import astropy.units as u
@@ -11,26 +12,21 @@ from astropy.coordinates import SkyCoord, EarthLocation, AltAz
 from astropy.table import Table
 from astropy.time import Time
 
-from mwapy.pb import primary_beam
-#import ephem
-#from mwapy import ephem_utils,metadata
-
 import matplotlib.pyplot as plt
 import matplotlib.path as mpath
 import matplotlib.patches as mpatches
-#import matplotlib.tri as tri
-#import matplotlib.cm as cm
 
+from mwapy.pb import primary_beam
 from mwa_metadb_utils import getmeta
 
 
 def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
 
     obsid, ra, dec, duration, delays, centrefreq, channels = obsid_data
-    midtimes = np.array([float(obsid) + 0.5 * duration]) # although only include one element, but need to be an array for line84 'for t, time in enumerate(obstimes):'
 
     # Figure out GPS times to evaluate the beam in order to map the drift scan
-    Ntimes = 1
+    midtimes = np.array([float(obsid) + 0.5 * duration]) # although only includes one element, could in future be extended
+    Ntimes = len(midtimes)
 
 
     # Make an EarthLocation for the MWA
@@ -75,7 +71,7 @@ def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
         theta = np.pi / 2 - altaz.alt.rad
         phi = altaz.az.rad
 
-        # Calcualte beam pattern for each frequency, and store the results in a ndarray
+        # Calculate beam pattern for each frequency, and store the results in a ndarray
         for f, freq in enumerate(frequencies):
             if beam_model == "analytic":
                 rX, rY = primary_beam.MWA_Tile_analytic(theta, phi, freq=freq, delays=delays, zenithnorm=True, power=True)
@@ -168,18 +164,15 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         maskGood = psrcat_coords.dec.wrap_at(180*u.deg).deg < mwa_dec_lim
         maskBad = psrcat_coords.dec.wrap_at(180*u.deg).deg >= mwa_dec_lim
 
-        psrcat_ra_good = psrcat_coords.ra.wrap_at(180*u.deg).rad[maskGood]
+        psrcat_ra_good = -psrcat_coords.ra.wrap_at(180*u.deg).rad[maskGood] # negative because RA increases to the West
         psrcat_dec_good = psrcat_coords.dec.wrap_at(180*u.deg).rad[maskGood]
 
-        psrcat_ra_bad = psrcat_coords.ra.wrap_at(180*u.deg).rad[maskBad]
+        psrcat_ra_bad = -psrcat_coords.ra.wrap_at(180*u.deg).rad[maskBad] # negative because RA increases to the West
         psrcat_dec_bad = psrcat_coords.dec.wrap_at(180*u.deg).rad[maskBad]
 
         # Now plot the pulsar locations
-        ax.scatter(-psrcat_ra_good, psrcat_dec_good, 0.01, marker="x", color="0.4", zorder=1.4)
-        ax.scatter(-psrcat_ra_bad, psrcat_dec_bad, 0.01, marker="x", color="0.8", zorder=1.4)
-
-
-
+        ax.scatter(psrcat_ra_good, psrcat_dec_good, 0.01, marker="x", color="0.4", zorder=1.4)
+        ax.scatter(psrcat_ra_bad, psrcat_dec_bad, 0.01, marker="x", color="0.8", zorder=1.4)
 
 
     # Calculate beam patterns and plot contours
@@ -195,7 +188,7 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
 
         ra = beam_meta_data[u'metadata'][u'ra_pointing']
         dec = beam_meta_data[u'metadata'][u'dec_pointing']
-        time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
+        duration = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
         delays = beam_meta_data[u'rfstreams'][u'0'][u'xdelays']
 
         minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
@@ -203,60 +196,58 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in MHz
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
 
-        cord = [obsid, ra, dec, time, delays, centrefreq, channels]
+        metadata = [obsid, ra, dec, duration, delays, centrefreq, channels]
 
+        # Create a meshgrid over which to iterate
+        _RA = np.arange(0, 360, 3)
+        _Dec = np.arange(-89, 90, 3)
+        RA, Dec = np.meshgrid(_RA, _Dec)
 
-        RA = []
-        Dec = []
-        z = []
-        x = []
-        y = []
-
-        # Generate Ra and Dec meshgrid for the whole sky
-        for i in range(-89, 89, 3): # Dec meshgrid in deg with 3 deg step, exclulde North and South pole
-            for j in range(0, 360, 3): # RA meshgrid in deg with 3 deg step
-                Dec.append(i)
-                RA.append(j)
+        # Flatten the arrays, such that for each Dec, every RA is presented before moving on to the next Dec
+        RA = np.ravel(RA)
+        Dec = np.ravel(Dec)
 
         print "Creating beam patterns..."
         dt = 600
-        powout = get_beam_power(cord, zip(RA,Dec))
+        beam_pattern_power = get_beam_power(metadata, zip(RA, Dec))
+        final_pattern_power = []
 
-        # TODO: this currently just rotate the sky on the beam pattern as calculated in the middle of the observation from the start to finish times
-        # We need to double check that this is doing the right thing...
+        # This currently just rotates the sky on the beam pattern as calculated in the middle of the 
+        # observation from the start to finish times. 
+        # TODO: We need to double check that this is doing the right thing...
         for i in range(len(RA)): # for each point in the sky meshgrid
-            temppower = powout[i, 0, 0]
+            power = beam_pattern_power[i, 0, 0]
 
-            # implement earth rotating effect during the observation
-            # by rorate powout array
-            for t in range(0, time / dt): #ra+t*15./3600 3deg
-                pow_rot = np.roll(powout, t)
-                power_ra =  pow_rot[i, 0, 0]
-                if power_ra > temppower:
-                    temppower = power_ra
+            # Implement Earth rotation during the observation
+            # by rotating the powout array
+            for t in range(0, duration / dt):
+                rotated_pattern_power = np.roll(beam_pattern_power, t)
+                rotated_power =  rotated_pattern_power[i, 0, 0]
+                if rotated_power > power:
+                    power = rotated_power
 
-            z.append(temppower)
-            if RA[i] > 180:
-                x.append(np.radians(-RA[i]) + 2 * np.pi)
-            else:
-                x.append(np.radians(-RA[i]))
+            final_pattern_power.append(power)
 
-            y.append(np.radians(Dec[i]))
-
+        # Create RA and Dec arrays for plotting, using Astropy to wrap at correct RA
+        ra_dec = SkyCoord(RA, Dec, unit=(u.deg, u.deg))
+        wrapped_ra = -ra_dec.ra.wrap_at(180*u.deg).rad # negative because RA increases to the West
+        wrapped_dec = ra_dec.dec.wrap_at(180*u.deg).rad
 
         print "Plotting beam pattern contours..."
         # Set vmin and vmax to ensure the beam patterns are on the same color scale
         # and plot the beam pattern contours on the map
-        c = ax.tricontour(x, y, z, levels=levels, cmap=cmap, vmin=levels.min(), vmax=levels.max(), zorder=1.3)
+        c = ax.tricontour(wrapped_ra, wrapped_dec, final_pattern_power, levels=levels, cmap=cmap, vmin=levels.min(), vmax=levels.max(), zorder=1.3)
 
     # Make a figure color scale based on the contour sets (which all have the same max/min values
     fig.colorbar(c, fraction=0.02, pad=0.03, label="Zenith normalised power")
 
 
-    # Plot the target positions
+    # Plot the target positions, using Astropy to wrap at correct RA
     target_coords = read_data(targetfile)
+    wrapped_target_ra = -target_coords.ra.wrap_at(180*u.deg).rad # negative because RA increases to the West
+    wrapped_target_dec = target_coords.dec.wrap_at(180*u.deg).rad
     print "Plotting target source positions..."
-    ax.scatter(-target_coords.ra.wrap_at(180*u.deg).rad, target_coords.dec.wrap_at(180*u.deg).rad, 10, marker="x", color="red", zorder=1.6, label="Target sources")
+    ax.scatter(wrapped_target_ra, wrapped_target_dec, 10, marker="x", color="red", zorder=1.6, label="Target sources")
 
     xtick_labels = ["10h", "8h", "6h", "4h", "2h", "0h", "22h", "20h", "18h", "16h", "14h"]
     ax.set_xticklabels(xtick_labels, color="0.2")
