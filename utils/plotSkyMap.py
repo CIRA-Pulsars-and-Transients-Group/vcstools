@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python
 
 import os
 import sys
@@ -24,16 +24,13 @@ import matplotlib.patches as mpatches
 from mwa_metadb_utils import getmeta
 
 
-def get_beam_power(obsid_data, sources, dt=296, beam_model="analytic", centeronly=True):
-    
+def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
+
     obsid, ra, dec, duration, delays, centrefreq, channels = obsid_data
-    
+    midtimes = np.array([float(obsid) + 0.5 * duration]) # although only include one element, but need to be an array for line84 'for t, time in enumerate(obstimes):'
+
     # Figure out GPS times to evaluate the beam in order to map the drift scan
-    starttimes = np.arange(0, duration, duration)
-    stoptimes = starttimes + dt
-    stoptimes[stoptimes > duration] = duration
-    Ntimes = len(starttimes)
-    midtimes = float(obsid) + 0.5 * (starttimes + stoptimes)
+    Ntimes = 1
 
 
     # Make an EarthLocation for the MWA
@@ -65,7 +62,7 @@ def get_beam_power(obsid_data, sources, dt=296, beam_model="analytic", centeronl
 
     # Turn RAs and DECs into SkyCoord objects that are to be fed to Alt/Az conversion
     coords = SkyCoord(RAs, Decs, unit=(u.deg, u.deg))
-    
+
     # Make times to feed to Alt/Az conversion
     obstimes = Time(midtimes, format='gps', scale='utc')
 
@@ -77,7 +74,7 @@ def get_beam_power(obsid_data, sources, dt=296, beam_model="analytic", centeronl
         # Change Altitude to Zenith Angle
         theta = np.pi / 2 - altaz.alt.rad
         phi = altaz.az.rad
-        
+
         # Calcualte beam pattern for each frequency, and store the results in a ndarray
         for f, freq in enumerate(frequencies):
             if beam_model == "analytic":
@@ -87,13 +84,13 @@ def get_beam_power(obsid_data, sources, dt=296, beam_model="analytic", centeronl
             else:
                 print "Unrecognised beam model '{0}'. Defaulting to 'analytic'."
                 rX, rY = primary_beam.MWA_Tile_analytic(theta, phi, freq=freq, delays=delays, zenithnorm=True, power=True)
-                
+
             PowersX[:, t, f] = rX
             PowersY[:, t, f] = rY
-    
+
     # Convert X and Y powers into total intensity
     Powers = 0.5 * (PowersX + PowersY)
-                 
+
     return Powers
 
 
@@ -109,7 +106,7 @@ def read_data(fname, delim=",", format="csv", coords=True):
     else:
         # Otherwise, return the whole table
         return tab
-    
+
 
 
 def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False, show_mwa_unique=False):
@@ -135,7 +132,7 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
                     (Path.LINETO, (ra_end, dec_end)),
                     (Path.LINETO, (ra_end, dec_start)),
                     (Path.CLOSEPOLY, (ra_end, dec_start)),
-                    ]   
+                    ]
         codes, verts = zip(*path_data)
         path = mpath.Path(verts, codes)
         patch = mpatches.PathPatch(path, lw=0, ec="lightskyblue", fc="lightskyblue", label="All MWA sky")
@@ -154,7 +151,7 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
                     (Path.LINETO, (ra_end, dec_end)),
                     (Path.LINETO, (ra_end, dec_start)),
                     (Path.CLOSEPOLY, (ra_end, dec_start)),
-                    ]   
+                    ]
         codes, verts = zip(*path_data)
         path = mpath.Path(verts, codes)
         patch = mpatches.PathPatch(path, lw=0, ec="lightgreen", fc="lightgreen", label="Unique MWA sky")
@@ -170,10 +167,10 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         # Create a mask for pulsar in and out of the declination limit of the MWA
         maskGood = psrcat_coords.dec.wrap_at(180*u.deg).deg < mwa_dec_lim
         maskBad = psrcat_coords.dec.wrap_at(180*u.deg).deg >= mwa_dec_lim
-        
+
         psrcat_ra_good = psrcat_coords.ra.wrap_at(180*u.deg).rad[maskGood]
         psrcat_dec_good = psrcat_coords.dec.wrap_at(180*u.deg).rad[maskGood]
-        
+
         psrcat_ra_bad = psrcat_coords.ra.wrap_at(180*u.deg).rad[maskBad]
         psrcat_dec_bad = psrcat_coords.dec.wrap_at(180*u.deg).rad[maskBad]
 
@@ -184,7 +181,7 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
 
 
 
-    
+
     # Calculate beam patterns and plot contours
     levels = np.arange(0.25, 1., 0.05)
     cmap = plt.get_cmap("cubehelix_r")
@@ -195,7 +192,7 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
 
         # TODO: I think this process is now implemented in a function in mwa_metadb_utils, need to double check
         beam_meta_data = getmeta(service='obs', params={'obs_id': obsid})
-            
+
         ra = beam_meta_data[u'metadata'][u'ra_pointing']
         dec = beam_meta_data[u'metadata'][u'dec_pointing']
         time = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
@@ -214,27 +211,35 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         z = []
         x = []
         y = []
-        
-        # TODO: This next section, until the tricontour command, needs documentation...
-        for i in range(-87, 88, 3):
-            for j in range(0, 361, 3):
+
+        # Generate Ra and Dec meshgrid for the whole sky
+        for i in range(-89, 89, 3): # Dec meshgrid in deg with 3 deg step, exclulde North and South pole
+            for j in range(0, 360, 3): # RA meshgrid in deg with 3 deg step
                 Dec.append(i)
                 RA.append(j)
 
         print "Creating beam patterns..."
-        powout = get_beam_power(cord, zip(RA,Dec), dt=600)
+        dt = 600
+        powout = get_beam_power(cord, zip(RA,Dec))
+        print 'len(powout)',len(powout)
 
-        # TODO: this currently just stretches the beam pattern as calculated in the middle of the observation from the start to finish times
+        # TODO: this currently just rotate the sky on the beam pattern as calculated in the middle of the observation from the start to finish times
         # We need to double check that this is doing the right thing...
-        for i in range(len(RA)):
+        for i in range(len(RA)): # for each point in the sky meshgrid
+            #print 'i', i
             temppower = powout[i, 0, 0]
-            for t in range(0, (time + 361)/720):
-                if i % 121 >= t:
-                    power_ra = powout[i-t, 0, 0] #ra+t*15./3600 3deg
+
+            # implement earth rotating effect during the observation
+            # by rorate powout array
+            max_t = time / dt
+            for t in range(0, max_t):
+                if i % max_t >= t:
+                    power_ra = powout[i - t, 0, 0] #ra+t*15./3600 3deg
                 else:
-                    power_ra = powout[i+121-t, 0, 0]
+                    power_ra = powout[i - t + max_t, 0, 0]
                 if power_ra > temppower:
                     temppower = power_ra
+
             z.append(temppower)
             if RA[i] > 180:
                 x.append(np.radians(-RA[i]) + 2 * np.pi)
@@ -257,7 +262,7 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
     target_coords = read_data(targetfile)
     print "Plotting target source positions..."
     ax.scatter(-target_coords.ra.wrap_at(180*u.deg).rad, target_coords.dec.wrap_at(180*u.deg).rad, 10, marker="x", color="red", zorder=1.6, label="Target sources")
-    
+
     xtick_labels = ["10h", "8h", "6h", "4h", "2h", "0h", "22h", "20h", "18h", "16h", "14h"]
     ax.set_xticklabels(xtick_labels, color="0.2")
     ax.set_xlabel("Right Ascension")
@@ -267,7 +272,7 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
     # Place upper-right corner of legend at specified Axis coordinates
     ax.legend(loc="upper right", bbox_to_anchor=(1.02, 0.08), numpoints=1, borderaxespad=0., fontsize=6)
 
-    
+
     plt.savefig(oname, format="eps", bbox_inches="tight")
 
 
@@ -275,9 +280,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-o", "--obsfile", type=str, help="File containing a list of observation IDs, one ID per line, column labelled 'OBSID'")
-    
+
     parser.add_argument("-t", "--targetfile", type=str, help="File containing a list of target sources, with positions in columns labelled 'RAJ' and 'DECJ'")
-    
+
     parser.add_argument("--oname", type=str, help="Output EPS file name [default: skymap.eps]", default="skymap.eps")
 
     parser.add_argument("--show_psrcat", action="store_true", help="Whether to show background pulsars on map (assumes psrcat is on PATH)")
