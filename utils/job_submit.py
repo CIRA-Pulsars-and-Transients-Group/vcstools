@@ -8,7 +8,6 @@ SLURM_TMPL = """#!/bin/bash -l
 #SBATCH --export={export}
 #SBATCH --output={outfile}
 #SBATCH --account=mwaops
-#SBATCH --gid=mwaops
 #SBATCH --clusters={cluster}
 #
 {header}
