@@ -166,8 +166,8 @@ int main(int argc, char **argv)
 
             // Flag both polarisations of the antenna in question
             flag = ant*2;
-            mi.weights_array[flag]   = 0.0;
-            mi.weights_array[flag+1] = 0.0;
+            //mi.weights_array[flag]   = 0.0;
+            //mi.weights_array[flag+1] = 0.0;
         }
 
         // Close file
