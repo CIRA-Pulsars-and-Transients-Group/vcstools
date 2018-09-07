@@ -14,6 +14,8 @@ SLURM_TMPL = """#!/bin/bash -l
 
 {script}
 """
+# NOTE: --gid option removed after discussion in helpdesk ticket GS-9370
+
 
 def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, 
                     batch_dir="batch/", depend=None, submit=True, 
