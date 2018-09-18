@@ -44,7 +44,7 @@ def remove_raw(obs):
     ics_files = False
     for file in glob.iglob("{0}/*".format(raw_folder)):
         if re.search('dat', file):
-            raw_files = True;
+            raw_files = True
     for file in glob.iglob("{0}/*".format(combined_folder)):
         if re.search('tar', file):
             tar_files = True
