@@ -202,12 +202,12 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None):
     if source_type !='Pulsar':
         os.remove(web_table)
 
-    return np.array(name_ra_dec)
+    return name_ra_dec
 
 
 def format_ra_dec(ra_dec_list, ra_col = 0, dec_col = 1):
     """
-    Will format a list of lists containing RAs and Decs to uniform strings.  eg 00:00:00.00 -00:00:00.00. 
+    Will format a list of lists containing RAs and Decs to uniform strings.  eg 00:00:00.00 -00:00:00.00. Will not work for numpy arrays so make sure they're list of lists
     An example input:
     format_ra_dec([[name,ra,dec]], ra_col = 1, dec_col = 2)
     """
