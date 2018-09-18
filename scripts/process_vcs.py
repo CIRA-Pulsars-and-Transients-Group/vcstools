@@ -154,6 +154,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                             tar_secs_to_run = "10:00:00"
                             body = []
                             untar = distutils.spawn.find_executable('untar.sh')
+                            body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
                             body.append(database_vcs.add_database_function())
                             body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(
                                 untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
@@ -200,7 +201,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         
                         
                         body = []
-                        commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                        body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
                         body.append(database_vcs.add_database_function())
                         body.append("oldcount=0")
                         body.append("let newcount=$oldcount+1")
@@ -214,7 +215,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, module_list=module_list,
                                      slurm_kwargs={"time": str(volt_secs_to_run), "partition": "copyq",
                                                    "clusters": "zeus", "nice" : nice},
-                                     vcstools_versio=vcstools_version, outfile=batch_dir+voltdownload_batch+"_1.out",
+                                     vcstools_version=vcstools_version, outfile=batch_dir+voltdownload_batch+"_1.out",
                                      cluster="zeus", export="NONE")
                         
                         # submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
