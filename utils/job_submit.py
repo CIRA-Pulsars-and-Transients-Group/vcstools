@@ -14,7 +14,7 @@ SLURM_TMPL = """#!/bin/bash -l
 
 {switches}
 module use /group/mwa/software/modulefiles
-module load vcstools/master
+module load vcstools/{version}
 {modules}
 
 {script}
@@ -22,7 +22,7 @@ module load vcstools/master
 # NOTE: --gid option removed after discussion in helpdesk ticket GS-9370
 
 
-def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[],
+def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[], vcstools_version="master",
                     batch_dir="batch/", depend=None, submit=True, 
                     outfile=None, cluster="galaxy", export="NONE"):
     """
@@ -55,6 +55,9 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
             module load presto/master
         to the header of the batch script. This can also invoke "module use ..." commands.
         NOTE: /group/mwa/software/modulefiles is used and vcstools/master is loaded by default.
+
+    vcstools_version :  str
+        The version of vcstools to load. Default: master.
 
     batch_dir : str [optional]
         The LOCAL directory where you want to write the batch scripts (i.e. it will write to `$PWD/batch_dir`).
@@ -117,8 +120,8 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
     modules = []
     switches = []
     for m in module_list:
-        if m == "vcstools/master":
-            # don't do anything as vcstools/master is loaded automatically
+        if m == "vcstools":
+            # don't do anything as vcstools is loaded automatically
             continue
         if "module switch" in m:
             # if a module switch command is included rather than just a module name, then add it to a separate list
@@ -135,7 +138,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
 
     # format the template script
     tmpl = tmpl.format(script=commands, outfile=outfile, header=header, switches=switches, modules=modules,
-                       cluster=cluster, export=export)
+                       version=vcstools_version, cluster=cluster, export=export)
 
     # write the formatted template to the job file for submission
     with open(jobfile, "w") as fh:
