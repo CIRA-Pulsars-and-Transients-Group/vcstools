@@ -202,12 +202,12 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None):
     if source_type !='Pulsar':
         os.remove(web_table)
 
-    return np.array(name_ra_dec)
+    return name_ra_dec
 
 
 def format_ra_dec(ra_dec_list, ra_col = 0, dec_col = 1):
     """
-    Will format a list of lists containing RAs and Decs to uniform strings.  eg 00:00:00.00 -00:00:00.00. 
+    Will format a list of lists containing RAs and Decs to uniform strings.  eg 00:00:00.00 -00:00:00.00. Will not work for numpy arrays so make sure they're list of lists
     An example input:
     format_ra_dec([[name,ra,dec]], ra_col = 1, dec_col = 2)
     """
@@ -332,7 +332,7 @@ def singles_source_search(ra, dec):
                                                              'minra':0.,'maxra':ra_high,
                                                              'mindec':dec_bot,'maxdec':dec_top})
             for row in temp_obsid_list:
-                obsid_list.append(row[0])
+                obsid_list.append(row)
         elif ra_high > 360:
             ra_new = ra_high - 360
             obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
@@ -342,7 +342,7 @@ def singles_source_search(ra, dec):
                                                              'minra':0., 'maxra':ra_new,
                                                              'mindec':dec_bot,'maxdec':dec_top})
             for row in temp_obsid_list:
-                obsid_list.append(row[0])
+                obsid_list.append(row)
         else:
             obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
                                                         'minra':ra_low, 'maxra':ra_high,
@@ -683,12 +683,12 @@ if __name__ == "__main__":
                 degrees_check = True
     else:
         names_ra_dec = grab_source_alog(source_type = args.source_type, pulsar_list = args.pulsar)
-    
+
     #format ra and dec
     if not degrees_check:
         names_ra_dec = format_ra_dec(names_ra_dec, ra_col = 1, dec_col = 2)
     names_ra_dec = np.array(names_ra_dec)
-    
+
     #Check if the user wants to use --obs for source
     if (len(names_ra_dec) ==1) and (not args.obs_for_source):
         args.obs_for_source = yes_no('You are only searching for one pulsar so it is '+\
