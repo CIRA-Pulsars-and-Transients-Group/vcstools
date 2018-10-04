@@ -436,7 +436,8 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         verbose: prints extra data to (default False)
         option: primary beam model [analytic, advanced, full_EE]
     """
-    obsid,ra, dec, time, delays,centrefreq, channels = beam_meta_data
+    obsid, ra, dec, time, delays, centrefreq, channels = beam_meta_data
+    names_ra_dec = np.array(names_ra_dec)
     print "Calculating beam power for OBS ID: {0}".format(obsid)
 
     starttimes=np.arange(0,time,dt)
