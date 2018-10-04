@@ -201,6 +201,9 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
             print "WARNING: Input detection time does not equal the dectetion time of the .bestprof file"
             print "Input (metadata) time: " + str(input_detection_time)
             print "Bestprof time: " + str(time_detection)
+
+            #make sure calculation uses Bestprof time
+            exit = enter + time_detection
     return enter, exit
 
 
@@ -234,8 +237,11 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     ntiles = 128#TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
     
     print "Calculating beam power and antena temperature..."
-    bandpowers = fpio.get_beam_power_over_time(metadata, np.array([["source",pul_ra, pul_dec]]),
-                                               dt=100)
+    #starting from enter for the bestprof duration
+    bandpowers = fpio.get_beam_power_over_time([obsid,ra_obs,dec_obs,time_detection,
+                                                delays,centrefreq,channels],
+                                               np.array([["source",pul_ra, pul_dec]]),
+                                               dt=100, start_time=int(enter))
     bandpowers = np.mean(bandpowers)
     
     beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
