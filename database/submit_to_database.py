@@ -207,6 +207,57 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
     return enter, exit
 
 
+def zip_calibration_files(base_dir, cal_obsid):
+    """
+    Checkes that all the expected calibration files are where they should be 
+    and returns the file location of the zipped file
+    """
+    import tarfile
+
+    #Bandpass calibrations
+    bandpass_files = glob.glob("{0}/rts/BandpassCalibration_node0*.dat".format(base_dir))
+    if len(bandpass_files) != 24:
+        print "Bandpass files not found. Exiting"
+        quit()
+
+    #DI Jones matricies
+    DIJ_files = glob.glob("{0}/rts/DI_JonesMatrices_node0*.dat".format(base_dir))
+    if len(DIJ_files) != 24:
+        print "DI Jones matricies not found. Exiting"
+        quit()
+
+    #flagged txt files
+    if not ( os.path.isfile("{0}/rts/flagged_channels.txt".format(base_dir))
+            and os.path.isfile("{0}/rts/flagged_tiles.txt".format(base_dir)) ):
+        print "Flag files not found. Exiting"
+        quit()
+
+    #rts.in
+    if not os.path.isfile("{0}/rts/rts_{1}.in".format(base_dir, cal_obsid)):
+        print "No rts in file. Exiting"
+        quit()
+
+    #source file
+    source_file = glob.glob("{0}/vis/srclist_*_{1}_patch*.txt".format(base_dir, cal_obsid))
+    if len(source_file) != 1:
+        print "No source file in {0}/vis/. Exiting".format(base_dir)
+        quit()
+
+    #zip the files
+    zip_file_location = "{0}/rts/{1}_rts_calibrator.zip".format(base_dir, cal_obsid)
+    out = tarfile.open(zip_file_location, mode='w')
+    for bf in bandpass_files:
+        out.add(bf, arcname=bf.split("/")[-1])
+    for DIJ in DIJ_files:
+        out.add(DIJ, arcname=DIJ.split("/")[-1])
+    out.add("{0}/rts/flagged_channels.txt".format(base_dir), arcname="flagged_channels.txt")
+    out.add("{0}/rts/flagged_tiles.txt".format(base_dir), arcname="flagged_tiles.txt")
+    out.add("{0}/rts/rts_{1}.in".format(base_dir, cal_obsid), arcname="rts_{0}.in".format(cal_obsid))
+    out.add(source_file[0], arcname=source_file[0].split("/")[-1])
+    out.close()
+
+    return zip_file_location
+
 
 def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, incoh,
@@ -476,6 +527,7 @@ if __name__ == "__main__":
     uploadargs.add_argument('-i','--ippd',type=str,help="The Intergrates Pulse Profile given by Dspsr.")
     uploadargs.add_argument('-w','--waterfall',type=str,help="A waterfall plot of pulse phase vs frequency using dspsr's psrplot.")
     uploadargs.add_argument('-c','--calibration',type=str,help='The calibration solution file location to be uploaded to the database. Expects a single file so please zip or tar up the bandpass calibrations, the DI Jones matrices, the flagged_channels.txt file, the flagged_tiles.txt file, the rts.in file and the source file.')
+    uploadargs.add_argument('--cal_dir',type=str,help='The calibration directory (eg. /group/mwaops/vcs/1221832280/cal/1221831856/). If the calibaration files are in the default positions then they will be tared and uploaded.')
 
     dspsrargs = parser.add_argument_group('Dspsr Calculation Options', "Requires the --fits_files. These options will send off dspsr jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the dspsr scripts are tested more") #TODO remove when I'm confident with dspsr
     dspsrargs.add_argument('--u_archive', action='store_true',help='The archive to be processed with dspsr and then uploaded to the database')
@@ -565,6 +617,10 @@ if __name__ == "__main__":
         subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, incoh,
                             start = args.start, stop = args.stop, trcvr = args.trcvr)
+
+    if args.cal_dir:
+         args.calibration = zip_calibration_files(args.cal_dir, args.cal_id)
+
 
     if args.pulsar and not args.bestprof:  
         #calc sub-bands
