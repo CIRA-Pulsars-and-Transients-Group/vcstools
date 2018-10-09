@@ -256,6 +256,10 @@ def format_ra_dec(ra_dec_list, ra_col = 0, dec_col = 1):
             elif len(ra_dec_list[i][ra_dec_col[n]]) == 10 + n:
                 ra_dec_list[i][ra_dec_col[n]] += '0'
 
+            #shorten if too long
+            if len(ra_dec_list[i][ra_dec_col[n]]) > (11 + n):
+                ra_dec_list[i][ra_dec_col[n]] = ra_dec_list[i][ra_dec_col[n]][:(11+n)]
+
     return ra_dec_list
 
 
