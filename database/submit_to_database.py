@@ -207,7 +207,7 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
     return enter, exit
 
 
-def zip_calibration_files(base_dir, cal_obsid):
+def zip_calibration_files(base_dir, cal_obsid, source_file):
     """
     Checkes that all the expected calibration files are where they should be 
     and returns the file location of the zipped file
@@ -238,9 +238,8 @@ def zip_calibration_files(base_dir, cal_obsid):
         quit()
 
     #source file
-    source_file = glob.glob("{0}/vis/srclist_*_{1}_patch*.txt".format(base_dir, cal_obsid))
-    if len(source_file) != 1:
-        print "No source file in {0}/vis/. Exiting".format(base_dir)
+    if not os.path.isfile(source_file):
+        print "No source file. Exiting"
         quit()
 
     #zip the files
@@ -253,7 +252,7 @@ def zip_calibration_files(base_dir, cal_obsid):
     out.add("{0}/rts/flagged_channels.txt".format(base_dir), arcname="flagged_channels.txt")
     out.add("{0}/rts/flagged_tiles.txt".format(base_dir), arcname="flagged_tiles.txt")
     out.add("{0}/rts/rts_{1}.in".format(base_dir, cal_obsid), arcname="rts_{0}.in".format(cal_obsid))
-    out.add(source_file[0], arcname=source_file[0].split("/")[-1])
+    out.add(source_file, arcname=source_file.split("/")[-1])
     out.close()
 
     return zip_file_location
@@ -527,7 +526,8 @@ if __name__ == "__main__":
     uploadargs.add_argument('-i','--ippd',type=str,help="The Intergrates Pulse Profile given by Dspsr.")
     uploadargs.add_argument('-w','--waterfall',type=str,help="A waterfall plot of pulse phase vs frequency using dspsr's psrplot.")
     uploadargs.add_argument('-c','--calibration',type=str,help='The calibration solution file location to be uploaded to the database. Expects a single file so please zip or tar up the bandpass calibrations, the DI Jones matrices, the flagged_channels.txt file, the flagged_tiles.txt file, the rts.in file and the source file.')
-    uploadargs.add_argument('--cal_dir',type=str,help='The calibration directory (eg. /group/mwaops/vcs/1221832280/cal/1221831856/). If the calibaration files are in the default positions then they will be tared and uploaded.')
+    uploadargs.add_argument('--cal_dir',type=str,help='The calibration directory (eg. /group/mwaops/vcs/1221832280/cal/1221831856/). Must be used with --srclist so the correct sourcelist is uploaded. If the calibaration files are in the default positions then they will be tared and uploaded.')
+    uploadargs.add_argument('--srclist',type=str,help='Used with --cal_dir to indicate the sourcelist file location. eg /group/mwaops/vcs/1221832280/cal/1221831856/vis/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_1221831856_patch1000.txt.')
 
     dspsrargs = parser.add_argument_group('Dspsr Calculation Options', "Requires the --fits_files. These options will send off dspsr jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the dspsr scripts are tested more") #TODO remove when I'm confident with dspsr
     dspsrargs.add_argument('--u_archive', action='store_true',help='The archive to be processed with dspsr and then uploaded to the database')
@@ -619,7 +619,10 @@ if __name__ == "__main__":
                             start = args.start, stop = args.stop, trcvr = args.trcvr)
 
     if args.cal_dir:
-         args.calibration = zip_calibration_files(args.cal_dir, args.cal_id)
+        if not args.srclist:
+            print "You must use --srclist to define the srclist file location. Exiting"
+            quit()
+        args.calibration = zip_calibration_files(args.cal_dir, args.cal_id, args.srclist)
 
 
     if args.pulsar and not args.bestprof:  
