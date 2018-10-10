@@ -256,6 +256,10 @@ def format_ra_dec(ra_dec_list, ra_col = 0, dec_col = 1):
             elif len(ra_dec_list[i][ra_dec_col[n]]) == 10 + n:
                 ra_dec_list[i][ra_dec_col[n]] += '0'
 
+            #shorten if too long
+            if len(ra_dec_list[i][ra_dec_col[n]]) > (11 + n):
+                ra_dec_list[i][ra_dec_col[n]] = ra_dec_list[i][ra_dec_col[n]][:(11+n)]
+
     return ra_dec_list
 
 
@@ -420,7 +424,8 @@ def cal_on_database_check(obsid):
 
 def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                              dt=296, centeronly=True, verbose=False, 
-                             option = 'analytic', degrees = False):
+                             option = 'analytic', degrees = False,
+                             start_time = 0):
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source over time.
 
@@ -435,11 +440,14 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         centeronly: only calculates for the centre frequency (default True)
         verbose: prints extra data to (default False)
         option: primary beam model [analytic, advanced, full_EE]
+        start_time: the time in seconds from the begining of the observation to 
+                    start calculating at
     """
-    obsid,ra, dec, time, delays,centrefreq, channels = beam_meta_data
+    obsid, ra, dec, time, delays, centrefreq, channels = beam_meta_data
+    names_ra_dec = np.array(names_ra_dec)
     print "Calculating beam power for OBS ID: {0}".format(obsid)
 
-    starttimes=np.arange(0,time,dt)
+    starttimes=np.arange(start_time,time,dt)
     stoptimes=starttimes+dt
     stoptimes[stoptimes>time]=time
     Ntimes=len(starttimes)

@@ -201,8 +201,61 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
             print "WARNING: Input detection time does not equal the dectetion time of the .bestprof file"
             print "Input (metadata) time: " + str(input_detection_time)
             print "Bestprof time: " + str(time_detection)
+
+            #make sure calculation uses Bestprof time
+            exit = enter + time_detection
     return enter, exit
 
+
+def zip_calibration_files(base_dir, cal_obsid, source_file):
+    """
+    Checkes that all the expected calibration files are where they should be 
+    and returns the file location of the zipped file
+    """
+    import tarfile
+
+    #Bandpass calibrations
+    bandpass_files = glob.glob("{0}/rts/BandpassCalibration_node0*.dat".format(base_dir))
+    if len(bandpass_files) != 24:
+        print "Bandpass files not found. Exiting"
+        quit()
+
+    #DI Jones matricies
+    DIJ_files = glob.glob("{0}/rts/DI_JonesMatrices_node0*.dat".format(base_dir))
+    if len(DIJ_files) != 24:
+        print "DI Jones matricies not found. Exiting"
+        quit()
+
+    #flagged txt files
+    if not ( os.path.isfile("{0}/rts/flagged_channels.txt".format(base_dir))
+            and os.path.isfile("{0}/rts/flagged_tiles.txt".format(base_dir)) ):
+        print "Flag files not found. Exiting"
+        quit()
+
+    #rts.in
+    if not os.path.isfile("{0}/rts/rts_{1}.in".format(base_dir, cal_obsid)):
+        print "No rts in file. Exiting"
+        quit()
+
+    #source file
+    if not os.path.isfile(source_file):
+        print "No source file. Exiting"
+        quit()
+
+    #zip the files
+    zip_file_location = "{0}/rts/{1}_rts_calibrator.zip".format(base_dir, cal_obsid)
+    out = tarfile.open(zip_file_location, mode='w')
+    for bf in bandpass_files:
+        out.add(bf, arcname=bf.split("/")[-1])
+    for DIJ in DIJ_files:
+        out.add(DIJ, arcname=DIJ.split("/")[-1])
+    out.add("{0}/rts/flagged_channels.txt".format(base_dir), arcname="flagged_channels.txt")
+    out.add("{0}/rts/flagged_tiles.txt".format(base_dir), arcname="flagged_tiles.txt")
+    out.add("{0}/rts/rts_{1}.in".format(base_dir, cal_obsid), arcname="rts_{0}.in".format(cal_obsid))
+    out.add(source_file, arcname=source_file.split("/")[-1])
+    out.close()
+
+    return zip_file_location
 
 
 def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
@@ -234,8 +287,11 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     ntiles = 128#TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
     
     print "Calculating beam power and antena temperature..."
-    bandpowers = fpio.get_beam_power_over_time(metadata, np.array([["source",pul_ra, pul_dec]]),
-                                               dt=100)
+    #starting from enter for the bestprof duration
+    bandpowers = fpio.get_beam_power_over_time([obsid,ra_obs,dec_obs,time_detection,
+                                                delays,centrefreq,channels],
+                                               np.array([["source",pul_ra, pul_dec]]),
+                                               dt=100, start_time=int(enter))
     bandpowers = np.mean(bandpowers)
     
     beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
@@ -470,6 +526,8 @@ if __name__ == "__main__":
     uploadargs.add_argument('-i','--ippd',type=str,help="The Intergrates Pulse Profile given by Dspsr.")
     uploadargs.add_argument('-w','--waterfall',type=str,help="A waterfall plot of pulse phase vs frequency using dspsr's psrplot.")
     uploadargs.add_argument('-c','--calibration',type=str,help='The calibration solution file location to be uploaded to the database. Expects a single file so please zip or tar up the bandpass calibrations, the DI Jones matrices, the flagged_channels.txt file, the flagged_tiles.txt file, the rts.in file and the source file.')
+    uploadargs.add_argument('--cal_dir',type=str,help='The calibration directory (eg. /group/mwaops/vcs/1221832280/cal/1221831856/). Must be used with --srclist so the correct sourcelist is uploaded. If the calibaration files are in the default positions then they will be tared and uploaded.')
+    uploadargs.add_argument('--srclist',type=str,help='Used with --cal_dir to indicate the sourcelist file location. eg /group/mwaops/vcs/1221832280/cal/1221831856/vis/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_1221831856_patch1000.txt.')
 
     dspsrargs = parser.add_argument_group('Dspsr Calculation Options', "Requires the --fits_files. These options will send off dspsr jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the dspsr scripts are tested more") #TODO remove when I'm confident with dspsr
     dspsrargs.add_argument('--u_archive', action='store_true',help='The archive to be processed with dspsr and then uploaded to the database')
@@ -559,6 +617,13 @@ if __name__ == "__main__":
         subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, incoh,
                             start = args.start, stop = args.stop, trcvr = args.trcvr)
+
+    if args.cal_dir:
+        if not args.srclist:
+            print "You must use --srclist to define the srclist file location. Exiting"
+            quit()
+        args.calibration = zip_calibration_files(args.cal_dir, args.cal_id, args.srclist)
+
 
     if args.pulsar and not args.bestprof:  
         #calc sub-bands
