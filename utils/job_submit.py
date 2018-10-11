@@ -23,7 +23,7 @@ module load vcstools/{version}
 
 
 def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[], vcstools_version="master",
-                    batch_dir="batch/", depend=None, submit=True, 
+                    batch_dir="batch/", depend=None, depend_type='afterok', submit=True, 
                     outfile=None, cluster="galaxy", export="NONE"):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
@@ -63,10 +63,15 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
         The LOCAL directory where you want to write the batch scripts (i.e. it will write to `$PWD/batch_dir`).
         Default: "batch/"
 
-    depend : int or None [optional]
-        The job ID that the desired job depends on to finish with the "afterok" qualifier from SLURM.
+    depend : list or None [optional]
+        A list of the SLURM job IDs that your would like this job to depend on.
         If `None` then it is assumed there is no dependency on any other job.
         Default: `None`
+
+    depend_type : str [optional]
+        The type of slurm dependancy required. For example if you wanted the 
+        job to run after the jobs have been terminated use 'afterany'.
+        Default: "afterok"
 
     submit : boolean [optional]
         Whether to write and submit the job scripts (`True`) or only write the scripts (`False`).
@@ -111,7 +116,22 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
 
     # check if there are dependencies, and if so include that in the header
     if depend is not None:
-        header.append("#SBATCH --dependency=afterok:{0}".format(depend))
+        #assumes append is a list but if not will make an educated guess of how to reformat it
+        if type(depend) is int:
+            #assume it's ben given a single job id
+            header.append("#SBATCH --dependency={0}:{1}".format(depend_type, depend))
+        if type(depend) is str:
+            if ":" in depend:
+                #assume it has been given an already formated string
+                if depend.startswith(":"):
+                    depend = depend[1:]
+            #or a single jobid 
+            header.append("#SBATCH --dependency={0}:{1}".format(depend_type, depend))
+        if type(depend) is list:
+            depend_str = ""
+            for job_id in depend:
+                 depend_str += ":" + str(job_id)
+            header.append("#SBATCH --dependency={0}{1}".format(depend_type, depend_str))
 
     # now join the header into one string
     header = "\n".join(header)
