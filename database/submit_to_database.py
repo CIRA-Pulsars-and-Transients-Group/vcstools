@@ -61,11 +61,12 @@ def sex2deg( ra, dec):
 def get_from_bestprof(file_loc):
     with open(file_loc,"rb") as bestprof:
         lines = bestprof.readlines()
+        #assumes the input fits files names begins with the obsid
         obsid = lines[0][22:32]
         try:
             obsid = int(obsid)
         except:
-            obsid = lines[0][28:38]
+            obsid = None
         pulsar = str(lines[1][26:-1])
         if not pulsar.startswith('J'):
             pulsar = 'J' + pulsar
@@ -296,7 +297,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     
     beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
      beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
-     pbtant.make_primarybeammap(obsid, delays, centrefreq*1e6, 'analytic', plottype='None')
+     pbtant.make_primarybeammap(int(obsid), delays, centrefreq*1e6, 'analytic', plottype='None')
     
     #TODO can be inaccurate for coherent but is too difficult to simulate
     tant = (Tant_XX + Tant_YY) / 2.
@@ -562,6 +563,13 @@ if __name__ == "__main__":
     if args.bestprof:
         bestprof_data = get_from_bestprof(args.bestprof)
         obsid, pulsar, dm, period, period_uncer, time_detection, profile, num_bins = bestprof_data
+        #The obsid can only be obtained from the bestprof file if the 
+        #fits file name start with the obsid
+        if obsid is None and args.obsid:
+            obsid = args.obsid
+        elif obsid is None:
+            print "Please use --obsid. Exiting"
+            sys.exit(0)
     elif args.obsid and args.pulsar:
         num_bins = 128 #used in dspsr calculations
         obsid = args.obsid
