@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from matplotlib.dates import date2num, DateFormatter
 import numpy as np
 from astropy.coordinates import EarthLocation, SkyCoord, AltAz
+from astropy.coordinates import get_body
 from astropy import units as u
 from astropy.time import Time, TimezoneInfo
 from astropy.utils import iers
@@ -78,7 +79,7 @@ class Observatory(object):
         self.maxtimeLST = None
         self.maxtimeLocalStr = None 
         self.utcoffsetStr = None
-
+        self.sun = None
 
     def compute_target_position(self, coords, times, tz):
         if coords and times:
@@ -97,20 +98,26 @@ class Observatory(object):
             print "The RA, DEC or time was not provided and so we cannot calculate the altaz of the target. Aborting."
             sys.exit(1)
         
+    def compute_sun_position(self, times):
+        sun_position = get_body('sun', times, self.location)
+        self.sun = sun_position.transform_to(AltAz(obstime=times, location=self.location))
+        
 
 
-def plot_ephem(ax, times, obs):
+def plot_ephem(ax, times, obs, plot_sun=False):
     """ Given an axis object, the times (x) and observed ephemeris (y), plot the source track."""
 
     eph = ax.plot_date(times, obs.alt, xdate=True, ls="-", lw=2, marker='', alpha=0.6, label="{0}".format(obs.name))
     ax.axhline(0, ls="--", color='k')
     ax.axvline(date2num(obs.maxtimeUTC.datetime), ls="--", lw=2, color=eph[0].get_color())
+    if plot_sun:
+        ax.plot_date(times[::50], obs.sun.alt, xdate=True, ls=":", lw=2, marker='', alpha=0.4, color=eph[0].get_color())
     
     return "{0}: {1} UTC{2}".format(obs.name, obs.maxtimeLocalStr, obs.utcoffsetStr)
     
 
 
-def calculate_ephem(ra, dec, date, tzoffset, site, center):
+def calculate_ephem(ra, dec, date, tzoffset, site, show_sun, center):
     """Compute the ephemeris for a target on a given day at a target position."""
     
     # first, let's set up the times we want to evaluate the source position for
@@ -136,7 +143,10 @@ def calculate_ephem(ra, dec, date, tzoffset, site, center):
     for s in site:
         o = Observatory(s)
         o.compute_target_position(coords, times, tz)
-        site_max.append(plot_ephem(ax, plttimes, o))
+        if show_sun:
+            o.compute_sun_position(times[::50])
+        site_max.append(plot_ephem(ax, plttimes, o, show_sun))
+        
 
     ax.set_xlim(min(plttimes), max(plttimes))
     if ax.get_ylim()[1] > 90:
@@ -181,7 +191,7 @@ if __name__ == "__main__":
     parser.add_argument('--site',    type=str,   metavar="name", nargs='+', 
                             choices=site_dict.keys(), help="Common radio telescope sites to use as observer position. "
                             "Choose from: {0}. No default.".format(site_dict.keys()), default=None)
-
+    parser.add_argument('--sun', action='store_true', help="Also plot the Sun's ephemeris for each location")
     # TODO: need to allow any number of manually defined observing positions, but for now just use those in the site_dict
     #parser.add_argument('--observer', type=float, nargs=3, metavar=("lat", "lon", "elev"), help="Latitude (deg), longitude (deg) and elevation (m) of observer. No default.",default=(None,None,None))
     parser.add_argument('-c', '--center', action='store_true', help="Center the time of maximum elevation on the plot")
@@ -205,4 +215,4 @@ if __name__ == "__main__":
         print "WARNING: You didn't provide a site, assuming MWA..."
         args.site = ["MWA"]
 
-    calculate_ephem(args.ra, args.dec, args.utcdate, args.utcoff, args.site, args.center)
+    calculate_ephem(args.ra, args.dec, args.utcdate, args.utcoff, args.site, args.sun, args.center)
