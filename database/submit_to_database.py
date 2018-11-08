@@ -214,25 +214,25 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
     import tarfile
 
     #Bandpass calibrations
-    bandpass_files = glob.glob("{0}/rts/BandpassCalibration_node0*.dat".format(base_dir))
+    bandpass_files = glob.glob("{0}/BandpassCalibration_node0*.dat".format(base_dir))
     if len(bandpass_files) != 24:
         print "Bandpass files not found. Exiting"
         quit()
 
     #DI Jones matricies
-    DIJ_files = glob.glob("{0}/rts/DI_JonesMatrices_node0*.dat".format(base_dir))
+    DIJ_files = glob.glob("{0}/DI_JonesMatrices_node0*.dat".format(base_dir))
     if len(DIJ_files) != 24:
         print "DI Jones matricies not found. Exiting"
         quit()
 
     #flagged txt files
-    if not ( os.path.isfile("{0}/rts/flagged_channels.txt".format(base_dir))
-            and os.path.isfile("{0}/rts/flagged_tiles.txt".format(base_dir)) ):
+    if not ( os.path.isfile("{0}/flagged_channels.txt".format(base_dir))
+            and os.path.isfile("{0}/flagged_tiles.txt".format(base_dir)) ):
         print "Flag files not found. Exiting"
         quit()
 
     #rts.in
-    if not os.path.isfile("{0}/rts/rts_{1}.in".format(base_dir, cal_obsid)):
+    if not os.path.isfile("{0}/rts_{1}.in".format(base_dir, cal_obsid)):
         print "No rts in file. Exiting"
         quit()
 
@@ -242,15 +242,15 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
         quit()
 
     #zip the files
-    zip_file_location = "{0}/rts/{1}_rts_calibrator.zip".format(base_dir, cal_obsid)
+    zip_file_location = "{0}/{1}_rts_calibrator.zip".format(base_dir, cal_obsid)
     out = tarfile.open(zip_file_location, mode='w')
     for bf in bandpass_files:
         out.add(bf, arcname=bf.split("/")[-1])
     for DIJ in DIJ_files:
         out.add(DIJ, arcname=DIJ.split("/")[-1])
-    out.add("{0}/rts/flagged_channels.txt".format(base_dir), arcname="flagged_channels.txt")
-    out.add("{0}/rts/flagged_tiles.txt".format(base_dir), arcname="flagged_tiles.txt")
-    out.add("{0}/rts/rts_{1}.in".format(base_dir, cal_obsid), arcname="rts_{0}.in".format(cal_obsid))
+    out.add("{0}/flagged_channels.txt".format(base_dir), arcname="flagged_channels.txt")
+    out.add("{0}/flagged_tiles.txt".format(base_dir), arcname="flagged_tiles.txt")
+    out.add("{0}/rts_{1}.in".format(base_dir, cal_obsid), arcname="rts_{0}.in".format(cal_obsid))
     out.add(source_file, arcname=source_file.split("/")[-1])
     out.close()
 
@@ -520,7 +520,7 @@ if __name__ == "__main__":
     calcargs.add_argument('--trcvr',type=str, default = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv", help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
 
     uploadargs = parser.add_argument_group('Upload Options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
-    uploadargs.add_argument('--cal_dir_to_tar',type=str,help='The calibration directory of a calibration solution that you would like to tar and upload to the database (eg. /group/mwaops/vcs/1221832280/cal/1221831856/). Must be used with --srclist so the correct source list is uploaded. If the calibration files are in the default positions then they will be tared and uploaded.')
+    uploadargs.add_argument('--cal_dir_to_tar',type=str,help='The calibration directory of a calibration solution that you would like to tar and upload to the database (eg. /group/mwaops/vcs/1221832280/cal/1221831856/rts). Must be used with --srclist so the correct source list is uploaded. If the calibration files are in the default positions then they will be tared and uploaded.')
     uploadargs.add_argument('--srclist',type=str,help='Used with --cal_dir to indicate the source list file location. eg /group/mwaops/vcs/1221832280/cal/1221831856/vis/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_1221831856_patch1000.txt.')
     uploadargs.add_argument('-c','--calibration',type=str,help='The calibration solution file location to be uploaded to the database. Expects a single file so please zip or tar up the bandpass calibrations, the DI Jones matrices, the flagged_channels.txt file, the flagged_tiles.txt file, the rts.in file and the source file.')
     uploadargs.add_argument('-a','--archive',type=str,help="The DSPSR archive file location to be uploaded to the database. Expects a single file that is the output of DSPSR using the pulsar's ephemeris.")
@@ -574,11 +574,15 @@ if __name__ == "__main__":
         num_bins = 128 #used in dspsr calculations
         obsid = args.obsid
         pulsar = args.pulsar
-    elif args.obsid and args.calibration and not (args.archive or args.single_pulse_series or args.ppps or args.ippd  or args.waterfall or args.u_archive or args.u_single_pulse_series or args.u_ppps or args.u_ippd  or args.u_waterfall):
+    elif args.obsid and (args.calibration or args.cal_dir_to_tar) and not\
+         (args.archive or args.single_pulse_series or args.ppps or args.ippd\
+          or args.waterfall or args.u_archive or args.u_single_pulse_series\
+          or args.u_ppps or args.u_ippd  or args.u_waterfall):
+        #uploaded calibrator
         obsid = args.obsid
     else:
-        print "Please us either --obsid and --pulsar or --bestprof"
-        sys.exit(0)
+        print "Please us either (--obsid and --pulsar) or --bestprof"
+        quit()
         
     if args.pulsar or args.bestprof:
         #Checks to see if the pulsar is already on the database
