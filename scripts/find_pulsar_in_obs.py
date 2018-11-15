@@ -91,7 +91,7 @@ def deg2sex( ra, dec):
     return coords
 
 
-def get_psrcat_ra_dec(pulsar_list = None):
+def get_psrcat_ra_dec(pulsar_list = None, max_dm = None):
     """
     Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
@@ -103,13 +103,13 @@ def get_psrcat_ra_dec(pulsar_list = None):
                (default: uses all pulsars)
     return [[Jname, RAJ, DecJ]]
     """
-    params = ['Jname', 'Raj', 'Decj']
+    params = ['Jname', 'Raj', 'Decj', 'DM']
     
     for p in params:
         #Gets the output of PSRCAT for each pparameter for each pulsar as a list
         cmd = ['psrcat', '-c', p]
         #If input pulsar list add them all to the psrcat command
-        if pulsar_list != None:
+        if pulsar_list is not None:
             for input_pulsar in pulsar_list:
                 cmd.append(input_pulsar)
         output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
@@ -127,12 +127,32 @@ def get_psrcat_ra_dec(pulsar_list = None):
                 temp.append([data[1]])
         if p == params[0]:
             pulsar_ra_dec=temp
+        elif p == 'DM' and max_dm is not None:
+            rows_to_delete = []
+            for dmi, dm in enumerate(temp):
+                #if there is a * given as the dm it is likely a gamma ray pulsar.
+                #Currently it won't delete these from the list just incase we can 
+                #detect them in radio even though it's unlikely
+                if '*' not in dm:
+                    if float(dm[0]) > max_dm:
+                        rows_to_delete.append(dmi)
+            pulsar_ra_dec = np.array(pulsar_ra_dec)
+            pulsar_ra_dec = np.delete(pulsar_ra_dec, rows_to_delete, 0)
         else:
             pulsar_ra_dec = [pulsar_ra_dec[x] + temp[x] for x in range(len(pulsar_ra_dec))]
+
+    #remove pulsars with DM over the max
+    if max_dm is not None:
+        cmd = ['psrcat', '-c', 'DM']
+        if pulsar_list is not None:
+            for input_pulsar in pulsar_list:
+                cmd.append(input_pulsar)
+        output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
+
     return pulsar_ra_dec
 
 
-def grab_source_alog(source_type = 'Pulsar', pulsar_list = None):
+def grab_source_alog(source_type = 'Pulsar', pulsar_list = None, max_dm = None):
     """
     Creates a csv file of source names, RAs and Decs using web catalogues for ['Pulsar', 'FRB', 'GC', 'RRATs'].
     """
@@ -158,7 +178,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None):
     #Get each source type into the format [[name, ra, dec]]
     name_ra_dec = []
     if source_type == 'Pulsar':
-        name_ra_dec = get_psrcat_ra_dec(pulsar_list)
+        name_ra_dec = get_psrcat_ra_dec(pulsar_list, max_dm = max_dm)
     elif source_type == 'FRB':
         #TODO it's changed and currently not working atm
         with open(web_table,"rb") as in_txt:
@@ -640,6 +660,7 @@ if __name__ == "__main__":
     #source options
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
     sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"', default = None)
+    sourargs.add_argument('--max_dm',type=float, default = 250., help='The maximum DM for pulsars. All pulsars with DMs higher than the maximum will not be included in output files. Default=250.0')
     sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue.")
     sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
     sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing the source\'s coordinates to be searched for in the format "RA,DEC" "RA,DEC". Must be enterered as either: "hh:mm:ss.ss,+dd:mm:ss.ss" or "deg,-deg". Please only use one format.')
@@ -690,7 +711,9 @@ if __name__ == "__main__":
             if ":" not in c:
                 degrees_check = True
     else:
-        names_ra_dec = grab_source_alog(source_type = args.source_type, pulsar_list = args.pulsar)
+        names_ra_dec = grab_source_alog(source_type = args.source_type, 
+                                        pulsar_list = args.pulsar,
+                                        max_dm = args.max_dm)
 
     #format ra and dec
     if not degrees_check:
