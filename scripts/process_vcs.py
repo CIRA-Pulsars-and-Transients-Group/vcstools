@@ -163,7 +163,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                                          slurm_kwargs={"time": str(tar_secs_to_run), "partition": "workq",
                                                        "nice": nice},
                                          vcstools_version=vcstools_version, submit=False,
-                                         outfile=batch_dir+tar_batch+".out", cluster="galaxy", export="NONE")
+                                         outfile=batch_dir+tar_batch+".out", cluster="zeus", export="NONE")
 
                         checks = distutils.spawn.find_executable("checks.py")
                         # Write out the checks batch file but don't submit it
@@ -214,7 +214,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         body.append('run "{0}" "--obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}" "{7}"'.format(voltdownload,obsid, data_type, time_to_get,(increment-1),parallel, dl_dir, vcs_database_id))
                         submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, module_list=module_list,
                                      slurm_kwargs={"time": str(volt_secs_to_run), "partition": "copyq",
-                                                   "clusters": "zeus", "nice" : nice},
+                                                    "nice" : nice},
                                      vcstools_version=vcstools_version, outfile=batch_dir+voltdownload_batch+"_1.out",
                                      cluster="zeus", export="NONE")
                         
