@@ -129,6 +129,7 @@ def get_psrcat_ra_dec(pulsar_list = None, max_dm = None):
             pulsar_ra_dec=temp
         elif p == 'DM' and max_dm is not None:
             rows_to_delete = []
+            #removes all pulsars over the DM max
             for dmi, dm in enumerate(temp):
                 #if there is a * given as the dm it is likely a gamma ray pulsar.
                 #Currently it won't delete these from the list just incase we can 
@@ -140,14 +141,6 @@ def get_psrcat_ra_dec(pulsar_list = None, max_dm = None):
             pulsar_ra_dec = np.delete(pulsar_ra_dec, rows_to_delete, 0)
         else:
             pulsar_ra_dec = [pulsar_ra_dec[x] + temp[x] for x in range(len(pulsar_ra_dec))]
-
-    #remove pulsars with DM over the max
-    if max_dm is not None:
-        cmd = ['psrcat', '-c', 'DM']
-        if pulsar_list is not None:
-            for input_pulsar in pulsar_list:
-                cmd.append(input_pulsar)
-        output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
 
     return pulsar_ra_dec
 
