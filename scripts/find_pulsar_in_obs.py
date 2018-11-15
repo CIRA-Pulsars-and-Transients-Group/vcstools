@@ -597,9 +597,20 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
             out_name = "{0}_{1}_beam.txt".format(source[0],beam)
             with open(out_name,"wb") as output_file:
                 output_file.write('#All of the observation IDs that the {0} beam model calculated a power of {1} or greater for the source: {2}\n'.format(beam,min_power, source[0])) 
-                output_file.write('#Obs ID,   Duration,   Obs fraction source entered,    Obs fractiong source exited,  Max power')
+                output_file.write('#Column headers:\n')
+                output_file.write('#Obs ID: Observation ID\n')
+                output_file.write('#Dur:    The duration of the observation in seconds\n')
+                output_file.write('#Enter:  The fraction of the observation when '+\
+                                            'the source entered the beam\n')
+                output_file.write('#Exit:   The fraction of the observation when '+\
+                                            'the source exits the beam\n')
+                output_file.write('#Power:  The maximum zenith normalised power of the source.\n')
                 if cal_check:
-                    output_file.write("   Cal\n")
+                    output_file.write('#Cal ID: Observation ID of an available '+\
+                                                'calibration solution\n')
+                output_file.write('#Obs ID   |Dur |Enter|Exit |Power')
+                if cal_check:
+                    output_file.write("|Cal ID\n")
                 else:
                     output_file.write('\n')
 
@@ -623,17 +634,23 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         for on, obsid in enumerate(obsid_list):
             out_name = "{0}_{1}_beam.txt".format(obsid,beam)
             duration = obsid_meta[on][3]
-            with open(out_name,"wb") as out_list:
-                out_list.write('#All of the sources that the {0} beam model calculated a power of {1} or greater for observation ID: {2}\n'.format(beam, min_power,obsid))
-                out_list.write('#Observation data :RA(deg): {0} DEC(deg): {1} Duration(s): {2}\n'.format(obsid_meta[on][1],obsid_meta[on][2],duration))
+            with open(out_name,"wb") as output_file:
+                output_file.write('#All of the sources that the {0} beam model calculated a power of {1} or greater for observation ID: {2}\n'.format(beam, min_power, obsid))
+                output_file.write('#Observation data :RA(deg): {0} DEC(deg): {1} Duration(s): {2}\n'.format(obsid_meta[on][1],obsid_meta[on][2],duration))
                 if cal_check:
                     #checks the MWA Pulsar Database to see if the obsid has been 
                     #used or has been calibrated
                     print "Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid)
                     cal_check_result = cal_on_database_check(obsid)
-                    out_list.write("#Calibrator Availability: {0}\n".format(cal_check_result))
-                out_list.write('#Source,  Obs frac source entered the '\
-                               + 'beam,    Obs frac source exited the beam,    Max Power \n')
+                    output_file.write("#Calibrator Availability: {0}\n".format(cal_check_result))
+                output_file.write('#Column headers:\n')
+                output_file.write('#Source: Pulsar Jname\n')
+                output_file.write('#Enter:  The fraction of the observation when '+\
+                                            'the source entered the beam\n')
+                output_file.write('#Exit:   The fraction of the observation when '+\
+                                            'the source exits the beam\n')
+                output_file.write('#Power:  The maximum zenith normalised power of the source.\n')
+                output_file.write('#Source    |Enter|Exit |Power\n')
                 
                 for sn, source in enumerate(names_ra_dec):
                     source_ob_power = powers[on][sn]
@@ -641,7 +658,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                         #print source[0], source_ob_power
                         enter, exit = beam_enter_exit(source_ob_power, duration,
                                                       dt=dt, min_power=min_power)
-                        out_list.write('{:10} {:1.3f} {:1.3f} {:1.3f} \n'.format(source[0],enter,exit,max(source_ob_power)[0]))
+                        output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} \n'.format(source[0],enter,exit,max(source_ob_power)[0]))
     return
 
 
