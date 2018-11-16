@@ -150,20 +150,21 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         volt_secs_to_run = datetime.timedelta(seconds=300*increment)
                         check_secs_to_run = "15:00"
                         if data_type == 16:
-                            tar_batch = "untar_{0}".format(time_to_get)
-                            tar_secs_to_run = "10:00:00"
-                            body = []
-                            untar = distutils.spawn.find_executable('untar.sh')
-                            body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
-                            body.append(database_vcs.add_database_function())
-                            body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(
-                                untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
+                            check_secs_to_run = "10:15:00"
+                            #tar_batch = "untar_{0}".format(time_to_get)
+                            #tar_secs_to_run = "10:00:00"
+                            #body = []
+                            #untar = distutils.spawn.find_executable('untar.sh')
+                            #body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                            #body.append(database_vcs.add_database_function())
+                            #body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(
+                            #    untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
 
-                            submit_slurm(tar_batch, body, batch_dir=batch_dir,
-                                         slurm_kwargs={"time": str(tar_secs_to_run), "partition": "workq",
-                                                       "nice": nice},
-                                         vcstools_version=vcstools_version, submit=False,
-                                         outfile=batch_dir+tar_batch+".out", cluster="zeus", export="NONE")
+                            #submit_slurm(tar_batch, body, batch_dir=batch_dir,
+                            #             slurm_kwargs={"time": str(tar_secs_to_run), "partition": "workq",
+                            #                           "nice": nice},
+                            #             vcstools_version=vcstools_version, submit=False,
+                            #             outfile=batch_dir+tar_batch+".out", cluster="zeus", export="NONE")
 
                         checks = distutils.spawn.find_executable("checks.py")
                         # Write out the checks batch file but don't submit it
@@ -183,7 +184,10 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         # if we have tarballs we send the untar jobs to the workq
                         if data_type == 16:
                             commands.append("else")
-                            commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
+                            untar = distutils.spawn.find_executable('untar.sh')
+                            commands.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
+
+                            #commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
                         commands.append("fi")
 
                         submit_slurm(check_batch, commands, batch_dir=batch_dir, module_list=module_list,
