@@ -12,17 +12,16 @@ Date: 2018/02/13
 Author: Bradley Meyers
 """
 
-import matplotlib.pyplot as plt
-from matplotlib.dates import date2num, DateFormatter, HourLocator
+import argparse
+import sys
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.dates import date2num, DateFormatter
 from astropy.coordinates import EarthLocation, SkyCoord, AltAz
 from astropy.coordinates import get_body
 from astropy import units as u
 from astropy.time import Time, TimezoneInfo
-from astropy.utils import iers
-from datetime import datetime, timedelta
-import sys
-import argparse
+from datetime import datetime
 
 
 # Radio telescope dictionary, formatted as:
@@ -259,7 +258,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
     if (args.ra is None) or (args.dec is None) or (args.utcdate is None):
-        print "ERROR: You must specify a RA, Dec and UTC date to plote the ephemeris"
+        print "ERROR: You must specify a RA, Dec and UTC date to plot the ephemeris"
 
     if args.site is None:
         print "WARNING: You didn't provide a site name, assuming MWA..."
