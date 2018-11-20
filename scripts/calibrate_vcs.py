@@ -907,24 +907,26 @@ class RTScal(object):
 if __name__ == '__main__':
 
     # Dictionary for choosing log-levels
-    loglevels = {"DEBUG": logging.DEBUG, 
-                 "INFO": logging.INFO, 
-                 "WARNING": logging.WARNING}
+    loglevels = dict(DEBUG=logging.DEBUG,
+                     INFO=logging.INFO,
+                     WARNING=logging.WARNING)
 
     # Option parsing
     parser = argparse.ArgumentParser(
-        description="Script for creating RTS configuration files and submitting relevant jobs in the VCS pulsar pipeline")
+        description="Script for creating RTS configuration files and submitting relevant jobs in the "
+                    "VCS pulsar pipeline")
 
-    parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None)
+    parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None, required=True)
 
     parser.add_argument("-O", "--cal_obsid", type=int,
                         help="Calibrator observation ID for the target observation. "
-                             "Can be the same as --obs if using in-beam visibilities", default=None)
+                             "Can be the same as --obs if using in-beam visibilities", default=None, required=True)
 
     parser.add_argument("-m", "--metafits", type=str,
-                        help="Path to the relevant calibration observation metafits file", default=None)
+                        help="Path to the relevant calibration observation metafits file", default=None, required=True)
 
-    parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list", default=None)
+    parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list",
+                        default=None, required=True)
 
     parser.add_argument("--gpubox_dir", type=str, 
                         help="Where the *_gpubox*.fits files are located " 
@@ -966,13 +968,13 @@ if __name__ == '__main__':
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
     ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(name)s  %(levelname)-9s :: %(message)s')
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
     if (args.obsid is None) or (args.cal_obsid is None) or (args.metafits is None) or (args.srclist is None):
-        print "You need to specify all of the follow arguments:"
-        print "-o/--obsid\n-O/--cal_obsid\n-m/--metafits\n-s/--srclist"
+        logger.error("You need to specify all of the follow arguments:")
+        logger.error("-o/--obsid\n-O/--cal_obsid\n-m/--metafits\n-s/--srclist")
         sys.exit(1)
 
     logger.info("Creating BaseRTSconfig instance - compiling basic RTS configuration script")
