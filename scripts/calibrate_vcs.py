@@ -972,11 +972,6 @@ if __name__ == '__main__':
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-    if (args.obsid is None) or (args.cal_obsid is None) or (args.metafits is None) or (args.srclist is None):
-        logger.error("You need to specify all of the follow arguments:")
-        logger.error("-o/--obsid\n-O/--cal_obsid\n-m/--metafits\n-s/--srclist")
-        sys.exit(1)
-
     logger.info("Creating BaseRTSconfig instance - compiling basic RTS configuration script")
     try:
         baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist,
