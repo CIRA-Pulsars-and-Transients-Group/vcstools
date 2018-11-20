@@ -124,7 +124,7 @@ class Observatory(object):
         
 
 
-def plot_ephem(ax, times, obs, plot_sun=False):
+def plot_ephem(ax, times, obs, plot_sun=False, draw_peaks=False):
     """ Given an axis object, the times (x) and observed ephemeris (y), plot the source track."""
 
     # plot the ephemeris over 24 hours
@@ -138,7 +138,8 @@ def plot_ephem(ax, times, obs, plot_sun=False):
         ax.axhline(obs.elev_limit, lw=3, color=eph[0].get_color(), label="{0} elev. limit".format(obs.name))
 
     # plot a line marking the time of maximum elevation
-    ax.axvline(date2num(obs.maxtimeUTC.datetime), ls="--", lw=2, color=eph[0].get_color())
+    if draw_peaks:
+        ax.axvline(date2num(obs.maxtimeUTC.datetime), ls="--", lw=2, color=eph[0].get_color())
 
     # if request, plot the Sun's ephemeris for the site
     if plot_sun:
@@ -148,7 +149,7 @@ def plot_ephem(ax, times, obs, plot_sun=False):
     
 
 
-def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, center=False):
+def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, draw_peaks=False, center=False):
     """Compute the ephemeris for a target on a given day at a target position."""
 
     # first, let's set up the times we want to evaluate the source position for
@@ -181,7 +182,7 @@ def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, cen
 
         if show_sun:
             o.compute_sun_position(times[::30])
-        site_max.append(plot_ephem(ax, plttimes, o, plot_sun=show_sun))
+        site_max.append(plot_ephem(ax, plttimes, o, plot_sun=show_sun, draw_peaks=draw_peaks))
 
     # plotting aesthetics
     ax.set_xlim(min(plttimes), max(plttimes))
@@ -269,4 +270,5 @@ if __name__ == "__main__":
         logger.warning("You didn't provide a site name, assuming MWA...")
         args.site = ["MWA"]
 
-    calculate_ephem(args.ra, args.dec, args.utcdate, tzoffset=args.utcoff, site=args.site, show_sun=args.sun)
+    calculate_ephem(args.ra, args.dec, args.utcdate,
+                    tzoffset=args.utcoff, site=args.site, show_sun=args.sun, draw_peaks=args.draw_peak)
