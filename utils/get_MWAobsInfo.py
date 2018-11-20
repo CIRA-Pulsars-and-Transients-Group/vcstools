@@ -15,37 +15,7 @@ import urllib2
 import json
 import astropy
 import os
-
-def getmeta(service='obs', params=None):
-    """
-    Given a JSON web service ('obs', find, or 'con') and a set of parameters as
-    a Python dictionary, return the RA and Dec in degrees from the Python dictionary.
-
-    getmeta(service='obs', params=None)
-    """
-    BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
-    if params:
-        data = urllib.urlencode(params)  # Turn the dictionary into a string with encoded 'name=value' pairs
-    else:
-        data = ''
-    #Validate the service name
-    if service.strip().lower() in ['obs', 'find', 'con']:
-        service = service.strip().lower()
-    else:
-        print "invalid service name: %s" % service
-        return
-    #Get the data
-    try:
-        result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
-    except urllib2.HTTPError as error:
-        print "HTTP error from server: code=%d, response:\n %s" % (error.code, error.read())
-        return
-    except urllib2.URLError as error:
-        print "URL or network error: %s" % error.reason
-        return
-    #Return the result dictionary
-    return result
-
+from mwa_metadb_utils import getmeta 
 
 def get_singleobs_meta(ob):
     beam_meta_data = getmeta(service='obs', params={'obs_id':ob})
@@ -68,12 +38,12 @@ def get_singleobs_meta(ob):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=" ")
-    parser.add_argument('-o','--obid',type=str,help="Input Observation ID")
+    parser.add_argument('-o','--obsid',type=str,help="Input Observation ID")
     parser.add_argument('-l','--list',type=str,help="Input Observation list file name (txt)")
     args=parser.parse_args()
 
-    if args.obid:
-        ob = args.obid
+    if args.obsid:
+        ob = args.obsid
         [obn,ra,dec,dura,centrefreq,Tsky,xdelays]=get_singleobs_meta(ob)
         print "{0:<10}   {1:<15}   {2:<6}   {3:<5}{4} {5:<6}  {6}".format('Obs_ID', 'Obs_name', 'RA', 'Dec', 'Duration', 'CentreFreq', 'Tsky')
         print "{0}   {1:<15}   {2:6.2f}   {3:6.2f}   {4:>4}   {5}   {6:7.3f}".format(ob,obn,ra,dec,dura,centrefreq,Tsky)
