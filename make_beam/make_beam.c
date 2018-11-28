@@ -238,67 +238,111 @@ int main(int argc, char **argv)
     int file_no = 0;
 
     printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
-    for (file_no = 0; file_no < nfiles; file_no++) {
+    
+    // Set up sections checks that allow the asynchronous sections no when others are done
+    int *read_check;
+    int *calc_check;
+    int *write_check;
+    read_check = (int*)malloc(nfiles*sizeof(int));
+    calc_check = (int*)malloc(nfiles*sizeof(int));
+    write_check = (int*)malloc(nfiles*sizeof(int));
+    for (file_no = 0; file_no < nfiles; file_no++)
+    {
+        read_check[fnum] = 0;//False
+        calc_check[fnum] = 0;//False
+        write_check[fnum] = 0;//False
+    } 
+    #pragma omp parallel sections shared(read_check, calc_check, write_check)
+    {
+        // Read section
+        #pragma omp section
+        {
+            for (file_no = 0; file_no < nfiles; file_no++)
+            {
+               //Waits until it can read 
+                int exit = 0; 
+                while (1) 
+                { 
+                    #pragma omp critical (read_queue) 
+                    { 
+                        if (file_no == 0) exit = 1;//First read 
+                        else if (read_check[file_no - 1]) exit = 1;//Second read
+                        //Rest of the reads 
+                        else if (read_check[file_no - 1] || calc_check[file_no-2]) exit = 1;
+                    } 
+                    if (exit) break; 
+                }
+                #pragma omp critical (read_queue)
+                {
+                    // Read in data from next file
+                    printf("[%f]  Reading in data from %s [%d/%d]\n", NOW-begintime,
+                            filenames[file_no], file_no+1, nfiles);
+                    read_data( filenames[file_no], data, bytes_per_file  );
+                }
+            }
+        }
 
-        // Read in data from next file
-        printf("[%f]  Reading in data from %s [%d/%d]\n", NOW-begintime,
-                filenames[file_no], file_no+1, nfiles);
-        read_data( filenames[file_no], data, bytes_per_file  );
+        // Calc section
+        #pragma omp section
+        {
+            for (file_no = 0; file_no < nfiles; file_no++)
+            {
 
-        // Get the next second's worth of phases / jones matrices, if needed
-        printf("[%f]  Calculating delays\n", NOW-begintime);
-        get_delays(
-                opts.dec_ddmmss,        // dec as a string "dd:mm:ss"
-                opts.ra_hhmmss,         // ra  as a string "hh:mm:ss"
-                opts.frequency,         // middle of the first frequency channel in Hz
-                &opts.cal,              // struct holding info about calibration
-                opts.sample_rate,       // = 10000 samples per sec
-                opts.time_utc,          // utc time string
-                (double)file_no,        // seconds offset from time_utc at which to calculate delays
-                NULL,                   // Don't update delay_vals
-                &mi,                    // Struct containing info from metafits file
-                complex_weights_array,  // complex weights array (answer will be output here)
-                invJi );                // invJi array           (answer will be output here)
+                
+                // Get the next second's worth of phases / jones matrices, if needed
+                printf("[%f]  Calculating delays\n", NOW-begintime);
+                get_delays(
+                        opts.dec_ddmmss,        // dec as a string "dd:mm:ss"
+                        opts.ra_hhmmss,         // ra  as a string "hh:mm:ss"
+                        opts.frequency,         // middle of the first frequency channel in Hz
+                        &opts.cal,              // struct holding info about calibration
+                        opts.sample_rate,       // = 10000 samples per sec
+                        opts.time_utc,          // utc time string
+                        (double)file_no,        // seconds offset from time_utc at which to calculate delays
+                        NULL,                   // Don't update delay_vals
+                        &mi,                    // Struct containing info from metafits file
+                        complex_weights_array,  // complex weights array (answer will be output here)
+                        invJi );                // invJi array           (answer will be output here)
 
-        printf("[%f]  Calculating beam\n", NOW-begintime);
+                printf("[%f]  Calculating beam\n", NOW-begintime);
 
-        for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
-            data_buffer_coh[i] = 0.0;
+                for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
+                    data_buffer_coh[i] = 0.0;
 
-        for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
-            data_buffer_incoh[i] = 0.0;
+                for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
+                    data_buffer_incoh[i] = 0.0;
 
 #ifdef HAVE_CUDA
-        cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                      nstation, nchan, npol, outpol_coh, invw, &gf,
-                      detected_beam, data_buffer_coh, data_buffer_incoh );
+                cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
+                              nstation, nchan, npol, outpol_coh, invw, &gf,
+                              detected_beam, data_buffer_coh, data_buffer_incoh );
 #else
-        form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                   nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
-                   detected_beam, data_buffer_coh, data_buffer_incoh );
+                form_beam( data, &opts, complex_weights_array, invJi, file_no,
+                           nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
+                           detected_beam, data_buffer_coh, data_buffer_incoh );
 #endif
 
-        // Invert the PFB, if requested
-        if (opts.out_vdif)
-        {
-            printf("[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
+                // Invert the PFB, if requested
+                if (opts.out_vdif)
+                {
+                    printf("[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
 #ifndef HAVE_CUDA
-            invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan,
-                    npol, data_buffer_vdif );
+                    invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan,
+                            npol, data_buffer_vdif );
 #endif
-        }
+                }
 
-        if (opts.out_uvdif)
-        {
-            printf("[%f]  Inverting the PFB (full)\n", NOW-begintime);
+                if (opts.out_uvdif)
+                {
+                    printf("[%f]  Inverting the PFB (full)\n", NOW-begintime);
 #ifdef HAVE_CUDA
-            cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate,
-                    nchan, npol, &gi, data_buffer_uvdif );
+                    cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate,
+                            nchan, npol, &gi, data_buffer_uvdif );
 #else
-            invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan,
-                    npol, fil_ramps, fil_size, data_buffer_uvdif );
+                    invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan,
+                            npol, fil_ramps, fil_size, data_buffer_uvdif );
 #endif
-        }
+                }
 
         printf("[%f]  Writing data to file(s)\n", NOW-begintime);
 
