@@ -513,7 +513,10 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         # go from altitude to zenith angle
         theta=np.radians(90.-Alts)
         phi=np.radians(Azs)
-    
+        
+        if not verbose:
+            #supress print statements
+            sys.stdout = open(os.devnull, 'w')
         for ifreq in xrange(len(frequencies)):
             #Decide on beam model
             if option == 'analytic':
@@ -531,6 +534,8 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
+        if not verbose:
+            sys.stdout = sys.__stdout__
             
         PowersX[:,itime,ifreq]=rX
         PowersY[:,itime,ifreq]=rY
