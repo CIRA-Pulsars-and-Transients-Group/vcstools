@@ -28,6 +28,7 @@ def tmp(suffix=".sh"):
     atexit.register(os.unlink, t)
     return t
 
+
 def is_number(s):
     try:
         int(s)
@@ -35,13 +36,16 @@ def is_number(s):
     except ValueError:
         return False
 
+
 def get_user_email():
     command="echo `ldapsearch -x \"uid=$USER\" mail |grep \"^mail\"|cut -f2 -d' '`"
     email = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).communicate()[0]
     return email.strip()
 
+
 def ensure_metafits(data_dir, obs_id, metafits_file):
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
+    
     if not os.path.exists(metafits_file):
         print "{0} does not exists".format(metafits_file)
         print "Will download it from the archive. This can take a while so please do not ctrl-C."
@@ -242,36 +246,47 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
     # hence we'll link vis agains /astro/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
     target_dir = '{0}'.format(cal_obs_id) 
     link = 'vis'
-
+    csvfile = "{0}{1}_dl.csv".format(batch_dir,obs_id)
     obsdownload = distutils.spawn.find_executable("obsdownload.py")
     get_data = "{0} -o {1} -d {2}".format(obsdownload,cal_obs_id, data_dir)
     if head:
-        print "Will download the data from the archive. This can take a while so please do not ctrl-C."
-        log_name="{0}/caldownload_{1}.log".format(batch_dir,cal_obs_id)
-        with open(log_name, 'w') as log:
-            subprocess.call(get_data, shell=True, stdout=log, stderr=log)
-        create_link(data_dir, target_dir, product_dir, link)
-        #clean up
-        try:
-            os.remove('obscrt.crt')
-            os.remove('obskey.key')
-        except:
-            pass
+        print "I'm sorry, this option is no longer supported. Please download through the copyq."
+        # print "Will download the data from the archive. This can take a while so please do not ctrl-C."
+        # log_name="{0}/caldownload_{1}.log".format(batch_dir,cal_obs_id)
+        # with open(log_name, 'w') as log:
+        #     subprocess.call(get_data, shell=True, stdout=log, stderr=log)
+        # create_link(data_dir, target_dir, product_dir, link)
+        # #clean up
+        # try:
+        #     os.remove('obscrt.crt')
+        #     os.remove('obskey.key')
+        # except:
+        #     pass
     else:
         # we create the link using bash and not our create_link function 
         # as we'd like to do this only once the data have arrived,
         # i.e. the download worked.
         make_link = "ln -s {0}/{1} {2}/{3}".format(data_dir, target_dir, product_dir, link)
         obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
-        secs_to_run = "02:00:00" # sometimes the staging can take a while...
+        secs_to_run = "03:00:00" # sometimes the staging can take a while...
         module_list = ["setuptools"]
         commands = []
+        commands.append("module load manta-ray-client")
         commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
         commands.append(database_vcs.add_database_function())
-        #commands.append('source /group/mwaops/PULSAR/psrBash.profile')
-        #commands.append('module load setuptools')
+        commands.append("csvfile={0}".format(csvfile))
+        # commands.append('source /group/mwaops/PULSAR/psrBash.profile')
+        # commands.append('module load setuptools')
         commands.append('cd {0}'.format(data_dir))
-        commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
+        commands.append('if [[ -z ${ASVO_USER} ]]')
+        commands.append('then')
+        commands.append('    echo "Error, ASVO_USER not set"')
+        commands.append('    echo "Cannot use client"')
+        commands.append('    exit 1')
+        commands.append('fi')
+        commands.append('echo "obs_id={0}, job_type=d, download_type=vis" > {1}'.format(obs_id,csvfile))
+        commands.append('mwa_client --csv={0} --dir={1}'.format(csvfile,data_dir))
+        # commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
         commands.append(make_link)
         commands.append('rm obscrt.crt obskey.key')
         submit_slurm(obsdownload_batch, commands, batch_dir=batch_dir, module_list=module_list,
