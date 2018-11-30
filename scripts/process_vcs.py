@@ -291,7 +291,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         commands.append('mwa_client --csv={0} --dir={1}'.format(csvfile,data_dir))
         # commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
         commands.append(make_link)
-        commands.append('rm obscrt.crt obskey.key')
+        commands.append('unzip *.zip')
         submit_slurm(obsdownload_batch, commands, batch_dir=batch_dir, module_list=module_list,
                      slurm_kwargs={"time": secs_to_run, "partition": "copyq", "nice": nice},
                      vcstools_version=vcstools_version, cluster="zeus", export="NONE")
