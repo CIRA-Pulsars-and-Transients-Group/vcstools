@@ -45,16 +45,19 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
     if not os.path.exists(metafits_file):
         print "{0} does not exists".format(metafits_file)
         print "Will download it from the archive. This can take a while so please do not ctrl-C."
-        obsdownload = distutils.spawn.find_executable("obsdownload.py")
-        get_metafits = "{0} -o {1} -d {2} -m".format(obsdownload, obs_id, data_dir.replace(str(obs_id), ''))
+        print "At the moment, even through the downloaded file is labelled as a ppd file this is not true"
+        print "this is hopefully a temporary measure"
+        #obsdownload = distutils.spawn.find_executable("obsdownload.py")
+        
+        get_metafits = "wget http://mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
         try:
             subprocess.call(get_metafits,shell=True)
         except:
             print "Couldn't download {0}. Aborting.".format(os.basename(metafits_file))
             quit()
         # clean up
-        os.remove('obscrt.crt')
-        os.remove('obskey.key')
+        #os.remove('obscrt.crt')
+        #os.remove('obskey.key')
     # make a copy of the file in the product_dir if that directory exists
     # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
     # in case --work_dir was specified in process_vcs call product_dir and data_dir
