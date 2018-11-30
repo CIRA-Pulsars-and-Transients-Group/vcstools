@@ -104,7 +104,7 @@ def get_psrcat_ra_dec(pulsar_list = None, max_dm = None):
     return [[Jname, RAJ, DecJ]]
     """
     params = ['Jname', 'Raj', 'Decj', 'DM']
-    
+     
     for p in params:
         #Gets the output of PSRCAT for each pparameter for each pulsar as a list
         cmd = ['psrcat', '-c', p]
@@ -127,21 +127,22 @@ def get_psrcat_ra_dec(pulsar_list = None, max_dm = None):
                 temp.append([data[1]])
         if p == params[0]:
             pulsar_ra_dec=temp
-        elif p == 'DM' and max_dm is not None:
-            rows_to_delete = []
-            #removes all pulsars over the DM max
-            for dmi, dm in enumerate(temp):
-                #if there is a * given as the dm it is likely a gamma ray pulsar.
-                #Currently it won't delete these from the list just incase we can 
-                #detect them in radio even though it's unlikely
-                if '*' not in dm:
-                    if float(dm[0]) > max_dm:
-                        rows_to_delete.append(dmi)
-            pulsar_ra_dec = np.array(pulsar_ra_dec)
-            pulsar_ra_dec = np.delete(pulsar_ra_dec, rows_to_delete, 0)
+        elif p == 'DM':
+            if max_dm is not None:
+                rows_to_delete = []
+                #removes all pulsars over the DM max
+                for dmi, dm in enumerate(temp):
+                    #if there is a * given as the dm it is likely a gamma ray pulsar.
+                    #Currently it won't delete these from the list just incase we can 
+                    #detect them in radio even though it's unlikely
+                    if '*' not in dm:
+                        if float(dm[0]) > max_dm:
+                            rows_to_delete.append(dmi)
+                pulsar_ra_dec = np.array(pulsar_ra_dec)
+                pulsar_ra_dec = np.delete(pulsar_ra_dec, rows_to_delete, 0)
         else:
             pulsar_ra_dec = [pulsar_ra_dec[x] + temp[x] for x in range(len(pulsar_ra_dec))]
-
+    
     return pulsar_ra_dec
 
 
