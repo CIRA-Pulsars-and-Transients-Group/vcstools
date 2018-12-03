@@ -68,8 +68,8 @@ def sex2deg( ra, dec):
 def get_sigma_from_bestprof(file_loc):
     with open(file_loc,"rb") as bestprof:
         lines = bestprof.readlines()
-        sigma = float(lines[11].split('=')[-1])
-        if lines[11].startswith("# Profile StdDev") and isinstance(sigma, float):
+        sigma = float(lines[13].split('~')[-1].split()[0])
+        if lines[13].startswith("# Prob(Noise)") and isinstance(sigma, float):
             return sigma
         else:
             print 'Invalid sigma in {}. Exiting'.format(file_loc)
@@ -343,11 +343,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     shiftby=-int(np.argmax(profile))+int(num_bins)/2 
     profile = np.roll(profile,shiftby)
 
-    #sigma calc using profile, inaccuare for high SN
+    #sigma calc using profile, inaccuare for high SN and just used for the uncertainty calculation
     sigma, flagged_profile  = sigmaClip(profile, alpha=3, tol=0.05, ntrials=10)
-
-    #grabbing SN from PRESTO bestprof, can be inaccurate but better than our estimates
-    sigma = get_sigma_from_bestprof(bestprof_loc)
     
     #adjust profile to be around the off-pulse mean
     off_pulse_mean = np.nanmean(flagged_profile)   
@@ -387,6 +384,9 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     #calc signal to noise ration and it's uncertainty
     sn = p_total / (pulse_width_bins * sigma)
     u_sn = math.sqrt( math.pow( u_p_total / sigma , 2)  +  math.pow( p_total * u_sigma / math.pow(sigma,2) ,2) )
+
+    #grabbing SN from PRESTO bestprof, can be inaccurate but better than our estimates
+    sn = get_sigma_from_bestprof(bestprof_loc)
 
     #final calc of the mean fluxdesnity
     S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
