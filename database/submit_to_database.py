@@ -43,7 +43,6 @@ import mwa_metadb_utils as meta
 import find_pulsar_in_obs as fpio
 
 web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
-auth = ('mwapulsar','veovys9OUTY=')
 
 class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
@@ -275,7 +274,7 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
 
 def flux_cal_and_sumbit(time_detection, time_obs, metadata, 
                         bestprof_data, bestprof_loc,
-                        pul_ra, pul_dec, coh,
+                        pul_ra, pul_dec, coh, auth,
                         start = None, stop = None,
                         trcvr = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
@@ -448,78 +447,45 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
             cal_db_id = client.calibrator_create(web_address, auth,
                                                   observationid = str(args.cal_id),
                                                   caltype = calibrator_type)[u'id']
- 
-        try:
-            client.detection_create(web_address, auth, 
-                                   observationid = int(obsid),
-                                   pulsar = str(pulsar), 
-                                   subband = str(subbands), 
-                                   coherent = coh,
-                                   observation_type = int(obstype),
-                                   calibrator = int(cal_db_id),
-                                   startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                                   flux = float("{0:.2f}".format(S_mean)),
-                                   flux_error = float("{0:.2f}".format(u_S_mean)),
-                                   width = float("{0:.2f}".format(w_equiv_ms)),
-                                   width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                                   scattering = float("{0:.5f}".format(scattering)), 
-                                   scattering_error = float("{0:.5f}".format(u_scattering)),
-                                   dm = float(dm),
-                                   version = 1)
-        except:
-            print "Detection already on database so updating the values"
-            client.detection_update(web_address, auth, 
-                                   observationid = int(obsid),
-                                   pulsar = str(pulsar), 
-                                   subband = str(subbands), 
-                                   coherent = coh,
-                                   observation_type = int(obstype),
-                                   calibrator = int(cal_db_id),
-                                   startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                                   flux = float("{0:.2f}".format(S_mean)),
-                                   flux_error = float("{0:.2f}".format(u_S_mean)),
-                                   width = float("{0:.2f}".format(w_equiv_ms)),
-                                   width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                                   scattering = float("{0:.5f}".format(scattering)), 
-                                   scattering_error = float("{0:.5f}".format(u_scattering)),
-                                   dm = float(dm),
-                                   version = 1)
-        print "Observation submitted to database"
     else:
-        #submits without the cal_id
-        try:
-            client.detection_create(web_address, auth, 
-                                   observationid = int(obsid),
-                                   pulsar = str(pulsar), 
-                                   subband = str(subbands), 
-                                   coherent = coh,
-                                   observation_type = int(obstype),
-                                   startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                                   flux = float("{0:.2f}".format(S_mean)),
-                                   flux_error = float("{0:.2f}".format(u_S_mean)),
-                                   width = float("{0:.2f}".format(w_equiv_ms)),
-                                   width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                                   scattering = float("{0:.5f}".format(scattering)), 
-                                   scattering_error = float("{0:.5f}".format(u_scattering)),
-                                   dm = float(dm))
-        except:
-            print "Detection already on database so updating the values"
-            client.detection_update(web_address, auth, 
-                                   observationid = int(obsid),
-                                   pulsar = str(pulsar), 
-                                   subband = str(subbands), 
-                                   coherent = coh,
-                                   observation_type = int(obstype),
-                                   startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                                   flux = float("{0:.2f}".format(S_mean)),
-                                   flux_error = float("{0:.2f}".format(u_S_mean)),
-                                   width = float("{0:.2f}".format(w_equiv_ms)),
-                                   width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                                   scattering = float("{0:.5f}".format(scattering)), 
-                                   scattering_error = float("{0:.5f}".format(u_scattering)),
-                                   dm = float(dm))
-                               
-        print "Observation submitted to database"
+        cal_db_id = None
+ 
+    try:
+        client.detection_create(web_address, auth, 
+                               observationid = int(obsid),
+                               pulsar = str(pulsar), 
+                               subband = str(subbands), 
+                               coherent = coh,
+                               observation_type = int(obstype),
+                               calibrator = int(cal_db_id),
+                               startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                               flux = float("{0:.2f}".format(S_mean)),
+                               flux_error = float("{0:.2f}".format(u_S_mean)),
+                               width = float("{0:.2f}".format(w_equiv_ms)),
+                               width_error = float("{0:.2f}".format(u_w_equiv_ms)),
+                               scattering = float("{0:.5f}".format(scattering)), 
+                               scattering_error = float("{0:.5f}".format(u_scattering)),
+                               dm = float(dm),
+                               version = 1)
+    except:
+        print "Detection already on database so updating the values"
+        client.detection_update(web_address, auth, 
+                               observationid = int(obsid),
+                               pulsar = str(pulsar), 
+                               subband = str(subbands), 
+                               coherent = coh,
+                               observation_type = int(obstype),
+                               calibrator = int(cal_db_id),
+                               startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                               flux = float("{0:.2f}".format(S_mean)),
+                               flux_error = float("{0:.2f}".format(u_S_mean)),
+                               width = float("{0:.2f}".format(w_equiv_ms)),
+                               width_error = float("{0:.2f}".format(u_w_equiv_ms)),
+                               scattering = float("{0:.5f}".format(scattering)), 
+                               scattering_error = float("{0:.5f}".format(u_scattering)),
+                               dm = float(dm),
+                               version = 1)
+    print "Observation submitted to database"
     return subbands
 
 
@@ -566,7 +532,15 @@ if __name__ == "__main__":
     dspsrargs.add_argument('--u_waterfall', action='store_true', help="Used to create a waterfall plot of pulse phase vs frequency using DSPSR.")
     args=parser.parse_args()
 
-
+    if 'MWA_PULSAR_DB_USER' in os.environ and 'MWA_PULSAR_DB_PASS' in os.environ:
+        auth = (os.environ['MWA_PULSAR_DB_USER'],os.environ['MWA_PULSAR_DB_PASS'])
+    else:
+        auth = ('mwapulsar','veovys9OUTY=')
+        print "No MWA Pulsar Database username and password found so using the defaults."
+        print 'Please add ". ~/.MWA_Pulsar_DB_profile" to your .bashrc where .MWA_Pulsar_DB_profile contains: '
+        print 'export MWA_PULSAR_DB_USER="<username>"'
+        print 'export MWA_PULSAR_DB_PASS="<password>"'
+        print 'replacing <username> <password> with your MWA Pulsar Database username and password.'
 
     #defaults for incoh and calibrator type
     if args.incoh:
@@ -656,7 +630,7 @@ if __name__ == "__main__":
         #Does the flux calculation and submits the results to the MWA pulsar database
         subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, 
                             bestprof_data, args.bestprof,
-                            pul_ra, pul_dec, coh,
+                            pul_ra, pul_dec, coh, auth,
                             start = args.start, stop = args.stop, trcvr = args.trcvr)
 
     if args.cal_dir_to_tar:
