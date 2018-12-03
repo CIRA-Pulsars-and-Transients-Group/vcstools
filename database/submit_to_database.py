@@ -64,6 +64,18 @@ def sex2deg( ra, dec):
     # return RA and DEC in degrees in degrees
     return [c.ra.deg, c.dec.deg]
     
+
+def get_sigma_from_bestprof(file_loc):
+    with open(file_loc,"rb") as bestprof:
+        lines = bestprof.readlines()
+        sigma = float(lines[11].split('=')[-1])
+        if lines[11].startswith("# Profile StdDev") and isinstance(sigma, float):
+            return sigma
+        else:
+            print 'Invalid sigma in {}. Exiting'.format(file_loc)
+            sys.exit()
+
+
 def get_from_bestprof(file_loc):
     with open(file_loc,"rb") as bestprof:
         lines = bestprof.readlines()
@@ -257,7 +269,8 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
     return zip_file_location
 
 
-def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+def flux_cal_and_sumbit(time_detection, time_obs, metadata, 
+                        bestprof_data, bestprof_loc,
                         pul_ra, pul_dec, coh,
                         start = None, stop = None,
                         trcvr = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
@@ -330,7 +343,11 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     shiftby=-int(np.argmax(profile))+int(num_bins)/2 
     profile = np.roll(profile,shiftby)
 
+    #sigma calc using profile, inaccuare for high SN
     sigma, flagged_profile  = sigmaClip(profile, alpha=3, tol=0.05, ntrials=10)
+
+    #grabbing SN from PRESTO bestprof, can be inaccurate but better than our estimates
+    sigma = get_sigma_from_bestprof(bestprof_loc)
     
     #adjust profile to be around the off-pulse mean
     off_pulse_mean = np.nanmean(flagged_profile)   
@@ -627,7 +644,8 @@ if __name__ == "__main__":
 
     if args.bestprof:
         #Does the flux calculation and submits the results to the MWA pulsar database
-        subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+        subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, 
+                            bestprof_data, args.bestprof,
                             pul_ra, pul_dec, coh,
                             start = args.start, stop = args.stop, trcvr = args.trcvr)
 
