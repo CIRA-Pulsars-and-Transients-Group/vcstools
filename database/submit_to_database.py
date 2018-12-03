@@ -712,7 +712,6 @@ if __name__ == "__main__":
         print "Uploading bestprof file to database"
         cp(str(args.bestprof) ,str(obsid) + "_" + str(pulsar) + ".bestprof")
         d_file_loc = str(obsid) + "_" + str(pulsar) + ".bestprof"
-        print "Uploading Presto Prepfold PostScript file to database"
         client.detection_file_upload(web_address, auth, 
                             observationid = str(obsid),
                             pulsar = str(pulsar), 
