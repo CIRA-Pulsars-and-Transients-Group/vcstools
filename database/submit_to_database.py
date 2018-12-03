@@ -26,6 +26,7 @@ import glob
 from astropy.table import Table
 from astropy.time import Time
 import textwrap as _textwrap
+import warnings
 
 import ephem
 from mwapy import ephem_utils
@@ -136,9 +137,10 @@ def get_Trec(tab,obsfreq):
 
 
 def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
-    x = np.copy(data)
+    x= np.copy(data)
     oldstd = np.nanstd(x)
-    
+    #removes the warning for the x[x<lolim] command when it encounters a nan
+    warnings.simplefilter("ignore")
     for trial in range(ntrials):
         median = np.nanmedian(x)
 
@@ -152,10 +154,12 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
 
         if tollvl <= tol:
             print "Took {0} trials to reach tolerance".format(trial+1)
+            warnings.simplefilter("default")
             return oldstd, x
 
         if trial == ntrials:
             print "Reached number of trials without reaching tolerance level"
+            warnings.simplefilter("default")
             return oldstd, x
 
         oldstd = newstd
@@ -304,11 +308,17 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
                                                dt=100, start_time=int(enter))
     bandpowers = np.mean(bandpowers)
     print "Calculating antena temperature..." 
-    sys.stdout = open(os.devnull, 'w') #represses print statements
+    #represses print statements and warnings
+    sys.stdout = open(os.devnull, 'w') 
+    warnings.simplefilter("ignore")
+    
     beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
      beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
      pbtant.make_primarybeammap(int(obsid), delays, centrefreq*1e6, 'analytic', plottype='None')
-    sys.stdout = sys.__stdout__#turns prints back on
+    
+    #turns prints and warnings back on
+    sys.stdout = sys.__stdout__
+    warnings.simplefilter("default")
 
     #TODO can be inaccurate for coherent but is too difficult to simulate
     tant = (Tant_XX + Tant_YY) / 2.
