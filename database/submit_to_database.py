@@ -707,7 +707,21 @@ if __name__ == "__main__":
                                     observation_type = int(obstype))  
             temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))  
 
-    #Archive files
+    #Upload analysis files to the database
+    if args.bestprof:
+        print "Uploading bestprof file to database"
+        cp(str(args.bestprof) ,str(obsid) + "_" + str(pulsar) + ".bestprof")
+        d_file_loc = str(obsid) + "_" + str(pulsar) + ".bestprof"
+        print "Uploading Presto Prepfold PostScript file to database"
+        client.detection_file_upload(web_address, auth, 
+                            observationid = str(obsid),
+                            pulsar = str(pulsar), 
+                            subband = int(subbands),
+                            coherent = coh,
+                            filetype = 5,
+                            filepath = str(d_file_loc))
+        os.system("rm " + d_file_loc)
+        
     if args.archive:
         print "Uploading archive file to database"
         client.detection_file_upload(web_address, auth, 
