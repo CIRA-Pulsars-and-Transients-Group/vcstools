@@ -27,6 +27,7 @@ from astropy.table import Table
 from astropy.time import Time
 import textwrap as _textwrap
 import warnings
+import logging
 
 import ephem
 from mwapy import ephem_utils
@@ -72,7 +73,7 @@ def get_sigma_from_bestprof(file_loc):
         if lines[13].startswith("# Prob(Noise)") and isinstance(sigma, float):
             return sigma
         else:
-            print 'Invalid sigma in {}. Exiting'.format(file_loc)
+            print 'Invalid sigma in {0}. Exiting'.format(file_loc)
             sys.exit()
 
 
@@ -156,7 +157,7 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
             warnings.simplefilter("default")
             return oldstd, x
 
-        if trial == ntrials:
+        if trial + 1 == ntrials:
             print "Reached number of trials without reaching tolerance level"
             warnings.simplefilter("default")
             return oldstd, x
@@ -212,9 +213,9 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
             exit *= float(time_obs)
             input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
-            print "WARNING: Input detection time does not equal the dectetion time of the .bestprof file"
-            print "Input (metadata) time: " + str(input_detection_time)
-            print "Bestprof time: " + str(time_detection)
+            logging.warning("WARNING: Input detection time does not equal the dectetion time of the .bestprof file")
+            logging.warning("Input (metadata) time: " + str(input_detection_time))
+            logging.warning("Bestprof time: " + str(time_detection))
 
             #make sure calculation uses Bestprof time
             exit = enter + time_detection
@@ -352,19 +353,41 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     shiftby=-int(np.argmax(profile))+int(num_bins)/2 
     profile = np.roll(profile,shiftby)
 
-    #sigma calc using profile, inaccuare for high SN and just used for the uncertainty calculation
-    sigma, flagged_profile  = sigmaClip(profile, alpha=3, tol=0.05, ntrials=10)
+    sigma, flagged_profile  = sigmaClip(profile, alpha=2.7, tol=0.01, ntrials=30)
+    #flagged profile is the off-pulse values with all on pulse values set to nan
+    
+    logging.basicConfig()
+    #logging.getLogger().setLevel(logging.DEBUG)
+    logging.debug('profile: {0}'.format(profile))
+    logging.debug('flagged_profile: {0}'.format(flagged_profile))
+    
+    #check if the flagged_profile is in the bottom 10% of the profile
+    bottom_profile_min = (max(profile) - min(profile))*.1 + min(profile)
+    logging.debug("min(flagged_profile): {0}   bottom_profile_min: {1}".\
+                  format(np.nanmin(flagged_profile), bottom_profile_min))
+    if (np.nanmin(flagged_profile) > bottom_profile_min) or ( not np.isnan(flagged_profile).any() ):
+        #something weird has happened so may be a very scattered profile like the crab
+        logging.warning('The noise floor is not at the bottom of the profile so forcing it to be at the minimum')
+        #making a new profile with the only bin being the lowest point
+        prof_min_i = np.argmin(profile)
+        flagged_profile = []
+        for fi in range(len(profile)):
+            if fi == prof_min_i:
+                flagged_profile.append(profile[fi])
+            else:
+                flagged_profile.append(np.nan)
+        flagged_profile = np.array(flagged_profile)
+
     
     #adjust profile to be around the off-pulse mean
-    off_pulse_mean = np.nanmean(flagged_profile)   
+    off_pulse_mean = np.nanmean(flagged_profile)
     profile -= off_pulse_mean
     flagged_profile -= off_pulse_mean
-
     profile_uncert = 500. #uncertainty approximation as none is given
-
+    
     #calc off-pulse sigma uncertainty
-    pulse_width_bins = 1
-    off_pulse_width_bins = 1
+    pulse_width_bins = 0
+    off_pulse_width_bins = 0
     p_total = 0.
     u_p_total = 0. #p uncertainty
     sigma_total = 0.
@@ -373,14 +396,14 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
         if math.isnan(flagged_profile[p]):
             #May increase the pulse width if there are large noise spikes
             pulse_width_bins += 1    
-            p_total = p_total + profile[p]
+            p_total += profile[p]
             u_p_total = math.sqrt(math.pow(u_p_total,2) + math.pow(profile_uncert,2))
         else:
             off_pulse_width_bins += 1
-            sigma_total = sigma_total + math.pow(float(profile[p]),2)
+            sigma_total += math.pow(float(profile[p]),2)
             u_sigma_total = u_sigma_total + 2 * float(profile[p]) * profile_uncert
 
-    u_sigma = profile_uncert / (2 * math.sqrt(abs(sigma_total * off_pulse_width_bins)))
+    u_sigma = profile_uncert / (2 * math.sqrt(0.0001+abs(sigma_total * off_pulse_width_bins)))
     profile_uncert = 500. #uncertainty approximation as none is given
         
     #the equivalent width (assumes top hat pulsar) in bins and it's uncertainty
@@ -394,8 +417,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     sn = p_total / (pulse_width_bins * sigma)
     u_sn = math.sqrt( math.pow( u_p_total / sigma , 2)  +  math.pow( p_total * u_sigma / math.pow(sigma,2) ,2) )
 
-    #grabbing SN from PRESTO bestprof, can be inaccurate but better than our estimates
-    sn = get_sigma_from_bestprof(bestprof_loc)
+    #grabbing SN from PRESTO bestprof
+    sn = get_sigma_from_bestprof(bestprof_loc) 
 
     #final calc of the mean fluxdesnity
     S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
@@ -488,6 +511,24 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     print "Observation submitted to database"
     return subbands
 
+"""
+Test set:
+Scattered detection (crab):
+python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof /group/mwaops/vcs/1127939368/pointings/05:34:31.97_+22:00:52.06/1127939368_PSR_0534+2200.pfd.bestprof
+Expected flux: 7500
+
+Weak detection (it's a 10 min detection):
+python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J0034-0721 --bestprof /group/mwaops/vcs/1222697776/pointings/00:34:08.87_-07:21:53.40/1222697776_PSR_J0034-0721.pfd.bestprof
+Expected flux: 640
+
+Medium detection:
+python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J2330-2005 --bestprof /group/mwaops/xuemy/pol_census/1222697776/pfold/1222697776_PSR_J2330-2005.pfd.bestprof
+Expected flux: ~180
+
+Strong detection:
+python submit_to_database.py -o 1117643248 -O 1117666768 -p J1752-2806 --bestprof /group/mwaops/vcs/1117643248/pointings/17:52:24.00_-28:06:00.00/1117643248_coh_master_branch_test_PSR_J1752-2806.pfd.bestprof
+Expected flux: 1170
+"""
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=LineWrapRawTextHelpFormatter, description=_textwrap.dedent("""
@@ -532,12 +573,15 @@ if __name__ == "__main__":
     dspsrargs.add_argument('--u_waterfall', action='store_true', help="Used to create a waterfall plot of pulse phase vs frequency using DSPSR.")
     args=parser.parse_args()
 
+    logging.basicConfig(level=logging.DEBUG)
+    
+    #Checks for MWA database usernames and passwords
     if 'MWA_PULSAR_DB_USER' in os.environ and 'MWA_PULSAR_DB_PASS' in os.environ:
         auth = (os.environ['MWA_PULSAR_DB_USER'],os.environ['MWA_PULSAR_DB_PASS'])
     else:
         auth = ('mwapulsar','veovys9OUTY=')
         print "No MWA Pulsar Database username and password found so using the defaults."
-        print 'Please add ". ~/.MWA_Pulsar_DB_profile" to your .bashrc where .MWA_Pulsar_DB_profile contains: '
+        print 'Please add the following to your .bashrc: '
         print 'export MWA_PULSAR_DB_USER="<username>"'
         print 'export MWA_PULSAR_DB_PASS="<password>"'
         print 'replacing <username> <password> with your MWA Pulsar Database username and password.'

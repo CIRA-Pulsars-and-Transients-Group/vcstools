@@ -491,7 +491,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         PowersY=np.zeros((len(names_ra_dec),
                              Ntimes,1))
         if centrefreq > 1e6:
-            print "centrefreq is under 1e6 so assuming it's been given in Hz so converting it to MHz"
+            print "centrefreq is greater than 1e6, assuming input with units of Hz."
             frequencies=np.array([centrefreq])
         else:
             frequencies=np.array([centrefreq])*1e6
