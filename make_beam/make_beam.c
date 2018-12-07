@@ -122,7 +122,7 @@ int main(int argc, char **argv)
     char **filenames = create_filenames( &opts );
     ComplexDouble ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
     ComplexDouble ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
-    ComplexDouble ***detected_beam = create_detected_beam( 2*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
+    ComplexDouble ***detected_beam = create_detected_beam( 3*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
 
     // Read in info from metafits file
     printf("[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
@@ -178,9 +178,12 @@ int main(int argc, char **argv)
     {
         fil[i] = CMaked( coeffs[i] * approx_filter_scale, 0.0 );
     }
+    //TODO I think i only need one fil
 
     // Memory for fil_ramps is allocated here:
-    ComplexDouble **fil_ramps = apply_mult_phase_ramps( fil, fil_size, nchan );
+    ComplexDouble **fil_ramps;
+    ComplexDouble **fil_ramps1 = apply_mult_phase_ramps( fil, fil_size, nchan );
+    ComplexDouble **fil_ramps2 = apply_mult_phase_ramps( fil, fil_size, nchan );
 
     // Populate the relevant header structs
     populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc,
@@ -205,41 +208,77 @@ int main(int argc, char **argv)
     sprintf( uvf.basefilename, "%s_%s_ch%03d_u",
              uvf.exp_name, uvf.scan_name, atoi(opts.rec_channel) );
 
+    // To run asynchronously we require two memory allocations for each data 
+    // set so multiple parts of the memory can be worked on at once.
+    // We control this by changing the pointer to alternate between
+    // the two memory allocations
+    
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
-    uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
-    assert(data);
+    uint8_t *data;
+    uint8_t *data1 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
+    assert(data1);
+    uint8_t *data2 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
+    assert(data2);
 
     // Create output buffer arrays
-    float *data_buffer_coh   = NULL;
-    float *data_buffer_incoh = NULL;
-    float *data_buffer_vdif  = NULL;
-    float *data_buffer_uvdif = NULL;
+    float *data_buffer_coh    = NULL;
+    float *data_buffer_coh1   = NULL;
+    float *data_buffer_coh2   = NULL; 
+    float *data_buffer_incoh  = NULL;
+    float *data_buffer_incoh1 = NULL;
+    float *data_buffer_incoh2 = NULL;
+    float *data_buffer_vdif   = NULL;
+    float *data_buffer_vdif1  = NULL;
+    float *data_buffer_vdif2  = NULL;
+    float *data_buffer_uvdif  = NULL;
+    float *data_buffer_uvdif1 = NULL;
+    float *data_buffer_uvdif2 = NULL;
 
-    data_buffer_coh   = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
-    data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
-    data_buffer_vdif  = create_data_buffer_vdif( &vf );
-    data_buffer_uvdif = create_data_buffer_vdif( &uvf );
+    data_buffer_coh1   = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
+    data_buffer_coh2   = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
+    data_buffer_incoh1 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
+    data_buffer_incoh2 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
+    data_buffer_vdif1  = create_data_buffer_vdif( &vf );
+    data_buffer_vdif2  = create_data_buffer_vdif( &vf );
+    data_buffer_uvdif1 = create_data_buffer_vdif( &uvf );
+    data_buffer_uvdif2 = create_data_buffer_vdif( &uvf );
 
     /* Allocate host and device memory for the use of the cu_form_beam function */
-    struct gpu_formbeam_arrays gf;
-    struct gpu_ipfb_arrays gi;
-#ifdef HAVE_CUDA
-    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol,
+    // Declaring pointers to the structs so the memory can be alternated
+    struct gpu_formbeam_arrays *gf;
+    struct gpu_formbeam_arrays *gf1;
+    struct gpu_formbeam_arrays *gf2;
+    gf1 = (struct gpu_formbeam_arrays *) malloc(sizeof(struct gpu_formbeam_arrays));
+    gf2 = (struct gpu_formbeam_arrays *) malloc(sizeof(struct gpu_formbeam_arrays));
+    
+    
+    struct gpu_ipfb_arrays *gi;
+    struct gpu_ipfb_arrays *gi1;
+    struct gpu_ipfb_arrays *gi2;
+    gi1 = (struct gpu_ipfb_arrays *) malloc(sizeof(struct gpu_ipfb_arrays));
+    gi2 = (struct gpu_ipfb_arrays *) malloc(sizeof(struct gpu_ipfb_arrays));
+    #ifdef HAVE_CUDA
+    malloc_formbeam( &gf1, opts.sample_rate, nstation, nchan, npol,
+            outpol_coh, outpol_incoh );
+    malloc_formbeam( &gf2, opts.sample_rate, nstation, nchan, npol,
             outpol_coh, outpol_incoh );
 
     if (opts.out_uvdif)
     {
-        malloc_ipfb( &gi, ntaps, opts.sample_rate, nchan, npol, fil_size );
-        cu_load_filter( fil_ramps, &gi, nchan );
+        malloc_ipfb( &gi1, ntaps, opts.sample_rate, nchan, npol, fil_size );
+        malloc_ipfb( &gi2, ntaps, opts.sample_rate, nchan, npol, fil_size );
+        cu_load_filter( fil_ramps1, &gi1, nchan );
+        cu_load_filter( fil_ramps2, &gi2, nchan );
     }
-#endif
+    #endif
 
     int file_no = 0;
 
     printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
     
-    // Set up sections checks that allow the asynchronous sections no when others are done
+    // Set up sections checks that allow the asynchronous sections know when 
+    // other sections have completed
     int *read_check;
     int *calc_check;
     int *write_check;
@@ -252,14 +291,34 @@ int main(int argc, char **argv)
         calc_check[fnum] = 0;//False
         write_check[fnum] = 0;//False
     } 
-    #pragma omp parallel sections shared(read_check, calc_check, write_check)
+    
+
+    int nthread;
+    #pragma omp parallel 
+    {
+        #pragma omp master
+        {
+            nthread = omp_get_num_threads();
+            fprintf( stderr, "Number of threads: %d\n", total_threads);
+        }
+    }
+    int thread_no, pnum;
+
+    // Sets up a parallel for loop for each of the available thread and 
+    // assigns a section to each thread
+    #pragma omp parallel for shared(read_check, calc_check, write_check)
+    for (thread_no = 0; thread_num < nthread; ++thread_num)
     {
         // Read section
-        #pragma omp section
+        if (thread_no == 0)
         {
             for (file_no = 0; file_no < nfiles; file_no++)
             {
-               //Waits until it can read 
+                //Work out which memory allocation it's requires
+                if (file_no%2 == 0) input = input1;
+                else input = input2;
+                
+                //Waits until it can read 
                 int exit = 0; 
                 while (1) 
                 { 
@@ -278,12 +337,15 @@ int main(int argc, char **argv)
                     printf("[%f]  Reading in data from %s [%d/%d]\n", NOW-begintime,
                             filenames[file_no], file_no+1, nfiles);
                     read_data( filenames[file_no], data, bytes_per_file  );
+                    
+                    // Record that this read section is complete
+                    read_check[fnum] = 1;
                 }
             }
         }
 
         // Calc section
-        #pragma omp section
+        if (thread_no == 1)
         {
             for (file_no = 0; file_no < nfiles; file_no++)
             {
@@ -291,6 +353,7 @@ int main(int argc, char **argv)
                 
                 // Get the next second's worth of phases / jones matrices, if needed
                 printf("[%f]  Calculating delays\n", NOW-begintime);
+                // TODO This should be fine for now but may need to manage this better for multipixel
                 get_delays(
                         opts.dec_ddmmss,        // dec as a string "dd:mm:ss"
                         opts.ra_hhmmss,         // ra  as a string "hh:mm:ss"
@@ -312,49 +375,55 @@ int main(int argc, char **argv)
                 for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
                     data_buffer_incoh[i] = 0.0;
 
-#ifdef HAVE_CUDA
+                #ifdef HAVE_CUDA
                 cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                               nstation, nchan, npol, outpol_coh, invw, &gf,
                               detected_beam, data_buffer_coh, data_buffer_incoh );
-#else
+                #else
                 form_beam( data, &opts, complex_weights_array, invJi, file_no,
                            nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
                            detected_beam, data_buffer_coh, data_buffer_incoh );
-#endif
+                #endif
 
                 // Invert the PFB, if requested
                 if (opts.out_vdif)
                 {
                     printf("[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
-#ifndef HAVE_CUDA
+                    #ifndef HAVE_CUDA
                     invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan,
                             npol, data_buffer_vdif );
-#endif
+                    #endif
                 }
 
                 if (opts.out_uvdif)
                 {
                     printf("[%f]  Inverting the PFB (full)\n", NOW-begintime);
-#ifdef HAVE_CUDA
+                    #ifdef HAVE_CUDA
                     cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate,
                             nchan, npol, &gi, data_buffer_uvdif );
-#else
+                    #else
                     invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan,
                             npol, fil_ramps, fil_size, data_buffer_uvdif );
-#endif
+                    #endif
                 }
 
-        printf("[%f]  Writing data to file(s)\n", NOW-begintime);
+        // Write section
+        if (thread_no == 2)
+        {
+            for (file_no = 0; file_no < nfiles; file_no++)
+            {
+                printf("[%f]  Writing data to file(s)\n", NOW-begintime);
 
-        if (opts.out_coh)
-            psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );
-        if (opts.out_incoh)
-            psrfits_write_second( &pf_incoh, data_buffer_incoh, nchan, outpol_incoh );
-        if (opts.out_vdif)
-            vdif_write_second( &vf, &vhdr, data_buffer_vdif, &vgain );
-        if (opts.out_uvdif)
-            vdif_write_second( &uvf, &uvhdr, data_buffer_uvdif, &ugain );
-
+                if (opts.out_coh)
+                    psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );
+                if (opts.out_incoh)
+                    psrfits_write_second( &pf_incoh, data_buffer_incoh, nchan, outpol_incoh );
+                if (opts.out_vdif)
+                    vdif_write_second( &vf, &vhdr, data_buffer_vdif, &vgain );
+                if (opts.out_uvdif)
+                    vdif_write_second( &uvf, &uvhdr, data_buffer_uvdif, &ugain );
+            }
+        }
     }
 
     printf("[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
