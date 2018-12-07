@@ -117,8 +117,8 @@ def from_power_to_gain(powers,cfreq,n,coh=True):
         coeff = obswl**2*16*n/(4*np.pi*k_B.value)
     else:
         coeff = obswl**2*16*sqrt(n)/(4*np.pi*k_B.value)
-    print "Wavelength",obswl,"m"
-    print "Gain coefficient:",coeff
+    logging.debug("Wavelength: {0} m".format(obswl))
+    logging.debug("Gain coefficient: {0}".format(coeff))
     SI_to_Jy = 1e-26
     return (powers*coeff)*SI_to_Jy
 
@@ -323,7 +323,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     #TODO can be inaccurate for coherent but is too difficult to simulate
     tant = (Tant_XX + Tant_YY) / 2.
 
-    print "Tant: " + str(tant)
+    logging.debug("Tant: {0}".format(tant))
     t_sys_table = tant + get_Trec(trec_table,centrefreq)
     
     print "Converting to gain from power..."
@@ -353,8 +353,11 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     shiftby=-int(np.argmax(profile))+int(num_bins)/2 
     profile = np.roll(profile,shiftby)
 
+    print "Calculating signal to noise ratio"
     sigma, flagged_profile  = sigmaClip(profile, alpha=2.7, tol=0.01, ntrials=30)
     #flagged profile is the off-pulse values with all on pulse values set to nan
+    #assumeing sigma uncertainty is 10%
+    u_sigma = sigma * 0.1
     
     logging.basicConfig()
     #logging.getLogger().setLevel(logging.DEBUG)
@@ -367,7 +370,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
                   format(np.nanmin(flagged_profile), bottom_profile_min))
     if (np.nanmin(flagged_profile) > bottom_profile_min) or ( not np.isnan(flagged_profile).any() ):
         #something weird has happened so may be a very scattered profile like the crab
-        logging.warning('The noise floor is not at the bottom of the profile so forcing it to be at the minimum')
+        logging.warning('The profile is extremely scattered so an accurate flux density could not be calculated so only the pulse width and scattering are being uploaded to the database.')
         #making a new profile with the only bin being the lowest point
         prof_min_i = np.argmin(profile)
         flagged_profile = []
@@ -377,63 +380,64 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
             else:
                 flagged_profile.append(np.nan)
         flagged_profile = np.array(flagged_profile)
+        profile -= min(profile)
+        S_mean = None
+        u_S_mean = None
+        #Assuming width is equal to pulsar period because of the scattering
+        w_equiv_ms = float(period)
+        u_w_equiv_ms = float(period) / float(num_bins)
+    else:
+        #The pulse is not scattered so calculate its properties
+        #calc signal to noise ratio and it's uncertainty
+        sn = max(profile) / sigma
+        profile_uncert = 500. #uncertainty approximation as none is given
+        u_sn = sn * math.sqrt( math.pow( profile_uncert / max(profile) , 2)  +  
+                               math.pow( u_sigma / sigma ,2) )
 
-    
-    #adjust profile to be around the off-pulse mean
-    off_pulse_mean = np.nanmean(flagged_profile)
-    profile -= off_pulse_mean
-    flagged_profile -= off_pulse_mean
-    profile_uncert = 500. #uncertainty approximation as none is given
-    
-    #calc off-pulse sigma uncertainty
-    pulse_width_bins = 0
-    off_pulse_width_bins = 0
-    p_total = 0.
-    u_p_total = 0. #p uncertainty
-    sigma_total = 0.
-    u_sigma_total = 0.
-    for p in range(len(profile)):
-        if math.isnan(flagged_profile[p]):
-            #May increase the pulse width if there are large noise spikes
-            pulse_width_bins += 1    
-            p_total += profile[p]
-            u_p_total = math.sqrt(math.pow(u_p_total,2) + math.pow(profile_uncert,2))
-        else:
-            off_pulse_width_bins += 1
-            sigma_total += math.pow(float(profile[p]),2)
-            u_sigma_total = u_sigma_total + 2 * float(profile[p]) * profile_uncert
-
-    u_sigma = profile_uncert / (2 * math.sqrt(0.0001+abs(sigma_total * off_pulse_width_bins)))
-    profile_uncert = 500. #uncertainty approximation as none is given
+        #adjust profile to be around the off-pulse mean
+        off_pulse_mean = np.nanmean(flagged_profile)
+        profile -= off_pulse_mean
+        flagged_profile -= off_pulse_mean
+        profile_uncert = 500. #uncertainty approximation as none is given
         
-    #the equivalent width (assumes top hat pulsar) in bins and it's uncertainty
-    w_equiv_bins = p_total / max(profile)
-    w_equiv_ms = w_equiv_bins / float(num_bins) * float(period) # in ms
-    u_w_equiv_bins = math.sqrt(math.pow(u_p_total / max(profile),2) + \
-                               math.pow(p_total * profile_uncert / math.pow(max(profile),2),2))
-    u_w_equiv_ms = u_w_equiv_bins / float(num_bins) * float(period) # in ms
-                               
-    #calc signal to noise ration and it's uncertainty
-    sn = p_total / (pulse_width_bins * sigma)
-    u_sn = math.sqrt( math.pow( u_p_total / sigma , 2)  +  math.pow( p_total * u_sigma / math.pow(sigma,2) ,2) )
+        #calculate the width equivalent bins and it's uncertainty
+        pulse_width_bins = 0
+        off_pulse_width_bins = 0
+        p_total = 0.
+        u_p_total = 0. #p uncertainty
+        for p in range(len(profile)):
+            if math.isnan(flagged_profile[p]):
+                #May increase the pulse width if there are large noise spikes
+                pulse_width_bins += 1    
+                p_total += profile[p]
+                u_p_total = math.sqrt(math.pow(u_p_total,2) + math.pow(profile_uncert,2))
+            else:
+                off_pulse_width_bins += 1
 
-    #grabbing SN from PRESTO bestprof
-    sn = get_sigma_from_bestprof(bestprof_loc) 
+        #the equivalent width (assumes top hat pulsar) in bins and it's uncertainty
+        w_equiv_bins = p_total / max(profile)
+        w_equiv_ms = w_equiv_bins / float(num_bins) * float(period) # in ms
+        u_w_equiv_bins = math.sqrt(math.pow(u_p_total / max(profile),2) + 
+                                   math.pow(p_total * profile_uncert / math.pow(max(profile),2),2))
+        u_w_equiv_ms = u_w_equiv_bins / float(num_bins) * float(period) # in ms
+                                   
+        #final calc of the mean fluxdesnity in mJy
+        S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
+                 math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
+        #constants to make uncertainty calc easier
+        S_mean_cons = t_sys / ( math.sqrt(2. * float(time_detection) * bandwidth)) *\
+                 math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000. 
+        u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
+                              math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )  
+        
+        logging.debug("T_sys {0} K".format(t_sys))
+        logging.debug("Gain {0} K/Jy".format(gain))
+        print "SN: {0}".format(sn)
+        print 'Smean {0:.2f} +/- {1:.2f} mJy'.format(S_mean, u_S_mean)
 
-    #final calc of the mean fluxdesnity
-    S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
-             math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
-    #constants to make uncertainty calc easier
-    S_mean_cons = t_sys / ( math.sqrt(2. * float(time_detection) * bandwidth)) *\
-             math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000. 
-    u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
-                          math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )  
-
-    print "SN " + str(sn)
-    #print "Sky temp " + str(sky_temp) + " K"
-    print "T_sys " + str(t_sys) + " K"
-    print "Gain " + str(gain) + " K/Jy"
-    print "Smean " + str(S_mean) + ' +/- ' + str(u_S_mean) + ' mJy'
+        #format fluxes
+        S_mean = float("{0:.2f}".format(S_mean))
+        u_S_mean = float("{0:.2f}".format(u_S_mean))
 
     #calc obstype
     if (maxfreq - minfreq) == 23:
@@ -482,8 +486,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
                                observation_type = int(obstype),
                                calibrator = int(cal_db_id),
                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                               flux = float("{0:.2f}".format(S_mean)),
-                               flux_error = float("{0:.2f}".format(u_S_mean)),
+                               flux = S_mean,
+                               flux_error = u_S_mean,
                                width = float("{0:.2f}".format(w_equiv_ms)),
                                width_error = float("{0:.2f}".format(u_w_equiv_ms)),
                                scattering = float("{0:.5f}".format(scattering)), 
@@ -500,8 +504,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
                                observation_type = int(obstype),
                                calibrator = int(cal_db_id),
                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                               flux = float("{0:.2f}".format(S_mean)),
-                               flux_error = float("{0:.2f}".format(u_S_mean)),
+                               flux = S_mean,
+                               flux_error = u_S_mean,
                                width = float("{0:.2f}".format(w_equiv_ms)),
                                width_error = float("{0:.2f}".format(u_w_equiv_ms)),
                                scattering = float("{0:.5f}".format(scattering)), 
