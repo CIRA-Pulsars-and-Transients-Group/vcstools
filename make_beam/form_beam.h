@@ -36,9 +36,9 @@ struct gpu_formbeam_arrays
 };
 
 
-void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
+void malloc_formbeam( struct gpu_formbeam_arrays **g, unsigned int sample_rate,
         int nstation, int nchan, int npol, int outpol_coh, int outpol_incoh );
-void free_formbeam( struct gpu_formbeam_arrays *g );
+void free_formbeam( struct gpu_formbeam_arrays **g );
 
 /* Calculating array indices for GPU inputs and outputs */
 
@@ -100,7 +100,7 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
 
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
                    ComplexDouble ****J, int file_no, int nstation, int nchan,
-                   int npol, int outpol_coh, double invw, struct gpu_formbeam_arrays *g,
+                   int npol, int outpol_coh, double invw, struct gpu_formbeam_arrays **g,
                    ComplexDouble ***detected_beam, float *coh, float *incoh );
 
 #else

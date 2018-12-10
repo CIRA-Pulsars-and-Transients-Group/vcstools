@@ -31,6 +31,7 @@
 #include "psrfits.h"
 #include "mycomplex.h"
 #include "form_beam.h"
+#include <omp.h>
 
 #ifdef HAVE_CUDA
 
@@ -39,18 +40,17 @@
 
 #else
 
-#include <omp.h>
 #define NOW  (omp_get_wtime())
 
 #endif
 
 int main(int argc, char **argv)
 {
-#ifndef HAVE_CUDA
+    #ifndef HAVE_CUDA
     // Initialise FFTW with OpenMP
     fftw_init_threads();
     fftw_plan_with_nthreads( omp_get_max_threads() );
-#endif
+    #endif
 
     // A place to hold the beamformer settings
     struct make_beam_opts opts;
@@ -105,11 +105,11 @@ int main(int argc, char **argv)
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = NOW;
-#ifdef HAVE_CUDA
-    printf("[%f]  Starting %s with GPU acceleration\n", NOW-begintime, argv[0] );
-#else
-    printf("[%f]  Starting %s with %d possible OpenMP threads\n", NOW-begintime, argv[0], omp_get_max_threads());
-#endif
+    #ifdef HAVE_CUDA
+    fprintf( stderr, "[%f]  Starting %s with GPU acceleration\n", NOW-begintime, argv[0] );
+    #else
+    fprintf( stderr, "[%f]  Starting %s with %d possible OpenMP threads\n", NOW-begintime, argv[0], omp_get_max_threads());
+    #endif
 
     // Calculate the number of files
     int nfiles = opts.end - opts.begin + 1;
@@ -125,7 +125,7 @@ int main(int argc, char **argv)
     ComplexDouble ***detected_beam = create_detected_beam( 3*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
 
     // Read in info from metafits file
-    printf("[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
+    fprintf( stderr, "[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
     struct metafits_info mi;
     get_metafits_info( opts.metafits, &mi, opts.chan_width );
 
@@ -144,7 +144,7 @@ int main(int argc, char **argv)
     double invw = 1.0/wgt_sum;
 
     // Run get_delays to populate the delay_vals struct
-    printf("[%f]  Setting up output header information\n", NOW-begintime);
+    fprintf( stderr, "[%f]  Setting up output header information\n", NOW-begintime);
     struct delays delay_vals;
     get_delays(
             opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
@@ -246,16 +246,16 @@ int main(int argc, char **argv)
 
     /* Allocate host and device memory for the use of the cu_form_beam function */
     // Declaring pointers to the structs so the memory can be alternated
-    struct gpu_formbeam_arrays *gf;
-    struct gpu_formbeam_arrays *gf1;
-    struct gpu_formbeam_arrays *gf2;
+    struct gpu_formbeam_arrays* gf;
+    struct gpu_formbeam_arrays* gf1;
+    struct gpu_formbeam_arrays* gf2;
     gf1 = (struct gpu_formbeam_arrays *) malloc(sizeof(struct gpu_formbeam_arrays));
     gf2 = (struct gpu_formbeam_arrays *) malloc(sizeof(struct gpu_formbeam_arrays));
     
     
-    struct gpu_ipfb_arrays *gi;
-    struct gpu_ipfb_arrays *gi1;
-    struct gpu_ipfb_arrays *gi2;
+    struct gpu_ipfb_arrays* gi;
+    struct gpu_ipfb_arrays* gi1;
+    struct gpu_ipfb_arrays* gi2;
     gi1 = (struct gpu_ipfb_arrays *) malloc(sizeof(struct gpu_ipfb_arrays));
     gi2 = (struct gpu_ipfb_arrays *) malloc(sizeof(struct gpu_ipfb_arrays));
     #ifdef HAVE_CUDA
@@ -275,7 +275,7 @@ int main(int argc, char **argv)
 
     int file_no = 0;
 
-    printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
+    fprintf( stderr, "[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
     
     // Set up sections checks that allow the asynchronous sections know when 
     // other sections have completed
@@ -287,9 +287,9 @@ int main(int argc, char **argv)
     write_check = (int*)malloc(nfiles*sizeof(int));
     for (file_no = 0; file_no < nfiles; file_no++)
     {
-        read_check[fnum] = 0;//False
-        calc_check[fnum] = 0;//False
-        write_check[fnum] = 0;//False
+        read_check[file_no]  = 0;//False
+        calc_check[file_no]  = 0;//False
+        write_check[file_no] = 0;//False
     } 
     
 
@@ -299,47 +299,53 @@ int main(int argc, char **argv)
         #pragma omp master
         {
             nthread = omp_get_num_threads();
-            fprintf( stderr, "Number of threads: %d\n", total_threads);
+            fprintf( stderr, "Number of threads: %d\n", nthread);
         }
     }
-    int thread_no, pnum;
-
+    int thread_no;
+    int exit_check = 0;
     // Sets up a parallel for loop for each of the available thread and 
     // assigns a section to each thread
-    #pragma omp parallel for shared(read_check, calc_check, write_check)
-    for (thread_no = 0; thread_num < nthread; ++thread_num)
+    #pragma omp parallel for shared(read_check, calc_check, write_check) private(thread_no, file_no, exit_check, gf, gi, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif, data_buffer_uvdif, fil_ramps)
+    for (thread_no = 0; thread_no < nthread; ++thread_no)
     {
         // Read section
         if (thread_no == 0)
         {
+            fprintf( stderr, "Read  section start on thread: %d\n", thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
                 //Work out which memory allocation it's requires
-                if (file_no%2 == 0) input = input1;
-                else input = input2;
+                if (file_no%2 == 0) data = data1;
+                else data = data2;
                 
                 //Waits until it can read 
-                int exit = 0; 
+                exit_check = 0; 
                 while (1) 
                 { 
                     #pragma omp critical (read_queue) 
                     { 
-                        if (file_no == 0) exit = 1;//First read 
-                        else if (read_check[file_no - 1]) exit = 1;//Second read
-                        //Rest of the reads 
-                        else if (read_check[file_no - 1] || calc_check[file_no-2]) exit = 1;
+                        if (file_no == 0) 
+                            exit_check = 1;//First read 
+                        else if ( (read_check[file_no - 1] == 1) && (file_no == 1))  
+                            exit_check = 1;//Second read
+                        else if ( (read_check[file_no - 1] == 1) && (calc_check[file_no - 2] == 1) )
+                            exit_check = 1;//Rest of the reads
+                        else
+                            exit_check = 0;
                     } 
-                    if (exit) break; 
+                    if (exit_check) break; 
                 }
+                // if (file_no > 1) fprintf( stderr, "read_check: %d  &&  calc_check: %d\n", read_check[file_no - 1], calc_check[file_no - 2]);
                 #pragma omp critical (read_queue)
                 {
                     // Read in data from next file
-                    printf("[%f]  Reading in data from %s [%d/%d]\n", NOW-begintime,
-                            filenames[file_no], file_no+1, nfiles);
+                    fprintf( stderr, "[%f] [%d/%d] Reading in data from %s \n", NOW-begintime,
+                            file_no+1, nfiles, filenames[file_no]);
                     read_data( filenames[file_no], data, bytes_per_file  );
                     
-                    // Record that this read section is complete
-                    read_check[fnum] = 1;
+                    // Records that this read section is complete
+                    read_check[file_no] = 1;
                 }
             }
         }
@@ -347,12 +353,49 @@ int main(int argc, char **argv)
         // Calc section
         if (thread_no == 1)
         {
+            fprintf( stderr, "Calc  section start on thread: %d\n", thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
+                //Work out which memory allocation it's requires
+                if (file_no%2 == 0)
+                {
+                   data = data1;
+                   gi = gi1;
+                   gf = gf1;
+                   data_buffer_coh   = data_buffer_coh1;
+                   data_buffer_incoh = data_buffer_incoh1;
+                   data_buffer_vdif  = data_buffer_vdif1;
+                   data_buffer_uvdif = data_buffer_uvdif2;
+                   fil_ramps = fil_ramps1;
+                }
+                else
+                {
+                   data = data2;
+                   gi = gi2;
+                   gf = gf2;
+                   data_buffer_coh   = data_buffer_coh2;
+                   data_buffer_incoh = data_buffer_incoh2;
+                   data_buffer_vdif  = data_buffer_vdif2;
+                   data_buffer_uvdif = data_buffer_uvdif2;
+                   fil_ramps = fil_ramps2;
+                }
 
-                
+                // Waits until it can start the calc
+                exit_check = 0;
+                while (1)
+                {
+                    #pragma omp critical (calc_queue)
+                    {
+                        // First two checks
+                        // fprintf( stderr, "file_no: %d  read_check: %d\n", file_no, read_check[file_no]);
+                        if ( (file_no < 2) && (read_check[file_no] == 1) ) exit_check = 1;
+                        // Rest of the checks. Checking if output memory is ready to be changed
+                        else if ( (read_check[file_no] == 1) && (write_check[file_no - 2] == 1) ) exit_check = 1;
+                    }
+                    if (exit_check == 1) break; 
+                }
                 // Get the next second's worth of phases / jones matrices, if needed
-                printf("[%f]  Calculating delays\n", NOW-begintime);
+                // fprintf( stderr, "[%f]  Calculating delays\n", NOW-begintime);
                 // TODO This should be fine for now but may need to manage this better for multipixel
                 get_delays(
                         opts.dec_ddmmss,        // dec as a string "dd:mm:ss"
@@ -367,7 +410,7 @@ int main(int argc, char **argv)
                         complex_weights_array,  // complex weights array (answer will be output here)
                         invJi );                // invJi array           (answer will be output here)
 
-                printf("[%f]  Calculating beam\n", NOW-begintime);
+                fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime, file_no+1, nfiles);
 
                 for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
                     data_buffer_coh[i] = 0.0;
@@ -388,7 +431,7 @@ int main(int argc, char **argv)
                 // Invert the PFB, if requested
                 if (opts.out_vdif)
                 {
-                    printf("[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
+                    fprintf( stderr, "[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
                     #ifndef HAVE_CUDA
                     invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan,
                             npol, data_buffer_vdif );
@@ -397,7 +440,7 @@ int main(int argc, char **argv)
 
                 if (opts.out_uvdif)
                 {
-                    printf("[%f]  Inverting the PFB (full)\n", NOW-begintime);
+                    fprintf( stderr, "[%f]  Inverting the PFB (full)\n", NOW-begintime);
                     #ifdef HAVE_CUDA
                     cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate,
                             nchan, npol, &gi, data_buffer_uvdif );
@@ -407,12 +450,42 @@ int main(int argc, char **argv)
                     #endif
                 }
 
+                // Records that this calc section is complete
+                calc_check[file_no] = 1;
+            }
+        }    
         // Write section
         if (thread_no == 2)
         {
+            fprintf( stderr, "Write section start on thread: %d\n", thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
-                printf("[%f]  Writing data to file(s)\n", NOW-begintime);
+                //Work out which memory allocation it's requires
+                if (file_no%2 == 0)
+                {
+                   data_buffer_coh   = data_buffer_coh1;
+                   data_buffer_incoh = data_buffer_incoh1;
+                   data_buffer_vdif  = data_buffer_vdif1;
+                   data_buffer_uvdif = data_buffer_uvdif2;
+                }
+                else
+                {
+                   data_buffer_coh   = data_buffer_coh2;
+                   data_buffer_incoh = data_buffer_incoh2;
+                   data_buffer_vdif  = data_buffer_vdif2;
+                   data_buffer_uvdif = data_buffer_uvdif2;
+                }
+                
+                // Waits until it's time to write
+                exit_check = 0;
+                while (1)
+                {
+                    #pragma omp critical (write_queue)
+                    if (calc_check[file_no] == 1) exit_check = 1;
+                    if (exit_check == 1) break;
+                }
+                
+                fprintf( stderr, "[%f] [%d/%d] Writing data to file(s)\n", NOW-begintime, file_no+1, nfiles);
 
                 if (opts.out_coh)
                     psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );
@@ -422,32 +495,48 @@ int main(int argc, char **argv)
                     vdif_write_second( &vf, &vhdr, data_buffer_vdif, &vgain );
                 if (opts.out_uvdif)
                     vdif_write_second( &uvf, &uvhdr, data_buffer_uvdif, &ugain );
+
+                // Records that this write section is complete
+                write_check[file_no] = 1;
             }
         }
     }
 
-    printf("[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
-    printf("[%f]  Starting clean-up\n", NOW-begintime);
+    fprintf( stderr, "[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
+    fprintf( stderr, "[%f]  Starting clean-up\n", NOW-begintime);
 
     // Free up memory
     destroy_filenames( filenames, &opts );
     destroy_complex_weights( complex_weights_array, nstation, nchan );
     destroy_invJi( invJi, nstation, nchan, npol );
-    destroy_detected_beam( detected_beam, 2*opts.sample_rate, nchan );
+    destroy_detected_beam( detected_beam, 3*opts.sample_rate, nchan );
 
     int ch;
     for (ch = 0; ch < nchan; ch++)
     {
-        free( fil_ramps[ch] );
+        free( fil_ramps1[ch] );
+        free( fil_ramps2[ch] );
     }
-    free( fil_ramps );
+    free( fil_ramps  );
+    free( fil_ramps1 );
+    free( fil_ramps2 );
 
     destroy_metafits_info( &mi );
-    free( data_buffer_coh   );
-    free( data_buffer_incoh );
-    free( data_buffer_vdif  );
-    free( data_buffer_uvdif );
-    free( data );
+    free( data_buffer_coh    );
+    free( data_buffer_coh1   );
+    free( data_buffer_coh2   );
+    free( data_buffer_incoh  );
+    free( data_buffer_incoh1 );
+    free( data_buffer_incoh2 );
+    free( data_buffer_vdif   );
+    free( data_buffer_vdif1  );
+    free( data_buffer_vdif2  );
+    free( data_buffer_uvdif  );
+    free( data_buffer_uvdif1 );
+    free( data_buffer_uvdif2 );
+    free( data  );
+    free( data1 );
+    free( data2 );
 
     free( opts.obsid        );
     free( opts.time_utc     );
@@ -485,16 +574,22 @@ int main(int argc, char **argv)
         free( uvf.b_offsets );
     }
 
-#ifdef HAVE_CUDA
-    free_formbeam( &gf );
+    #ifdef HAVE_CUDA
+    free( gf  );
+    free_formbeam( &gf1 );
+    free_formbeam( &gf2 );
     if (opts.out_uvdif)
-        free_ipfb( &gi );
-#endif
+    {
+        free( gi  );
+        free_ipfb( &gi1 );
+        free_ipfb( &gi2 );
+    }
+    #endif
 
-#ifndef HAVE_CUDA
+    #ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
     fftw_cleanup_threads();
-#endif
+    #endif
 
     return 0;
 }
@@ -748,7 +843,7 @@ void make_beam_parse_cmdline(
                     opts->out_vdif = 1;
                     break;
                 case 'V':
-                    printf("MWA Beamformer v%s\n", VERSION_BEAMFORMER);
+                    fprintf( stderr, "MWA Beamformer v%s\n", VERSION_BEAMFORMER);
                     exit(0);
                     break;
                 case 'w':

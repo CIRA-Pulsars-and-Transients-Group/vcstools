@@ -25,14 +25,14 @@ struct gpu_ipfb_arrays
 
 void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
                         int nsamples, int nchan, int npol,
-                        struct gpu_ipfb_arrays *g, float *data_buffer_uvdif );
+                        struct gpu_ipfb_arrays **g, float *data_buffer_uvdif );
 
-void cu_load_filter( ComplexDouble **fils, struct gpu_ipfb_arrays *g,
+void cu_load_filter( ComplexDouble **fils, struct gpu_ipfb_arrays **g,
         int nchan );
 
-void malloc_ipfb( struct gpu_ipfb_arrays *g, int ntaps, int nsamples,
+void malloc_ipfb( struct gpu_ipfb_arrays **g, int ntaps, int nsamples,
         int nchan, int npol, int fil_size );
 
-void free_ipfb( struct gpu_ipfb_arrays *g );
+void free_ipfb( struct gpu_ipfb_arrays **g );
 
 #endif
