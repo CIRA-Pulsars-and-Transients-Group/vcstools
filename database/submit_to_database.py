@@ -137,10 +137,12 @@ def get_Trec(tab,obsfreq):
 
 
 def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
-    x= np.copy(data)
+    x = np.copy(data)
     oldstd = np.nanstd(x)
-    #removes the warning for the x[x<lolim] command when it encounters a nan
-    warnings.simplefilter("ignore")
+    #When the x[x<lolim] and x[x>hilim] commands encounter a nan it produces a 
+    #warning. This is expected because it is ignoring flagged data from a 
+    #previous trial so the warning is supressed.
+    old_settings = np.seterr(all='ignore')
     for trial in range(ntrials):
         median = np.nanmedian(x)
 
@@ -154,12 +156,12 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
 
         if tollvl <= tol:
             print "Took {0} trials to reach tolerance".format(trial+1)
-            warnings.simplefilter("default")
+            np.seterr(**old_settings)
             return oldstd, x
 
         if trial + 1 == ntrials:
             print "Reached number of trials without reaching tolerance level"
-            warnings.simplefilter("default")
+            np.seterr(**old_settings)
             return oldstd, x
 
         oldstd = newstd

@@ -507,6 +507,9 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     if not len(RAs)==len(Decs):
         sys.stderr.write('Must supply equal numbers of RAs and Decs\n')
         return None
+    if verbose is False:
+        #Supress print statements of the primary beam model functions
+        sys.stdout = open(os.devnull, 'w')
     for itime in range(Ntimes):
         obstime = Time(midtimes[itime],format='gps',scale='utc')
         observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
@@ -517,9 +520,6 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         # go from altitude to zenith angle
         theta=np.radians(90.-Alts)
         phi=np.radians(Azs)
-        if not verbose:
-            #supress print statements
-            sys.stdout = open(os.devnull, 'w')
         for ifreq in range(len(frequencies)):
             #Decide on beam model
             if option == 'analytic':
@@ -537,10 +537,10 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
-        if not verbose:
-            sys.stdout = sys.__stdout__
         PowersX[:,itime,ifreq]=rX
         PowersY[:,itime,ifreq]=rY
+    if verbose is False:
+        sys.stdout = sys.__stdout__
     Powers=0.5*(PowersX+PowersY)
     return Powers
 
