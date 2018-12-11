@@ -26,7 +26,6 @@ import glob
 from astropy.table import Table
 from astropy.time import Time
 import textwrap as _textwrap
-import warnings
 import logging
 
 import ephem
@@ -312,7 +311,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     print "Calculating antena temperature..." 
     #represses print statements and warnings
     sys.stdout = open(os.devnull, 'w') 
-    warnings.simplefilter("ignore")
+    np.warnings.filterwarnings('ignore')
     
     beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
      beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
@@ -320,7 +319,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     
     #turns prints and warnings back on
     sys.stdout = sys.__stdout__
-    warnings.simplefilter("default")
+    np.warnings.filterwarnings('default')
 
     #TODO can be inaccurate for coherent but is too difficult to simulate
     tant = (Tant_XX + Tant_YY) / 2.
@@ -356,10 +355,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     profile = np.roll(profile,shiftby)
 
     print "Calculating signal to noise ratio"
-    sigma, flagged_profile  = sigmaClip(profile, alpha=2.7, tol=0.01, ntrials=30)
+    sigma, flagged_profile  = sigmaClip(profile, alpha=3., tol=0.01, ntrials=100)
     #flagged profile is the off-pulse values with all on pulse values set to nan
-    #assumeing sigma uncertainty is 10%
-    u_sigma = sigma * 0.1
     
     logging.basicConfig()
     #logging.getLogger().setLevel(logging.DEBUG)
@@ -390,19 +387,9 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
         u_w_equiv_ms = float(period) / float(num_bins)
     else:
         #The pulse is not scattered so calculate its properties
-        #calc signal to noise ratio and it's uncertainty
-        sn = max(profile) / sigma
-        profile_uncert = 500. #uncertainty approximation as none is given
-        u_sn = sn * math.sqrt( math.pow( profile_uncert / max(profile) , 2)  +  
-                               math.pow( u_sigma / sigma ,2) )
 
-        #adjust profile to be around the off-pulse mean
-        off_pulse_mean = np.nanmean(flagged_profile)
-        profile -= off_pulse_mean
-        flagged_profile -= off_pulse_mean
-        profile_uncert = 500. #uncertainty approximation as none is given
-        
         #calculate the width equivalent bins and it's uncertainty
+        profile_uncert = 500. #uncertainty approximation as none is given
         pulse_width_bins = 0
         off_pulse_width_bins = 0
         p_total = 0.
@@ -416,6 +403,19 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
             else:
                 off_pulse_width_bins += 1
 
+        u_sigma = sigma / math.sqrt( off_pulse_width_bins )
+        
+        #calc signal to noise ratio and it's uncertainty
+        sn = max(profile) / sigma
+        u_sn = sn * math.sqrt( math.pow( profile_uncert / max(profile) , 2)  +  
+                               math.pow( u_sigma / sigma ,2) )
+
+        #adjust profile to be around the off-pulse mean
+        off_pulse_mean = np.nanmean(flagged_profile)
+        profile -= off_pulse_mean
+        flagged_profile -= off_pulse_mean
+        profile_uncert = 500. #uncertainty approximation as none is given
+        
         #the equivalent width (assumes top hat pulsar) in bins and it's uncertainty
         w_equiv_bins = p_total / max(profile)
         w_equiv_ms = w_equiv_bins / float(num_bins) * float(period) # in ms
@@ -586,11 +586,11 @@ if __name__ == "__main__":
         auth = (os.environ['MWA_PULSAR_DB_USER'],os.environ['MWA_PULSAR_DB_PASS'])
     else:
         auth = ('mwapulsar','veovys9OUTY=')
-        print "No MWA Pulsar Database username and password found so using the defaults."
-        print 'Please add the following to your .bashrc: '
-        print 'export MWA_PULSAR_DB_USER="<username>"'
-        print 'export MWA_PULSAR_DB_PASS="<password>"'
-        print 'replacing <username> <password> with your MWA Pulsar Database username and password.'
+        logging.warning("No MWA Pulsar Database username and password found so using the defaults.")
+        logging.warning('Please add the following to your .bashrc: ')
+        logging.warning('export MWA_PULSAR_DB_USER="<username>"')
+        logging.warning('export MWA_PULSAR_DB_PASS="<password>"')
+        logging.warning('replacing <username> <password> with your MWA Pulsar Database username and password.')
 
     #defaults for incoh and calibrator type
     if args.incoh:
