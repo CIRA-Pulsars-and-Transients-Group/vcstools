@@ -403,7 +403,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
             else:
                 off_pulse_width_bins += 1
 
-        u_sigma = sigma / math.sqrt( off_pulse_width_bins )
+        u_sigma = sigma / math.sqrt( 2 * off_pulse_width_bins - 2)
         
         #calc signal to noise ratio and it's uncertainty
         sn = max(profile) / sigma
