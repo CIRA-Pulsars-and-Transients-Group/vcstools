@@ -181,7 +181,7 @@ int main(int argc, char **argv)
     //TODO I think i only need one fil
 
     // Memory for fil_ramps is allocated here:
-    ComplexDouble **fil_ramps;
+    ComplexDouble **fil_ramps  = NULL;
     ComplexDouble **fil_ramps1 = apply_mult_phase_ramps( fil, fil_size, nchan );
     ComplexDouble **fil_ramps2 = apply_mult_phase_ramps( fil, fil_size, nchan );
 
@@ -517,7 +517,6 @@ int main(int argc, char **argv)
         free( fil_ramps1[ch] );
         free( fil_ramps2[ch] );
     }
-    free( fil_ramps  );
     free( fil_ramps1 );
     free( fil_ramps2 );
 
@@ -534,7 +533,6 @@ int main(int argc, char **argv)
     free( data_buffer_uvdif  );
     free( data_buffer_uvdif1 );
     free( data_buffer_uvdif2 );
-    free( data  );
     free( data1 );
     free( data2 );
 
@@ -575,12 +573,10 @@ int main(int argc, char **argv)
     }
 
     #ifdef HAVE_CUDA
-    free( gf  );
     free_formbeam( &gf1 );
     free_formbeam( &gf2 );
     if (opts.out_uvdif)
     {
-        free( gi  );
         free_ipfb( &gi1 );
         free_ipfb( &gi2 );
     }
