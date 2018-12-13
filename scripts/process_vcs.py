@@ -249,7 +249,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
     # hence we'll link vis agains /astro/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
     target_dir = '{0}'.format(cal_obs_id) 
     link = 'vis'
-    csvfile = "{0}{1}_dl.csv".format(batch_dir,cal_id)
+    csvfile = "{0}{1}_dl.csv".format(batch_dir,cal_obs_id)
     obsdownload = distutils.spawn.find_executable("obsdownload.py")
     get_data = "{0} -o {1} -d {2}".format(obsdownload,cal_obs_id, data_dir)
     if head:
@@ -281,13 +281,14 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         # commands.append('source /group/mwaops/PULSAR/psrBash.profile')
         # commands.append('module load setuptools')
         commands.append('cd {0}'.format(data_dir))
-        commands.append('if [[ -z ${ASVO_USER} ]]')
+        commands.append('if [[ -z ${MWA_ASVO_API_KEY} ]]')
         commands.append('then')
-        commands.append('    echo "Error, ASVO_USER not set"')
-        commands.append('    echo "Cannot use client"')
+        commands.append('    echo "Error, MWA_ASVO_API_KEY not set"')
+        commands.append('    echo "Cannot use client"'
+                        '    echo "Please read the MWA ASVO documentation about setting this (https://wiki.mwatelescope.org/display/MP/MWA+ASVO%3A+Release+Notes)"')
         commands.append('    exit 1')
         commands.append('fi')
-        commands.append('echo "obs_id={0}, job_type=d, download_type=vis" > {1}'.format(cal_id,csvfile))
+        commands.append('echo "obs_id={0}, job_type=d, download_type=vis" > {1}'.format(cal_obs_id,csvfile))
         commands.append('mwa_client --csv={0} --dir={1}'.format(csvfile,data_dir))
         # commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
         commands.append(make_link)
