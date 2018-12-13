@@ -62,7 +62,7 @@ int main(int argc, char **argv)
     opts.begin       = 0;    // GPS time -- when to start beamforming
     opts.end         = 0;    // GPS time -- when to stop beamforming
     opts.time_utc    = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
-    opts.pointings  = NULL; // list of pointings "dd:mm:ss_hh:mm:ss,dd:mm:ss_hh:mm:ss"
+    opts.pointings   = NULL; // list of pointings "dd:mm:ss_hh:mm:ss,dd:mm:ss_hh:mm:ss"
     opts.datadir     = NULL; // The path to where the recombined data live
     opts.metafits    = NULL; // filename of the metafits file
     opts.rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
@@ -121,25 +121,29 @@ int main(int argc, char **argv)
     int max_npointing = 6; // This is dependant on the number of threads - 2 
     char RAs[max_npointing][64];
     char DECs[max_npointing][64];
-    int npointing = sscand( opts.pointings, "%s_%s,%s_%s,%s_%s,%s_%s,%s_%s,%s_%s" , 
+    int npointing = sscanf( opts.pointings, 
+            "%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,]" , 
                             RAs[0], DECs[0], RAs[1], DECs[1], RAs[2], DECs[2],
-                            RAs[3], DECs[3], RAs[4], DECs[4], RAs[5], DECs[5] )
+                            RAs[3], DECs[3], RAs[4], DECs[4], RAs[5], DECs[5] );
     if (npointing%2 == 1)
     {
-        printf("Number of RAs do not equal the number of Decs given. Exiting")
+        printf("Number of RAs do not equal the number of Decs given. Exiting\n");
+        printf("npointings : %d\n", npointing);
+        printf("RAs[0] : %s\n", RAs[0]);
+        printf("DECs[0] : %s\n", DECs[0]);
         exit(0);
     }
     else
-        npointing /= 2 // converting from number of RAs and DECs to number of pointings
+        npointing /= 2; // converting from number of RAs and DECs to number of pointings
+    int pointing_num = npointing; //TODO replace them all with npointing
     char pointing_array[pointing_num][2][64];
     int p;
     for (p=0;p<pointing_num;p++) 
     {
-       pointing_array[p][0] = RAs[p];
-       pointing_array[p][1] = DECs[p];
+       strcpy( pointing_array[p][0], RAs[p] );
+       strcpy( pointing_array[p][1], DECs[p] );
        printf("Num: %i  RA: %s  Dec: %s\n", p, pointing_array[p][0], pointing_array[p][1]);
     }
-    exit(0);
 
     // Allocate memory
     char **filenames = create_filenames( &opts );
@@ -170,8 +174,8 @@ int main(int argc, char **argv)
     fprintf( stderr, "[%f]  Setting up output header information\n", NOW-begintime);
     struct delays delay_vals;
     get_delays(
-            opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
-            opts.ra_hhmmss,     // ra  as a string "hh:mm:ss"
+            pointing_array,     // an array of pointings [pointing][ra/dec][characters]
+            npointing,          // number of pointings
             opts.frequency,     // middle of the first frequency channel in Hz
             &opts.cal,          // struct holding info about calibration
             opts.sample_rate,   // = 10000 samples per sec
@@ -421,8 +425,8 @@ int main(int argc, char **argv)
                 // fprintf( stderr, "[%f]  Calculating delays\n", NOW-begintime);
                 // TODO This should be fine for now but may need to manage this better for multipixel
                 get_delays(
-                        opts.dec_ddmmss,        // dec as a string "dd:mm:ss"
-                        opts.ra_hhmmss,         // ra  as a string "hh:mm:ss"
+                        pointing_array,     // an array of pointings [pointing][ra/dec][characters]
+                        npointing,          // number of pointings
                         opts.frequency,         // middle of the first frequency channel in Hz
                         &opts.cal,              // struct holding info about calibration
                         opts.sample_rate,       // = 10000 samples per sec
@@ -561,8 +565,7 @@ int main(int argc, char **argv)
 
     free( opts.obsid        );
     free( opts.time_utc     );
-    free( opts.dec_ddmmss   );
-    free( opts.ra_hhmmss    );
+    free( opts.pointings    );
     free( opts.datadir      );
     free( opts.metafits     );
     free( opts.rec_channel  );
@@ -896,8 +899,7 @@ void make_beam_parse_cmdline(
     assert( opts->begin        != 0    );
     assert( opts->end          != 0    );
     assert( opts->time_utc     != NULL );
-    assert( opts->dec_ddmmss   != NULL );
-    assert( opts->ra_hhmmss    != NULL );
+    assert( opts->pointings    != NULL );
     assert( opts->datadir      != NULL );
     assert( opts->metafits     != NULL );
     assert( opts->rec_channel  != NULL );
