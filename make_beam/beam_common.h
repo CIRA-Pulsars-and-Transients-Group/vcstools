@@ -67,8 +67,7 @@ struct make_beam_opts {
     unsigned long int  begin;         // GPS time -- when to start beamforming
     unsigned long int  end;           // GPS time -- when to stop beamforming
     char              *time_utc;      // utc time string "yyyy-mm-ddThh:mm:ss"
-    char              *dec_ddmmss;    // "dd:mm:ss"
-    char              *ra_hhmmss;     // "hh:mm:ss"
+    char              *pointings[6];    // pointing list"dd:mm:ss_hh:mm:ss, dd:mm:ss_hh:mm:ss"
     char              *datadir;       // The path to where the recombined data live
     char              *metafits;      // filename of the metafits file
     char              *rec_channel;   // 0 - 255 receiver 1.28MHz channel

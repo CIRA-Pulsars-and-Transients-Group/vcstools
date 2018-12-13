@@ -62,8 +62,7 @@ int main(int argc, char **argv)
     opts.begin       = 0;    // GPS time -- when to start beamforming
     opts.end         = 0;    // GPS time -- when to stop beamforming
     opts.time_utc    = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
-    opts.dec_ddmmss  = NULL; // "dd:mm:ss"
-    opts.ra_hhmmss   = NULL; // "hh:mm:ss"
+    opts.pointings  = NULL; // list of pointings "dd:mm:ss_hh:mm:ss,dd:mm:ss_hh:mm:ss"
     opts.datadir     = NULL; // The path to where the recombined data live
     opts.metafits    = NULL; // filename of the metafits file
     opts.rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
@@ -117,6 +116,30 @@ int main(int argc, char **argv)
         fprintf(stderr, "Cannot beamform on %d files (between %lu and %lu)\n", nfiles, opts.begin, opts.end);
         exit(EXIT_FAILURE);
     }
+
+    // Parse input pointings
+    int max_npointing = 6; // This is dependant on the number of threads - 2 
+    char RAs[max_npointing][64];
+    char DECs[max_npointing][64];
+    int npointing = sscand( opts.pointings, "%s_%s,%s_%s,%s_%s,%s_%s,%s_%s,%s_%s" , 
+                            RAs[0], DECs[0], RAs[1], DECs[1], RAs[2], DECs[2],
+                            RAs[3], DECs[3], RAs[4], DECs[4], RAs[5], DECs[5] )
+    if (npointing%2 == 1)
+    {
+        printf("Number of RAs do not equal the number of Decs given. Exiting")
+        exit(0);
+    }
+    else
+        npointing /= 2 // converting from number of RAs and DECs to number of pointings
+    char pointing_array[pointing_num][2][64];
+    int p;
+    for (p=0;p<pointing_num;p++) 
+    {
+       pointing_array[p][0] = RAs[p];
+       pointing_array[p][1] = DECs[p];
+       printf("Num: %i  RA: %s  Dec: %s\n", p, pointing_array[p][0], pointing_array[p][1]);
+    }
+    exit(0);
 
     // Allocate memory
     char **filenames = create_filenames( &opts );
@@ -609,10 +632,8 @@ void usage() {
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "option. UTCTIME must have the format: yyyy-mm-ddThh:mm:ss\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "\t-D, --dec=dd:mm:ss.s      ");
-    fprintf(stderr, "Declination of pointing direction\n");
-    fprintf(stderr, "\t-R, --ra=hh:mm:ss.s       ");
-    fprintf(stderr, "Right ascension of pointing direction\n");
+    fprintf(stderr, "\t-P, --pointings=hh:mm:ss.s_dd:mm:ss.s,hh:mm:ss.s_dd:mm:ss.s... ");
+    fprintf(stderr, "Right ascension and declinations of multiple pointings\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-d, --data-location=PATH  ");
     fprintf(stderr, "PATH is the directory containing the recombined data\n");
@@ -740,8 +761,7 @@ void make_beam_parse_cmdline(
                 {"psrfits",         no_argument,       0, 'p'},
                 {"vdif",            no_argument,       0, 'v'},
                 {"utc-time",        required_argument, 0, 'z'},
-                {"dec",             required_argument, 0, 'D'},
-                {"ra",              required_argument, 0, 'R'},
+                {"pointings",       required_argument, 0, 'P'},
                 {"data-location",   required_argument, 0, 'd'},
                 {"metafits-file",   required_argument, 0, 'm'},
                 {"coarse-chan",     required_argument, 0, 'f'},
@@ -761,7 +781,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:b:B:C:d:D:e:f:FhiJ:m:n:o:O:pr:R:uvVw:W:z:",
+                             "a:b:B:C:d:e:f:FhiJ:m:n:o:O:pP:r:uvVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -783,9 +803,6 @@ void make_beam_parse_cmdline(
                     break;
                 case 'd':
                     opts->datadir = strdup(optarg);
-                    break;
-                case 'D':
-                    opts->dec_ddmmss = strdup(optarg);
                     break;
                 case 'e':
                     opts->end = atol(optarg);
@@ -826,11 +843,11 @@ void make_beam_parse_cmdline(
                 case 'p':
                     opts->out_coh = 1;
                     break;
+                case 'P':
+                    opts->pointings = strdup(optarg);
+                    break;
                 case 'r':
                     opts->sample_rate = atoi(optarg);
-                    break;
-                case 'R':
-                    opts->ra_hhmmss = strdup(optarg);
                     break;
                 case 'u':
                     opts->out_uvdif = 1;
