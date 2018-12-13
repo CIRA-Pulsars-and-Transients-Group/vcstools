@@ -607,6 +607,8 @@ if __name__ == '__main__':
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
     group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
+    group_beamform.add_option("--pointing_list", help="A comma sepertated list of pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS, e.g. \"19:23:48.53_-20:31:52.95,19:23:40.00_-20:31:50.00\"")
+    group_beamform.add_option("--pointing_list", help="A file containing pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS on each line, e.g. \"19:23:48.53_-20:31:52.95\n19:23:40.00_-20:31:50.00\"")
     group_beamform.add_option("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) " +\
                                   "or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. [default=%default]".format(bf_out_modes), default='psrfits')
@@ -675,8 +677,14 @@ if __name__ == '__main__':
         quit()
     if (opts.mode == "beamform" or opts.incoh):
         bf_format = ""
-        if not opts.pointing:
-            print "Pointing (-p) required in beamformer mode"
+        if not (opts.pointing or opts.pointing_list or opts.pointing_file):
+            print "Beamformer mode required that you specify pointings using either -p, --pointing_list or --pointing_file."
+            quit()
+        #check if they're using more than one of the pointing options
+        if (opts.pointing and opts.pointing_list) or \
+           (opts.pointing and opts.pointing_file) or \
+           (opts.pointing_list and opts.pointing_file):
+            print "Beamformer mode requires only one pointing option. Please use either -p, --pointing_list or --pointing_file."
             quit()
         if (opts.bf_out_format == 'psrfits' or opts.bf_out_format == 'both'):
             bf_format +=" -p"
@@ -746,6 +754,16 @@ if __name__ == '__main__':
         else:
             flagged_tiles_file = None
         ensure_metafits(data_dir, opts.obs, metafits_file)
+        #Turn the pointings into a list
+        if opts.pointing:
+            pointing_list = ["{0}_{1}".format(opts.pointing[0],opts.pointing[1])]
+        elif opts.pointing_list:
+            pointing_list = opts.pointing_list.split(",")
+        elif opts.pointing_file:
+            with open(opts.pointing_file) as f:
+                pointing_list = f.readlines()
+        print pointing_list
+        
         coherent_beam(opts.obs, opts.begin, opts.end, 
                 data_dir, product_dir, batch_dir,
                 metafits_file, opts.nfine_chan, opts.pointing, sys.argv,
