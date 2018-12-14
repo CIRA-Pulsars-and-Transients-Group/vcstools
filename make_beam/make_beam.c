@@ -127,29 +127,28 @@ int main(int argc, char **argv)
                             RAs[3], DECs[3], RAs[4], DECs[4], RAs[5], DECs[5] );
     if (npointing%2 == 1)
     {
-        printf("Number of RAs do not equal the number of Decs given. Exiting\n");
-        printf("npointings : %d\n", npointing);
-        printf("RAs[0] : %s\n", RAs[0]);
-        printf("DECs[0] : %s\n", DECs[0]);
+        fprintf(stderr, "Number of RAs do not equal the number of Decs given. Exiting\n");
+        fprintf(stderr, "npointings : %d\n", npointing);
+        fprintf(stderr, "RAs[0] : %s\n", RAs[0]);
+        fprintf(stderr, "DECs[0] : %s\n", DECs[0]);
         exit(0);
     }
     else
         npointing /= 2; // converting from number of RAs and DECs to number of pointings
-    int pointing_num = npointing; //TODO replace them all with npointing
-    char pointing_array[pointing_num][2][64];
+    char pointing_array[npointing][2][64];
     int p;
-    for (p=0;p<pointing_num;p++) 
+    for ( p = 0; p < npointing; p++) 
     {
        strcpy( pointing_array[p][0], RAs[p] );
        strcpy( pointing_array[p][1], DECs[p] );
-       printf("Num: %i  RA: %s  Dec: %s\n", p, pointing_array[p][0], pointing_array[p][1]);
+       fprintf(stderr, "Num: %i  RA: %s  Dec: %s\n", p, pointing_array[p][0], pointing_array[p][1]);
     }
 
     // Allocate memory
     char **filenames = create_filenames( &opts );
-    ComplexDouble ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
-    ComplexDouble ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
-    ComplexDouble ***detected_beam = create_detected_beam( 3*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
+    ComplexDouble ****complex_weights_array = create_complex_weights( npointing, nstation, nchan, npol ); // [npointing][nstation][nchan][npol]
+    ComplexDouble *****invJi = create_invJi( npointing, nstation, nchan, npol ); // [npointing][nstation][nchan][npol][npol]
+    ComplexDouble ****detected_beam = create_detected_beam( npointing, 3*opts.sample_rate, nchan, npol ); // [npointing][3*opts.sample_rate][nchan][npol]
 
     // Read in info from metafits file
     fprintf( stderr, "[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
@@ -172,7 +171,7 @@ int main(int argc, char **argv)
 
     // Run get_delays to populate the delay_vals struct
     fprintf( stderr, "[%f]  Setting up output header information\n", NOW-begintime);
-    struct delays delay_vals;
+    struct delays delay_vals[npointing];
     get_delays(
             pointing_array,     // an array of pointings [pointing][ra/dec][characters]
             npointing,          // number of pointings
@@ -181,19 +180,19 @@ int main(int argc, char **argv)
             opts.sample_rate,   // = 10000 samples per sec
             opts.time_utc,      // utc time string
             0.0,                // seconds offset from time_utc at which to calculate delays
-            &delay_vals,        // Populate psrfits header info
+            delay_vals,        // Populate psrfits header info
             &mi,                // Struct containing info from metafits file
             NULL,               // complex weights array (ignore this time)
             NULL                // invJi array           (ignore this time)
     );
 
     // Create structures for holding header information
-    struct psrfits  pf;
-    struct psrfits  pf_incoh;
+    struct psrfits  pf[npointing];
+    struct psrfits  pf_incoh[1];
     vdif_header     vhdr;
     vdif_header     uvhdr;
-    struct vdifinfo vf;
-    struct vdifinfo uvf;
+    struct vdifinfo vf[npointing];
+    struct vdifinfo uvf[npointing];
 
     // Create structures for the PFB filter coefficients
     int ntaps    = 12;
@@ -213,27 +212,28 @@ int main(int argc, char **argv)
     ComplexDouble **fil_ramps2 = apply_mult_phase_ramps( fil, fil_size, nchan );
 
     // Populate the relevant header structs
-    populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc,
+    populate_psrfits_header( pf, opts.metafits, opts.obsid, opts.time_utc,
             opts.sample_rate, opts.frequency, nchan, opts.chan_width,
-            outpol_coh, opts.rec_channel, &delay_vals );
-    populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid,
+            outpol_coh, opts.rec_channel, delay_vals, mi, npointing );
+    populate_psrfits_header( pf_incoh, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, outpol_incoh, opts.rec_channel, &delay_vals );
+            opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals, mi, 1);
 
     // Use the tile pointing instead of the pencil beam pointing
     // TO DO: Move this to populate_psrfits_header?
-    pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
-    pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
+    pf_incoh[0].hdr.ra2000  = mi.tile_pointing_ra;
+    pf_incoh[0].hdr.dec2000 = mi.tile_pointing_dec;
 
-    populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
+    populate_vdif_header( vf, &vhdr, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, opts.rec_channel, &delay_vals );
-    populate_vdif_header( &uvf, &uvhdr, opts.metafits, opts.obsid,
+            opts.chan_width, opts.rec_channel, delay_vals, npointing );
+    populate_vdif_header( uvf, &uvhdr, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, opts.rec_channel, &delay_vals );
+            opts.chan_width, opts.rec_channel, delay_vals, npointing );
 
-    sprintf( uvf.basefilename, "%s_%s_ch%03d_u",
-             uvf.exp_name, uvf.scan_name, atoi(opts.rec_channel) );
+    for ( p=0; p<npointing; p++ )
+        sprintf( uvf[p].basefilename, "%s_%s_ch%03d_u",
+                 uvf[p].exp_name, uvf[p].scan_name, atoi(opts.rec_channel) );
 
     // To run asynchronously we require two memory allocations for each data 
     // set so multiple parts of the memory can be worked on at once.
@@ -262,14 +262,16 @@ int main(int argc, char **argv)
     float *data_buffer_uvdif1 = NULL;
     float *data_buffer_uvdif2 = NULL;
 
-    data_buffer_coh1   = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
-    data_buffer_coh2   = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
-    data_buffer_incoh1 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
-    data_buffer_incoh2 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
-    data_buffer_vdif1  = create_data_buffer_vdif( &vf );
-    data_buffer_vdif2  = create_data_buffer_vdif( &vf );
-    data_buffer_uvdif1 = create_data_buffer_vdif( &uvf );
-    data_buffer_uvdif2 = create_data_buffer_vdif( &uvf );
+    data_buffer_coh1   = create_data_buffer_psrfits( npointing * nchan *
+                                                     outpol_coh * pf[0].hdr.nsblk );
+    data_buffer_coh2   = create_data_buffer_psrfits( npointing * nchan * 
+                                                     outpol_coh * pf[0].hdr.nsblk );
+    data_buffer_incoh1 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
+    data_buffer_incoh2 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
+    data_buffer_vdif1  = create_data_buffer_vdif( &vf[1], npointing );
+    data_buffer_vdif2  = create_data_buffer_vdif( &vf[1], npointing );
+    data_buffer_uvdif1 = create_data_buffer_vdif( &uvf[1], npointing );
+    data_buffer_uvdif2 = create_data_buffer_vdif( &uvf[1], npointing );
 
     /* Allocate host and device memory for the use of the cu_form_beam function */
     // Declaring pointers to the structs so the memory can be alternated
@@ -287,14 +289,15 @@ int main(int argc, char **argv)
     gi2 = (struct gpu_ipfb_arrays *) malloc(sizeof(struct gpu_ipfb_arrays));
     #ifdef HAVE_CUDA
     malloc_formbeam( &gf1, opts.sample_rate, nstation, nchan, npol,
-            outpol_coh, outpol_incoh );
+            outpol_coh, outpol_incoh, npointing );
     malloc_formbeam( &gf2, opts.sample_rate, nstation, nchan, npol,
-            outpol_coh, outpol_incoh );
+            outpol_coh, outpol_incoh, npointing );
 
     if (opts.out_uvdif)
     {
-        malloc_ipfb( &gi1, ntaps, opts.sample_rate, nchan, npol, fil_size );
-        malloc_ipfb( &gi2, ntaps, opts.sample_rate, nchan, npol, fil_size );
+        malloc_ipfb( &gi1, ntaps, opts.sample_rate, nchan, npol, fil_size, npointing );
+        malloc_ipfb( &gi2, ntaps, opts.sample_rate, nchan, npol, fil_size, npointing );
+        // Below may need a npointing update but I don't think it's used
         cu_load_filter( fil_ramps1, &gi1, nchan );
         cu_load_filter( fil_ramps2, &gi2, nchan );
     }
@@ -308,15 +311,16 @@ int main(int argc, char **argv)
     // other sections have completed
     int *read_check;
     int *calc_check;
-    int *write_check;
+    int **write_check;
     read_check = (int*)malloc(nfiles*sizeof(int));
     calc_check = (int*)malloc(nfiles*sizeof(int));
-    write_check = (int*)malloc(nfiles*sizeof(int));
+    write_check = (int**)malloc(nfiles*sizeof(int *));
     for (file_no = 0; file_no < nfiles; file_no++)
     {
         read_check[file_no]  = 0;//False
         calc_check[file_no]  = 0;//False
-        write_check[file_no] = 0;//False
+        write_check[file_no] = (int*)malloc(npointing*sizeof(int));
+        for (p=0;p<npointing;p++) write_check[file_no][p] = 0;//False
     } 
     
 
@@ -333,7 +337,7 @@ int main(int argc, char **argv)
     int exit_check = 0;
     // Sets up a parallel for loop for each of the available thread and 
     // assigns a section to each thread
-    #pragma omp parallel for shared(read_check, calc_check, write_check) private(thread_no, file_no, exit_check, gf, gi, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif, data_buffer_uvdif, fil_ramps)
+    #pragma omp parallel for shared(read_check, calc_check, write_check) private(thread_no, file_no, p, exit_check, gf, gi, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif, data_buffer_uvdif, fil_ramps)
     for (thread_no = 0; thread_no < nthread; ++thread_no)
     {
         // Read section
@@ -409,6 +413,7 @@ int main(int argc, char **argv)
 
                 // Waits until it can start the calc
                 exit_check = 0;
+                int write_array_check = 0;
                 while (1)
                 {
                     #pragma omp critical (calc_queue)
@@ -417,7 +422,17 @@ int main(int argc, char **argv)
                         // fprintf( stderr, "file_no: %d  read_check: %d\n", file_no, read_check[file_no]);
                         if ( (file_no < 2) && (read_check[file_no] == 1) ) exit_check = 1;
                         // Rest of the checks. Checking if output memory is ready to be changed
-                        else if ( (read_check[file_no] == 1) && (write_check[file_no - 2] == 1) ) exit_check = 1;
+                        else if (read_check[file_no] == 1) 
+                        {    
+                            // Loop through each pointing's write_check
+                            for (int pc=0; pc<npointing; pc++)
+                            {   
+                                if (write_check[file_no - 2][pc] == 0)
+                                    // Not complete so changing check to true
+                                    write_array_check = 1;
+                            }
+                            if (write_array_check == 0) exit_check = 1;
+                        }
                     }
                     if (exit_check == 1) break; 
                 }
@@ -439,15 +454,15 @@ int main(int argc, char **argv)
 
                 fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime, file_no+1, nfiles);
 
-                for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
+                for (i = 0; i < npointing * nchan * outpol_coh * pf[0].hdr.nsblk; i++)
                     data_buffer_coh[i] = 0.0;
 
-                for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
+                for (i = 0; i < npointing * nchan * outpol_incoh * pf_incoh[0].hdr.nsblk; i++)
                     data_buffer_incoh[i] = 0.0;
 
                 #ifdef HAVE_CUDA
                 cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                              nstation, nchan, npol, outpol_coh, invw, &gf,
+                              npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
                               detected_beam, data_buffer_coh, data_buffer_incoh );
                 #else
                 form_beam( data, &opts, complex_weights_array, invJi, file_no,
@@ -470,7 +485,7 @@ int main(int argc, char **argv)
                     fprintf( stderr, "[%f]  Inverting the PFB (full)\n", NOW-begintime);
                     #ifdef HAVE_CUDA
                     cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate,
-                            nchan, npol, &gi, data_buffer_uvdif );
+                            npointing, nchan, npol, &gi, data_buffer_uvdif );
                     #else
                     invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan,
                             npol, fil_ramps, fil_size, data_buffer_uvdif );
@@ -482,9 +497,10 @@ int main(int argc, char **argv)
             }
         }    
         // Write section
-        if (thread_no == 2)
+        if (thread_no > 1 && thread_no < npointing + 2)
         {
-            fprintf( stderr, "Write section start on thread: %d\n", thread_no);
+            p = thread_no - 2;
+            fprintf( stderr, "Write section p:%d started on thread: %d\n", p, thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
                 //Work out which memory allocation it's requires
@@ -512,19 +528,19 @@ int main(int argc, char **argv)
                     if (exit_check == 1) break;
                 }
                 
-                fprintf( stderr, "[%f] [%d/%d] Writing data to file(s)\n", NOW-begintime, file_no+1, nfiles);
+                fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n", NOW-begintime, file_no+1, nfiles, p, npointing );
 
                 if (opts.out_coh)
-                    psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );
-                if (opts.out_incoh)
-                    psrfits_write_second( &pf_incoh, data_buffer_incoh, nchan, outpol_incoh );
+                    psrfits_write_second( pf, data_buffer_coh, nchan, outpol_coh, p );
+                if (opts.out_incoh && p == 0)
+                    psrfits_write_second( pf_incoh, data_buffer_incoh, nchan, outpol_incoh, p );
                 if (opts.out_vdif)
-                    vdif_write_second( &vf, &vhdr, data_buffer_vdif, &vgain );
+                    vdif_write_second( vf, &vhdr, data_buffer_vdif, &vgain, p );
                 if (opts.out_uvdif)
-                    vdif_write_second( &uvf, &uvhdr, data_buffer_uvdif, &ugain );
+                    vdif_write_second( uvf, &uvhdr, data_buffer_uvdif, &ugain, p );
 
                 // Records that this write section is complete
-                write_check[file_no] = 1;
+                write_check[file_no][p] = 1;
             }
         }
     }
@@ -534,9 +550,9 @@ int main(int argc, char **argv)
 
     // Free up memory
     destroy_filenames( filenames, &opts );
-    destroy_complex_weights( complex_weights_array, nstation, nchan );
-    destroy_invJi( invJi, nstation, nchan, npol );
-    destroy_detected_beam( detected_beam, 3*opts.sample_rate, nchan );
+    destroy_complex_weights( complex_weights_array, npointing, nstation, nchan );
+    destroy_invJi( invJi, npointing, nstation, nchan, npol );
+    destroy_detected_beam( detected_beam, npointing, 3*opts.sample_rate, nchan );
 
     int ch;
     for (ch = 0; ch < nchan; ch++)
@@ -571,31 +587,34 @@ int main(int argc, char **argv)
     free( opts.rec_channel  );
     free( opts.cal.filename );
 
-    if (opts.out_coh)
-    {
-        free( pf.sub.data        );
-        free( pf.sub.dat_freqs   );
-        free( pf.sub.dat_weights );
-        free( pf.sub.dat_offsets );
-        free( pf.sub.dat_scales  );
-    }
     if (opts.out_incoh)
     {
-        free( pf_incoh.sub.data        );
-        free( pf_incoh.sub.dat_freqs   );
-        free( pf_incoh.sub.dat_weights );
-        free( pf_incoh.sub.dat_offsets );
-        free( pf_incoh.sub.dat_scales  );
+        free( pf_incoh[0].sub.data        );
+        free( pf_incoh[0].sub.dat_freqs   );
+        free( pf_incoh[0].sub.dat_weights );
+        free( pf_incoh[0].sub.dat_offsets );
+        free( pf_incoh[0].sub.dat_scales  );
     }
-    if (opts.out_vdif)
+    for (p = 0; p < npointing; p++)
     {
-        free( vf.b_scales  );
-        free( vf.b_offsets );
-    }
-    if (opts.out_uvdif)
-    {
-        free( uvf.b_scales  );
-        free( uvf.b_offsets );
+        if (opts.out_coh)
+        {
+            free( pf[p].sub.data        );
+            free( pf[p].sub.dat_freqs   );
+            free( pf[p].sub.dat_weights );
+            free( pf[p].sub.dat_offsets );
+            free( pf[p].sub.dat_scales  );
+        }
+        if (opts.out_vdif)
+        {
+            free( vf[p].b_scales  );
+            free( vf[p].b_offsets );
+        }
+        if (opts.out_uvdif)
+        {
+            free( uvf[p].b_scales  );
+            free( uvf[p].b_offsets );
+        }
     }
 
     #ifdef HAVE_CUDA
@@ -924,7 +943,7 @@ char **create_filenames( struct make_beam_opts *opts )
                  nfiles, opts->begin, opts->end);
         exit(EXIT_FAILURE);
     }
-
+    fprintf( stderr, "%d\n", nfiles);
     // Allocate memory for the file name list
     char **filenames = NULL;
     filenames = (char **)malloc( nfiles*sizeof(char *) );
@@ -942,7 +961,6 @@ char **create_filenames( struct make_beam_opts *opts )
     return filenames;
 }
 
-
 void destroy_filenames( char **filenames, struct make_beam_opts *opts )
 {
     int nfiles = opts->end - opts->begin + 1;
@@ -953,120 +971,139 @@ void destroy_filenames( char **filenames, struct make_beam_opts *opts )
 }
 
 
-ComplexDouble ***create_complex_weights( int nstation, int nchan, int npol )
+ComplexDouble ****create_complex_weights( int npointing, int nstation, int nchan, int npol )
 // Allocate memory for complex weights matrices
 {
-    int ant, ch; // Loop variables
-    ComplexDouble ***array;
+    int p, ant, ch; // Loop variables
+    ComplexDouble ****array;
     
-    array = (ComplexDouble ***)malloc( nstation * sizeof(ComplexDouble **) );
-
-    for (ant = 0; ant < nstation; ant++)
+    array = (ComplexDouble ****)malloc( npointing * sizeof(ComplexDouble ***) );
+    
+    for (p = 0; p < npointing; p++)
     {
-        array[ant] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
+        array[p] = (ComplexDouble ***)malloc( nstation * sizeof(ComplexDouble **) );
 
-        for (ch = 0; ch < nchan; ch++)
-            array[ant][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+        for (ant = 0; ant < nstation; ant++)
+        {
+            array[p][ant] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
+
+            for (ch = 0; ch < nchan; ch++)
+                array[p][ant][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+        }
     }
-
     return array;
 }
 
 
-void destroy_complex_weights( ComplexDouble ***array, int nstation, int nchan )
+void destroy_complex_weights( ComplexDouble ****array, int npointing, int nstation, int nchan )
 {
-    int ant, ch;
-    for (ant = 0; ant < nstation; ant++)
+    int p, ant, ch;
+    for (p = 0; p < npointing; p++)
     {
-        for (ch = 0; ch < nchan; ch++)
-            free( array[ant][ch] );
+        for (ant = 0; ant < nstation; ant++)
+        {
+            for (ch = 0; ch < nchan; ch++)
+                free( array[p][ant][ch] );
 
-        free( array[ant] );
+            free( array[p][ant] );
+        }
+        free( array[p] );
     }
-
     free( array );
 }
 
 
-ComplexDouble ****create_invJi( int nstation, int nchan, int npol )
+ComplexDouble *****create_invJi( int npointing, int nstation, int nchan, int npol )
 // Allocate memory for (inverse) Jones matrices
 {
-    int ant, p, ch; // Loop variables
-    ComplexDouble ****invJi;
-
-    invJi = (ComplexDouble ****)malloc( nstation * sizeof(ComplexDouble ***) );
-
-    for (ant = 0; ant < nstation; ant++)
+    int p, ant, pol, ch; // Loop variables
+    ComplexDouble *****invJi;
+    
+    invJi = (ComplexDouble *****)malloc( npointing * sizeof(ComplexDouble ****) );
+    for (p = 0; p < npointing; p++)
     {
-        invJi[ant] =(ComplexDouble ***)malloc( nchan * sizeof(ComplexDouble **) );
+        invJi[p] = (ComplexDouble ****)malloc( nstation * sizeof(ComplexDouble ***) );
 
-        for (ch = 0; ch < nchan; ch++)
+        for (ant = 0; ant < nstation; ant++)
         {
-            invJi[ant][ch] = (ComplexDouble **)malloc( npol * sizeof(ComplexDouble *) );
+            invJi[p][ant] =(ComplexDouble ***)malloc( nchan * sizeof(ComplexDouble **) );
 
-            for (p = 0; p < npol; p++)
-                invJi[ant][ch][p] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+            for (ch = 0; ch < nchan; ch++)
+            {
+                invJi[p][ant][ch] = (ComplexDouble **)malloc( npol * sizeof(ComplexDouble *) );
+
+                for (pol = 0; pol < npol; pol++)
+                    invJi[p][ant][ch][pol] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+            }
         }
     }
-
     return invJi;
 }
 
 
-void destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol )
+void destroy_invJi( ComplexDouble *****array, int npointing, int nstation, int nchan, int npol )
 {
-    int ant, ch, p;
-    for (ant = 0; ant < nstation; ant++)
+    int p, ant, ch, pol;
+    for (p = 0; p < npointing; p++)
     {
-        for (ch = 0; ch < nchan; ch++)
+        for (ant = 0; ant < nstation; ant++)
         {
-            for (p = 0; p < npol; p++)
-                free( array[ant][ch][p] );
+            for (ch = 0; ch < nchan; ch++)
+            {
+                for (pol = 0; pol < npol; pol++)
+                    free( array[p][ant][ch][pol] );
 
-            free( array[ant][ch] );
+                free( array[p][ant][ch] );
+            }
+
+            free( array[p][ant] );
         }
-
-        free( array[ant] );
+        free( array[p] );
     }
-
     free( array );
 }
 
 
-ComplexDouble ***create_detected_beam( int nsamples, int nchan, int npol )
+ComplexDouble ****create_detected_beam( int npointing, int nsamples, int nchan, int npol )
 // Allocate memory for complex weights matrices
 {
-    int s, ch; // Loop variables
-    ComplexDouble ***array;
+    int p, s, ch; // Loop variables
+    ComplexDouble ****array;
     
-    array = (ComplexDouble ***)malloc( nsamples * sizeof(ComplexDouble **) );
-
-    for (s = 0; s < nsamples; s++)
+    array = (ComplexDouble ****)malloc( npointing * sizeof(ComplexDouble ***) );
+    for (p = 0; p < npointing; p++) 
     {
-        array[s] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
+        array[p] = (ComplexDouble ***)malloc( nsamples * sizeof(ComplexDouble **) );
 
-        for (ch = 0; ch < nchan; ch++)
-            array[s][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+        for (s = 0; s < nsamples; s++)
+        {
+            array[p][s] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
+
+            for (ch = 0; ch < nchan; ch++)
+                array[p][s][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+        }
     }
-
     return array;
 }
 
-
-void destroy_detected_beam( ComplexDouble ***array, int nsamples, int nchan )
+void destroy_detected_beam( ComplexDouble ****array, int npointing, int nsamples, int nchan )
 {
-    int s, ch;
-    for (s = 0; s < nsamples; s++)
+    int p, s, ch;
+    for (p = 0; p < npointing; p++)    
     {
-        for (ch = 0; ch < nchan; ch++)
-            free( array[s][ch] );
+        for (s = 0; s < nsamples; s++)
+        {
+            for (ch = 0; ch < nchan; ch++)
+                free( array[p][s][ch] );
 
-        free( array[s] );
+            free( array[p][s] );
+        }
+
+        free( array[p] );
     }
 
     free( array );
 }
-
 
 float *create_data_buffer_psrfits( size_t size )
 {
@@ -1075,9 +1112,9 @@ float *create_data_buffer_psrfits( size_t size )
 }
 
 
-float *create_data_buffer_vdif( struct vdifinfo *vf )
+float *create_data_buffer_vdif( struct vdifinfo *vf , int npointing)
 {
-    float *ptr  = (float *)malloc( vf->sizeof_buffer * sizeof(float) );
+    float *ptr  = (float *)malloc( vf->sizeof_buffer * npointing * sizeof(float) );
     return ptr;
 }
 

@@ -10,10 +10,10 @@
 #include "psrfits.h"
 #include "mycomplex.h"
 
-void printf_psrfits( struct psrfits *pf );  /* Prints values in psrfits struct to stdout */
+void printf_psrfits( struct psrfits pf[], int p );  /* Prints values in psrfits struct to stdout */
 
 void populate_psrfits_header(
-        struct psrfits *pf,
+        struct psrfits  pf[],
         char           *metafits,
         char           *obsid,
         char           *time_utc,
@@ -23,12 +23,14 @@ void populate_psrfits_header(
         long int        chan_width,
         int             outpol,
         char           *rec_channel,
-        struct delays  *delay_vals );
+        struct delays  *delay_vals,
+        struct metafits_info mi,
+        int             npointing );
 
 void correct_psrfits_stt( struct psrfits *pf );
 
-void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
-        int outpol );
+void psrfits_write_second( struct psrfits pf[], float *data_buffer, int nchan,
+        int outpol, int p);
 
 
 #endif

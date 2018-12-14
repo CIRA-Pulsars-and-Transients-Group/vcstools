@@ -63,6 +63,7 @@ __global__ void beamform_kernel( uint8_t *data,
     // Translate GPU block/thread numbers into meaningful names
     int s   = blockIdx.x;  /* The (s)ample number */
     int c   = blockIdx.y;  /* The (c)hannel number */
+    int p   = blockIdx.z;  /* The (p)ointing number */
     int nc  = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
     int ant = threadIdx.x; /* The (ant)enna number */
 
@@ -102,13 +103,13 @@ __global__ void beamform_kernel( uint8_t *data,
 
     Ia[ant] = DETECT(Dx) + DETECT(Dy);
 
-    WDx = CMuld( W[W_IDX(c,ant,0,nc)], Dx );
-    WDy = CMuld( W[W_IDX(c,ant,1,nc)], Dy );
+    WDx = CMuld( W[W_IDX(p,c,ant,0,nc)], Dx );
+    WDy = CMuld( W[W_IDX(p,c,ant,1,nc)], Dy );
 
-    Bx[ant] = CAddd( CMuld( J[J_IDX(c,ant,0,0,nc)], WDx ),
-                     CMuld( J[J_IDX(c,ant,1,0,nc)], WDy ) );
-    By[ant] = CAddd( CMuld( J[J_IDX(c,ant,0,1,nc)], WDx ),
-                     CMuld( J[J_IDX(c,ant,1,1,nc)], WDy ) );
+    Bx[ant] = CAddd( CMuld( J[J_IDX(p,c,ant,0,0,nc)], WDx ),
+                     CMuld( J[J_IDX(p,c,ant,1,0,nc)], WDy ) );
+    By[ant] = CAddd( CMuld( J[J_IDX(p,c,ant,0,1,nc)], WDx ),
+                     CMuld( J[J_IDX(p,c,ant,1,1,nc)], WDy ) );
 
     Nxx[ant] = CMuld( Bx[ant], CConjd(Bx[ant]) );
     Nxy[ant] = CMuld( Bx[ant], CConjd(By[ant]) );
@@ -203,14 +204,14 @@ __global__ void beamform_kernel( uint8_t *data,
         I[I_IDX(s,c,nc)] = Ia[0];
 
         // Stokes I, Q, U, V:
-        C[C_IDX(s,c,0,nc)] = invw*(bnXX + bnYY);
-        C[C_IDX(s,c,1,nc)] = invw*(bnXX - bnYY);
-        C[C_IDX(s,c,2,nc)] =  2.0*invw*CReald( bnXY );
-        C[C_IDX(s,c,3,nc)] = -2.0*invw*CImagd( bnXY );
+        C[C_IDX(p,s,c,0,nc)] = invw*(bnXX + bnYY);
+        C[C_IDX(p,s,c,1,nc)] = invw*(bnXX - bnYY);
+        C[C_IDX(p,s,c,2,nc)] =  2.0*invw*CReald( bnXY );
+        C[C_IDX(p,s,c,3,nc)] = -2.0*invw*CImagd( bnXY );
 
         // The beamformed products
-        Bd[B_IDX(s,c,0,nc)] = Bx[0];
-        Bd[B_IDX(s,c,1,nc)] = By[0];
+        Bd[B_IDX(p,s,c,0,nc)] = Bx[0];
+        Bd[B_IDX(p,s,c,1,nc)] = By[0];
     }
 }
 
@@ -269,6 +270,7 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     // Translate GPU block/thread numbers into meaningful names
     int chan = threadIdx.x; /* The (c)hannel number */
     int nchan = blockDim.x; /* The total number of channels */
+    int p = blockDim.y;
     int stokes = threadIdx.y;
 //    int nstokes = blockDim.y;
 
@@ -285,14 +287,14 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     // accumulate abs(data) over all time samples and save into band
     //data_ptr = C + C_IDX(0,chan,stokes,nchan);
     for (i=0;i<nstep;i++) { // time steps
-        data_ptr = C + C_IDX(i,chan,stokes,nchan);
+        data_ptr = C + C_IDX(p,i,chan,stokes,nchan);
         band += fabsf(*data_ptr);
     }
 
     // now normalise the coherent beam
     //data_ptr = C + C_IDX(0,chan,stokes,nchan);
     for (i=0;i<nstep;i++) { // time steps
-        data_ptr = C + C_IDX(i,chan,stokes,nchan);
+        data_ptr = C + C_IDX(p,i,chan,stokes,nchan);
         *data_ptr = (*data_ptr)/( (band/nstep)/new_var );
     }
 
@@ -301,11 +303,12 @@ __global__ void flatten_bandpass_C_kernel(float *C,
 
 
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
-                   ComplexDouble ***complex_weights_array,
-                   ComplexDouble ****invJi, int file_no, int nstation, int nchan,
+                   ComplexDouble ****complex_weights_array,
+                   ComplexDouble *****invJi, int file_no, 
+                   int npointing, int nstation, int nchan,
                    int npol, int outpol_coh, double invw,
                    struct gpu_formbeam_arrays **g,
-                   ComplexDouble ***detected_beam, float *coh, float *incoh )
+                   ComplexDouble ****detected_beam, float *coh, float *incoh )
 /* The CPU version of the beamforming operations, using OpenMP for
  * parallelisation.
  *
@@ -314,8 +317,8 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
  *             documentation.
  *   opts    = passed option parameters, containing meta information about the
  *             obs and the data
- *   W       = complex weights array. [nstation][nchan][npol]
- *   J       = inverse Jones matrix. [nstation][nchan][npol][npol]
+ *   W       = complex weights array. [npointing][nstation][nchan][npol]
+ *   J       = inverse Jones matrix. [npointing][nstation][nchan][npol][npol]
  *   file_no = number of file we are processing, starting at 0.
  *   nstation     = 128
  *   nchan        = 128
@@ -337,31 +340,33 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
  */
 {
     // Setup input values (= populate W and J)
-    int s, ant, ch, pol, pol2;
+    int p, s, ant, ch, pol, pol2;
     int Wi, Ji;
-    for (ant = 0; ant < nstation; ant++)
-    for (ch  = 0; ch  < nchan   ; ch++ )
-    for (pol = 0; pol < npol    ; pol++)
+    for (p   = 0; p   < npointing; p++  )
+    for (ant = 0; ant < nstation ; ant++)
+    for (ch  = 0; ch  < nchan    ; ch++ )
+    for (pol = 0; pol < npol     ; pol++)
     {
-        Wi = ant * (npol*nchan) +
+        Wi = p   * (npol*nchan*nstation) +
+             ant * (npol*nchan) +
              ch  * (npol) +
              pol;
-        (*g)->W[Wi] = complex_weights_array[ant][ch][pol];
+        (*g)->W[Wi] = complex_weights_array[p][ant][ch][pol];
 
         for (pol2 = 0; pol2 < npol; pol2++)
         {
             Ji = Wi*npol + pol2;
-            (*g)->J[Ji] = invJi[ant][ch][pol][pol2];
+            (*g)->J[Ji] = invJi[p][ant][ch][pol][pol2];
         }
     }
 
     // Copy the data to the device
-    gpuErrchk(cudaMemcpy( (*g)->d_data, data, (*g)->data_size, cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpy( (*g)->d_data, data,    (*g)->data_size, cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( (*g)->d_W,    (*g)->W, (*g)->W_size,    cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( (*g)->d_J,    (*g)->J, (*g)->J_size,    cudaMemcpyHostToDevice ));
 
     // Call the kernels
-    dim3 samples_chan(opts->sample_rate, nchan);
+    dim3 samples_chan(opts->sample_rate, nchan, npointing);
     beamform_kernel<<<samples_chan, NSTATION>>>(
             (*g)->d_data, (*g)->d_W, (*g)->d_J, invw, (*g)->d_Bd, (*g)->d_coh, (*g)->d_incoh );
     //cudaDeviceSynchronize();
@@ -375,7 +380,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
 
     // now do the same for the coherent beam
     dim3 chan_stokes(nchan, outpol_coh);
-    flatten_bandpass_C_kernel<<<1, chan_stokes>>>((*g)->d_coh, opts->sample_rate);
+    flatten_bandpass_C_kernel<<<npointing, chan_stokes>>>((*g)->d_coh, opts->sample_rate);
 
     //cudaDeviceSynchronize(); // Memcpy acts as a synchronize step so don't sync here
     // Copy the results back into host memory
@@ -389,6 +394,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     int offset, i;
     offset = file_no % 3 * opts->sample_rate;
 
+    for (p   = 0; p   < npointing     ; p++  )
     for (s   = 0; s   < opts->sample_rate; s++  )
     for (ch  = 0; ch  < nchan            ; ch++ )
     for (pol = 0; pol < npol             ; pol++)
@@ -397,21 +403,21 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
             ch * (npol)       +
             pol;
 
-        detected_beam[s+offset][ch][pol] = (*g)->Bd[i];
+        detected_beam[p][s+offset][ch][pol] = (*g)->Bd[i];
     }
 
 }
 
 void malloc_formbeam( struct gpu_formbeam_arrays **g, unsigned int sample_rate,
-        int nstation, int nchan, int npol, int outpol_coh, int outpol_incoh )
+        int nstation, int nchan, int npol, int outpol_coh, int outpol_incoh, int npointing)
 {
     // Calculate array sizes for host and device
-    (*g)->coh_size   = sample_rate * outpol_coh   * nchan * sizeof(float);
+    (*g)->coh_size   = npointing * sample_rate * outpol_coh   * nchan * sizeof(float);
     (*g)->incoh_size = sample_rate * outpol_incoh * nchan * sizeof(float);
-    (*g)->data_size  = sample_rate * nstation * nchan * npol * sizeof(uint8_t);
-    (*g)->Bd_size    = sample_rate * nchan * npol * sizeof(ComplexDouble);
-    (*g)->W_size     = nstation * nchan * npol * sizeof(ComplexDouble);
-    (*g)->J_size     = nstation * nchan * npol * npol * sizeof(ComplexDouble);
+    (*g)->data_size  = npointing * sample_rate * nstation * nchan * npol * sizeof(uint8_t);
+    (*g)->Bd_size    = npointing * sample_rate * nchan * npol * sizeof(ComplexDouble);
+    (*g)->W_size     = npointing * nstation * nchan * npol * sizeof(ComplexDouble);
+    (*g)->J_size     = npointing * nstation * nchan * npol * npol * sizeof(ComplexDouble);
 
     // Allocate host memory
     (*g)->W  = (ComplexDouble *)malloc( (*g)->W_size );

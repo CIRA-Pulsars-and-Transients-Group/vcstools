@@ -91,17 +91,18 @@ struct make_beam_opts {
 
 /* Running get_delays from within make_beam */
 void get_delays(
-        char                  *dec_ddmmss,
-        char                  *ra_hhmmss,
+        // an array of pointings [pointing][ra/dec][characters]
+        char                   pointing_array[][2][64],
+        int                    npointing, // number of pointings 
         long int               frequency,
         struct                 calibration *cal,
         float                  samples_per_sec,
         char                  *time_utc,
         double                 sec_offset,
-        struct delays         *delay_vals,
+        struct delays          delay_vals[],
         struct metafits_info  *mi,
-        ComplexDouble       ***complex_weights_array,  // output
-        ComplexDouble      ****invJi                   // output
+        ComplexDouble      ****complex_weights_array,  // output
+        ComplexDouble     *****invJi                   // output
 );
 
 
