@@ -49,26 +49,26 @@ void free_formbeam( struct gpu_formbeam_arrays **g );
                             AP2REC(a,p) * (NINC)                + \
                             ANT2INC(a))
 
-#define W_IDX(p,c,a,pol,nc)   ((p) * (NPOL*(nc)*(NANT))+ \
-                               (a) * (NPOL*(nc)) + \
-                               (c) * (NPOL)      + \
+#define W_IDX(p,a,c,pol,nc)   ((p) * (NPOL*(nc)*NANT)  + \
+                               (a) * (NPOL*(nc))       + \
+                               (c) * (NPOL)            + \
                                (pol))
 
-#define J_IDX(p,c,a,p1,p2,nc) ((p) * (NPOL*(nc)*(NANT))+ \
-                               (a)  * (NPOL*NPOL*(nc)) + \
-                               (c)  * (NPOL*NPOL)      + \
-                               (p1) * (NPOL)           + \
+#define J_IDX(p,a,c,p1,p2,nc) ((p) *  (NPOL*NPOL*(nc)*NANT) + \
+                               (a)  * (NPOL*NPOL*(nc))      + \
+                               (c)  * (NPOL*NPOL)           + \
+                               (p1) * (NPOL)                + \
                                (p2))
 
-#define B_IDX(p,s,c,pol,nc) ((p)  * (NPOL*(nc)*(NANT)) + \
-                           (s)  * (NPOL*(nc)) + \
-                           (c)  * (NPOL)      + \
-                           (pol))
+#define B_IDX(p,s,c,pol,ns,nc) ((p)  * (NPOL*(nc)*(ns))   + \
+                                (s)  * (NPOL*(nc))        + \
+                                (c)  * (NPOL)             + \
+                                (pol))
  
-#define C_IDX(p,s,c,st,nc)  ((p)  * ((nc)*NSTOKES*(NANT)) + \
-                             (s)  * ((nc)*NSTOKES) + \
-                             (st) * (nc)         + \
-                             (c))
+#define C_IDX(p,s,st,c,ns,nc)  ((p)  * ((nc)*NSTOKES*(ns)) + \
+                                (s)  * ((nc)*NSTOKES)      + \
+                                (st) *  (nc)               + \
+                                (c))
 
 #define I_IDX(s,c,nc)  ((s)*(nc) + (c))
 

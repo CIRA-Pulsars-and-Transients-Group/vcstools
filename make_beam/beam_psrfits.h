@@ -10,7 +10,7 @@
 #include "psrfits.h"
 #include "mycomplex.h"
 
-void printf_psrfits( struct psrfits pf[], int p );  /* Prints values in psrfits struct to stdout */
+void printf_psrfits( struct psrfits *pf );  /* Prints values in psrfits struct to stdout */
 
 void populate_psrfits_header(
         struct psrfits  pf[],
@@ -29,7 +29,7 @@ void populate_psrfits_header(
 
 void correct_psrfits_stt( struct psrfits *pf );
 
-void psrfits_write_second( struct psrfits pf[], float *data_buffer, int nchan,
+void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
         int outpol, int p);
 
 

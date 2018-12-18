@@ -262,6 +262,7 @@ int main(int argc, char **argv)
     float *data_buffer_uvdif1 = NULL;
     float *data_buffer_uvdif2 = NULL;
 
+    fprintf( stderr, "Data buffer length: %d\n", npointing * nchan * outpol_coh * pf[0].hdr.nsblk);
     data_buffer_coh1   = create_data_buffer_psrfits( npointing * nchan *
                                                      outpol_coh * pf[0].hdr.nsblk );
     data_buffer_coh2   = create_data_buffer_psrfits( npointing * nchan * 
@@ -337,7 +338,7 @@ int main(int argc, char **argv)
     int exit_check = 0;
     // Sets up a parallel for loop for each of the available thread and 
     // assigns a section to each thread
-    #pragma omp parallel for shared(read_check, calc_check, write_check) private(thread_no, file_no, p, exit_check, gf, gi, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif, data_buffer_uvdif, fil_ramps)
+    #pragma omp parallel for shared(read_check, calc_check, write_check, pf) private( thread_no, file_no, p, exit_check, gf, gi, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif, data_buffer_uvdif, fil_ramps)
     for (thread_no = 0; thread_no < nthread; ++thread_no)
     {
         // Read section
@@ -531,9 +532,9 @@ int main(int argc, char **argv)
                 fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n", NOW-begintime, file_no+1, nfiles, p, npointing );
 
                 if (opts.out_coh)
-                    psrfits_write_second( pf, data_buffer_coh, nchan, outpol_coh, p );
+                    psrfits_write_second( &pf[p], data_buffer_coh, nchan, outpol_coh, p );
                 if (opts.out_incoh && p == 0)
-                    psrfits_write_second( pf_incoh, data_buffer_incoh, nchan, outpol_incoh, p );
+                    psrfits_write_second( &pf_incoh[p], data_buffer_incoh, nchan, outpol_incoh, p );
                 if (opts.out_vdif)
                     vdif_write_second( vf, &vhdr, data_buffer_vdif, &vgain, p );
                 if (opts.out_uvdif)
