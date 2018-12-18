@@ -471,11 +471,11 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
         for c in cal_list:
             if ( c[u'observationid'] == int(args.cal_id) ) and ( c[u'caltype'] == calibrator_type ):
                 cal_already_created = True
-                cal_db_id = c[u'id']
+                cal_db_id = int(c[u'id'])
         if not cal_already_created:
-            cal_db_id = client.calibrator_create(web_address, auth,
+            cal_db_id = int(client.calibrator_create(web_address, auth,
                                                   observationid = str(args.cal_id),
-                                                  caltype = calibrator_type)[u'id']
+                                                  caltype = calibrator_type)[u'id'])
     else:
         cal_db_id = None
  
@@ -486,7 +486,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
                                subband = str(subbands), 
                                coherent = coh,
                                observation_type = int(obstype),
-                               calibrator = int(cal_db_id),
+                               calibrator = cal_db_id,
                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
                                flux = S_mean,
                                flux_error = u_S_mean,
@@ -504,7 +504,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
                                subband = str(subbands), 
                                coherent = coh,
                                observation_type = int(obstype),
-                               calibrator = int(cal_db_id),
+                               calibrator = cal_db_id,
                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
                                flux = S_mean,
                                flux_error = u_S_mean,
