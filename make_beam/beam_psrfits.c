@@ -111,11 +111,15 @@ void populate_psrfits_header(
     }
 
 
-    fitsfile *fptr = NULL;
-    int status     = 0;
+    fitsfile *fptr;
+    int status;
     
     for ( int p=0; p<npointing; p++)
     {
+        fptr  = NULL;
+        status = 0;
+    
+
         fits_open_file(&fptr, metafits, READONLY, &status);
         fits_read_key(fptr, TSTRING, "PROJECT", pf[p].hdr.project_id, NULL, &status);
         fits_close_file(fptr, &status);
@@ -254,7 +258,6 @@ void populate_psrfits_header(
             {
                 sprintf(pf[p].basefilename, "%s_%s_%s_%s_ch%03d",
                         pf[p].hdr.project_id, pf[p].hdr.ra_str, pf[p].hdr.dec_str, pf[p].hdr.source, ch);
-                printf("File name: %s\n",pf[p].basefilename);
                 //printf("Each part: %s\n%s\n%s\n%s\n",pf[p].hdr.project_id, pf[p].hdr.ra_str, pf[p].hdr.dec_str, pf[p].hdr.source, ch);
             }
             else
@@ -308,26 +311,19 @@ void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
 //    }
     // pointing_offset makes the buffer start at the memory assigned the pointing
     int pointing_offset = p * sec_size;
-    fprintf(stderr, "p: %d poffest: %d   sec_size: %d\n", p, pointing_offset, sec_size);
     float *pointing_buffer  = malloc( sec_size * sizeof(float) );
     memcpy(pointing_buffer, data_buffer + pointing_offset, sec_size * sizeof(float) );
     float_to_unit8( pointing_buffer, sec_size, out_buffer_8);
-    fprintf(stderr, "p: %d first p buffer %f\n", p, pointing_buffer[0]);
-    fprintf(stderr, "p: %d last p buffer %f\n", p, pointing_buffer[sec_size - 2]);
-    //float_to_unit8( data_buffer, sec_size, out_buffer_8);
     
-    fprintf(stderr, "p: %d memcpy to struct\n", p);
     memcpy( pf->sub.data, out_buffer_8, pf->sub.bytes_per_subint );
-    fprintf(stderr, "p: %d write\n", p);
-    memset(pf->filename,0,strlen(pf->filename));
-    memset(pf->hdr.poln_order,0,strlen(pf->hdr.poln_order));
-    //printf_psrfits( pf);
+    //memset(pf->filename,0,strlen(pf->filename));
+    //memset(pf->hdr.poln_order,0,strlen(pf->hdr.poln_order));
+    
     if (psrfits_write_subint(pf) != 0)
     {
         fprintf(stderr, "error: Write subint failed. File exists?\n");
         exit(EXIT_FAILURE);
     }
-    fprintf(stderr, "p: %d done write\n", p);
     pf->sub.offs = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
     pf->sub.lst += pf->sub.tsubint;
     

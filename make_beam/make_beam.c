@@ -141,7 +141,7 @@ int main(int argc, char **argv)
     {
        strcpy( pointing_array[p][0], RAs[p] );
        strcpy( pointing_array[p][1], DECs[p] );
-       fprintf(stderr, "Num: %i  RA: %s  Dec: %s\n", p, pointing_array[p][0], pointing_array[p][1]);
+       fprintf(stderr, " Pointing Num: %i  RA: %s  Dec: %s\n", p, pointing_array[p][0], pointing_array[p][1]);
     }
 
     // Allocate memory
@@ -187,12 +187,17 @@ int main(int argc, char **argv)
     );
 
     // Create structures for holding header information
-    struct psrfits  pf[npointing];
-    struct psrfits  pf_incoh[1];
+    struct psrfits  *pf;
+    struct psrfits  *pf_incoh;
+    pf = (struct psrfits *)malloc(npointing * sizeof(struct psrfits));
+    pf_incoh = (struct psrfits *)malloc(1 * sizeof(struct psrfits));
     vdif_header     vhdr;
     vdif_header     uvhdr;
-    struct vdifinfo vf[npointing];
-    struct vdifinfo uvf[npointing];
+    struct vdifinfo *vf;
+    struct vdifinfo *uvf;
+    vf = (struct vdifinfo *)malloc(npointing * sizeof(struct vdifinfo));
+    uvf = (struct vdifinfo *)malloc(npointing * sizeof(struct vdifinfo));
+
 
     // Create structures for the PFB filter coefficients
     int ntaps    = 12;
@@ -218,11 +223,6 @@ int main(int argc, char **argv)
     populate_psrfits_header( pf_incoh, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
             opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals, mi, 1);
-
-    // Use the tile pointing instead of the pencil beam pointing
-    // TO DO: Move this to populate_psrfits_header?
-    pf_incoh[0].hdr.ra2000  = mi.tile_pointing_ra;
-    pf_incoh[0].hdr.dec2000 = mi.tile_pointing_dec;
 
     populate_vdif_header( vf, &vhdr, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
@@ -262,14 +262,13 @@ int main(int argc, char **argv)
     float *data_buffer_uvdif1 = NULL;
     float *data_buffer_uvdif2 = NULL;
 
-    fprintf( stderr, "Data buffer length: %d\n", npointing * nchan * outpol_coh * pf[0].hdr.nsblk);
     data_buffer_coh1   = create_data_buffer_psrfits( npointing * nchan *
                                                      outpol_coh * pf[0].hdr.nsblk );
     data_buffer_coh2   = create_data_buffer_psrfits( npointing * nchan * 
                                                      outpol_coh * pf[0].hdr.nsblk );
     data_buffer_incoh1 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
     data_buffer_incoh2 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
-    data_buffer_vdif1  = create_data_buffer_vdif( &vf[1], npointing );
+    data_buffer_vdif1  = create_data_buffer_vdif( &vf[1], npointing );//should this be [0]?
     data_buffer_vdif2  = create_data_buffer_vdif( &vf[1], npointing );
     data_buffer_uvdif1 = create_data_buffer_vdif( &uvf[1], npointing );
     data_buffer_uvdif2 = create_data_buffer_vdif( &uvf[1], npointing );
@@ -331,7 +330,7 @@ int main(int argc, char **argv)
         #pragma omp master
         {
             nthread = omp_get_num_threads();
-            fprintf( stderr, "Number of threads: %d\n", nthread);
+            fprintf( stderr, "[%f]  Number of CPU threads: %d\n", NOW-begintime, nthread);
         }
     }
     int thread_no;
@@ -344,7 +343,7 @@ int main(int argc, char **argv)
         // Read section
         if (thread_no == 0)
         {
-            fprintf( stderr, "Read  section start on thread: %d\n", thread_no);
+            //fprintf( stderr, "Read  section start on thread: %d\n", thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
                 //Work out which memory allocation it's requires
@@ -385,7 +384,7 @@ int main(int argc, char **argv)
         // Calc section
         if (thread_no == 1)
         {
-            fprintf( stderr, "Calc  section start on thread: %d\n", thread_no);
+            //fprintf( stderr, "Calc  section start on thread: %d\n", thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
                 //Work out which memory allocation it's requires
@@ -455,10 +454,10 @@ int main(int argc, char **argv)
 
                 fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime, file_no+1, nfiles);
 
-                for (i = 0; i < npointing * nchan * outpol_coh * pf[0].hdr.nsblk; i++)
+                for (i = 0; i < npointing * nchan * outpol_coh * opts.sample_rate; i++)
                     data_buffer_coh[i] = 0.0;
 
-                for (i = 0; i < npointing * nchan * outpol_incoh * pf_incoh[0].hdr.nsblk; i++)
+                for (i = 0; i < npointing * nchan * outpol_incoh * opts.sample_rate; i++)
                     data_buffer_incoh[i] = 0.0;
 
                 #ifdef HAVE_CUDA
@@ -498,10 +497,10 @@ int main(int argc, char **argv)
             }
         }    
         // Write section
-        if (thread_no > 1 && thread_no < npointing + 2)
+        if (thread_no == 2) //(thread_no > 1 && thread_no < npointing + 2)
         {
             p = thread_no - 2;
-            fprintf( stderr, "Write section p:%d started on thread: %d\n", p, thread_no);
+            //fprintf( stderr, "Write section p:%d started on thread: %d\n", p, thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
                 //Work out which memory allocation it's requires
@@ -529,19 +528,24 @@ int main(int argc, char **argv)
                     if (exit_check == 1) break;
                 }
                 
-                fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n", NOW-begintime, file_no+1, nfiles, p, npointing );
+                for ( p = 0; p < npointing; p++)
+                {
+                    //printf_psrfits(&pf[p]);
+                    fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n",
+                            NOW-begintime, file_no+1, nfiles, p+1, npointing );
 
-                if (opts.out_coh)
-                    psrfits_write_second( &pf[p], data_buffer_coh, nchan, outpol_coh, p );
-                if (opts.out_incoh && p == 0)
-                    psrfits_write_second( &pf_incoh[p], data_buffer_incoh, nchan, outpol_incoh, p );
-                if (opts.out_vdif)
-                    vdif_write_second( vf, &vhdr, data_buffer_vdif, &vgain, p );
-                if (opts.out_uvdif)
-                    vdif_write_second( uvf, &uvhdr, data_buffer_uvdif, &ugain, p );
+                    if (opts.out_coh)
+                        psrfits_write_second( &pf[p], data_buffer_coh, nchan, outpol_coh, p );
+                    if (opts.out_incoh && p == 0)
+                        psrfits_write_second( &pf_incoh[p], data_buffer_incoh, nchan, outpol_incoh, p );
+                    if (opts.out_vdif)
+                        vdif_write_second( vf, &vhdr, data_buffer_vdif, &vgain, p );
+                    if (opts.out_uvdif)
+                        vdif_write_second( uvf, &uvhdr, data_buffer_uvdif, &ugain, p );
 
-                // Records that this write section is complete
-                write_check[file_no][p] = 1;
+                    // Records that this write section is complete
+                    write_check[file_no][p] = 1;
+                }
             }
         }
     }
@@ -554,7 +558,7 @@ int main(int argc, char **argv)
     destroy_complex_weights( complex_weights_array, npointing, nstation, nchan );
     destroy_invJi( invJi, npointing, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, npointing, 3*opts.sample_rate, nchan );
-
+    
     int ch;
     for (ch = 0; ch < nchan; ch++)
     {
@@ -563,23 +567,34 @@ int main(int argc, char **argv)
     }
     free( fil_ramps1 );
     free( fil_ramps2 );
-
+    fprintf(stderr, "free mi\n");
     destroy_metafits_info( &mi );
-    free( data_buffer_coh    );
+    //free( data_buffer_coh    );
+    fprintf(stderr, "free coh\n");
     free( data_buffer_coh1   );
     free( data_buffer_coh2   );
-    free( data_buffer_incoh  );
-    free( data_buffer_incoh1 );
-    free( data_buffer_incoh2 );
-    free( data_buffer_vdif   );
-    free( data_buffer_vdif1  );
-    free( data_buffer_vdif2  );
-    free( data_buffer_uvdif  );
-    free( data_buffer_uvdif1 );
-    free( data_buffer_uvdif2 );
+    //free( data_buffer_incoh  );
+    //free( data_buffer_incoh1 );
+    //free( data_buffer_incoh2 );
+    //free( data_buffer_vdif   );
+    fprintf(stderr, "free vdif\n");
+    if (opts.out_vdif)
+    {
+        free( data_buffer_vdif1  );
+        free( data_buffer_vdif2  );
+    }
+    //free( data_buffer_uvdif  );
+    fprintf(stderr, "free uvdif\n");
+    if (opts.out_uvdif)
+    {
+        free( data_buffer_uvdif1 );
+        free( data_buffer_uvdif2 );
+    }
+    fprintf(stderr, "free data\n");
     free( data1 );
     free( data2 );
-
+    
+    fprintf(stderr, "free opts\n");
     free( opts.obsid        );
     free( opts.time_utc     );
     free( opts.pointings    );
@@ -587,7 +602,8 @@ int main(int argc, char **argv)
     free( opts.metafits     );
     free( opts.rec_channel  );
     free( opts.cal.filename );
-
+    
+    fprintf(stderr, "free pf_incoh\n");
     if (opts.out_incoh)
     {
         free( pf_incoh[0].sub.data        );
@@ -596,6 +612,7 @@ int main(int argc, char **argv)
         free( pf_incoh[0].sub.dat_offsets );
         free( pf_incoh[0].sub.dat_scales  );
     }
+    fprintf(stderr, "free pf\n");
     for (p = 0; p < npointing; p++)
     {
         if (opts.out_coh)
@@ -617,7 +634,7 @@ int main(int argc, char **argv)
             free( uvf[p].b_offsets );
         }
     }
-
+    fprintf(stderr, "free gf\n");
     #ifdef HAVE_CUDA
     free_formbeam( &gf1 );
     free_formbeam( &gf2 );
@@ -944,7 +961,6 @@ char **create_filenames( struct make_beam_opts *opts )
                  nfiles, opts->begin, opts->end);
         exit(EXIT_FAILURE);
     }
-    fprintf( stderr, "%d\n", nfiles);
     // Allocate memory for the file name list
     char **filenames = NULL;
     filenames = (char **)malloc( nfiles*sizeof(char *) );
@@ -1109,6 +1125,10 @@ void destroy_detected_beam( ComplexDouble ****array, int npointing, int nsamples
 float *create_data_buffer_psrfits( size_t size )
 {
     float *ptr = (float *)malloc( size * sizeof(float) );
+    /*float *ptr;
+    cudaError_t status = cudaMallocHost((void**)&ptr, size * sizeof(float) );
+    if (status != cudaSuccess)
+        printf("Error allocating pinned host memory\n");*/
     return ptr;
 }
 

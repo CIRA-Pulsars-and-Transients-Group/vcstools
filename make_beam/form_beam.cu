@@ -273,12 +273,11 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     // ... figure it out later.
 
     // Translate GPU block/thread numbers into meaningful names
-    int chan = threadIdx.x; /* The (c)hannel number */
-    int nchan = blockDim.x; /* The total number of channels */
-    int p = blockDim.y;
+    int chan   = threadIdx.x; /* The (c)hannel number */
+    int nchan  = blockDim.x; /* The total number of channels */
+    int p      = blockIdx.x;
     int stokes = threadIdx.y;
-//    int nstokes = blockDim.y;
-
+    //int nstokes = blockDim.y;
     float band;
 
     int new_var = 32; /* magic number */
@@ -304,7 +303,6 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     }
 
 }
-
 
 
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
@@ -365,14 +363,38 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
         }
     }
 
+    // events for timing
+    cudaEvent_t startEvent, stopEvent; 
+    cudaEventCreate(&startEvent);
+    cudaEventCreate(&stopEvent);
+    float time;
+
     // Copy the data to the device
+    cudaEventRecord(startEvent, 0);
     gpuErrchk(cudaMemcpy( (*g)->d_data, data,    (*g)->data_size, cudaMemcpyHostToDevice ));
+    cudaEventRecord(stopEvent, 0);
+    cudaEventSynchronize(stopEvent);
+    cudaEventElapsedTime(&time, startEvent, stopEvent);
+    printf(" d_data memmcpy time : %7.3f ms  transfer: %7.3f GB/s \n",time, (*g)->data_size * 1e-6 / time);
+
+    cudaEventRecord(startEvent, 0);
     gpuErrchk(cudaMemcpy( (*g)->d_W,    (*g)->W, (*g)->W_size,    cudaMemcpyHostToDevice ));
+    cudaEventRecord(stopEvent, 0);
+    cudaEventSynchronize(stopEvent);
+    cudaEventElapsedTime(&time, startEvent, stopEvent);
+    printf(" d_w    memmcpy time : %7.3f ms  transfer: %7.3f GB/s \n",time, (*g)->W_size * 1e-6 / time);
+
+    cudaEventRecord(startEvent, 0);
     gpuErrchk(cudaMemcpy( (*g)->d_J,    (*g)->J, (*g)->J_size,    cudaMemcpyHostToDevice ));
+    cudaEventRecord(stopEvent, 0);
+    cudaEventSynchronize(stopEvent);
+    cudaEventElapsedTime(&time, startEvent, stopEvent);
+    printf(" d_j    memmcpy time : %7.3f ms  transfer: %7.3f GB/s \n",time, (*g)->J_size * 1e-6 / time);
 
     // Call the kernels
-    printf("coh_size: %d\n", (*g)->coh_size);
     dim3 samples_chan(opts->sample_rate, nchan, npointing);
+    #define NOW  ((double)clock()/(double)CLOCKS_PER_SEC)
+    double begintime = NOW;
     beamform_kernel<<<samples_chan, NSTATION>>>(
             (*g)->d_data, (*g)->d_W, (*g)->d_J, invw, (*g)->d_Bd, (*g)->d_coh, (*g)->d_incoh );
     //cudaDeviceSynchronize();
@@ -381,25 +403,42 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     // we are using the "default" stream since we don't specify any stream id
 
     // 1 block per pointing direction, hence the 1 for now
-    flatten_bandpass_I_kernel<<<1, nchan>>>((*g)->d_incoh, opts->sample_rate);
+    // TODO check if these actually work, can't see them return values.
+    // The incoh kernal also takes 40 second for some reason so commenting out
+    //flatten_bandpass_I_kernel<<<1, nchan>>>((*g)->d_incoh, opts->sample_rate);
     //cudaDeviceSynchronize();
 
     // now do the same for the coherent beam
     dim3 chan_stokes(nchan, outpol_coh);
-    flatten_bandpass_C_kernel<<<npointing, chan_stokes>>>((*g)->d_coh, opts->sample_rate);
-
+    //flatten_bandpass_C_kernel<<<npointing, chan_stokes>>>((*g)->d_coh, opts->sample_rate);
     //cudaDeviceSynchronize(); // Memcpy acts as a synchronize step so don't sync here
     // Copy the results back into host memory
+    cudaEventRecord(startEvent, 0);
     gpuErrchk(cudaMemcpy( (*g)->Bd, (*g)->d_Bd,    (*g)->Bd_size,    cudaMemcpyDeviceToHost ));
-    gpuErrchk(cudaMemcpy( incoh,    (*g)->d_incoh, (*g)->incoh_size, cudaMemcpyDeviceToHost ));
-    gpuErrchk(cudaMemcpy( coh,      (*g)->d_coh,   (*g)->coh_size,   cudaMemcpyDeviceToHost ));
+    cudaEventRecord(stopEvent, 0);
+    cudaEventSynchronize(stopEvent);
+    cudaEventElapsedTime(&time, startEvent, stopEvent);
+    printf(" d_Bd   memmcpy time : %7.3f ms  transfer: %7.3f GB/s \n",time, (*g)->Bd_size * 1e-6 / time);
 
+    cudaEventRecord(startEvent, 0);
+    gpuErrchk(cudaMemcpy( incoh,    (*g)->d_incoh, (*g)->incoh_size, cudaMemcpyDeviceToHost ));
+    cudaEventRecord(stopEvent, 0);
+    cudaEventSynchronize(stopEvent);
+    cudaEventElapsedTime(&time, startEvent, stopEvent);
+    printf(" incoh  memmcpy time : %7.3f ms  transfer: %7.3f GB/s \n",time, (*g)->incoh_size * 1e-6 / time);
+
+    cudaEventRecord(startEvent, 0);
+    gpuErrchk(cudaMemcpy( coh,      (*g)->d_coh,   (*g)->coh_size,   cudaMemcpyDeviceToHost ));
+    cudaEventRecord(stopEvent, 0);
+    cudaEventSynchronize(stopEvent);
+    cudaEventElapsedTime(&time, startEvent, stopEvent);
+    printf(" coh    memmcpy time : %7.3f ms  transfer: %7.3f GB/s \n",time, (*g)->coh_size * 1e-6 / time);
     // Copy the data back from Bd back into the detected_beam array
     // Make sure we put it back into the correct half of the array, depending
     // on whether this is an even or odd second.
     int offset, i;
     offset = file_no % 3 * opts->sample_rate;
- 
+    
     for (p   = 0; p   < npointing        ; p++  )
     for (s   = 0; s   < opts->sample_rate; s++  )
     for (ch  = 0; ch  < nchan            ; ch++ )
@@ -438,6 +477,9 @@ void malloc_formbeam( struct gpu_formbeam_arrays **g, unsigned int sample_rate,
     gpuErrchk(cudaMalloc( (void **)&(*g)->d_data,  (*g)->data_size ));
     gpuErrchk(cudaMalloc( (void **)&(*g)->d_coh,   (*g)->coh_size ));
     gpuErrchk(cudaMalloc( (void **)&(*g)->d_incoh, (*g)->incoh_size ));
+
+    printf("%d B GPU memory allocated\n", (*g)->W_size + (*g)->J_size + (*g)->Bd_size + 
+                                      (*g)->data_size + (*g)->coh_size + (*g)->incoh_size );
 }
 
 void free_formbeam( struct gpu_formbeam_arrays **g )
