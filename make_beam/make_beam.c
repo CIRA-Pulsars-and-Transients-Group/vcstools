@@ -268,10 +268,10 @@ int main(int argc, char **argv)
                                                      outpol_coh * pf[0].hdr.nsblk );
     data_buffer_incoh1 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
     data_buffer_incoh2 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
-    data_buffer_vdif1  = create_data_buffer_vdif( &vf[1], npointing );//should this be [0]?
-    data_buffer_vdif2  = create_data_buffer_vdif( &vf[1], npointing );
-    data_buffer_uvdif1 = create_data_buffer_vdif( &uvf[1], npointing );
-    data_buffer_uvdif2 = create_data_buffer_vdif( &uvf[1], npointing );
+    data_buffer_vdif1  = create_data_buffer_vdif( &vf[0], npointing );
+    data_buffer_vdif2  = create_data_buffer_vdif( &vf[0], npointing );
+    data_buffer_uvdif1 = create_data_buffer_vdif( &uvf[0], npointing );
+    data_buffer_uvdif2 = create_data_buffer_vdif( &uvf[0], npointing );
 
     /* Allocate host and device memory for the use of the cu_form_beam function */
     // Declaring pointers to the structs so the memory can be alternated
@@ -323,6 +323,8 @@ int main(int argc, char **argv)
         for (p=0;p<npointing;p++) write_check[file_no][p] = 0;//False
     } 
     
+    // Set up timing for each section
+    long read_total_time, calc_total_time, write_total_time;
 
     int nthread;
     #pragma omp parallel 
@@ -368,6 +370,7 @@ int main(int argc, char **argv)
                     if (exit_check) break; 
                 }
                 // if (file_no > 1) fprintf( stderr, "read_check: %d  &&  calc_check: %d\n", read_check[file_no - 1], calc_check[file_no - 2]);
+                clock_t start = clock();
                 #pragma omp critical (read_queue)
                 {
                     // Read in data from next file
@@ -378,6 +381,7 @@ int main(int argc, char **argv)
                     // Records that this read section is complete
                     read_check[file_no] = 1;
                 }
+                read_total_time += clock() - start;
             }
         }
 
@@ -436,6 +440,7 @@ int main(int argc, char **argv)
                     }
                     if (exit_check == 1) break; 
                 }
+                clock_t start = clock();
                 // Get the next second's worth of phases / jones matrices, if needed
                 // fprintf( stderr, "[%f]  Calculating delays\n", NOW-begintime);
                 // TODO This should be fine for now but may need to manage this better for multipixel
@@ -459,7 +464,7 @@ int main(int argc, char **argv)
 
                 for (i = 0; i < npointing * nchan * outpol_incoh * opts.sample_rate; i++)
                     data_buffer_incoh[i] = 0.0;
-
+                
                 #ifdef HAVE_CUDA
                 cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                               npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
@@ -494,6 +499,7 @@ int main(int argc, char **argv)
 
                 // Records that this calc section is complete
                 calc_check[file_no] = 1;
+                calc_total_time += clock() - start;
             }
         }    
         // Write section
@@ -528,6 +534,8 @@ int main(int argc, char **argv)
                     if (exit_check == 1) break;
                 }
                 
+                clock_t start = clock();
+
                 for ( p = 0; p < npointing; p++)
                 {
                     //printf_psrfits(&pf[p]);
@@ -546,11 +554,21 @@ int main(int argc, char **argv)
                     // Records that this write section is complete
                     write_check[file_no][p] = 1;
                 }
+                write_total_time += clock() - start;
             }
         }
     }
 
     fprintf( stderr, "[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
+    int read_ms = read_total_time * 1000 / CLOCKS_PER_SEC;
+    fprintf( stderr, "[%f]  Total read  processing time: %3d.%3d s\n", 
+                NOW-begintime, read_ms/1000, read_ms%1000);
+    int calc_ms = calc_total_time * 1000 / CLOCKS_PER_SEC;
+    fprintf( stderr, "[%f]  Total calc  processing time: %3d.%3d s\n", 
+                NOW-begintime, calc_ms/1000, calc_ms%1000);
+    int write_ms = write_total_time * 1000 / CLOCKS_PER_SEC;
+    fprintf( stderr, "[%f]  Total write processing time: %3d.%3d s\n", 
+                NOW-begintime, write_ms/1000, write_ms%1000);
     fprintf( stderr, "[%f]  Starting clean-up\n", NOW-begintime);
 
     // Free up memory
