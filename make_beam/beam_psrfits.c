@@ -257,8 +257,8 @@ void populate_psrfits_header(
             if (is_coherent)
             {
                 sprintf(pf[p].basefilename, "%s_%s_%s_%s_ch%03d",
-                        pf[p].hdr.project_id, pf[p].hdr.ra_str, pf[p].hdr.dec_str, pf[p].hdr.source, ch);
-                //printf("Each part: %s\n%s\n%s\n%s\n",pf[p].hdr.project_id, pf[p].hdr.ra_str, pf[p].hdr.dec_str, pf[p].hdr.source, ch);
+                        pf[p].hdr.project_id, pf[p].hdr.source, pf[p].hdr.ra_str, 
+                        pf[p].hdr.dec_str, ch);
             }
             else
             {

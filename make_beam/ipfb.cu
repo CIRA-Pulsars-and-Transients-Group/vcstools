@@ -123,7 +123,6 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
     if (file_no % 3 == 0) start_s = 3*nsamples - (*g)->ntaps;
     else if (file_no % 3 == 1) start_s = nsamples - (*g)->ntaps;
     else start_s = 2*nsamples - (*g)->ntaps;
-
     int p, s_in, s, ch, pol, i;
     for (p = 0; p < npointing; p++)
     for (s_in = 0; s_in < nsamples + (*g)->ntaps; s_in++)
@@ -134,8 +133,10 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
             for (pol = 0; pol < npol; pol++)
             {
                 // Calculate the index for in_real and in_imag;
-                i = npol*nchan*s_in + npol*ch + pol;
-
+                i = npol*nchan*nsamples*p +
+                    npol*nchan*s_in + 
+                    npol*ch + 
+                    pol;
                 // Copy the data across - taking care of the file_no = 0 case
                 if (file_no == 0 && s_in < (*g)->ntaps)
                 {
@@ -150,11 +151,11 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
             }
         }
     }
-
+    
     // Copy the data to the device
     gpuErrchk(cudaMemcpy( (*g)->d_in_real, (*g)->in_real, (*g)->in_size, cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( (*g)->d_in_imag, (*g)->in_imag, (*g)->in_size, cudaMemcpyHostToDevice ));
-
+    
     // Call the kernel
     filter_kernel<<<nsamples, nchan*npol>>>( (*g)->d_in_real, (*g)->d_in_imag,
                                              (*g)->d_fils_real, (*g)->d_fils_imag,
@@ -198,7 +199,7 @@ void malloc_ipfb( struct gpu_ipfb_arrays **g, int ntaps, int nsamples,
     // beginning (from the previous second)
 
     (*g)->ntaps     = ntaps;
-    (*g)->in_size   = ((nsamples + ntaps) * nchan * npol) * sizeof(float);
+    (*g)->in_size   = npointing * ((nsamples + ntaps) * nchan * npol) * sizeof(float);
     (*g)->fils_size = npointing * nchan * fil_size * sizeof(float);
     (*g)->out_size  = npointing * nsamples * nchan * npol * 2 * sizeof(float);
 

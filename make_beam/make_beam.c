@@ -231,9 +231,9 @@ int main(int argc, char **argv)
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
             opts.chan_width, opts.rec_channel, delay_vals, npointing );
 
-    for ( p=0; p<npointing; p++ )
+    /*for ( p=0; p<npointing; p++ )
         sprintf( uvf[p].basefilename, "%s_%s_ch%03d_u",
-                 uvf[p].exp_name, uvf[p].scan_name, atoi(opts.rec_channel) );
+                 uvf[p].exp_name, uvf[p].scan_name, atoi(opts.rec_channel) );*/
 
     // To run asynchronously we require two memory allocations for each data 
     // set so multiple parts of the memory can be worked on at once.
@@ -489,8 +489,8 @@ int main(int argc, char **argv)
                 {
                     fprintf( stderr, "[%f]  Inverting the PFB (full)\n", NOW-begintime);
                     #ifdef HAVE_CUDA
-                    cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate,
-                            npointing, nchan, npol, &gi, data_buffer_uvdif );
+                    cu_invert_pfb_ord( detected_beam, file_no, npointing, 
+                            opts.sample_rate, nchan, npol, &gi, data_buffer_uvdif );
                     #else
                     invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan,
                             npol, fil_ramps, fil_size, data_buffer_uvdif );
@@ -547,9 +547,9 @@ int main(int argc, char **argv)
                     if (opts.out_incoh && p == 0)
                         psrfits_write_second( &pf_incoh[p], data_buffer_incoh, nchan, outpol_incoh, p );
                     if (opts.out_vdif)
-                        vdif_write_second( vf, &vhdr, data_buffer_vdif, &vgain, p );
+                        vdif_write_second( &vf[p], &vhdr, data_buffer_vdif, &vgain, p );
                     if (opts.out_uvdif)
-                        vdif_write_second( uvf, &uvhdr, data_buffer_uvdif, &ugain, p );
+                        vdif_write_second( &uvf[p], &uvhdr, data_buffer_uvdif, &ugain, p );
 
                     // Records that this write section is complete
                     write_check[file_no][p] = 1;

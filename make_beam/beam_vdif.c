@@ -24,7 +24,7 @@
 #include <omp.h>
 #endif
 
-void vdif_write_second( struct vdifinfo vf[], vdif_header *vhdr,
+void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         float *data_buffer_vdif, float *gain, int p )
 {
 
@@ -34,46 +34,45 @@ void vdif_write_second( struct vdifinfo vf[], vdif_header *vhdr,
 
     get_mean_complex(
             (ComplexFloat *)data_buffer_vdif,
-            vf[p].sizeof_buffer/2.0,
+            vf->sizeof_buffer/2.0,
             &rmean, &imean, &cmean );
 
     stddev = get_std_dev_complex(
             (ComplexFloat *)data_buffer_vdif,
-            vf[p].sizeof_buffer/2.0 );
+            vf->sizeof_buffer/2.0 );
 
-    //if (fabsf(rmean) > 0.001)
-    if (1)
+    if (fabsf(rmean) > 0.001)
     {
         fprintf( stderr, "warning: vdif_write_second: significantly "
                          "non-zero mean (%f), adjusting data\n", rmean );
         unsigned int i;
-        for (i = 0; i < vf[p].sizeof_buffer/2; i++)
+        for (i = 0; i < vf->sizeof_buffer/2; i++)
         {
             data_buffer_vdif[2*i+0] -= CRealf(cmean);
             data_buffer_vdif[2*i+1] -= CImagf(cmean);
         }
     }
 
-    vf[p].b_scales[0] = CRealf(stddev);
-    vf[p].b_scales[1] = CRealf(stddev);
+    vf->b_scales[0] = CRealf(stddev);
+    vf->b_scales[1] = CRealf(stddev);
 
-    vf[p].got_scales = 1;
+    vf->got_scales = 1;
     set_level_occupancy(
             (ComplexFloat *)data_buffer_vdif,
-            vf[p].sizeof_buffer/2.0, gain);
+            vf->sizeof_buffer/2.0, gain);
 
     // Normalise
     normalise_complex(
             (ComplexFloat *)data_buffer_vdif,
-            vf[p].sizeof_buffer/2.0,
+            vf->sizeof_buffer/2.0,
             1.0/(*gain) );
 
     float *data_buffer_ptr = data_buffer_vdif;
     size_t offset_out_vdif = 0;
 
-    int8_t *out_buffer_8_vdif = (int8_t *)malloc(vf[p].block_size);
+    int8_t *out_buffer_8_vdif = (int8_t *)malloc(vf->block_size);
 
-    while  (offset_out_vdif < vf[p].block_size) {
+    while  (offset_out_vdif < vf->block_size) {
 
         // Add the current header
         memcpy( (out_buffer_8_vdif + offset_out_vdif), vhdr, VDIF_HEADER_SIZE );
@@ -82,18 +81,18 @@ void vdif_write_second( struct vdifinfo vf[], vdif_header *vhdr,
         offset_out_vdif += VDIF_HEADER_SIZE;
 
         // Convert from float to int8
-        float2int8_trunc( data_buffer_ptr, vf[p].sizeof_beam, -126.0, 127.0,
+        float2int8_trunc( data_buffer_ptr, vf->sizeof_beam, -126.0, 127.0,
                           (out_buffer_8_vdif + offset_out_vdif) );
         to_offset_binary( (out_buffer_8_vdif + offset_out_vdif),
-                          vf[p].sizeof_beam );
+                          vf->sizeof_beam );
 
-        offset_out_vdif += vf[p].frame_length - VDIF_HEADER_SIZE; // increment output offset
-        data_buffer_ptr += vf[p].sizeof_beam;
-        nextVDIFHeader( vhdr, vf[p].frame_rate );
+        offset_out_vdif += vf->frame_length - VDIF_HEADER_SIZE; // increment output offset
+        data_buffer_ptr += vf->sizeof_beam;
+        nextVDIFHeader( vhdr, vf->frame_rate );
     }
 
     // Write a full second's worth of samples
-    vdif_write_data( &vf[p], out_buffer_8_vdif );
+    vdif_write_data( vf, out_buffer_8_vdif );
 
     free( out_buffer_8_vdif );
 }
@@ -200,8 +199,8 @@ void populate_vdif_header(
         strncpy( vf[p].obs_mode,  "PSR", 8);
 
         // Determine the RA and Dec strings
-        double ra2000  = delay_vals->mean_ra  * DR2D;
-        double dec2000 = delay_vals->mean_dec * DR2D;
+        double ra2000  = delay_vals[p].mean_ra  * DR2D;
+        double dec2000 = delay_vals[p].mean_dec * DR2D;
 
         dec2hms(vf[p].ra_str,  ra2000/15.0, 0); // 0 = no '+' sign
         dec2hms(vf[p].dec_str, dec2000,     1); // 1 = with '+' sign
@@ -214,8 +213,10 @@ void populate_vdif_header(
 
         // The output file basename
         int ch = atoi(rec_channel);
-        sprintf( vf[p].basefilename, "%s_%s_ch%03d",
-                 vf[p].exp_name, vf[p].scan_name, ch);
+        printf( " basename: %s_%s_%s_%s_ch%03d\n",
+               vf[p].exp_name, vf[p].scan_name, vf[p].ra_str, vf[p].dec_str, ch);
+        sprintf( vf[p].basefilename, "%s_%s_%s_%s_ch%03d",
+                 vf[p].exp_name, vf[p].scan_name, vf[p].ra_str, vf[p].dec_str, ch);
     }
 }
 
