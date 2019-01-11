@@ -40,6 +40,8 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 #define NSTATION  128
 #define NPOL      2
 #define NSTOKES   4
+// maximum number of pointings (currently)
+#define NPOINTING 4
 
 
 
@@ -64,25 +66,26 @@ __global__ void beamform_kernel( uint8_t *data,
     int s   = blockIdx.x;  /* The (s)ample number */
     int ns  = gridDim.x;   /* The (n)umber of (s)amples (=10000)*/
     int c   = blockIdx.y;  /* The (c)hannel number */
-    int p   = blockIdx.z;  /* The (p)ointing number */
+    //int p   = blockIdx.z;  /* The (p)ointing number */
+    int p   = threadIdx.y;  /* The (p)ointing number */
     int nc  = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
     int ant = threadIdx.x; /* The (ant)enna number */
     
     // Calculate the beam and the noise floor
     __shared__ double Ia[NSTATION];
-    __shared__ ComplexDouble Bx[NSTATION], By[NSTATION];
+    __shared__ ComplexDouble Bx[NPOINTING][NSTATION], By[NPOINTING][NSTATION];
     ComplexDouble Dx, Dy;
     ComplexDouble WDx, WDy;
 
-    __shared__ ComplexDouble Nxx[NSTATION], Nxy[NSTATION],
-                             Nyx[NSTATION], Nyy[NSTATION];
+    __shared__ ComplexDouble Nxx[NPOINTING][NSTATION], Nxy[NPOINTING][NSTATION],
+                             Nyy[NPOINTING][NSTATION];//Nyx[NPOINTING][NSTATION]
 
 
     /* Fix from Maceij regarding NaNs in output when running on Athena, 13 April 2018.
        Apparently the different compilers and architectures are treating what were 
        unintialised variables very differently */
-    Bx[ant]  = CMaked( 0.0, 0.0 );
-    By[ant]  = CMaked( 0.0, 0.0 );
+    Bx[p][ant]  = CMaked( 0.0, 0.0 );
+    By[p][ant]  = CMaked( 0.0, 0.0 );
 
     Dx  = CMaked( 0.0, 0.0 );
     Dy  = CMaked( 0.0, 0.0 );
@@ -90,116 +93,125 @@ __global__ void beamform_kernel( uint8_t *data,
     WDx = CMaked( 0.0, 0.0 );
     WDy = CMaked( 0.0, 0.0 );
 
-    Nxx[ant] = CMaked( 0.0, 0.0 );
-    Nxy[ant] = CMaked( 0.0, 0.0 );
-    Nyx[ant] = CMaked( 0.0, 0.0 );
-    Nyy[ant] = CMaked( 0.0, 0.0 );
+    Nxx[p][ant] = CMaked( 0.0, 0.0 );
+    Nxy[p][ant] = CMaked( 0.0, 0.0 );
+    //Nyx[p][ant] = CMaked( 0.0, 0.0 );
+    Nyy[p][ant] = CMaked( 0.0, 0.0 );
 
-    Ia[ant] = 0.0;
+    if (p == 0) Ia[ant] = 0.0;
 
     // Calculate beamform products for each antenna, and then add them together
     // Calculate the coherent beam (B = J*W*D)
     Dx  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,0,nc)]);
     Dy  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,1,nc)]);
 
-    Ia[ant] = DETECT(Dx) + DETECT(Dy);
+    if (p == 0) Ia[ant] = DETECT(Dx) + DETECT(Dy);
 
     WDx = CMuld( W[W_IDX(p,ant,c,0,nc)], Dx );
     WDy = CMuld( W[W_IDX(p,ant,c,1,nc)], Dy );
 
-    Bx[ant] = CAddd( CMuld( J[J_IDX(p,ant,c,0,0,nc)], WDx ),
-                     CMuld( J[J_IDX(p,ant,c,1,0,nc)], WDy ) );
-    By[ant] = CAddd( CMuld( J[J_IDX(p,ant,c,0,1,nc)], WDx ),
-                     CMuld( J[J_IDX(p,ant,c,1,1,nc)], WDy ) );
+    Bx[p][ant] = CAddd( CMuld( J[J_IDX(p,ant,c,0,0,nc)], WDx ),
+                        CMuld( J[J_IDX(p,ant,c,1,0,nc)], WDy ) );
+    By[p][ant] = CAddd( CMuld( J[J_IDX(p,ant,c,0,1,nc)], WDx ),
+                        CMuld( J[J_IDX(p,ant,c,1,1,nc)], WDy ) );
 
-    Nxx[ant] = CMuld( Bx[ant], CConjd(Bx[ant]) );
-    Nxy[ant] = CMuld( Bx[ant], CConjd(By[ant]) );
-    Nyx[ant] = CMuld( By[ant], CConjd(Bx[ant]) );
-    Nyy[ant] = CMuld( By[ant], CConjd(By[ant]) );
+    Nxx[p][ant] = CMuld( Bx[p][ant], CConjd(Bx[p][ant]) );
+    Nxy[p][ant] = CMuld( Bx[p][ant], CConjd(By[p][ant]) );
+    //Nyx[p][ant] = CMuld( By[p][ant], CConjd(Bx[p][ant]) );
+    Nyy[p][ant] = CMuld( By[p][ant], CConjd(By[p][ant]) );
 
     // Detect the coherent beam
+    // A summation over an array is faster on a GPU if you add half on array 
+    // to its other half as than can be done in parallel. Then this is repeated
+    // with half of the previous array until the array is down to 1.
     __syncthreads();
     if (ant < 64)
     {
-        Ia[ant] += Ia[ant+64];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+64] );
-        By[ant] = CAddd( By[ant], By[ant+64] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+64] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+64] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+64] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+64] );
+        if (p == 0) Ia[ant] += Ia[ant+64];
+        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+64] );
+        By[p][ant] = CAddd( By[p][ant], By[p][ant+64] );
+        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+64] );
+        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+64] );
+        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+64] );
+        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+64] );
     }
     __syncthreads();
     if (ant < 32)
     {
-        Ia[ant] += Ia[ant+32];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+32] );
-        By[ant] = CAddd( By[ant], By[ant+32] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+32] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+32] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+32] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+32] );
+        if (p == 0) Ia[ant] += Ia[ant+32];
+        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+32] );
+        By[p][ant] = CAddd( By[p][ant], By[p][ant+32] );
+        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+32] );
+        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+32] );
+        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+32] );
+        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+32] );
     }
+    __syncthreads();
     if (ant < 16)
     {
-        Ia[ant] += Ia[ant+16];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+16] );
-        By[ant] = CAddd( By[ant], By[ant+16] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+16] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+16] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+16] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+16] );
+        if (p == 0) Ia[ant] += Ia[ant+16];
+        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+16] );
+        By[p][ant] = CAddd( By[p][ant], By[p][ant+16] );
+        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+16] );
+        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+16] );
+        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+16] );
+        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+16] );
     }
+    __syncthreads();
     if (ant < 8)
     {
-        Ia[ant] += Ia[ant+8];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+8] );
-        By[ant] = CAddd( By[ant], By[ant+8] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+8] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+8] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+8] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+8] );
+        if (p == 0) Ia[ant] += Ia[ant+8];
+        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+8] );
+        By[p][ant] = CAddd( By[p][ant], By[p][ant+8] );
+        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+8] );
+        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+8] );
+        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+8] );
+        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+8] );
     }
+    __syncthreads();
     if (ant < 4)
     {
-        Ia[ant] += Ia[ant+4];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+4] );
-        By[ant] = CAddd( By[ant], By[ant+4] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+4] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+4] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+4] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+4] );
+        if (p == 0) Ia[ant] += Ia[ant+4];
+        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+4] );
+        By[p][ant] = CAddd( By[p][ant], By[p][ant+4] );
+        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+4] );
+        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+4] );
+        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+4] );
+        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+4] );
     }
+    __syncthreads();
     if (ant < 2)
     {
-        Ia[ant] += Ia[ant+2];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+2] );
-        By[ant] = CAddd( By[ant], By[ant+2] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+2] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+2] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+2] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+2] );
+        if (p == 0) Ia[ant] += Ia[ant+2];
+        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+2] );
+        By[p][ant] = CAddd( By[p][ant], By[p][ant+2] );
+        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+2] );
+        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+2] );
+        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+2] );
+        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+2] );
     }
+    __syncthreads();
     if (ant < 1)
     {
-        Ia[ant] += Ia[ant+1];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+1] );
-        By[ant] = CAddd( By[ant], By[ant+1] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+1] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+1] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+1] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+1] );
+        if (p == 0) Ia[ant] += Ia[ant+1];
+        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+1] );
+        By[p][ant] = CAddd( By[p][ant], By[p][ant+1] );
+        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+1] );
+        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+1] );
+        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+1] );
+        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+1] );
     }
     __syncthreads();
 
     // Form the stokes parameters for the coherent beam
+    // Only doing it for ant 0 so that it only prints once
     if (ant == 0)
     {
-        float bnXX = DETECT(Bx[0]) - CReald(Nxx[0]);
-        float bnYY = DETECT(By[0]) - CReald(Nyy[0]);
+        float bnXX = DETECT(Bx[p][0]) - CReald(Nxx[p][0]);
+        float bnYY = DETECT(By[p][0]) - CReald(Nyy[p][0]);
         ComplexDouble bnXY = CSubd(
-                                 CMuld( Bx[0], CConjd( By[0] ) ),
-                                 Nxy[0] );
+                                 CMuld( Bx[p][0], CConjd( By[p][0] ) ),
+                                 Nxy[p][0] );
 
         // The incoherent beam
         I[I_IDX(s,c,nc)] = Ia[0];
@@ -211,8 +223,8 @@ __global__ void beamform_kernel( uint8_t *data,
         C[C_IDX(p,s,3,c,ns,nc)] = -2.0*invw*CImagd( bnXY );
 
         // The beamformed products
-        Bd[B_IDX(p,s,c,0,ns,nc)] = Bx[0];
-        Bd[B_IDX(p,s,c,1,ns,nc)] = By[0];
+        Bd[B_IDX(p,s,c,0,ns,nc)] = Bx[p][0];
+        Bd[B_IDX(p,s,c,1,ns,nc)] = By[p][0];
     }
 }
 
@@ -359,22 +371,15 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
         }
     }
 
-    // events for timing
-    cudaEvent_t startEvent, stopEvent; 
-    cudaEventCreate(&startEvent);
-    cudaEventCreate(&stopEvent);
-    float time;
-
     // Copy the data to the device
     gpuErrchk(cudaMemcpy( (*g)->d_data, data,    (*g)->data_size, cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( (*g)->d_W,    (*g)->W, (*g)->W_size,    cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( (*g)->d_J,    (*g)->J, (*g)->J_size,    cudaMemcpyHostToDevice ));
     
     // Call the kernels
-    dim3 samples_chan(opts->sample_rate, nchan, npointing);
-    #define NOW  ((double)clock()/(double)CLOCKS_PER_SEC)
-    double begintime = NOW;
-    beamform_kernel<<<samples_chan, NSTATION>>>(
+    dim3 samples_chan(opts->sample_rate, nchan);
+    dim3 stat_point(NSTATION, npointing);
+    beamform_kernel<<<samples_chan, stat_point>>>(
             (*g)->d_data, (*g)->d_W, (*g)->d_J, invw, (*g)->d_Bd, (*g)->d_coh, (*g)->d_incoh );
     //cudaDeviceSynchronize();
     // sync not required between kernel queues since each stream acts like a FIFO queue
@@ -442,8 +447,10 @@ void malloc_formbeam( struct gpu_formbeam_arrays **g, unsigned int sample_rate,
     gpuErrchk(cudaMalloc( (void **)&(*g)->d_coh,   (*g)->coh_size ));
     gpuErrchk(cudaMalloc( (void **)&(*g)->d_incoh, (*g)->incoh_size ));
 
-    printf("%d GB GPU memory allocated\n", ((*g)->W_size + (*g)->J_size + (*g)->Bd_size + 
-                                      (*g)->data_size + (*g)->coh_size + (*g)->incoh_size)/1e9 );
+    printf("%d GB GPU memory allocated\n", ((*g)->W_size + (*g)->J_size + 
+                                            (*g)->Bd_size + (*g)->data_size +
+                                            (*g)->coh_size + (*g)->incoh_size)
+                                            /1000000000 );
 }
 
 void free_formbeam( struct gpu_formbeam_arrays **g )
