@@ -66,26 +66,25 @@ __global__ void beamform_kernel( uint8_t *data,
     int s   = blockIdx.x;  /* The (s)ample number */
     int ns  = gridDim.x;   /* The (n)umber of (s)amples (=10000)*/
     int c   = blockIdx.y;  /* The (c)hannel number */
-    //int p   = blockIdx.z;  /* The (p)ointing number */
-    int p   = threadIdx.y;  /* The (p)ointing number */
+    int p   = threadIdx.y; /* The (p)ointing number */
     int nc  = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
     int ant = threadIdx.x; /* The (ant)enna number */
     
     // Calculate the beam and the noise floor
     __shared__ double Ia[NSTATION];
-    __shared__ ComplexDouble Bx[NPOINTING][NSTATION], By[NPOINTING][NSTATION];
+    __shared__ ComplexDouble Bx[NPOINTING*NSTATION], By[NPOINTING*NSTATION];
     ComplexDouble Dx, Dy;
     ComplexDouble WDx, WDy;
 
-    __shared__ ComplexDouble Nxx[NPOINTING][NSTATION], Nxy[NPOINTING][NSTATION],
-                             Nyy[NPOINTING][NSTATION];//Nyx[NPOINTING][NSTATION]
+    __shared__ ComplexDouble Nxx[NPOINTING*NSTATION], Nxy[NPOINTING*NSTATION],
+                             Nyy[NPOINTING*NSTATION];//Nyx[NPOINTING][NSTATION]
 
 
     /* Fix from Maceij regarding NaNs in output when running on Athena, 13 April 2018.
        Apparently the different compilers and architectures are treating what were 
        unintialised variables very differently */
-    Bx[p][ant]  = CMaked( 0.0, 0.0 );
-    By[p][ant]  = CMaked( 0.0, 0.0 );
+    Bx[BN_IDX(p,ant)]  = CMaked( 0.0, 0.0 );
+    By[BN_IDX(p,ant)]  = CMaked( 0.0, 0.0 );
 
     Dx  = CMaked( 0.0, 0.0 );
     Dy  = CMaked( 0.0, 0.0 );
@@ -93,10 +92,10 @@ __global__ void beamform_kernel( uint8_t *data,
     WDx = CMaked( 0.0, 0.0 );
     WDy = CMaked( 0.0, 0.0 );
 
-    Nxx[p][ant] = CMaked( 0.0, 0.0 );
-    Nxy[p][ant] = CMaked( 0.0, 0.0 );
-    //Nyx[p][ant] = CMaked( 0.0, 0.0 );
-    Nyy[p][ant] = CMaked( 0.0, 0.0 );
+    Nxx[BN_IDX(p,ant)] = CMaked( 0.0, 0.0 );
+    Nxy[BN_IDX(p,ant)] = CMaked( 0.0, 0.0 );
+    //Nyx[BN_IDX(p,ant)] = CMaked( 0.0, 0.0 );
+    Nyy[BN_IDX(p,ant)] = CMaked( 0.0, 0.0 );
 
     if (p == 0) Ia[ant] = 0.0;
 
@@ -110,15 +109,15 @@ __global__ void beamform_kernel( uint8_t *data,
     WDx = CMuld( W[W_IDX(p,ant,c,0,nc)], Dx );
     WDy = CMuld( W[W_IDX(p,ant,c,1,nc)], Dy );
 
-    Bx[p][ant] = CAddd( CMuld( J[J_IDX(p,ant,c,0,0,nc)], WDx ),
-                        CMuld( J[J_IDX(p,ant,c,1,0,nc)], WDy ) );
-    By[p][ant] = CAddd( CMuld( J[J_IDX(p,ant,c,0,1,nc)], WDx ),
-                        CMuld( J[J_IDX(p,ant,c,1,1,nc)], WDy ) );
+    Bx[BN_IDX(p,ant)] = CAddd( CMuld( J[J_IDX(p,ant,c,0,0,nc)], WDx ),
+                               CMuld( J[J_IDX(p,ant,c,1,0,nc)], WDy ) );
+    By[BN_IDX(p,ant)] = CAddd( CMuld( J[J_IDX(p,ant,c,0,1,nc)], WDx ),
+                               CMuld( J[J_IDX(p,ant,c,1,1,nc)], WDy ) );
 
-    Nxx[p][ant] = CMuld( Bx[p][ant], CConjd(Bx[p][ant]) );
-    Nxy[p][ant] = CMuld( Bx[p][ant], CConjd(By[p][ant]) );
-    //Nyx[p][ant] = CMuld( By[p][ant], CConjd(Bx[p][ant]) );
-    Nyy[p][ant] = CMuld( By[p][ant], CConjd(By[p][ant]) );
+    Nxx[BN_IDX(p,ant)] = CMuld( Bx[BN_IDX(p,ant)], CConjd(Bx[BN_IDX(p,ant)]) );
+    Nxy[BN_IDX(p,ant)] = CMuld( Bx[BN_IDX(p,ant)], CConjd(By[BN_IDX(p,ant)]) );
+    //Nyx[BN_IDX(p,ant)] = CMuld( By[BN_IDX(p,ant)], CConjd(Bx[BN_IDX(p,ant)]) );
+    Nyy[BN_IDX(p,ant)] = CMuld( By[BN_IDX(p,ant)], CConjd(By[BN_IDX(p,ant)]) );
 
     // Detect the coherent beam
     // A summation over an array is faster on a GPU if you add half on array 
@@ -128,78 +127,78 @@ __global__ void beamform_kernel( uint8_t *data,
     if (ant < 64)
     {
         if (p == 0) Ia[ant] += Ia[ant+64];
-        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+64] );
-        By[p][ant] = CAddd( By[p][ant], By[p][ant+64] );
-        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+64] );
-        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+64] );
-        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+64] );
-        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+64] );
+        Bx[BN_IDX(p,ant)] = CAddd( Bx[BN_IDX(p,ant)], Bx[BN_IDX(p,ant+64)] );
+        By[BN_IDX(p,ant)] = CAddd( By[BN_IDX(p,ant)], By[BN_IDX(p,ant+64)] );
+        Nxx[BN_IDX(p,ant)] = CAddd( Nxx[BN_IDX(p,ant)], Nxx[BN_IDX(p,ant+64)] );
+        Nxy[BN_IDX(p,ant)] = CAddd( Nxy[BN_IDX(p,ant)], Nxy[BN_IDX(p,ant+64)] );
+        //Nyx[BN_IDX(p,ant)] = CAddd( Nyx[BN_IDX(p,ant)], Nyx[BN_IDX(p,ant+64)] );
+        Nyy[BN_IDX(p,ant)] = CAddd( Nyy[BN_IDX(p,ant)], Nyy[BN_IDX(p,ant+64)] );
     }
     __syncthreads();
     if (ant < 32)
     {
         if (p == 0) Ia[ant] += Ia[ant+32];
-        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+32] );
-        By[p][ant] = CAddd( By[p][ant], By[p][ant+32] );
-        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+32] );
-        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+32] );
-        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+32] );
-        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+32] );
+        Bx[BN_IDX(p,ant)] = CAddd( Bx[BN_IDX(p,ant)], Bx[BN_IDX(p,ant+32)] );
+        By[BN_IDX(p,ant)] = CAddd( By[BN_IDX(p,ant)], By[BN_IDX(p,ant+32)] );
+        Nxx[BN_IDX(p,ant)] = CAddd( Nxx[BN_IDX(p,ant)], Nxx[BN_IDX(p,ant+32)] );
+        Nxy[BN_IDX(p,ant)] = CAddd( Nxy[BN_IDX(p,ant)], Nxy[BN_IDX(p,ant+32)] );
+        //Nyx[BN_IDX(p,ant)] = CAddd( Nyx[BN_IDX(p,ant)], Nyx[BN_IDX(p,ant+32)] );
+        Nyy[BN_IDX(p,ant)] = CAddd( Nyy[BN_IDX(p,ant)], Nyy[BN_IDX(p,ant+32)] );
     }
     __syncthreads();
     if (ant < 16)
     {
         if (p == 0) Ia[ant] += Ia[ant+16];
-        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+16] );
-        By[p][ant] = CAddd( By[p][ant], By[p][ant+16] );
-        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+16] );
-        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+16] );
-        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+16] );
-        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+16] );
+        Bx[BN_IDX(p,ant)] = CAddd( Bx[BN_IDX(p,ant)], Bx[BN_IDX(p,ant+16)] );
+        By[BN_IDX(p,ant)] = CAddd( By[BN_IDX(p,ant)], By[BN_IDX(p,ant+16)] );
+        Nxx[BN_IDX(p,ant)] = CAddd( Nxx[BN_IDX(p,ant)], Nxx[BN_IDX(p,ant+16)] );
+        Nxy[BN_IDX(p,ant)] = CAddd( Nxy[BN_IDX(p,ant)], Nxy[BN_IDX(p,ant+16)] );
+        //Nyx[BN_IDX(p,ant)] = CAddd( Nyx[BN_IDX(p,ant)], Nyx[BN_IDX(p,ant+16)] );
+        Nyy[BN_IDX(p,ant)] = CAddd( Nyy[BN_IDX(p,ant)], Nyy[BN_IDX(p,ant+16)] );
     }
     __syncthreads();
     if (ant < 8)
     {
         if (p == 0) Ia[ant] += Ia[ant+8];
-        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+8] );
-        By[p][ant] = CAddd( By[p][ant], By[p][ant+8] );
-        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+8] );
-        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+8] );
-        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+8] );
-        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+8] );
+        Bx[BN_IDX(p,ant)] = CAddd( Bx[BN_IDX(p,ant)], Bx[BN_IDX(p,ant+8)] );
+        By[BN_IDX(p,ant)] = CAddd( By[BN_IDX(p,ant)], By[BN_IDX(p,ant+8)] );
+        Nxx[BN_IDX(p,ant)] = CAddd( Nxx[BN_IDX(p,ant)], Nxx[BN_IDX(p,ant+8)] );
+        Nxy[BN_IDX(p,ant)] = CAddd( Nxy[BN_IDX(p,ant)], Nxy[BN_IDX(p,ant+8)] );
+        //Nyx[BN_IDX(p,ant)] = CAddd( Nyx[BN_IDX(p,ant)], Nyx[BN_IDX(p,ant+8)] );
+        Nyy[BN_IDX(p,ant)] = CAddd( Nyy[BN_IDX(p,ant)], Nyy[BN_IDX(p,ant+8)] );
     }
     __syncthreads();
     if (ant < 4)
     {
         if (p == 0) Ia[ant] += Ia[ant+4];
-        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+4] );
-        By[p][ant] = CAddd( By[p][ant], By[p][ant+4] );
-        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+4] );
-        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+4] );
-        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+4] );
-        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+4] );
+        Bx[BN_IDX(p,ant)] = CAddd( Bx[BN_IDX(p,ant)], Bx[BN_IDX(p,ant+4)] );
+        By[BN_IDX(p,ant)] = CAddd( By[BN_IDX(p,ant)], By[BN_IDX(p,ant+4)] );
+        Nxx[BN_IDX(p,ant)] = CAddd( Nxx[BN_IDX(p,ant)], Nxx[BN_IDX(p,ant+4)] );
+        Nxy[BN_IDX(p,ant)] = CAddd( Nxy[BN_IDX(p,ant)], Nxy[BN_IDX(p,ant+4)] );
+        //Nyx[BN_IDX(p,ant)] = CAddd( Nyx[BN_IDX(p,ant)], Nyx[BN_IDX(p,ant+4)] );
+        Nyy[BN_IDX(p,ant)] = CAddd( Nyy[BN_IDX(p,ant)], Nyy[BN_IDX(p,ant+4)] );
     }
     __syncthreads();
     if (ant < 2)
     {
         if (p == 0) Ia[ant] += Ia[ant+2];
-        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+2] );
-        By[p][ant] = CAddd( By[p][ant], By[p][ant+2] );
-        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+2] );
-        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+2] );
-        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+2] );
-        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+2] );
+        Bx[BN_IDX(p,ant)] = CAddd( Bx[BN_IDX(p,ant)], Bx[BN_IDX(p,ant+2)] );
+        By[BN_IDX(p,ant)] = CAddd( By[BN_IDX(p,ant)], By[BN_IDX(p,ant+2)] );
+        Nxx[BN_IDX(p,ant)] = CAddd( Nxx[BN_IDX(p,ant)], Nxx[BN_IDX(p,ant+2)] );
+        Nxy[BN_IDX(p,ant)] = CAddd( Nxy[BN_IDX(p,ant)], Nxy[BN_IDX(p,ant+2)] );
+        //Nyx[BN_IDX(p,ant)] = CAddd( Nyx[BN_IDX(p,ant)], Nyx[BN_IDX(p,ant+2)] );
+        Nyy[BN_IDX(p,ant)] = CAddd( Nyy[BN_IDX(p,ant)], Nyy[BN_IDX(p,ant+2)] );
     }
     __syncthreads();
     if (ant < 1)
     {
         if (p == 0) Ia[ant] += Ia[ant+1];
-        Bx[p][ant] = CAddd( Bx[p][ant], Bx[p][ant+1] );
-        By[p][ant] = CAddd( By[p][ant], By[p][ant+1] );
-        Nxx[p][ant] = CAddd( Nxx[p][ant], Nxx[p][ant+1] );
-        Nxy[p][ant] = CAddd( Nxy[p][ant], Nxy[p][ant+1] );
-        //Nyx[p][ant] = CAddd( Nyx[p][ant], Nyx[p][ant+1] );
-        Nyy[p][ant] = CAddd( Nyy[p][ant], Nyy[p][ant+1] );
+        Bx[BN_IDX(p,ant)] = CAddd( Bx[BN_IDX(p,ant)], Bx[BN_IDX(p,ant+1)] );
+        By[BN_IDX(p,ant)] = CAddd( By[BN_IDX(p,ant)], By[BN_IDX(p,ant+1)] );
+        Nxx[BN_IDX(p,ant)] = CAddd( Nxx[BN_IDX(p,ant)], Nxx[BN_IDX(p,ant+1)] );
+        Nxy[BN_IDX(p,ant)] = CAddd( Nxy[BN_IDX(p,ant)], Nxy[BN_IDX(p,ant+1)] );
+        //Nyx[BN_IDX(p,ant)] = CAddd( Nyx[BN_IDX(p,ant)], Nyx[BN_IDX(p,ant+1)] );
+        Nyy[BN_IDX(p,ant)] = CAddd( Nyy[BN_IDX(p,ant)], Nyy[BN_IDX(p,ant+1)] );
     }
     __syncthreads();
 
@@ -207,11 +206,11 @@ __global__ void beamform_kernel( uint8_t *data,
     // Only doing it for ant 0 so that it only prints once
     if (ant == 0)
     {
-        float bnXX = DETECT(Bx[p][0]) - CReald(Nxx[p][0]);
-        float bnYY = DETECT(By[p][0]) - CReald(Nyy[p][0]);
+        float bnXX = DETECT(Bx[BN_IDX(p,0)]) - CReald(Nxx[BN_IDX(p,0)]);
+        float bnYY = DETECT(By[BN_IDX(p,0)]) - CReald(Nyy[BN_IDX(p,0)]);
         ComplexDouble bnXY = CSubd(
-                                 CMuld( Bx[p][0], CConjd( By[p][0] ) ),
-                                 Nxy[p][0] );
+                                 CMuld( Bx[BN_IDX(p,0)], CConjd( By[BN_IDX(p,0)] ) ),
+                                 Nxy[BN_IDX(p,0)] );
 
         // The incoherent beam
         I[I_IDX(s,c,nc)] = Ia[0];
@@ -223,8 +222,8 @@ __global__ void beamform_kernel( uint8_t *data,
         C[C_IDX(p,s,3,c,ns,nc)] = -2.0*invw*CImagd( bnXY );
 
         // The beamformed products
-        Bd[B_IDX(p,s,c,0,ns,nc)] = Bx[p][0];
-        Bd[B_IDX(p,s,c,1,ns,nc)] = By[p][0];
+        Bd[B_IDX(p,s,c,0,ns,nc)] = Bx[BN_IDX(p,0)];
+        Bd[B_IDX(p,s,c,1,ns,nc)] = By[BN_IDX(p,0)];
     }
 }
 
