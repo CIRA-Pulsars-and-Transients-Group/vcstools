@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
 #include <cuda_runtime.h>
 
 extern "C" {
@@ -69,6 +70,11 @@ __global__ void beamform_kernel( uint8_t *data,
     int p   = threadIdx.y; /* The (p)ointing number */
     int nc  = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
     int ant = threadIdx.x; /* The (ant)enna number */
+
+    // GPU profiling
+    clock_t start, stop;
+    double setup_t, detect_t, sum_t, stokes_t;
+    if ((p == 0) && (ant == 0) && (c == 0) && (s == 0)) start = clock();
     
     // Calculate the beam and the noise floor
     __shared__ double Ia[NSTATION];
@@ -101,6 +107,13 @@ __global__ void beamform_kernel( uint8_t *data,
 
     // Calculate beamform products for each antenna, and then add them together
     // Calculate the coherent beam (B = J*W*D)
+    if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
+    {
+        stop = clock();
+        setup_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
+        start = clock();
+    }
+
     Dx  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,0,nc)]);
     Dy  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,1,nc)]);
 
@@ -124,6 +137,13 @@ __global__ void beamform_kernel( uint8_t *data,
     // to its other half as than can be done in parallel. Then this is repeated
     // with half of the previous array until the array is down to 1.
     __syncthreads();
+
+    if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
+    {
+        stop = clock();
+        detect_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
+        start = clock();
+    }
     if (ant < 64)
     {
         if (p == 0) Ia[ant] += Ia[ant+64];
@@ -201,7 +221,14 @@ __global__ void beamform_kernel( uint8_t *data,
         Nyy[BN_IDX(p,ant)] = CAddd( Nyy[BN_IDX(p,ant)], Nyy[BN_IDX(p,ant+1)] );
     }
     __syncthreads();
+    if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
+    {
+        stop = clock();
+        sum_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
+        start = clock();
 
+    }
+    
     // Form the stokes parameters for the coherent beam
     // Only doing it for ant 0 so that it only prints once
     if (ant == 0)
@@ -225,6 +252,13 @@ __global__ void beamform_kernel( uint8_t *data,
         Bd[B_IDX(p,s,c,0,ns,nc)] = Bx[BN_IDX(p,0)];
         Bd[B_IDX(p,s,c,1,ns,nc)] = By[BN_IDX(p,0)];
     }
+    if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
+    {
+        stop = clock();
+        stokes_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
+        printf("Time:  setup: % f detect: %f    sum: %f     stokes: %f\n", setup_t, detect_t, sum_t, stokes_t);
+    }
+    
 }
 
 __global__ void flatten_bandpass_I_kernel(float *I,
