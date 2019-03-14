@@ -37,8 +37,13 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *fils_real, float *fils_imag,
                                int ntaps, int npol, float *out )
 {
-    int idx = blockDim.x * blockIdx.x + threadIdx.x;
-
+    //blockIdx.x = sample number
+    //gridDim.x = ns
+    //blockDim.x = nchan * npol 
+    //threadIdx.x = npol*ch + pol
+    int p = threadIdx.y;
+    int idx = blockDim.x * gridDim.x * p + blockDim.x * blockIdx.x + threadIdx.x;
+    
     // Calculate the number of channels
     int nchan = blockDim.x / npol;
 
@@ -50,6 +55,13 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
     int i0 = ((idx + blockDim.x - npol) / blockDim.x) * blockDim.x +
              (threadIdx.x % npol);
 
+    //i = npol*nchan*nsamples*p +
+    //    npol*nchan*s_in +
+    //    npol*ch +
+    //    pol;
+
+    //f = fil_size*ch + tap
+    
     // Calculate the "fils" first column index
     //int f0 = nchan - ((idx/npol + nchan - 1) % nchan) - 1;
     int f0 = (idx/npol) % nchan;
@@ -138,7 +150,8 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
                     npol*ch + 
                     pol;
                 // Copy the data across - taking care of the file_no = 0 case
-                if (file_no == 0 && s_in < (*g)->ntaps)
+                // The s_in%(npol*nchan*nsamples) does this for each pointing
+                if (file_no == 0 && (s_in%(npol*nchan*nsamples)) < (*g)->ntaps)
                 {
                     (*g)->in_real[i] = 0.0;
                     (*g)->in_imag[i] = 0.0;
@@ -157,7 +170,8 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
     gpuErrchk(cudaMemcpy( (*g)->d_in_imag, (*g)->in_imag, (*g)->in_size, cudaMemcpyHostToDevice ));
     
     // Call the kernel
-    filter_kernel<<<nsamples, nchan*npol>>>( (*g)->d_in_real, (*g)->d_in_imag,
+    dim3 n_cpol_p(nchan*npol, npointing);
+    filter_kernel<<<nsamples, n_cpol_p>>>( (*g)->d_in_real, (*g)->d_in_imag,
                                              (*g)->d_fils_real, (*g)->d_fils_imag,
                                              (*g)->ntaps, npol, (*g)->d_out );
     cudaDeviceSynchronize();
@@ -200,7 +214,8 @@ void malloc_ipfb( struct gpu_ipfb_arrays **g, int ntaps, int nsamples,
 
     (*g)->ntaps     = ntaps;
     (*g)->in_size   = npointing * ((nsamples + ntaps) * nchan * npol) * sizeof(float);
-    (*g)->fils_size = npointing * nchan * fil_size * sizeof(float);
+    // fils_size = nchan * nchan * ntaps = 128 * 128 * 12
+    (*g)->fils_size = nchan * fil_size * sizeof(float);
     (*g)->out_size  = npointing * nsamples * nchan * npol * 2 * sizeof(float);
 
     // Allocate memory on the device

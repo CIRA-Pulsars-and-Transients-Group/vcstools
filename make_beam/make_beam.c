@@ -478,7 +478,8 @@ int main(int argc, char **argv)
                 // Invert the PFB, if requested
                 if (opts.out_vdif)
                 {
-                    fprintf( stderr, "[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
+                    fprintf( stderr, "[%f] [%d/%d]  Inverting the PFB (IFFT)\n",
+                                      NOW-begintime, file_no+1, nfiles);
                     #ifndef HAVE_CUDA
                     invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan,
                             npol, data_buffer_vdif );
@@ -487,7 +488,8 @@ int main(int argc, char **argv)
 
                 if (opts.out_uvdif)
                 {
-                    fprintf( stderr, "[%f]  Inverting the PFB (full)\n", NOW-begintime);
+                    fprintf( stderr, "[%f] [%d/%d]   Inverting the PFB (full)\n", 
+                                     NOW-begintime, file_no+1, nfiles);
                     #ifdef HAVE_CUDA
                     cu_invert_pfb_ord( detected_beam, file_no, npointing, 
                             opts.sample_rate, nchan, npol, &gi, data_buffer_uvdif );

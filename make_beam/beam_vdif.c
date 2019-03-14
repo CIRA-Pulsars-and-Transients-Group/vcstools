@@ -68,7 +68,7 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
             1.0/(*gain) );
 
     float *data_buffer_ptr = data_buffer_vdif;
-    size_t offset_out_vdif = 0;
+    size_t offset_out_vdif = p * vf->block_size;
 
     int8_t *out_buffer_8_vdif = (int8_t *)malloc(vf->block_size);
 
