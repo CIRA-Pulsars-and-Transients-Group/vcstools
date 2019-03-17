@@ -104,7 +104,7 @@ def get_psrcat_ra_dec(pulsar_list = None, max_dm = None):
     return [[Jname, RAJ, DecJ]]
     """
     params = ['Jname', 'Raj', 'Decj', 'DM']
-    
+     
     for p in params:
         #Gets the output of PSRCAT for each pparameter for each pulsar as a list
         cmd = ['psrcat', '-c', p]
@@ -127,21 +127,22 @@ def get_psrcat_ra_dec(pulsar_list = None, max_dm = None):
                 temp.append([data[1]])
         if p == params[0]:
             pulsar_ra_dec=temp
-        elif p == 'DM' and max_dm is not None:
-            rows_to_delete = []
-            #removes all pulsars over the DM max
-            for dmi, dm in enumerate(temp):
-                #if there is a * given as the dm it is likely a gamma ray pulsar.
-                #Currently it won't delete these from the list just incase we can 
-                #detect them in radio even though it's unlikely
-                if '*' not in dm:
-                    if float(dm[0]) > max_dm:
-                        rows_to_delete.append(dmi)
-            pulsar_ra_dec = np.array(pulsar_ra_dec)
-            pulsar_ra_dec = np.delete(pulsar_ra_dec, rows_to_delete, 0)
+        elif p == 'DM':
+            if max_dm is not None:
+                rows_to_delete = []
+                #removes all pulsars over the DM max
+                for dmi, dm in enumerate(temp):
+                    #if there is a * given as the dm it is likely a gamma ray pulsar.
+                    #Currently it won't delete these from the list just incase we can 
+                    #detect them in radio even though it's unlikely
+                    if '*' not in dm:
+                        if float(dm[0]) > max_dm:
+                            rows_to_delete.append(dmi)
+                pulsar_ra_dec = np.array(pulsar_ra_dec)
+                pulsar_ra_dec = np.delete(pulsar_ra_dec, rows_to_delete, 0)
         else:
             pulsar_ra_dec = [pulsar_ra_dec[x] + temp[x] for x in range(len(pulsar_ra_dec))]
-
+    
     return pulsar_ra_dec
 
 
@@ -460,7 +461,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     names_ra_dec = np.array(names_ra_dec)
     print "Calculating beam power for OBS ID: {0}".format(obsid)
 
-    starttimes=np.arange(start_time,time,dt)
+    starttimes=np.arange(start_time,time+start_time,dt)
     stoptimes=starttimes+dt
     stoptimes[stoptimes>time]=time
     Ntimes=len(starttimes)
@@ -489,8 +490,11 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                              Ntimes,1))
         PowersY=np.zeros((len(names_ra_dec),
                              Ntimes,1))
-        frequencies=np.array([centrefreq])*1e6
-
+        if centrefreq > 1e6:
+            print "centrefreq is greater than 1e6, assuming input with units of Hz."
+            frequencies=np.array([centrefreq])
+        else:
+            frequencies=np.array([centrefreq])*1e6
     if degrees:
         RAs = np.array(names_ra_dec[:,1],dtype=float)
         Decs = np.array(names_ra_dec[:,2],dtype=float)
@@ -503,7 +507,10 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     if not len(RAs)==len(Decs):
         sys.stderr.write('Must supply equal numbers of RAs and Decs\n')
         return None
-    for itime in xrange(Ntimes):
+    if verbose is False:
+        #Supress print statements of the primary beam model functions
+        sys.stdout = open(os.devnull, 'w')
+    for itime in range(Ntimes):
         obstime = Time(midtimes[itime],format='gps',scale='utc')
         observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
         LST_hours = observer.sidereal_time() * ephem_utils.HRS_IN_RADIAN
@@ -513,8 +520,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         # go from altitude to zenith angle
         theta=np.radians(90.-Alts)
         phi=np.radians(Azs)
-    
-        for ifreq in xrange(len(frequencies)):
+        for ifreq in range(len(frequencies)):
             #Decide on beam model
             if option == 'analytic':
                 rX,rY=primary_beam.MWA_Tile_analytic(theta, phi,
@@ -531,9 +537,10 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
-            
         PowersX[:,itime,ifreq]=rX
         PowersY[:,itime,ifreq]=rY
+    if verbose is False:
+        sys.stdout = sys.__stdout__
     Powers=0.5*(PowersX+PowersY)
     return Powers
 

@@ -28,6 +28,7 @@ def tmp(suffix=".sh"):
     atexit.register(os.unlink, t)
     return t
 
+
 def is_number(s):
     try:
         int(s)
@@ -35,26 +36,32 @@ def is_number(s):
     except ValueError:
         return False
 
+
 def get_user_email():
     command="echo `ldapsearch -x \"uid=$USER\" mail |grep \"^mail\"|cut -f2 -d' '`"
     email = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).communicate()[0]
     return email.strip()
 
+
 def ensure_metafits(data_dir, obs_id, metafits_file):
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
+    
     if not os.path.exists(metafits_file):
         print "{0} does not exists".format(metafits_file)
         print "Will download it from the archive. This can take a while so please do not ctrl-C."
-        obsdownload = distutils.spawn.find_executable("obsdownload.py")
-        get_metafits = "{0} -o {1} -d {2} -m".format(obsdownload, obs_id, data_dir.replace(str(obs_id), ''))
+        print "At the moment, even through the downloaded file is labelled as a ppd file this is not true"
+        print "this is hopefully a temporary measure"
+        #obsdownload = distutils.spawn.find_executable("obsdownload.py")
+        
+        get_metafits = "wget http://mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
         try:
             subprocess.call(get_metafits,shell=True)
         except:
             print "Couldn't download {0}. Aborting.".format(os.basename(metafits_file))
             quit()
         # clean up
-        os.remove('obscrt.crt')
-        os.remove('obskey.key')
+        #os.remove('obscrt.crt')
+        #os.remove('obskey.key')
     # make a copy of the file in the product_dir if that directory exists
     # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
     # in case --work_dir was specified in process_vcs call product_dir and data_dir
@@ -247,38 +254,50 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
     # hence we'll link vis agains /astro/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
     target_dir = '{0}'.format(cal_obs_id)
     link = 'vis'
-
+    csvfile = "{0}{1}_dl.csv".format(batch_dir,cal_obs_id)
     obsdownload = distutils.spawn.find_executable("obsdownload.py")
     get_data = "{0} -o {1} -d {2}".format(obsdownload,cal_obs_id, data_dir)
     if head:
-        print "Will download the data from the archive. This can take a while so please do not ctrl-C."
-        log_name="{0}/caldownload_{1}.log".format(batch_dir,cal_obs_id)
-        with open(log_name, 'w') as log:
-            subprocess.call(get_data, shell=True, stdout=log, stderr=log)
-        create_link(data_dir, target_dir, product_dir, link)
-        #clean up
-        try:
-            os.remove('obscrt.crt')
-            os.remove('obskey.key')
-        except:
-            pass
+        print "I'm sorry, this option is no longer supported. Please download through the copyq."
+        # print "Will download the data from the archive. This can take a while so please do not ctrl-C."
+        # log_name="{0}/caldownload_{1}.log".format(batch_dir,cal_obs_id)
+        # with open(log_name, 'w') as log:
+        #     subprocess.call(get_data, shell=True, stdout=log, stderr=log)
+        # create_link(data_dir, target_dir, product_dir, link)
+        # #clean up
+        # try:
+        #     os.remove('obscrt.crt')
+        #     os.remove('obskey.key')
+        # except:
+        #     pass
     else:
         # we create the link using bash and not our create_link function
         # as we'd like to do this only once the data have arrived,
         # i.e. the download worked.
-        make_link = "ln -s {0}/{1} {2}/{3}".format(data_dir, target_dir, product_dir, link)
+        make_link = "ln -s {0} {1}/{2}".format(data_dir, product_dir, link)
         obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
-        secs_to_run = "02:00:00" # sometimes the staging can take a while...
+        secs_to_run = "03:00:00" # sometimes the staging can take a while...
         module_list = ["setuptools"]
         commands = []
+        commands.append("module load manta-ray-client")
         commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
         commands.append(database_vcs.add_database_function())
-        #commands.append('source /group/mwaops/PULSAR/psrBash.profile')
-        #commands.append('module load setuptools')
+        commands.append("csvfile={0}".format(csvfile))
+        # commands.append('source /group/mwaops/PULSAR/psrBash.profile')
+        # commands.append('module load setuptools')
         commands.append('cd {0}'.format(data_dir))
-        commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
+        commands.append('if [[ -z ${MWA_ASVO_API_KEY} ]]')
+        commands.append('then')
+        commands.append('    echo "Error, MWA_ASVO_API_KEY not set"')
+        commands.append('    echo "Cannot use client"'
+                        '    echo "Please read the MWA ASVO documentation about setting this (https://wiki.mwatelescope.org/display/MP/MWA+ASVO%3A+Release+Notes)"')
+        commands.append('    exit 1')
+        commands.append('fi')
+        commands.append('echo "obs_id={0}, job_type=d, download_type=vis" > {1}'.format(cal_obs_id,csvfile))
+        commands.append('mwa_client --csv={0} --dir={1}'.format(csvfile,data_dir))
+        # commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
         commands.append(make_link)
-        commands.append('rm obscrt.crt obskey.key')
+        commands.append('unzip *.zip')
         submit_slurm(obsdownload_batch, commands, batch_dir=batch_dir, module_list=module_list,
                      slurm_kwargs={"time": secs_to_run, "partition": "copyq", "nice": nice},
                      vcstools_version=vcstools_version, cluster="zeus", export="NONE")
