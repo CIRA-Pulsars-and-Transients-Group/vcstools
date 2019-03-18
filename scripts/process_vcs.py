@@ -45,14 +45,14 @@ def get_user_email():
 
 def ensure_metafits(data_dir, obs_id, metafits_file):
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
-    
+
     if not os.path.exists(metafits_file):
         print "{0} does not exists".format(metafits_file)
         print "Will download it from the archive. This can take a while so please do not ctrl-C."
         print "At the moment, even through the downloaded file is labelled as a ppd file this is not true"
         print "this is hopefully a temporary measure"
         #obsdownload = distutils.spawn.find_executable("obsdownload.py")
-        
+
         get_metafits = "wget http://mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
         try:
             subprocess.call(get_metafits,shell=True)
@@ -198,11 +198,10 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         commands.append("fi")
 
                         submit_slurm(check_batch, commands, batch_dir=batch_dir, module_list=module_list,
-                                     slurm_kwargs={"time": check_secs_to_run, "partition": "workq", "nice": nice},
+                                     slurm_kwargs={"time": check_secs_to_run, "partition": "workq", "nice": nice, "mem-per-cpu": 8192MB},
                                      vcstools_version=vcstools_version, submit=False,
-                                     #outfile=batch_dir+check_batch+"_0.out", cluster="zeus", export="NONE")
-                                     outfile=batch_dir+check_batch+"_0.out", cluster="zeus\n#SBATCH --mem-per-cpu=8192MB", export="NONE")
-                        
+                                     outfile=batch_dir+check_batch+"_0.out", cluster="zeus", export="NONE")
+
                         # Write out the tar batch file if in mode 15
                         #if format == 16:
                         #        body = []
