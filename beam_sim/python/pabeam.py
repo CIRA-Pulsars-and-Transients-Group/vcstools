@@ -61,9 +61,9 @@ def getTileLocations(obsid, flags=[], fdir="."):
         list[0] = a list of tile positions East of the array centre
         list[1] = a list of tile positions North of the array centre
         list[2] = a list of tile heights about sea-level 
-	"""
+    """
 
-    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(fdir, obsid))		
+    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(fdir, obsid))     
     
     east = f[1].data['East'][::2]
     north = f[1].data['North'][::2]
@@ -77,14 +77,14 @@ def getTileLocations(obsid, flags=[], fdir="."):
     east = np.delete(east,flags)
     north = np.delete(north,flags)
     height = np.delete(height,flags)
-			
+            
     return east, north, height
 
 
 def get_obstime_duration(obsid, fdir="."):
     """
     Funciton to grab the recorded start-time and duration of the observation
-	
+    
     Input:
       obsid - the GPS observation ID
 
@@ -92,18 +92,18 @@ def get_obstime_duration(obsid, fdir="."):
       a list containing the folloing two items (in order):
         list[0] = observation starting time in UTC
         list[1] = observation duration in seconds
-	"""
+    """
 
     # metafits file will already have been downloaded
     f = fits.open('{0}/{1}_metafits_ppds.fits'.format(obsid, fdir))
-	
+    
     return [f[0].header['DATE-OBS'], f[0].header['EXPOSURE']]
 
 
 def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827):
     """
     Function to get the target position in alt/az at a given EarthLocation and Time.
-	
+    
     Default lat,lon,height is the centre of  MWA.
 
     Input:
@@ -120,25 +120,25 @@ def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827):
         list[2] = target azimuth in degrees
         list[3] = target zenith angle in degrees
     """
-	
+    
     # Create Earth location for MWA
     location = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=height*u.m)
-	
+    
     # Create sky coordinates for target
     coord = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
-	
+    
     # Create a time object for desired observing time
     obstime = Time(time)
-	
+    
     # Convert from RA/Dec to Alt/Az
     altaz = coord.transform_to(AltAz(obstime=obstime, location=location))
-	
+    
     az = altaz.az.rad 
     azdeg = altaz.az.deg
-	 
+     
     za = np.pi / 2 - altaz.alt.rad
     zadeg = 90 - altaz.alt.deg
-	
+    
 
     return az, za, azdeg, zadeg
 
@@ -151,17 +151,17 @@ def calcWaveNumbers(wl, p, t):
       wl - central wavelength for the observation
       p - azimuth/phi (either a scalar or an array)
       t - zenith angle/theta (either a scalar or an array)
-	
+    
     Return:
       [kx, ky, kz] - the 3D wavenumbers 
-	"""
+    """
     # the standard equations are:
-    #	a = 2 * pi / lambda
-    #	kx = a * sin(theta) * cos(phi)
-    #	ky = a * sin(theta) * sin(phi)
-    #	kz = a * cos(theta)
+    #   a = 2 * pi / lambda
+    #   kx = a * sin(theta) * cos(phi)
+    #   ky = a * sin(theta) * sin(phi)
+    #   kz = a * cos(theta)
     # this is assuming that theta,phi are in the convention from Sutinjo et al. 2015
-    #	i.e. phi = pi/2 - az
+    #   i.e. phi = pi/2 - az
     kx = (2*np.pi/wl) * np.sin(t) * np.cos(p)
     ky = (2*np.pi/wl) * np.sin(t) * np.sin(p)
     kz = (2*np.pi/wl) * np.cos(t)
@@ -219,7 +219,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
       write -  whether to actually write a file to disk
     Return:
       results -  a list of lists cotaining [ZA, Az, beam power], for all ZA and Az in the given band
-    """	
+    """ 
     # convert frequency to wavelength
     obswl = obsfreq / c.value
 
@@ -241,7 +241,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
     for za in za_chunk:
         # for each Az "pixel", 360deg not included
         for az in genAZZA(0, 2 * np.pi, np.radians(phi_res)):
-			
+            
             # calculate the relevent wavenumber for (theta,phi)
             kx, ky, kz = calcWaveNumbers(obswl, (np.pi / 2) - az, za)
             array_factor = 0 + 0.j
@@ -251,27 +251,27 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                 ph = kx * x + ky * y + kz * z
                 ph_target = target_kx * x + target_ky * y + target_kz * z
                 array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
-			
+            
             # normalise to unity at pointing position
             array_factor /= len(xpos)
-			array_factor_power = np.abs(array_factor)**2
+            array_factor_power = np.abs(array_factor)**2
 
             # keep track of maximum value calculated
             if (array_factor_power > array_factor_max):
                 array_factor_max = array_factor_power
-	
+    
             # calculate the tile beam at the given Az,ZA pixel
             #tile_xpol,tile_ypol = pb.MWA_Tile_full_EE([[za]],[[az]],freq=obsfreq,delays=[delays,delays],power=True,zenithnorm=True,interp=False)
             tile_xpol, tile_ypol = pb.MWA_Tile_analytic(za, az, freq=obsfreq, delays=delays, power=True, zenithnorm=True)
             tile_pattern = (tile_xpol + tile_ypol) / 2.0
-			
+            
             # calculate the phased array power pattern 
             phased_array_pattern = tile_pattern * array_factor_power
             #phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
-		
-            # append results to a reference list for later	
+        
+            # append results to a reference list for later  
             results.append([np.degrees(za), np.degrees(az), phased_array_pattern])
-		
+        
             # add this contribution to the beam solid angle
             omega_A += np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
 
@@ -295,13 +295,13 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                 # we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
                 # values are calculated using that convetion, so we need to represent that here
                 f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0], res[1], res[2]))
-		
+        
     else:
         print "worker {0} not writing".format(rank)
 
     return omega_A
 
-	
+    
 
 ###############
 ## Setup MPI ##
@@ -411,7 +411,7 @@ if rank == 0:
 
     # get the tile locations from the metafits
     print "getting tile locations from metafits file"
-    xpos, ypos, zpos = getTileLocations(args.obsid, flags, fdir=args.out_dir)	
+    xpos, ypos, zpos = getTileLocations(args.obsid, flags, fdir=args.out_dir)   
     if args.coplanar:
         zpos = np.zeros_like(xpos)
 
@@ -470,7 +470,7 @@ comm.barrier()
 
 # set the base output file name (will be editted based on the worker rank)
 oname = "{0}/{1}_{2}_{3:.2f}MHz_{4}_{5}.dat".format(args.out_dir, args.obsid, time.gps, args.freq / 1e6, ra, dec)
-	
+    
 
 # create array factor for given ZA band and write to file
 beam_area = createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
@@ -493,7 +493,7 @@ comm.barrier()
 if rank == 0:
     eff_area = args.efficiency * (c.value / args.freq)**2 * (4 * np.pi / result)
     gain = (1e-26) * eff_area / (2 * k_B.value)
-	
+    
     print "==== Summary ===="
     print "** Pointing **"
     print "(RA, Dec)      : {0} {1}".format(ra, dec)
@@ -529,7 +529,7 @@ if rank == 0:
     else:
         nfiles = 0
 
-	# write the stats file
+    # write the stats file
     with open(oname.replace(".dat", ".stats"), "w") as f:
         f.write("==== Summary ====\n")
         f.write("** Pointing **\n")

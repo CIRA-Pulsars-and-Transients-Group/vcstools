@@ -4,6 +4,7 @@ import subprocess
 import sys
 import argparse
 import glob
+import re
 
 
 def opt_parser():
@@ -22,9 +23,10 @@ def munlink_files(folder, file_type):
         question = 'Preparing to delete {0} files from {1}. Proceed [y/n]? '.format(file_type, folder)
         authority = raw_input(question)
         if (authority == "Y") or (authority =="y"):
-            #command = "munlink {0}".format(files)
-            command = "find {0}/{1} -type f -print0 | xargs -0 munlink".format(folder, file_type)
-            subprocess.call(command, shell=True)
+            for file in glob.iglob(folder+"/*"):
+                if re.search(file_type,file):
+                    command = "munlink {0}".format(file)
+                    subprocess.call(command, shell=True)
             break
         elif (authority == "N") or (authority ==  "n"):
             break
@@ -36,19 +38,29 @@ def remove_raw(obs):
     raw_folder = "/astro/mwaops/vcs/{0}/raw".format(obs) #This is a terrible thing to do and needs to be replaced with a config file
     combined_folder = "/astro/mwaops/vcs/{0}/combined".format(obs) #This is a terrible thing to do and needs to be replaced with a config file
     
-    raw_files = glob.glob("{0}/*.dat".format(raw_folder))
-    tar_files = glob.glob("{0}/*.tar".format(combined_folder))
-    combined_files = glob.glob("{0}/*ch???.dat".format(combined_folder))
-    ics_files = glob.glob("{0}/*ics.dat".format(combined_folder))
+    raw_files = False
+    tar_files = False
+    combined_files = False
+    ics_files = False
+    for file in glob.iglob("{0}/*".format(raw_folder)):
+        if re.search('dat', file):
+            raw_files = True
+    for file in glob.iglob("{0}/*".format(combined_folder)):
+        if re.search('tar', file):
+            tar_files = True
+        if re.search('ch\d{3}', file):
+            combined_files = True
+        if re.search('ics', file):
+            ics_files = True
     
     if raw_files:
-        munlink_files(raw_folder, "*.dat")
+        munlink_files(raw_folder, "dat")
     if tar_files:
-        munlink_files(combined_folder, "*.tar")
+        munlink_files(combined_folder, "tar")
     if combined_files:
-        munlink_files(combined_folder, "*ch???.dat")
+        munlink_files(combined_folder, "ch\d{3}")
     if ics_files:
-        munlink_files(combined_folder, "*ics.dat")
+        munlink_files(combined_folder, "ics")
         
 def remove_beamformed(obs,pointing=None):
     pointing_folder = "/group/mwaops/vcs/{0}/pointings".format(obs) # TODO: Replace this with proper config file

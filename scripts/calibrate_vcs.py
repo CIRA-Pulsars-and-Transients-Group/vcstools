@@ -71,12 +71,16 @@ class BaseRTSconfig(object):
         The list of coarse channels recorded within a subband. Can range from length of 1-24.
     fine_cbw : float
         The fine channel bandwidth in MHz
+    max_frequnecy : float
+        The maximum frequency in the provided data, used by the RTS to calcualte the decorrelation across the band
     corr_dump_time : float
         The time scale on which the correlator dumped the visibilities (i.e. the integration time).
     n_corr_dumps_to_average : int
         The number of correlator dumps to use. 
         Must be such that `corr_dump_time * n_corr_dumps_to_average` is <= than the total amount of data 
         available for the calibrator observation.
+    n_integration_bins : int
+        The number of visbility groups to construct (and then integrate over). 5 seems to be ok - but this will change with configuration.
     PB_HA : float
         The primary beam Hour Angle (in degrees)
     PB_DEC : float
@@ -116,7 +120,7 @@ class BaseRTSconfig(object):
         When there is a problem with some of the observation information and/or its manipulation.
     """
 
-    def __init__(self, obsid, cal_obsid, metafits, srclist, datadir=None, outdir=None, offline=False):
+    def __init__(self, obsid, cal_obsid, metafits, srclist, n_int_bins=6, datadir=None, outdir=None, offline=False):
         self.obsid = obsid  # target observation ID
         self.cal_obsid = cal_obsid  # calibrator observation ID
         self.offline = offline  # switch to decide if offline correlated data or not
@@ -124,6 +128,7 @@ class BaseRTSconfig(object):
         self.nfine_chan = None  # number of fine channels
         self.channels = None  # actual channel numbers
         self.fine_cbw = None  # fine channel bandwidth
+        self.max_frequency = None # the maximum frequency used by the RTS to calculate decorrelation
         self.corr_dump_time = None  # correlator dump times (i.e. integration time)
         self.n_dumps_to_average = None  # number of integration times to use for calibration
         self.PB_HA = None  # primary beam HA
@@ -133,6 +138,7 @@ class BaseRTSconfig(object):
         self.metafits_RTSform = None  # modified metafits file name for RTS
         self.ArrayPositionLat = -26.70331940  # MWA latitude
         self.ArrayPositionLong = 116.6708152  # MWA longitude
+        self.n_integration_bins = n_int_bins # number of visibility integration groups for RTS 
         self.base_str = None  # base string to be written to file, will be editted by RTScal
 
         # Check to make sure paths and files exist:
@@ -321,8 +327,10 @@ class BaseRTSconfig(object):
         ra_pointing_degs = obsinfo['metadata']['ra_pointing']
         dec_pointing_degs = obsinfo['metadata']['dec_pointing']
 
-        # now get teh absolute channels
+        # now get the absolute channels
         self.channels = obsinfo[u'rfstreams'][u"0"][u'frequencies']
+        # and figure out the MaxFrequency parameter
+        self.max_frequency = 1.28 * (max(self.channels) + 1) # this way we ensure that MaxFrequency is applicable for ALL subbands
 
         # convert times using our timeconvert and get LST and JD 
         # TODO: need to make this not have to call an external script
@@ -393,12 +401,12 @@ class BaseRTSconfig(object):
         logger.info("Constructing base RTS configuration script content")
         file_str = """
 ReadAllFromSingleFile=
-BaseFilename={0}/*_gpubox
-ReadGpuboxDirect={1}
-UseCorrelatorInput={2}
+BaseFilename={base}/*_gpubox
+ReadGpuboxDirect={read_direct}
+UseCorrelatorInput={use_corr_input}
 
 ReadMetafitsFile=1
-MetafitsFilename={3}
+MetafitsFilename={metafits_file}
 
 DoCalibration=
 doMWArxCorrections=1
@@ -410,46 +418,49 @@ applyDIcalibration=1
 UsePacketInput=0
 UseThreadedVI=1
 
-ObservationFrequencyBase={4}
-ObservationTimeBase={5}
-ObservationPointCentreHA={6}
-ObservationPointCentreDec={7}
-ChannelBandwidth={8}
-NumberOfChannels={9}
+MaxFrequency={max_freq}
+ObservationFrequencyBase={base_freq}
+ObservationTimeBase={base_time}
+ObservationPointCentreHA={obs_ha}
+ObservationPointCentreDec={obs_dec}
+ChannelBandwidth={fcbw}
+NumberOfChannels={nchan}
 
-CorrDumpsPerCadence={10}
-CorrDumpTime={11}
-NumberOfIntegrationBins=3
+CorrDumpsPerCadence={corr_dumps_per_cadence}
+CorrDumpTime={corr_dump_time}
+NumberOfIntegrationBins={n_int_bins}
 NumberOfIterations=1
 
 StartProcessingAt=0
 
-ArrayPositionLat={12}
-ArrayPositionLong={13}
+ArrayPositionLat={array_lat}
+ArrayPositionLong={array_lon}
 ArrayNumberOfStations=128
 
 ArrayFile=
 
-SourceCatalogueFile={14}
+SourceCatalogueFile={source_list}
 NumberOfCalibrators=1
 NumberOfSourcesToPeel=0
 calBaselineMin=20.0
 calShortBaselineTaper=40.0
-FieldOfViewDegrees=1""".format(self.data_dir,
-                               self.readDirect,
-                               self.useCorrInput,
-                               self.metafits_RTSform,
-                               self.freq_base,
-                               self.JD,
-                               self.PB_HA,
-                               self.PB_DEC,
-                               self.fine_cbw,
-                               self.nfine_chan,
-                               self.n_dumps_to_average,
-                               self.corr_dump_time,
-                               self.ArrayPositionLat,
-                               self.ArrayPositionLong,
-                               self.source_list)
+FieldOfViewDegrees=1""".format(base=self.data_dir,
+                               read_direct=self.readDirect,
+                               use_corr_input=self.useCorrInput,
+                               metafits_file=self.metafits_RTSform,
+                               max_freq=self.max_frequency,
+                               base_freq=self.freq_base,
+                               base_time=self.JD,
+                               obs_ha=self.PB_HA,
+                               obs_dec=self.PB_DEC,
+                               fcbw=self.fine_cbw,
+                               nchan=self.nfine_chan,
+                               corr_dumps_per_cadence=self.n_dumps_to_average,
+                               corr_dump_time=self.corr_dump_time,
+                               n_int_bins=self.n_integration_bins,
+                               array_lat=self.ArrayPositionLat,
+                               array_lon=self.ArrayPositionLong,
+                               source_list=self.source_list)
 
         return file_str
 
@@ -667,13 +678,18 @@ class RTScal(object):
                         "nodes": "{0}".format(nnodes),
                         "gres": "gpu:1",
                         "ntasks-per-node": "1"}
+        module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
-        commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, fname))
+        #commands.append("module use /group/mwa/software/modulefiles")
+        #commands.append("module load RTS/master")
+        #commands.append("module load vcstools/master")
+        commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, fname))
         jobid = submit_slurm(rts_batch, commands, 
                                 slurm_kwargs=slurm_kwargs,
+                                module_list=module_list,
                                 batch_dir=self.batch_dir,
                                 submit=self.submit,
-                                export="ALL")
+                                export="NONE")
         jobids.append(jobid)
 
         return jobids
@@ -847,13 +863,18 @@ class RTScal(object):
                             "nodes": "{0}".format(nnodes),
                             "gres": "gpu:1",
                             "ntasks-per-node": "1"}
+            module_list= ["RTS/master"]
             commands = list(self.script_body)  # make a copy of body to then extend
-            commands.append("srun -N {0} -n {0}  rts_gpu {1}".format(nnodes, k))
+            #commands.append("module use /group/mwa/software/modulefiles")
+            #commands.append("module load RTS/master")
+            #commands.append("module load vcstools/master")
+            commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, k))
             jobid = submit_slurm(rts_batch, commands,
                                     slurm_kwargs=slurm_kwargs,
+                                    module_list=module_list,
                                     batch_dir=self.batch_dir,
                                     submit=self.submit,
-                                    export="ALL")
+                                    export="NONE")
             jobids.append(jobid)
 
         return jobids
@@ -886,39 +907,47 @@ class RTScal(object):
 if __name__ == '__main__':
 
     # Dictionary for choosing log-levels
-    loglevels = {"DEBUG": logging.DEBUG, 
-                 "INFO": logging.INFO, 
-                 "WARNING": logging.WARNING}
+    loglevels = dict(DEBUG=logging.DEBUG,
+                     INFO=logging.INFO,
+                     WARNING=logging.WARNING)
 
     # Option parsing
     parser = argparse.ArgumentParser(
-        description="Script for creating RTS configuration files and submitting relevant jobs in the VCS pulsar pipeline")
+        description="Script for creating RTS configuration files and submitting relevant jobs in the "
+                    "VCS pulsar pipeline")
 
-    parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target.", default=None)
+    parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None, required=True)
 
     parser.add_argument("-O", "--cal_obsid", type=int,
                         help="Calibrator observation ID for the target observation. "
-                             "Can be the same as --obs if using in-beam visibilities.", default=None)
+                             "Can be the same as --obs if using in-beam visibilities", default=None, required=True)
 
     parser.add_argument("-m", "--metafits", type=str,
-                        help="Path to the relevant calibration observation metafits file.", default=None)
+                        help="Path to the relevant calibration observation metafits file", default=None, required=True)
 
-    parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list.", default=None)
+    parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list",
+                        default=None, required=True)
 
     parser.add_argument("--gpubox_dir", type=str, 
-                        help="Where the *_gpubox*.fits files are located. " 
+                        help="Where the *_gpubox*.fits files are located " 
                              "(ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.)", default=None)
 
     parser.add_argument("--rts_output_dir", type=str,
-                        help="Parent directory where you want the /rts directory and /batch directory to be created. "
+                        help="Parent directory where you want the /rts directory and /batch directory to be created "
                              "(ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.)", default=None)
 
-    parser.add_argument("--offline", action='store_true',
-                        help="Tell the RTS to read calibrator data in the offline correlated data format.")
+    parser.add_argument("--n_vis_grp", type=int,
+                        help="The number of visbility groups for the RTS to construct. "
+                        "This changes with the MWA configuration "
+                        "(i.e. long baselines require more visibility groups to combat decorrelation)",
+                        default=6)
 
-    parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue.")
+    parser.add_argument("--offline", action='store_true',
+                        help="Tell the RTS to read calibrator data in the offline correlated data format")
+
+    parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue")
     
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: DEBUG.", 
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
                         choices=loglevels.keys(), default="INFO")
 
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
@@ -939,19 +968,15 @@ if __name__ == '__main__':
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
     ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(name)s  %(levelname)-9s :: %(message)s')
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-    if (args.obsid is None) or (args.cal_obsid is None) or (args.metafits is None) or (args.srclist is None):
-        print "You need to specify all of the follow arguments:"
-        print "-o/--obsid\n-O/--cal_obsid\n-m/--metafits\n-s/--srclist"
-        sys.exit(1)
-
     logger.info("Creating BaseRTSconfig instance - compiling basic RTS configuration script")
     try:
-        baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist, args.gpubox_dir,
-                                      args.rts_output_dir, args.offline)
+        baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist,
+                                        datadir=args.gpubox_dir, outdir=args.rts_output_dir,
+                                        offline=args.offline, n_int_bins=args.n_vis_grp)
         baseRTSconfig.run()
     except CalibrationError as e:
         logger.critical("Caught CalibrationError: {0}".format(e))
