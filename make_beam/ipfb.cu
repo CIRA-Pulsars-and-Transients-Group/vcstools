@@ -43,7 +43,11 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
     //threadIdx.x = npol*ch + pol
     int p = threadIdx.y;
     int idx = blockDim.x * gridDim.x * p + blockDim.x * blockIdx.x + threadIdx.x;
-    
+ 
+    //idx = npol*nchan*nsamples*p +
+    //      npol*nchan*s_in +
+    //      npol*ch +         pol;
+
     // Calculate the number of channels
     int nchan = blockDim.x / npol;
 
@@ -54,12 +58,6 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
     // Calculate the first "in" index for this thread
     int i0 = ((idx + blockDim.x - npol) / blockDim.x) * blockDim.x +
              (threadIdx.x % npol);
-
-    //i = npol*nchan*nsamples*p +
-    //    npol*nchan*s_in +
-    //    npol*ch +
-    //    pol;
-
     //f = fil_size*ch + tap
     
     // Calculate the "fils" first column index
@@ -132,9 +130,10 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
     // odd.
     int start_s;
     
-    if (file_no % 3 == 0) start_s = 3*nsamples - (*g)->ntaps;
+    if (file_no % 3 == 0)      start_s = 3*nsamples - (*g)->ntaps;
     else if (file_no % 3 == 1) start_s = nsamples - (*g)->ntaps;
-    else start_s = 2*nsamples - (*g)->ntaps;
+    else                       start_s = 2*nsamples - (*g)->ntaps;
+
     int p, s_in, s, ch, pol, i;
     for (p = 0; p < npointing; p++)
     for (s_in = 0; s_in < nsamples + (*g)->ntaps; s_in++)

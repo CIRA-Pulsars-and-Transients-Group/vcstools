@@ -74,15 +74,15 @@ void populate_vdif_header(
         struct delays   *delay_vals,
         int              npointing );
 
-ComplexFloat get_std_dev_complex( ComplexFloat *input, int nsamples );
+ComplexFloat get_std_dev_complex( ComplexFloat *input, int begin, int nsamples );
 
 void set_level_occupancy( ComplexFloat *input, int nsamples,
                           float *new_gain );
 
-void get_mean_complex( ComplexFloat *input, int nsamples, float *rmean,
+void get_mean_complex( ComplexFloat *input, int begin, int nsamples, float *rmean,
                        float *imean, ComplexFloat *cmean );
 
-void normalise_complex( ComplexFloat *input, int nsamples, float scale );
+void normalise_complex( ComplexFloat *input, int begin, int nsamples, float scale );
 
 void to_offset_binary( int8_t *i, int n );
 
