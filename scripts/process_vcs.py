@@ -198,7 +198,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         commands.append("fi")
 
                         submit_slurm(check_batch, commands, batch_dir=batch_dir, module_list=module_list,
-                                     slurm_kwargs={"time": check_secs_to_run, "partition": "workq", "nice": nice, "mem-per-cpu": 8192MB},
+                                     slurm_kwargs={"time": check_secs_to_run, "partition": "workq", "nice": nice, "mem-per-cpu": "8192MB"},
                                      vcstools_version=vcstools_version, submit=False,
                                      outfile=batch_dir+check_batch+"_0.out", cluster="zeus", export="NONE")
 
