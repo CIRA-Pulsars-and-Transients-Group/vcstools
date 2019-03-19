@@ -26,16 +26,16 @@ def getmeta(service='obs', params=None):
   if service.strip().lower() in ['obs', 'find', 'con']:
     service = service.strip().lower()
   else:
-    logging.error("invalid service name: %s", service)
+    logger.error("invalid service name: %s", service)
     return
 
   try:
     result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
   except urllib2.HTTPError as error:
-    logging.error("HTTP error from server: code=%d, response:\n %s", error.code, error.read())
+    logger.error("HTTP error from server: code=%d, response:\n %s", error.code, error.read())
     return
   except urllib2.URLError as error:
-    logging.error("URL or network error: %s", error.reason)
+    logger.error("URL or network error: %s", error.reason)
     return
 
   return result
@@ -55,10 +55,10 @@ def print_info(obs_id):
 
     obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
 
-    logging.info("Obs ID %s:", obs_id)
-    logging.info("Name: %s", obsinfo['obsname'])
-    logging.info("Channels: %s", obsinfo['rfstreams']['0']['frequencies'])
-    logging.info("Duration: %s", obsinfo['stoptime'] - obsinfo['starttime'], "seconds")
+    logger.info("Obs ID %s:", obs_id)
+    logger.info("Name: %s", obsinfo['obsname'])
+    logger.info("Channels: %s", obsinfo['rfstreams']['0']['frequencies'])
+    logger.info("Duration: %s", obsinfo['stoptime'] - obsinfo['starttime'], "seconds")
     #times=[file[11:21] for file in obsinfo['files'] if is_number(file[11:21])] #Make a list of gps times excluding non-numbers from list
     #obs_start = int(min(times))
     #obs_end = int(max(times))
