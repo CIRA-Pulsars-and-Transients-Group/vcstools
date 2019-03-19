@@ -20,10 +20,6 @@ def sfreq(freqs):
     highchans.reverse()
     freqs = lowchans + highchans
 
-    #print "lowchans", lowchans
-    #print "highchans", highchans
-    #print "freqs", freqs
-
     return freqs
 
 if __name__ == '__main__':
@@ -41,4 +37,4 @@ if __name__ == '__main__':
     freq_str   = hdulist[0].header['CHANNELS']
     freq_array = [int(f) for f in freq_str.split(',')]
 
-    print sfreq(freq_array)
+    print(sfreq(freq_array))
