@@ -10,7 +10,7 @@ import argparse
 def sfreq(freqs):
 
     if len(freqs) != 24:
-        print "There are not 24 coarse chans defined for this obs. Got: %s" % freqs
+        print("There are not 24 coarse chans defined for this obs. Got: %s" % freqs)
         return
 
     #freqs.sort()   # It should already be sorted, but just in case...[SET] Commenting this out because sort() is ironically putting 2-digit channels out of order
