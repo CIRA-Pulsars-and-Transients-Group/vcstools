@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
 Contains a single function that reads in a list of integers (channel numbers),
 and returns a list of the same integers whose order depends on whether or not
