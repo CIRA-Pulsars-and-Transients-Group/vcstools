@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 
 import subprocess
-
+import config
 
 SLURM_TMPL = """#!/bin/bash -l
 
 #SBATCH --export={export}
 #SBATCH --output={outfile}
-#SBATCH --account=mwaops
+#SBATCH --account={account}
 #SBATCH --clusters={cluster}
 #
 {header}
 
 {switches}
-module use /group/mwa/software/modulefiles
+module use {module_dir}
 module load vcstools/{version}
 {modules}
 
@@ -156,9 +156,15 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
     # join the commands into a single string
     commands = "\n".join(commands)
 
+    #Load computer dependant config file
+    comp_config = config.load_config_file()
+    
     # format the template script
-    tmpl = tmpl.format(script=commands, outfile=outfile, header=header, switches=switches, modules=modules,
-                       version=vcstools_version, cluster=cluster, export=export)
+    tmpl = tmpl.format(script=commands, outfile=outfile, header=header, 
+                       switches=switches, modules=modules, 
+                       version=vcstools_version, cluster=cluster, 
+                       export=export, account=comp_config['group_account'],
+                       module_dir=comp_config['module_dir'])
 
     # write the formatted template to the job file for submission
     with open(jobfile, "w") as fh:
