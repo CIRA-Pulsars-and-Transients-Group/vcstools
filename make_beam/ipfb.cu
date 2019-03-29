@@ -37,27 +37,27 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *fils_real, float *fils_imag,
                                int ntaps, int npol, float *out )
 {
-    //blockIdx.x = sample number
-    //gridDim.x = ns
+    int s = blockIdx.x;
+    int nsamples = gridDim.x;
     //blockDim.x = nchan * npol 
     //threadIdx.x = npol*ch + pol
-    int p = threadIdx.y;
-    int idx = blockDim.x * gridDim.x * p + blockDim.x * blockIdx.x + threadIdx.x;
  
-    //idx = npol*nchan*nsamples*p +
-    //      npol*nchan*s_in +
-    //      npol*ch +         pol;
-
     // Calculate the number of channels
     int nchan = blockDim.x / npol;
+    int p = threadIdx.y;
+    int idx = nchan * npol * nsamples * p + nchan * npol * s + threadIdx.x;
+ 
+    //idx = npol*nchan*(nsamples+ntaps)*p +
+    //      npol*nchan*s_in +
+    //      npol*ch +         pol;
 
     // Calculate the first "out" index
     int o_real = 2*idx;
     int o_imag = o_real + 1;
 
     // Calculate the first "in" index for this thread
-    int i0 = ((idx + blockDim.x - npol) / blockDim.x) * blockDim.x +
-             (threadIdx.x % npol);
+    int i0 = ((idx + nchan * npol - npol) / (nchan * npol)) * nchan * npol 
+             + (threadIdx.x % npol) + p * ntaps * nchan * npol;
     //f = fil_size*ch + tap
     
     // Calculate the "fils" first column index
@@ -76,7 +76,7 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
         for (ch = 0; ch < nchan; ch++)
         {
             // The "in" index
-            i = i0 + blockDim.x*tap + npol*ch;
+            i = i0 + nchan * npol*tap + npol*ch;
 
             // The "fils" index
             f = f0 + nchan*(ntaps-1-tap) + nchan*ntaps*ch;
@@ -144,7 +144,7 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
             for (pol = 0; pol < npol; pol++)
             {
                 // Calculate the index for in_real and in_imag;
-                i = npol*nchan*nsamples*p +
+                i = npol*nchan*(nsamples + (*g)->ntaps)*p +
                     npol*nchan*s_in + 
                     npol*ch + 
                     pol;
