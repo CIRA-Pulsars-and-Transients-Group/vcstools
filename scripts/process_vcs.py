@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 
 import subprocess
@@ -196,7 +196,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             module_list = ["numpy", "mwa-voltage/master"]
             commands = []
             #commands.append("module load numpy")
-            commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(config['base_data_dir']))
+            commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_data_dir']))
             commands.append(database_vcs.add_database_function())
             commands.append("newcount=0")
             commands.append("let oldcount=$newcount-1")
@@ -223,12 +223,11 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             submit_slurm(check_batch, commands, batch_dir=batch_dir, 
                          module_list=module_list,
                          slurm_kwargs={"time": check_secs_to_run, 
-                                       "partition": "workq", 
                                        "nice": nice, 
                                        "mem-per-cpu": "8192MB"},
                          vcstools_version=vcstools_version, submit=False,
                          outfile=batch_dir+check_batch+"_0.out", 
-                         cluster="zeus", export="NONE")
+                         queue="cpuq", export="NONE")
 
             # Write out the tar batch file if in mode 15
             #if format == 16:
@@ -240,7 +239,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
 
 
             body = []
-            body.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(config['base_data_dir']))
+            body.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_data_dir']))
             body.append(database_vcs.add_database_function())
             body.append("oldcount=0")
             body.append("let newcount=$oldcount+1")
@@ -259,11 +258,10 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, 
                          module_list=module_list, 
                          slurm_kwargs={"time": str(volt_secs_to_run), 
-                                       "partition": "copyq",
                                        "nice" : nice},
                          vcstools_version=vcstools_version, 
                          outfile=batch_dir+voltdownload_batch+"_1.out",
-                         cluster="zeus", export="NONE")
+                         queue="copyq", export="NONE")
 
             # submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
             continue
@@ -342,9 +340,8 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         commands.append('unzip *.zip')
         submit_slurm(obsdownload_batch, commands, batch_dir=batch_dir, 
                      module_list=module_list,
-                     slurm_kwargs={"time": secs_to_run, "partition": "copyq", 
-                                   "nice": nice},
-                     vcstools_version=vcstools_version, cluster="zeus", 
+                     slurm_kwargs={"time": secs_to_run, "nice": nice},
+                     vcstools_version=vcstools_version, queue="copyq", 
                      export="NONE")
 
 
@@ -374,7 +371,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         check_batch = "check_recombine_{0}".format(time_to_get)
         module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "numpy", "mwa-voltage/master"]
         commands = []
-        commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(config['base_data_dir']))
+        commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_data_dir']))
         commands.append(database_vcs.add_database_function())
         commands.append("newcount=0")
         commands.append("let oldcount=$newcount-1")
@@ -391,15 +388,15 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         commands.append("fi")
         submit_slurm(check_batch, commands, batch_dir=batch_dir, 
                      module_list=module_list,
-                     slurm_kwargs={"time": "15:00", "partition": "gpuq", "nice": nice},
+                     slurm_kwargs={"time": "15:00", "nice": nice},
                      vcstools_version=vcstools_version, submit=False, 
                      outfile=batch_dir+check_batch+"_0.out",
-                     export="NONE")
+                     queue='gpuq', export="NONE")
 
         module_list = ["module switch PrgEnv-cray PrgEnv-gnu",
                        "numpy", "mwa-voltage/master", "mpi4py", "cfitsio"]
         commands = []
-        commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(config['base_data_dir']))
+        commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_data_dir']))
         commands.append(database_vcs.add_database_function())
         #commands.append("module switch PrgEnv-cray PrgEnv-gnu")
         #commands.append("module load mpi4py")
@@ -422,12 +419,11 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         submit_slurm(recombine_batch, commands, batch_dir=batch_dir, 
                      module_list=module_list,
                      slurm_kwargs={"time": "06:00:00", "nodes": str(nodes), 
-                                   "partition": "gpuq", 
                                    "ntasks-per-node": jobs_per_node, 
                                    "nice": nice},
                      vcstools_version=vcstools_version, 
                      outfile=batch_dir+recombine_batch+"_1.out",
-                     export="NONE")
+                     queue='gpuq', export="NONE")
 
 
 
@@ -480,7 +476,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
             if (len(f) > 0):
                 corr_batch = "correlator_{0}_gpubox{1:0>2}".format(inc_start,gpubox_label)
                 body = []
-                body.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(config['base_data_dir']))
+                body.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_data_dir']))
                 body.append(database_vcs.add_database_function())
                 #body.append("source /group/mwaops/PULSAR/psrBash.profile")
                 #body.append("module swap craype-ivybridge craype-sandybridge")
@@ -512,8 +508,8 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                 # added factor two on 10 April 2017 as galaxy seemed really slow...
                 submit_slurm(corr_batch, body, module_list=module_list,
                              slurm_kwargs={"time": secs_to_run, "nice": nice,
-                                           "partition": "gpuq", "gres": "gpu:1"},
-                             vcstools_version=vcstools_version, 
+                                           "gres": "gpu:1"},
+                             queue='gpuq', vcstools_version=vcstools_version, 
                              batch_dir=batch_dir, export="NONE")
                 # batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
                 # submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
@@ -622,7 +618,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     # VDIF will need gpuq if inverting pfb with '-m' option, otherwise cpuq is fine
     # In general this needs to be cleaned up, prefferably to be able to intelligently select a
     # queue and a maximum wall time (SET)
-    partition = "gpuq"
     n_omp_threads = 8
     openmp_line = "export OMP_NUM_THREADS={0}".format(n_omp_threads)
 
@@ -658,9 +653,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
         job_id = submit_slurm(make_beam_small_batch, commands,
                     batch_dir=batch_dir,
-                    slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1",
+                    slurm_kwargs={"time": secs_to_run, "gres": "gpu:1",
                                   "nice" : nice},
-                    vcstools_version=vcstools_version, submit=True, export="NONE")
+                    queue='gpuq', vcstools_version=vcstools_version, 
+                    submit=True, export="NONE")
         job_id_list.append(job_id)
     #TODO This can be returned as a job id string that can be slapped right on for dependancies
     #job_id_str = ""
@@ -754,9 +750,9 @@ if __name__ == '__main__':
     (opts, args) = parser.parse_args()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
+    logger.setLevel(loglevels[opts.loglvl])
     ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
+    ch.setLevel(loglevels[opts.loglvl])
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)

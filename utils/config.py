@@ -9,13 +9,25 @@ Functions to handle parsing the config file for multiple super computers
 GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
                  'base_product_dir' : '/group/mwaops/vcs/',
                  'group_account' : 'mwaops',
-                 'module_dir' : '/group/mwa/software/modulefiles'}
+                 'module_dir' : '/group/mwa/software/modulefiles',
+                 'cpuq_cluster' : 'zeus',
+                 'cpuq_partition' : 'workq',
+                 'gpuq_cluster' : 'galaxy',
+                 'gpuq_partition' : 'gpuq',
+                 'copyq_cluster' : 'zeus',
+                 'copyq_partition' : 'copyq'}
 
 #TODO will have to add something for handling slurm jobs
 OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'base_product_dir' : '/fred/oz125/vcs/',
                  'group_account' : 'oz125',
-                 'module_dir' : ''}#TODO make one
+                 'module_dir' : '/home/nswainst/modulefiles',
+                 'cpuq_cluster' : 'farnarkle',
+                 'cpuq_partition' : 'skylake',
+                 'gpuq_cluster' : 'farnarkle',
+                 'gpuq_partition' : 'skylake-gpu',
+                 'copyq_cluster' : 'farnarkle',
+                 'copyq_partition' : 'skylake'} #TODO check if there's a better one
 
     
 import logging
