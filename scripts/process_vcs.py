@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 
 import subprocess
@@ -16,6 +16,7 @@ import sqlite3 as lite
 from astropy.io import fits as pyfits
 from reorder_chans import *
 from mdir import mdir
+import logging
 
 #vcstools functions
 from job_submit import submit_slurm
@@ -23,7 +24,7 @@ import mwa_metadb_utils as meta
 import database_vcs
 import config
 
-
+logger = logging.getLogger(__name__)
 
 def tmp(suffix=".sh"):
     t = tempfile.mktemp(suffix=suffix)
@@ -620,6 +621,11 @@ def database_command(args, obsid):
 
 if __name__ == '__main__':
 
+    # Dictionary for choosing log-levels
+    loglevels = dict(DEBUG=logging.DEBUG,
+                     INFO=logging.INFO,
+                     WARNING=logging.WARNING)
+   
     modes=['download', 'download_ics', 'download_cal', 'recombine','correlate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
@@ -667,6 +673,8 @@ if __name__ == '__main__':
     parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
     parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
     parser.add_option("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.[default=%default]")
+    parser.add_option("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+                                    choices=loglevels.keys(), default="INFO")
     parser.add_option("-V", "--version", action="store_true", help="Print version and quit")
     parser.add_option("--vcstools_version", type=str, default="master", help="VCSTools version to load in jobs (i.e. on the queues) [default=%default]")
     parser.add_option("--nice", type="int", default=0, help="Reduces your priority of Slurm Jobs. [default=%default]")
@@ -675,6 +683,14 @@ if __name__ == '__main__':
     parser.add_option_group(group_beamform)
 
     (opts, args) = parser.parse_args()
+
+    # set up the logger for stand-alone execution
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
 
     print "Using vcstools/{0}".format(opts.vcstools_version)
     if opts.version:
@@ -687,6 +703,7 @@ if __name__ == '__main__':
             print("ImportError: {0}".format(ie))
             sys.exit(0)
 
+    #Option parsing
     if opts.all and (opts.begin or opts.end):
         print "Please specify EITHER (-b,-e) OR -a"
         quit()
