@@ -17,7 +17,6 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
                  'copyq_cluster' : 'zeus',
                  'copyq_partition' : 'copyq'}
 
-#TODO will have to add something for handling slurm jobs
 OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'base_product_dir' : '/fred/oz125/vcs/',
                  'group_account' : 'oz125',

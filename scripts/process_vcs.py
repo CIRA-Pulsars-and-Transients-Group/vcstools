@@ -193,7 +193,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
 
             checks = distutils.spawn.find_executable("checks.py")
             # Write out the checks batch file but don't submit it
-            module_list = ["numpy", "mwa-voltage/master"]
+            module_list = ["mwa-voltage/master"]
             commands = []
             #commands.append("module load numpy")
             commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_data_dir']))

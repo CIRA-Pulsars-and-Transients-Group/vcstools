@@ -134,7 +134,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         outfile = batch_dir + name + ".out"
     
     # create the header from supplied arguments
-    for k,v in slurm_kwargs.iteritems():
+    for k,v in slurm_kwargs.items():
         if len(k) > 1:
             k = "--" + k + "="
         else:
@@ -205,8 +205,8 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     if submit:
         submit_cmd = subprocess.Popen(batch_submit_line, shell=True, stdout=subprocess.PIPE)
         for line in submit_cmd.stdout:
-            if "Submitted" in line:
-                jobid = str(line.split(" ")[3])
+            if b"Submitted" in line:
+                jobid = str(line.split(b" ")[3])
         if jobid is None:
             logger.debug(batch_submit_line)
             logger.debug(submit_cmd.stdout)
