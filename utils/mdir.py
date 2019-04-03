@@ -2,6 +2,10 @@
 
 import os
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def mdir(path, description, gid=30832):
     """
@@ -18,13 +22,13 @@ def mdir(path, description, gid=30832):
         os.makedirs(path)
         # we leave the uid unchanged but change gid to mwaops
         os.chown(path, -1, gid)
-        os.chmod(path, 0771)
+        os.chmod(path, 0o771)
         os.system("chmod -R g+s {0}".format(path))
     except:
         if (os.path.exists(path)):
-            print "{0} Directory Already Exists\n".format(description)
+            logger.info("{0} Directory Already Exists\n".format(description))
         else:
-            print "ERROR: Could not make new directories\n"
+            logger.error("Could not make new directories\n")
             sys.exit(0)
 
 
