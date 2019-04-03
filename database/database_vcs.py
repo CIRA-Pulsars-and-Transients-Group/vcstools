@@ -125,7 +125,8 @@ if __name__ == '__main__':
 
     if opts.mode == "s":
         vcs_row = database_script_start(opts.vcs_id, opts.command, opts.argument)
-        #print vcs_row
+        #prints to standard out to be used by the end mode
+        print(vcs_row)
     elif opts.mode == "e":
         database_script_stop(opts.rownum, opts.errorcode)
     elif opts.mode == "vc" or opts.mode == "vs":
