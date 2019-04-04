@@ -10,43 +10,10 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 from mwapy.pb import primary_beam as pb
+from mwa_metadb_utils import getmeta 
 
-import urllib
-import urllib2
-import json
 import sys
 import argparse
-
-
-def getmeta(service='obs', params=None):
-    """
-    getmeta(service='obs', params=None)
-    
-    Given a JSON web service ('obs', find, or 'con') and a set of parameters as
-    a Python dictionary, return the RA and Dec in degrees from the Python dictionary.
-    """
-    BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
-    if params:
-        data = urllib.urlencode(params)  # Turn the dictionary into a string with encoded 'name=value' pairs
-    else:
-        data = ''
-    #Validate the service name
-    if service.strip().lower() in ['obs', 'find', 'con']:
-        service = service.strip().lower()
-    else:
-        print "invalid service name: %s" % service
-        return
-    #Get the data
-    try:
-        result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
-    except urllib2.HTTPError as error:
-        print "HTTP error from server: code=%d, response:\n %s" % (error.code, error.read())
-        return
-    except urllib2.URLError as error:
-        print "URL or network error: %s" % error.reason
-        return
-    #Return the result dictionary
-    return result
 
 
 def get_obs_metadata(obs):
