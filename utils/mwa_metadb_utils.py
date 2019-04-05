@@ -4,6 +4,38 @@
 Collection of database related utilities that are used throughout the VCS processing pipeline
 """
 
+def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
+    """
+    Calculate the altitude, azumith and zenith for an obsid
+
+    Args:
+        obsid  : The MWA observation id (GPS time)
+        ra     : The right acension in HH:MM:SS
+        dec    : The declintation in HH:MM:SS
+        degrees: If true the ra and dec is given in degrees (Default:False)
+    """
+    from astropy.time import Time
+    from astropy.coordinates import SkyCoord, AltAz, EarthLocation
+    from astropy import units as u
+
+    obstime = Time(float(obsid),format='gps') 
+    
+    if ra is None or dec is None:
+        #if no ra and dec given use obsid ra and dec
+        print get_common_obs_metadata(obsid)[1:3]
+        ra, dec = get_common_obs_metadata(obsid)[1:3]
+
+    if degrees:
+        sky_posn = SkyCoord(ra, dec, unit=(u.deg,u.deg))
+    else:
+        sky_posn = SkyCoord(ra, dec, unit=(u.hourangle,u.deg)) 
+    earth_location = EarthLocation.of_site('Murchison Widefield Array') 
+    altaz = sky_posn.transform_to(AltAz(obstime=obstime, location=earth_location)) 
+    Alt = altaz.alt.deg
+    Az  = altaz.az.deg 
+    Za  = 90. - Alt
+    return Alt, Az, Za
+
 def get_common_obs_metadata(obs, return_all = False):
     """
     Gets needed comon meta data from http://mwa-metadata01.pawsey.org.au/metadata/

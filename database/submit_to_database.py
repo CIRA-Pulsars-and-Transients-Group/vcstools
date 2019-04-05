@@ -29,9 +29,6 @@ import textwrap as _textwrap
 
 #import the required parts of astropy
 from astropy.table import Table
-from astropy.time import Time
-from astropy.coordinates import SkyCoord, AltAz, EarthLocation  
-from astropy import units as u
 
 #TODO check if I need the below two imports
 import requests.packages.urllib3
@@ -42,7 +39,7 @@ from mwapy.pb import primary_beam
 from mwapy.pb import primarybeammap_tant as pbtant
 import mwapy.pb.primarybeammap as pbl
 from mwa_pulsar_client import client
-import mwa_metadb_utils as meta
+from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 import find_pulsar_in_obs as fpio
 
 web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
@@ -340,16 +337,9 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
 
     #gain uncertainty through beam position estimates
     RAs, Decs = sex2deg(ra_obs,dec_obs)
-    obstime = Time(float(obsid),format='gps')
+    Alts, Azs, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
     
-    #astropy method
-    sky_posn = SkyCoord(pul_ra, pul_dec, unit=(u.hourangle,u.deg))
-    earth_location = EarthLocation.of_site('Murchison Widefield Array')
-    altaz = sky_posn.transform_to(AltAz(obstime=obstime, location=earth_location))
-    Azs  = altaz.az.deg
-    Alts = altaz.alt.deg
-    
-    theta=np.radians(90.-Alts)
+    theta=np.radians(Zas)
     u_gain_per = (1. - avg_power)*0.12 + (theta/90.)*(theta/90.)*2. + 0.1
     u_gain = gain * u_gain_per #assumed to be 10% 
         
@@ -665,7 +655,7 @@ if __name__ == "__main__":
         
 
     #get meta data from obsid
-    metadata = meta.get_common_obs_metadata(obsid)
+    metadata = get_common_obs_metadata(obsid)
     obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = metadata
     minfreq = float(min(channels))
     maxfreq = float(max(channels))

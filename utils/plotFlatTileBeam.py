@@ -8,13 +8,13 @@ from astropy.coordinates import SkyCoord,EarthLocation,AltAz
 from astropy.time import Time
 import astropy.units as u
 import argparse
+from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 
 
 def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     
     # extra imports from MWA_Tools to access database and beam models
     from mwapy.pb import primary_beam as pb
-    from mwapy.pb import mwa_db_query as dbq
 
     _az = np.linspace(0, 360, 3600)
     _za = np.linspace(0, 90, 900)
@@ -33,12 +33,13 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     colours = cm.viridis(np.linspace(1, 0, len(targetAZ)))
 
     ## MWA BEAM CALCULATIONS ##
-    xdelays, ydelays = dbq.get_delays_obsid(obsid)[0] # x-pol and y-pol delays for obsid
-    ptAZ, _, ptZA = dbq.get_beam_pointing(obsid) # Az and ZA in degrees for obsid   
+    xdelays = get_common_obs_metadata(obsid)[4] # x-pol and y-pol delays for obsid
+    _, ptAZ, ptZA = mwa_alt_az_za(obsid)
+    #ptAZ, _, ptZA = dbq.get_beam_pointing(obsid) # Az and ZA in degrees for obsid   
 
     print "obs pointing: ({0}, {1})".format(ptAZ,ptZA)
 
-    xp,yp = pb.MWA_Tile_full_EE(np.radians(za), np.radians(az), obsfreq*1e6, delays=[xdelays,ydelays], zenithnorm=True, interp=True)
+    xp,yp = pb.MWA_Tile_full_EE(np.radians(za), np.radians(az), obsfreq*1e6, delays=xdelays, zenithnorm=True, interp=True)
     pattern = np.sqrt(xp**2+yp**2) # sum to get "total intensity"
     pmax = pattern.max()
     hpp = 0.5 * pmax # half-power point
@@ -59,7 +60,7 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     track_lines = []
     print "beam power at target track points:"
     for ta,tz in zip(targetAZ, targetZA):
-        xp, yp = pb.MWA_Tile_full_EE(np.radians([[tz]]), np.radians([[ta]]), obsfreq*1e6, delays=[xdelays,ydelays], zenithnorm=True, interp=False)
+        xp, yp = pb.MWA_Tile_full_EE(np.radians([[tz]]), np.radians([[ta]]), obsfreq*1e6, delays=xdelays, zenithnorm=True, interp=False)
         bp = (xp + yp) / 2
         track_lines.append(bp[0])
         print "({0:.2f},{1:.2f}) = {2:.3f}".format(ta, tz, bp[0][0])

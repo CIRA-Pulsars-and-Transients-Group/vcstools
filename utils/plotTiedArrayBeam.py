@@ -10,21 +10,19 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 from mwapy.pb import primary_beam as pb
-from mwa_metadb_utils import getmeta 
+from mwa_metadb_utils import getmeta, mwa_alt_az_za
 
 import sys
 import argparse
 
 
 def get_obs_metadata(obs):
-    from mwapy.pb import mwa_db_query as mwa_dbQ
-
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
     channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
     freqs = [float(c)*1.28 for c in channels]
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
     ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
-    pointing_AZ, pointing_EL, pointing_ZA = mwa_dbQ.get_beam_pointing(obs)
+    pointing_EL, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
 
     return {"channels":channels,
             "frequencies":freqs,
