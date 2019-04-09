@@ -9,7 +9,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
-from mwapy.pb import primary_beam as pb
+from mwa_pb import primary_beam as pb
 from mwa_metadb_utils import getmeta, mwa_alt_az_za
 
 import sys

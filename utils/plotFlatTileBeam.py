@@ -14,7 +14,7 @@ from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     
     # extra imports from MWA_Tools to access database and beam models
-    from mwapy.pb import primary_beam as pb
+    from mwa_pb import primary_beam as pb
 
     _az = np.linspace(0, 360, 3600)
     _za = np.linspace(0, 90, 900)

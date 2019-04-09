@@ -21,7 +21,6 @@ import sys
 from shutil import copyfile as cp
 import math
 from scipy.interpolate import InterpolatedUnivariateSpline
-import matplotlib.pyplot as plt
 import glob
 import ephem
 import logging
@@ -35,12 +34,15 @@ import requests.packages.urllib3
 requests.packages.urllib3.disable_warnings()
 
 #import mwa software
-from mwapy.pb import primary_beam
-from mwapy.pb import primarybeammap_tant as pbtant
-import mwapy.pb.primarybeammap as pbl
+from mwa_pb import primarybeammap_tant as pbtant
+from mwa_pb import primary_beam
+import mwa_pb.primarybeammap as pbl
 from mwa_pulsar_client import client
 from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 import find_pulsar_in_obs as fpio
+
+
+import matplotlib.pyplot as plt
 
 web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
 
