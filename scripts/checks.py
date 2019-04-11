@@ -174,7 +174,7 @@ def get_files_and_sizes(obsID, mode):
     elif mode == 'ics':
         suffix = '_ics.dat'
     else:
-        loffer.error("Wrong mode supplied. Options are raw, tar_ics, and ics")
+        logger.error("Wrong mode supplied. Options are raw, tar_ics, and ics")
         return
     logger.info("Retrieving file info from MWA database for all {0} files...".format(suffix))
     meta = getmeta(service='obs', params={'obs_id':obsID})
