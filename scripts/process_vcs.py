@@ -193,7 +193,6 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
 
             checks = distutils.spawn.find_executable("checks.py")
             # Write out the checks batch file but don't submit it
-            module_list = ["mwa-voltage/master"]
             commands = []
             #commands.append("module load numpy")
             commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_data_dir']))
@@ -221,7 +220,6 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             commands.append("fi")
 
             submit_slurm(check_batch, commands, batch_dir=batch_dir, 
-                         module_list=module_list,
                          slurm_kwargs={"time": check_secs_to_run, 
                                        "nice": nice, 
                                        "mem-per-cpu": "8192MB"},
@@ -238,6 +236,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
 
 
 
+            module_list=["mwa-voltage/master"]
             body = []
             body.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_data_dir']))
             body.append(database_vcs.add_database_function())
