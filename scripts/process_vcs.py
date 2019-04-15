@@ -14,6 +14,7 @@ import time
 import distutils.spawn
 import sqlite3 as lite
 from astropy.io import fits as pyfits
+from astropy.time import Time
 from reorder_chans import *
 import database_vcs
 from mdir import mdir
@@ -519,9 +520,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
 
     # make_beam_small requires the start time in UTC, get it from the start
     # GPS time as is done in timeconvert.py
-    from mwapy import ephem_utils
-    t = ephem_utils.MWATime(gpstime=float(start))
-    utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
+    utctime = Time(start, format='gps', scale='utc').fits
+    # remove (UTC) that some astropy versions leave on the end
+    if utctime.endswith('(UTC)'):
+        utctime = utctime[:-5]
 
     print "Running make_beam"
     P_dir = product_dir+"/pointings"
