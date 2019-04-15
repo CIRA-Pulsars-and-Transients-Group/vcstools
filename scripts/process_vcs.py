@@ -560,7 +560,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         channels = None
         with open(metafile, 'rb') as m:
             for line in m.readlines():
-                if line.startswith("channels"):
+                if line.startswith("channels".encode()):
                     channels = line.strip().split(",")[1:]
         if channels == None:
             logger.info("Channels keyword not found in metafile. Re-querying "+\
@@ -575,8 +575,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         obs_info = meta.getmeta(service='obs', params={'obs_id': str(obs_id)})
         channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
         with open(metafile, "wb") as m:
-            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(obs_id))
-            m.write("channels,{0}".format(",".join([str(c) for c in channels])))
+            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(obs_id).encode())
+            m.write("channels,{0}".format(b",".join([str(c).encode() for c in channels])).encode())
     hichans = [c for c in channels if c>128]
     lochans = [c for c in channels if c<=128]
     lochans.extend(list(reversed(hichans)))
