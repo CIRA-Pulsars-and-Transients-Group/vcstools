@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
-from mwapy.aocal import AOCal
+from mwa_metadb_utils import AOCal
 from astropy.io import fits
 import glob
 from reorder_chans import *
