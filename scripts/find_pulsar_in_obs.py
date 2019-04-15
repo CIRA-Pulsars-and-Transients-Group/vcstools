@@ -41,8 +41,7 @@ from astropy.time import Time
 
 #MWA scripts
 from mwa_pb import primary_beam
-from mwapy import ephem_utils,metadata
-import mwa_metadb_utils as meta
+from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata
 
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
@@ -303,7 +302,7 @@ def find_obsids_meta_pages(params={'mode':'VOLTAGE_START'}):
     #need to ask for a page of results at a time
     while len(temp) == 200 or page == 1:
         params['page'] = page
-        temp = meta.getmeta(service='find', params=params)
+        temp = getmeta(service='find', params=params)
         for row in temp:
             obsid_list.append(row[0])
         page += 1
@@ -467,15 +466,6 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     Ntimes=len(starttimes)
     midtimes=float(obsid)+0.5*(starttimes+stoptimes)
 
-    mwa = ephem_utils.Obs[ephem_utils.obscode['MWA']]
-    # determine the LST
-    observer = ephem.Observer()
-    # make sure no refraction is included
-    observer.pressure = 0
-    observer.long = mwa.long / ephem_utils.DEG_IN_RADIAN
-    observer.lat = mwa.lat / ephem_utils.DEG_IN_RADIAN
-    observer.elevation = mwa.elev
-
     if not centeronly:
         PowersX=np.zeros((len(names_ra_dec),
                              Ntimes,
@@ -511,14 +501,10 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         #Supress print statements of the primary beam model functions
         sys.stdout = open(os.devnull, 'w')
     for itime in range(Ntimes):
-        obstime = Time(midtimes[itime],format='gps',scale='utc')
-        observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
-        LST_hours = observer.sidereal_time() * ephem_utils.HRS_IN_RADIAN
-
-        HAs = -RAs + LST_hours * 15
-        Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
+        # this differ's from the previous ephem_utils method by 0.1 degrees
+        Alts, Azs, Zas = mwa_alt_az_za(midtimes[itime], ra=RAs, dec=Decs, degrees=True)
         # go from altitude to zenith angle
-        theta=np.radians(90.-Alts)
+        theta=np.radians(Zas)
         phi=np.radians(Azs)
         for ifreq in range(len(frequencies)):
             #Decide on beam model
@@ -570,7 +556,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
     obsid_to_remove = []
 
     for obsid in obsid_list:
-        beam_meta_data, full_meta = meta.get_common_obs_metadata(obsid, return_all = True)
+        beam_meta_data, full_meta = get_common_obs_metadata(obsid, return_all = True)
         #beam_meta_data = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
 
         #check for raw volatge files

@@ -22,7 +22,6 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     
     if ra is None or dec is None:
         #if no ra and dec given use obsid ra and dec
-        print get_common_obs_metadata(obsid)[1:3]
         ra, dec = get_common_obs_metadata(obsid)[1:3]
 
     if degrees:
