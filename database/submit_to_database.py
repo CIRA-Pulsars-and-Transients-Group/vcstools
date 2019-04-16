@@ -341,7 +341,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     RAs, Decs = sex2deg(ra_obs,dec_obs)
     Alts, Azs, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
     
-    theta=np.radians(Zas)
+    theta = np.radians(Zas)
     u_gain_per = (1. - avg_power)*0.12 + (theta/90.)*(theta/90.)*2. + 0.1
     u_gain = gain * u_gain_per #assumed to be 10% 
         

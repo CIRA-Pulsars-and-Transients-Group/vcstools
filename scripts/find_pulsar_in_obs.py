@@ -504,8 +504,8 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         # this differ's from the previous ephem_utils method by 0.1 degrees
         Alts, Azs, Zas = mwa_alt_az_za(midtimes[itime], ra=RAs, dec=Decs, degrees=True)
         # go from altitude to zenith angle
-        theta=np.radians(Zas)
-        phi=np.radians(Azs)
+        theta = np.radians(Zas)
+        phi = np.radians(Azs)
         for ifreq in range(len(frequencies)):
             #Decide on beam model
             if option == 'analytic':
