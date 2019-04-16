@@ -163,7 +163,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                             #tar_secs_to_run = "10:00:00"
                             #body = []
                             #untar = distutils.spawn.find_executable('untar.sh')
-                            #body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                            #body.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                             #body.append(database_vcs.add_database_function())
                             #body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(
                             #    untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
@@ -179,7 +179,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         module_list = ["numpy", "mwa-voltage/master"]
                         commands = []
                         #commands.append("module load numpy")
-                        commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                        commands.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                         commands.append(database_vcs.add_database_function())
                         commands.append("newcount=0")
                         commands.append("let oldcount=$newcount-1")
@@ -213,7 +213,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 
 
                         body = []
-                        body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                        body.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                         body.append(database_vcs.add_database_function())
                         body.append("oldcount=0")
                         body.append("let newcount=$oldcount+1")
@@ -280,7 +280,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         module_list = ["setuptools"]
         commands = []
         commands.append("module load manta-ray-client")
-        commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+        commands.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
         commands.append(database_vcs.add_database_function())
         commands.append("csvfile={0}".format(csvfile))
         # commands.append('source /group/mwaops/PULSAR/psrBash.profile')
@@ -327,7 +327,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                 check_batch = "check_recombine_{0}".format(time_to_get)
                 module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "numpy", "mwa-voltage/master"]
                 commands = []
-                commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                commands.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                 commands.append(database_vcs.add_database_function())
                 commands.append("newcount=0")
                 commands.append("let oldcount=$newcount-1")
@@ -346,7 +346,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                 module_list = ["module switch PrgEnv-cray PrgEnv-gnu",
                                "numpy", "mwa-voltage/master", "mpi4py", "cfitsio"]
                 commands = []
-                commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                commands.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                 commands.append(database_vcs.add_database_function())
                 #commands.append("module switch PrgEnv-cray PrgEnv-gnu")
                 #commands.append("module load mpi4py")
@@ -416,7 +416,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                         if (len(f) > 0):
                                 corr_batch = "correlator_{0}_gpubox{1:0>2}".format(inc_start,gpubox_label)
                                 body = []
-                                body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                                body.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                                 body.append(database_vcs.add_database_function())
                                 #body.append("source /group/mwaops/PULSAR/psrBash.profile")
                                 #body.append("module swap craype-ivybridge craype-sandybridge")
