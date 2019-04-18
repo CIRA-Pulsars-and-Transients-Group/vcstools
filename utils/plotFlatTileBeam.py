@@ -33,13 +33,13 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     colours = cm.viridis(np.linspace(1, 0, len(targetAZ)))
 
     ## MWA BEAM CALCULATIONS ##
-    xdelays = get_common_obs_metadata(obsid)[4] # x-pol and y-pol delays for obsid
+    delays = get_common_obs_metadata(obsid)[4] # x-pol and y-pol delays for obsid
     _, ptAZ, ptZA = mwa_alt_az_za(obsid)
     #ptAZ, _, ptZA = dbq.get_beam_pointing(obsid) # Az and ZA in degrees for obsid   
 
     print "obs pointing: ({0}, {1})".format(ptAZ,ptZA)
 
-    xp,yp = pb.MWA_Tile_full_EE(np.radians(za), np.radians(az), obsfreq*1e6, delays=xdelays, zenithnorm=True, interp=True)
+    xp,yp = pb.MWA_Tile_full_EE(np.radians(za), np.radians(az), obsfreq*1e6, delays=delays, zenithnorm=True, interp=True)
     pattern = np.sqrt(xp**2+yp**2) # sum to get "total intensity"
     pmax = pattern.max()
     hpp = 0.5 * pmax # half-power point
@@ -60,7 +60,7 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     track_lines = []
     print "beam power at target track points:"
     for ta,tz in zip(targetAZ, targetZA):
-        xp, yp = pb.MWA_Tile_full_EE(np.radians([[tz]]), np.radians([[ta]]), obsfreq*1e6, delays=xdelays, zenithnorm=True, interp=False)
+        xp, yp = pb.MWA_Tile_full_EE(np.radians([[tz]]), np.radians([[ta]]), obsfreq*1e6, delays=delays, zenithnorm=True, interp=False)
         bp = (xp + yp) / 2
         track_lines.append(bp[0])
         print "({0:.2f},{1:.2f}) = {2:.3f}".format(ta, tz, bp[0][0])

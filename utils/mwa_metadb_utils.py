@@ -44,15 +44,16 @@ def get_common_obs_metadata(obs, return_all = False):
     dec = beam_meta_data[u'metadata'][u'dec_pointing']
     dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
     minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
     maxfreq = float(max(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
     channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
     centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
 
     if return_all:
-        return [obs,ra,dec,dura,xdelays,centrefreq,channels],beam_meta_data
+        return [obs,ra,dec,dura,[xdelays,ydelays],centrefreq,channels],beam_meta_data
     else:
-        return [obs,ra,dec,dura,xdelays,centrefreq,channels]
+        return [obs,ra,dec,dura,[xdelays,ydelays],centrefreq,channels]
 
 def getmeta(service='obs', params=None):
     """
