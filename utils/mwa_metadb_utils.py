@@ -32,6 +32,7 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     Za  = 90. - Alt
     return Alt, Az, Za
 
+
 def get_common_obs_metadata(obs, return_all = False):
     """
     Gets needed comon meta data from http://mwa-metadata01.pawsey.org.au/metadata/
@@ -51,9 +52,10 @@ def get_common_obs_metadata(obs, return_all = False):
     centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
 
     if return_all:
-        return [obs,ra,dec,dura,[xdelays,ydelays],centrefreq,channels],beam_meta_data
+        return [obs, ra, dec, dura, [xdelays, ydelays], centrefreq, channels], beam_meta_data
     else:
-        return [obs,ra,dec,dura,[xdelays,ydelays],centrefreq,channels]
+        return [obs, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
+
 
 def getmeta(service='obs', params=None):
     """
