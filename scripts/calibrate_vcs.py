@@ -376,7 +376,6 @@ class BaseRTSconfig(object):
         jd = obstime.jd
         logger.info("   LST: {0}".format(lst_in_hours))
         logger.info("   JD : {0}".format(jd))
-        exit()
 
         # set the HA of the image centre to the primary beam HA
         logger.debug("Determining HA and DEC for primary beam")
