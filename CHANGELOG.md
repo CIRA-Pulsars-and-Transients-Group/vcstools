@@ -5,7 +5,7 @@
 
 
 ----
-## v1.4.1 (2019-04-18)
+## v1.4.2 (2019-04-18)
 
 *Removed all functions that use MWA_Tools. Since we now use astropy to more accurately calculate altitude and azimuth, the results differ ~0.1 degrees from the MWA_Tools calculations. This leads to a ~1% difference in tile beam power calculations.
 
