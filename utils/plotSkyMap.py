@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.path as mpath
 import matplotlib.patches as mpatches
 
-from mwapy.pb import primary_beam
+from mwa_pb import primary_beam
 from mwa_metadb_utils import getmeta
 
 
