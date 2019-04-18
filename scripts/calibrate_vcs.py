@@ -20,6 +20,7 @@ from itertools import groupby
 from operator import itemgetter
 import glob
 import logging
+from time import strptime, strftime
 
 from astropy.time import Time
 from astropy.coordinates import EarthLocation
@@ -368,9 +369,8 @@ class BaseRTSconfig(object):
         logger.info("Converting times with astropy")
         mwa_loc = EarthLocation.of_site('Murchison Widefield Array')
         #Astropy formating
-        a_time = self.utctime[0:4] + '-' + self.utctime[4:6] + '-'+ \
-                 self.utctime[6:8] + 'T' + self.utctime[8:10] + ':' +\
-                 self.utctime[10:12] + ':' + self.utctime[12:] 
+        utctime = strptime(self.utctime, '%Y%d%m%H%M%S')
+        a_time = strftime('%Y-%d-%mT%H:%M:%S', utctime)
         obstime = Time(a_time, format='fits', scale='utc', location=mwa_loc)
         lst_in_hours = obstime.sidereal_time('apparent').hourangle
         jd = obstime.jd

@@ -5,12 +5,11 @@ import subprocess
 import os
 import sys
 import glob
-import time
 import tempfile
 import atexit
 import hashlib
 import datetime
-import time
+from time import sleep, strptime, strftime
 import distutils.spawn
 import sqlite3 as lite
 from astropy.io import fits as pyfits
@@ -523,8 +522,9 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
     utctime = Time(start, format='gps', scale='utc').fits
     # remove (UTC) that some astropy versions leave on the end
     if utctime.endswith('(UTC)'):
-        utctime = utctime[:-5]
-
+        utctime = strptime(utctime, '%Y-%d-%mT%H:%M:%S.000(UTC)')
+        utctime = strftime('%Y-%d-%mT%H:%M:%S', utctime)
+    
     print "Running make_beam"
     P_dir = product_dir+"/pointings"
     mdir(P_dir, "Pointings")
@@ -719,7 +719,7 @@ if __name__ == '__main__':
 
     if opts.work_dir:
         print "YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!"
-        time.sleep(5)
+        sleep(5)
         data_dir = product_dir = "{0}/{1}".format(opts.work_dir, opts.obs)
     else:
         data_dir = '/astro/mwaops/vcs/{0}'.format(opts.obs)
