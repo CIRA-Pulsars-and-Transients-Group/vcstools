@@ -64,12 +64,12 @@ __global__ void beamform_kernel( uint8_t *data,
  */
 {
     // Translate GPU block/thread numbers into meaningful names
-    int s   = blockIdx.x;  /* The (s)ample number */
-    int ns  = gridDim.x;   /* The (n)umber of (s)amples (=10000)*/
-    int c   = blockIdx.y;  /* The (c)hannel number */
-    int p   = threadIdx.y; /* The (p)ointing number */
-    int nc  = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
-    int ant = threadIdx.x; /* The (ant)enna number */
+    int s   = threadIdx.x;  /* The (s)ample number */
+    int ns  = blockDim.x;   /* The (n)umber of (s)amples (=10000)*/
+    int c   = threadIdx.y;  /* The (c)hannel number */
+    int p   = blockIdx.y; /* The (p)ointing number */
+    int nc  = blockDim.y;   /* The (n)umber of (c)hannels (=128) */
+    int ant = blockIdx.x; /* The (ant)enna number */
 
     // GPU profiling
     clock_t start, stop;
@@ -410,9 +410,13 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     gpuErrchk(cudaMemcpy( (*g)->d_J,    (*g)->J, (*g)->J_size,    cudaMemcpyHostToDevice ));
     
     // Call the kernels
+    // sammples_chan(index=blockIdx.x  size=gridDim.x,
+    //               index=blockIdx.y  size=gridDim.y)
+    // stat_point   (index=threadIdx.x size=blockDim.x,
+    //               index=threadIdx.y size=blockDim.y)
     dim3 samples_chan(opts->sample_rate, nchan);
     dim3 stat_point(NSTATION, npointing);
-    beamform_kernel<<<samples_chan, stat_point>>>(
+    beamform_kernel<<<stat_point, samples_chan>>>(
             (*g)->d_data, (*g)->d_W, (*g)->d_J, invw, (*g)->d_Bd, (*g)->d_coh, (*g)->d_incoh );
     //cudaDeviceSynchronize();
     // sync not required between kernel queues since each stream acts like a FIFO queue
