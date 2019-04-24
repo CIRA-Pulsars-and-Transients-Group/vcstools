@@ -1,8 +1,37 @@
 #!/usr/bin/env python
 
-"""
-Collection of database related utilities that are used throughout the VCS processing pipeline
-"""
+
+def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
+    """
+    Calculate the altitude, azumith and zenith for an obsid
+
+    Args:
+        obsid  : The MWA observation id (GPS time)
+        ra     : The right acension in HH:MM:SS
+        dec    : The declintation in HH:MM:SS
+        degrees: If true the ra and dec is given in degrees (Default:False)
+    """
+    from astropy.time import Time
+    from astropy.coordinates import SkyCoord, AltAz, EarthLocation
+    from astropy import units as u
+
+    obstime = Time(float(obsid),format='gps') 
+    
+    if ra is None or dec is None:
+        #if no ra and dec given use obsid ra and dec
+        ra, dec = get_common_obs_metadata(obsid)[1:3]
+
+    if degrees:
+        sky_posn = SkyCoord(ra, dec, unit=(u.deg,u.deg))
+    else:
+        sky_posn = SkyCoord(ra, dec, unit=(u.hourangle,u.deg)) 
+    earth_location = EarthLocation.of_site('Murchison Widefield Array') 
+    altaz = sky_posn.transform_to(AltAz(obstime=obstime, location=earth_location)) 
+    Alt = altaz.alt.deg
+    Az  = altaz.az.deg 
+    Za  = 90. - Alt
+    return Alt, Az, Za
+
 
 import logging
 
@@ -20,15 +49,17 @@ def get_common_obs_metadata(obs, return_all = False):
     dec = beam_meta_data[u'metadata'][u'dec_pointing']
     dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
     minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
     maxfreq = float(max(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
     channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
     centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
 
     if return_all:
-        return [obs,ra,dec,dura,xdelays,centrefreq,channels],beam_meta_data
+        return [obs, ra, dec, dura, [xdelays, ydelays], centrefreq, channels], beam_meta_data
     else:
-        return [obs,ra,dec,dura,xdelays,centrefreq,channels]
+        return [obs, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
+
 
 def getmeta(service='obs', params=None):
     """

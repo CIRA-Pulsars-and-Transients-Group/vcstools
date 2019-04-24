@@ -5,15 +5,15 @@ import subprocess
 import os
 import sys
 import glob
-import time
 import tempfile
 import atexit
 import hashlib
 import datetime
-import time
+from time import sleep, strptime, strftime
 import distutils.spawn
 import sqlite3 as lite
 from astropy.io import fits as pyfits
+from astropy.time import Time
 from reorder_chans import *
 from mdir import mdir
 import logging
@@ -145,6 +145,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
         if ics:
             data_type = 15
         else:
+<<<<<<< HEAD
             data_type = 16
         dl_dir = "{0}/{1}".format(data_dir, target_dir)
         dir_description = "Combined"
@@ -272,6 +273,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             sys.exit()
 
 
+
 def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
                  vcstools_version="master", nice=0):
 
@@ -316,7 +318,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         module_list = ["setuptools"]
         commands = []
         commands.append("module load manta-ray-client")
-        commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(config['base_data_dir']))
+        commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(config['base_product_dir']))
         commands.append(database_vcs.add_database_function())
         commands.append("csvfile={0}".format(csvfile))
         # commands.append('source /group/mwaops/PULSAR/psrBash.profile')
@@ -426,6 +428,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 
 
 
+
 def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args, metafits,
                   vcstools_version="master", nice=0):
 
@@ -438,6 +441,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
     batch_dir = product_dir+"/batch/"
     target_dir = link = 'vis'
 
+<<<<<<< HEAD
     if data_dir == product_dir:
         corr_dir = "{0}/cal/{1}/{2}".format(product_dir, obsid, target_dir)
     else:
@@ -489,7 +493,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                     corr_line = ""
                     (current_time,ext) = os.path.splitext(os.path.basename(file))
                     (obsid,gpstime,chan) = current_time.split('_')
-                    t = Time(int(gpstime), format='gps', scale='utc')
+                    t = Time(int(gpstime), format='gps', scale='utc'
                     unix_time = int(t.unix)
 
                     body.append('run "srun --export=all {0}" "-o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}" "{9}"'.\
@@ -596,10 +600,12 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
     # make_beam_small requires the start time in UTC, get it from the start
     # GPS time as is done in timeconvert.py
-    from mwapy import ephem_utils
-    t = ephem_utils.MWATime(gpstime=float(start))
-    utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
-
+    utctime = Time(start, format='gps', scale='utc').fits
+    # remove (UTC) that some astropy versions leave on the end
+    if utctime.endswith('(UTC)'):
+        utctime = strptime(utctime, '%Y-%d-%mT%H:%M:%S.000(UTC)')
+        utctime = strftime('%Y-%d-%mT%H:%M:%S', utctime)
+    
     logger.info("Running make_beam")
     P_dir = product_dir+"/pointings"
     mdir(P_dir, "Pointings")
@@ -648,9 +654,13 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
         #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
         commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} -e {5} -a 128 -n 128 -f {6} {7} -d "
-                        "{8}/combined -R {9} -D {10} -r 10000 -m {11} -z {12} {13}".format(comp_config['container_command'], n_omp_threads, make_beam_cmd, obs_id, start,
-                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats))  # check these
+                        "{8}/combined -R {9} -D {10} -r 10000 -m {11} -z {12} {13} -F {14}".format(comp_config['container_command'], n_omp_threads, make_beam_cmd, obs_id, start,
+                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
 
+        commands.append("srun --export=all -n 1 -c {0} {1} -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
+                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(n_omp_threads, make_beam_cmd, obs_id, start,
+                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
+       
         job_id = submit_slurm(make_beam_small_batch, commands,
                     batch_dir=batch_dir,
                     slurm_kwargs={"time": secs_to_run, "gres": "gpu:1",
@@ -818,7 +828,7 @@ if __name__ == '__main__':
     if opts.work_dir:
         logger.warning("YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE "+\
                        "FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!")
-        time.sleep(5)
+        sleep(5)
         data_dir = product_dir = "{0}/{1}".format(opts.work_dir, opts.obs)
     else:
         data_dir = '{0}{1}'.format(comp_config['base_data_dir'],opts.obs)

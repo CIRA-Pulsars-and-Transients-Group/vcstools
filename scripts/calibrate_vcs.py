@@ -16,16 +16,20 @@ import sys
 import numpy as np
 import re
 import argparse
-from astropy.io import fits
 from itertools import groupby
 from operator import itemgetter
 import glob
 import logging
+from time import strptime, strftime
+
+from astropy.time import Time
+from astropy.coordinates import EarthLocation
+from astropy import units as u
+from astropy.io import fits
 
 from job_submit import submit_slurm
 from mdir import mdir
 from mwa_metadb_utils import getmeta
-from mwapy import ephem_utils
 
 logger = logging.getLogger(__name__)
 
@@ -362,16 +366,16 @@ class BaseRTSconfig(object):
                 jdflag, jd = line.split()
         """
         # use the same operations as in timeconvert.py for our specific need
-        logger.info("Converting times with mwapy.ephem_utils")
-        time = ephem_utils.MWATime()
-        time.datetimestring = self.utctime
-        lststring = time.LST.strftime('%H:%M:%S')
-        hh, mm, ss = lststring.split(":")
-        jd = time.MJD + 2400000.5
-        logger.info("   LST: {0}".format(lststring))
+        logger.info("Converting times with astropy")
+        mwa_loc = EarthLocation.of_site('Murchison Widefield Array')
+        #Astropy formating
+        utctime = strptime(self.utctime, '%Y%d%m%H%M%S')
+        a_time = strftime('%Y-%d-%mT%H:%M:%S', utctime)
+        obstime = Time(a_time, format='fits', scale='utc', location=mwa_loc)
+        lst_in_hours = obstime.sidereal_time('apparent').hourangle
+        jd = obstime.jd
+        logger.info("   LST: {0}".format(lst_in_hours))
         logger.info("   JD : {0}".format(jd))
-        
-        lst_in_hours = float(hh) + float(mm) / 60.0 + float(ss) / 60.0 ** 2
 
         # set the HA of the image centre to the primary beam HA
         logger.debug("Determining HA and DEC for primary beam")
@@ -382,7 +386,6 @@ class BaseRTSconfig(object):
 
         logger.debug("Primary beam: HA = {0} hrs, Dec = {1} deg".format(self.PB_HA, self.PB_DEC))
         logger.debug("JD = {0}".format(self.JD))
-        logger.debug("LST = {0}:{1}:{2} = {3} hrs".format(hh, mm, ss, lst_in_hours))
 
         # get the lowest frequency channel
         freqs = obsinfo['rfstreams']['0']['frequencies']

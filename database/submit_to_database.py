@@ -21,26 +21,28 @@ import sys
 from shutil import copyfile as cp
 import math
 from scipy.interpolate import InterpolatedUnivariateSpline
-import matplotlib.pyplot as plt
 import glob
-from astropy.table import Table
-from astropy.time import Time
-import textwrap as _textwrap
-import logging
-
 import ephem
-from mwapy import ephem_utils
+import logging
+import textwrap as _textwrap
+
+#import the required parts of astropy
+from astropy.table import Table
 
 #TODO check if I need the below two imports
 import requests.packages.urllib3
 requests.packages.urllib3.disable_warnings()
 
-from mwapy.pb import primary_beam
-from mwapy.pb import primarybeammap_tant as pbtant
-import mwapy.pb.primarybeammap as pbl
+#import mwa software
+from mwa_pb import primarybeammap_tant as pbtant
+from mwa_pb import primary_beam
+import mwa_pb.primarybeammap as pbl
 from mwa_pulsar_client import client
-import mwa_metadb_utils as meta
+from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 import find_pulsar_in_obs as fpio
+
+
+import matplotlib.pyplot as plt
 
 web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
 
@@ -214,7 +216,7 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
             exit *= float(time_obs)
             input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
-            logging.warning("WARNING: Input detection time does not equal the dectetion time of the .bestprof file")
+            logging.warning("Input detection time does not equal the dectetion time of the .bestprof file")
             logging.warning("Input (metadata) time: " + str(input_detection_time))
             logging.warning("Bestprof time: " + str(time_detection))
 
@@ -336,17 +338,10 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata,
     print "Average Power: " + str(avg_power)
 
     #gain uncertainty through beam position estimates
-    mwa = ephem_utils.Obs[ephem_utils.obscode['MWA']]    
     RAs, Decs = sex2deg(ra_obs,dec_obs)
-    obstime = Time(float(obsid),format='gps',scale='utc')
-    observer = ephem.Observer()
-    observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
-    LST_hours = observer.sidereal_time() * ephem_utils.HRS_IN_RADIAN
-
-    HAs = -RAs + LST_hours * 15.
-    Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
-    theta=np.radians(90.-Alts)
-
+    Alts, Azs, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
+    
+    theta = np.radians(Zas)
     u_gain_per = (1. - avg_power)*0.12 + (theta/90.)*(theta/90.)*2. + 0.1
     u_gain = gain * u_gain_per #assumed to be 10% 
         
@@ -662,7 +657,7 @@ if __name__ == "__main__":
         
 
     #get meta data from obsid
-    metadata = meta.get_common_obs_metadata(obsid)
+    metadata = get_common_obs_metadata(obsid)
     obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = metadata
     minfreq = float(min(channels))
     maxfreq = float(max(channels))
