@@ -102,6 +102,14 @@ __global__ void beamform_kernel( uint8_t *data,
 
     Ia[ant] = DETECT(Dx) + DETECT(Dy);
 
+    if (CReald(W[W_IDX(c,ant,0,nc)]) == 0.0 &&
+        CImagd(W[W_IDX(c,ant,0,nc)]) == 0.0 &&
+        CReald(W[W_IDX(c,ant,1,nc)]) == 0.0 &&
+        CImagd(W[W_IDX(c,ant,1,nc)]) == 0.0)
+    {
+        Ia[ant] = 0.0;
+    }
+
     WDx = CMuld( W[W_IDX(c,ant,0,nc)], Dx );
     WDy = CMuld( W[W_IDX(c,ant,1,nc)], Dy );
 
