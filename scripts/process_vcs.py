@@ -145,7 +145,6 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
         if ics:
             data_type = 15
         else:
-<<<<<<< HEAD
             data_type = 16
         dl_dir = "{0}/{1}".format(data_dir, target_dir)
         dir_description = "Combined"
@@ -441,7 +440,6 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
     batch_dir = product_dir+"/batch/"
     target_dir = link = 'vis'
 
-<<<<<<< HEAD
     if data_dir == product_dir:
         corr_dir = "{0}/cal/{1}/{2}".format(product_dir, obsid, target_dir)
     else:
@@ -493,7 +491,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                     corr_line = ""
                     (current_time,ext) = os.path.splitext(os.path.basename(file))
                     (obsid,gpstime,chan) = current_time.split('_')
-                    t = Time(int(gpstime), format='gps', scale='utc'
+                    t = Time(int(gpstime), format='gps', scale='utc')
                     unix_time = int(t.unix)
 
                     body.append('run "srun --export=all {0}" "-o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}" "{9}"'.\
@@ -603,8 +601,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     utctime = Time(start, format='gps', scale='utc').fits
     # remove (UTC) that some astropy versions leave on the end
     if utctime.endswith('(UTC)'):
-        utctime = strptime(utctime, '%Y-%d-%mT%H:%M:%S.000(UTC)')
-        utctime = strftime('%Y-%d-%mT%H:%M:%S', utctime)
+        utctime = utctime[:-5]
     
     logger.info("Running make_beam")
     P_dir = product_dir+"/pointings"
@@ -624,7 +621,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     # VDIF will need gpuq if inverting pfb with '-m' option, otherwise cpuq is fine
     # In general this needs to be cleaned up, prefferably to be able to intelligently select a
     # queue and a maximum wall time (SET)
-    n_omp_threads = 8
+    n_omp_threads = 1
     openmp_line = "export OMP_NUM_THREADS={0}".format(n_omp_threads)
 
     # Run one coarse channel per node
@@ -644,27 +641,20 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
             quit()
 
         make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(RA, Dec, coarse_chan)
-        module_list = ["module switch craype-ivybridge craype-sandybridge", comp_config['container_module']]
+        module_list = [comp_config['container_module']]
         commands = []
         #commands.append("source /group/mwaops/PULSAR/psrBash.profile")
         #commands.append("module swap craype-ivybridge craype-sandybridge")
         commands.append(openmp_line)
         commands.append("cd {0}".format(pointing_dir))
-        #commands.append("srun -n 1 -c {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
-        #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
-        #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
         commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} -e {5} -a 128 -n 128 -f {6} {7} -d "
-                        "{8}/combined -R {9} -D {10} -r 10000 -m {11} -z {12} {13} -F {14}".format(comp_config['container_command'], n_omp_threads, make_beam_cmd, obs_id, start,
+                        "{8}/combined -R {9} -D {10} -r 10000 -m {11} -z {12} {13} -F {14}".format(n_omp_threads, comp_config['container_command'], make_beam_cmd, obs_id, start,
                         stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
 
-        commands.append("srun --export=all -n 1 -c {0} {1} -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
-                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(n_omp_threads, make_beam_cmd, obs_id, start,
-                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
-       
         job_id = submit_slurm(make_beam_small_batch, commands,
-                    batch_dir=batch_dir,
-                    slurm_kwargs={"time": secs_to_run, "gres": "gpu:1",
-                                  "nice" : nice},
+                    batch_dir=batch_dir, module_list=module_list,
+                    slurm_kwargs={"time":secs_to_run, "gres":"gpu:1",
+                                  "nice":nice, "mem-per-cpu":"8192MB"},
                     queue='gpuq', vcstools_version=vcstools_version, 
                     submit=True, export="NONE")
         job_id_list.append(job_id)
