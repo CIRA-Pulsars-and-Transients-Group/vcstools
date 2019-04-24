@@ -561,7 +561,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         with open(metafile, 'rb') as m:
             for line in m.readlines():
                 if line.startswith("channels".encode()):
-                    channels = line.strip().split(",")[1:]
+                    chan_line = line.decode()[11:-1]
+                    channels = chan_line.split(",")
         if channels == None:
             logger.info("Channels keyword not found in metafile. Re-querying "+\
                         "the database.")
@@ -637,7 +638,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
             quit()
 
         make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(RA, Dec, coarse_chan)
-        module_list = ["module switch craype-ivybridge craype-sandybridge"]
+        module_list = ["module switch craype-ivybridge craype-sandybridge", comp_config['container_module']]
         commands = []
         #commands.append("source /group/mwaops/PULSAR/psrBash.profile")
         #commands.append("module swap craype-ivybridge craype-sandybridge")
@@ -646,8 +647,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         #commands.append("srun -n 1 -c {0} {1}/make_beam_small -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
         #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
         #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
-        commands.append("srun --export=all -n 1 -c {0} {1} -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
-                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12}".format(n_omp_threads, make_beam_cmd, obs_id, start,
+        commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} -e {5} -a 128 -n 128 -f {6} {7} -d "
+                        "{8}/combined -R {9} -D {10} -r 10000 -m {11} -z {12} {13}".format(comp_config['container_command'], n_omp_threads, make_beam_cmd, obs_id, start,
                         stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats))  # check these
 
         job_id = submit_slurm(make_beam_small_batch, commands,

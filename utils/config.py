@@ -15,7 +15,9 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
                  'gpuq_cluster' : 'galaxy',
                  'gpuq_partition' : 'gpuq',
                  'copyq_cluster' : 'zeus',
-                 'copyq_partition' : 'copyq'}
+                 'copyq_partition' : 'copyq',
+                 'container_module' : 'shifter',
+                 'container_command' : 'shifter run cirapulsarsandtransients/vcstools:cuda-9.2'}
 
 OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'base_product_dir' : '/fred/oz125/vcs/',
@@ -26,7 +28,9 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'gpuq_cluster' : 'farnarkle',
                  'gpuq_partition' : 'skylake-gpu',
                  'copyq_cluster' : 'farnarkle',
-                 'copyq_partition' : 'skylake'} #TODO check if there's a better one
+                 'copyq_partition' : 'skylake',
+                 'container_module' : 'singularity/latest',
+                 'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools-cuda-9.2.simg'} #TODO check if there's a better one
 
     
 import logging
