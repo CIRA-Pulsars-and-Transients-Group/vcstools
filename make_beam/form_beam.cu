@@ -67,9 +67,10 @@ __global__ void beamform_kernel( uint8_t *data,
     int s   = threadIdx.x;  /* The (s)ample number */
     int ns  = blockDim.x;   /* The (n)umber of (s)amples (=10000)*/
     int c   = threadIdx.y;  /* The (c)hannel number */
-    int p   = blockIdx.y; /* The (p)ointing number */
     int nc  = blockDim.y;   /* The (n)umber of (c)hannels (=128) */
-    int ant = blockIdx.x; /* The (ant)enna number */
+    
+    int ant = blockIdx.x;   /* The (ant)enna number */
+    int p   = blockIdx.y;   /* The (p)ointing number */
 
     // GPU profiling
     clock_t start, stop;
