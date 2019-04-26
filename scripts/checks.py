@@ -5,7 +5,10 @@ import subprocess, os, sys
 import argparse
 import numpy as np
 import traceback
-from mwa_metadb_utils import getmeta 
+import logging
+from mwa_metadb_utils import getmeta
+
+logger = logging.getLogger(__name__)
 
 def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type='raw'):
     '''
@@ -13,13 +16,13 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
     as that found on the archive and also checks that all files have the same size (253440000 for raw, 7864340480 for recombined tarballs by default).
     '''
     if not data_type in ['raw', 'tar_ics', 'ics']:
-        print "Wrong data type given to download check."
+        logger.error("Wrong data type given to download check.")
         return True
     if not directory:
         directory = "/astro/mwaops/vcs/{0}/raw/".format(obsID) if data_type == 'raw' else "/astro/mwaops/vcs/{0}/combined/".format(obsID)
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
-    print base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range."
+    logger.info(base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range.")
 
     # put files in
     try:
@@ -35,6 +38,8 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
         output = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).stdout
     else:
         n_files_expected = 0
+        #remove stray metafits from list that causes int errors
+        files = [ x for x in files if "metafits" not in x ]
         times = [int(time[11:21]) for time in files]
         for sec in range(startsec,startsec+n_secs):
             n_files_expected += times.count(sec)
@@ -50,22 +55,24 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
 
     # in case we're checking for downloaded tarballs also need to check ics-files.
     if data_type == 'tar_ics':
-        print "Now checking ICS files"
-        error, n_ics = check_recombine_ics(directory=directory, \
-                                               startsec=startsec, n_secs=n_files_expected, obsID=obsID)
+        logger.info("Now checking ICS files")
+        error, n_ics = check_recombine_ics(directory=directory, 
+                                           startsec=startsec, 
+                                           n_secs=n_secs,#n_files_expected, 
+                                           obsID=obsID)
         n_files_expected *= 2
         files_in_dir += n_ics
 
 
     if not files_in_dir == n_files_expected:
-        print "We have {0} files but expected {1}".format(files_in_dir, n_files_expected)
+        logger.error("We have {0} files but expected {1}".format(files_in_dir, n_files_expected))
         error = True
     for line in output[1:]:
         if 'file' in line:
-            print line
+            logger.error(line)
             error = True
     if not error:
-        print "We have all {0} {1} files as expected.".format(files_in_dir, data_type)
+        logger.info("We have all {0} {1} files as expected.".format(files_in_dir, data_type))
     return error
 
 def check_recombine(obsID, directory=None, required_size=327680000, \
@@ -78,7 +85,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
         directory = "/astro/mwaops/vcs/{0}/combined/".format(obsID)
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
-    print base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range."
+    logger.info(base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range.")
     required_size = required_size
     # we need to get the number of unique seconds from the file names
     files = np.array(getmeta(service='obs', params={'obs_id':obsID})['files'].keys())
@@ -106,14 +113,14 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
                                            startsec=startsec, n_secs=n_secs, required_size=required_size_ics)
     files_in_dir += n_ics
     if not files_in_dir == expected_files:
-        print "We have {0} files but expected {1}".format(files_in_dir, expected_files)
+        logger.error("We have {0} files but expected {1}".format(files_in_dir, expected_files))
         error = True
     for line in output[1:]:
         if 'dat' in line:
-            print "Deleted {0} due to wrong size.".format(line.strip())
+            logger.warning("Deleted {0} due to wrong size.".format(line.strip()))
             error = True
     if not error:
-        print "We have all {0} files as expected.".format(files_in_dir)
+        logger.info("We have all {0} files as expected.".format(files_in_dir))
     return error
 
 def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_size=None, obsID=None):
@@ -143,20 +150,21 @@ def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_siz
     files_in_dir = int(output[0].strip())
     error = False
     if not files_in_dir == n_secs:
-        print "We have {0} ics-files but expected {1}".format(files_in_dir, n_secs)
+        logger.error("We have {0} ics-files but expected {1}".format(files_in_dir, n_secs))
         error = True
     for line in output[1:]:
         if 'dat' in line:
             error = True
             line = line.strip()
-            print "Deleted {0} due to wrong size.".format(line)
+            logger.error("Deleted {0} due to wrong size.".format(line))
             dat_files = line.replace('_ics.dat','*.dat')
             rm_cmd = "rm -rf {0}".format(dat_files)
-            print "Also running {0} to make sure ics files are rebuilt.".format(rm_cmd)
+            logger.warning("Also running {0} to make sure ics files are rebuilt.".format(rm_cmd))
             rm = subprocess.Popen(rm_cmd, stdout=subprocess.PIPE, shell=True)
     if error == False:
-        print "We have all {0} ICS files as expected.".format(files_in_dir)
+        logger.info("We have all {0} ICS files as expected.".format(files_in_dir))
     return error, files_in_dir
+
 
 def get_files_and_sizes(obsID, mode):
     if mode == 'raw':
@@ -166,24 +174,36 @@ def get_files_and_sizes(obsID, mode):
     elif mode == 'ics':
         suffix = '_ics.dat'
     else:
-        print "Wrong mode supplied. Options are raw, tar_ics, and ics"
+        logger.error("Wrong mode supplied. Options are raw, tar_ics, and ics")
         return
-    print "Retrieving file info from MWA database for all {0} files...".format(suffix)
+    logger.info("Retrieving file info from MWA database for all {0} files...".format(suffix))
     meta = getmeta(service='obs', params={'obs_id':obsID})
-    files = np.array(meta['files'].keys())
-    mask = np.array([suffix in file for file in files])
-    files = files[mask]
-    sizes=np.array([meta['files'][f]['size'] for f in files])
-    print "...Done. Expect all on database to be {0} bytes in size...".format(sizes[0])
-    if np.all(sizes == sizes[0]):
-        print "...yep they are. Now checking on disk."
-        return list(files), suffix, sizes[0]
+    files = np.array(list(meta['files'].keys()))
+    files_masked = []
+    sizes = []
+    for f in files:
+        if suffix in f:
+            sizes.append(meta['files'][f]['size'])
+            files_masked.append(f)
+    #mask = np.array([suffix in file for file in files])
+    #files = files[mask]
+    #sizes=np.array([meta['files'][f]['size'] for f in files])
+    logger.info("...Done. Expect all on database to be {0} bytes in size...".format(sizes[0]))
+    
+    size_check = True
+    for s in sizes:
+        if not s == sizes[0]:
+            size_check = False
+    #if np.all(sizes == sizes[0]): #this stopped working for some reason
+    if size_check:
+        logger.info("...yep they are. Now checking on disk.")
+        return files_masked, suffix, sizes[0]
     else:
-        print "Not all files have the same size. Check your data!"
-        print "{0}".format(np.vstack((files,sizes)).T)
+        logger.error("Not all files have the same size. Check your data!")
+        logger.error("{0}".format(np.vstack((files,sizes)).T))
         return
 
-def opt_parser():
+def opt_parser(loglevels):
     parser = argparse.ArgumentParser(description="scripts to check sanity of downloads and recombine.")
     parser.add_argument("-m", "--mode", type=str, choices=['download','recombine'],\
                           help="Mode you want to run: download, recombine", dest='mode', default=None)
@@ -218,24 +238,39 @@ def opt_parser():
                             "to check the files in. Default is /astro/mwaops/vcs/" + \
                             "[obsID]/[raw,combined]")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+                                    choices=loglevels.keys(), default="INFO")
     return parser.parse_args()
 
 if __name__ == '__main__':
-    args = opt_parser()
+    # Dictionary for choosing log-levels
+    loglevels = dict(DEBUG=logging.DEBUG,
+                     INFO=logging.INFO,
+                     WARNING=logging.WARNING)
+
+    args = opt_parser(loglevels)
     work_dir_base = '/astro/mwaops/vcs/' + str(args.obsID)
+    
+    # set up the logger for stand-alone execution
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
 
     if args.version:
         try:
             import version
-            print(version.__version__)
+            logger.info(version.__version__)
             sys.exit(0)
         except ImportError as ie:
-            print("Couldn't import version.py - have you installed vcstools?")
-            print("ImportError: {0}".format(ie))
+            logger.error("Couldn't import version.py - have you installed vcstools?")
+            logger.error("ImportError: {0}".format(ie))
             sys.exit(0)
 
     if (args.mode is None) or (args.obsID is None):
-        print "ERROR: You must specify BOTH a mode and observation ID"
+        logger.error("You must specify BOTH a mode and observation ID")
         sys.exit(1)
 
     if args.all:
@@ -243,20 +278,20 @@ if __name__ == '__main__':
         args.begin, args.end = obs_max_min(args.obsID)
     if args.end:
         if not args.begin:
-            print "If you supply and end time you also *have* to supply a begin time."
+            logger.error("If you supply and end time you also *have* to supply a begin time.")
             sys.exit(1)
         args.increment = args.end - args.begin + 1
-        print "Checking {0} seconds.".format(args.increment)
+        logger.info("Checking {0} seconds.".format(args.increment))
     if not args.all and not args.begin:
-        print "You have to either set the -a flag to process the whole obs or povide a start and stop time with -b and -e"
+        logger.error("You have to either set the -a flag to process the whole obs or povide a start and stop time with -b and -e")
         sys.exit(1)
     if args.begin:
         if not args.end and not args.increment:
-            print "If you specify a begin time you also have to provide either an end time (-e end) or the number of seconds to check via the increment flag (-i increment)"
+            logger.error("If you specify a begin time you also have to provide either an end time (-e end) or the number of seconds to check via the increment flag (-i increment)")
             sys.exit(1)
     if args.mode == 'download':
         if not args.data_type:
-            print "In download mode you need to specify the data type you downloaded."
+            logger.error("In download mode you need to specify the data type you downloaded.")
             sys.exit(1)
         if args.data_type == '11':
             data_type = 'raw'
@@ -286,5 +321,5 @@ if __name__ == '__main__':
         sys.exit(check_recombine(args.obsID, directory=work_dir, required_size=required_size, \
                             required_size_ics=required_size_ics, startsec=args.begin, n_secs=args.increment))
     else:
-        print "No idea what you want to do. This mode is not supported. Ckeck the help."
+        logger.error("No idea what you want to do. This mode is not supported. Ckeck the help.")
         sys.exit(1)
