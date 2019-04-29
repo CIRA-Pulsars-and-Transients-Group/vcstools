@@ -601,9 +601,14 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     utctime = Time(start, format='gps', scale='utc').fits
     # remove (UTC) that some astropy versions leave on the end
     if utctime.endswith('(UTC)'):
-        utctime = utctime[:-5]
-    
-    logger.info("Running make_beam")
+        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000(UTC)')
+        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
+    else:
+        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000')
+        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
+
+
+    logging.info("Running make_beam")
     P_dir = product_dir+"/pointings"
     mdir(P_dir, "Pointings")
     pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
