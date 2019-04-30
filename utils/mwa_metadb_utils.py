@@ -33,11 +33,15 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     return Alt, Az, Za
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def get_common_obs_metadata(obs, return_all = False):
     """
     Gets needed comon meta data from http://mwa-metadata01.pawsey.org.au/metadata/
     """
-    print "Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obs)
+    logger.info("Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obs))
     #for line in txtfile:
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
     #obn = beam_meta_data[u'obsname']
@@ -64,8 +68,8 @@ def getmeta(service='obs', params=None):
     a Python dictionary, return a Python dictionary xcontaining the result.
     Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
     """
-    import urllib
-    import urllib2
+    #import urllib
+    import urllib.request
     import json
 
     # Append the service name to this base URL, eg 'con', 'obs', etc.
@@ -74,23 +78,23 @@ def getmeta(service='obs', params=None):
 
     if params:
         # Turn the dictionary into a string with encoded 'name=value' pairs
-        data = urllib.urlencode(params)
+        data = urllib.parse.urlencode(params)
     else:
         data = ''
 
     if service.strip().lower() in ['obs', 'find', 'con']:
         service = service.strip().lower()
     else:
-        print "invalid service name: %s" % service
+        logger.error("invalid service name: %s" % service)
         return
 
     try:
-        result = json.load(urllib2.urlopen(BASEURL + service + '?' + data + "&nocache"))
-    except urllib2.HTTPError as error:
-        print "HTTP error from server: code=%d, response:\n %s" % (error.code, error.read())
+        result = json.load(urllib.request.urlopen(BASEURL + service + '?' + data + "&nocache"))
+    except urllib.error.HTTPError as err:
+        logger.error("HTTP error from server: code=%d, response:\n %s" % (err.code, err.read()))
         return
-    except urllib2.URLError as error:
-        print "URL or network error: %s" % error.reason
+    except urllib.error.URLError as err:
+        logger.error("URL or network error: %s" % err.reason)
         return
 
     return result
