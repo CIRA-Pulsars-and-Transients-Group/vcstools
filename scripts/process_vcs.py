@@ -658,10 +658,9 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
         job_id = submit_slurm(make_beam_small_batch, commands,
                     batch_dir=batch_dir, module_list=module_list,
-                    slurm_kwargs={"time":secs_to_run, "gres":"gpu:1",
-                                  "nice":nice, "mem-per-cpu":"8192MB"},
+                    slurm_kwargs={"time":secs_to_run, "nice":nice},
                     queue='gpuq', vcstools_version=vcstools_version, 
-                    submit=True, export="NONE")
+                    submit=True, export="NONE", gpu_res=1)
         job_id_list.append(job_id)
     #TODO This can be returned as a job id string that can be slapped right on for dependancies
     #job_id_str = ""

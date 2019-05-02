@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python/
 
 import subprocess
 import config
@@ -14,7 +14,12 @@ SLURM_TMPL = """#!/bin/bash -l
 #SBATCH --clusters={cluster}
 #SBATCH --partition={partition}
 #
+#SBARCH --cpus-per-task={threads}
+#SBATCH --mem-per-cpu={mem}MB
 {header}
+
+ncpus={threads}
+export OMP_NUM_THREADS={threads}
 
 {switches}
 module use {module_dir}
@@ -29,7 +34,8 @@ module load vcstools/{version}
 def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, 
                  module_list=[], vcstools_version="master",
                  batch_dir="batch/", depend=None, depend_type='afterok', 
-                 submit=True, outfile=None, queue="cpuq", export="NONE"):
+                 submit=True, outfile=None, queue="cpuq", export="NONE",
+                 gpu_res=None, mem=8192, cpu_threads=1):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
@@ -98,7 +104,20 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     export : str [optional]
         Switch that lets SLURM use your login environment on the compute 
         nodes ("ALL") or not ("NONE").
-        Default: "NONE"
+        Default: "None"
+
+    gpu_res : int [optional]
+        Number of GPUs that the SLURM job will reserve.
+        Default: "None"
+
+    mem : int [optional]
+        The MB of ram required for your slurm job.
+        Default: 8192
+
+    cpu_threads : int [optional]
+        The number of cpu threads required for your slurm job.
+        Default: 1
+
 
     Returns
     -------
@@ -115,6 +134,9 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     elif queue == 'gpuq':
         cluster   = comp_config['gpuq_cluster']
         partition = comp_config['gpuq_partition']
+        if gpu_res is None:
+            # No gpus reserved so change it to a default of 1
+            gpu_res = 1
     elif queue == 'copyq':
         cluster   = comp_config['copyq_cluster']
         partition = comp_config['copyq_partition']
@@ -161,6 +183,10 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
                  depend_str += ":" + str(job_id)
             header.append("#SBATCH --dependency={0}{1}".format(depend_type, depend_str))
 
+    # add a gpu res to header
+    if gpu_res is not None:
+        header.append('#SBATCH --gres=gpu:{0}'.format(gpu_res))
+
     # now join the header into one string
     header = "\n".join(header)
 
@@ -193,7 +219,8 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
                        version=vcstools_version, 
                        cluster=cluster, partition=partition,
                        export=export, account=comp_config['group_account'],
-                       module_dir=comp_config['module_dir'])
+                       module_dir=comp_config['module_dir'],
+                       threads=cpu_threads, mem=mem)
 
     # write the formatted template to the job file for submission
     with open(jobfile, "w") as fh:
