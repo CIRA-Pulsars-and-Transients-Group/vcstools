@@ -22,30 +22,26 @@ import sys
 from shutil import copyfile as cp
 import math
 from scipy.interpolate import InterpolatedUnivariateSpline
-import matplotlib.pyplot as plt
 import glob
-from astropy.table import Table
-from astropy.time import Time
 import textwrap as _textwrap
 
-import ephem
-from mwapy import ephem_utils
+#Astropy imports
+from astropy.table import Table
+from astropy.time import Time
 
-#TODO check if I need the below two imports
-import requests.packages.urllib3
-requests.packages.urllib3.disable_warnings()
-
-from mwapy.pb import primary_beam
-from mwapy.pb import primarybeammap_tant as pbtant
-import mwapy.pb.primarybeammap as pbl
+#MWA software imports
+from mwa_pb import primarybeammap_tant as pbtant
+from mwa_pb import primary_beam
+import mwa_pb.primarybeammap as pbl
 from mwa_pulsar_client import client
-import mwa_metadb_utils as meta
+from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 import find_pulsar_in_obs as fpio
 
+import matplotlib.pyplot as plt
 import logging
 logger = logging.getLogger(__name__)
 
-web_address = 'mwa-pawsey-volt01.pawsey.org.au'
+web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
 auth = ('mwapulsar','veovys9OUTY=')
 
 class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
@@ -69,7 +65,7 @@ def sex2deg( ra, dec):
     return [c.ra.deg, c.dec.deg]
     
 def get_from_bestprof(file_loc):
-    with open(file_loc,"rb") as bestprof:
+    with open(file_loc,"r") as bestprof:
         lines = bestprof.readlines()
         #assumes the input fits files names begins with the obsid
         obsid = lines[0][22:32]
@@ -658,7 +654,7 @@ if __name__ == "__main__":
         
 
     #get meta data from obsid
-    metadata = meta.get_common_obs_metadata(obsid)
+    metadata = get_common_obs_metadata(obsid)
     obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = metadata
     minfreq = float(min(channels))
     maxfreq = float(max(channels))
