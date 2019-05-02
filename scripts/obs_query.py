@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import urllib
-import urllib2
+import urllib3
 import json
 import logging
 
@@ -31,10 +31,10 @@ def getmeta(service='obs', params=None):
 
   try:
     result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
-  except urllib2.HTTPError as error:
+  except urllib3.HTTPError as error:
     logger.error("HTTP error from server: code=%d, response:\n %s", error.code, error.read())
     return
-  except urllib2.URLError as error:
+  except urllib3.URLError as error:
     logger.error("URL or network error: %s", error.reason)
     return
 
