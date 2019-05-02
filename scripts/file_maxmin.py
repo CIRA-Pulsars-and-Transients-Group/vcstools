@@ -2,6 +2,13 @@
 
 from mwa_metadb_utils import getmeta 
 
+def is_number(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
 def print_minmax(obs_id):
     """
     Snippet function to show how to get the first and last files for a given observation
