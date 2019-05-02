@@ -206,7 +206,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         submit_cmd = subprocess.Popen(batch_submit_line, shell=True, stdout=subprocess.PIPE)
         for line in submit_cmd.stdout:
             if b"Submitted" in line:
-                jobid = str(line.split(b" ")[3])
+                jobid = str(line.split(b" ")[3].decode())
         if jobid is None:
             logger.debug(batch_submit_line)
             logger.debug(submit_cmd.stdout)
