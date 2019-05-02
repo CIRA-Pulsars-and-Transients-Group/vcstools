@@ -5,15 +5,15 @@ import subprocess
 import os
 import sys
 import glob
-import time
 import tempfile
 import atexit
 import hashlib
 import datetime
-import time
+from time import sleep, strptime, strftime
 import distutils.spawn
 import sqlite3 as lite
 from astropy.io import fits as pyfits
+from astropy.time import Time
 from reorder_chans import *
 import database_vcs
 from mdir import mdir
@@ -162,7 +162,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                             #tar_secs_to_run = "10:00:00"
                             #body = []
                             #untar = distutils.spawn.find_executable('untar.sh')
-                            #body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                            #body.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                             #body.append(database_vcs.add_database_function())
                             #body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(
                             #    untar, dl_dir, obsid, time_to_get, time_to_get+increment-1, n_untar, keep, vcs_database_id))
@@ -178,7 +178,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
                         module_list = ["numpy", "mwa-voltage/master"]
                         commands = []
                         #commands.append("module load numpy")
-                        commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                        commands.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                         commands.append(database_vcs.add_database_function())
                         commands.append("newcount=0")
                         commands.append("let oldcount=$newcount-1")
@@ -212,7 +212,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir, produc
 
 
                         body = []
-                        body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                        body.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                         body.append(database_vcs.add_database_function())
                         body.append("oldcount=0")
                         body.append("let newcount=$oldcount+1")
@@ -279,7 +279,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         module_list = ["setuptools"]
         commands = []
         commands.append("module load manta-ray-client")
-        commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+        commands.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
         commands.append(database_vcs.add_database_function())
         commands.append("csvfile={0}".format(csvfile))
         # commands.append('source /group/mwaops/PULSAR/psrBash.profile')
@@ -326,7 +326,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                 check_batch = "check_recombine_{0}".format(time_to_get)
                 module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "numpy", "mwa-voltage/master"]
                 commands = []
-                commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                commands.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                 commands.append(database_vcs.add_database_function())
                 commands.append("newcount=0")
                 commands.append("let oldcount=$newcount-1")
@@ -345,7 +345,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                 module_list = ["module switch PrgEnv-cray PrgEnv-gnu",
                                "numpy", "mwa-voltage/master", "mpi4py", "cfitsio"]
                 commands = []
-                commands.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                commands.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                 commands.append(database_vcs.add_database_function())
                 #commands.append("module switch PrgEnv-cray PrgEnv-gnu")
                 #commands.append("module load mpi4py")
@@ -415,7 +415,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                         if (len(f) > 0):
                                 corr_batch = "correlator_{0}_gpubox{1:0>2}".format(inc_start,gpubox_label)
                                 body = []
-                                body.append("export CMD_VCS_DB_FILE=/astro/mwaops/vcs/.vcs.db")
+                                body.append("export CMD_VCS_DB_FILE=/group/mwaops/vcs/.vcs.db")
                                 body.append(database_vcs.add_database_function())
                                 #body.append("source /group/mwaops/PULSAR/psrBash.profile")
                                 #body.append("module swap craype-ivybridge craype-sandybridge")
@@ -519,9 +519,15 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
 
     # make_beam_small requires the start time in UTC, get it from the start
     # GPS time as is done in timeconvert.py
-    from mwapy import ephem_utils
-    t = ephem_utils.MWATime(gpstime=float(start))
-    utctime = t.strftime('%Y-%m-%dT%H:%M:%S %Z')[:-4]
+    utctime = Time(start, format='gps', scale='utc').fits
+    # remove (UTC) that some astropy versions leave on the end
+    if utctime.endswith('(UTC)'):
+        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000(UTC)')
+        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
+    else:
+        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000')
+        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
+
 
     print "Running make_beam"
     P_dir = product_dir+"/pointings"
@@ -572,9 +578,9 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, metafit
         #                "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11}".format(n_omp_threads, execpath, obs_id, start,
         #                stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime))  # check these
         commands.append("srun --export=all -n 1 -c {0} {1} -o {2} -b {3} -e {4} -a 128 -n 128 -f {5} {6} -d "
-                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12}".format(n_omp_threads, make_beam_cmd, obs_id, start,
-                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats))  # check these
-
+                        "{7}/combined -R {8} -D {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(n_omp_threads, make_beam_cmd, obs_id, start,
+                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
+       
         job_id = submit_slurm(make_beam_small_batch, commands,
                     batch_dir=batch_dir,
                     slurm_kwargs={"time": secs_to_run, "partition": partition, "gres": "gpu:1",
@@ -717,7 +723,7 @@ if __name__ == '__main__':
 
     if opts.work_dir:
         print "YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!"
-        time.sleep(5)
+        sleep(5)
         data_dir = product_dir = "{0}/{1}".format(opts.work_dir, opts.obs)
     else:
         data_dir = '/astro/mwaops/vcs/{0}'.format(opts.obs)
