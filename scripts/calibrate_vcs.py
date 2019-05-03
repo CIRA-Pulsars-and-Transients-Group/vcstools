@@ -369,8 +369,8 @@ class BaseRTSconfig(object):
         logger.info("Converting times with astropy")
         mwa_loc = EarthLocation.of_site('Murchison Widefield Array')
         #Astropy formating
-        utctime = strptime(self.utctime, '%Y%d%m%H%M%S')
-        a_time = strftime('%Y-%d-%mT%H:%M:%S', utctime)
+        utctime = strptime(self.utctime, '%Y%m%d%H%M%S')
+        a_time = strftime('%Y-%m-%dT%H:%M:%S', utctime)
         obstime = Time(a_time, format='fits', scale='utc', location=mwa_loc)
         lst_in_hours = obstime.sidereal_time('apparent').hourangle
         jd = obstime.jd
