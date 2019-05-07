@@ -293,9 +293,13 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                                dt=100, start_time=int(enter))
     bandpowers = np.mean(bandpowers)
     
+    #supress print statements of the make_primarybeammap function
+    sys.stdout = open(os.devnull, 'w')
     beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
      beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
      pbtant.make_primarybeammap(int(obsid), delays, centrefreq*1e6, 'analytic', plottype='None')
+    #turns print statments back on
+    sys.stdout = sys.__stdout__
     
     #TODO can be inaccurate for coherent but is too difficult to simulate
     tant = (Tant_XX + Tant_YY) / 2.
@@ -312,17 +316,11 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     logger.info("Average Power: " + str(avg_power))
 
     #gain uncertainty through beam position estimates
-    mwa = ephem_utils.Obs[ephem_utils.obscode['MWA']]    
     RAs, Decs = sex2deg(ra_obs,dec_obs)
-    obstime = Time(float(obsid),format='gps',scale='utc')
-    observer = ephem.Observer()
-    observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
-    LST_hours = observer.sidereal_time() * ephem_utils.HRS_IN_RADIAN
-
-    HAs = -RAs + LST_hours * 15.
-    Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
-    theta=np.radians(90.-Alts)
-
+    Alts, Azs, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
+   
+    theta = np.radians(Zas)
+    
     u_gain_per = (1. - avg_power)*0.12 + (theta/90.)*(theta/90.)*2. + 0.1
     u_gain = gain * u_gain_per #assumed to be 10% 
         
@@ -408,6 +406,9 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
         if not (channels[b] - channels[b-1]) == 1:
             subbands = subbands + 1
     
+    print(str(pulsar))
+    print(str(subbands))
+    
     #get cal id
     if not incoh:
         cal_list = client.calibrator_list(web_address, auth)
@@ -433,7 +434,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                    flux = float("{0:.2f}".format(S_mean)),
                                    flux_error = float("{0:.2f}".format(u_S_mean)),
                                    width = float("{0:.2f}".format(w_equiv_ms)),
-                                   width_error = float("{0:.2f}".format(u_w_equiv_ms)),
+                                   width_erro = float("{0:.2f}".format(u_w_equiv_ms)),
                                    scattering = float("{0:.5f}".format(scattering)), 
                                    scattering_error = float("{0:.5f}".format(u_scattering)),
                                    dm = float(dm))
@@ -441,8 +442,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
             logger.info("Detection already on database so updating the values")
             client.detection_update(web_address, auth, 
                                    observationid = int(obsid),
-                                   pulsar = str(pulsar), 
-                                   subband = str(subbands), 
+                                   pulsar = str(pulsar).encode(), 
+                                   subband = str(subbands).encode(), 
                                    incoherent = incoh,
                                    observation_type = int(obstype),
                                    calibrator = int(cal_db_id),
@@ -582,6 +583,7 @@ if __name__ == "__main__":
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+    logger.propagate = 0
 
 
     #defaults for incoh and calibrator type
