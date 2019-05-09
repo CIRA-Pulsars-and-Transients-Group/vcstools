@@ -4,14 +4,7 @@ import logging
 import argparse
 
 logger = logging.getLogger(__name__)
-from mwa_metadb_utils import getmeta 
-
-def is_number(s):
-    try:
-        int(s)
-        return True
-    except ValueError:
-        return False
+from mwa_metadb_utils import getmeta, is_number 
 
 
 def print_info(obs_id):
@@ -24,7 +17,10 @@ def print_info(obs_id):
     logger.info("Obs ID: {0}".format(obs_id))
     logger.info("Observation Name: {0}".format(obsinfo['obsname']))
     logger.info("Channels: {0}".format(obsinfo['rfstreams']['0']['frequencies']))
+    logger.info("Start Time: {0}".format(obsinfo['starttime']))
+    logger.info("Stop Time: {0}".format(obsinfo['stoptime']))
     logger.info("Duration: {0}".format(obsinfo['stoptime'] - obsinfo['starttime'], "seconds"))
+    
    
 if __name__ == '__main__':
     from sys import argv
@@ -36,7 +32,8 @@ if __name__ == '__main__':
     
     #Arguments
     parser = argparse.ArgumentParser(description="""Returns information on a given OBS ID""")
-    parser.add_argument('-o','--obsid',type=str, help='Input OBS IDs in the format " -o 1099414416"')
+    #parser.add_argument('-o','--obsid',type=str, help='Input OBS IDs in the format " -o 1099414416"')
+    parser.add_argument('-o', '--obsid', type=int, help='Input Observation ID')
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                     choices=loglevels.keys(), default="INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
