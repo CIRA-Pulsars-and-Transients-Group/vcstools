@@ -30,9 +30,9 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'gpuq_cluster' : 'farnarkle',
                  'gpuq_partition' : 'skylake-gpu',
                  'copyq_cluster' : 'farnarkle',
-                 'copyq_partition' : 'skylake',
+                 'copyq_partition' : 'skylake', #TODO check if there's a better one
                  'container_module' : 'singularity/latest',
-                 'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools-cuda-9.2.simg'} #TODO check if there's a better one
+                 'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools-cuda-9.2.simg'}
 
     
 import logging
@@ -52,8 +52,11 @@ def load_config_file():
         comp_config = GALAXY_CONFIG
     elif hostname.startswith('farnarkle'):
         comp_config = OZSTAR_CONFIG
+    elif hostname.startswith('john'):
+        #work nodes on ozstar
+        comp_config = OZSTAR_CONFIG
     else:
-        logger.error('Unknown computer. Exiting')
+        logger.error('Unknown computer {}. Exiting'.format(hostname))
         quit()
 
     return comp_config
