@@ -39,7 +39,7 @@ if __name__ == '__main__':
     
     #Arguments
     parser = argparse.ArgumentParser(description="""Returns information on a given OBS ID""")
-    parser.add_argument('obsid', type=int, help='Input Observation ID in the format "-o 1099414416"')
+    parser.add_argument("obsid", type=int, help="Input Observation ID")
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                     choices=loglevels.keys(), default="INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit. Currently this requires an obsid to work. Any number will suffice.")
