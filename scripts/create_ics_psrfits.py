@@ -4,6 +4,7 @@ import logging
 import argparse
 import sys
 import os
+import subprocess
 import glob
 import getpass
 from itertools import groupby
@@ -60,6 +61,15 @@ if __name__ == "__main__":
     data_files = sorted(glob.glob("{data_dir}/*ics*.dat".format(data_dir=data_dir)))
     nfiles = len(data_files)
 
+    ics_files = glob.glob("{ics_dir}/*.fits".format(ics_dir=ics_dir))
+    if len(ics_files) > 0:
+        logger.error("There are already PSRFITS files in the ics directory. Please delete or move them elsewhere")
+        sys.exit(1)
+
+    if os.path.isfile("{ics_dir}/mk_psrfits_in".format(ics_dir=ics_dir)):
+        logger.error("Pipe file already exists in ICS directory. Please delete it")
+        sys.exit(1)
+
     first_gps_second = int(data_files[0].split("/")[-1].split("_")[1])
     logger.info("First GPS second present: {0}".format(first_gps_second))
     mwa_loc = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8)
@@ -105,6 +115,7 @@ if __name__ == "__main__":
     user = getpass.getuser()
     os.system("mkdir -p {ics_dir}".format(ics_dir=ics_dir))
 
+    # TODO: this is bloody awful, surely there's a better way to do this?
     make_command = 'cd {ics_dir} && echo -e "{ics_dir}/mk_psrfits_in\n' \
                    '\n' \
                    '{obsid}\n' \
@@ -135,14 +146,20 @@ if __name__ == "__main__":
                    '\n' \
                    '\n' \
                    '\n' \
-                   '\n" | make_psrfits & sleep 2.0'.format(ics_dir=ics_dir, obsid=args.obsID, nfiles=nfiles,
+                   '\n" | make_psrfits & sleep 1.0'.format(ics_dir=ics_dir, obsid=args.obsID, nfiles=nfiles,
                                                            user=user, utc_isot=utc_isot, cfreq=cfreq, bw=bw,
                                                            ra=ra, dec=dec, az=az, za=za, lst_sec=lst_sec,
                                                            utc_sec=utc_sec, mjd_trunc=mjd_trunc)
 
     cat_command = 'cat {data_dir}/*ics.dat > {ics_dir}/mk_psrfits_in'.format(data_dir=data_dir, ics_dir=ics_dir)
 
-    os.system(make_command)
-    os.system(cat_command)
-    os.system("wait")
+    logfile = "{ics_dir}/make_psrfits.log".format(ics_dir=ics_dir)
+    logger.info("Now piping data to make_psrfits, writing stdout/stderr to:")
+    logger.info("   {0}".format(logfile))
+    with open(logfile, "w") as f:
+        p1 = subprocess.Popen(make_command, shell=True, stdout=f, stderr=f)
+        p2 = subprocess.Popen(cat_command, shell=True, stdout=f, stderr=f)
+        p2.wait()
     os.system("rm -rf {ics_dir}/mk_psrfits_in".format(ics_dir=ics_dir))
+
+
