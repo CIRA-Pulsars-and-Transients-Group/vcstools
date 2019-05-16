@@ -38,16 +38,14 @@ done
 ## to be combined.
 for j in $(seq -f "%04g" 1 1 $NSETS);do
 
-	sname=splice_${j}
+    sname=splice_${j}
 
     for i in $(seq -f "%03g" $LO 1 $HI);do 
-		echo ${PROJECT}_${OBSID}_ch${i}_${j}.fits >> $sname
-	done
+        echo ${PROJECT}_${OBSID}_ch${i}_${j}.fits >> $sname
+    done
 
     ## Combine the channels for each individual 200-second 
     ## chunk, then rename it to something more sensible.
     splice_psrfits $(cat $sname) ${OBSID}_tmp
-	mv ${OBSID}_tmp_0001.fits ${OBSID}_ch${LO}-${HI}_${j}.fits
+    mv ${OBSID}_tmp_0001.fits ${OBSID}_ch${LO}-${HI}_${j}.fits
 done
-
-
