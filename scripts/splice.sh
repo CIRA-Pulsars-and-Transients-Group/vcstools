@@ -8,7 +8,7 @@ read -p "Highest coarse channel number [156]: " hichan
 
 PROJECT=${project:-G0024}
 OBSID=${obsid}
-NSETS=${nsets:-24}
+NSETS=${nsets:-2}
 LO=${lochan:-133}
 HI=${hichan:-156}
 
