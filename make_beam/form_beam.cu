@@ -432,6 +432,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
 
     // now do the same for the coherent beam
     dim3 chan_stokes(nchan, outpol_coh);
+    // This doesn't seem to change anything some commenting out
     //flatten_bandpass_C_kernel<<<npointing, chan_stokes>>>((*g)->d_coh, opts->sample_rate);
     //cudaDeviceSynchronize(); // Memcpy acts as a synchronize step so don't sync here
     
