@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from mwa_metadb_utils import getmeta 
+from mwa_metadb_utils import getmeta, is_number
 
 def print_minmax(obs_id):
     """
@@ -8,7 +8,7 @@ def print_minmax(obs_id):
     """
 
     obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
-    times=[file[11:21] for file in obsinfo['files'] if file[11:21].isnumeric()] #Make a list of gps times excluding non-numbers from list
+    times=[file[11:21] for file in obsinfo['files'] if is_number(file[11:21])] #Make a list of gps times excluding non-numbers from list
     obs_start = int(min(times))
     obs_end = int(max(times))
     obs_dur = len(obsinfo['files'])
