@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from mwa_metadb_utils import getmeta, is_number
 
