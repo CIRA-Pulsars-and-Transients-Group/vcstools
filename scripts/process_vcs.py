@@ -560,10 +560,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     if os.path.isfile(metafile):
         logger.info("Found observation metafile: {0}".format(metafile))
         channels = None
-        with open(metafile, 'rb') as m:
+        with open(metafile, 'r') as m:
             for line in m.readlines():
-                if line.startswith("channels".encode()):
-                    chan_line = line.decode()[11:-1]
+                if line.startswith("channels"):
+                    chan_line = line[11:-1]
                     channels = chan_line.split(",")
         if channels == None:
             logger.info("Channels keyword not found in metafile. Re-querying "+\
