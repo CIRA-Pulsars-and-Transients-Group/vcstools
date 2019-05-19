@@ -17,12 +17,15 @@ from mwa_metadb_utils import getmeta, mwa_alt_az_za
 import sys
 import argparse
 
+import logging
+logger = logging.getLogger(__name__)
 
 def get_obs_metadata(obs):
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
     channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
     freqs = [float(c)*1.28 for c in channels]
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
     pointing_EL, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
     
     return {"channels":channels,
@@ -78,7 +81,6 @@ def log_normalise(data, vmin, vmax):
 def plot_beam(obs, target, cal, freq):
 
     metadata = get_obs_metadata(obs)
-
     phi = np.linspace(0,360,3600)
     theta = np.linspace(0,90,900)
 
@@ -87,7 +89,7 @@ def plot_beam(obs, target, cal, freq):
         
     # compute beam and plot
     delays = [metadata["xdelays"], metadata["ydelays"]]
-    gx, gy = pb.MWA_Tile_full_EE(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
+    gx, gy = pb.MWA_Tile_analytic(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
     beam = (gx + gy) / 2.0
 
     fig = plt.figure(figsize=(10,8))
@@ -132,23 +134,30 @@ def plot_beam(obs, target, cal, freq):
     # plot the pointing centre of the tile beam
     ax.plot(np.radians(metadata["az"]), np.radians(metadata["za"]), ls="", marker="+", ms=8, color='C3', zorder=1002, label="pointing centre")
 
-    if target is not None:
+    if target is not None:   
         # color map for tracking target positions
         target_colors = cm.viridis(np.linspace(0, 1, len(target.obstime.gps)))
-        print len(target.obstime.gps)
+        logger.info("obs time length: {0} seconds".format(len(target.obstime.gps)))
         for t,color in zip(target, target_colors):
             target_az = t.altaz.az.rad
             target_za = np.pi/2 - t.altaz.alt.rad
-            
+
+
             # get beam power for target
-            bpt_x, bpt_y = pb.MWA_Tile_full_EE([[target_za]], [[target_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
+            bpt_x, bpt_y = pb.MWA_Tile_analytic(target_za, target_az,
+                                freq=freq*1e6,
+                                delays=[metadata["xdelays"],
+                                        metadata["ydelays"]], 
+                                power=True, zenithnorm=True)
             bpt = (bpt_x + bpt_y) / 2.0
             lognormbpt = log_normalise(bpt, cc_levels.min(), beam.max())
-            print "Beam power @ source @ {0}: {1:.3f}".format(t.obstime.gps, bpt[0][0])
-            print "     log-normalised: {0:.3f}".format(lognormbpt[0][0])
+            logger.debug("bpt, cc_levels, beam: {0}, {1}, {2}".format(bpt, cc_levels.min(), beam.max()))
+            #logger.info("Beam power @ source @ {0}: {1:.3f}".format(t.obstime.gps, bpt[0][0]))
+            logger.info("Beam power @ source @ gps: {0}: {1}".format(t.obstime.gps, bpt))
+            logger.info("log-normalised BP: {0}".format(lognormbpt))
             
             # plot the target position on sky
-            ax.plot(target_az, target_za, ls="", marker="o", color=color, zorder=1002, label="target @ {0} ({1:.2f})".format(t.obstime.gps, bpt[0][0]))
+            ax.plot(target_az, target_za, ls="", marker="o", color=color, zorder=1002, label="target @ {0} ({1})".format(t.obstime.gps, bpt))
             
             # plot the target on the color bar
             cbarCC.ax.plot(0.5, lognormbpt, color=color, marker="o")
@@ -160,13 +169,14 @@ def plot_beam(obs, target, cal, freq):
         for c,color in zip(cal, calibrator_colors):
             cal_az = c.altaz.az.rad
             cal_za = np.pi/2 - c.altaz.alt.rad
-            
+        
+    
             # get the beam power for calibrator
-            bpc_x, bpc_y = pb.MWA_Tile_full_EE([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
+            bpc_x, bpc_y = pb.MWA_Tile_analytic([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
             bpc = (bpc_x + bpc_y) / 2.0
             lognormbpc = log_normalise(bpc, cc_levels.min(), beam.max())
-            print "Beam power @ calibrator @ {0}: {1:.3f}".format(c.obstime.gps, bpc[0][0])
-            print "     log-normalised: {0:.3f}".format(lognormbpc[0][0])
+            logger.info("Beam power @ calibrator @ gps:{0}: {1:.3f}".format(c.obstime.gps, bpc[0][0]))
+            logger.info("log-normalised BP: {0:.3f}".format(lognormbpc[0][0]))
             
             # plot the calibrator position on sky
             ax.plot(cal_az, cal_za, ls="", marker="^", color=color, zorder=1002, label="cal @ {0} ({1:.2f})".format(c.obstime.gps, bpc[0][0]))
@@ -191,11 +201,18 @@ def plot_beam(obs, target, cal, freq):
 
     plt.legend(bbox_to_anchor=(0.95,-0.05), ncol=2)
     #plt.savefig("{0}_{1:.2f}MHz_tile.eps".format(obs, freq), bbox_inches="tight", format="eps")
+    logger.info("Saving plot as output file: {0}_{1:.2f}MHz_tile.png".format(obs, freq))
     plt.savefig("{0}_{1:.2f}MHz_tile.png".format(obs, freq), bbox_inches="tight")
 
 
-
 if __name__ == "__main__":
+
+    #dictionary for choosing log-levels
+    loglevels = dict(DEBUG=logging.DEBUG,
+                    INFO=logging.INFO,
+                    WARNING=logging.WARNING,
+                    ERROR = logging.ERROR)
+
     parser = argparse.ArgumentParser(description="Plotting tool for tile beam pattern")
 
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID ", required=True)
@@ -206,14 +223,22 @@ if __name__ == "__main__":
     parser.add_argument("--cal_dec", type=str, help="Calibrator DEC (J2000)")
     parser.add_argument("--gps", type=int, nargs="+", help="Time(s) at which to evaluate target/calibrator position (GPS seconds)")
     parser.add_argument("--utc", type=str, nargs="+", help="Time(s) at which to evaluate target/calibrator position (YYYY-MM-DDThh:mm:ss.ss)")
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", choices=loglevels.keys(), default="INFO")
     args = parser.parse_args()
     
+    
+    #set log levels    
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+
+
     if args.gps and not args.utc:
         time = Time(args.gps, format="gps")
     elif args.utc and not args.gps:
         time = Time(args.utc, scale="utc", format="isot")
     elif args.gps and arg.utc:
-        print "You supplied GPS and UTC times: only using GPS time"
+        logger.warn("You supplied GPS and UTC times: only using GPS time")
         time = Time(args.gps, format="gps")
     else:
         time = None
@@ -221,13 +246,13 @@ if __name__ == "__main__":
     if args.ra and args.dec and time:
         target = compute_target_position(args.ra, args.dec, time) 
     else:
-        print "No target RA, Dec or Time given. Not plotting target position."
+        logger.warn("No target RA, Dec or Time given. Not plotting target position.")
         target = None
        
     if args.cal_ra and args.cal_dec and time:
         calibrator = compute_target_position(args.cal_ra, args.cal_dec, time)
     else:
-        print "No calibrator RA, Dec or Time given. Not plotting calibrator position."
+        logger.warn("No calibrator RA, Dec or Time given. Not plotting calibrator position.")
         calibrator = None
      
 
