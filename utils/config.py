@@ -19,7 +19,9 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
                  'copyq_cluster' : 'zeus',
                  'copyq_partition' : 'copyq',
                  'container_module' : 'shifter',
-                 'container_command' : 'shifter run cirapulsarsandtransients/vcstools:cuda-9.2'}
+                 #'container_command' : 'shifter run cirapulsarsandtransients/vcstools:cuda-9.2'}
+                 #removed container command as containers do not currently work on Galaxy
+                 'container_command' : ''}
 
 OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'base_product_dir' : '/fred/oz125/vcs/',
