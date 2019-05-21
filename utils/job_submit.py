@@ -35,7 +35,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
                  module_list=[], vcstools_version="master",
                  batch_dir="batch/", depend=None, depend_type='afterok', 
                  submit=True, outfile=None, queue="cpuq", export="NONE",
-                 gpu_res=None, mem=8192, cpu_threads=1):
+                 gpu_res=None, mem=1024, cpu_threads=1):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
