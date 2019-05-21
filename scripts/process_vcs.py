@@ -179,7 +179,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
                 #tar_secs_to_run = "10:00:00"
                 #body = []
                 #untar = distutils.spawn.find_executable('untar.sh')
-                #body.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(config['base_data_dir'])
+                #body.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_data_dir'])
                 #body.append(database_vcs.add_database_function())
                 #body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(
                 #            untar, dl_dir, obsid, time_to_get, 
@@ -317,7 +317,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         module_list = ["setuptools"]
         commands = []
         commands.append("module load manta-ray-client")
-        commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(config['base_product_dir']))
+        commands.append("export CMD_VCS_DB_FILE={0}.vcs.db".format(comp_config['base_product_dir']))
         commands.append(database_vcs.add_database_function())
         commands.append("csvfile={0}".format(csvfile))
         # commands.append('source /group/mwaops/PULSAR/psrBash.profile')
@@ -794,9 +794,10 @@ if __name__ == '__main__':
     if not opts.obs:
         logger.error("Observation ID required, please put in with -o or --obs")
         quit()
-    if opts.begin > opts.end:
-        logger.error("Starting time is after end time")
-        quit()
+    if opts.begin and opts.end:
+        if opts.begin > opts.end:
+            logger.error("Starting time is after end time")
+            quit()
     if (opts.mode == "beamform" or opts.incoh):
         bf_format = ""
         if not opts.pointing:
