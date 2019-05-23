@@ -678,7 +678,7 @@ class RTScal(object):
         rts_batch = "RTS_{0}".format(self.cal_obsid)
         slurm_kwargs = {"partition": "gpuq",
                         "workdir": "{0}".format(self.rts_out_dir),
-                        "time": "00:20:00",
+                        "time": "2:00:00",
                         "nodes": "{0}".format(nnodes),
                         "gres": "gpu:1",
                         "ntasks-per-node": "1"}
@@ -863,7 +863,7 @@ class RTScal(object):
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
             slurm_kwargs = {"partition": "gpuq",
                             "workdir": "{0}".format(self.rts_out_dir),
-                            "time": "00:45:00",
+                            "time": "2:00:00",
                             "nodes": "{0}".format(nnodes),
                             "gres": "gpu:1",
                             "ntasks-per-node": "1"}
