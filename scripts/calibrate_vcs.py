@@ -367,7 +367,8 @@ class BaseRTSconfig(object):
         """
         # use the same operations as in timeconvert.py for our specific need
         logger.info("Converting times with astropy")
-        mwa_loc = EarthLocation.of_site('Murchison Widefield Array')
+        #mwa_loc = EarthLocation.of_site('Murchison Widefield Array')
+        mwa_loc = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8) 
         #Astropy formating
         utctime = strptime(self.utctime, '%Y%m%d%H%M%S')
         a_time = strftime('%Y-%m-%dT%H:%M:%S', utctime)
