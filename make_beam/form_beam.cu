@@ -419,10 +419,12 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     dim3 stat(NSTATION);
     // Send off a parrellel cuda stream for each pointing
     cudaStream_t streams[npointing];
+    size_t shared_mem = 5 * NSTATION * sizeof(ComplexDouble);
+
     for ( p = 0; p < npointing; p++ )
     {
         cudaStreamCreate(&(streams[p]));
-        beamform_kernel<<<stat, samples_chan, 0, streams[p]>>>( (*g)->d_data,
+        beamform_kernel<<<stat, samples_chan, shared_mem, streams[p]>>>( (*g)->d_data,
                             (*g)->d_W, (*g)->d_J, invw, 
                             (*g)->d_Bd, (*g)->d_coh, (*g)->d_incoh, p );
             
