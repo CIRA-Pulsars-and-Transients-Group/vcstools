@@ -1,19 +1,28 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import subprocess
+import config
+import logging
 
+logger = logging.getLogger(__name__)
 
 SLURM_TMPL = """#!/bin/bash -l
 
 #SBATCH --export={export}
 #SBATCH --output={outfile}
-#SBATCH --account=mwaops
+#SBATCH --account={account}
 #SBATCH --clusters={cluster}
+#SBATCH --partition={partition}
 #
+#SBATCH --cpus-per-task={threads}
+#SBATCH --mem-per-cpu={mem}MB
 {header}
 
+ncpus={threads}
+export OMP_NUM_THREADS={threads}
+
 {switches}
-module use /group/mwa/software/modulefiles
+module use {module_dir}
 module load vcstools/{version}
 {modules}
 
@@ -22,9 +31,11 @@ module load vcstools/{version}
 # NOTE: --gid option removed after discussion in helpdesk ticket GS-9370
 
 
-def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[], vcstools_version="master",
-                    batch_dir="batch/", depend=None, depend_type='afterok', submit=True, 
-                    outfile=None, cluster="galaxy", export="NONE"):
+def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, 
+                 module_list=[], vcstools_version="master",
+                 batch_dir="batch/", depend=None, depend_type='afterok', 
+                 submit=True, outfile=None, queue="cpuq", export="NONE",
+                 gpu_res=None, mem=1024, cpu_threads=1):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
@@ -38,17 +49,20 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
         Expects a list where each element is a single line of the bash script.
 
     tmpl : str
-        A template header string with format place holders: export, outfile, cluster, header and script.
+        A template header string with format place holders: export, outfile, 
+        cluster, header and script.
         This is used to create the final string to be written to the job script.
         For this function, it is required to be SLURM compliant. 
         Default: `SLURM_TMPL`
 
     slurm_kwargs : dict [optional]
-        A dictionary of SLURM keyword, value pairs to fill in whatever is not in the template supplied to `tmpl`.
+        A dictionary of SLURM keyword, value pairs to fill in whatever is not
+        in the template supplied to `tmpl`.
         Default: `{}` (empty dictionary, i.e. no additional header parameters)
 
     module_list : list of str [optional]
-        A list of module names (including versions if applicable) that will be included in the header for the batch
+        A list of module names (including versions if applicable) that will 
+        be included in the header for the batch
         scripts. e.g. ["vcstools/master", "mwa-voltage/master", "presto/master"] would append
             module load vcstools/master
             module load mwa-voltage/master
@@ -60,7 +74,8 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
         The version of vcstools to load. Default: master.
 
     batch_dir : str [optional]
-        The LOCAL directory where you want to write the batch scripts (i.e. it will write to `$PWD/batch_dir`).
+        The LOCAL directory where you want to write the batch scripts 
+        (i.e. it will write to `$PWD/batch_dir`).
         Default: "batch/"
 
     depend : list or None [optional]
@@ -81,19 +96,54 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
         The output file name if "`name`.out" is not desirable.
         Default: `None` (i.e. "`batch_dir`/`name`.out")
 
-    cluster : str [optional]
-        The compute cluster that the job is to run on.
-        Default: "galaxy"
+    queue : str [optional]
+        The type of queue you require (cpuq, gpuq or copyq) then the script will
+        choose the correct partitions and clusters for the job to run on
+        Default: "cpuq"
 
     export : str [optional]
-        Switch that lets SLURM use your login environment on the compute nodes ("ALL") or not ("NONE").
-        Default: "NONE"
+        Switch that lets SLURM use your login environment on the compute 
+        nodes ("ALL") or not ("NONE").
+        Default: "None"
+
+    gpu_res : int [optional]
+        Number of GPUs that the SLURM job will reserve.
+        Default: "None"
+
+    mem : int [optional]
+        The MB of ram required for your slurm job.
+        Default: 8192
+
+    cpu_threads : int [optional]
+        The number of cpu threads required for your slurm job.
+        Default: 1
+
 
     Returns
     -------
     jobid : int
         The unique SLURM job ID associated with the submitted job.
     """
+
+    #Work out which partition and cluster to use based on the supercomputer 
+    #(in config file) and queue required
+    comp_config = config.load_config_file()
+    if queue == 'cpuq':
+        cluster   = comp_config['cpuq_cluster']
+        partition = comp_config['cpuq_partition']
+    elif queue == 'gpuq':
+        cluster   = comp_config['gpuq_cluster']
+        partition = comp_config['gpuq_partition']
+        if gpu_res is None:
+            # No gpus reserved so change it to a default of 1
+            gpu_res = 1
+    elif queue == 'copyq':
+        cluster   = comp_config['copyq_cluster']
+        partition = comp_config['copyq_partition']
+    else:
+        logger.error("No queue found, please use cpuq, gpuq or copyq")       
+
+
 
     header = []
 
@@ -106,7 +156,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
         outfile = batch_dir + name + ".out"
     
     # create the header from supplied arguments
-    for k,v in slurm_kwargs.iteritems():
+    for k,v in slurm_kwargs.items():
         if len(k) > 1:
             k = "--" + k + "="
         else:
@@ -133,6 +183,10 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
                  depend_str += ":" + str(job_id)
             header.append("#SBATCH --dependency={0}{1}".format(depend_type, depend_str))
 
+    # add a gpu res to header
+    if gpu_res is not None:
+        header.append('#SBATCH --gres=gpu:{0}'.format(gpu_res))
+
     # now join the header into one string
     header = "\n".join(header)
 
@@ -146,6 +200,8 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
         if "module switch" in m:
             # if a module switch command is included rather than just a module name, then add it to a separate list
             switches.append(m)
+        elif "module use" in m:
+            modules.append("{0}\n".format(m))
         else:
             modules.append("module load {0}\n".format(m))
 
@@ -156,9 +212,17 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
     # join the commands into a single string
     commands = "\n".join(commands)
 
+    #Load computer dependant config file
+    comp_config = config.load_config_file()
+    
     # format the template script
-    tmpl = tmpl.format(script=commands, outfile=outfile, header=header, switches=switches, modules=modules,
-                       version=vcstools_version, cluster=cluster, export=export)
+    tmpl = tmpl.format(script=commands, outfile=outfile, header=header, 
+                       switches=switches, modules=modules, 
+                       version=vcstools_version, 
+                       cluster=cluster, partition=partition,
+                       export=export, account=comp_config['group_account'],
+                       module_dir=comp_config['module_dir'],
+                       threads=cpu_threads, mem=mem)
 
     # write the formatted template to the job file for submission
     with open(jobfile, "w") as fh:
@@ -170,11 +234,11 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, module_list=[
     if submit:
         submit_cmd = subprocess.Popen(batch_submit_line, shell=True, stdout=subprocess.PIPE)
         for line in submit_cmd.stdout:
-            if "Submitted" in line:
-                jobid = str(line.split(" ")[3])
+            if b"Submitted" in line:
+                jobid = str(line.split(b" ")[3].decode())
         if jobid is None:
-            print batch_submit_line
-            print submit_cmd.stdout
+            logger.debug(batch_submit_line)
+            logger.debug(submit_cmd.stdout)
             return
         else:
             return jobid

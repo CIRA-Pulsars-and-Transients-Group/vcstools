@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 
 def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):

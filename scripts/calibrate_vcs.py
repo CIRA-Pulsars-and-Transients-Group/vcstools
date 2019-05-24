@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """Script for RTS calibration jobs in the VCS Pulsar pipeline.
 
@@ -567,7 +567,7 @@ class RTScal(object):
 
     def __summary(self):
         # debugging use only
-        print self.__dict__
+        print(self.__dict__)
 
 
     def submit_true(self):
