@@ -399,7 +399,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
  */
 {
     // Setup input values (= populate W and J)
-    int p, s, ant, ch, pol, pol2;
+    int p, ant, ch, pol, pol2;
     int Wi, Ji;
     for (p   = 0; p   < npointing; p++  )
     for (ant = 0; ant < nstation ; ant++)
@@ -494,10 +494,15 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
     g->J_size     = npointing * nstation * nchan * npol * npol * sizeof(ComplexDouble);
 
     // Allocate host memory
-    g->W  = (ComplexDouble *)malloc( g->W_size );
-    g->J  = (ComplexDouble *)malloc( g->J_size );
-    g->Bd = (ComplexDouble *)malloc( g->Bd_size );
-
+    //g->W  = (ComplexDouble *)malloc( g->W_size );
+    //g->J  = (ComplexDouble *)malloc( g->J_size );
+    //g->Bd = (ComplexDouble *)malloc( g->Bd_size );
+    cudaMallocHost( &g->W, g->W_size );
+    cudaCheckErrors("cudaMallocHost W fail");
+    cudaMallocHost( &g->J, g->J_size );
+    cudaCheckErrors("cudaMallocHost J fail");
+    cudaMallocHost( &g->Bd, g->Bd_size );
+    cudaCheckErrors("cudaMallocHost Bd fail");
 
     // Allocate device memory
     gpuErrchk(cudaMalloc( (void **)&g->d_W,     g->W_size ));
@@ -533,7 +538,7 @@ float *create_pinned_data_buffer_psrfits( size_t size )
     cudaMallocHost( &ptr, size * sizeof(float) );
     //cudaError_t status = cudaHostRegister((void**)&ptr, size * sizeof(float),
     //                                      cudaHostRegisterPortable );
-    cudaCheckErrors("cudaHostRegister fail");
+    cudaCheckErrors("cudaMallocHost data_buffer_psrfits fail");
     return ptr;
 }
 
@@ -543,7 +548,7 @@ float *create_pinned_data_buffer_vdif( size_t size )
     cudaMallocHost( &ptr, size * sizeof(float) );
     //cudaError_t status = cudaHostRegister((void**)&ptr, size * sizeof(float),
     //                                      cudaHostRegisterPortable );
-    cudaCheckErrors("cudaHostRegister fail");
+    cudaCheckErrors("cudaMallocHost data_buffer_vdif fail");
     return ptr;
 }
 

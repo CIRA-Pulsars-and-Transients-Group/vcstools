@@ -35,6 +35,7 @@
 
 #ifdef HAVE_CUDA
 
+#include <cuda_runtime.h>
 #include "ipfb.h"
 #define NOW  ((double)clock()/(double)CLOCKS_PER_SEC)
 
@@ -243,15 +244,15 @@ int main(int argc, char **argv)
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
     uint8_t *data;
-    /*#ifdef HAVE_CUDA
+    #ifdef HAVE_CUDA
     uint8_t *data1;
     uint8_t *data2;
     cudaMallocHost( &data1, bytes_per_file * sizeof(uint8_t) );
     cudaMallocHost( &data2, bytes_per_file * sizeof(uint8_t) );
-    #elif*/
+    #else
     uint8_t *data1 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     uint8_t *data2 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
-    //#endif
+    #endif
     assert(data1);
     assert(data2);
 
@@ -269,7 +270,7 @@ int main(int argc, char **argv)
     float *data_buffer_uvdif1 = NULL;
     float *data_buffer_uvdif2 = NULL;
 
-    /*#ifdef HAVE_CUDA
+    #ifdef HAVE_CUDA
     data_buffer_coh1   = create_pinned_data_buffer_psrfits( npointing * nchan *
                                                             outpol_coh * pf[0].hdr.nsblk );
     data_buffer_coh2   = create_pinned_data_buffer_psrfits( npointing * nchan * 
@@ -287,7 +288,7 @@ int main(int argc, char **argv)
     data_buffer_uvdif2 = create_pinned_data_buffer_vdif( uvf->sizeof_buffer *
                                                          npointing );
     
-    #elif*/
+    #else
     data_buffer_coh1   = create_data_buffer_psrfits( npointing * nchan *
                                                      outpol_coh * pf[0].hdr.nsblk );
     data_buffer_coh2   = create_data_buffer_psrfits( npointing * nchan * 
@@ -298,7 +299,7 @@ int main(int argc, char **argv)
     data_buffer_vdif2  = create_data_buffer_vdif( vf->sizeof_buffer * npointing );
     data_buffer_uvdif1 = create_data_buffer_vdif( uvf->sizeof_buffer * npointing );
     data_buffer_uvdif2 = create_data_buffer_vdif( uvf->sizeof_buffer * npointing );
-    //#endif
+    #endif
 
     /* Allocate host and device memory for the use of the cu_form_beam function */
     // Declaring pointers to the structs so the memory can be alternated
