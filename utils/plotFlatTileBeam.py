@@ -43,7 +43,7 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     logger.info("obs pointing: ({0}, {1})".format(ptAZ,ptZA))
 
     xp,yp = pb.MWA_Tile_analytic(np.radians(za), np.radians(az), obsfreq*1e6, delays=delays, zenithnorm=True) #interp=True)
-    pattern = np.sqrt(xp**2+yp**2).real # sum to get "total intensity"
+    pattern = np.sqrt((xp+yp)/2.0).real # sum to get "total intensity"
     logger.debug("Pattern: {0}".format(pattern))
     pmax = pattern.max()
     hpp = 0.5 * pmax # half-power point

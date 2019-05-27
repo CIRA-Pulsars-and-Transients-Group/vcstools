@@ -89,7 +89,7 @@ def plot_beam(obs, target, cal, freq):
         
     # compute beam and plot
     delays = [metadata["xdelays"], metadata["ydelays"]]
-    gx, gy = pb.MWA_Tile_analytic(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
+    gx, gy = pb.MWA_Tile_full_EE(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
     beam = (gx + gy) / 2.0
 
     fig = plt.figure(figsize=(10,8))
@@ -144,11 +144,7 @@ def plot_beam(obs, target, cal, freq):
 
 
             # get beam power for target
-            bpt_x, bpt_y = pb.MWA_Tile_analytic(target_za, target_az,
-                                freq=freq*1e6,
-                                delays=[metadata["xdelays"],
-                                        metadata["ydelays"]], 
-                                power=True, zenithnorm=True)
+            bpt_x, bpt_y = pb.MWA_Tile_full_EE(target_za, target_az, freq=freq*1e6, delays=[metadata["xdelays"], metadata["ydelays"]], power=True, zenithnorm=True)
             bpt = (bpt_x + bpt_y) / 2.0
             lognormbpt = log_normalise(bpt, cc_levels.min(), beam.max())
             logger.debug("bpt, cc_levels, beam: {0}, {1}, {2}".format(bpt, cc_levels.min(), beam.max()))
@@ -172,7 +168,7 @@ def plot_beam(obs, target, cal, freq):
         
     
             # get the beam power for calibrator
-            bpc_x, bpc_y = pb.MWA_Tile_analytic([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
+            bpc_x, bpc_y = pb.MWA_Tile_full_EE([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
             bpc = (bpc_x + bpc_y) / 2.0
             lognormbpc = log_normalise(bpc, cc_levels.min(), beam.max())
             logger.info("Beam power @ calibrator @ gps:{0}: {1:.3f}".format(c.obstime.gps, bpc[0][0]))
@@ -234,12 +230,12 @@ if __name__ == "__main__":
 
 
     if args.gps and not args.utc:
-        time = Time(args.gps, format="gps")
+        time = Time(args.gps, scale="utc", format="gps")
     elif args.utc and not args.gps:
         time = Time(args.utc, scale="utc", format="isot")
     elif args.gps and arg.utc:
         logger.warn("You supplied GPS and UTC times: only using GPS time")
-        time = Time(args.gps, format="gps")
+        time = Time(args.gps, scale="utc", format="gps")
     else:
         time = None
 
