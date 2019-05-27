@@ -222,8 +222,6 @@ void populate_vdif_header(
 
         // The output file basename
         int ch = atoi(rec_channel);
-        printf( " basename: %s_%s_%s_%s_ch%03d\n",
-               vf[p].exp_name, vf[p].scan_name, vf[p].ra_str, vf[p].dec_str, ch);
         sprintf( vf[p].basefilename, "%s_%s_%s_%s_ch%03d",
                  vf[p].exp_name, vf[p].scan_name, vf[p].ra_str, vf[p].dec_str, ch);
     }

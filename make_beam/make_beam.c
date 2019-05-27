@@ -243,9 +243,16 @@ int main(int argc, char **argv)
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
     uint8_t *data;
+    /*#ifdef HAVE_CUDA
+    uint8_t *data1;
+    uint8_t *data2;
+    cudaMallocHost( &data1, bytes_per_file * sizeof(uint8_t) );
+    cudaMallocHost( &data2, bytes_per_file * sizeof(uint8_t) );
+    #elif*/
     uint8_t *data1 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
-    assert(data1);
     uint8_t *data2 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
+    //#endif
+    assert(data1);
     assert(data2);
 
     // Create output buffer arrays
@@ -262,45 +269,81 @@ int main(int argc, char **argv)
     float *data_buffer_uvdif1 = NULL;
     float *data_buffer_uvdif2 = NULL;
 
+    /*#ifdef HAVE_CUDA
+    data_buffer_coh1   = create_pinned_data_buffer_psrfits( npointing * nchan *
+                                                            outpol_coh * pf[0].hdr.nsblk );
+    data_buffer_coh2   = create_pinned_data_buffer_psrfits( npointing * nchan * 
+                                                            outpol_coh * pf[0].hdr.nsblk );
+    data_buffer_incoh1 = create_pinned_data_buffer_psrfits( nchan * outpol_incoh *
+                                                            pf_incoh[0].hdr.nsblk );
+    data_buffer_incoh2 = create_pinned_data_buffer_psrfits( nchan * outpol_incoh *
+                                                            pf_incoh[0].hdr.nsblk );
+    data_buffer_vdif1  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
+                                                         npointing );
+    data_buffer_vdif2  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
+                                                         npointing );
+    data_buffer_uvdif1 = create_pinned_data_buffer_vdif( uvf->sizeof_buffer *
+                                                         npointing );
+    data_buffer_uvdif2 = create_pinned_data_buffer_vdif( uvf->sizeof_buffer *
+                                                         npointing );
+    
+    #elif*/
     data_buffer_coh1   = create_data_buffer_psrfits( npointing * nchan *
                                                      outpol_coh * pf[0].hdr.nsblk );
     data_buffer_coh2   = create_data_buffer_psrfits( npointing * nchan * 
                                                      outpol_coh * pf[0].hdr.nsblk );
     data_buffer_incoh1 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
     data_buffer_incoh2 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
-    data_buffer_vdif1  = create_data_buffer_vdif( &vf[0], npointing );
-    data_buffer_vdif2  = create_data_buffer_vdif( &vf[0], npointing );
-    data_buffer_uvdif1 = create_data_buffer_vdif( &uvf[0], npointing );
-    data_buffer_uvdif2 = create_data_buffer_vdif( &uvf[0], npointing );
+    data_buffer_vdif1  = create_data_buffer_vdif( vf->sizeof_buffer * npointing );
+    data_buffer_vdif2  = create_data_buffer_vdif( vf->sizeof_buffer * npointing );
+    data_buffer_uvdif1 = create_data_buffer_vdif( uvf->sizeof_buffer * npointing );
+    data_buffer_uvdif2 = create_data_buffer_vdif( uvf->sizeof_buffer * npointing );
+    //#endif
 
     /* Allocate host and device memory for the use of the cu_form_beam function */
     // Declaring pointers to the structs so the memory can be alternated
-    struct gpu_formbeam_arrays* gf;
-    struct gpu_formbeam_arrays* gf1;
-    struct gpu_formbeam_arrays* gf2;
-    gf1 = (struct gpu_formbeam_arrays *) malloc(sizeof(struct gpu_formbeam_arrays));
-    gf2 = (struct gpu_formbeam_arrays *) malloc(sizeof(struct gpu_formbeam_arrays));
-    
-    
-    struct gpu_ipfb_arrays* gi;
-    struct gpu_ipfb_arrays* gi1;
-    struct gpu_ipfb_arrays* gi2;
-    gi1 = (struct gpu_ipfb_arrays *) malloc(sizeof(struct gpu_ipfb_arrays));
-    gi2 = (struct gpu_ipfb_arrays *) malloc(sizeof(struct gpu_ipfb_arrays));
+    struct gpu_formbeam_arrays gf;
+    struct gpu_ipfb_arrays gi;
     #ifdef HAVE_CUDA
-    malloc_formbeam( &gf1, opts.sample_rate, nstation, nchan, npol,
-            outpol_coh, outpol_incoh, npointing );
-    malloc_formbeam( &gf2, opts.sample_rate, nstation, nchan, npol,
+    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol,
             outpol_coh, outpol_incoh, npointing );
 
     if (opts.out_uvdif)
     {
-        malloc_ipfb( &gi1, ntaps, opts.sample_rate, nchan, npol, fil_size, npointing );
-        malloc_ipfb( &gi2, ntaps, opts.sample_rate, nchan, npol, fil_size, npointing );
+        malloc_ipfb( &gi, ntaps, opts.sample_rate, nchan, npol, fil_size, npointing );
         // Below may need a npointing update but I don't think it's used
-        cu_load_filter( fil_ramps1, &gi1, nchan );
-        cu_load_filter( fil_ramps2, &gi2, nchan );
+        cu_load_filter( fil_ramps1, &gi, nchan );
     }
+
+    // Set up parrel streams
+    cudaStream_t streams[npointing];
+
+    for ( p = 0; p < npointing; p++ )
+        cudaStreamCreate(&(streams[p])) ;
+    
+    /*// Setup input values (= populate W and J)
+    int s, ant, ch, pol, pol2;
+    int Wi, Ji;
+    for (p   = 0; p   < npointing; p++  )
+    for (ant = 0; ant < nstation ; ant++)
+    for (ch  = 0; ch  < nchan    ; ch++ )
+    for (pol = 0; pol < npol     ; pol++)
+    {
+        Wi = p   * (npol*nchan*nstation) +
+             ant * (npol*nchan) +
+             ch  * (npol) +
+             pol;
+        gf.W[Wi] = complex_weights_array[p][ant][ch][pol];
+
+        for (pol2 = 0; pol2 < npol; pol2++)
+        {
+            Ji = Wi*npol + pol2;
+            gf.J[Ji] = invJi[p][ant][ch][pol][pol2];
+        }
+    }
+    //cudaMemcpy( gf.d_W, gf.W, gf.W_size, cudaMemcpyHostToDevice );
+    //cudaMemcpy( gf.d_J, gf.J, gf.J_size, cudaMemcpyHostToDevice );
+    */
     #endif
 
     int file_no = 0;
@@ -339,7 +382,7 @@ int main(int argc, char **argv)
     int exit_check = 0;
     // Sets up a parallel for loop for each of the available thread and 
     // assigns a section to each thread
-    #pragma omp parallel for shared(read_check, calc_check, write_check, pf) private( thread_no, file_no, p, exit_check, gf, gi, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif, data_buffer_uvdif, fil_ramps)
+    #pragma omp parallel for shared(read_check, calc_check, write_check, pf) private( thread_no, file_no, p, exit_check, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif, data_buffer_uvdif, fil_ramps)
     for (thread_no = 0; thread_no < nthread; ++thread_no)
     {
         // Read section
@@ -395,8 +438,6 @@ int main(int argc, char **argv)
                 if (file_no%2 == 0)
                 {
                    data = data1;
-                   gi = gi1;
-                   gf = gf1;
                    data_buffer_coh   = data_buffer_coh1;
                    data_buffer_incoh = data_buffer_incoh1;
                    data_buffer_vdif  = data_buffer_vdif1;
@@ -406,8 +447,6 @@ int main(int argc, char **argv)
                 else
                 {
                    data = data2;
-                   gi = gi2;
-                   gf = gf2;
                    data_buffer_coh   = data_buffer_coh2;
                    data_buffer_incoh = data_buffer_incoh2;
                    data_buffer_vdif  = data_buffer_vdif2;
@@ -459,16 +498,17 @@ int main(int argc, char **argv)
 
                 fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime, file_no+1, nfiles);
 
-                for (i = 0; i < npointing * nchan * outpol_coh * opts.sample_rate; i++)
+                /*for (i = 0; i < npointing * nchan * outpol_coh * opts.sample_rate; i++)
                     data_buffer_coh[i] = 0.0;
 
                 for (i = 0; i < npointing * nchan * outpol_incoh * opts.sample_rate; i++)
-                    data_buffer_incoh[i] = 0.0;
+                    data_buffer_incoh[i] = 0.0;*/
                 
                 #ifdef HAVE_CUDA
                 cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                               npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
-                              detected_beam, data_buffer_coh, data_buffer_incoh );
+                              detected_beam, data_buffer_coh, data_buffer_incoh,
+                              streams );
                 #else
                 form_beam( data, &opts, complex_weights_array, invJi, file_no,
                            nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
@@ -579,8 +619,7 @@ int main(int argc, char **argv)
     destroy_invJi( invJi, npointing, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, npointing, 3*opts.sample_rate, nchan );
     
-    int ch;
-    for (ch = 0; ch < nchan; ch++)
+    for ( int ch = 0; ch < nchan; ch++)
     {
         free( fil_ramps1[ch] );
         free( fil_ramps2[ch] );
@@ -656,12 +695,10 @@ int main(int argc, char **argv)
     }
     fprintf(stderr, "free gf\n");
     #ifdef HAVE_CUDA
-    free_formbeam( &gf1 );
-    free_formbeam( &gf2 );
+    free_formbeam( &gf );
     if (opts.out_uvdif)
     {
-        free_ipfb( &gi1 );
-        free_ipfb( &gi2 );
+        free_ipfb( &gi );
     }
     #endif
 
@@ -1145,17 +1182,13 @@ void destroy_detected_beam( ComplexDouble ****array, int npointing, int nsamples
 float *create_data_buffer_psrfits( size_t size )
 {
     float *ptr = (float *)malloc( size * sizeof(float) );
-    /*float *ptr;
-    cudaError_t status = cudaMallocHost((void**)&ptr, size * sizeof(float) );
-    if (status != cudaSuccess)
-        printf("Error allocating pinned host memory\n");*/
     return ptr;
 }
 
 
-float *create_data_buffer_vdif( struct vdifinfo *vf , int npointing)
+float *create_data_buffer_vdif( size_t size )
 {
-    float *ptr  = (float *)malloc( vf->sizeof_buffer * npointing * sizeof(float) );
+    float *ptr  = (float *)malloc( size * sizeof(float) );
     return ptr;
 }
 

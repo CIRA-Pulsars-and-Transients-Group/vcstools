@@ -33,6 +33,6 @@ void            destroy_detected_beam( ComplexDouble ****array, int npointing,
                                        int nsamples, int nchan );
 
 float *create_data_buffer_psrfits( size_t size );
-float *create_data_buffer_vdif( struct vdifinfo *vf, int npointing );
+float *create_data_buffer_vdif( size_t size );
 
 #endif

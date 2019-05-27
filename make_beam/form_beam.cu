@@ -17,6 +17,19 @@ extern "C" {
 #include "mycomplex.h"
 }
 
+
+#define cudaCheckErrors(msg) \
+    do { \
+        cudaError_t __err = cudaGetLastError(); \
+        if (__err != cudaSuccess) { \
+            fprintf(stderr, "Fatal error: %s (%s at %s:%d)\n", \
+                msg, cudaGetErrorString(__err), \
+                __FILE__, __LINE__); \
+            fprintf(stderr, "*** FAILED - ABORTING\n"); \
+            exit(1); \
+        } \
+    } while (0)
+
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
     /* Wrapper function for GPU/CUDA error handling. Every CUDA call goes through
@@ -64,13 +77,13 @@ __global__ void beamform_kernel( uint8_t *data,
  *   I    [nsamples] [nchan]                      -- incoherent
  */
 {
-    // Translate GPU block/thread numbers into meaningful names
-    int s   = threadIdx.x;  /* The (s)ample number */
-    int ns  = blockDim.x;   /* The (n)umber of (s)amples (=10000)*/
-    int c   = threadIdx.y;  /* The (c)hannel number */
-    int nc  = blockDim.y;   /* The (n)umber of (c)hannels (=128) */
+    // Translate GPU block/thread numbers into meaning->l names
+    int s   = blockIdx.x;  /* The (s)ample number */
+    int ns  = gridDim.x;   /* The (n)umber of (s)amples (=10000)*/
+    int c   = blockIdx.y;  /* The (c)hannel number */
+    int nc  = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
     
-    int ant = blockIdx.x;   /* The (ant)enna number */
+    int ant = threadIdx.x;   /* The (ant)enna number */
 
     // GPU profiling
     clock_t start, stop;
@@ -352,8 +365,9 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
                    ComplexDouble *****invJi, int file_no, 
                    int npointing, int nstation, int nchan,
                    int npol, int outpol_coh, double invw,
-                   struct gpu_formbeam_arrays **g,
-                   ComplexDouble ****detected_beam, float *coh, float *incoh )
+                   struct gpu_formbeam_arrays *g,
+                   ComplexDouble ****detected_beam, float *coh, float *incoh,
+                   cudaStream_t *streams )
 /* The CPU version of the beamforming operations, using OpenMP for
  * parallelisation.
  *
@@ -396,20 +410,19 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
              ant * (npol*nchan) +
              ch  * (npol) +
              pol;
-        (*g)->W[Wi] = complex_weights_array[p][ant][ch][pol];
+        g->W[Wi] = complex_weights_array[p][ant][ch][pol];
 
         for (pol2 = 0; pol2 < npol; pol2++)
         {
             Ji = Wi*npol + pol2;
-            (*g)->J[Ji] = invJi[p][ant][ch][pol][pol2];
+            g->J[Ji] = invJi[p][ant][ch][pol][pol2];
         }
     }
-
     // Copy the data to the device
-    gpuErrchk(cudaMemcpy( (*g)->d_data, data,    (*g)->data_size, cudaMemcpyHostToDevice ));
-    gpuErrchk(cudaMemcpy( (*g)->d_W,    (*g)->W, (*g)->W_size,    cudaMemcpyHostToDevice ));
-    gpuErrchk(cudaMemcpy( (*g)->d_J,    (*g)->J, (*g)->J_size,    cudaMemcpyHostToDevice ));
-    
+    gpuErrchk(cudaMemcpyAsync( g->d_data, data, g->data_size, cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpyAsync( g->d_W,    g->W, g->W_size,    cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpyAsync( g->d_J,    g->J, g->J_size,    cudaMemcpyHostToDevice ));
+
     // Call the kernels
     // sammples_chan(index=blockIdx.x  size=gridDim.x,
     //               index=blockIdx.y  size=gridDim.y)
@@ -418,16 +431,13 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     dim3 samples_chan(opts->sample_rate, nchan);
     dim3 stat(NSTATION);
     // Send off a parrellel cuda stream for each pointing
-    cudaStream_t streams[npointing];
-    size_t shared_mem = 5 * NSTATION * sizeof(ComplexDouble);
-
     for ( p = 0; p < npointing; p++ )
-    {
-        cudaStreamCreate(&(streams[p]));
-        beamform_kernel<<<stat, samples_chan, shared_mem, streams[p]>>>( (*g)->d_data,
-                            (*g)->d_W, (*g)->d_J, invw, 
-                            (*g)->d_Bd, (*g)->d_coh, (*g)->d_incoh, p );
+    {    
+        beamform_kernel<<<samples_chan, stat, 0, streams[p]>>>( g->d_data,
+                            g->d_W, g->d_J, invw, 
+                            g->d_Bd, g->d_coh, g->d_incoh, p );
             
+        gpuErrchk( cudaPeekAtLastError() );
         //cudaDeviceSynchronize();
         // sync not required between kernel queues since each stream acts like a FIFO queue
         // so all instances of the above kernel will complete before we move to the next
@@ -436,21 +446,21 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
         // 1 block per pointing direction, hence the 1 for now
         // TODO check if these actually work, can't see them return values.
         // The incoh kernal also takes 40 second for some reason so commenting out
-        //flatten_bandpass_I_kernel<<<1, nchan>>>((*g)->d_incoh, opts->sample_rate);
+        //flatten_bandpass_I_kernel<<<1, nchan>>>(g->d_incoh, opts->sample_rate);
         //cudaDeviceSynchronize();
 
         // now do the same for the coherent beam
         dim3 chan_stokes(nchan, outpol_coh);
         // This doesn't seem to change anything some commenting out
-        //flatten_bandpass_C_kernel<<<npointing, chan_stokes>>>((*g)->d_coh, opts->sample_rate);
+        //flatten_bandpass_C_kernel<<<npointing, chan_stokes>>>(g->d_coh, opts->sample_rate);
         //cudaDeviceSynchronize(); // Memcpy acts as a synchronize step so don't sync here
     }
-    cudaDeviceSynchronize();
+    gpuErrchk( cudaDeviceSynchronize() );
     
     // Copy the results back into host memory
-    gpuErrchk(cudaMemcpy( (*g)->Bd, (*g)->d_Bd,    (*g)->Bd_size,    cudaMemcpyDeviceToHost ));
-    gpuErrchk(cudaMemcpy( incoh,    (*g)->d_incoh, (*g)->incoh_size, cudaMemcpyDeviceToHost ));
-    gpuErrchk(cudaMemcpy( coh,      (*g)->d_coh,   (*g)->coh_size,   cudaMemcpyDeviceToHost ));
+    gpuErrchk(cudaMemcpyAsync( g->Bd, g->d_Bd,    g->Bd_size,    cudaMemcpyDeviceToHost ));
+    gpuErrchk(cudaMemcpyAsync( incoh, g->d_incoh, g->incoh_size, cudaMemcpyDeviceToHost ));
+    gpuErrchk(cudaMemcpyAsync( coh,   g->d_coh,   g->coh_size,   cudaMemcpyDeviceToHost ));
     
     // Copy the data back from Bd back into the detected_beam array
     // Make sure we put it back into the correct half of the array, depending
@@ -458,61 +468,82 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     int offset, i;
     offset = file_no % 3 * opts->sample_rate;
     
-    for (p   = 0; p   < npointing        ; p++  )
-    for (s   = 0; s   < opts->sample_rate; s++  )
-    for (ch  = 0; ch  < nchan            ; ch++ )
-    for (pol = 0; pol < npol             ; pol++)
+    for ( int p   = 0; p   < npointing        ; p++  )
+    for ( int s   = 0; s   < opts->sample_rate; s++  )
+    for ( int ch  = 0; ch  < nchan            ; ch++ )
+    for ( int pol = 0; pol < npol             ; pol++)
     {
         i = p  * (npol*nchan*opts->sample_rate) +
             s  * (npol*nchan)                   +
             ch * (npol)                         +
             pol;
 
-        detected_beam[p][s+offset][ch][pol] = (*g)->Bd[i];
+        detected_beam[p][s+offset][ch][pol] = g->Bd[i];
     }
 }
 
-void malloc_formbeam( struct gpu_formbeam_arrays **g, unsigned int sample_rate,
+void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
         int nstation, int nchan, int npol, int outpol_coh, int outpol_incoh, int npointing)
 {
     // Calculate array sizes for host and device
-    (*g)->coh_size   = npointing * sample_rate * outpol_coh   * nchan * sizeof(float);
-    (*g)->incoh_size = sample_rate * outpol_incoh * nchan * sizeof(float);
-    (*g)->data_size  = sample_rate * nstation * nchan * npol * sizeof(uint8_t);
-    (*g)->Bd_size    = npointing * sample_rate * nchan * npol * sizeof(ComplexDouble);
-    (*g)->W_size     = npointing * nstation * nchan * npol * sizeof(ComplexDouble);
-    (*g)->J_size     = npointing * nstation * nchan * npol * npol * sizeof(ComplexDouble);
+    g->coh_size   = npointing * sample_rate * outpol_coh   * nchan * sizeof(float);
+    g->incoh_size = sample_rate * outpol_incoh * nchan * sizeof(float);
+    g->data_size  = sample_rate * nstation * nchan * npol * sizeof(uint8_t);
+    g->Bd_size    = npointing * sample_rate * nchan * npol * sizeof(ComplexDouble);
+    g->W_size     = npointing * nstation * nchan * npol * sizeof(ComplexDouble);
+    g->J_size     = npointing * nstation * nchan * npol * npol * sizeof(ComplexDouble);
 
     // Allocate host memory
-    (*g)->W  = (ComplexDouble *)malloc( (*g)->W_size );
-    (*g)->J  = (ComplexDouble *)malloc( (*g)->J_size );
-    (*g)->Bd = (ComplexDouble *)malloc( (*g)->Bd_size );
+    g->W  = (ComplexDouble *)malloc( g->W_size );
+    g->J  = (ComplexDouble *)malloc( g->J_size );
+    g->Bd = (ComplexDouble *)malloc( g->Bd_size );
 
 
     // Allocate device memory
-    gpuErrchk(cudaMalloc( (void **)&(*g)->d_W,     (*g)->W_size ));
-    gpuErrchk(cudaMalloc( (void **)&(*g)->d_J,     (*g)->J_size ));
-    gpuErrchk(cudaMalloc( (void **)&(*g)->d_Bd,    (*g)->Bd_size ));
-    gpuErrchk(cudaMalloc( (void **)&(*g)->d_data,  (*g)->data_size ));
-    gpuErrchk(cudaMalloc( (void **)&(*g)->d_coh,   (*g)->coh_size ));
-    gpuErrchk(cudaMalloc( (void **)&(*g)->d_incoh, (*g)->incoh_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_W,     g->W_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_J,     g->J_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_Bd,    g->Bd_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_data,  g->data_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_coh,   g->coh_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_incoh, g->incoh_size ));
 
-    printf("%d GB GPU memory allocated\n", ((*g)->W_size + (*g)->J_size + 
-                                            (*g)->Bd_size + (*g)->data_size +
-                                            (*g)->coh_size + (*g)->incoh_size)
+    printf("%d GB GPU memory allocated\n", (g->W_size + g->J_size + 
+                                            g->Bd_size + g->data_size +
+                                            g->coh_size + g->incoh_size)
                                             /1000000000 );
 }
 
-void free_formbeam( struct gpu_formbeam_arrays **g )
+void free_formbeam( struct gpu_formbeam_arrays *g )
 {
     // Free memory on host and device
-    free( (*g)->W );
-    free( (*g)->J );
-    free( (*g)->Bd );
-    cudaFree( (*g)->d_W );
-    cudaFree( (*g)->d_J );
-    cudaFree( (*g)->d_Bd );
-    cudaFree( (*g)->d_data );
-    cudaFree( (*g)->d_coh );
-    cudaFree( (*g)->d_incoh );
+    free( g->W );
+    free( g->J );
+    free( g->Bd );
+    cudaFree( g->d_W );
+    cudaFree( g->d_J );
+    cudaFree( g->d_Bd );
+    cudaFree( g->d_data );
+    cudaFree( g->d_coh );
+    cudaFree( g->d_incoh );
 }
+
+float *create_pinned_data_buffer_psrfits( size_t size )
+{
+    float *ptr;
+    cudaMallocHost( &ptr, size * sizeof(float) );
+    //cudaError_t status = cudaHostRegister((void**)&ptr, size * sizeof(float),
+    //                                      cudaHostRegisterPortable );
+    cudaCheckErrors("cudaHostRegister fail");
+    return ptr;
+}
+
+float *create_pinned_data_buffer_vdif( size_t size )
+{
+    float *ptr;
+    cudaMallocHost( &ptr, size * sizeof(float) );
+    //cudaError_t status = cudaHostRegister((void**)&ptr, size * sizeof(float),
+    //                                      cudaHostRegisterPortable );
+    cudaCheckErrors("cudaHostRegister fail");
+    return ptr;
+}
+
