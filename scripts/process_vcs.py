@@ -32,6 +32,12 @@ def tmp(suffix=".sh"):
     return t
 
 
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+
+
 def is_number(s):
     try:
         int(s)
@@ -51,9 +57,9 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
 
     if not os.path.exists(metafits_file):
         logger.warning("{0} does not exists".format(metafits_file))
-        logger.warning("Will download it from the archive. This can take a "+\
+        logger.warning("Will download it from the archive. This can take a "
                       "while so please do not ctrl-C.")
-        logger.warning("At the moment, even through the downloaded file is "+\
+        logger.warning("At the moment, even through the downloaded file is "
                        "labelled as a ppd file this is not true.")
         logger.warning("This is hopefully a temporary measure.")
         #obsdownload = distutils.spawn.find_executable("obsdownload.py")
@@ -134,7 +140,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
     if data_format == 1:
         target_dir = link = '/raw'
         if ics:
-            logger.error("Data have not been recombined in the "+\
+            logger.error("Data have not been recombined in the "
                          "archive yet. Exiting")
             quit()
         data_type = 11
@@ -294,7 +300,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
     obsdownload = distutils.spawn.find_executable("obsdownload.py")
     get_data = "{0} -o {1} -d {2}".format(obsdownload,cal_obs_id, data_dir)
     if head:
-        logging.error("I'm sorry, this option is no longer supported. Please "+\
+        logging.error("I'm sorry, this option is no longer supported. Please "
                       "download through the copyq.")
         # print "Will download the data from the archive. This can take a while so please do not ctrl-C."
         # log_name="{0}/caldownload_{1}.log".format(batch_dir,cal_obs_id)
@@ -327,8 +333,8 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         commands.append('then')
         commands.append('    echo "Error, MWA_ASVO_API_KEY not set"')
         commands.append('    echo "Cannot use client"')
-        commands.append('    echo "Please read the MWA ASVO documentation '+\
-                        'about setting this (https://wiki.mwatelescope.org/'+\
+        commands.append('    echo "Please read the MWA ASVO documentation '
+                        'about setting this (https://wiki.mwatelescope.org/'
                         'display/MP/MWA+ASVO%3A+Release+Notes)"')
         commands.append('    exit 1')
         commands.append('fi')
@@ -523,7 +529,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
 
 
 def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, 
-                  metafits_file, nfine_chan, pointing, args, 
+                  metafits_file, nfine_chan, pointing_list, args, 
                   rts_flag_file=None, bf_formats=None, DI_dir=None, 
                   execpath=None, calibration_type='rts', 
                   vcstools_version="master", nice=0):
@@ -551,9 +557,9 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     #make_beam_version_cmd = "make_beam -V"
     make_beam_version = subprocess.Popen(make_beam_version_cmd, 
                            stdout=subprocess.PIPE, shell=True).communicate()[0]
-    tested_version = "?.?.?"
+    #tested_version = "?.?.?"
     logger.info("Current version of make_beam = {0}".format(make_beam_version.strip()))
-    logger.info("Tested version of make_beam = {0}".format(tested_version.strip()))
+    #logger.info("Tested version of make_beam = {0}".format(tested_version.strip()))
 
     metafile = "{0}/{1}.meta".format(product_dir, obs_id)
     metafile_exists = False
@@ -566,7 +572,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     chan_line = line[11:-1]
                     channels = chan_line.split(",")
         if channels == None:
-            logger.info("Channels keyword not found in metafile. Re-querying "+\
+            logger.info("Channels keyword not found in metafile. Re-querying "
                         "the database.")
         else:
             metafile_exists = True
@@ -588,13 +594,11 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     # Run for each coarse channel. Calculates delays and makes beam
 
     if not DI_dir:
-        logger.error("You need to specify the path to the calibrator files, "+\
-                     "either where the DIJs are or where the Offringa "+\
+        logger.error("You need to specify the path to the calibrator files, "
+                     "either where the DIJs are or where the Offringa "
                      "calibration_solutions.bin file is. Aborting here")
         quit()
     DI_dir = os.path.abspath(DI_dir)
-    RA = pointing[0]
-    Dec = pointing[1]
 
     # make_beam_small requires the start time in UTC, get it from the start
     # GPS time as is done in timeconvert.py
@@ -611,13 +615,16 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     logging.info("Running make_beam")
     P_dir = product_dir+"/pointings"
     mdir(P_dir, "Pointings")
-    pointing_dir = "{0}/{1}_{2}".format(P_dir, RA, Dec)
-    mdir(pointing_dir, "Pointing {0} {1}".format(RA, Dec))
     # startjobs = True
 
+    max_pointing = 15 
 
     # set up SLURM requirements
-    seconds_to_run = 15 * (stop - start + 1)  # This should be able to be reduced after functional testing
+    if len(pointing_list) > max_pointing:
+        seconds_to_run = 8 * (stop - start + 1) * max_pointing
+    else:
+        seconds_to_run = 8 * (stop - start + 1) * len(pointing_list)
+    
     if seconds_to_run > 86399.:
         secs_to_run = datetime.timedelta(seconds=86399)
     else:
@@ -626,47 +633,56 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     # VDIF will need gpuq if inverting pfb with '-m' option, otherwise cpuq is fine
     # In general this needs to be cleaned up, prefferably to be able to intelligently select a
     # queue and a maximum wall time (SET)
-    n_omp_threads = 1
+    n_omp_threads = 3
     openmp_line = "export OMP_NUM_THREADS={0}".format(n_omp_threads)
 
-    # Run one coarse channel per node
-    #for coarse_chan in range(24):
-    job_id_list = []
-    for gpubox, coarse_chan in enumerate(ordered_channels, 1):
-        if calibration_type == 'rts':
-            #chan_list = get_frequencies(metafits_file, resort=True)
-            DI_file = "{0}/DI_JonesMatrices_node{1:0>3}.dat".format(DI_dir, gpubox)
-            jones_option = "-J {0}".format(DI_file)
-        elif calibration_type == 'offringa':
-            #chan_list = get_frequencies(metafits_file, resort=False)
-            DI_file = "{0}/calibration_solution.bin".format(DI_dir)
-            jones_option = "-O {0} -C {1}".format(DI_file, int(gpubox) - 1)
-        else:
-            logger.info("Please an accepted calibratin type. Aborting here.")
-            quit()
+    # splits the pointing list into lists of length max_pointing
+    pointing_list_list = list(chunks(pointing_list, max_pointing))
+    time_now = str(datetime.datetime.now()).replace(" ", "_")
 
-        make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(RA, Dec, coarse_chan)
-        module_list = [comp_config['container_module']]
-        commands = []
-        #commands.append("source /group/mwaops/PULSAR/psrBash.profile")
-        #commands.append("module swap craype-ivybridge craype-sandybridge")
-        commands.append(openmp_line)
-        commands.append("cd {0}".format(pointing_dir))
-        commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} -e {5} -a 128 -n 128 -f {6} {7} -d "
-                        "{8}/combined -R {9} -D {10} -r 10000 -m {11} -z {12} {13} -F {14}".format(n_omp_threads, comp_config['container_command'], make_beam_cmd, obs_id, start,
-                        stop, coarse_chan, jones_option, data_dir, RA, Dec, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
+    job_id_list_list = []
+    for pl, pointing_list in enumerate(pointing_list_list):
+        pointing_dir = "{0}/mb_temp_{1}_{2}".format(P_dir, pl, time_now)
+        mdir(pointing_dir, "Temp pointing dir mb_temp_{0}_{1}".format(pl, time_now))
+        pointing_str = ",".join(pointing_list)
+        # Run one coarse channel per node
+        job_id_list = []
+        for gpubox, coarse_chan in enumerate(ordered_channels, 1):
+            if calibration_type == 'rts':
+                #chan_list = get_frequencies(metafits_file, resort=True)
+                DI_file = "{0}/DI_JonesMatrices_node{1:0>3}.dat".format(DI_dir, gpubox)
+                jones_option = "-J {0}".format(DI_file)
+            elif calibration_type == 'offringa':
+                #chan_list = get_frequencies(metafits_file, resort=False)
+                DI_file = "{0}/calibration_solution.bin".format(DI_dir)
+                jones_option = "-O {0} -C {1}".format(DI_file, int(gpubox) - 1)
+            else:
+                logger.info("Please an accepted calibratin type. Aborting here.")
+                quit()
 
-        job_id = submit_slurm(make_beam_small_batch, commands,
-                    batch_dir=batch_dir, module_list=module_list,
-                    slurm_kwargs={"time":secs_to_run, "nice":nice},
-                    queue='gpuq', vcstools_version=vcstools_version, 
-                    submit=True, export="NONE", gpu_res=1)
-        job_id_list.append(job_id)
-    #TODO This can be returned as a job id string that can be slapped right on for dependancies
-    #job_id_str = ""
-    #for i in job_id_list:
-    #    job_id_str += ":" + str(i)
-    #return job_id_str
+            make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(pl, time_now, coarse_chan)
+            module_list = [comp_config['container_module']]
+            commands = []
+            #commands.append("source /group/mwaops/PULSAR/psrBash.profile")
+            #commands.append("module swap craype-ivybridge craype-sandybridge")
+            commands.append(openmp_line)
+            commands.append("cd {0}".format(pointing_dir))
+            commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} -e {5} -a 128 -n 128 -f {6} {7} -d "
+                            "{8}/combined -P {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(n_omp_threads, comp_config['container_command'], make_beam_cmd, obs_id, start,
+                            stop, coarse_chan, jones_option, data_dir, pointing_str, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
+            commands.append("")
+            for pointing in pointing_list:
+                mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
+                commands.append("mv *_{0}_{1}_ch*_00*fits ../{1}".format(obs_id, pointing))
+
+            job_id = submit_slurm(make_beam_small_batch, commands,
+                        batch_dir=batch_dir, module_list=module_list,
+                        slurm_kwargs={"time":secs_to_run, "nice":nice},
+                        queue='gpuq', vcstools_version=vcstools_version, 
+                        submit=True, export="NONE", gpu_res=1)
+            job_id_list.append(job_id)
+        job_id_list_list.append(job_id_list)
+        
     return job_id_list
 
 def database_command(args, obsid):
@@ -702,69 +718,65 @@ if __name__ == '__main__':
     chan_list = []
     jones = "-j jones.txt"
 
-    from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
+    import argparse
 
  #   parser=OptionParser(description="process_vcs.py is a script of scripts that downloads prepares and submits jobs to Galaxy. It can be run with just a pointing (-p \"xx:xx:xx xx:xx:xx.x\") and an obsid (\"-o <obsid>\") and it will process all the data in the obs. It will call prepare.py which will attempt to build the phase and calibration information - which will only exist if a calibration obs has already been run. So it will only move past the data prepa stage if the \"-r\" (for run) is used\n"
 
-    parser=OptionParser(description="process_vcs.py is a script for processing the MWA VCS data on Galaxy in steps. It can download data from the archive, call on recombine to form course channels, run the offline correlator, make tile re-ordered and bit promoted PFB files or for a coherent beam for a given pointing.")
-    group_download = OptionGroup(parser, 'Download Options')
-    group_download.add_option("--head", action="store_true", default=False, help="Submit download jobs to the headnode instead of the copyqueue [default=%default]")
-    #group_download.add_option("--format", type="choice", choices=['11','15','16'], default='11', help="Voltage data type (Raw = 11, ICS Only = 15, Recombined and ICS = 16) [default=%default]")
-    group_download.add_option("-d", "--parallel_dl", type="int", default=3, help="Number of parallel downloads to envoke [default=%default]")
-    group_download.add_option("-j", "--untar_jobs", type='int', default=2, help="Number of parallel jobs when untaring downloaded tarballs. [default=%default]")
-    group_download.add_option("-k", "--keep_tarball", action="store_true", default=False, help="Keep the tarballs after unpacking. [default=%default]")
-    group_correlate = OptionGroup(parser, 'Correlator Options')
-    group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
+    parser=argparse.ArgumentParser(description="process_vcs.py is a script for processing the MWA VCS data on Galaxy in steps. It can download data from the archive, call on recombine to form course channels, run the offline correlator, make tile re-ordered and bit promoted PFB files or for a coherent beam for a given pointing.")
+    group_download = parser.add_argument_group('Download Options')
+    group_download.add_argument("--head", action="store_true", default=False, help="Submit download jobs to the headnode instead of the copyqueue [default=%default]")
+    #group_download.add_argument("--format", type="choice", choices=['11','15','16'], default='11', help="Voltage data type (Raw = 11, ICS Only = 15, Recombined and ICS = 16) [default=%default]")
+    group_download.add_argument("-d", "--parallel_dl", type=int, default=3, help="Number of parallel downloads to envoke [default=%default]")
+    group_download.add_argument("-j", "--untar_jobs", type=int, default=2, help="Number of parallel jobs when untaring downloaded tarballs. [default=%default]")
+    group_download.add_argument("-k", "--keep_tarball", action="store_true", default=False, help="Keep the tarballs after unpacking. [default=%default]")
+    group_correlate = parser.add_argument_group('Correlator Options')
+    group_correlate.add_argument("--ft_res", metavar="FREQ RES,TIME RES", type=int, nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
-    group_beamform = OptionGroup(parser, 'Beamforming Options')
-    group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
-    group_beamform.add_option("--pointing_list", help="A comma sepertated list of pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS, e.g. \"19:23:48.53_-20:31:52.95,19:23:40.00_-20:31:50.00\"")
-    group_beamform.add_option("--pointing_list", help="A file containing pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS on each line, e.g. \"19:23:48.53_-20:31:52.95\n19:23:40.00_-20:31:50.00\"")
-    group_beamform.add_option("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) " +\
-                                  "or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
-    group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. [default=%default]".format(bf_out_modes), default='psrfits')
-    group_beamform.add_option("--incoh", action="store_true", default=False, help="Add this flag if you want to form an incoherent sum as well. [default=%default]")
-    group_beamform.add_option("--flagged_tiles", type="string", default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. [default=%default]")
-    group_beamform.add_option('--cal_type', type='string', help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
-    group_beamform.add_option("-E", "--execpath", type="string", default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
+    group_beamform = parser.add_argument_group('Beamforming Options')
+    group_beamform.add_argument("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
+    group_beamform.add_argument("--pointing_list", type=str, nargs='*', help="A comma sepertated list of pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS, e.g. \"19:23:48.53_-20:31:52.95,19:23:40.00_-20:31:50.00\"")
+    group_beamform.add_argument("--pointing_file", help="A file containing pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS on each line, e.g. \"19:23:48.53_-20:31:52.95\n19:23:40.00_-20:31:50.00\"")
+    group_beamform.add_argument("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
+    group_beamform.add_argument("--bf_out_format", type=str, choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. [default=%default]".format(bf_out_modes), default='psrfits')
+    group_beamform.add_argument("--incoh", action="store_true", default=False, help="Add this flag if you want to form an incoherent sum as well. [default=%default]")
+    group_beamform.add_argument("--flagged_tiles", type=str, default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. [default=%default]")
+    group_beamform.add_argument('--cal_type', type=str, help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
+    group_beamform.add_argument("-E", "--execpath", type=str, default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
 
-    parser.add_option("-m", "--mode", type="choice", choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
-    parser.add_option("-o", "--obs", metavar="OBS ID", type="int", help="Observation ID you want to process [no default]")
-    parser.add_option('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type="int", help="Only required in 'calibrate' and 'download_cal' mode."+\
-                          "Observation ID of calibrator you want to process. In case of " + \
+    parser.add_argument("-m", "--mode", type=str, choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
+    parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, help="Observation ID you want to process [no default]")
+    parser.add_argument('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type=int, help="Only required in 'calibrate' and 'download_cal' mode."
+                          "Observation ID of calibrator you want to process. In case of " 
                           "in-beam calibration should be the same as input to -o (obsID). [no default]", default=None)
-    parser.add_option("-b", "--begin", type="int", help="First GPS time to process [no default]")
-    parser.add_option("-e", "--end", type="int", help="Last GPS time to process [no default]")
-    parser.add_option("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
-    parser.add_option("-i", "--increment", type="int", default=64, help="Increment in seconds (how much we process at once) [default=%default]")
-    parser.add_option("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
-    parser.add_option("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default " + \
-                          "raw data will will be downloaded into /astro/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."+ \
+    parser.add_argument("-b", "--begin", type=int, help="First GPS time to process [no default]")
+    parser.add_argument("-e", "--end", type=int, help="Last GPS time to process [no default]")
+    parser.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
+    parser.add_argument("-i", "--increment", type=int, default=64, help="Increment in seconds (how much we process at once) [default=%default]")
+    parser.add_argument("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
+    parser.add_argument("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default "
+                          "raw data will will be downloaded into /astro/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."
                           " If set, this will create a folder for the Obs. ID if it doesn't exist [default=%default]")
-    parser.add_option("-c", "--ncoarse_chan", type="int", default=24, help="Coarse channel count (how many to process) [default=%default]")
-    parser.add_option("-n", "--nfine_chan", type="int", default=128, help="Number of fine channels per coarse channel [default=%default]")
-    parser.add_option("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.[default=%default]")
-    parser.add_option("-L", "--loglvl", type="string", help="Logger verbosity level. Default: INFO", 
+    parser.add_argument("-c", "--ncoarse_chan", type=int, default=24, help="Coarse channel count (how many to process) [default=%default]")
+    parser.add_argument("-n", "--nfine_chan", type=int, default=128, help="Number of fine channels per coarse channel [default=%default]")
+    parser.add_argument("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.[default=%default]")
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
                                         default="INFO")
-    parser.add_option("-V", "--version", action="store_true", help="Print version and quit")
-    parser.add_option("--vcstools_version", type="string", default="master", help="VCSTools version to load in jobs (i.e. on the queues) [default=%default]")
-    parser.add_option("--nice", type="int", default=0, help="Reduces your priority of Slurm Jobs. [default=%default]")
-    parser.add_option_group(group_download)
-    parser.add_option_group(group_correlate)
-    parser.add_option_group(group_beamform)
+    parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
+    parser.add_argument("--vcstools_version", type=str, default="master", help="VCSTools version to load in jobs (i.e. on the queues) [default=%default]")
+    parser.add_argument("--nice", type=int, default=0, help="Reduces your priority of Slurm Jobs. [default=%default]")
 
-    (opts, args) = parser.parse_args()
+    args = parser.parse_args()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[opts.loglvl])
+    logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
-    ch.setLevel(loglevels[opts.loglvl])
+    ch.setLevel(loglevels[args.loglvl])
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-    logger.info("Using vcstools/{0}".format(opts.vcstools_version))
-    if opts.version:
+    logger.info("Using vcstools/{0}".format(args.vcstools_version))
+    if args.version:
         try:
             import version
             logger.info(version.__version__)
@@ -775,156 +787,160 @@ if __name__ == '__main__':
             sys.exit(0)
 
     #Option parsing
-    if opts.all and (opts.begin or opts.end):
+    if args.all and (args.begin or args.end):
         logger.error("Please specify EITHER (-b,-e) OR -a")
         quit()
-    elif opts.all:
-        opts.begin, opts.end = meta.obs_max_min(opts.cal_obs\
-                               if opts.mode == 'download_cal' else opts.obs)
+    elif args.all:
+        args.begin, args.end = meta.obs_max_min(args.cal_obs\
+                               if args.mode == 'download_cal' else args.obs)
     # make sure we can process increments smaller than 64 seconds when not in calibration related mode
-    if opts.mode not in ['download_cal','calibrate']:
-        if opts.end - opts.begin +1 < opts.increment:
-            opts.increment = opts.end - opts.begin + 1
+    if args.mode not in ['download_cal','calibrate']:
+        if args.end - args.begin +1 < args.increment:
+            args.increment = args.end - args.begin + 1
     e_mail = ""
-    if opts.mail:
+    if args.mail:
         e_mail = get_user_email()
         logger.info("Sending info to {0}".format(e_mail))
-    if not opts.mode:
+    if not args.mode:
       logger.error("Mode required {0}. Please specify with -m or --mode.".format(modes))
 
       quit()
-    if not opts.obs:
+    if not args.obs:
         logger.error("Observation ID required, please put in with -o or --obs")
         quit()
-    if opts.begin and opts.end:
-        if opts.begin > opts.end:
+    if args.begin and args.end:
+        if args.begin > args.end:
             logger.error("Starting time is after end time")
             quit()
-    if (opts.mode == "beamform" or opts.incoh):
+    if (args.mode == "beamform" or args.incoh):
         bf_format = ""
-        if not (opts.pointing or opts.pointing_list or opts.pointing_file):
+        if not (args.pointing or args.pointing_list or args.pointing_file):
             logger.info("Beamformer mode required that you specify pointings "
                         "using either -p, --pointing_list or --pointing_file.")
             quit()
         #check if they're using more than one of the pointing options
-        if (opts.pointing and opts.pointing_list) or \
-           (opts.pointing and opts.pointing_file) or \
-           (opts.pointing_list and opts.pointing_file):
+        if (args.pointing and args.pointing_list) or \
+           (args.pointing and args.pointing_file) or \
+           (args.pointing_list and args.pointing_file):
             logger.info("Beamformer mode requires only one pointing option. "
                         "Please use either -p, --pointing_list or --pointing_file.")
             quit()
-        if (opts.bf_out_format == 'psrfits' or opts.bf_out_format == 'both'):
+        if (args.bf_out_format == 'psrfits' or args.bf_out_format == 'both'):
             bf_format +=" -p"
             logger.info("Writing out PSRFITS.")
-        if  (opts.bf_out_format == 'vdif' or opts.bf_out_format == 'both'):
+        if  (args.bf_out_format == 'vdif' or args.bf_out_format == 'both'):
             bf_format += " -u"
             logger.info("Writing out upsampled VDIF.")
-        if (opts.incoh):
+        if (args.incoh):
             bf_format += " -i"
             logger.info("Writing out incoherent sum.")
 
         # This isn't necessary as checks for execpath are done in beamforming function (BWM 6/4/18)
-        #if opts.execpath:
-        #    execpath = opts.execpath
+        #if args.execpath:
+        #    execpath = args.execpath
 
     #Load computer dependant config file
     comp_config = config.load_config_file()
     
-    if opts.work_dir:
+    if args.work_dir:
         logger.warning("YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE "
                        "FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!")
         sleep(5)
-        data_dir = product_dir = "{0}/{1}".format(opts.work_dir, opts.obs)
+        data_dir = product_dir = "{0}/{1}".format(args.work_dir, args.obs)
     else:
-        data_dir = '{0}{1}'.format(comp_config['base_data_dir'],opts.obs)
-        product_dir = '{0}{1}'.format(comp_config['base_product_dir'],opts.obs)
+        data_dir = '{0}{1}'.format(comp_config['base_data_dir'],args.obs)
+        product_dir = '{0}{1}'.format(comp_config['base_product_dir'],args.obs)
     batch_dir = "{0}/batch".format(product_dir)
     mdir(data_dir, "Data")
     mdir(product_dir, "Products")
     mdir(batch_dir, "Batch")
-    metafits_file = "{0}/{1}_metafits_ppds.fits".format(data_dir, opts.obs)
+    metafits_file = "{0}/{1}_metafits_ppds.fits".format(data_dir, args.obs)
     # TODO: modify metafits downloader to not just do a trivial wget
 
     logger.info("Processing Obs ID {0} from GPS times {1} till {2}".\
-                format(opts.obs, opts.begin, opts.end))
+                format(args.obs, args.begin, args.end))
 
-    if opts.mode == 'download_ics':
-        logger.info("Mode: {0}".format(opts.mode))
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head,
-                     data_dir, product_dir, opts.parallel_dl, sys.argv,
-                     ics=True, vcstools_version=opts.vcstools_version,
-                     nice=opts.nice)
-    elif opts.mode == 'download':
-        logger.info("Mode: {0}".format(opts.mode))
-        vcs_download(opts.obs, opts.begin, opts.end, opts.increment, opts.head,
-                     data_dir, product_dir, opts.parallel_dl, sys.argv,
-                     n_untar=opts.untar_jobs,
-                     keep='-k' if opts.keep_tarball else "",
-                     vcstools_version=opts.vcstools_version, nice=opts.nice)
-    elif opts.mode == 'recombine':
-        logger.info("Mode: {0}".format(opts.mode))
-        ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_recombine(opts.obs, opts.begin, opts.end, opts.increment, data_dir,
+    if args.mode == 'download_ics':
+        logger.info("Mode: {0}".format(args.mode))
+        vcs_download(args.obs, args.begin, args.end, args.increment, args.head,
+                     data_dir, product_dir, args.parallel_dl, sys.argv,
+                     ics=True, vcstools_version=args.vcstools_version,
+                     nice=args.nice)
+    elif args.mode == 'download':
+        logger.info("Mode: {0}".format(args.mode))
+        vcs_download(args.obs, args.begin, args.end, args.increment, args.head,
+                     data_dir, product_dir, args.parallel_dl, sys.argv,
+                     n_untar=args.untar_jobs,
+                     keep='-k' if args.keep_tarball else "",
+                     vcstools_version=args.vcstools_version, nice=args.nice)
+    elif args.mode == 'recombine':
+        logger.info("Mode: {0}".format(args.mode))
+        ensure_metafits(data_dir, args.obs, metafits_file)
+        vcs_recombine(args.obs, args.begin, args.end, args.increment, data_dir,
                       product_dir, sys.argv, 
-                      vcstools_version=opts.vcstools_version, nice=opts.nice)
-    elif opts.mode == 'correlate':
-        logger.info("Mode: {0}".format(opts.mode))
-        ensure_metafits(data_dir, opts.obs, metafits_file)
-        vcs_correlate(opts.obs, opts.begin, opts.end, opts.increment, data_dir,
-                      product_dir, opts.ft_res, sys.argv, metafits_file, 
-                      vcstools_version=opts.vcstools_version, nice=opts.nice)
-    elif opts.mode == 'download_cal':
-        logger.info("Mode: {0}".format(opts.mode))
-        if not opts.cal_obs:
-            logger.error("You need to also pass the calibrator observation ID."+\
+                      vcstools_version=args.vcstools_version, nice=args.nice)
+    elif args.mode == 'correlate':
+        logger.info("Mode: {0}".format(args.mode))
+        ensure_metafits(data_dir, args.obs, metafits_file)
+        vcs_correlate(args.obs, args.begin, args.end, args.increment, data_dir,
+                      product_dir, args.ft_res, sys.argv, metafits_file, 
+                      vcstools_version=args.vcstools_version, nice=args.nice)
+    elif args.mode == 'download_cal':
+        logger.info("Mode: {0}".format(args.mode))
+        if not args.cal_obs:
+            logger.error("You need to also pass the calibrator observation ID."
                          " Aborting here.")
             quit()
-        if opts.cal_obs == opts.obs:
-            logging.error("The calibrator obsID cannot be the same as the "+\
-                          "target obsID -- there are not gpubox files for "+\
+        if args.cal_obs == args.obs:
+            logging.error("The calibrator obsID cannot be the same as the "
+                          "target obsID -- there are not gpubox files for "
                           "VCS data on the archive.")
             quit()
-        data_dir = data_dir.replace(str(opts.obs), str(opts.cal_obs))
+        data_dir = data_dir.replace(str(args.obs), str(args.cal_obs))
         mdir(data_dir, "Calibrator Data")
-        download_cal(opts.obs, opts.cal_obs, data_dir, product_dir, sys.argv, 
-                     opts.head, vcstools_version=opts.vcstools_version, 
-                     nice=opts.nice)
-    elif opts.mode == ('beamform' or 'incoh'):
-        logger.info("Mode: {0}".format(opts.mode))
-        if not opts.DI_dir:
-            logger.error("You need to specify the path to either where the "+\
-                         "DIJs are or where the offringe calibration_solution.bin"+\
+        download_cal(args.obs, args.cal_obs, data_dir, product_dir, sys.argv, 
+                     args.head, vcstools_version=args.vcstools_version, 
+                     nice=args.nice)
+    elif args.mode == ('beamform' or 'incoh'):
+        logger.info("Mode: {0}".format(args.mode))
+        if not args.DI_dir:
+            logger.error("You need to specify the path to either where the "
+                         "DIJs are or where the offringe calibration_solution.bin"
                          "file is. Aborting here.")
             quit()
-        if opts.flagged_tiles:
-            flagged_tiles_file = os.path.abspath(opts.flagged_tiles)
-            if not os.path.isfile(opts.flagged_tiles):
-                logger.error("Your are not pointing at a file with your input "+\
-                             "to --flagged_tiles. Aborting here as the "+\
+        if args.flagged_tiles:
+            flagged_tiles_file = os.path.abspath(args.flagged_tiles)
+            if not os.path.isfile(args.flagged_tiles):
+                logger.error("Your are not pointing at a file with your input "
+                             "to --flagged_tiles. Aborting here as the "
                              "beamformer will not run...")
                 quit()
         else:
             flagged_tiles_file = None
-        ensure_metafits(data_dir, opts.obs, metafits_file)
+        ensure_metafits(data_dir, args.obs, metafits_file)
         #Turn the pointings into a list
-        if opts.pointing:
-            pointing_list = ["{0}_{1}".format(opts.pointing[0],opts.pointing[1])]
-        elif opts.pointing_list:
-            pointing_list = opts.pointing_list.split(",")
-        elif opts.pointing_file:
-            with open(opts.pointing_file) as f:
+        if args.pointing:
+            pointing_list = ["{0}_{1}".format(args.pointing[0],args.pointing[1])]
+        elif args.pointing_list:
+            pointing_list = args.pointing_list
+        elif args.pointing_file:
+            with open(args.pointing_file) as f:
                 pointing_list = f.readlines()
+        else:
+            logger.error("Please use either --pointing, --pointing_list or "
+                         "--pointing_file when beamforming. Exiting here.")
+            quit()
         logger.debug(pointing_list)
         
-        coherent_beam(opts.obs, opts.begin, opts.end, 
+        coherent_beam(args.obs, args.begin, args.end, 
                       data_dir, product_dir, batch_dir,
-                      metafits_file, opts.nfine_chan, opts.pointing, sys.argv,
+                      metafits_file, args.nfine_chan, pointing_list, args,
                       rts_flag_file=flagged_tiles_file,
-                      bf_formats=bf_format, DI_dir=opts.DI_dir, 
-                      calibration_type=opts.cal_type,
-                      vcstools_version=opts.vcstools_version, nice=opts.nice,
-                      execpath=opts.execpath)
+                      bf_formats=bf_format, DI_dir=args.DI_dir, 
+                      calibration_type=args.cal_type,
+                      vcstools_version=args.vcstools_version, nice=args.nice,
+                      execpath=args.execpath)
     else:
-        logger.error("Somehow your non-standard mode snuck through. "+\
+        logger.error("Somehow your non-standard mode snuck through. "
                      "Try again with one of {0}".format(modes))
         quit()
