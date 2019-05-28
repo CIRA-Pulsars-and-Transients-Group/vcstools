@@ -142,7 +142,8 @@ int main(int argc, char **argv)
     {
        strcpy( pointing_array[p][0], RAs[p] );
        strcpy( pointing_array[p][1], DECs[p] );
-       fprintf(stderr, " Pointing Num: %i  RA: %s  Dec: %s\n", p, pointing_array[p][0], pointing_array[p][1]);
+       fprintf(stderr, "[%f]  Pointing Num: %i  RA: %s  Dec: %s\n", NOW-begintime,
+                             p, pointing_array[p][0], pointing_array[p][1]);
     }
 
     // Allocate memory
@@ -307,7 +308,7 @@ int main(int argc, char **argv)
     struct gpu_ipfb_arrays gi;
     #ifdef HAVE_CUDA
     malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol,
-            outpol_coh, outpol_incoh, npointing );
+            outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
     if (opts.out_uvdif)
     {
@@ -322,32 +323,12 @@ int main(int argc, char **argv)
     for ( p = 0; p < npointing; p++ )
         cudaStreamCreate(&(streams[p])) ;
     
-    /*// Setup input values (= populate W and J)
-    int s, ant, ch, pol, pol2;
-    int Wi, Ji;
-    for (p   = 0; p   < npointing; p++  )
-    for (ant = 0; ant < nstation ; ant++)
-    for (ch  = 0; ch  < nchan    ; ch++ )
-    for (pol = 0; pol < npol     ; pol++)
-    {
-        Wi = p   * (npol*nchan*nstation) +
-             ant * (npol*nchan) +
-             ch  * (npol) +
-             pol;
-        gf.W[Wi] = complex_weights_array[p][ant][ch][pol];
-
-        for (pol2 = 0; pol2 < npol; pol2++)
-        {
-            Ji = Wi*npol + pol2;
-            gf.J[Ji] = invJi[p][ant][ch][pol][pol2];
-        }
-    }
-    //cudaMemcpy( gf.d_W, gf.W, gf.W_size, cudaMemcpyHostToDevice );
-    //cudaMemcpy( gf.d_J, gf.J, gf.J_size, cudaMemcpyHostToDevice );
-    */
+    // TODO work out why the below won't work
+    //populate_weights_johnes( &gf, complex_weights_array, invJi,
+    //                         npointing, nstation, nchan, npol );
+        
     #endif
 
-    int file_no = 0;
 
     fprintf( stderr, "[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
     
@@ -359,7 +340,7 @@ int main(int argc, char **argv)
     read_check = (int*)malloc(nfiles*sizeof(int));
     calc_check = (int*)malloc(nfiles*sizeof(int));
     write_check = (int**)malloc(nfiles*sizeof(int *));
-    for (file_no = 0; file_no < nfiles; file_no++)
+    for ( int file_no = 0; file_no < nfiles; file_no++ )
     {
         read_check[file_no]  = 0;//False
         calc_check[file_no]  = 0;//False
@@ -389,7 +370,6 @@ int main(int argc, char **argv)
         // Read section
         if (thread_no == 0)
         {
-            //fprintf( stderr, "Read  section start on thread: %d\n", thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
                 //Work out which memory allocation it's requires
@@ -413,7 +393,6 @@ int main(int argc, char **argv)
                     } 
                     if (exit_check) break; 
                 }
-                // if (file_no > 1) fprintf( stderr, "read_check: %d  &&  calc_check: %d\n", read_check[file_no - 1], calc_check[file_no - 2]);
                 clock_t start = clock();
                 #pragma omp critical (read_queue)
                 {
@@ -700,10 +679,8 @@ int main(int argc, char **argv)
             free( uvf[p].b_offsets );
         }
     }
-    fprintf(stderr, "free gf\n");
     #ifdef HAVE_CUDA
     free_formbeam( &gf );
-    fprintf(stderr, "free gi\n"); 
     if (opts.out_uvdif)
     {
         free_ipfb( &gi );
@@ -712,10 +689,8 @@ int main(int argc, char **argv)
 
     #ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
-    fprintf(stderr, "free cleanup\n");
     fftw_cleanup_threads();
     #endif
-    fprintf(stderr, "done free \n");
 
     return 0;
 }

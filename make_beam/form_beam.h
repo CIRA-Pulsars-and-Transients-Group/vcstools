@@ -40,7 +40,8 @@ struct gpu_formbeam_arrays
 
 
 void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
-        int nstation, int nchan, int npol, int outpol_coh, int outpol_incoh, int npointing );
+                      int nstation, int nchan, int npol, int outpol_coh,
+                      int outpol_incoh, int npointing, double time );
 void free_formbeam( struct gpu_formbeam_arrays *g );
 
 /* Calculating array indices for GPU inputs and outputs */
@@ -107,16 +108,21 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
 
 #ifdef HAVE_CUDA
 
-float *create_pinned_data_buffer_psrfits( size_t size );
-        
-float *create_pinned_data_buffer_vdif( size_t size );
-
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ****W,
                    ComplexDouble *****J, int file_no, 
                    int npointing, int nstation, int nchan,
                    int npol, int outpol_coh, double invw, struct gpu_formbeam_arrays *g,
                    ComplexDouble ****detected_beam, float *coh, float *incoh,
                    cudaStream_t *streams );
+
+float *create_pinned_data_buffer_psrfits( size_t size );
+        
+float *create_pinned_data_buffer_vdif( size_t size );
+
+void populate_weights_johnes( struct gpu_formbeam_arrays *g,
+                              ComplexDouble ****complex_weights_array,
+                              ComplexDouble *****invJi,
+                              int npointing, int nstation, int nchan, int npol );
 
 #else
 
@@ -128,6 +134,7 @@ void form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
 void form_stokes( ComplexDouble **detected_beam,
                   ComplexDouble noise_floor[][2][2],
                   int nchan, double invw, float *spectrum );
+
 
 #endif
 
