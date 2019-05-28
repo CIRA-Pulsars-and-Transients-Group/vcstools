@@ -119,7 +119,7 @@ __global__ void beamform_kernel( uint8_t *data,
     //Nyx[ant] = CMaked( 0.0, 0.0 );
     Nyy[ant] = CMaked( 0.0, 0.0 );
 
-    if (p == 0) Ia[ant] = 0.0;
+    if ( p == 0 ) Ia[ant] = 0.0;
 
     /*if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
     {
@@ -133,8 +133,17 @@ __global__ void beamform_kernel( uint8_t *data,
     Dx  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,0,nc)]);
     Dy  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,1,nc)]);
 
-    if (p == 0) Ia[ant] = DETECT(Dx) + DETECT(Dy);
 
+    if ( p == 0 )
+    {
+        if (CReald(W[W_IDX(p,ant,c,0,nc)]) == 0.0 &&
+            CImagd(W[W_IDX(p,ant,c,0,nc)]) == 0.0 &&
+            CReald(W[W_IDX(p,ant,c,1,nc)]) == 0.0 &&
+            CImagd(W[W_IDX(p,ant,c,1,nc)]) == 0.0)
+            Ia[ant] = 0.0;
+        else
+            Ia[ant] = DETECT(Dx) + DETECT(Dy);
+    }
     WDx = CMuld( W[W_IDX(p,ant,c,0,nc)], Dx );
     WDy = CMuld( W[W_IDX(p,ant,c,1,nc)], Dy );
 
@@ -187,7 +196,7 @@ __global__ void beamform_kernel( uint8_t *data,
     
     // Form the stokes parameters for the coherent beam
     // Only doing it for ant 0 so that it only prints once
-    if (ant == 0)
+    if ( ant == 0 )
     {
         float bnXX = DETECT(Bx[0]) - CReald(Nxx[0]);
         float bnYY = DETECT(By[0]) - CReald(Nyy[0]);

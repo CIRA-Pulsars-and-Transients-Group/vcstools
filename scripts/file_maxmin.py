@@ -1,50 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import urllib
-import urllib2
-import json
-
-# Append the service name to this base URL, eg 'con', 'obs', etc.
-BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
-
-
-def getmeta(service='obs', params=None):
-  """
-  Function to call a JSON web service and return a dictionary:
-  Given a JSON web service ('obs', find, or 'con') and a set of parameters as
-  a Python dictionary, return a Python dictionary containing the result.
-  Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
-  """
-
-  if params:
-    data = urllib.urlencode(params)  # Turn the dictionary into a string with encoded 'name=value' pairs
-  else:
-    data = ''
-
-  if service.strip().lower() in ['obs', 'find', 'con']:
-    service = service.strip().lower()
-  else:
-    print "invalid service name: %s" % service
-    return
-
-  try:
-    result = json.load(urllib2.urlopen(BASEURL + service + '?' + data))
-  except urllib2.HTTPError as error:
-    print "HTTP error from server: code=%d, response:\n %s" % (error.code, error.read())
-    return
-  except urllib2.URLError as error:
-    print "URL or network error: %s" % error.reason
-    return
-
-  return result
-
-def is_number(s):
-    try:
-        int(s)
-        return True
-    except ValueError:
-        return False
-
+from mwa_metadb_utils import getmeta, is_number
 
 def print_minmax(obs_id):
     """
@@ -55,14 +11,17 @@ def print_minmax(obs_id):
     times=[file[11:21] for file in obsinfo['files'] if is_number(file[11:21])] #Make a list of gps times excluding non-numbers from list
     obs_start = int(min(times))
     obs_end = int(max(times))
+    obs_dur = len(obsinfo['files'])
 
-    print "{0} file found with Observation ID {1}".format(len(obsinfo['files']), obs_id)
-    print "First file: {0}".format(obs_start)
-    print "Last file: {0}".format(obs_end)
+    return obs_start, obs_end, obs_dur
 
 if __name__ == '__main__':
     from sys import argv
-    print_minmax(argv[1])
+    obs_start, obs_end, obs_dur = print_minmax(argv[1])
+    print("{0} file found with Observation ID {1}".format(obs_dur, argv[1]))
+    print("First file: {0}".format(obs_start))
+    print("Last file: {0}".format(obs_end))
+    
 
 
 

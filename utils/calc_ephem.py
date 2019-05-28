@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 This script will accept a source position and a UTC day in which to calculate the ephemerides for 24 hours.
@@ -13,8 +13,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.dates import date2num, DateFormatter
-from astropy.coordinates import EarthLocation, SkyCoord, AltAz
-from astropy.coordinates import get_body
+from astropy.coordinates import EarthLocation, SkyCoord, AltAz, get_body
 from astropy import units as u
 from astropy.time import Time, TimezoneInfo
 from datetime import datetime
@@ -63,12 +62,13 @@ class Observatory(object):
             # if not, check to make sure lat, long and elev were provided, otherwise abort
             logger.warning("Observatory '{0}' not found in internal list".format(name))
             if (latitude is None) or (longitude is None) or (elevation is None):
-                logger.critical("Aborting here, there was no observatory found and one or more coordinates were not provided.")
+                logger.critical("Aborting here, there was no observatory found and one or more coordinates were "
+                                "not provided.")
                 sys.exit(1)
             else:
                 logger.info("Using provided name and location")
-                logger.debug("\ttelescope = {0}".format(name))
-                logger.debug("\tlon, lat, elev = ({0}, {1}, {2})".format(longitude, latitude, elevation))
+                logger.debug("    telescope = {0}".format(name))
+                logger.debug("    lon, lat, elev = ({0}, {1}, {2})".format(longitude, latitude, elevation))
                 self.name = name
                 self.latitude = latitude
                 self.longitude = longitude
@@ -98,7 +98,6 @@ class Observatory(object):
         else:
             self.elev_limit = None
 
-
     def compute_target_position(self, coords, times, tz):
         # compute the ephemeris of a given set of coordinates and set relevant attributes
         if coords and times:
@@ -109,20 +108,19 @@ class Observatory(object):
             self.altmaxidx = np.argmax(self.alt)
             self.altmax = self.alt[self.altmaxidx]
             self.maxtimeUTC = times[self.altmaxidx]
-            self.maxtimeLST = self.maxtimeUTC.sidereal_time(('apparent'), "{0}d".format(self.longitude))
+            self.maxtimeLST = self.maxtimeUTC.sidereal_time('apparent', "{0}d".format(self.longitude))
             self.maxtimeLocalStr = str(self.maxtimeUTC.to_datetime(timezone=tz))[:-6]
             self.utcoffsetStr = str(self.maxtimeUTC.to_datetime(timezone=tz))[-6:]
         else:
-            logger.critical("The RA, DEC or time was not provided and so we cannot calculate the altaz of the target. Aborting.")
+            logger.critical("The RA, DEC or time was not provided and so we cannot calculate the altaz of the target. "
+                            "Aborting.")
             sys.exit(1)
-
 
     def compute_sun_position(self, times):
         # compute the Sun's sky position over time
         sun_position = get_body('sun', times, self.location)
         self.sun = sun_position.transform_to(AltAz(obstime=times, location=self.location))
         
-
 
 def plot_ephem(ax, times, obs, plot_sun=False, draw_peaks=False):
     """ Given an axis object, the times (x) and observed ephemeris (y), plot the source track."""
@@ -148,8 +146,7 @@ def plot_ephem(ax, times, obs, plot_sun=False, draw_peaks=False):
     return "{0}: {1} UTC{2}".format(obs.name, obs.maxtimeLocalStr, obs.utcoffsetStr)
     
 
-
-def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, draw_peaks=False, center=False):
+def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, draw_peaks=False):
     """Compute the ephemeris for a target on a given day at a target position."""
 
     # first, let's set up the times we want to evaluate the source position for
@@ -158,14 +155,14 @@ def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, dra
     hr = [int(i) for i in hours]
     mi = [int((hours[i]-hr[i]) * 60) for i in range(len(hours))]
     se = [0]*len(hours)
-    t = [datetime(int(year), int(month), int(day), h, m, s) for h,m,s in zip(hr,mi,se)]
+    t = [datetime(int(year), int(month), int(day), h, m, s) for h, m, s in zip(hr, mi, se)]
 
     times = Time(t, scale='utc', format='datetime')  # list of Time objects at which the ephemeris is computed
     tz = TimezoneInfo(utc_offset=tzoffset * u.hour)  # timezone object to convert times
-    plttimes = date2num([t for t in times.datetime]) # times in plottable format
+    plttimes = date2num([t for t in times.datetime])  # times in plottable format
 
     # set up figure for plot
-    fig = plt.figure(figsize=(10,8))
+    fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111)
 
     # site can be a list, so we need to create an Observatory for each
@@ -177,8 +174,8 @@ def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, dra
     for s in site:
         o = Observatory(s)
         o.compute_target_position(coords, times, tz)
-        logger.info("\tmax. target elevation  = {0}".format(o.altmax))
-        logger.info("\ttime of max. elevation = {0} UTC{1}".format(o.maxtimeLocalStr, o.utcoffsetStr))
+        logger.info("    max. target elevation  = {0}".format(o.altmax))
+        logger.info("    time of max. elevation = {0} UTC{1}".format(o.maxtimeLocalStr, o.utcoffsetStr))
 
         if show_sun:
             o.compute_sun_position(times[::30])
@@ -192,7 +189,7 @@ def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, dra
         ax.set_ylim(-10, None)
 
     ys = [ax.get_ylim()[0]] * len(plttimes)
-    ax.fill_between(plttimes, ys, interpolate=True, color='gray') # fill from axis lower limit to 0
+    ax.fill_between(plttimes, ys, interpolate=True, color='gray')  # fill from axis lower limit to 0
 
     title_str = "Target :: {0}\n{1}".format(coords.to_string('hmsdms'), "\n".join(site_max))
     ax.set_title(title_str)
@@ -205,19 +202,6 @@ def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, dra
     ax.grid()
     plt.tight_layout()
     plt.show()
-
-    # TODO: need to re-implement this in a consistent way...   
-#    if center:
-#        # shifting things to the centre of the plot
-#        dt = (times[-1]-times[0]) / len(times)
-#        times = (maxtime - 12*u.hour) + dt * np.arange(len(times))
-#        altaz = target.transform_to(AltAz(obstime=times,location=location))
-#        alt = altaz.alt.deg
-#        #times += tzoffset*u.hour
-#        # for things to be unaltered downstream
-#        maxidx = 1200
-
-
 
 
 if __name__ == "__main__":
@@ -236,11 +220,11 @@ if __name__ == "__main__":
     parser.add_argument('--sun', action='store_true', help="Plot the Sun's ephemeris for each location")
     parser.add_argument('--draw_peak', action='store_true',
                         help="Draw a vertical line representing the peak elevation time")
-    # TODO: need to allow any number of manually defined observing positions, but for now just use those in the site_dict
+    # TODO: need to allow any number of manually defined observing positions, but for now just use those in the
+    #  site_dict
     #parser.add_argument('--observer', type=float, nargs=3, metavar=("lat", "lon", "elev"),
     # help="Latitude (deg), longitude (deg) and elevation (m) of observer. No default.",default=(None,None,None))
     # TODO: is centering really necessary?
-    #parser.add_argument('-c', '--center', action='store_true', help="Center the time of maximum elevation on the plot")
     parser.add_argument('-V', '--version', action='store_true', help="Print version and quit")
     args = parser.parse_args()
 
@@ -254,14 +238,12 @@ if __name__ == "__main__":
             logger.error("ImportError: {0}".format(ie))
             sys.exit(0)
 
-
     logger.setLevel(logging.DEBUG)
     ch = logging.StreamHandler()
     ch.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
-
 
     if (args.ra is None) or (args.dec is None) or (args.utcdate is None):
         logger.error("You must specify a RA, Dec and UTC date to plot the ephemeris")

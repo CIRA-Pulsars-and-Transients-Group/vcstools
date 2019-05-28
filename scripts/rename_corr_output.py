@@ -4,6 +4,9 @@ from datetime import datetime
 import argparse
 import os
 
+import logging
+logger = logging.getLogger(__name__)
+
 def splitTimestring(timestring):
     yr=int(timestring[0:4])
     month=int(timestring[4:6])
@@ -17,7 +20,7 @@ def computeTimes(startsec, n_secs=100):
     yr,month,day,hr,minute,sec = splitTimestring(startsec)
     startgps=int(Time(datetime(yr,month,day,hr,minute,sec),scale='utc').gps)
     times = Time(range(startgps + 1, startgps + n_secs), scale='utc',format='gps').datetime
-    return " ".join([time.strftime(format='%Y%m%d%H%M%S') for time in times]) 
+    return " ".join([time.strftime(format='%Y%m%d%H%M%S') for time in times])
 
 def get_nsecs(startsec, endsec):
     yr,month,day,hr,minute,sec = splitTimestring(startsec)
@@ -57,12 +60,11 @@ def opt_parser():
 if __name__ == '__main__':
     args = opt_parser()
     if args.end:
-	n_secs = get_nsecs(args.begin, args.end)
+        n_secs = get_nsecs(args.begin, args.end)
     else:
-	n_secs = args.n_secs
+        n_secs = args.n_secs
     if n_secs > 100:
-        print "n_secs is too large ({0}). Cannot have more than 100 time steps -- reducing n_secs to 100.".format(n_secs)
+        logger.warning("n_secs is too large ({0}). Cannot have more than 100 time steps -- reducing n_secs to 100.\n".format(n_secs))
+        #print "n_secs is too large ({0}). Cannot have more than 100 time steps -- reducing n_secs to 100.".format(n_secs)
         n_secs = 100
     quit(rename(args.obsID, computeTimes(args.begin, n_secs), workdir=args.workdir))
-
-

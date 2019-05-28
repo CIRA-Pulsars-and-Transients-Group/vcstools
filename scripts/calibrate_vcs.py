@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """Script for RTS calibration jobs in the VCS Pulsar pipeline.
 
@@ -16,16 +16,20 @@ import sys
 import numpy as np
 import re
 import argparse
-from astropy.io import fits
 from itertools import groupby
 from operator import itemgetter
 import glob
 import logging
+from time import strptime, strftime
+
+from astropy.time import Time
+from astropy.coordinates import EarthLocation
+from astropy import units as u
+from astropy.io import fits
 
 from job_submit import submit_slurm
 from mdir import mdir
 from mwa_metadb_utils import getmeta
-from mwapy import ephem_utils
 
 logger = logging.getLogger(__name__)
 
@@ -263,7 +267,7 @@ class BaseRTSconfig(object):
             # the correlator dump time is whatever is in the header
             self.corr_dump_time = inttime
 
-            ngroups = len_files / 24
+            ngroups = len_files // 24
             fgrouped = np.array(np.array_split(files, ngroups))
             ndumps = 0
             for item in fgrouped[:,0]:
@@ -288,7 +292,7 @@ class BaseRTSconfig(object):
 
             # for offline correlation, each file is one integration time - there has been no concatenation
             # TODO: this assumes that the offline correlator ALWAYS produces 1 second FITS files
-            ndumps = len(fits.open(first_file)) * len_files / 24
+            ndumps = len(fits.open(first_file)) * (len_files // 24)
             self.n_dumps_to_average = self.power_of_2_less_than(ndumps)
 
         logger.info("Number of fine channels: {0}".format(self.nfine_chan))
@@ -312,8 +316,6 @@ class BaseRTSconfig(object):
             When there is a problem with some of the observation information and/or its manipulation.
         """
         # get calibrator observation information from database
-        # TODO: need to make this write a metafile so that we don't have to keep querying the database on every run
-        # TODO: actually, do we?
         logger.info("Querying metadata database for obsevation information...")
         obsinfo = getmeta(service='obs', params={'obs_id': str(self.cal_obsid)})
 
@@ -332,46 +334,18 @@ class BaseRTSconfig(object):
         # and figure out the MaxFrequency parameter
         self.max_frequency = 1.28 * (max(self.channels) + 1) # this way we ensure that MaxFrequency is applicable for ALL subbands
 
-        # convert times using our timeconvert and get LST and JD 
-        # TODO: need to make this not have to call an external script
-        #       we could do this by using the mwapy.ephem_utils 
-        #       (which timeconvert.py just wraps) or use astropy
-        """
-        try:
-            timeconvert = distutils.spawn.find_executable("timeconvert.py")
-        except Exception:
-            errmsg = "Unable to access or find the executebale \"timeconvert.py\""
-            logger.error(errmsg)
-            raise CalibrationError(errmsg)
-
-        cmd = "{0} --datetime={1}".format(timeconvert, self.utctime)
-        logger.debug(cmd)
-        time_cmd = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-
-        hh = 0
-        mm = 0
-        ss = 0
-        jd = 2451545.25  # 2001-01-01 18:00:00 UTC
-
-        for line in time_cmd.stdout:
-            if "LST" in line:
-                lststring, lstflag = line.split()
-                hh, mm, ss = lststring.split(":")
-
-            if "JD" in line:
-                jdflag, jd = line.split()
-        """
         # use the same operations as in timeconvert.py for our specific need
-        logger.info("Converting times with mwapy.ephem_utils")
-        time = ephem_utils.MWATime()
-        time.datetimestring = self.utctime
-        lststring = time.LST.strftime('%H:%M:%S')
-        hh, mm, ss = lststring.split(":")
-        jd = time.MJD + 2400000.5
-        logger.info("   LST: {0}".format(lststring))
-        logger.info("   JD : {0}".format(jd))
+        logger.info("Converting times with astropy")
+        mwa_loc = EarthLocation.of_site('Murchison Widefield Array')
         
-        lst_in_hours = float(hh) + float(mm) / 60.0 + float(ss) / 60.0 ** 2
+        # Astropy formating
+        utctime = strptime(self.utctime, '%Y%m%d%H%M%S')
+        a_time = strftime('%Y-%m-%dT%H:%M:%S', utctime)
+        obstime = Time(a_time, format='fits', scale='utc', location=mwa_loc)
+        lst_in_hours = obstime.sidereal_time('apparent').hourangle
+        jd = obstime.jd
+        logger.info("   LST: {0}".format(lst_in_hours))
+        logger.info("   JD : {0}".format(jd))
 
         # set the HA of the image centre to the primary beam HA
         logger.debug("Determining HA and DEC for primary beam")
@@ -382,14 +356,13 @@ class BaseRTSconfig(object):
 
         logger.debug("Primary beam: HA = {0} hrs, Dec = {1} deg".format(self.PB_HA, self.PB_DEC))
         logger.debug("JD = {0}".format(self.JD))
-        logger.debug("LST = {0}:{1}:{2} = {3} hrs".format(hh, mm, ss, lst_in_hours))
 
         # get the lowest frequency channel
         freqs = obsinfo['rfstreams']['0']['frequencies']
         start_channel = freqs[0]
 
-        self.freq_base = start_channel * 1.28e6 - 0.64e6 + 15e3  # frequency base in Hz
-        self.freq_base /= 1e6  # convert to MHz
+        self.freq_base = start_channel * 1.28e6 - 0.64e6 + 15e3  # frequency base in Hz (based on Steve Ord's logic)
+        self.freq_base = self.freq_base / 1.0e6  # convert to MHz
 
         logger.debug("Frequency lower edge = {0} MHz".format(self.freq_base))
 
@@ -482,12 +455,12 @@ FieldOfViewDegrees=1""".format(base=self.data_dir,
                     fid.write("{0}\n".format(b))
 
         # figure out how many edge channels to flag based on the fact that with 128, we flag the edge 8
-        ntoflag = int(8 * self.nfine_chan / 128.)
+        ntoflag = int(8 * self.nfine_chan / 128.0)
         logger.debug("Flagging {0} edge channels".format(ntoflag))
         chans = np.arange(self.nfine_chan)
         start_chans = chans[:ntoflag]
         end_chans = chans[-ntoflag:]
-        center_chan = [self.nfine_chan / 2]
+        center_chan = [self.nfine_chan // 2]
         bad_chans = np.hstack((start_chans, center_chan, end_chans))
         flagged_channels = "{0}/flagged_channels.txt".format(self.output_dir)
         if os.path.isfile(flagged_channels):
@@ -594,7 +567,7 @@ class RTScal(object):
 
     def __summary(self):
         # debugging use only
-        print self.__dict__
+        print(self.__dict__)
 
 
     def submit_true(self):
@@ -646,8 +619,8 @@ class RTScal(object):
             logger.info("A subband crosses the channel 129 boundary. This subband will be split on that boundary.")
 
         # create a list of lists with consecutive channels grouped within a list
-        hichan_groups = [map(itemgetter(1), g)[::-1] for k, g in groupby(enumerate(self.hichans), lambda (i, x): i - x)][::-1]  # reversed order (both of internal lists and globally)
-        lochan_groups = [map(itemgetter(1), g) for k, g in groupby(enumerate(self.lochans), lambda (i, x): i - x)]
+        hichan_groups = [map(itemgetter(1), g)[::-1] for k, g in groupby(enumerate(self.hichans), lambda i, x: i - x)][::-1]  # reversed order (both of internal lists and globally)
+        lochan_groups = [map(itemgetter(1), g) for k, g in groupby(enumerate(self.lochans), lambda i, x: i - x)]
         logger.debug("High channels (grouped): {0}".format(hichan_groups))
         logger.debug("Low channels  (grouped): {0}".format(lochan_groups))
 
@@ -680,9 +653,6 @@ class RTScal(object):
                         "ntasks-per-node": "1"}
         module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
-        #commands.append("module use /group/mwa/software/modulefiles")
-        #commands.append("module load RTS/master")
-        #commands.append("module load vcstools/master")
         commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, fname))
         jobid = submit_slurm(rts_batch, commands, 
                                 slurm_kwargs=slurm_kwargs,
@@ -741,7 +711,7 @@ class RTScal(object):
                     # offset is now how many subbandsIDs away from 24 we are
                     offset = 24 - int(subid)
                 else:
-                    errmsg = "Invalid channel group type: must be \"low\" or \"high\"."
+                    errmsg = "Invalid channel group type: must be 'low' or 'high'"
                     logger.error(errmsg)
                     raise CalibrationError(errmsg)
 
@@ -782,7 +752,7 @@ class RTScal(object):
                     # for high channels, there is now multiple offsets
                     offset = np.array([24 - int(x) for x in subids])
                 else:
-                    errmsg = "Invalid channel group type: must be \"low\" or \"high\"."
+                    errmsg = "Invalid channel group type: must be 'low' or 'high'"
                     logger.error(errmsg)
                     raise CalibrationError(errmsg)
 
@@ -865,9 +835,6 @@ class RTScal(object):
                             "ntasks-per-node": "1"}
             module_list= ["RTS/master"]
             commands = list(self.script_body)  # make a copy of body to then extend
-            #commands.append("module use /group/mwa/software/modulefiles")
-            #commands.append("module load RTS/master")
-            #commands.append("module load vcstools/master")
             commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, k))
             jobid = submit_slurm(rts_batch, commands,
                                     slurm_kwargs=slurm_kwargs,
@@ -907,24 +874,26 @@ class RTScal(object):
 if __name__ == '__main__':
 
     # Dictionary for choosing log-levels
-    loglevels = {"DEBUG": logging.DEBUG, 
-                 "INFO": logging.INFO, 
-                 "WARNING": logging.WARNING}
+    loglevels = dict(DEBUG=logging.DEBUG,
+                     INFO=logging.INFO,
+                     WARNING=logging.WARNING)
 
     # Option parsing
     parser = argparse.ArgumentParser(
-        description="Script for creating RTS configuration files and submitting relevant jobs in the VCS pulsar pipeline")
+        description="Script for creating RTS configuration files and submitting relevant jobs in the "
+                    "VCS pulsar pipeline")
 
-    parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None)
+    parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None, required=True)
 
     parser.add_argument("-O", "--cal_obsid", type=int,
                         help="Calibrator observation ID for the target observation. "
-                             "Can be the same as --obs if using in-beam visibilities", default=None)
+                             "Can be the same as --obs if using in-beam visibilities", default=None, required=True)
 
     parser.add_argument("-m", "--metafits", type=str,
-                        help="Path to the relevant calibration observation metafits file", default=None)
+                        help="Path to the relevant calibration observation metafits file", default=None, required=True)
 
-    parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list", default=None)
+    parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list",
+                        default=None, required=True)
 
     parser.add_argument("--gpubox_dir", type=str, 
                         help="Where the *_gpubox*.fits files are located " 
@@ -966,14 +935,9 @@ if __name__ == '__main__':
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
     ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(name)s  %(levelname)-9s :: %(message)s')
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
-
-    if (args.obsid is None) or (args.cal_obsid is None) or (args.metafits is None) or (args.srclist is None):
-        print "You need to specify all of the follow arguments:"
-        print "-o/--obsid\n-O/--cal_obsid\n-m/--metafits\n-s/--srclist"
-        sys.exit(1)
 
     logger.info("Creating BaseRTSconfig instance - compiling basic RTS configuration script")
     try:
