@@ -78,12 +78,13 @@ __global__ void beamform_kernel( uint8_t *data,
  */
 {
     // Translate GPU block/thread numbers into meaning->l names
-    int s   = blockIdx.x;  /* The (s)ample number */
-    int ns  = gridDim.x;   /* The (n)umber of (s)amples (=10000)*/
-    int c   = blockIdx.y;  /* The (c)hannel number */
-    int nc  = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
+    int s    = blockIdx.x;  /* The (s)ample number */
+    int ns   = gridDim.x;   /* The (n)umber of (s)amples (=10000)*/
+    int c    = blockIdx.y;  /* The (c)hannel number */
+    int nc   = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
     
-    int ant = threadIdx.x;   /* The (ant)enna number */
+    int ant  = threadIdx.x; /* The (ant)enna number */
+    int nant = blockDim.x;  /* The (n_umber of (ant)ennas */
 
     // GPU profiling
     clock_t start, stop;
@@ -158,83 +159,23 @@ __global__ void beamform_kernel( uint8_t *data,
         detect_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
         start = clock();
     }
-    if (ant < 64)
+    for ( int h_ant = nant / 2; h_ant > 0; h_ant = h_ant / 2 )
     {
-        if (p == 0) Ia[ant] += Ia[ant+64];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+64] );
-        By[ant] = CAddd( By[ant], By[ant+64] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+64] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+64] );
-        //Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+64] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+64] );
+        if (ant < h_ant)
+        {
+            if (p == 0) Ia[ant] += Ia[ant+h_ant];
+            Bx[ant]  = CAddd( Bx[ant],  Bx[ant  + h_ant] );
+            By[ant]  = CAddd( By[ant],  By[ant  + h_ant] );
+            Nxx[ant] = CAddd( Nxx[ant], Nxx[ant + h_ant] );
+            Nxy[ant] = CAddd( Nxy[ant], Nxy[ant + h_ant] );
+            //Nyx[ant]=CAddd( Nyx[ant], Nyx[ant + h_ant] );
+            Nyy[ant] = CAddd( Nyy[ant], Nyy[ant + h_ant] );
+        }
+        // below makes no difference so removed
+        // else return;
+        __syncthreads();
     }
-    __syncthreads();
-    if (ant < 32)
-    {
-        if (p == 0) Ia[ant] += Ia[ant+32];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+32] );
-        By[ant] = CAddd( By[ant], By[ant+32] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+32] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+32] );
-        //Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+32] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+32] );
-    }
-    __syncthreads();
-    if (ant < 16)
-    {
-        if (p == 0) Ia[ant] += Ia[ant+16];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+16] );
-        By[ant] = CAddd( By[ant], By[ant+16] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+16] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+16] );
-        //Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+16] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+16] );
-    }
-    __syncthreads();
-    if (ant < 8)
-    {
-        if (p == 0) Ia[ant] += Ia[ant+8];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+8] );
-        By[ant] = CAddd( By[ant], By[ant+8] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+8] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+8] );
-        //Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+8] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+8] );
-    }
-    __syncthreads();
-    if (ant < 4)
-    {
-        if (p == 0) Ia[ant] += Ia[ant+4];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+4] );
-        By[ant] = CAddd( By[ant], By[ant+4] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+4] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+4] );
-        //Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+4] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+4] );
-    }
-    __syncthreads();
-    if (ant < 2)
-    {
-        if (p == 0) Ia[ant] += Ia[ant+2];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+2] );
-        By[ant] = CAddd( By[ant], By[ant+2] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+2] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+2] );
-        //Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+2] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+2] );
-    }
-    __syncthreads();
-    if (ant < 1)
-    {
-        if (p == 0) Ia[ant] += Ia[ant+1];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+1] );
-        By[ant] = CAddd( By[ant], By[ant+1] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+1] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+1] );
-        //Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+1] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+1] );
-    }
-    __syncthreads();
+
     if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
     {
         stop = clock();
@@ -329,10 +270,11 @@ __global__ void flatten_bandpass_C_kernel(float *C,
 
     // Translate GPU block/thread numbers into meaningful names
     int chan   = threadIdx.x; /* The (c)hannel number */
-    int nchan  = blockDim.x; /* The total number of channels */
-    int p      = blockIdx.x;
-    int stokes = threadIdx.y;
-    //int nstokes = blockDim.y;
+    int nchan  = blockDim.x;  /* The (n)umber of (c)hannels */
+    int stokes = threadIdx.y; /* The (stokes) number */
+    
+    int p      = blockIdx.x;  /* The (p)ointing number */
+
     float band;
 
     int new_var = 32; /* magic number */
@@ -446,13 +388,16 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
         // 1 block per pointing direction, hence the 1 for now
         // TODO check if these actually work, can't see them return values.
         // The incoh kernal also takes 40 second for some reason so commenting out
-        //flatten_bandpass_I_kernel<<<1, nchan>>>(g->d_incoh, opts->sample_rate);
+        if ( p == 0 )
+            flatten_bandpass_I_kernel<<<1, nchan, 0, streams[p]>>>(g->d_incoh,
+                                                     opts->sample_rate);
         //cudaDeviceSynchronize();
 
         // now do the same for the coherent beam
         dim3 chan_stokes(nchan, outpol_coh);
         // This doesn't seem to change anything some commenting out
-        //flatten_bandpass_C_kernel<<<npointing, chan_stokes>>>(g->d_coh, opts->sample_rate);
+        flatten_bandpass_C_kernel<<<npointing, chan_stokes, 0, streams[p]>>>(g->d_coh, 
+                                                               opts->sample_rate);
         //cudaDeviceSynchronize(); // Memcpy acts as a synchronize step so don't sync here
     }
     gpuErrchk( cudaDeviceSynchronize() );
@@ -521,9 +466,9 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
 void free_formbeam( struct gpu_formbeam_arrays *g )
 {
     // Free memory on host and device
-    free( g->W );
-    free( g->J );
-    free( g->Bd );
+    cudaFreeHost( g->W );
+    cudaFreeHost( g->J );
+    cudaFreeHost( g->Bd );
     cudaFree( g->d_W );
     cudaFree( g->d_J );
     cudaFree( g->d_Bd );

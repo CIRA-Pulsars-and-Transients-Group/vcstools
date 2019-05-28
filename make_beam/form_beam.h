@@ -4,6 +4,8 @@
  *                                                      *
  ********************************************************/
 
+#include <cuda_runtime.h>
+
 #ifndef FORM_BEAM_H
 #define FORM_BEAM_H
 

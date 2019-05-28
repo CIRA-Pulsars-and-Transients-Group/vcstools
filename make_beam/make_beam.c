@@ -629,30 +629,36 @@ int main(int argc, char **argv)
     free( fil_ramps2 );
     fprintf(stderr, "free mi\n");
     destroy_metafits_info( &mi );
-    //free( data_buffer_coh    );
     fprintf(stderr, "free coh\n");
+    free( data_buffer_coh    );
+    free( data_buffer_incoh  );
+    free( data_buffer_vdif   );
+    #ifdef HAVE_CUDA
+    cudaFreeHost( data_buffer_coh1   );
+    cudaFreeHost( data_buffer_coh2   );
+    fprintf(stderr, "free incoh\n");
+    cudaFreeHost( data_buffer_incoh1 );
+    cudaFreeHost( data_buffer_incoh2 );
+    fprintf(stderr, "free vdif\n");
+    cudaFreeHost( data_buffer_vdif1  );
+    cudaFreeHost( data_buffer_vdif2  );
+    cudaFreeHost( data_buffer_uvdif1 );
+    cudaFreeHost( data_buffer_uvdif2 );
+    fprintf(stderr, "free data\n");
+    cudaFreeHost( data1 );
+    cudaFreeHost( data2 );
+    #else
     free( data_buffer_coh1   );
     free( data_buffer_coh2   );
-    //free( data_buffer_incoh  );
-    //free( data_buffer_incoh1 );
-    //free( data_buffer_incoh2 );
-    //free( data_buffer_vdif   );
-    fprintf(stderr, "free vdif\n");
-    if (opts.out_vdif)
-    {
-        free( data_buffer_vdif1  );
-        free( data_buffer_vdif2  );
-    }
-    //free( data_buffer_uvdif  );
-    fprintf(stderr, "free uvdif\n");
-    if (opts.out_uvdif)
-    {
-        free( data_buffer_uvdif1 );
-        free( data_buffer_uvdif2 );
-    }
-    fprintf(stderr, "free data\n");
+    free( data_buffer_incoh1 );
+    free( data_buffer_incoh2 );
+    free( data_buffer_vdif1 );
+    free( data_buffer_vdif2 );
+    free( data_buffer_uvdif1 );
+    free( data_buffer_uvdif2 );
     free( data1 );
     free( data2 );
+    #endif
     
     fprintf(stderr, "free opts\n");
     free( opts.obsid        );
@@ -697,6 +703,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "free gf\n");
     #ifdef HAVE_CUDA
     free_formbeam( &gf );
+    fprintf(stderr, "free gi\n"); 
     if (opts.out_uvdif)
     {
         free_ipfb( &gi );
@@ -705,8 +712,10 @@ int main(int argc, char **argv)
 
     #ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
+    fprintf(stderr, "free cleanup\n");
     fftw_cleanup_threads();
     #endif
+    fprintf(stderr, "done free \n");
 
     return 0;
 }
