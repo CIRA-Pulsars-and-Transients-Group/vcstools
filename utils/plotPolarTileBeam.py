@@ -89,7 +89,12 @@ def plot_beam(obs, target, cal, freq):
         
     # compute beam and plot
     delays = [metadata["xdelays"], metadata["ydelays"]]
-    gx, gy = pb.MWA_Tile_full_EE(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
+    logger.debug("delays: {0}".format(delays))
+    logger.debug("freq*1e6: {0}".format(freq*1e6))
+    logger.debug("za: {0}".format(za))
+    logger.debug("az: {0}".format(az))
+
+    gx, gy = pb.MWA_Tile_analytic(za, az, freq=int(freq*1e6), delays=delays, power=True, zenithnorm=True)
     beam = (gx + gy) / 2.0
 
     fig = plt.figure(figsize=(10,8))
@@ -144,7 +149,7 @@ def plot_beam(obs, target, cal, freq):
 
 
             # get beam power for target
-            bpt_x, bpt_y = pb.MWA_Tile_full_EE(target_za, target_az, freq=freq*1e6, delays=[metadata["xdelays"], metadata["ydelays"]], power=True, zenithnorm=True)
+            bpt_x, bpt_y = pb.MWA_Tile_analytic(target_za, target_az, freq=freq*1e6, delays=[metadata["xdelays"], metadata["ydelays"]], power=True, zenithnorm=True)
             bpt = (bpt_x + bpt_y) / 2.0
             lognormbpt = log_normalise(bpt, cc_levels.min(), beam.max())
             logger.debug("bpt, cc_levels, beam: {0}, {1}, {2}".format(bpt, cc_levels.min(), beam.max()))
@@ -168,7 +173,7 @@ def plot_beam(obs, target, cal, freq):
         
     
             # get the beam power for calibrator
-            bpc_x, bpc_y = pb.MWA_Tile_full_EE([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
+            bpc_x, bpc_y = pb.MWA_Tile_analytic([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
             bpc = (bpc_x + bpc_y) / 2.0
             lognormbpc = log_normalise(bpc, cc_levels.min(), beam.max())
             logger.info("Beam power @ calibrator @ gps:{0}: {1:.3f}".format(c.obstime.gps, bpc[0][0]))

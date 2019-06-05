@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env 
+   
 import numpy as np
 from astropy.coordinates import EarthLocation, SkyCoord, AltAz
 from astropy import units as u
@@ -16,14 +16,14 @@ import sys
 import argparse
 
 import logging
-logger = logging.getLogger(__name__)
-
+logger = logging.getLogger(__name__) 
 
 def get_obs_metadata(obs):
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
     channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
     freqs = [float(c)*1.28 for c in channels]
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    pythodelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
     ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
     pointing_EL, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
 
@@ -154,14 +154,14 @@ def plot_beam(obs, fname, target, freq, time):
         target_za = np.pi/2 - target.altaz.alt.rad
 
         # get beam power for target
-        bpt_x, bpt_y = pb.MWA_Tile_analytic([[target_za]], [[target_az]], freq=freq*1e6, delays=[metadata["xdelays"], metadata["ydelays"]], power=True, zenithnorm=True)
+        bpt_x, bpt_y = pb.MWA_Tile_analytic(target_za, target_az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
         bpt = (bpt_x + bpt_y) / 2.0
         lognormbpt = log_normalise(bpt, cf_levels.min(), beam.max())
-        logger.info("Beam power @ source:",bpt[0][0])
-        logger.info("log-normalised:",lognormbpt[0][0])
+        logger.info("Beam power @ source: {0}".format(bpt))
+        logger.info("   log-normalised: {0}".format(lognormbpt))
 
         # plot the target position on sky
-        ax.plot(target_az, target_za, ls="", marker="o", color='C3', zorder=1002, label="target ({0:.2f})".format(bpt[0][0]))
+        ax.plot(target_az, target_za, ls="", marker="o", color='C3', zorder=1002, label="   target: )".format(bpt))
 
         # plot the target on the color bar
         cbar.ax.plot(0.5, lognormbpt, color='C3', marker="o")
