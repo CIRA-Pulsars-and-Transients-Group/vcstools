@@ -1,4 +1,4 @@
-#!/usr/bin/env 
+#!/usr/bin/env python3 
    
 import numpy as np
 from astropy.coordinates import EarthLocation, SkyCoord, AltAz

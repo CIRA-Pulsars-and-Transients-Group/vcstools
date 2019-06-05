@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import numpy as np
 from astropy.coordinates import EarthLocation, SkyCoord, AltAz
@@ -12,29 +12,13 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 from mwa_pb import primary_beam as pb
-from mwa_metadb_utils import getmeta, mwa_alt_az_za
+from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 
 import sys
 import argparse
 
 import logging
 logger = logging.getLogger(__name__)
-
-def get_obs_metadata(obs):
-    beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
-    channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
-    freqs = [float(c)*1.28 for c in channels]
-    xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
-    ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
-    pointing_EL, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
-    
-    return {"channels":channels,
-            "frequencies":freqs,
-            "xdelays":xdelays,
-            "ydelays":ydelays,
-            "az":pointing_AZ,
-            "za":pointing_ZA
-            }
 
 
 def compute_target_position(ra, dec, time):
@@ -80,7 +64,7 @@ def log_normalise(data, vmin, vmax):
 
 def plot_beam(obs, target, cal, freq):
 
-    metadata = get_obs_metadata(obs)
+    metadata = get_common_obs_metadata(obs)
     phi = np.linspace(0,360,3600)
     theta = np.linspace(0,90,900)
 
@@ -88,7 +72,7 @@ def plot_beam(obs, target, cal, freq):
     az, za = np.meshgrid(np.radians(phi), np.radians(theta))
         
     # compute beam and plot
-    delays = [metadata["xdelays"], metadata["ydelays"]]
+    delays = metadata[4] #x and y delays 
     logger.debug("delays: {0}".format(delays))
     logger.debug("freq*1e6: {0}".format(freq*1e6))
     logger.debug("za: {0}".format(za))
@@ -137,7 +121,8 @@ def plot_beam(obs, target, cal, freq):
     cbarCC.add_lines(cs)
 
     # plot the pointing centre of the tile beam
-    ax.plot(np.radians(metadata["az"]), np.radians(metadata["za"]), ls="", marker="+", ms=8, color='C3', zorder=1002, label="pointing centre")
+    pointing_EL, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
+    ax.plot(np.radians(pointing_AZ), np.radians(pointing_ZA), ls="", marker="+", ms=8, color='C3', zorder=1002, label="pointing centre")
 
     if target is not None:   
         # color map for tracking target positions
@@ -149,11 +134,10 @@ def plot_beam(obs, target, cal, freq):
 
 
             # get beam power for target
-            bpt_x, bpt_y = pb.MWA_Tile_analytic(target_za, target_az, freq=freq*1e6, delays=[metadata["xdelays"], metadata["ydelays"]], power=True, zenithnorm=True)
+            bpt_x, bpt_y = pb.MWA_Tile_analytic(target_za, target_az, freq=freq*1e6, delays=[metadata[4][0], metadata[4][1]], power=True, zenithnorm=True)
             bpt = (bpt_x + bpt_y) / 2.0
             lognormbpt = log_normalise(bpt, cc_levels.min(), beam.max())
             logger.debug("bpt, cc_levels, beam: {0}, {1}, {2}".format(bpt, cc_levels.min(), beam.max()))
-            #logger.info("Beam power @ source @ {0}: {1:.3f}".format(t.obstime.gps, bpt[0][0]))
             logger.info("Beam power @ source @ gps: {0}: {1}".format(t.obstime.gps, bpt))
             logger.info("log-normalised BP: {0}".format(lognormbpt))
             
@@ -173,7 +157,7 @@ def plot_beam(obs, target, cal, freq):
         
     
             # get the beam power for calibrator
-            bpc_x, bpc_y = pb.MWA_Tile_analytic([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata["delays"], power=True, zenithnorm=True)
+            bpc_x, bpc_y = pb.MWA_Tile_analytic([[cal_za]], [[cal_az]], freq=freq*1e6, delays=metadata[4], power=True, zenithnorm=True)
             bpc = (bpc_x + bpc_y) / 2.0
             lognormbpc = log_normalise(bpc, cc_levels.min(), beam.max())
             logger.info("Beam power @ calibrator @ gps:{0}: {1:.3f}".format(c.obstime.gps, bpc[0][0]))
@@ -198,7 +182,7 @@ def plot_beam(obs, target, cal, freq):
     ax.set_yticklabels([r"${0:d}^\circ$".format(int(np.ceil(x))) for x in np.degrees(ax.get_yticks())], color='k')
 
     # Title
-    ax.set_title("MWA Tile beam (FEE)\naz = {0:.2f}, za = {1:.2f}, freq = {2:.2f}MHz\nobsid = {3}".format(metadata["az"], metadata["za"], freq, obs))
+    ax.set_title("MWA Tile beam (FEE)\naz = {0:.2f}, za = {1:.2f}, freq = {2:.2f}MHz\nobsid = {3}".format(pointing_AZ, pointing_ZA, freq, obs))
 
     plt.legend(bbox_to_anchor=(0.95,-0.05), ncol=2)
     #plt.savefig("{0}_{1:.2f}MHz_tile.eps".format(obs, freq), bbox_inches="tight", format="eps")
