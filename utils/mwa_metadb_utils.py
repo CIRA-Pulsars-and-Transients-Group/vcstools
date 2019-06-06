@@ -73,7 +73,7 @@ def getmeta(service='obs', params=None):
     import json
 
     # Append the service name to this base URL, eg 'con', 'obs', etc.
-    BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
+    BASEURL = 'http://ws.mwatelescope.org/metadata/'
 
 
     if params:
