@@ -722,24 +722,25 @@ if __name__ == '__main__':
 
  #   parser=OptionParser(description="process_vcs.py is a script of scripts that downloads prepares and submits jobs to Galaxy. It can be run with just a pointing (-p \"xx:xx:xx xx:xx:xx.x\") and an obsid (\"-o <obsid>\") and it will process all the data in the obs. It will call prepare.py which will attempt to build the phase and calibration information - which will only exist if a calibration obs has already been run. So it will only move past the data prepa stage if the \"-r\" (for run) is used\n"
 
-    parser=argparse.ArgumentParser(description="process_vcs.py is a script for processing the MWA VCS data on Galaxy in steps. It can download data from the archive, call on recombine to form course channels, run the offline correlator, make tile re-ordered and bit promoted PFB files or for a coherent beam for a given pointing.")
+    parser=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+            description="process_vcs.py is a script for processing the MWA VCS data on Galaxy in steps. It can download data from the archive, call on recombine to form course channels, run the offline correlator, make tile re-ordered and bit promoted PFB files or for a coherent beam for a given pointing.")
     group_download = parser.add_argument_group('Download Options')
-    group_download.add_argument("--head", action="store_true", default=False, help="Submit download jobs to the headnode instead of the copyqueue [default=%default]")
-    #group_download.add_argument("--format", type="choice", choices=['11','15','16'], default='11', help="Voltage data type (Raw = 11, ICS Only = 15, Recombined and ICS = 16) [default=%default]")
-    group_download.add_argument("-d", "--parallel_dl", type=int, default=3, help="Number of parallel downloads to envoke [default=%default]")
-    group_download.add_argument("-j", "--untar_jobs", type=int, default=2, help="Number of parallel jobs when untaring downloaded tarballs. [default=%default]")
-    group_download.add_argument("-k", "--keep_tarball", action="store_true", default=False, help="Keep the tarballs after unpacking. [default=%default]")
+    group_download.add_argument("--head", action="store_true", default=False, help="Submit download jobs to the headnode instead of the copyqueue ")
+    #group_download.add_argument("--format", type="choice", choices=['11','15','16'], default='11', help="Voltage data type (Raw = 11, ICS Only = 15, Recombined and ICS = 16) ")
+    group_download.add_argument("-d", "--parallel_dl", type=int, default=3, help="Number of parallel downloads to envoke ")
+    group_download.add_argument("-j", "--untar_jobs", type=int, default=2, help="Number of parallel jobs when untaring downloaded tarballs. ")
+    group_download.add_argument("-k", "--keep_tarball", action="store_true", default=False, help="Keep the tarballs after unpacking. ")
     group_correlate = parser.add_argument_group('Correlator Options')
-    group_correlate.add_argument("--ft_res", metavar="FREQ RES,TIME RES", type=int, nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
+    group_correlate.add_argument("--ft_res", metavar="FREQ RES,TIME RES", type=int, nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. ")
 
     group_beamform = parser.add_argument_group('Beamforming Options')
     group_beamform.add_argument("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
     group_beamform.add_argument("--pointing_list", type=str, nargs='*', help="A comma sepertated list of pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS, e.g. \"19:23:48.53_-20:31:52.95,19:23:40.00_-20:31:50.00\"")
     group_beamform.add_argument("--pointing_file", help="A file containing pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS on each line, e.g. \"19:23:48.53_-20:31:52.95\n19:23:40.00_-20:31:50.00\"")
     group_beamform.add_argument("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
-    group_beamform.add_argument("--bf_out_format", type=str, choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. [default=%default]".format(bf_out_modes), default='psrfits')
-    group_beamform.add_argument("--incoh", action="store_true", default=False, help="Add this flag if you want to form an incoherent sum as well. [default=%default]")
-    group_beamform.add_argument("--flagged_tiles", type=str, default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. [default=%default]")
+    group_beamform.add_argument("--bf_out_format", type=str, choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. ".format(bf_out_modes), default='psrfits')
+    group_beamform.add_argument("--incoh", action="store_true", default=False, help="Add this flag if you want to form an incoherent sum as well. ")
+    group_beamform.add_argument("--flagged_tiles", type=str, default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. ")
     group_beamform.add_argument('--cal_type', type=str, help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
     group_beamform.add_argument("-E", "--execpath", type=str, default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
 
@@ -750,20 +751,20 @@ if __name__ == '__main__':
                           "in-beam calibration should be the same as input to -o (obsID). [no default]", default=None)
     parser.add_argument("-b", "--begin", type=int, help="First GPS time to process [no default]")
     parser.add_argument("-e", "--end", type=int, help="Last GPS time to process [no default]")
-    parser.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
-    parser.add_argument("-i", "--increment", type=int, default=64, help="Increment in seconds (how much we process at once) [default=%default]")
-    parser.add_argument("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
+    parser.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. ")
+    parser.add_argument("-i", "--increment", type=int, default=64, help="Increment in seconds (how much we process at once) ")
+    parser.add_argument("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) ")
     parser.add_argument("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default "
                           "raw data will will be downloaded into /astro/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."
-                          " If set, this will create a folder for the Obs. ID if it doesn't exist [default=%default]")
-    parser.add_argument("-c", "--ncoarse_chan", type=int, default=24, help="Coarse channel count (how many to process) [default=%default]")
-    parser.add_argument("-n", "--nfine_chan", type=int, default=128, help="Number of fine channels per coarse channel [default=%default]")
-    parser.add_argument("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.[default=%default]")
+                          " If set, this will create a folder for the Obs. ID if it doesn't exist ")
+    parser.add_argument("-c", "--ncoarse_chan", type=int, default=24, help="Coarse channel count (how many to process) ")
+    parser.add_argument("-n", "--nfine_chan", type=int, default=128, help="Number of fine channels per coarse channel ")
+    parser.add_argument("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.")
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
                                         default="INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
-    parser.add_argument("--vcstools_version", type=str, default="master", help="VCSTools version to load in jobs (i.e. on the queues) [default=%default]")
-    parser.add_argument("--nice", type=int, default=0, help="Reduces your priority of Slurm Jobs. [default=%default]")
+    parser.add_argument("--vcstools_version", type=str, default="master", help="VCSTools version to load in jobs (i.e. on the queues) ")
+    parser.add_argument("--nice", type=int, default=0, help="Reduces your priority of Slurm Jobs. ")
 
     args = parser.parse_args()
 
