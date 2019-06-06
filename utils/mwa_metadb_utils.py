@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 
 def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
@@ -73,7 +73,7 @@ def getmeta(service='obs', params=None):
     import json
 
     # Append the service name to this base URL, eg 'con', 'obs', etc.
-    BASEURL = 'http://mwa-metadata01.pawsey.org.au/metadata/'
+    BASEURL = 'http://ws.mwatelescope.org/metadata/'
 
 
     if params:
