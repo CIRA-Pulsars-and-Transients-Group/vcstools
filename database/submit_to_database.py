@@ -357,17 +357,10 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     logger.info("Average Power: " + str(avg_power))
 
     #gain uncertainty through beam position estimates
-    mwa = ephem_utils.Obs[ephem_utils.obscode['MWA']]    
     RAs, Decs = sex2deg(ra_obs,dec_obs)
-    obstime = Time(float(obsid),format='gps',scale='utc')
-    observer = ephem.Observer()
-    observer.date = obstime.datetime.strftime('%Y/%m/%d %H:%M:%S')
-    LST_hours = observer.sidereal_time() * ephem_utils.HRS_IN_RADIAN
-
-    HAs = -RAs + LST_hours * 15.
-    Azs, Alts = ephem_utils.eq2horz(HAs, Decs, mwa.lat)
+    Alts, Azs, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
+    
     theta=np.radians(90.-Alts)
-
     u_gain_per = (1. - avg_power)*0.12 + (theta/90.)*(theta/90.)*2. + 0.1
     u_gain = gain * u_gain_per #assumed to be 10% 
         
@@ -716,8 +709,8 @@ if __name__ == "__main__":
     minfreq = float(min(channels))
     maxfreq = float(max(channels))
 
-    #bandwidth = 30720000. #In Hz
-    bandwidth = 30720000. / 12. #In Hz
+    bandwidth = 30720000. #In Hz
+    #bandwidth = 30720000. / 12. #In Hz
 
     #calc obstype
     if (maxfreq - minfreq) == 23:
