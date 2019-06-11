@@ -1,4 +1,4 @@
-#! /usr/bin/env python 
+#! /usr/bin/env python3
 
 """
 Author: Nicholas Swainston
@@ -24,6 +24,7 @@ import math
 from scipy.interpolate import InterpolatedUnivariateSpline
 import glob
 import textwrap as _textwrap
+from requests.auth import HTTPBasicAuth
 
 #Astropy imports
 from astropy.table import Table
@@ -42,7 +43,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
-auth = ('mwapulsar','veovys9OUTY=')
+auth = HTTPBasicAuth('mwapulsar','veovys9OUTY=')
 
 class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
@@ -139,16 +140,16 @@ def get_from_ascii(file_loc):
 
 
 
-def from_power_to_gain(powers,cfreq,n,incoh=False):
+def from_power_to_gain(powers,cfreq,n,coh=True):
     from astropy.constants import c,k_B
     from math import sqrt
 
     obswl = c.value/cfreq
-    #for incoherent
-    if incoh:
-        coeff = obswl**2*16*sqrt(n)/(4*np.pi*k_B.value) #TODO add a coherent option
-    else:
+    #for coherent
+    if coh:
         coeff = obswl**2*16*n/(4*np.pi*k_B.value)
+    else:
+        coeff = obswl**2*16*sqrt(n)/(4*np.pi*k_B.value)
     logger.debug("Wavelength",obswl,"m")
     logger.debug("Gain coefficient:",coeff)
     SI_to_Jy = 1e-26
@@ -303,7 +304,7 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
 
 
 def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
-                        pul_ra, pul_dec, incoh,
+                        pul_ra, pul_dec, coh,
                         start = None, stop = None,
                         trcvr = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
@@ -353,7 +354,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     t_sys_table = tant + get_Trec(trec_table,centrefreq)
     
     logger.info("Converting to gain from power...")
-    gain = from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,incoh)
+    gain = from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,coh)
     logger.debug('Frequency {0} Hz'.format(centrefreq*1e6))
     
     t_sys = np.mean(t_sys_table)
@@ -454,7 +455,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     print(str(subbands))
     
     #get cal id
-    if not incoh:
+    if coh:
         cal_list = client.calibrator_list(web_address, auth)
         cal_already_created = False
         for c in cal_list:
@@ -470,8 +471,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
             client.detection_create(web_address, auth, 
                                    observationid = int(obsid),
                                    pulsar = str(pulsar), 
-                                   subband = str(subbands), 
-                                   incoherent = incoh,
+                                   subband = int(subbands), 
+                                   coherent = coh,
                                    observation_type = int(obstype),
                                    calibrator = int(cal_db_id),
                                    startcchan = int(minfreq), stopcchan = int(maxfreq), 
@@ -486,9 +487,9 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
             logger.info("Detection already on database so updating the values")
             client.detection_update(web_address, auth, 
                                    observationid = int(obsid),
-                                   pulsar = str(pulsar).encode(), 
-                                   subband = str(subbands).encode(), 
-                                   incoherent = incoh,
+                                   pulsar = str(pulsar), 
+                                   subband = str(subbands), 
+                                   coherent = coh,
                                    observation_type = int(obstype),
                                    calibrator = int(cal_db_id),
                                    startcchan = int(minfreq), stopcchan = int(maxfreq), 
@@ -508,7 +509,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                    observationid = int(obsid),
                                    pulsar = str(pulsar), 
                                    subband = str(subbands), 
-                                   incoherent = incoh,
+                                   coherent = coh,
                                    observation_type = int(obstype),
                                    startcchan = int(minfreq), stopcchan = int(maxfreq), 
                                    flux = float("{0:.2f}".format(S_mean)),
@@ -524,7 +525,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                    observationid = int(obsid),
                                    pulsar = str(pulsar), 
                                    subband = str(subbands), 
-                                   incoherent = incoh,
+                                   coherent = coh,
                                    observation_type = int(obstype),
                                    startcchan = int(minfreq), stopcchan = int(maxfreq), 
                                    flux = float("{0:.2f}".format(S_mean)),
@@ -633,10 +634,10 @@ if __name__ == "__main__":
 
     #defaults for incoh and calibrator type
     if args.incoh:
-        incoh = True
+        coh = False
         calibrator_type = None
     else:
-        incoh = False
+        coh = True
         if not args.cal_id:
             logger.error("Please include --cal_id for coherent observations")
             quit()
@@ -730,7 +731,7 @@ if __name__ == "__main__":
     if args.bestprof or args.ascii:
         #Does the flux calculation and submits the results to the MWA pulsar database
         subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
-                            pul_ra, pul_dec, incoh,
+                            pul_ra, pul_dec, coh,
                             start = args.start, stop = args.stop, trcvr = args.trcvr)
 
     if args.cal_dir_to_tar:
@@ -749,7 +750,7 @@ if __name__ == "__main__":
             if not (channels[b] - channels[b-1]) == 1:
                 subbands = subbands + 1
                 
-        if not incoh:
+        if coh:
             cal_list = client.calibrator_list(web_address, auth)
             cal_already_created = False
             for c in cal_list:
@@ -773,7 +774,7 @@ if __name__ == "__main__":
                                     pulsar = str(pulsar),
                                     calibrator = int(cal_db_id),
                                     subband = int(subbands),
-                                    incoherent = incoh,
+                                    coherent = coh,
                                     startcchan = int(minfreq), stopcchan = int(maxfreq), 
                                     observation_type = int(obstype))  
             temp_dict = client.detection_get(web_address, auth, observationid =str(obsid))  
@@ -785,7 +786,7 @@ if __name__ == "__main__":
                                     pulsar = str(pulsar),
                                     calibrator = int(cal_db_id),
                                     subband = int(subbands),
-                                    incoherent = incoh,
+                                    coherent = coh,
                                     startcchan = int(minfreq), stopcchan = int(maxfreq), 
                                     observation_type = int(obstype))  
             temp_dict = client.detection_get(web_address, auth, observationid = str(obsid)) 
@@ -802,7 +803,7 @@ if __name__ == "__main__":
                                     pulsar = str(pulsar),
                                     calibrator = int(cal_db_id),
                                     subband = int(subbands),
-                                    incoherent = incoh,
+                                    coherent = coh,
                                     startcchan = int(minfreq), stopcchan = int(maxfreq), 
                                     observation_type = int(obstype))  
             temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))  
@@ -814,7 +815,7 @@ if __name__ == "__main__":
                                     observationid = str(obsid),
                                     pulsar = str(pulsar), 
                                     subband = int(subbands),
-                                    incoherent = incoh,
+                                    coherent = coh,
                                     filetype = 1,
                                     filepath = str(args.archive))
 
@@ -824,7 +825,7 @@ if __name__ == "__main__":
                                     observationid = str(obsid),
                                     pulsar = str(pulsar), 
                                     subband = int(subbands),
-                                    incoherent = incoh,
+                                    coherent = coh,
                                     filetype = 2,
                                     filepath = str(args.single_pulse_series))
 
@@ -836,7 +837,7 @@ if __name__ == "__main__":
                             observationid = str(obsid),
                             pulsar = str(pulsar), 
                             subband = int(subbands),
-                            incoherent = incoh,
+                            coherent = coh,
                             filetype = 3,
                             filepath = str(d_file_loc))
         os.system("rm " + d_file_loc)
@@ -849,7 +850,7 @@ if __name__ == "__main__":
                             observationid = str(obsid),
                             pulsar = str(pulsar), 
                             subband = int(subbands),
-                            incoherent = incoh,
+                            coherent = coh,
                             filetype = 3,
                             filepath = str(d_file_loc))
         os.system("rm " + d_file_loc)
@@ -862,7 +863,7 @@ if __name__ == "__main__":
                             observationid = str(obsid),
                             pulsar = str(pulsar), 
                             subband = int(subbands),
-                            incoherent = incoh,
+                            coherent = coh,
                             filetype = 3,
                             filepath = str(d_file_loc))
         os.system("rm " + d_file_loc)
