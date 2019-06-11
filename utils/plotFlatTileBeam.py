@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import numpy as np
 import matplotlib.cm as cm
@@ -9,6 +9,9 @@ from astropy.time import Time
 import astropy.units as u
 import argparse
 from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
@@ -37,14 +40,15 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     _, ptAZ, ptZA = mwa_alt_az_za(obsid)
     #ptAZ, _, ptZA = dbq.get_beam_pointing(obsid) # Az and ZA in degrees for obsid   
 
-    print "obs pointing: ({0}, {1})".format(ptAZ,ptZA)
+    logger.info("obs pointing: ({0}, {1})".format(ptAZ,ptZA))
 
-    xp,yp = pb.MWA_Tile_full_EE(np.radians(za), np.radians(az), obsfreq*1e6, delays=delays, zenithnorm=True, interp=True)
-    pattern = np.sqrt(xp**2+yp**2) # sum to get "total intensity"
+    xp,yp = pb.MWA_Tile_analytic(np.radians(za), np.radians(az), obsfreq*1e6, delays=delays, zenithnorm=True) #interp=True)
+    pattern = np.sqrt((xp+yp)/2.0).real # sum to get "total intensity"
+    logger.debug("Pattern: {0}".format(pattern))
     pmax = pattern.max()
     hpp = 0.5 * pmax # half-power point
-    print "tile pattern maximum: {0:.3f}".format(pmax)
-    print "tile pattern half-max: {0:.3f}".format(hpp)
+    logger.info("tile pattern maximum: {0:.3f}".format(pmax))
+    logger.info("tile pattern half-max: {0:.3f}".format(hpp))
     pattern[np.where(pattern < cutoff)] = 0 # ignore everything below cutoff 
 
     # figure out the fwhm
@@ -58,12 +62,12 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
 
     # figure out beam pattern value at target tracking points
     track_lines = []
-    print "beam power at target track points:"
+    logger.info("beam power at target track points:")
     for ta,tz in zip(targetAZ, targetZA):
-        xp, yp = pb.MWA_Tile_full_EE(np.radians([[tz]]), np.radians([[ta]]), obsfreq*1e6, delays=delays, zenithnorm=True, interp=False)
+        xp, yp = pb.MWA_Tile_analytic(np.radians([[tz]]), np.radians([[ta]]), obsfreq*1e6, delays=delays, zenithnorm=True) #interp=False
         bp = (xp + yp) / 2
         track_lines.append(bp[0])
-        print "({0:.2f},{1:.2f}) = {2:.3f}".format(ta, tz, bp[0][0])
+        logger.info("({0:.2f},{1:.2f}) = {2:.3f}".format(ta, tz, bp[0][0]))
 
     
     ## PLOTTING ##
@@ -82,6 +86,8 @@ Beam Pmax: {2:.3f}
 Beam half-Pmax: {3:.3f}
 """.format(obsid, obsfreq, pmax,hpp)
     axtxt.text(0.01, 0.5, infostr, verticalalignment='center')
+
+    logger.debug("az: {0}, za: {1}, pattern: {2}, pmax: {3}".format(az, za, pattern, pmax))
 
     # plot the actual beam patter over sky
     p = axP.contourf(az, za, pattern, 100, cmap=plt.get_cmap('gist_yarg'), vmax=pmax) # plot beam contours
@@ -124,6 +130,13 @@ Beam half-Pmax: {3:.3f}
 
 
 if __name__ == "__main__":
+
+    loglevels = dict(DEBUG=logging.DEBUG,
+                    INFO=logging.INFO,
+                    WARNING=logging.WARNING,
+                    ERROR = logging.ERROR)
+
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID")
     parser.add_argument("-f", "--freq", type=float, help="Observing frequency (MHz)")
@@ -131,8 +144,13 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--cutoff", type=float, help="Cut-off value for beam pattern [default: 0.1]", default=0.1)
     parser.add_argument("--ra", type=str, help="RAJ2000 of target")
     parser.add_argument("--dec", type=str, help="DECJ2000 of target")
-
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", choices=loglevels.keys(), default="INFO")
     args = parser.parse_args()
+    
+    #set log levels    
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])    
 
     # do the things
     plot_beam_pattern(args.obsid, args.freq, args.times, args.ra, args.dec, args.cutoff)

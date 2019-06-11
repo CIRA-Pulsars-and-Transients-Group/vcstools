@@ -1,10 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import sys
 import os, datetime, logging
 import sqlite3 as lite
 from optparse import OptionParser #NB zeus does not have argparse!
+import logging
 
+logger = logging.getLogger(__name__)
 DB_FILE = os.environ['CMD_VCS_DB_FILE']
 
 def dict_factory(cursor, row):
@@ -123,7 +125,8 @@ if __name__ == '__main__':
 
     if opts.mode == "s":
         vcs_row = database_script_start(opts.vcs_id, opts.command, opts.argument)
-        print vcs_row
+        #prints to standard out to be used by the end mode
+        print(vcs_row)
     elif opts.mode == "e":
         database_script_stop(opts.rownum, opts.errorcode)
     elif opts.mode == "vc" or opts.mode == "vs":
@@ -161,33 +164,31 @@ if __name__ == '__main__':
         
         
         if opts.mode == "vc": 
-            print 'Row# ','Obsid       ','Started               ','UserID       ','Arguments'
-            print '--------------------------------------------------------------------------------------------------'
+            print('{0:6} | {1:10} | {2:19} | {3:10} | {4}'.format('Row#',
+                  'Obsid','Started','UserID','Arguments'))
+            print('--------------------------------------------------------------'+\
+                  '------------------------------------')
 
             for row in rows:
-                if not ( (row['Rownum'] is None) or (row['Obsid'] is None) or (row['Started'] is None) or\
-                         (row['UserId'] is None) or (row['Arguments'] is None) ):
-                    print '%-5s' % (str(row['Rownum']).rjust(4)),
-                    print '%-12s' % (row['Obsid']),
-                    print '%-22s' % (row['Started'][:19]),
-                    print '%-13s' % (row['UserId'].ljust(10)),
-                    print row['Arguments']
-                    print "\n"
+                if not ( (row['Rownum'] is None) or (row['Obsid'] is None) or\
+                         (row['Started'] is None) or (row['UserId'] is None) or\
+                         (row['Arguments'] is None) ):
+                    print('{0:6d} | {1:10d} | {2:19.19} | {3:10} | {4}'.\
+                          format(row['Rownum'],row['Obsid'], 
+                                 row['Started'], row['UserId'],
+                                 row['Arguments']))
         if opts.mode == "vs":
-            print 'VCS# ','Command             ','Started               ','Ended                 ','Exit_Code','Arguments'
-            print '--------------------------------------------------------------------------------------------------'
+            print('{0:6} | {1:15} | {2:19} | {3:19} | {4:7} |{5}'.format('VCS#',
+                  'Command','Started','Ended', 'ExtCode','Arguments'))
+            print('-------------------------------------------------------'+\
+                  '-------------------------------------------')
 
             for row in rows:
                 if not ( (row['trackvcs'] is None) or (row['Command'] is None) or\
                          (row['Started'] is None) or (row['Ended'] is None) or\
                          (row['Exit'] is None) or (row['Arguments'] is None) ):
-                    print '%-5s' % (str(row['trackvcs']).rjust(4)),
-                    print '%-20s' % (row['Command']),
-                    print '%-22s' % (row['Started'][:19]),
-                    if row['Ended'] is None:
-                        print '%-22s' % (row['Ended']),
-                    else:
-                        print '%-22s' % (row['Ended'][:19]),
-                    print '%-5s' % (row['Exit']),
-                    print row['Arguments'],
-                    print "\n"
+                    print('{0:6d} | {1:15.15} | {2:19.19} | {3:19.19} | {4:7d} | {5}'.\
+                          format(row['trackvcs'], row['Command'], 
+                                 row['Started'], row['Ended'], 
+                                 row['Exit'], row['Arguments']))
+                    

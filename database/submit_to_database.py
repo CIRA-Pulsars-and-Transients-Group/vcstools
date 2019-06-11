@@ -49,6 +49,34 @@ class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
         text = _textwrap.dedent(self._whitespace_matcher.sub(' ', text).strip())
         return _textwrap.wrap(text, width)
 
+
+def send_cmd(cmd): 
+    output = subprocess.Popen(cmd.split(' '), stdin=subprocess.PIPE, 
+                              stdout=subprocess.PIPE, 
+                              stderr=subprocess.STDOUT).communicate()[0].decode() 
+    return output
+
+
+def get_pulsar_dm_p(pulsar):
+    #Gets the ra and dec from the output of PSRCAT
+    cmd = 'psrcat -c dm {}'.format(pulsar)
+    output = send_cmd(cmd)
+    lines = output.split('\n')
+    for l in lines[4:-1]:
+        columns = l.split()
+
+        if len(columns) > 1:
+            dm = columns[1]
+    cmd = 'psrcat -c p0 {}'.format(pulsar)
+    output = send_cmd(cmd)
+    lines = output.split('\n')
+    for l in lines[4:-1]:
+        columns = l.split()
+        if len(columns) > 1:
+            p = columns[1]
+    return [dm, p]
+
+
 def sex2deg( ra, dec):
     """
     sex2deg( ra, dec)
@@ -92,6 +120,23 @@ def get_from_bestprof(file_loc):
             profile[p] = orig_profile[p] - min_prof
         #maybe centre it around the pulse later        
     return [obsid, pulsar, dm, period, period_uncer,obslength, profile, bin_num]
+
+def get_from_ascii(file_loc):
+    with open(file_loc,"r") as f_ascii:
+        lines = f_ascii.readlines()
+
+        orig_profile = []
+        for l in lines[1:]:
+            orig_profile.append(float(l.split(" ")[-1]))
+        bin_num = len(orig_profile)
+        profile = np.zeros(bin_num)
+        min_prof = min(orig_profile)
+        for p in range(len(orig_profile)):
+            profile[p] = orig_profile[p] - min_prof
+        #maybe centre it around the pulse later        
+    return [profile, bin_num]
+
+
 
 
 def from_power_to_gain(powers,cfreq,n,incoh=False):
@@ -195,7 +240,7 @@ def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = Non
             enter, exit = fpio.beam_enter_exit(source_ob_power[0], time_obs)
             enter *= float(time_obs) 
             exit *= float(time_obs)
-            input_detection_time = exit - enter
+        input_detection_time = exit - enter
         if not int(input_detection_time) == int(time_detection):
             logger.warning("Input detection time does not equal the dectetion time of the .bestprof file")
             logger.warning("Input (metadata) time: " + str(input_detection_time))
@@ -318,7 +363,6 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     #gain uncertainty through beam position estimates
     RAs, Decs = sex2deg(ra_obs,dec_obs)
     Alts, Azs, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
-   
     theta = np.radians(Zas)
     
     u_gain_per = (1. - avg_power)*0.12 + (theta/90.)*(theta/90.)*2. + 0.1
@@ -542,8 +586,9 @@ if __name__ == "__main__":
         
     calcargs = parser.add_argument_group('Detection Calculation Options', 'All the values of a pulsar detection (such as flux density, width, scattering) can be calculated by this code using either a .besprof file or a soon to be implemented DSPSR equivalent and automatically uploaded to the MWA Pulsar Database. Analysis files can still be uploaded before this step but this will leave the pulsar values as nulls.')
     calcargs.add_argument('-b','--bestprof',type=str,help='The location of the .bestprof file. Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputting the observation ID and pulsar name.')
-    calcargs.add_argument('--start',type=str,help="The start time of the detection in seconds. For example if the detection begins at the start of the observation you would use --start 0. If this option isn't used, the code will calculate when the pulsar entered the beam", default = None)
-    calcargs.add_argument('--stop',type=str,help="The stop time of the detection in seconds. For example if the detection ended 60 minutes in use --end 600. If this option isn't used, the code will calculate when the pulsar exited the beam", default = None)
+    calcargs.add_argument('--ascii',type=str,help='The location of the ascii file (pulsar profile output of DSPSR). Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering).')
+    calcargs.add_argument('--start',type=float,help="The start time of the detection in seconds. For example if the detection begins at the start of the observation you would use --start 0. If this option isn't used, the code will calculate when the pulsar entered the beam", default = None)
+    calcargs.add_argument('--stop',type=float,help="The stop time of the detection in seconds. For example if the detection ended 60 minutes in use --end 600. If this option isn't used, the code will calculate when the pulsar exited the beam", default = None)
     calcargs.add_argument('--trcvr',type=str, default = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv", help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
 
     uploadargs = parser.add_argument_group('Upload Options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
@@ -616,6 +661,17 @@ if __name__ == "__main__":
         elif obsid is None:
             logger.error("Please use --obsid. Exiting")
             sys.exit(0)
+    elif args.ascii:
+        profile, num_bins = get_from_ascii(args.ascii)
+        if args.obsid:
+            obsid = args.obsid
+        if args.pulsar:
+            pulsar = args.pulsar
+        dm, period = get_pulsar_dm_p(pulsar)
+        period_uncer = float(period) / 10.**10 #assuming it's miniscule
+        time_detection = args.stop - args.start
+        bestprof_data = [obsid, pulsar, dm, period, period_uncer, time_detection, profile, num_bins]
+    
     elif args.obsid and args.pulsar:
         num_bins = 128 #used in dspsr calculations
         obsid = args.obsid
@@ -630,7 +686,7 @@ if __name__ == "__main__":
         logger.error("Please us either (--obsid and --pulsar) or --bestprof")
         quit()
         
-    if args.pulsar or args.bestprof:
+    if args.pulsar or args.bestprof or args.ascii:
         #Checks to see if the pulsar is already on the database
         pul_list_dict = client.pulsar_list(web_address, auth)
         pul_list_str = ''
@@ -662,6 +718,7 @@ if __name__ == "__main__":
     maxfreq = float(max(channels))
 
     bandwidth = 30720000. #In Hz
+    #bandwidth = 30720000. / 12. #In Hz
 
     #calc obstype
     if (maxfreq - minfreq) == 23:
@@ -670,7 +727,7 @@ if __name__ == "__main__":
         obstype = 2
 
 
-    if args.bestprof:
+    if args.bestprof or args.ascii:
         #Does the flux calculation and submits the results to the MWA pulsar database
         subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, incoh,
@@ -683,7 +740,7 @@ if __name__ == "__main__":
         args.calibration = zip_calibration_files(args.cal_dir_to_tar, args.cal_id, args.srclist)
 
 
-    if args.pulsar and not args.bestprof:  
+    if args.pulsar and not (args.bestprof or args.ascii):  
         #calc sub-bands
         subbands = 1
         for b in range(len(channels)):

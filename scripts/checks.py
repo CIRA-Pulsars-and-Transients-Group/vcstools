@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
 import subprocess, os, sys
@@ -68,7 +68,7 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
         logger.error("We have {0} files but expected {1}".format(files_in_dir, n_files_expected))
         error = True
     for line in output[1:]:
-        if 'file' in line:
+        if b'file' in line:
             logger.error(line)
             error = True
     if not error:
