@@ -8,8 +8,6 @@ The MWA Pulsar Database was created by David Pallot and he wrote the database ca
 
 This code is used to submit observations to the MWA Pulsar Database. The goal is to calculate all need values (flux density, width, scattering) for each observation and  submit them to the pulsar database without having to manually input them.
 """
-from __future__ import print_function
-
 __author__ = 'Nicholas Swainston'
 __date__ = '2016-05-12'
 
@@ -172,7 +170,10 @@ def get_Trec(tab,obsfreq):
 def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
     x = np.copy(data)
     oldstd = np.nanstd(x)
-    
+    #When the x[x<lolim] and x[x>hilim] commands encounter a nan it produces a 
+    #warning. This is expected because it is ignoring flagged data from a 
+    #previous trial so the warning is supressed.
+    old_settings = np.seterr(all='ignore') 
     for trial in range(ntrials):
         median = np.nanmedian(x)
 
@@ -186,10 +187,12 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
 
         if tollvl <= tol:
             logger.info("Took {0} trials to reach tolerance".format(trial+1))
+            np.seterr(**old_settings)
             return oldstd, x
 
-        if trial == ntrials:
+        if trial + 1 == ntrials:
             logger.warning("Reached number of trials without reaching tolerance level")
+            np.seterr(**old_settings)
             return oldstd, x
 
         oldstd = newstd
@@ -304,7 +307,7 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
 
 
 def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
-                        pul_ra, pul_dec, coh,
+                        pul_ra, pul_dec, coh, auth,
                         start = None, stop = None,
                         trcvr = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
@@ -729,7 +732,7 @@ if __name__ == "__main__":
     if args.bestprof or args.ascii:
         #Does the flux calculation and submits the results to the MWA pulsar database
         subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
-                            pul_ra, pul_dec, coh,
+                            pul_ra, pul_dec, coh, auth,
                             start = args.start, stop = args.stop, trcvr = args.trcvr)
 
     if args.cal_dir_to_tar:
