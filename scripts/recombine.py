@@ -12,7 +12,6 @@ import argparse
 logger = logging.getLogger(__name__)
 
 
-
 def usage(opts={}):
     logger.info("recombine.py -s <start time> -o <obsid> -w <working directory> -e <recombine executable>\n")
 
@@ -20,7 +19,7 @@ testsize = 327680000
 
 
 if __name__ == '__main__':
-
+    
     from sys import argv
 
     the_options = {'recombine': "recombine", 'start': int(0), 'root' : "./", 'obsid' : int(0), 'testit' : 0, 'skip' : " ", 'read_pfb' : 1}
@@ -37,17 +36,18 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--start", type=int, help="GPS time to test")
     parser.add_argument("-w", "--data_dir", type=str, help="Directory containing the raw data")
     parser.add_argument("-e", "--recombine", type=str, help="filename of the recombine function") 
+    parser.add_argument("-L", "loglvl". type=str, default="INFO", help="Logger verbosity level. Default: INFO")
 
     args = parser.parse_args()
     
-    #logger.setLevel(loglevels[args.loglvl])
-    #logger.setLevel(DEBUG)
-    #ch = logging.StreamHandler()
-    #ch.setLevel(loglevels[args.loglvl])
-    #ch.setLevel(DEBUG)
-    #formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    #ch.setFormatter(formatter)
-    #logger.addHandler(ch)
+    logger.setLevel(loglevels[args.loglvl])
+    logger.setLevel(DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+    ch.setLevel(DEBUG)
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
 
 
     """
@@ -87,8 +87,7 @@ if __name__ == '__main__':
     the_options["root"] = args.data_dir
     the_options["recombine"] = args.recombine
     
-    logger.info("Input Options:")
-    usage(the_options)
+    logger.debug("Input Options: {0}".format(the_options))
 
     if (the_options['start'] == 0):
         usage(the_options)
