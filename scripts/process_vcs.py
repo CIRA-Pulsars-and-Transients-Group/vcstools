@@ -369,7 +369,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
         recombine_batch = "recombine_{0}".format(time_to_get)
         check_batch = "check_recombine_{0}".format(time_to_get)
-        module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "numpy/1.13.3", "mwa-voltage/master, pytyon/3.6.3"]
+        module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3", "numpy/1.13.3", "mwa-voltage/master"]
         commands = []
         commands.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']))
         commands.append(database_vcs.add_database_function())
@@ -382,7 +382,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                         format(batch_dir+recombine_batch+".batch"))
         commands.append('run "{0}" "-m recombine -o {1} -w {2}/combined/ -b {3} -i {4}" "{5}"'.\
                         format(checks, obsid, data_dir, time_to_get, 
-                               process_nsecs, vcs_database_id))
+                               process_nsecs, vcs_database_id)) 
         commands.append("if [ $? -eq 1 ];then")
         commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))
         commands.append("fi")
@@ -393,8 +393,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                      outfile=batch_dir+check_batch+"_0.out",
                      queue='gpuq', export="NONE")
 
-        module_list = ["module switch PrgEnv-cray PrgEnv-gnu",
-                       "numpy", "mwa-voltage/master", "mpi4py", "cfitsio"]
+        module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3",
+                       "numpy/1.13.3", "mwa-voltage/master", "mpi4py", "cfitsio"]
         commands = []
         commands.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']))
         commands.append(database_vcs.add_database_function())

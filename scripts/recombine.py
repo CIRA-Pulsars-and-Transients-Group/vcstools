@@ -65,9 +65,7 @@ if __name__ == '__main__':
     rank = comm.Get_rank() 
     
     time_to_combine = the_options['start']+rank
-    #files_glob = "{0}/combined/{1}_{2}_ch*.dat" % (the_options['root'],the_options['obsid'],time_to_combine)
-    #Need to change the 
-    files_glob = "{0}/recombine_test_delete_this/{1}_{2}_ch*.dat".format(the_options['root'], the_options['obsid'], time_to_combine)
+    files_glob = "{0}/combined/{1}_{2}_ch*.dat".format(the_options['root'], the_options['obsid'], time_to_combine)
  
 
     broken = 24;
@@ -92,7 +90,7 @@ if __name__ == '__main__':
                 f.append(file_to_combine)
 
 
-        recombine_line = "{0} {1} -o {2} -t {3} -m {4}/{5}_metafits_ppds.fits -i {6}/recombine_test_delete_this -f ".format(the_options['recombine'],the_options['skip'],the_options['obsid'],time_to_combine,the_options['root'],the_options['obsid'],the_options['root'])
+        recombine_line = "{0} {1} -o {2} -t {3} -m {4}/{5}_metafits_ppds.fits -i {6}/combined -f ".format(the_options['recombine'],the_options['skip'],the_options['obsid'],time_to_combine,the_options['root'],the_options['obsid'],the_options['root'])
 
 
 
