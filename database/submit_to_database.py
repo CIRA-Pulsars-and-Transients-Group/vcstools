@@ -22,7 +22,6 @@ import math
 from scipy.interpolate import InterpolatedUnivariateSpline
 import glob
 import textwrap as _textwrap
-from requests.auth import HTTPBasicAuth
 
 #Astropy imports
 from astropy.table import Table
@@ -41,7 +40,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
-auth = HTTPBasicAuth('mwapulsar','veovys9OUTY=')
 
 class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
@@ -504,7 +502,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                flux = float("{0:.2f}".format(S_mean)),
                                flux_error = float("{0:.2f}".format(u_S_mean)),
                                width = float("{0:.2f}".format(w_equiv_ms)),
-                               width_erro = float("{0:.2f}".format(u_w_equiv_ms)),
+                               width_error = float("{0:.2f}".format(u_w_equiv_ms)),
                                scattering = float("{0:.5f}".format(scattering)), 
                                scattering_error = float("{0:.5f}".format(u_scattering)),
                                dm = float(dm))
@@ -580,7 +578,7 @@ if __name__ == "__main__":
     calcargs.add_argument('-b','--bestprof',type=str,help='The location of the .bestprof file. Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputting the observation ID and pulsar name.')
     calcargs.add_argument('--ascii',type=str,help='The location of the ascii file (pulsar profile output of DSPSR). Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering).')
     calcargs.add_argument('--start',type=float,help="The start time of the detection in seconds. For example if the detection begins at the start of the observation you would use --start 0. If this option isn't used, the code will calculate when the pulsar entered the beam", default = None)
-    calcargs.add_argument('--stop',type=float,help="The stop time of the detection in seconds. For example if the detection ended 60 minutes in use --end 600. If this option isn't used, the code will calculate when the pulsar exited the beam", default = None)
+    calcargs.add_argument('--stop',type=float,help="The stop time of the detection in seconds. For example if the detection ended 10 minutes in use --end 600. If this option isn't used, the code will calculate when the pulsar exited the beam", default = None)
     calcargs.add_argument('--trcvr',type=str, default = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv", help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
 
     uploadargs = parser.add_argument_group('Upload Options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
