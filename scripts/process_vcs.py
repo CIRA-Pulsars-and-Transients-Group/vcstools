@@ -369,7 +369,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
         recombine_batch = "recombine_{0}".format(time_to_get)
         check_batch = "check_recombine_{0}".format(time_to_get)
-        module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "numpy", "mwa-voltage/master"]
+        module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "numpy/1.13.3", "mwa-voltage/master, pytyon/3.6.3"]
         commands = []
         commands.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']))
         commands.append(database_vcs.add_database_function())
@@ -412,7 +412,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                         format(batch_dir+check_batch+".batch"))
         commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".\
                         format(batch_dir+check_batch+".batch"))
-        commands.append('run "srun --export=all python {0}" "-o {1} -s {2} -w {3} -e {4}" "{5}"'.\
+        commands.append('run "srun --export=all python3 {0}" "-o {1} -s {2} -w {3} -e {4}" "{5}"'.\
                         format(recombine, obsid, time_to_get, data_dir,
                                recombine_binary, vcs_database_id))
 

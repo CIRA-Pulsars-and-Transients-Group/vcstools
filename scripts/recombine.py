@@ -36,58 +36,23 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--start", type=int, help="GPS time to test")
     parser.add_argument("-w", "--data_dir", type=str, help="Directory containing the raw data")
     parser.add_argument("-e", "--recombine", type=str, help="filename of the recombine function") 
-    parser.add_argument("-L", "loglvl". type=str, default="INFO", help="Logger verbosity level. Default: INFO")
-
+    parser.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO", help="Logger verbosity level. Default: INFO")
     args = parser.parse_args()
     
     logger.setLevel(loglevels[args.loglvl])
-    logger.setLevel(DEBUG)
     ch = logging.StreamHandler()
     ch.setLevel(loglevels[args.loglvl])
-    ch.setLevel(DEBUG)
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
 
-    """
-    try:
-        opts, args = getopt.getopt(sys.argv[1:],"hce:o:s:tw:")
-        logger.debug("options: {0}".format(opts))
-        logger.debug("arguments: {0}".format(args))
-    except getopt.GetoptError:
-        usage(the_options)
-        sys.exit(-1)
-    finally:
-        if len(sys.argv) < 1:
-            usage(the_options)
-            sys.exit(-1)
-        
-    for opt,arg in opts:    
-    
-        if (opt == "-h"):
-            usage(the_options)
-        elif (opt == "-e"):
-            the_options['recombine'] = arg
-        elif (opt == "-s"):
-            the_options['start'] = int(arg)
-        elif (opt == "-t"):
-            the_options['testit'] = 1
-        elif (opt == "-o"):
-            the_options['obsid'] = int(arg)
-        elif (opt == "-w"):
-            the_options['root'] = arg
-        elif (opt == "-c"):
-            the_options['skip'] = "-c"
-            the_options['read_pfb'] = 0
-    """
     #Setting the_options to the arg inputs
     the_options["obsid"] = args.obsid
     the_options["start"] = args.start
     the_options["root"] = args.data_dir
     the_options["recombine"] = args.recombine
     
-    logger.debug("Input Options: {0}".format(the_options))
 
     if (the_options['start'] == 0):
         usage(the_options)
@@ -97,26 +62,33 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-
+    rank = comm.Get_rank() 
+    
     time_to_combine = the_options['start']+rank
     #files_glob = "{0}/combined/{1}_{2}_ch*.dat" % (the_options['root'],the_options['obsid'],time_to_combine)
     #Need to change the 
     files_glob = "{0}/recombine_test_delete_this/{1}_{2}_ch*.dat".format(the_options['root'], the_options['obsid'], time_to_combine)
  
+
     broken = 24;
     for to_check in sorted(glob.glob(files_glob)):
         file_statinfo = os.stat(to_check)
+        
+        
         if (file_statinfo.st_size == testsize):
             broken = broken-1
         else:    
             os.remove(to_check)
+    
+    logger.debug("Thread {0} :: Final broken check: {1}".format(rank, broken))
 
     if (broken > 0):
+        logger.info("Thread {0} :: Combining raw files".format(rank))
+        
         f=[]
         for vcs in range(1,17):
             for stream in [0,1]:
-                file_to_combine = "{0}_{1}_vcs{2}02_{3}1.dat ".format(the_options['obsid'],time_to_combine,vcs,stream)
+                file_to_combine = "{0}_{1}_vcs{2:0=2d}_{3}.dat ".format(the_options['obsid'],time_to_combine,vcs,stream)
                 f.append(file_to_combine)
 
 
@@ -136,7 +108,8 @@ if __name__ == '__main__':
 
         #with open(log_name, 'w') as log:
         #    subprocess.call(recombine_line,shell=True,stdout=log,stderr=log)
-
+    else:    
+        logger.warn("Combined files already present. Exiting.")
     comm.Barrier()
        
    
