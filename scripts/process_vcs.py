@@ -679,7 +679,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                         batch_dir=batch_dir, module_list=module_list,
                         slurm_kwargs={"time":secs_to_run, "nice":nice},
                         queue='gpuq', vcstools_version=vcstools_version, 
-                        submit=True, export="NONE", gpu_res=1)
+                        submit=True, export="NONE", gpu_res=1,
+                        cpu_threads=n_omp_threads, mem=4096)
             job_id_list.append(job_id)
         job_id_list_list.append(job_id_list)
         
