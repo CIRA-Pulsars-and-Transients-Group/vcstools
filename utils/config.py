@@ -38,7 +38,9 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'copyq_cluster' : 'farnarkle',
                  'copyq_partition' : 'skylake', #TODO check if there's a better one
                  'container_module' : 'singularity/latest',
-                 'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel_test.simg'}
+                 #removed since I've now installed it on Ozstar
+                 'container_command' : ''}
+                 #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'}
 
     
 import logging

@@ -673,7 +673,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
             commands.append("")
             for pointing in pointing_list:
                 mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
-                commands.append("mv *_{0}_{1}_ch*_00*fits ../{1}".format(obs_id, pointing))
+                commands.append("mv *_{0}_{1}_ch{2}_00*fits ../{1}".format(obs_id, pointing, coarse_chan))
 
             job_id = submit_slurm(make_beam_small_batch, commands,
                         batch_dir=batch_dir, module_list=module_list,
