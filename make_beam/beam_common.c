@@ -727,5 +727,5 @@ void dec2hms( char *out, double in, int sflag )
     }
     // Limiting the output's pointings' smallest significant figure to 
     // 0.01 arc seconds
-    sprintf( ptr, "%2.2d:%2.2d:%07.2f", h, m, s );
+    sprintf( ptr, "%2.2d:%2.2d:%05.2f", h, m, s );
 }
