@@ -569,8 +569,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         with open(metafile, 'r') as m:
             for line in m.readlines():
                 if line.startswith("channels"):
-                    chan_line = line[11:-1]
-                    channels = chan_line.split(",")
+                    channels = line.split(",")[1:]
         if channels == None:
             logger.info("Channels keyword not found in metafile. Re-querying "
                         "the database.")
@@ -680,7 +679,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                         slurm_kwargs={"time":secs_to_run, "nice":nice},
                         queue='gpuq', vcstools_version=vcstools_version, 
                         submit=True, export="NONE", gpu_res=1,
-                        cpu_threads=n_omp_threads, mem=4096)
+                        cpu_threads=n_omp_threads, mem=1024)
             job_id_list.append(job_id)
         job_id_list_list.append(job_id_list)
         
