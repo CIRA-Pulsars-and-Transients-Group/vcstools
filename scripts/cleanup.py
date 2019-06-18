@@ -1,13 +1,19 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import subprocess
 import sys
 import argparse
 import glob
 import re
-
+import logging
+logger = logging.getLogger(__name__)
 
 def opt_parser():
+    # Dictionary for choosing log-levels
+    loglevels = dict(DEBUG=logging.DEBUG,
+                     INFO=logging.INFO,
+                     WARNING=logging.WARNING)
+    beam_models = ['analytic', 'advanced', 'full_EE']
     parser = argparse.ArgumentParser(description="Tool for cleaning up after processing MWA Pulsar Data on Galaxy")
     parser.add_argument("-o", "--obs", type=int, default=None, help="Observation ID you want to process [no default]")
     parser.add_argument("--raw", action="store_true", default=False,
@@ -15,7 +21,8 @@ def opt_parser():
     parser.add_argument("--beamformed", action="store_true", default=False,
                         help="Add this option if you want to remove the recombined files for an observation")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
-    
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+                                    choices=loglevels.keys(), default="INFO")
     return parser.parse_args()
 
 def munlink_files(folder, file_type):
@@ -31,7 +38,7 @@ def munlink_files(folder, file_type):
         elif (authority == "N") or (authority ==  "n"):
             break
         else:
-            print "Unrecognized input option, please try again."
+            logger.error("Unrecognized input option, please try again.")
 
 
 def remove_raw(obs):
@@ -69,11 +76,11 @@ def remove_beamformed(obs,pointing=None):
         if (authority == "Y") or (authority == "y"):
             pointings = glob.glob("{0}/*:*:*:*:*")
             if not pointings:
-                print "No valid pointings in {0}. Exiting..."
+                logger.error("No valid pointings in {0}. Exiting...")
                 sys.exit(0)
             else:
                 for pointing in pointings:
-                    print "Checking if pointing {0} has been uploaded to MWA Pulsar Database...".format(pointing)
+                    logger.info("Checking if pointing {0} has been uploaded to MWA Pulsar Database...".format(pointing))
                     
             # Upload to MWA Pulsar Database if not there already
             # Remove each pointing
@@ -87,17 +94,25 @@ if __name__ == '__main__':
     if args.version:
         try:
             import version
-            print(version.__version__)
+            logger.info(version.__version__)
             sys.exit(0)
         except ImportError as ie:
-            print("Couldn't import version.py - have you installed vcstools?")
-            print("ImportError: {0}".format(ie))
+            logger.error("Couldn't import version.py - have you installed vcstools?")
+            logger.error("ImportError: {0}".format(ie))
             sys.exit(0)
     
+    # set up the logger for stand-alone execution
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
     if args.raw:
         remove_raw(args.obs)
     if args.beamformed:
-        print "Sorry, this option is not implemented yet :("
+        logger.error("Sorry, this option is not implemented yet :(")
 
 
 
