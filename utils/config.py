@@ -14,6 +14,7 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
                  'psrcat_module' : 'psrcat/1.59',
                  #'cpuq_cluster' : 'zeus',
                  #'cpuq_partition' : 'workq',
+                 #temporarily removed the cpu jobs off zeus because a lot of our software isn't installed on zeus
                  'cpuq_cluster' : 'galaxy',
                  'cpuq_partition' : 'gpuq',
                  'gpuq_cluster' : 'galaxy',
