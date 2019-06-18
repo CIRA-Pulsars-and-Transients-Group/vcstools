@@ -17,8 +17,11 @@ import matplotlib.path as mpath
 import matplotlib.patches as mpatches
 
 from mwa_pb import primary_beam
-from mwa_metadb_utils import getmeta
+from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata
+from find_pulsar_in_obs import get_beam_power_over_time
 
+import logging
+logger = logging.getLogger(__name__)
 
 def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
 
@@ -46,7 +49,8 @@ def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
         frequencies = [centrefreq]
 
     # Create arrays of the RAs and DECs to be sampled (already in degrees)
-    print "Constructing RA and DEC arrays for beam model..."
+    #print "Constructing RA and DEC arrays for beam model..."
+    logger.info("Constructing RA and DEC arrays for beam model...")
     RAs = np.array([x[0] for x in sources])
     Decs = np.array([x[1] for x in sources])
     if len(RAs) == 0:
@@ -62,7 +66,8 @@ def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
     # Make times to feed to Alt/Az conversion
     obstimes = Time(midtimes, format='gps', scale='utc')
 
-    print "Converting RA and DEC to Alt/Az and computing beam pattern..."
+    #print "Converting RA and DEC to Alt/Az and computing beam pattern..."
+    logger.info("Converting RA and DEC to Alt/Az and computing beam pattern...")
     for t, time in enumerate(obstimes):
         # Convert to Alt/Az given MWA position and observing time
         altaz = coords.transform_to(AltAz(obstime=time, location=mwa_location))
@@ -78,7 +83,8 @@ def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
             elif beam_model == "FEE":
                 rX, rY = primary_beam.MWA_Tile_full_EE(theta, phi, freq=freq, delays=delays, zenithnorm=True, power=True)
             else:
-                print "Unrecognised beam model '{0}'. Defaulting to 'analytic'."
+                #print "Unrecognised beam model '{0}'. Defaulting to 'analytic'."
+                logger.warning("Unrecognised beam model '{0}'. Defaulting to 'analytic'.")
                 rX, rY = primary_beam.MWA_Tile_analytic(theta, phi, freq=freq, delays=delays, zenithnorm=True, power=True)
 
             PowersX[:, t, f] = rX
@@ -91,7 +97,8 @@ def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
 
 
 def read_data(fname, delim=",", format="csv", coords=True):
-    print "reading from", fname
+    #print "reading from", fname
+    logger.info("reading from {0}".format(fname))
     # Read the data file as an Astropy Table
     tab = Table.read(fname, delimiter=delim, format=format)
 
@@ -181,7 +188,8 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
 
     obsids = read_data(obsfile, coords=False)["OBSID"]
     for obsid in obsids:
-        print "Accessing database for observation: {0}".format(obsid)
+        #print "Accessing database for observation: {0}".format(obsid)
+        logger.info("Accessing database for observation: {0}".format(obsid))
 
         # TODO: I think this process is now implemented in a function in mwa_metadb_utils, need to double check
         beam_meta_data = getmeta(service='obs', params={'obs_id': obsid})
@@ -197,46 +205,47 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
 
         metadata = [obsid, ra, dec, duration, delays, centrefreq, channels]
+        beam_meta_data, full_meta = get_common_obs_metadata(obsid, return_all = True)
 
         # Create a meshgrid over which to iterate
-        _RA = np.arange(0, 360, 3)
-        _Dec = np.arange(-89, 90, 3)
-        RA, Dec = np.meshgrid(_RA, _Dec)
+        Dec = [] ; RA = []
+        map_dec_range = np.arange(-89, 90, 3)
+        map_ra_range = np.arange(0, 360, 3)
+        for i in map_dec_range:
+            for j in map_ra_range:
+                Dec.append(i)
+                RA.append(j)
+        RADecIndex = np.arange(len(RA))
+        names_ra_dec = np.column_stack((RADecIndex, RA, Dec))
 
-        # Flatten the arrays, such that for each Dec, every RA is presented before moving on to the next Dec
-        RA = np.ravel(RA)
-        Dec = np.ravel(Dec)
+        #print "Creating beam patterns..."
+        time_intervals = 600 # seconds
 
-        print "Creating beam patterns..."
-        dt = 600
-        beam_pattern_power = get_beam_power(metadata, zip(RA, Dec))
-        final_pattern_power = []
+        powout = get_beam_power_over_time(beam_meta_data, names_ra_dec, dt=time_intervals, degrees=True)
+        z=[] ; x=[] ; y=[]
+        for c in range(len(RA)):
+            temppower = 0.
+            for t in range(powout.shape[1]):
+                power_ra = powout[c,t,0]
+                if power_ra > temppower:
+                    temppower = power_ra
+            z.append(temppower)
+            if RA[c] > 180:
+                x.append(-RA[c]/180.*np.pi+2*np.pi)
+            else:
+                x.append(-RA[c]/180.*np.pi)
 
-        # This currently just rotates the sky on the beam pattern as calculated in the middle of the 
-        # observation from the start to finish times. 
-        # TODO: We need to double check that this is doing the right thing...
-        for i in range(len(RA)): # for each point in the sky meshgrid
-            power = beam_pattern_power[i, 0, 0]
+            y.append(Dec[c]/180.*np.pi)
 
-            # Implement Earth rotation during the observation
-            # by rotating the powout array
-            for t in range(0, duration / dt):
-                rotated_pattern_power = np.roll(beam_pattern_power, t)
-                rotated_power =  rotated_pattern_power[i, 0, 0]
-                if rotated_power > power:
-                    power = rotated_power
+        nx=np.array(x) ; ny=np.array(y); nz=np.array(z)
 
-            final_pattern_power.append(power)
-
-        # Create RA and Dec arrays for plotting, using Astropy to wrap at correct RA
-        ra_dec = SkyCoord(RA, Dec, unit=(u.deg, u.deg))
-        wrapped_ra = -ra_dec.ra.wrap_at(180*u.deg).rad # negative because RA increases to the West
-        wrapped_dec = ra_dec.dec.wrap_at(180*u.deg).rad
-
-        print "Plotting beam pattern contours..."
+        #print "Plotting beam pattern contours..."
+        logger.info("Plotting beam pattern contours...")
         # Set vmin and vmax to ensure the beam patterns are on the same color scale
         # and plot the beam pattern contours on the map
-        c = ax.tricontour(wrapped_ra, wrapped_dec, final_pattern_power, levels=levels, cmap=cmap, vmin=levels.min(), vmax=levels.max(), zorder=1.3)
+
+        #c = ax.tricontour(wrapped_ra, wrapped_dec, final_pattern_power, levels=levels, cmap=cmap, vmin=levels.min(), vmax=levels.max(), zorder=1.3)
+        c = ax.tricontour(nx, ny, nz, levels=levels, cmap=cmap, vmin=levels.min(), vmax=levels.max(), zorder=1.3)
 
     # Make a figure color scale based on the contour sets (which all have the same max/min values
     fig.colorbar(c, fraction=0.02, pad=0.03, label="Zenith normalised power")
@@ -246,7 +255,8 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
     target_coords = read_data(targetfile)
     wrapped_target_ra = -target_coords.ra.wrap_at(180*u.deg).rad # negative because RA increases to the West
     wrapped_target_dec = target_coords.dec.wrap_at(180*u.deg).rad
-    print "Plotting target source positions..."
+    #print "Plotting target source positions..."
+    logger.info("Plotting target source positions...")
     ax.scatter(wrapped_target_ra, wrapped_target_dec, 10, marker="x", color="red", zorder=1.6, label="Target sources")
 
     xtick_labels = ["10h", "8h", "6h", "4h", "2h", "0h", "22h", "20h", "18h", "16h", "14h"]
