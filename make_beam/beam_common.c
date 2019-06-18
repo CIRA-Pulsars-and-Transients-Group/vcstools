@@ -713,18 +713,18 @@ void dec2hms( char *out, double in, int sflag )
 
     h = (int)in; in -= (double)h; in *= 60.0;
     m = (int)in; in -= (double)m; in *= 60.0;
-    if (m >= 60.0)
+    if (m >= 60)
     {
         // if minutes is 60 convert that to 1 hour
         h += 1;
-        m -= 60.0;
+        m -= 60;
     }
     s = in;
-    if (s >= 60.0)
+    if (s >= 59.995)
     {
-        // if secondssis 60 convert that to 1 minute
+        // if seconds is 60 convert that to 1 minute
         m += 1;
-        s -= 60.0;
+        s = 00.00;
     }
     if (sign==1 && sflag)
     {

@@ -641,8 +641,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
     job_id_list_list = []
     for pl, pointing_list in enumerate(pointing_list_list):
-        pointing_dir = "{0}/mb_temp_{1}_{2}".format(P_dir, pl, time_now)
-        mdir(pointing_dir, "Temp pointing dir mb_temp_{0}_{1}".format(pl, time_now))
         pointing_str = ",".join(pointing_list)
         # Run one coarse channel per node
         job_id_list = []
@@ -665,14 +663,13 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
             #commands.append("source /group/mwaops/PULSAR/psrBash.profile")
             #commands.append("module swap craype-ivybridge craype-sandybridge")
             commands.append(openmp_line)
-            commands.append("cd {0}".format(pointing_dir))
+            commands.append("cd {0}".format(P_dir))
             commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} -e {5} -a 128 -n 128 -f {6} {7} -d "
                             "{8}/combined -P {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(n_omp_threads, comp_config['container_command'], make_beam_cmd, obs_id, start,
                             stop, coarse_chan, jones_option, data_dir, pointing_str, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
             commands.append("")
             for pointing in pointing_list:
                 mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
-                commands.append("mv *_{0}_{1}_ch{2}_00*fits ../{1}".format(obs_id, pointing, coarse_chan))
 
             job_id = submit_slurm(make_beam_small_batch, commands,
                         batch_dir=batch_dir, module_list=module_list,

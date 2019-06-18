@@ -256,13 +256,14 @@ void populate_psrfits_header(
             int ch = atoi(rec_channel);
             if (is_coherent)
             {
-                sprintf(pf[p].basefilename, "%s_%s_%s_%s_ch%03d",
-                        pf[p].hdr.project_id, pf[p].hdr.source, pf[p].hdr.ra_str, 
-                        pf[p].hdr.dec_str, ch);
+                sprintf(pf[p].basefilename, "%s_%s/%s_%s_%s_%s_ch%03d",
+                        pf[p].hdr.ra_str, pf[p].hdr.dec_str,
+                        pf[p].hdr.project_id, pf[p].hdr.source, 
+                        pf[p].hdr.ra_str, pf[p].hdr.dec_str, ch);
             }
             else
             {
-                sprintf(pf[p].basefilename, "%s_%s_incoh_ch%03d",
+                sprintf(pf[p].basefilename, "../incoh/%s_%s_incoh_ch%03d",
                         pf[p].hdr.project_id, pf[p].hdr.source, ch);
             }
         }
