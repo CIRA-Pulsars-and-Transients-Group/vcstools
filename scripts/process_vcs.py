@@ -58,7 +58,7 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         logger.warning("This is hopefully a temporary measure.")
         #obsdownload = distutils.spawn.find_executable("obsdownload.py")
 
-        get_metafits = "wget http://mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
+        get_metafits = "wget http://ws.mwatelescope.org/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
         try:
             subprocess.call(get_metafits,shell=True)
         except:
