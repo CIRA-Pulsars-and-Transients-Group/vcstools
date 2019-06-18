@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 
 def get_common_obs_metadata(obs, return_all = False):
     """
-    Gets needed comon meta data from http://mwa-metadata01.pawsey.org.au/metadata/
+    Gets needed comon meta data from http://ws.mwatelescope.org/metadata/
     """
-    logger.info("Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obs))
+    logger.info("Obtaining metadata from http://ws.mwatelescope.org/metadata/ for OBS ID: " + str(obs))
     #for line in txtfile:
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
     #obn = beam_meta_data[u'obsname']
