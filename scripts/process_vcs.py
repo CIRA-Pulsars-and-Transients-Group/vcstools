@@ -16,6 +16,7 @@ from astropy.io import fits as pyfits
 from astropy.time import Time
 from reorder_chans import *
 from mdir import mdir
+import numpy as np
 import logging
 
 #vcstools functions
@@ -570,21 +571,25 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
             for line in m.readlines():
                 if line.startswith("channels"):
                     channels = line.split(",")[1:]
-        if channels == None:
+                    channels = np.array(channels, dtype=np.int)
+        if channels is None:
             logger.info("Channels keyword not found in metafile. Re-querying "
                         "the database.")
         else:
             metafile_exists = True
-            channels = [int(c) for c in channels]
+            #channels = [int(c) for c in channels]
     # Grabbing this from the calibrate section for now. This should be streamlined to call an external function (SET)
     if metafile_exists == False:
         logger.info("Querying the database for calibrator obs ID {0}...".\
                     format(obs_id))
         obs_info = meta.getmeta(service='obs', params={'obs_id': str(obs_id)})
         channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
-        with open(metafile, "wb") as m:
-            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(obs_id).encode())
-            m.write("channels,{0}".format(b",".join([str(c).encode() for c in channels])).encode())
+        with open(metafile, "w") as m:
+            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(obs_id))
+            m.write("channels,{0}".format(",".join([str(c) for c in channels])))
+    if len(channels) == 0:
+        logger.error("Error reading in channels: {0}. Exiting")
+        sys.exit(0)
     hichans = [c for c in channels if c>128]
     lochans = [c for c in channels if c<=128]
     lochans.extend(list(reversed(hichans)))
@@ -638,7 +643,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     # splits the pointing list into lists of length max_pointing
     pointing_list_list = list(chunks(pointing_list, max_pointing))
     time_now = str(datetime.datetime.now()).replace(" ", "_")
-
+    
     job_id_list_list = []
     for pl, pointing_list in enumerate(pointing_list_list):
         pointing_str = ",".join(pointing_list)
@@ -676,11 +681,12 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                         slurm_kwargs={"time":secs_to_run, "nice":nice},
                         queue='gpuq', vcstools_version=vcstools_version, 
                         submit=True, export="NONE", gpu_res=1,
-                        cpu_threads=n_omp_threads, mem=1024)
+                        cpu_threads=n_omp_threads,
+                        mem=comp_config['gpu_beamform_mem'])
             job_id_list.append(job_id)
         job_id_list_list.append(job_id_list)
         
-    return job_id_list
+    return job_id_list_list
 
 def database_command(args, obsid):
     DB_FILE = os.environ['CMD_VCS_DB_FILE']
