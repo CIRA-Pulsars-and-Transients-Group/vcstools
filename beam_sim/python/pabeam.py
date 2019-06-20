@@ -25,9 +25,13 @@ import os
 import sys
 from mpi4py import MPI
 import argparse
+import logging
+
 #from mwapy import ephem_utils,metadata
 from mwa_metadb_utils import getmeta
-from mwapy.pb import primary_beam as pb
+from mwa_pb import primary_beam as pb 
+
+logger = logging.getLogger(__name__)
 
 
 def get_delay_steps(obs):
@@ -261,7 +265,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                 array_factor_max = array_factor_power
     
             # calculate the tile beam at the given Az,ZA pixel
-            #tile_xpol,tile_ypol = pb.MWA_Tile_full_EE([[za]],[[az]],freq=obsfreq,delays=[delays,delays],power=True,zenithnorm=True,interp=False)
+            #tile_xpol,tile_ypol = pb.MWA_Tile_analytic([[za]],[[az]],freq=obsfreq,delays=[delays,delays],power=True,zenithnorm=True,interp=False)
             tile_xpol, tile_ypol = pb.MWA_Tile_analytic(za, az, freq=obsfreq, delays=delays, power=True, zenithnorm=True)
             tile_pattern = (tile_xpol + tile_ypol) / 2.0
             
@@ -275,11 +279,11 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
             # add this contribution to the beam solid angle
             omega_A += np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
 
-    print "worker {0}, array factor maximum = {1}".format(rank, array_factor_max)
+    logger.info("worker {0}, array factor maximum = {1}".format(rank, array_factor_max))
 
     # write a file based on rank of the process being used
     if write:
-        print "writing file from worker {0}".format(rank)
+        logger.info("writing file from worker {0}".format(rank))
         with open(oname.replace(".dat",".{0}.dat".format(rank)), 'w') as f:
             if rank == 0:
                 # if master process, write the header information first and then the data
@@ -297,7 +301,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                 f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0], res[1], res[2]))
         
     else:
-        print "worker {0} not writing".format(rank)
+        logger.warn("worker {0} not writing".format(rank))
 
     return omega_A
 
@@ -351,7 +355,9 @@ def parse_options(comm):
     parser.add_argument("--write",action='store_true',
                 help="""Write the beam pattern to disk when done calculating. 
                     If this option is not passed, you will just get a '.stats' files containing basic information about simulation parameters and the calculated gain.""")
-
+    
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbositylevel. Default: INFO", choices=loglevels.keys(), default="INFO")
+   
     args = None
     try:
         if comm.Get_rank() == 0:
@@ -365,8 +371,26 @@ def parse_options(comm):
 
     return args
 
+
+#dictionary for choosing log-levels
+loglevels = dict(DEBUG=logging.DEBUG,
+                 INFO=logging.INFO,
+                 WARNING=logging.WARNING,
+                 ERROR = logging.ERROR)
+
+
 args = parse_options(comm)
 
+logger.setLevel(loglevels[args.loglvl])
+ch = logging.StreamHandler()
+ch.setLevel(loglevels[args.loglvl])
+formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+
+
+logger.warn("WARNING: CURRENTLY USING ANALYTIC BEAM MODEL. FOR GREATER ACCURACY, PLEASE USE THE PYTHON 2 VERSION OF THIS SCRIPT.")
 
 # small calculations and data gathering from arguments is fine and won't run into trouble by having multiple processes do it simultaneously
 ra = str(args.target[0]).replace('"', '').replace("'", "")
@@ -383,19 +407,19 @@ else:
 
 # if the observation ID metafits file doesn't exist, get the master node to download it
 if rank == 0:
-    print "will use {0} processes".format(size)
-    print "gathering required data"
+    logger.info("will use {0} processes".format(size))
+    logger.info("gathering required data")
     os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir, args.obsid))
 
     # for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
-    print "getting delay steps from database"
+    logger.info("getting delay steps from database")
     if args.zenith:
         delays = [0] * 16
     else:
         delays = get_delay_steps(args.obsid)[4]
 
     # same for obs time, master reads and then distributes
-    print "getting times"
+    logger.info("getting times")
     if args.time is None:
         time = Time(get_obstime_duration(args.obsid)[0], format='gps', fdir=args.out_dir)
     else:
@@ -403,14 +427,14 @@ if rank == 0:
 
     # get the target azimuth and zenith angle in radians and degrees
     # these are defined in the normal sense: za = 90 - elevation, az = angle east of North (i.e. E=90)
-    print "getting source position"
+    logger.info("getting source position")
     if args.zenith:
         srcAz, srcZA, srcAz_deg, srcZA_deg = 0, 0, 0, 0
     else:
         srcAz, srcZA, srcAz_deg, srcZA_deg = getTargetAZZA(ra, dec, time)
 
     # get the tile locations from the metafits
-    print "getting tile locations from metafits file"
+    logger.info("getting tile locations from metafits file")
     xpos, ypos, zpos = getTileLocations(args.obsid, flags, fdir=args.out_dir)   
     if args.coplanar:
         zpos = np.zeros_like(xpos)
@@ -449,7 +473,7 @@ else:
 # now broadcast the data from the master to the slaves
 data = comm.bcast(data, root=0)
 if data:
-    print "broadcast received by worker {0} successfully".format(rank)
+    logger.info("broadcast received by worker {0} successfully".format(rank))
     delays = data['delays']
     time = data['time']
     xpos = data['x']
@@ -461,8 +485,8 @@ if data:
     targetZAdeg = data['targetZA_deg']
     za_chunk = data['za_arr'][rank]
 else:
-    print "broadcast failed to worker {0}".format(rank)
-    print "!!! ABORTING !!!"
+    logger.error("broadcast failed to worker {0}".format(rank))
+    logger.error("!!! ABORTING !!!")
     comm.Abort(errorcode=1)
 
 # wait for all processes to have recieved the data
@@ -494,34 +518,34 @@ if rank == 0:
     eff_area = args.efficiency * (c.value / args.freq)**2 * (4 * np.pi / result)
     gain = (1e-26) * eff_area / (2 * k_B.value)
     
-    print "==== Summary ===="
-    print "** Pointing **"
-    print "(RA, Dec)      : {0} {1}".format(ra, dec)
-    print "(Az, ZA) [rad] : {0:.3f} {1:.3f}".format(targetAZ, targetZA)
-    print "(Az, ZA) [deg] : {0:.3f} {1:.3f}".format(targetAZdeg, targetZAdeg)
-    print
-    print "** Time **"
-    print "GPS : {0}".format(time.gps)
-    print "UTC : {0}".format(time.iso)
-    print "MJD : {0}".format(time.mjd)
-    print
-    print "** Telescope parameters **"
-    print "Observation ID       : {0}".format(args.obsid)
-    print "Frequency            : {0} MHz".format(args.freq/1e6)
-    print "Radiation efficiency : {0}".format(args.efficiency)
-    print "Flagged tiles        : {0}".format(" ".join(flags))
-    print
-    print "** Simulation resolution **"
-    print "Theta (ZA) resolution    [deg] : {0}".format(tres)
-    print "                      [arcmin] : {0}".format(tres * 60)
-    print "Phi   (Az) resolution    [deg] : {0}".format(pres)
-    print "                      [arcmin] : {0}".format(pres * 60)
-    print
-    print "** Calculated quantities **"
-    print "Beam solid angle [steradians] : {0}".format(result)
-    print "Beam solid angle    [sq. deg] : {0}".format(np.degrees(np.degrees(result)))
-    print "Effective area          [m^2] : {0:.3f}".format(eff_area)
-    print "Effective gain         [K/Jy] : {0:.6f}".format(gain)
+    logger.info("==== Summary ====")
+    logger.info("** Pointing **")
+    logger.info("(RA, Dec)      : {0} {1}".format(ra, dec))
+    logger.info("(Az, ZA) [rad] : {0:.3f} {1:.3f}".format(targetAZ, targetZA))
+    logger.info("(Az, ZA) [deg] : {0:.3f} {1:.3f}".format(targetAZdeg, targetZAdeg))
+    logger.info("------------------------------------------")
+    logger.info("** Time **")
+    logger.info("GPS : {0}".format(time.gps))
+    logger.info("UTC : {0}".format(time.iso))
+    logger.info("MJD : {0}".format(time.mjd))
+    logger.info("------------------------------------------")
+    logger.info("** Telescope parameters **")
+    logger.info("Observation ID       : {0}".format(args.obsid))
+    logger.info("Frequency            : {0} MHz".format(args.freq/1e6))
+    logger.info("Radiation efficiency : {0}".format(args.efficiency))
+    logger.info("Flagged tiles        : {0}".format(" ".join(flags)))
+    logger.info("------------------------------------------")
+    logger.info("** Simulation resolution **")
+    logger.info("Theta (ZA) resolution    [deg] : {0}".format(tres))
+    logger.info("                      [arcmin] : {0}".format(tres * 60))
+    logger.info("Phi   (Az) resolution    [deg] : {0}".format(pres))
+    logger.info("                      [arcmin] : {0}".format(pres * 60))
+    logger.info("------------------------------------------")
+    logger.info("** Calculated quantities **")
+    logger.info("Beam solid angle [steradians] : {0}".format(result))
+    logger.info("Beam solid angle    [sq. deg] : {0}".format(np.degrees(np.degrees(result))))
+    logger.info("Effective area          [m^2] : {0:.3f}".format(eff_area))
+    logger.info("Effective gain         [K/Jy] : {0:.6f}".format(gain))
 
     
     if args.write:
