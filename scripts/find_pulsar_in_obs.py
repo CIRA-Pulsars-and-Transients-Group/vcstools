@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 """
 Author: Nicholas Swainston
@@ -43,6 +43,9 @@ from astropy.time import Time
 from mwa_pb import primary_beam
 from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata
 
+import logging
+logger = logging.getLogger(__name__)
+
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
     no = set(['N','no','n'])
@@ -54,7 +57,7 @@ def yes_no(answer):
         elif choice in no:
            return False
         else:
-           print "Please respond with 'yes' or 'no'\n"
+           logger.warning("Please respond with 'yes' or 'no'\n")
 
 
 def sex2deg( ra, dec):
@@ -112,18 +115,18 @@ def get_psrcat_ra_dec(pulsar_list = None, max_dm = None):
             for input_pulsar in pulsar_list:
                 cmd.append(input_pulsar)
         output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
-        if output.startswith("WARNING: PSR"):
-            print "Pulsar not on psrcat."
+        if output.startswith(b"WARNING: PSR"):
+            logger.error("Pulsar not on psrcat.")
             quit()
         temp = []
         
         #process output to extract parameters
-        pulsars = output.split('\n')
+        pulsars = output.split(b'\n')
         for pulsar in pulsars[4:-1]:
             data = pulsar.split()
             #skip empty rows
             if len(data) > 1:
-                temp.append([data[1]])
+                temp.append([data[1].decode()])
         if p == params[0]:
             pulsar_ra_dec=temp
         elif p == 'DM':
@@ -151,7 +154,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None, max_dm = None):
     """
     modes = ['Pulsar', 'FRB', 'GC', 'RRATs']
     if source_type not in modes:
-        print "Input source type not in known catalogues types. Please choose from: {0}".format(modes)
+        logger.error("Input source type not in known catalogues types. Please choose from: {0}".format(modes))
         return None
 
     #Download the catalogue from the respective website
@@ -165,7 +168,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None, max_dm = None):
         website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
         web_table = 'rratalog.txt'
     if source_type != 'Pulsar':
-        print "Downloading {0} catalogue from {1}".format(source_type, website)
+        logger.info("Downloading {0} catalogue from {1}".format(source_type, website))
         os.system('wget {0}'.format(website))
 
     #Get each source type into the format [[name, ra, dec]]
@@ -179,7 +182,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None, max_dm = None):
             data = []
             for l in lines[7:]:
                 ltemp = l.strip('<td>').split('</td>')
-                print ltemp
+                logger.info(ltemp)
                 if len(ltemp) > 2:
                     ratemp = ltemp[7].lstrip('<td>')
                     dectemp = ltemp[8].lstrip('<td>')
@@ -458,7 +461,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     """
     obsid, ra, dec, time, delays, centrefreq, channels = beam_meta_data
     names_ra_dec = np.array(names_ra_dec)
-    print "Calculating beam power for OBS ID: {0}".format(obsid)
+    logger.info("Calculating beam power for OBS ID: {0}".format(obsid))
 
     starttimes=np.arange(start_time,time+start_time,dt)
     stoptimes=starttimes+dt
@@ -481,7 +484,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         PowersY=np.zeros((len(names_ra_dec),
                              Ntimes,1))
         if centrefreq > 1e6:
-            print "centrefreq is greater than 1e6, assuming input with units of Hz."
+            logger.warning("centrefreq is greater than 1e6, assuming input with units of Hz.")
             frequencies=np.array([centrefreq])
         else:
             frequencies=np.array([centrefreq])*1e6
@@ -572,7 +575,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                                     option=beam, degrees=degrees_check))
             obsid_meta.append(beam_meta_data)
         else:
-            print('No raw voltage files for %s' % obsid)
+            logger.warning('No raw voltage files for %s' % obsid)
             obsid_to_remove.append(obsid)
     for otr in obsid_to_remove:
         obsid_list.remove(otr)
@@ -610,7 +613,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                         if cal_check:
                             #checks the MWA Pulsar Database to see if the obsid has been 
                             #used or has been calibrated
-                            print "Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid)
+                            logger.info("Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid))
                             cal_check_result = cal_on_database_check(obsid)
                             output_file.write(" {0}\n".format(cal_check_result))
                         else:
@@ -620,13 +623,13 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         for on, obsid in enumerate(obsid_list):
             out_name = "{0}_{1}_beam.txt".format(obsid,beam)
             duration = obsid_meta[on][3]
-            with open(out_name,"wb") as output_file:
+            with open(out_name,"w") as output_file:
                 output_file.write('#All of the sources that the {0} beam model calculated a power of {1} or greater for observation ID: {2}\n'.format(beam, min_power, obsid))
                 output_file.write('#Observation data :RA(deg): {0} DEC(deg): {1} Duration(s): {2}\n'.format(obsid_meta[on][1],obsid_meta[on][2],duration))
                 if cal_check:
                     #checks the MWA Pulsar Database to see if the obsid has been 
                     #used or has been calibrated
-                    print "Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid)
+                    logger.info("Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid))
                     cal_check_result = cal_on_database_check(obsid)
                     output_file.write("#Calibrator Availability: {0}\n".format(cal_check_result))
                 output_file.write('#Column headers:\n')
@@ -649,6 +652,10 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
 
 
 if __name__ == "__main__":
+    # Dictionary for choosing log-levels
+    loglevels = dict(DEBUG=logging.DEBUG,
+                     INFO=logging.INFO,
+                     WARNING=logging.WARNING)
     beam_models = ['analytic', 'advanced', 'full_EE']
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     description="""
@@ -658,6 +665,8 @@ if __name__ == "__main__":
     parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
     parser.add_argument('-b','--beam',type=str, default = 'analytic', help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
     parser.add_argument('-m','--min_power',type=float,help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3', default=0.3)
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+                                    choices=loglevels.keys(), default="INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
 
     #source options
@@ -687,18 +696,26 @@ if __name__ == "__main__":
             print("ImportError: {0}".format(ie))
             sys.exit(0)
 
+    # set up the logger for stand-alone execution
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
     #Parse options
     if args.in_cat and args.coords:
-        print "Can't use --in_cat and --coords. Please input your cooridantes using one method. Exiting."
+        logger.error("Can't use --in_cat and --coords. Please input your cooridantes using one method. Exiting.")
         quit()
     if args.obsid and args.FITS_dir:
-        print "Can't use --obsid and --FITS_dir at the same time. Exiting."
+        logger.error("Can't use --obsid and --FITS_dir at the same time. Exiting.")
         quit()
     if args.beam not in beam_models:
-        print "Unknown beam model. Please use one of {0}. Exiting.".format(beam_models)
+        logger.error("Unknown beam model. Please use one of {0}. Exiting.".format(beam_models))
         quit()
 
-    print "Gathering sources"
+    logger.info("Gathering sources")
     degrees_check = False
     if args.in_cat:
         names_ra_dec = []
@@ -729,12 +746,12 @@ if __name__ == "__main__":
                                      'recommened that you use --obs_for_source. Would '+\
                                      'you like to use --obs_for_source. (Y/n)')
         if args.obs_for_source:
-            print "Using option --obs_for_source"
+            logger.info("Using option --obs_for_source")
         else:
-            print "Not using option --obs_for_source"
+            logger.info("Not using option --obs_for_source")
     
     #get obs IDs
-    print "Gathering observation IDs"
+    logger.info("Gathering observation IDs")
     if args.obsid:
         obsid_list = args.obsid
     elif args.FITS_dir:
@@ -762,6 +779,6 @@ if __name__ == "__main__":
                         min_power = args.min_power, cal_check = args.cal_check,
                         all_volt = args.all_volt, degrees_check = degrees_check)
     
-    print "The code is complete and all results have been output to text files"
+    logger.info("The code is complete and all results have been output to text files")
 
 

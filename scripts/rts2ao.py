@@ -1,11 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import numpy as np
 from aocal import AOCal
 from astropy.io import fits
 import glob
 from reorder_chans import *
-from optparse import OptionParser
+import argparse
+import logging
+logger = logging.getLogger(__name__)
 
 def real2cmplx2x2mat(riririri):
     """
@@ -20,7 +22,7 @@ def real2cmplx2x2mat(riririri):
     """
     result = np.empty((2, 2,),dtype=np.complex128)
     for i in range(4):
-        result[i/2][i%2] = riririri[2*i] + riririri[2*i+1]*1j
+        result[i//2][i%2] = riririri[2*i] + riririri[2*i+1]*1j
     return result
 
 def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
@@ -36,25 +38,25 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
     # Get antenna reording from metafits file:
     f = fits.open(metafits)
     d = f[1].data
-    nants = f[1].header[4] / 2 # I THINK this is the number of antennas
+    nants = f[1].header[4] // 2 # I THINK this is the number of antennas
     ant_map = list(d.field('Antenna'))
     if "TileName" in f[1].header.values():
         tilenames = list(d.field('TileName'))
         ant_names = tilenames[0:-1:2]
     elif "Tile" in f[1].header.values():
         tilenames = list(d.field('Tile'))
-        ant_names = ["Tile{0:03d}".format(tilenames[i*2]) for i in range(len(tilenames)/2)]
+        ant_names = ["Tile{0:03d}".format(tilenames[i*2]) for i in range(len(tilenames)//2)]
     else:
-        print("Error: Antenna Name field not found")
+        logging.error(("Error: Antenna Name field not found"))
         exit()
-    ao_order  = [0 for i in range(len(ant_map)/2)]
-    for i in range(len(ant_map)/2):
+    ao_order  = [0 for i in range(len(ant_map)//2)]
+    for i in range(len(ant_map)//2):
         ao_order[ant_map[i*2]] = i
     chans = [int(f) for f in f[0].header['CHANNELS'].split(',')]
     ch_order = np.argsort(sfreq(chans))
-    print "Assuming RTS channel order: "
+    logger.info("Assuming RTS channel order: ")
     for i in range(len(ch_order)):
-        print "   GPUBOX {0:02d} == Channel {1:3d}".format(i+1, chans[ch_order[i]])
+        logger.info("   GPUBOX {0:02d} == Channel {1:3d}".format(i+1, chans[ch_order[i]]))
 
     # Assumptions:
     nintervals = 1
@@ -102,7 +104,7 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
 
                 ant_idx = ant_map[ant*2]
                 for pol in range(len(pol_map)):
-                    px = pol_map[pol]/2
+                    px = pol_map[pol]//2
                     py = pol_map[pol]%2
                     # Put in the Jones matrix TIMES the inverse of the reference Jones matrix
                     data[0,ant_idx,chan,pol] = G[py][px]
@@ -111,22 +113,45 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
     return new_aocal
 
 if __name__ == "__main__":
-
+    # Dictionary for choosing log-levels
+    loglevels = dict(DEBUG=logging.DEBUG,
+                     INFO=logging.INFO,
+                     WARNING=logging.WARNING)
     # Parse command line
-    parser = OptionParser(description="rts2ao.py is a tool for converting an RTS solution to an Offringa-style solution.")
+    parser=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                    description="rts2ao.py is a tool for converting an RTS solution to an Offringa-style solution.")
 
     # Add valid command line options
-    parser.add_option("-d", "--dir", metavar="DIR", default="./", help="Directory containing RTS solution files (DI_Jones...) [default=%default]")
-    parser.add_option("-m", "--metafits", type="string", default=None, help="Metafits file from which to determine antenna and channel order")
-    parser.add_option("-r", "--rts_glob", type="string", default="DI_JonesMatrices_node[0-9]*.dat", help="Filename globbing pattern for the RTS direction independent solution files [default=%default]")
-    parser.add_option("-o", "--outfile", type="string", default="calibration_solution.bin", help="Name of the file to write [default=%default]")
+    parser.add_argument("-d", "--dir", metavar="DIR", default="./", help="Directory containing RTS solution files (DI_Jones...)")
+    parser.add_argument("-m", "--metafits", type=str, default=None, help="Metafits file from which to determine antenna and channel order")
+    parser.add_argument("-r", "--rts_glob", type=str, default="DI_JonesMatrices_node[0-9]*.dat", help="Filename globbing pattern for the RTS direction independent solution files")
+    parser.add_argument("-o", "--outfile", type=str, default="calibration_solution.bin", help="Name of the file to write")
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+                                    choices=loglevels.keys(), default="INFO")
+    parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
+    args = parser.parse_args()
 
-    # Parse!
-    (opts, args) = parser.parse_args()
+    if args.version:
+        try:
+            import version
+            logger.info(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            logger.error("Couldn't import version.py - have you installed vcstools?")
+            logger.error("ImportError: {0}".format(ie))
+            sys.exit(0)
 
-    if not opts.metafits:
-        print "Metafits file required. [-m]"
+    # set up the logger for stand-alone execution
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+    if not args.metafits:
+        logging.error("Metafits file required. [-m]")
         quit()
 
-    ao = rtsfile(opts.metafits, opts.dir + '/' + opts.rts_glob)
-    ao.tofile(opts.outfile)
+    ao = rtsfile(args.metafits, args.dir + '/' + args.rts_glob)
+    ao.tofile(args.outfile)

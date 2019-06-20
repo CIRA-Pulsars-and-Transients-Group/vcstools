@@ -4,3 +4,7 @@ install/
 *~
 build_logs/
 *.pyc
+.cache/
+.eggs/
+dist/
+vcstools.egg-info/

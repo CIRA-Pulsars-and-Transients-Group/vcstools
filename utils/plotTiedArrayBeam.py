@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env python3 
+   
 import numpy as np
 from astropy.coordinates import EarthLocation, SkyCoord, AltAz
 from astropy import units as u
@@ -15,12 +15,15 @@ from mwa_metadb_utils import getmeta, mwa_alt_az_za
 import sys
 import argparse
 
+import logging
+logger = logging.getLogger(__name__) 
 
 def get_obs_metadata(obs):
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
     channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
     freqs = [float(c)*1.28 for c in channels]
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    pythodelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
     ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
     pointing_EL, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
 
@@ -82,16 +85,16 @@ def load_data(fname):
 
 def plot_beam(obs, fname, target, freq, time):
 
-    print "Getting observation metadata"
+    logger.info("Getting observation metadata")
     metadata = get_obs_metadata(obs)
     
-    print "Loading data from file (this may take a while...)"
+    logger.info("Loading data from file (this may take a while...)")
     theta, phi, beam = load_data(fname)
     
-    print "Re-normalising beam-pattern"
+    logger.info("Re-normalising beam-pattern")
     az, za = np.meshgrid(np.radians(sorted(set(phi))), np.radians(sorted(set(theta))))
     delays = [metadata['xdelays'], metadata['ydelays']]
-    gx, gy = pb.MWA_Tile_full_EE(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
+    gx, gy = pb.MWA_Tile_analytic(za, az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
     tile_beam = (gx + gy) / 2.0
 
     # re-normalise tied-array beam to 1 at maximum and then apply tile beam
@@ -115,15 +118,15 @@ def plot_beam(obs, fname, target, freq, time):
     ax = fig.add_subplot(111, polar=True, aspect='equal')
 
     # plot the beam pattern
-    print "Plotting beam pattern (this may take a while, too...)"
+    logger.info("Plotting beam pattern (this may take a while, too...)")
     cf_levels = np.linspace(lower_contour, upper_contour, num=20)
     cf_levels_log = np.logspace(np.log10(lower_contour), np.log10(upper_contour), num=20)
-    print "     contour levels: max,min = ", cf_levels.max(), cf_levels.min()
+    logger.info("     contour levels: max,min = {0}, {1}".format(cf_levels.max(), cf_levels.min()))
     cf_cmap = plt.get_cmap('gray_r')
-    print "     beam levels: max,min = ", beam.max(), beam.min()
+    logger.info("     beam levels: max,min = {0},{1}".format( beam.max(), beam.min()))
     
     #sys.exit()
-    print "     plotting tied-array beam pattern contours"
+    logger.info("     plotting tied-array beam pattern contours")
     #cf_norm = LogNorm(vmin=cf_levels.min(), vmax=beam.max())
     #cf = ax.tricontourf(np.radians(phi), np.radians(theta), beam, cmap=cf_cmap, norm=cf_norm, levels=cf_levels)
     cf = ax.tricontourf(np.radians(phi), np.radians(theta), beam, cmap=cf_cmap, levels=cf_levels)
@@ -131,7 +134,7 @@ def plot_beam(obs, fname, target, freq, time):
     cf.cmap.set_under('white')
 
     # color bar setup
-    print "     assigning colorbar"
+    logger.info("     assigning colorbar")
     cbar_levels = np.linspace(fill_min, fill_max, num=6)
     cbar_levels_log = np.logspace(np.log10(fill_min), np.log10(fill_max), num=6)
     cbar = plt.colorbar(cf, shrink=0.9, pad=0.08)
@@ -141,24 +144,24 @@ def plot_beam(obs, fname, target, freq, time):
     cbar.ax.tick_params(labelsize=18)
    
     # plot the pointing centre
-    print "     plotting observation pointing centre"
+    logger.info("     plotting observation pointing centre")
     ax.plot(np.radians(metadata["az"]), np.radians(metadata["za"]), ls="", marker="+", ms=8, color='cyan', zorder=1002, label="pointing centre")
 
     # plot the target position on sky
     if target is not None:
-        print "     plotting target position"
+        logger.info("     plotting target position")
         target_az = target.altaz.az.rad
         target_za = np.pi/2 - target.altaz.alt.rad
 
         # get beam power for target
-        bpt_x, bpt_y = pb.MWA_Tile_full_EE([[target_za]], [[target_az]], freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
+        bpt_x, bpt_y = pb.MWA_Tile_analytic(target_za, target_az, freq=freq*1e6, delays=delays, power=True, zenithnorm=True)
         bpt = (bpt_x + bpt_y) / 2.0
         lognormbpt = log_normalise(bpt, cf_levels.min(), beam.max())
-        print "Beam power @ source:",bpt[0][0]
-        print "log-normalised:",lognormbpt[0][0]
+        logger.info("Beam power @ source: {0}".format(bpt))
+        logger.info("   log-normalised: {0}".format(lognormbpt))
 
         # plot the target position on sky
-        ax.plot(target_az, target_za, ls="", marker="o", color='C3', zorder=1002, label="target ({0:.2f})".format(bpt[0][0]))
+        ax.plot(target_az, target_za, ls="", marker="o", color='C3', zorder=1002, label="   target: )".format(bpt))
 
         # plot the target on the color bar
         cbar.ax.plot(0.5, lognormbpt, color='C3', marker="o")
@@ -179,7 +182,7 @@ def plot_beam(obs, fname, target, freq, time):
     # title
     ax.set_title("MWA tied-array beam\naz = {0:.2f}, za = {1:.2f}, freq = {2:.2f}MHz\n{3}".format(metadata["az"], metadata["za"], freq, time.iso))
 
-    print "Saving figure"
+    logger.info("Saving figure")
     #plt.savefig("{0}_{1:.2f}MHz_tabeam.eps".format(obs, freq), bbox_inches="tight", format="eps")
     plt.savefig("{0}_{1:.2f}MHz_tabeam.png".format(obs, freq), bbox_inches="tight")
 
@@ -187,6 +190,13 @@ def plot_beam(obs, fname, target, freq, time):
 
 
 if __name__ == "__main__":
+
+    #dictionary for choosing log-levels
+    loglevels = dict(DEBUG=logging.DEBUG,
+                    INFO=logging.INFO,
+                    WARNING=logging.WARNING,
+                    ERROR = logging.ERROR)
+
     parser = argparse.ArgumentParser(description="Plotting tool for the tied-array beam simulations")
 
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID ", required=True)
@@ -196,14 +206,21 @@ if __name__ == "__main__":
     parser.add_argument("--dec", type=str, help="Target DEC (J2000)")
     parser.add_argument("--gps", type=int, help="Time at which to evaluate target position (GPS seconds)")
     parser.add_argument("--utc", type=str, help="Time at which to evaluate target position (YYYY-MM-DDThh:mm:ss.ss UTC)")
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", choices=loglevels.keys(), default="INFO")
     args = parser.parse_args()
+
+    #set log levels
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+
 
     if args.gps and not args.utc:
         time = Time(args.gps, format="gps")
     elif args.utc and not args.gps:
         time = Time(args.utc, scale="utc", format="isot")
     elif args.gps and args.utc:
-        print "You supplied GPS and UTC times: only using GPS time"
+        logger.warn("You supplied GPS and UTC times: only using GPS time")
         time = Time(args.gps, format="gps")
     else:
         time = None
@@ -211,7 +228,7 @@ if __name__ == "__main__":
     if args.ra and args.dec and time:
         target = compute_target_position(args.ra, args.dec, time)
     else:
-        print "No target RA, Dec or Time given. Not plotting target position."
+        logger.warn("No target RA, Dec or Time given. Not plotting target position.")
         target = None
 
 
