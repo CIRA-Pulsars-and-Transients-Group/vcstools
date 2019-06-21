@@ -200,7 +200,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         if "module switch" in m:
             # if a module switch command is included rather than just a module name, then add it to a separate list
             switches.append(m)
-        elif "module use" in m:
+        elif "module" in m:
             modules.append("{0}\n".format(m))
         else:
             modules.append("module load {0}\n".format(m))
