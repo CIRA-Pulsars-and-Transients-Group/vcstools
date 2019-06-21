@@ -4,9 +4,9 @@
 import numpy as np
 import struct, os, logging
 from collections import namedtuple
-HEADER_FORMAT = "8s6I2d"
+HEADER_FORMAT = b"8s6I2d"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
-HEADER_INTRO = "MWAOCAL\0"
+HEADER_INTRO = b"MWAOCAL\0"
 
 Header = namedtuple("header", "intro fileType structureType intervalCount antennaCount channelCount polarizationCount timeStart timeEnd")
 Header.__new__.__defaults__ = (HEADER_INTRO, 0, 0, 0, 0, 0, 0, 0.0, 0.0)
@@ -67,7 +67,7 @@ class AOCal(np.ndarray):
             # required to avoid infinite recursion
             return object.__getattribute__(self, time_end)
         else:
-            raise AttributeError, "AOCal has no Attribute %s. Dimensions can be accessed via n_int, n_ant, n_chan, n_pol" % name
+            raise AttributeError("AOCal has no Attribute %s. Dimensions can be accessed via n_int, n_ant, n_chan, n_pol" % name)
 
     def strip_edge(self, n_chan):
         """
@@ -79,7 +79,7 @@ class AOCal(np.ndarray):
 
     def tofile(self, cal_filename):
         if not (np.iscomplexobj(self) and self.itemsize == 16 and len(self.shape) == 4):
-            raise TypeError, "array must have 4 dimensions and be of type complex128"
+            raise TypeError("array must have 4 dimensions and be of type complex128")
         header = Header(intervalCount=self.shape[0], antennaCount = self.shape[1], channelCount = self.shape[2], polarizationCount = self.shape[3], timeStart = self.time_start, timeEnd = self.time_end)
         with open(cal_filename, "wb") as cal_file:
             header_string = struct.pack(HEADER_FORMAT, *header)
@@ -91,7 +91,7 @@ class AOCal(np.ndarray):
 
     def fit(self, pols=(0, 3), mode='model', amp_order=5):
         if not (np.iscomplexobj(self) and self.itemsize == 16 and len(self.shape) == 4):
-            raise TypeError, "array must have 4 dimensions and be of type complex128"
+            raise TypeError("array must have 4 dimensions and be of type complex128")
         fit_array = np.zeros(self.shape, dtype=np.complex128)
         for interval in xrange(self.shape[0]):
             for antenna in xrange(self.shape[1]):

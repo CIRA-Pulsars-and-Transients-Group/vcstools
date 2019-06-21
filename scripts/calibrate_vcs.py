@@ -336,9 +336,9 @@ class BaseRTSconfig(object):
 
         # use the same operations as in timeconvert.py for our specific need
         logger.info("Converting times with astropy")
-        mwa_loc = EarthLocation.of_site('Murchison Widefield Array')
-        
-        # Astropy formating
+        #mwa_loc = EarthLocation.of_site('Murchison Widefield Array')
+        mwa_loc = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8) 
+        #Astropy formating
         utctime = strptime(self.utctime, '%Y%m%d%H%M%S')
         a_time = strftime('%Y-%m-%dT%H:%M:%S', utctime)
         obstime = Time(a_time, format='fits', scale='utc', location=mwa_loc)
@@ -647,7 +647,7 @@ class RTScal(object):
         rts_batch = "RTS_{0}".format(self.cal_obsid)
         slurm_kwargs = {"partition": "gpuq",
                         "workdir": "{0}".format(self.rts_out_dir),
-                        "time": "00:20:00",
+                        "time": "2:00:00",
                         "nodes": "{0}".format(nnodes),
                         "gres": "gpu:1",
                         "ntasks-per-node": "1"}
@@ -829,7 +829,7 @@ class RTScal(object):
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
             slurm_kwargs = {"partition": "gpuq",
                             "workdir": "{0}".format(self.rts_out_dir),
-                            "time": "00:45:00",
+                            "time": "2:00:00",
                             "nodes": "{0}".format(nnodes),
                             "gres": "gpu:1",
                             "ntasks-per-node": "1"}

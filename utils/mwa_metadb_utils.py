@@ -25,7 +25,8 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
         sky_posn = SkyCoord(ra, dec, unit=(u.deg,u.deg))
     else:
         sky_posn = SkyCoord(ra, dec, unit=(u.hourangle,u.deg)) 
-    earth_location = EarthLocation.of_site('Murchison Widefield Array') 
+    #earth_location = EarthLocation.of_site('Murchison Widefield Array') 
+    earth_location = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8) 
     altaz = sky_posn.transform_to(AltAz(obstime=obstime, location=earth_location)) 
     Alt = altaz.alt.deg
     Az  = altaz.az.deg 
@@ -39,9 +40,9 @@ logger = logging.getLogger(__name__)
 
 def get_common_obs_metadata(obs, return_all = False):
     """
-    Gets needed comon meta data from http://mwa-metadata01.pawsey.org.au/metadata/
+    Gets needed comon meta data from http://ws.mwatelescope.org/metadata/
     """
-    logger.info("Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obs))
+    logger.info("Obtaining metadata from http://ws.mwatelescope.org/metadata/ for OBS ID: " + str(obs))
     #for line in txtfile:
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
     #obn = beam_meta_data[u'obsname']

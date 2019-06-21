@@ -1,31 +1,31 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import numpy as np
 from astropy.time import Time
 import argparse
 import sys
 import os
+import logging
 
+logger = logging.getLogger(__name__)
 
 pabeam_sbatch_header = """#!/bin/bash -l
 #SBATCH --export=NONE
 #SBATCH --account=mwaops
-#SBATCH --gid=mwaops
 #SBATCH --cluster=galaxy
-#SBATCH --partition=workq
+#SBATCH --partition=gpuq
 #SBATCH --nodes={nodes}
-#SBATCH --ntasks={nprocesses}
+#SBATCH --ntasks-per-node={nprocesses}
 #SBATCH --cpus-per-task=1
 #SBATCH --time=12:00:00
 #SBATCH --output=make_pabeam_{obsid}_{time}_{freq:.2f}MHz_%j.out
 
-module load python/2.7.14
+module load python/3.6.3
 module load argparse
-module load numpy
+module load numpy/1.13.3
 module load astropy
 module load mpi4py
 module use /group/mwa/software/modulefiles
-module load MWA_Tools/mwa-sci  # for tile beam models
 module load vcstools/master
 """
 
@@ -43,7 +43,7 @@ odir="{odir}"
 pabeam=/group/mwa/software/vcstools/vcstools/beam_sim/python/pabeam.py
 """
 
-pabeam_base_cmd = """srun --export=all -u -n ${nprocesses} python ${pabeam} -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"""
+pabeam_base_cmd = """srun --export=all -u -n ${nprocesses} python3 ${pabeam} -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"""
 
 pabeam_concat_cmd= """BASENAME={0} # base name of the output files (everything before the .[rank].dat)
 FNAME={1} # name of output file
@@ -72,11 +72,10 @@ fi
 showspec_sbatch_header = """#!/bin/bash -l
 #SBATCH --export=NONE
 #SBATCH --account=mwaops
-#SBATCH --gid=mwaops
 #SBATCH --cluster=galaxy
-#SBATCH --partition=workq
+#SBATCH --partition=gpuq
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
 #SBATCH --time=3:00:00
 #SBATCH --output={outfile}
 
@@ -120,7 +119,7 @@ def write_batch_files(tmin, tmax, step, thetares, phires, nnodes, ra, dec, obsid
     times = np.arange(tmin, tmax, step=step)
     times = np.append(times, tmax)
 
-    nprocesses = 20 * nnodes
+    nprocesses = 8 * nnodes
     flags = " ".join(flaggedtiles)
 
     if write:
@@ -187,6 +186,13 @@ def write_showspec_batch(time, obsid, ra, dec, freq, ntheta, nphi, infile, maplo
 
 
 if __name__ == "__main__":
+
+    loglevels = dict(DEBUG=logging.DEBUG,
+                    INFO=logging.INFO,
+                    WARNING=logging.WARNING,
+                    ERROR = logging.ERROR)
+
+
     # Argument parsing
     parser = argparse.ArgumentParser(description="Simple script to help write the batch scripts required for running the tied-array beam simulations over multiple epochs")
 
@@ -208,8 +214,20 @@ if __name__ == "__main__":
 
     parser.add_argument("--write", action='store_true', help="Write output files to disk")
     parser.add_argument("--odir", type=str, help="Output directory")
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", choices=loglevels.keys(), default="INFO")
+
+
 
     args = parser.parse_args()
+
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    logger.warn("FULL_EE BEAM MODEL NOT AVAILABLE IN PYTHON 3 YET. ANALYTIC BEAM MODEL WILL BE USED. FOR GREATER ACCURACY PLEASE USE PYTHON 2 VRESION.")
 
     write_batch_files(args.tmin, args.tmax, args.step, args.thetares, args.phires, 
                       args.nodes, args.ra, args.dec, args.obsid, args.freq, args.eff, args.flagged,
