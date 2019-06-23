@@ -279,7 +279,8 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
         quit()
 
     #rts.in
-    if not os.path.isfile("{0}/rts_{1}.in".format(base_dir, cal_obsid)):
+    rts_files = glob.glob("{0}/rts_{1}*.in".format(base_dir, cal_obsid))
+    if len(rts_files) == 0:
         logger.error("No rts in file. Exiting")
         quit()
 
@@ -295,9 +296,10 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
         out.add(bf, arcname=bf.split("/")[-1])
     for DIJ in DIJ_files:
         out.add(DIJ, arcname=DIJ.split("/")[-1])
+    for rts in rts_files:
+        out.add(rts, arcname=rts.split("/")[-1])
     out.add("{0}/flagged_channels.txt".format(base_dir), arcname="flagged_channels.txt")
     out.add("{0}/flagged_tiles.txt".format(base_dir), arcname="flagged_tiles.txt")
-    out.add("{0}/rts_{1}.in".format(base_dir, cal_obsid), arcname="rts_{0}.in".format(cal_obsid))
     out.add(source_file, arcname=source_file.split("/")[-1])
     out.close()
 
