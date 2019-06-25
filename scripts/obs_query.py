@@ -14,7 +14,6 @@ def print_info(obs_id, out_dir):
 
     obsinfo = getmeta(service='obs', params={'obs_id':str(obs_id)})
     logger.info("Obs ID: {0}".format(obs_id))
-    print(obsinfo.keys())
     #See if OBS ID is valid. If not, exit
     try:
         logger.info("Observation Name: {0}".format(obsinfo['obsname']))
