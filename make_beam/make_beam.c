@@ -501,6 +501,7 @@ int main(int argc, char **argv)
         // Calc section
         if (thread_no == 1)
         {
+            int write_array_check = 1;
             //fprintf( stderr, "Calc  section start on thread: %d\n", thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
@@ -526,7 +527,6 @@ int main(int argc, char **argv)
 
                 // Waits until it can start the calc
                 exit_check = 0;
-                int write_array_check = 0;
                 while (1)
                 {
                     #pragma omp critical (calc_queue)
@@ -537,19 +537,23 @@ int main(int argc, char **argv)
                         // Rest of the checks. Checking if output memory is ready to be changed
                         else if (read_check[file_no] == 1) 
                         {    
+                            write_array_check = 1;
                             // Loop through each pointing's write_check
                             for (int pc=0; pc<npointing; pc++)
                             {   
-                                if (write_check[file_no - 2][pc] == 0)
-                                    // Not complete so changing check to true
-                                    write_array_check = 1;
+                                if (write_check[file_no - 2][pc] == 0) 
+                                {
+                                    // Not complete so changing check to False
+                                    write_array_check = 0;
+                                }
                             }
-                            if (write_array_check == 0) exit_check = 1;
+                            if (write_array_check == 1) exit_check = 1;
                         }
                     }
                     if (exit_check == 1) break; 
                 }
                 clock_t start = clock();
+                fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime, file_no+1, nfiles);
                 // Get the next second's worth of phases / jones matrices, if needed
                 // fprintf( stderr, "[%f]  Calculating delays\n", NOW-begintime);
                 // TODO This should be fine for now but may need to manage this better for multipixel
@@ -566,7 +570,6 @@ int main(int argc, char **argv)
                         complex_weights_array,  // complex weights array (answer will be output here)
                         invJi );                // invJi array           (answer will be output here)
 
-                fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime, file_no+1, nfiles);
 
                 /*for (i = 0; i < npointing * nchan * outpol_coh * opts.sample_rate; i++)
                     data_buffer_coh[i] = 0.0;
