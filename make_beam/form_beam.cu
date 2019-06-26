@@ -393,12 +393,16 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
 
         // Flatten the bandpass 
         if ( p == 0 )
+        {
             flatten_bandpass_I_kernel<<<1, nchan, 0, streams[p]>>>(g->d_incoh,
                                                      opts->sample_rate);
+            gpuErrchk( cudaPeekAtLastError() );
+        }
         // Now do the same for the coherent beam
         dim3 chan_stokes(nchan, outpol_coh);
         flatten_bandpass_C_kernel<<<npointing, chan_stokes, 0, streams[p]>>>(g->d_coh, 
                                                                opts->sample_rate);
+        gpuErrchk( cudaPeekAtLastError() );
     }
     gpuErrchk( cudaDeviceSynchronize() );
     
