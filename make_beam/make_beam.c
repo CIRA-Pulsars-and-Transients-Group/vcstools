@@ -553,10 +553,8 @@ int main(int argc, char **argv)
                     if (exit_check == 1) break; 
                 }
                 clock_t start = clock();
-                fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime, file_no+1, nfiles);
                 // Get the next second's worth of phases / jones matrices, if needed
-                // fprintf( stderr, "[%f]  Calculating delays\n", NOW-begintime);
-                // TODO This should be fine for now but may need to manage this better for multipixel
+                fprintf( stderr, "[%f]  Calculating delays\n", NOW-begintime);
                 get_delays(
                         pointing_array,     // an array of pointings [pointing][ra/dec][characters]
                         npointing,          // number of pointings
@@ -576,6 +574,7 @@ int main(int argc, char **argv)
 
                 for (i = 0; i < npointing * nchan * outpol_incoh * opts.sample_rate; i++)
                     data_buffer_incoh[i] = 0.0;*/
+                fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime, file_no+1, nfiles);
                 
                 #ifdef HAVE_CUDA
                 cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,

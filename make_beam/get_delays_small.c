@@ -185,112 +185,126 @@ void get_delays(
     int ch;      // Channel number
     int p1, p2;  // Counters for polarisation
 
+    int conjugate = -1;
+    int invert = -1;
+    
+    /* easy -- now the positions from the database */
+    
+    double phase;
+
+    /* Calibration related defines */
+    /* set these here for the library */
+    nfrequency = NCHAN;
+    nstation   = NANT;
+    npol       = NPOL;
+
+    double amp = 0;
+
+    ComplexDouble Jref[NPOL*NPOL];            // Calibration Direction
+    ComplexDouble E[NPOL*NPOL];               // Model Jones in Desired Direction
+    ComplexDouble G[NPOL*NPOL];               // Coarse channel DI Gain
+    ComplexDouble Gf[NPOL*NPOL];              // Fine channel DI Gain
+    ComplexDouble Ji[NPOL*NPOL];              // Gain in Desired Direction
+
+    ComplexDouble  **M  = (ComplexDouble ** ) calloc(NANT, sizeof(ComplexDouble * )); // Gain in direction of Calibration
+    ComplexDouble ***Jf = (ComplexDouble ***) calloc(NANT, sizeof(ComplexDouble **)); // Fitted bandpass solutions
+
+    for (ant = 0; ant < NANT; ant++) {
+        M[ant]  = (ComplexDouble * ) calloc(NPOL*NPOL,  sizeof(ComplexDouble));
+        Jf[ant] = (ComplexDouble **) calloc(cal->nchan, sizeof(ComplexDouble *));
+        for (ch = 0; ch < cal->nchan; ch++) { // Only need as many channels as used in calibration solution
+            Jf[ant][ch] = (ComplexDouble *) calloc(NPOL*NPOL, sizeof(ComplexDouble));
+        }
+    }
+
+    // Choose a reference tile
+    int refinp = 84; // Tile012
+    double N_ref = mi->N_array[refinp];
+    double E_ref = mi->E_array[refinp];
+    double H_ref = mi->H_array[refinp];
+
+    double intmjd;
+    double fracmjd;
+    double lmst;
+    double mjd;
+    double pr=0, pd=0, px=0, rv=0, eq=2000, ra_ap=0, dec_ap=0;
+    double mean_ra, mean_dec, ha;
+    double app_ha_rad, app_dec_rad;
+    double az,el;
+    
+    double unit_N;
+    double unit_E;
+    double unit_H;
+    int    n;
+
+    int *order = (int *)malloc( NANT*sizeof(int) );
+        
+    double dec_degs;
+    double ra_hours;
+    long int freq_ch;
+    int cal_chan;
+    
+    double cable;
+
+    double integer_phase;
+    double X,Y,Z,u,v,w;
+    double geometry, delay_time, delay_samples, cycles_per_sample;
+
+    double Fnorm;
+
+    // Read in the Jones matrices for this (coarse) channel, if requested
+    ComplexDouble invJref[4];
+    if (cal->cal_type == RTS || cal->cal_type == RTS_BANDPASS) {
+
+        read_rts_file(M, Jref, &amp, cal->filename); // Read in the RTS DIJones file
+        inv2x2(Jref, invJref);
+
+        if  (cal->cal_type == RTS_BANDPASS) {
+
+            read_bandpass_file(              // Read in the RTS Bandpass file
+                    NULL,                    // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
+                    Jf,                      // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
+                    cal->chan_width,         // Input:  channel width of one column in file (in Hz)
+                    cal->nchan,              // Input:  (max) number of channels in one file (=128/(chan_width/10000))
+                    NANT,                    // Input:  (max) number of antennas in one file (=128)
+                    cal->bandpass_filename); // Input:  name of bandpass file
+
+        }
+
+    }
+    else if (cal->cal_type == OFFRINGA) {
+
+        // Find the ordering of antennas in Offringa solutions from metafits file
+        for (n = 0; n < NANT; n++) {
+            order[mi->antenna_num[n*2]] = n;
+        }
+        read_offringa_gains_file(M, NANT, cal->offr_chan_num, cal->filename, order);
+        free(order);
+
+        // Just make Jref (and invJref) the identity matrix since they are already
+        // incorporated into Offringa's calibration solutions.
+        Jref[0] = CMaked( 1.0, 0.0 );
+        Jref[1] = CMaked( 0.0, 0.0 );
+        Jref[2] = CMaked( 0.0, 0.0 );
+        Jref[3] = CMaked( 1.0, 0.0 );
+        inv2x2(Jref, invJref);
+    }
+
+    /* get mjd */
+
+    utc2mjd(time_utc, &intmjd, &fracmjd);
+
+    /* get requested Az/El from command line */
+  
+    mjd = intmjd + fracmjd;
+    mjd += (sec_offset+0.5)/86400.0;
+    mjd2lst(mjd, &lmst);
+
     for ( int p = 0; p < npointing; p++ )
     {
 
-        double dec_degs = parse_dec( pointing_array[p][1] );
-        double ra_hours = parse_ra( pointing_array[p][0] );  
-
-        int conjugate = -1;
-        int invert = -1;
-        
-        /* easy -- now the positions from the database */
-        
-        double phase;
-
-        /* Calibration related defines */
-        /* set these here for the library */
-        nfrequency = NCHAN;
-        nstation   = NANT;
-        npol       = NPOL;
-
-        double amp = 0;
-
-        ComplexDouble Jref[NPOL*NPOL];            // Calibration Direction
-        ComplexDouble E[NPOL*NPOL];               // Model Jones in Desired Direction
-        ComplexDouble G[NPOL*NPOL];               // Coarse channel DI Gain
-        ComplexDouble Gf[NPOL*NPOL];              // Fine channel DI Gain
-        ComplexDouble Ji[NPOL*NPOL];              // Gain in Desired Direction
-
-        ComplexDouble  **M  = (ComplexDouble ** ) calloc(NANT, sizeof(ComplexDouble * )); // Gain in direction of Calibration
-        ComplexDouble ***Jf = (ComplexDouble ***) calloc(NANT, sizeof(ComplexDouble **)); // Fitted bandpass solutions
-
-        for (ant = 0; ant < NANT; ant++) {
-            M[ant]  = (ComplexDouble * ) calloc(NPOL*NPOL,  sizeof(ComplexDouble));
-            Jf[ant] = (ComplexDouble **) calloc(cal->nchan, sizeof(ComplexDouble *));
-            for (ch = 0; ch < cal->nchan; ch++) { // Only need as many channels as used in calibration solution
-                Jf[ant][ch] = (ComplexDouble *) calloc(NPOL*NPOL, sizeof(ComplexDouble));
-            }
-        }
-
-        // Choose a reference tile
-        int refinp = 84; // Tile012
-        double N_ref = mi->N_array[refinp];
-        double E_ref = mi->E_array[refinp];
-        double H_ref = mi->H_array[refinp];
-
-        double intmjd;
-        double fracmjd;
-        double lmst;
-        double mjd;
-        double pr=0, pd=0, px=0, rv=0, eq=2000, ra_ap=0, dec_ap=0;
-        double mean_ra, mean_dec, ha;
-        double app_ha_rad, app_dec_rad;
-        double az,el;
-        
-        double unit_N;
-        double unit_E;
-        double unit_H;
-        int    n;
-
-        // Read in the Jones matrices for this (coarse) channel, if requested
-        ComplexDouble invJref[4];
-        if (cal->cal_type == RTS || cal->cal_type == RTS_BANDPASS) {
-
-            read_rts_file(M, Jref, &amp, cal->filename); // Read in the RTS DIJones file
-            inv2x2(Jref, invJref);
-
-            if  (cal->cal_type == RTS_BANDPASS) {
-
-                read_bandpass_file(              // Read in the RTS Bandpass file
-                        NULL,                    // Output: measured Jones matrices (Jm[ant][ch][pol,pol])
-                        Jf,                      // Output: fitted Jones matrices   (Jf[ant][ch][pol,pol])
-                        cal->chan_width,         // Input:  channel width of one column in file (in Hz)
-                        cal->nchan,              // Input:  (max) number of channels in one file (=128/(chan_width/10000))
-                        NANT,                    // Input:  (max) number of antennas in one file (=128)
-                        cal->bandpass_filename); // Input:  name of bandpass file
-
-            }
-
-        }
-        else if (cal->cal_type == OFFRINGA) {
-
-            // Find the ordering of antennas in Offringa solutions from metafits file
-            int *order = (int *)malloc( NANT*sizeof(int) );
-            for (n = 0; n < NANT; n++) {
-                order[mi->antenna_num[n*2]] = n;
-            }
-            read_offringa_gains_file(M, NANT, cal->offr_chan_num, cal->filename, order);
-            free(order);
-
-            // Just make Jref (and invJref) the identity matrix since they are already
-            // incorporated into Offringa's calibration solutions.
-            Jref[0] = CMaked( 1.0, 0.0 );
-            Jref[1] = CMaked( 0.0, 0.0 );
-            Jref[2] = CMaked( 0.0, 0.0 );
-            Jref[3] = CMaked( 1.0, 0.0 );
-            inv2x2(Jref, invJref);
-        }
-
-        /* get mjd */
-
-        utc2mjd(time_utc, &intmjd, &fracmjd);
-
-        /* get requested Az/El from command line */
-      
-        mjd = intmjd + fracmjd;
-        mjd += (sec_offset+0.5)/86400.0;
-        mjd2lst(mjd, &lmst);
+        dec_degs = parse_dec( pointing_array[p][1] );
+        ra_hours = parse_ra( pointing_array[p][0] );  
 
         /* for the look direction <not the tile> */
         
@@ -320,8 +334,8 @@ void get_delays(
         for (ch = 0; ch < NCHAN; ch++) {
 
             // Calculating direction-dependent matrices
-            long int freq_ch = frequency + ch*mi->chan_width;    // The frequency of this fine channel
-            int cal_chan = 0;
+            freq_ch = frequency + ch*mi->chan_width;    // The frequency of this fine channel
+            cal_chan = 0;
             if (cal->cal_type == RTS_BANDPASS) {
                 cal_chan = ch*mi->chan_width / cal->chan_width;  // The corresponding "calibration channel number"
                 if (cal_chan >= cal->nchan) {                        // Just check that the channel number is reasonable
@@ -368,13 +382,10 @@ void get_delays(
                 if (complex_weights_array != NULL) {
                     if (mi->weights_array[row] != 0.0) {
 
-                        double cable = mi->cable_array[row] - mi->cable_array[refinp];
+                        cable = mi->cable_array[row] - mi->cable_array[refinp];
                         double E = mi->E_array[row];
                         double N = mi->N_array[row];
                         double H = mi->H_array[row];
-
-                        double integer_phase;
-                        double X,Y,Z,u,v,w;
 
                         ENH2XYZ_local(E,N,H, MWA_LAT*DD2R, &X, &Y, &Z);
 
@@ -382,18 +393,18 @@ void get_delays(
 
                         // shift the origin of ENH to Antenna 0 and hoping the Far Field Assumption still applies ...
 
-                        double geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
+                        geometry = (E-E_ref)*unit_E + (N-N_ref)*unit_N + (H-H_ref)*unit_H ;
                         // double geometry = E*unit_E + N*unit_N + H*unit_H ;
                         // Above is just w as you should see from the check.
 
-                        double delay_time = (geometry + (invert*(cable)))/(VLIGHT);
-                        double delay_samples = delay_time * samples_per_sec;
+                        delay_time = (geometry + (invert*(cable)))/(VLIGHT);
+                        delay_samples = delay_time * samples_per_sec;
 
                         // freq should be in cycles per sample and delay in samples
                         // which essentially means that the samples_per_sec cancels
 
                         // and we only need the fractional part of the turn
-                        double cycles_per_sample = (double)freq_ch/samples_per_sec;
+                        cycles_per_sample = (double)freq_ch/samples_per_sec;
 
                         phase = cycles_per_sample*delay_samples;
                         phase = modf(phase, &integer_phase);
@@ -413,9 +424,6 @@ void get_delays(
                 // Now, calculate the inverse Jones matrix
                 if (invJi != NULL) {
                     if (pol == 0) {
-
-                        double Fnorm;
-
                         conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
                         Fnorm = norm2x2( Ji, Ji );
 
