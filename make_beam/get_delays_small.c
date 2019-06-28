@@ -251,7 +251,6 @@ void get_delays(
     double geometry, delay_time, delay_samples, cycles_per_sample;
 
     double Fnorm;
-    fprintf(stderr, "declare stuff\n");
     // Read in the Jones matrices for this (coarse) channel, if requested
     ComplexDouble invJref[4];
     if (cal->cal_type == RTS || cal->cal_type == RTS_BANDPASS) {
@@ -291,7 +290,6 @@ void get_delays(
     }
 
     /* get mjd */
-    fprintf(stderr, "done read bandpass\n");
     utc2mjd(time_utc, &intmjd, &fracmjd);
 
     /* get requested Az/El from command line */
@@ -329,7 +327,6 @@ void get_delays(
         unit_N = cos(el) * cos(az);
         unit_E = cos(el) * sin(az);
         unit_H = sin(el);
-        fprintf(stderr, "done ra dec stuff\n");
         // Everything from this point on is frequency-dependent
         for (ch = 0; ch < NCHAN; ch++) {
 
@@ -344,7 +341,6 @@ void get_delays(
                     exit(EXIT_FAILURE);
                 }
             }
-            fprintf(stderr, "before calcjones\n");
             calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
                     freq_ch,                              // observing freq of fine channel (Hz)
                     (MWA_LAT*DD2R),                       // observing latitude (radians)
@@ -352,7 +348,6 @@ void get_delays(
                     (DPIBY2-(mi->tile_pointing_el*DD2R)), // zenith angle to sample
                     az,                                   // azimuth & zenith angle to sample
                     (DPIBY2-el));
-            fprintf(stderr, "after\n");
             /* for the tile <not the look direction> */
 
             for (row=0; row < (int)(mi->ninput); row++) {
@@ -379,7 +374,6 @@ void get_delays(
                 }
 
                 // Calculate the complex weights array
-                fprintf(stderr, "start cwa\n");
                 if (complex_weights_array != NULL) {
                     if (mi->weights_array[row] != 0.0) {
 
