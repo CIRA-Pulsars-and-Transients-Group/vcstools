@@ -555,7 +555,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         make_beam_cmd = "make_beam"
         make_beam_version_cmd = "make_beam -V"
 
-    #make_beam_version_cmd = "make_beam -V"
     make_beam_version = subprocess.Popen(make_beam_version_cmd, 
                            stdout=subprocess.PIPE, shell=True).communicate()[0]
     #tested_version = "?.?.?"
@@ -662,28 +661,58 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 logger.info("Please an accepted calibratin type. Aborting here.")
                 quit()
 
-            make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(pl, time_now, coarse_chan)
-            module_list = [comp_config['container_module']]
-            commands = []
-            #commands.append("source /group/mwaops/PULSAR/psrBash.profile")
-            #commands.append("module swap craype-ivybridge craype-sandybridge")
-            commands.append(openmp_line)
-            commands.append("cd {0}".format(P_dir))
-            commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} -e {5} -a 128 -n 128 -f {6} {7} -d "
-                            "{8}/combined -P {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(n_omp_threads, comp_config['container_command'], make_beam_cmd, obs_id, start,
-                            stop, coarse_chan, jones_option, data_dir, pointing_str, metafits_file, utctime, bf_formats, rts_flag_file))  # check these
-            commands.append("")
-            for pointing in pointing_list:
-                mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
+            if "v" in bf_formats:
+                for pointing in pointing_list:
+                    ra, dec = pointing.split("_")
+                    mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
+                    make_beam_small_batch = "mb_{0}_ch{1}".format(pointing, coarse_chan)
+                    module_list = [comp_config['container_module']]
+                    commands = []
+                    commands.append(openmp_line)
+                    commands.append("cd {0}/{1}".format(P_dir,pointing))
+                    commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4}"
+                                    " -e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
+                                    "-R {9} -D {10} -r 10000 -m {11} -z {12} {13} -F {14}".format(
+                                    n_omp_threads, comp_config['container_command'],
+                                    make_beam_cmd, obs_id, start, stop, coarse_chan,
+                                    jones_option, data_dir, ra, dec, metafits_file,
+                                    utctime, bf_formats.replace("v", "u"), rts_flag_file))  
+                    commands.append("")
 
-            job_id = submit_slurm(make_beam_small_batch, commands,
-                        batch_dir=batch_dir, module_list=module_list,
-                        slurm_kwargs={"time":secs_to_run, "nice":nice},
-                        queue='gpuq', vcstools_version=vcstools_version, 
-                        submit=True, export="NONE", gpu_res=1,
-                        cpu_threads=n_omp_threads,
-                        mem=comp_config['gpu_beamform_mem'])
-            job_id_list.append(job_id)
+                    job_id = submit_slurm(make_beam_small_batch, commands,
+                                batch_dir=batch_dir, module_list=module_list,
+                                slurm_kwargs={"time":secs_to_run, "nice":nice},
+                                queue='gpuq', vcstools_version="python2",#forces olf version with vdif 
+                                submit=True, export="NONE", gpu_res=1,
+                                cpu_threads=n_omp_threads,
+                                mem=comp_config['gpu_beamform_mem'])
+                    job_id_list.append(job_id)
+
+            else:
+                make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(pl, time_now, coarse_chan)
+                module_list = [comp_config['container_module']]
+                commands = []
+                commands.append(openmp_line)
+                commands.append("cd {0}".format(P_dir))
+                commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4}"
+                                "-e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
+                                "-P {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(
+                                n_omp_threads, comp_config['container_command'],
+                                make_beam_cmd, obs_id, start, stop, coarse_chan,
+                                jones_option, data_dir, pointing_str, metafits_file,
+                                utctime, bf_formats, rts_flag_file))  
+                commands.append("")
+                for pointing in pointing_list:
+                    mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
+
+                job_id = submit_slurm(make_beam_small_batch, commands,
+                            batch_dir=batch_dir, module_list=module_list,
+                            slurm_kwargs={"time":secs_to_run, "nice":nice},
+                            queue='gpuq', vcstools_version=vcstools_version, 
+                            submit=True, export="NONE", gpu_res=1,
+                            cpu_threads=n_omp_threads,
+                            mem=comp_config['gpu_beamform_mem'])
+                job_id_list.append(job_id)
         job_id_list_list.append(job_id_list)
         
     return job_id_list_list
@@ -833,7 +862,7 @@ if __name__ == '__main__':
             bf_format +=" -p"
             logger.info("Writing out PSRFITS.")
         if  (args.bf_out_format == 'vdif' or args.bf_out_format == 'both'):
-            bf_format += " -u"
+            bf_format += " -v"
             logger.info("Writing out upsampled VDIF.")
         if (args.incoh):
             bf_format += " -i"
@@ -920,7 +949,12 @@ if __name__ == '__main__':
                              "beamformer will not run...")
                 quit()
         else:
-            flagged_tiles_file = None
+            if os.path.isfile("{0}/flagged_tiles.txt".format(args.DI_dir)):
+                flagged_tiles_file = "{0}/flagged_tiles.txt".format(args.DI_dir)
+                logger.info("Found tiles flags in {0}/flagged_tiles.txt. "
+                            "Using it by default".format(args.DI_dir))
+            else:
+                flagged_tiles_file = None
         ensure_metafits(data_dir, args.obs, metafits_file)
         #Turn the pointings into a list
         if args.pointing:
