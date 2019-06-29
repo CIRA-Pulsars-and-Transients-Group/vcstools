@@ -68,10 +68,10 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
                                 (c)  * (NPOL)             + \
                                 (pol))
  
-#define C_IDX(p,s,st,c,ns,nc)  ((p)  * ((nc)*NSTOKES*(ns)) + \
-                                (s)  * ((nc)*NSTOKES)      + \
-                                (st) *  (nc)               + \
-                                (c))
+#define C_IDX(p,s,st,c,ns,nst,nc)  ((p)  * ((nc)*(nst)*(ns)) + \
+                                    (s)  * ((nc)*(nst))      + \
+                                    (st) *  (nc)               + \
+                                    (c))
 
 #define I_IDX(s,c,nc)          ((s)*(nc) + (c))
 

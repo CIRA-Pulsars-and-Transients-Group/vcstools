@@ -670,8 +670,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     commands = []
                     commands.append(openmp_line)
                     commands.append("cd {0}/{1}".format(P_dir,pointing))
-                    commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4}"
-                                    " -e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
+                    commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} "
+                                    "-e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
                                     "-R {9} -D {10} -r 10000 -m {11} -z {12} {13} -F {14}".format(
                                     n_omp_threads, comp_config['container_command'],
                                     make_beam_cmd, obs_id, start, stop, coarse_chan,
@@ -694,7 +694,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 commands = []
                 commands.append(openmp_line)
                 commands.append("cd {0}".format(P_dir))
-                commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4}"
+                commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} "
                                 "-e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
                                 "-P {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(
                                 n_omp_threads, comp_config['container_command'],
@@ -772,6 +772,7 @@ if __name__ == '__main__':
     group_beamform.add_argument("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
     group_beamform.add_argument("--bf_out_format", type=str, choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. ".format(bf_out_modes), default='psrfits')
     group_beamform.add_argument("--incoh", action="store_true", default=False, help="Add this flag if you want to form an incoherent sum as well. ")
+    group_beamform.add_argument("--sum", action="store_true", default=False, help="Add this flag if you the beamformer output as summed polarisations (only Stokes I). This reduces the data size by a factor of 4.")
     group_beamform.add_argument("--flagged_tiles", type=str, default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. ")
     group_beamform.add_argument('--cal_type', type=str, help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
     group_beamform.add_argument("-E", "--execpath", type=str, default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
@@ -867,6 +868,8 @@ if __name__ == '__main__':
         if (args.incoh):
             bf_format += " -i"
             logger.info("Writing out incoherent sum.")
+        if (args.sum):
+            bf_format += " -s"
 
         # This isn't necessary as checks for execpath are done in beamforming function (BWM 6/4/18)
         #if args.execpath:

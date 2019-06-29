@@ -80,6 +80,8 @@ int main(int argc, char **argv)
     opts.out_incoh     = 0;  // Default = PSRFITS (incoherent) output turned OFF
     opts.out_coh       = 0;  // Default = PSRFITS (coherent)   output turned OFF
     opts.out_vdif      = 0;  // Default = VDIF                 output turned OFF
+    opts.out_summed    = 0;  // Default = output only Stokes I output turned OFF
+
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -93,11 +95,13 @@ int main(int argc, char **argv)
     make_beam_parse_cmdline( argc, argv, &opts );
 
     // Create "shorthand" variables for options that are used frequently
-    int nstation           = opts.nstation;
-    int nchan              = opts.nchan;
-    const int npol         = 2;      // (X,Y)
-    const int outpol_coh   = 4;      // (I,Q,U,V)
-    const int outpol_incoh = 1;      // ("I")
+    int nstation             = opts.nstation;
+    int nchan                = opts.nchan;
+    const int npol           = 2;   // (X,Y)
+    int outpol_coh           = 4;  // (I,Q,U,V)
+    if ( opts.out_summed )
+        outpol_coh           = 1;  // (I)
+    const int outpol_incoh   = 1;  // ("I")
 
     float vgain = 1.0; // This is re-calculated every second for the VDIF output
 
@@ -286,12 +290,14 @@ int main(int argc, char **argv)
     int fil_size = ntaps * nchan; // = 12 * 128 = 1536
 
     // Populate the relevant header structs
-    populate_psrfits_header( pf, opts.metafits, opts.obsid, opts.time_utc,
-            opts.sample_rate, opts.frequency, nchan, opts.chan_width,
-            outpol_coh, opts.rec_channel, delay_vals, mi, npointing );
+    populate_psrfits_header( pf,       opts.metafits, opts.obsid,
+            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.chan_width,outpol_coh, opts.rec_channel, delay_vals,
+            mi, npointing, 1 );
     populate_psrfits_header( pf_incoh, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals, mi, 1);
+            opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals,
+            mi, 1, 0 );
 
     populate_vdif_header( vf, &vhdr, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
@@ -332,6 +338,8 @@ int main(int argc, char **argv)
     data_buffer_incoh2 = create_pinned_data_buffer_psrfits( nchan * outpol_incoh *
                                                             pf_incoh[0].hdr.nsblk );
     data_buffer_vdif1  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
+                                                         npointing );
+    data_buffer_vdif2  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
                                                          npointing );
     
     /* Allocate host and device memory for the use of the cu_form_beam function */
@@ -374,7 +382,7 @@ int main(int argc, char **argv)
         read_check[file_no]  = 0;//False
         calc_check[file_no]  = 0;//False
         write_check[file_no] = (int*)malloc(npointing*sizeof(int));
-        for (p=0;p<npointing;p++) write_check[file_no][p] = 0;//False
+        for ( p = 0; p < npointing; p++ ) write_check[file_no][p] = 0;//False
     } 
     
     // Set up timing for each section
@@ -568,11 +576,14 @@ int main(int argc, char **argv)
                             NOW-begintime, file_no+1, nfiles, p+1, npointing );
 
                     if (opts.out_coh)
-                        psrfits_write_second( &pf[p], data_buffer_coh, nchan, outpol_coh, p );
+                        psrfits_write_second( &pf[p], data_buffer_coh, nchan,
+                                              outpol_coh, p );
                     if (opts.out_incoh && p == 0)
-                        psrfits_write_second( &pf_incoh[p], data_buffer_incoh, nchan, outpol_incoh, p );
+                        psrfits_write_second( &pf_incoh[p], data_buffer_incoh,
+                                              nchan, outpol_incoh, p );
                     if (opts.out_vdif)
-                        vdif_write_second( &vf[p], &vhdr, data_buffer_vdif, &vgain, p );
+                        vdif_write_second( &vf[p], &vhdr, data_buffer_vdif,
+                                           &vgain, p );
 
                     // Records that this write section is complete
                     write_check[file_no][p] = 1;
@@ -693,15 +704,18 @@ void usage() {
     fprintf(stderr, "OUTPUT OPTIONS\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-i, --incoh                ");
-    fprintf(stderr, "Turn on incoherent PSRFITS beam output.                          ");
+    fprintf(stderr, "Turn on incoherent PSRFITS beam output.                             ");
     fprintf(stderr, "[default: OFF]\n");
     fprintf(stderr, "\t-p, --psrfits              ");
     fprintf(stderr, "Turn on coherent PSRFITS output (will be turned on if none of\n");
     fprintf(stderr, "\t                           ");
-    fprintf(stderr, "-i, -p, -u, -v are chosen).                                      ");
+    fprintf(stderr, "-i, -p, -u, -v are chosen).                                         ");
     fprintf(stderr, "[default: OFF]\n");
-    fprintf(stderr, "\t-v, --vdif                ");
-    fprintf(stderr, "Turn on VDIF output with upsampling                              ");
+    fprintf(stderr, "\t-v, --vdif                 ");
+    fprintf(stderr, "Turn on VDIF output with upsampling                                 ");
+    fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-s, --summed               ");
+    fprintf(stderr, "Turn on summed polarisations of the coherent output (only Stokes I) ");
     fprintf(stderr, "[default: OFF]\n");
 
     fprintf(stderr, "\n");
@@ -801,6 +815,7 @@ void make_beam_parse_cmdline(
                 {"incoh",           no_argument,       0, 'i'},
                 {"psrfits",         no_argument,       0, 'p'},
                 {"vdif",            no_argument,       0, 'v'},
+                {"summed",          no_argument,       0, 's'},
                 {"utc-time",        required_argument, 0, 'z'},
                 {"pointings",       required_argument, 0, 'P'},
                 {"data-location",   required_argument, 0, 'd'},
@@ -822,7 +837,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:vVw:W:z:",
+                             "a:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:svVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -889,6 +904,9 @@ void make_beam_parse_cmdline(
                     break;
                 case 'r':
                     opts->sample_rate = atoi(optarg);
+                    break;
+                case 's':
+                    opts->out_summed = 1;
                     break;
                 case 'v':
                     opts->out_vdif = 1;

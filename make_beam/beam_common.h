@@ -85,6 +85,7 @@ struct make_beam_opts {
     int                out_coh;       // Default = PSRFITS (coherent)   output turned OFF
     int                out_vdif;      // Default = VDIF                 output turned OFF
     int                out_uvdif;     // Default = upsampled VDIF       output turned OFF
+    int                out_summed;    // Default = output only Stokes I output turned OFF
 
     struct calibration cal;           // Variables for calibration settings
 };
