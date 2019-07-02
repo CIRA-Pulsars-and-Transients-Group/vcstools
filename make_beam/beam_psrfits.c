@@ -99,12 +99,10 @@ void populate_psrfits_header(
         char           *rec_channel,
         struct delays  *delay_vals,
         struct metafits_info mi,
-        int             npointing )
+        int             npointing,
+        int             is_coherent )
 {
-    int is_coherent = 0;
-    if (outpol == 4)
-        is_coherent = 1;
-    else if (outpol != 1)
+    if ( !( outpol == 1 || outpol == 4 ) )
     {
         fprintf( stderr, "warning: populate_psrfits_header: "
                          "unusual number of output pols = %d\n", outpol );

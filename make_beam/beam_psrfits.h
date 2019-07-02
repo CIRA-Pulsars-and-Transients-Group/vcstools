@@ -25,7 +25,8 @@ void populate_psrfits_header(
         char           *rec_channel,
         struct delays  *delay_vals,
         struct metafits_info mi,
-        int             npointing );
+        int             npointing,
+        int             is_coherent );
 
 void correct_psrfits_stt( struct psrfits *pf );
 

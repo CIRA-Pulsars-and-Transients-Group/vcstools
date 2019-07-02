@@ -68,10 +68,10 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
                                 (c)  * (NPOL)             + \
                                 (pol))
  
-#define C_IDX(p,s,st,c,ns,nc)  ((p)  * ((nc)*NSTOKES*(ns)) + \
-                                (s)  * ((nc)*NSTOKES)      + \
-                                (st) *  (nc)               + \
-                                (c))
+#define C_IDX(p,s,st,c,ns,nst,nc)  ((p)  * ((nc)*(nst)*(ns)) + \
+                                    (s)  * ((nc)*(nst))      + \
+                                    (st) *  (nc)               + \
+                                    (c))
 
 #define I_IDX(s,c,nc)          ((s)*(nc) + (c))
 
@@ -106,8 +106,6 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
 
 
 
-#ifdef HAVE_CUDA
-
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ****W,
                    ComplexDouble *****J, int file_no, 
                    int npointing, int nstation, int nchan,
@@ -123,19 +121,5 @@ void populate_weights_johnes( struct gpu_formbeam_arrays *g,
                               ComplexDouble ****complex_weights_array,
                               ComplexDouble *****invJi,
                               int npointing, int nstation, int nchan, int npol );
-
-#else
-
-void form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
-                ComplexDouble ****J, int file_no, int nstation, int nchan,
-                int npol, int outpol_coh, int outpol_incoh, double invw,
-                ComplexDouble ***detected_beam, float *coh, float *incoh );
-
-void form_stokes( ComplexDouble **detected_beam,
-                  ComplexDouble noise_floor[][2][2],
-                  int nchan, double invw, float *spectrum );
-
-
-#endif
 
 #endif

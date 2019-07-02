@@ -66,7 +66,8 @@ __global__ void beamform_kernel( uint8_t *data,
                                  ComplexDouble *Bd,
                                  float *C,
                                  float *I,
-                                 int p)
+                                 int p,
+                                 int coh_pol)
 /* Layout for input arrays:
  *   data [nsamples] [nchan] [NPFB] [NREC] [NINC] -- see docs
  *   W    [NSTATION] [nchan] [NPOL]               -- weights array
@@ -75,6 +76,8 @@ __global__ void beamform_kernel( uint8_t *data,
  *   Bd   [nsamples] [nchan]   [NPOL]             -- detected beam
  *   C    [nsamples] [NSTOKES] [nchan]            -- coherent full stokes
  *   I    [nsamples] [nchan]                      -- incoherent
+ *   p                                            -- pointing number
+ *   coh_pol                                      -- coherent polorisation number
  */
 {
     // Translate GPU block/thread numbers into meaning->l names
@@ -208,10 +211,13 @@ __global__ void beamform_kernel( uint8_t *data,
         I[I_IDX(s,c,nc)] = Ia[0];
 
         // Stokes I, Q, U, V:
-        C[C_IDX(p,s,0,c,ns,nc)] = invw*(bnXX + bnYY);
-        C[C_IDX(p,s,1,c,ns,nc)] = invw*(bnXX - bnYY);
-        C[C_IDX(p,s,2,c,ns,nc)] =  2.0*invw*CReald( bnXY );
-        C[C_IDX(p,s,3,c,ns,nc)] = -2.0*invw*CImagd( bnXY );
+        C[C_IDX(p,s,0,c,ns,coh_pol,nc)] = invw*(bnXX + bnYY);
+        if ( coh_pol == 4 )
+        {
+            C[C_IDX(p,s,1,c,ns,coh_pol,nc)] = invw*(bnXX - bnYY);
+            C[C_IDX(p,s,2,c,ns,coh_pol,nc)] =  2.0*invw*CReald( bnXY );
+            C[C_IDX(p,s,3,c,ns,coh_pol,nc)] = -2.0*invw*CImagd( bnXY );
+        }
 
         // The beamformed products
         Bd[B_IDX(p,s,c,0,ns,nc)] = Bx[0];
@@ -267,8 +273,7 @@ __global__ void flatten_bandpass_I_kernel(float *I,
 }
 
 
-__global__ void flatten_bandpass_C_kernel(float *C,
-                                          int nstep)/* uint8_t *Iout ) */
+__global__ void flatten_bandpass_C_kernel(float *C, int nstep )
 {
     // For just doing stokes I
     // One block
@@ -279,9 +284,10 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     // ... figure it out later.
 
     // Translate GPU block/thread numbers into meaningful names
-    int chan   = threadIdx.x; /* The (c)hannel number */
-    int nchan  = blockDim.x;  /* The (n)umber of (c)hannels */
-    int stokes = threadIdx.y; /* The (stokes) number */
+    int chan    = threadIdx.x; /* The (c)hannel number */
+    int nchan   = blockDim.x;  /* The (n)umber of (c)hannels */
+    int stokes  = threadIdx.y; /* The (stokes) number */
+    int nstokes = blockDim.y;  /* The (n)umber of (stokes) */
     
     int p      = blockIdx.x;  /* The (p)ointing number */
 
@@ -298,14 +304,14 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     // accumulate abs(data) over all time samples and save into band
     //data_ptr = C + C_IDX(0,stokes,chan,nchan);
     for (i=0;i<nstep;i++) { // time steps
-        data_ptr = C + C_IDX(p,i,stokes,chan,nstep,nchan);
+        data_ptr = C + C_IDX(p,i,stokes,chan,nstep,nstokes,nchan);
         band += fabsf(*data_ptr);
     }
 
     // now normalise the coherent beam
     //data_ptr = C + C_IDX(0,stokes,chan,nchan);
     for (i=0;i<nstep;i++) { // time steps
-        data_ptr = C + C_IDX(p,i,stokes,chan,nstep,nchan);
+        data_ptr = C + C_IDX(p,i,stokes,chan,nstep,nstokes,nchan);
         *data_ptr = (*data_ptr)/( (band/nstep)/new_var );
     }
 
@@ -387,7 +393,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     {    
         beamform_kernel<<<samples_chan, stat, 0, streams[p]>>>( g->d_data,
                             g->d_W, g->d_J, invw, 
-                            g->d_Bd, g->d_coh, g->d_incoh, p );
+                            g->d_Bd, g->d_coh, g->d_incoh, p, outpol_coh );
             
         gpuErrchk( cudaPeekAtLastError() );
 
@@ -436,7 +442,7 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
                       int outpol_incoh, int npointing, double time )
 {
     // Calculate array sizes for host and device
-    g->coh_size   = npointing * sample_rate * outpol_coh   * nchan * sizeof(float);
+    g->coh_size   = npointing * sample_rate * outpol_coh * nchan * sizeof(float);
     g->incoh_size = sample_rate * outpol_incoh * nchan * sizeof(float);
     g->data_size  = sample_rate * nstation * nchan * npol * sizeof(uint8_t);
     g->Bd_size    = npointing * sample_rate * nchan * npol * sizeof(ComplexDouble);

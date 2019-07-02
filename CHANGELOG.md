@@ -5,6 +5,11 @@
 
 
 ----
+## v1.5.0 (2019-06-28)
+
+Upgraded the beamforming to be multi-pixel so hundreads of tied-array beams can be created at once. This increases the speed of beamforming by a factor of 5.
+
+----
 ## v1.4.3 (2019-06-20)
 
 Upgraded all scripts to python 3

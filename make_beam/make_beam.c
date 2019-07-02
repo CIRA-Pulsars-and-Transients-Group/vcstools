@@ -80,7 +80,8 @@ int main(int argc, char **argv)
     opts.out_incoh     = 0;  // Default = PSRFITS (incoherent) output turned OFF
     opts.out_coh       = 0;  // Default = PSRFITS (coherent)   output turned OFF
     opts.out_vdif      = 0;  // Default = VDIF                 output turned OFF
-    opts.out_uvdif     = 0;  // Default = upsampled VDIF       output turned OFF
+    opts.out_summed    = 0;  // Default = output only Stokes I output turned OFF
+
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -94,22 +95,19 @@ int main(int argc, char **argv)
     make_beam_parse_cmdline( argc, argv, &opts );
 
     // Create "shorthand" variables for options that are used frequently
-    int nstation           = opts.nstation;
-    int nchan              = opts.nchan;
-    const int npol         = 2;      // (X,Y)
-    const int outpol_coh   = 4;      // (I,Q,U,V)
-    const int outpol_incoh = 1;      // ("I")
+    int nstation             = opts.nstation;
+    int nchan                = opts.nchan;
+    const int npol           = 2;   // (X,Y)
+    int outpol_coh           = 4;  // (I,Q,U,V)
+    if ( opts.out_summed )
+        outpol_coh           = 1;  // (I)
+    const int outpol_incoh   = 1;  // ("I")
 
     float vgain = 1.0; // This is re-calculated every second for the VDIF output
-    float ugain = 1.0; // This is re-calculated every second for the VDIF output
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = NOW;
-    #ifdef HAVE_CUDA
     fprintf( stderr, "[%f]  Starting %s with GPU acceleration\n", NOW-begintime, argv[0] );
-    #else
-    fprintf( stderr, "[%f]  Starting %s with %d possible OpenMP threads\n", NOW-begintime, argv[0], omp_get_max_threads());
-    #endif
 
     // Calculate the number of files
     int nfiles = opts.end - opts.begin + 1;
@@ -283,48 +281,27 @@ int main(int argc, char **argv)
     pf = (struct psrfits *)malloc(npointing * sizeof(struct psrfits));
     pf_incoh = (struct psrfits *)malloc(1 * sizeof(struct psrfits));
     vdif_header     vhdr;
-    vdif_header     uvhdr;
     struct vdifinfo *vf;
-    struct vdifinfo *uvf;
     vf = (struct vdifinfo *)malloc(npointing * sizeof(struct vdifinfo));
-    uvf = (struct vdifinfo *)malloc(npointing * sizeof(struct vdifinfo));
 
 
     // Create structures for the PFB filter coefficients
     int ntaps    = 12;
     int fil_size = ntaps * nchan; // = 12 * 128 = 1536
-    double coeffs[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
-    ComplexDouble fil[fil_size];
-    double approx_filter_scale = 1.0/120000.0;
-    for (i = 0; i < fil_size; i++)
-    {
-        fil[i] = CMaked( coeffs[i] * approx_filter_scale, 0.0 );
-    }
-    //TODO I think i only need one fil
-
-    // Memory for fil_ramps is allocated here:
-    ComplexDouble **fil_ramps  = NULL;
-    ComplexDouble **fil_ramps1 = apply_mult_phase_ramps( fil, fil_size, nchan );
-    ComplexDouble **fil_ramps2 = apply_mult_phase_ramps( fil, fil_size, nchan );
 
     // Populate the relevant header structs
-    populate_psrfits_header( pf, opts.metafits, opts.obsid, opts.time_utc,
-            opts.sample_rate, opts.frequency, nchan, opts.chan_width,
-            outpol_coh, opts.rec_channel, delay_vals, mi, npointing );
+    populate_psrfits_header( pf,       opts.metafits, opts.obsid,
+            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.chan_width,outpol_coh, opts.rec_channel, delay_vals,
+            mi, npointing, 1 );
     populate_psrfits_header( pf_incoh, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals, mi, 1);
+            opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals,
+            mi, 1, 0 );
 
     populate_vdif_header( vf, &vhdr, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
             opts.chan_width, opts.rec_channel, delay_vals, npointing );
-    populate_vdif_header( uvf, &uvhdr, opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, opts.rec_channel, delay_vals, npointing );
-
-    /*for ( p=0; p<npointing; p++ )
-        sprintf( uvf[p].basefilename, "%s_%s_ch%03d_u",
-                 uvf[p].exp_name, uvf[p].scan_name, atoi(opts.rec_channel) );*/
 
     // To run asynchronously we require two memory allocations for each data 
     // set so multiple parts of the memory can be worked on at once.
@@ -334,15 +311,10 @@ int main(int argc, char **argv)
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
     uint8_t *data;
-    #ifdef HAVE_CUDA
     uint8_t *data1;
     uint8_t *data2;
-    cudaMallocHost( &data1, bytes_per_file * sizeof(uint8_t) );
-    cudaMallocHost( &data2, bytes_per_file * sizeof(uint8_t) );
-    #else
-    uint8_t *data1 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
-    uint8_t *data2 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
-    #endif
+    cudaMallocHost( (void**)&data1, bytes_per_file * sizeof(uint8_t) );
+    cudaMallocHost( (void**)&data2, bytes_per_file * sizeof(uint8_t) );
     assert(data1);
     assert(data2);
 
@@ -356,11 +328,7 @@ int main(int argc, char **argv)
     float *data_buffer_vdif   = NULL;
     float *data_buffer_vdif1  = NULL;
     float *data_buffer_vdif2  = NULL;
-    float *data_buffer_uvdif  = NULL;
-    float *data_buffer_uvdif1 = NULL;
-    float *data_buffer_uvdif2 = NULL;
 
-    #ifdef HAVE_CUDA
     data_buffer_coh1   = create_pinned_data_buffer_psrfits( npointing * nchan *
                                                             outpol_coh * pf[0].hdr.nsblk );
     data_buffer_coh2   = create_pinned_data_buffer_psrfits( npointing * nchan * 
@@ -373,37 +341,17 @@ int main(int argc, char **argv)
                                                          npointing );
     data_buffer_vdif2  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
                                                          npointing );
-    data_buffer_uvdif1 = create_pinned_data_buffer_vdif( uvf->sizeof_buffer *
-                                                         npointing );
-    data_buffer_uvdif2 = create_pinned_data_buffer_vdif( uvf->sizeof_buffer *
-                                                         npointing );
     
-    #else
-    data_buffer_coh1   = create_data_buffer_psrfits( npointing * nchan *
-                                                     outpol_coh * pf[0].hdr.nsblk );
-    data_buffer_coh2   = create_data_buffer_psrfits( npointing * nchan * 
-                                                     outpol_coh * pf[0].hdr.nsblk );
-    data_buffer_incoh1 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
-    data_buffer_incoh2 = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh[0].hdr.nsblk );
-    data_buffer_vdif1  = create_data_buffer_vdif( vf->sizeof_buffer * npointing );
-    data_buffer_vdif2  = create_data_buffer_vdif( vf->sizeof_buffer * npointing );
-    data_buffer_uvdif1 = create_data_buffer_vdif( uvf->sizeof_buffer * npointing );
-    data_buffer_uvdif2 = create_data_buffer_vdif( uvf->sizeof_buffer * npointing );
-    #endif
-
     /* Allocate host and device memory for the use of the cu_form_beam function */
     // Declaring pointers to the structs so the memory can be alternated
     struct gpu_formbeam_arrays gf;
     struct gpu_ipfb_arrays gi;
-    #ifdef HAVE_CUDA
     malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol,
             outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
-    if (opts.out_uvdif)
+    if (opts.out_vdif)
     {
         malloc_ipfb( &gi, ntaps, opts.sample_rate, nchan, npol, fil_size, npointing );
-        // Below may need a npointing update but I don't think it's used
-        cu_load_filter( fil_ramps1, &gi, nchan );
     }
 
     // Set up parrel streams
@@ -412,12 +360,11 @@ int main(int argc, char **argv)
     for ( p = 0; p < npointing; p++ )
         cudaStreamCreate(&(streams[p])) ;
     
-    // TODO work out why the below won't work
+    // TODO work out why the below won't work. It should save a bit of time 
+    // instead of doing the same thing every second
     //populate_weights_johnes( &gf, complex_weights_array, invJi,
     //                         npointing, nstation, nchan, npol );
         
-    #endif
-
 
     fprintf( stderr, "[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
     
@@ -435,7 +382,7 @@ int main(int argc, char **argv)
         read_check[file_no]  = 0;//False
         calc_check[file_no]  = 0;//False
         write_check[file_no] = (int*)malloc(npointing*sizeof(int));
-        for (p=0;p<npointing;p++) write_check[file_no][p] = 0;//False
+        for ( p = 0; p < npointing; p++ ) write_check[file_no][p] = 0;//False
     } 
     
     // Set up timing for each section
@@ -454,10 +401,10 @@ int main(int argc, char **argv)
     int exit_check = 0;
     // Sets up a parallel for loop for each of the available thread and 
     // assigns a section to each thread
-    #pragma omp parallel for shared(read_check, calc_check, write_check, pf) private( thread_no, file_no, p, exit_check, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif, data_buffer_uvdif, fil_ramps)
+    #pragma omp parallel for shared(read_check, calc_check, write_check, pf) private( thread_no, file_no, p, exit_check, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif )
     for (thread_no = 0; thread_no < nthread; ++thread_no)
     {
-        // Read section
+        // Read section -------------------------------------------------------
         if (thread_no == 0)
         {
             for (file_no = 0; file_no < nfiles; file_no++)
@@ -498,11 +445,10 @@ int main(int argc, char **argv)
             }
         }
 
-        // Calc section
+        // Calc section -------------------------------------------------------
         if (thread_no == 1)
         {
             int write_array_check = 1;
-            //fprintf( stderr, "Calc  section start on thread: %d\n", thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
                 //Work out which memory allocation it's requires
@@ -512,8 +458,6 @@ int main(int argc, char **argv)
                    data_buffer_coh   = data_buffer_coh1;
                    data_buffer_incoh = data_buffer_incoh1;
                    data_buffer_vdif  = data_buffer_vdif1;
-                   data_buffer_uvdif = data_buffer_uvdif2;
-                   fil_ramps = fil_ramps1;
                 }
                 else
                 {
@@ -521,8 +465,6 @@ int main(int argc, char **argv)
                    data_buffer_coh   = data_buffer_coh2;
                    data_buffer_incoh = data_buffer_incoh2;
                    data_buffer_vdif  = data_buffer_vdif2;
-                   data_buffer_uvdif = data_buffer_uvdif2;
-                   fil_ramps = fil_ramps2;
                 }
 
                 // Waits until it can start the calc
@@ -532,7 +474,6 @@ int main(int argc, char **argv)
                     #pragma omp critical (calc_queue)
                     {
                         // First two checks
-                        // fprintf( stderr, "file_no: %d  read_check: %d\n", file_no, read_check[file_no]);
                         if ( (file_no < 2) && (read_check[file_no] == 1) ) exit_check = 1;
                         // Rest of the checks. Checking if output memory is ready to be changed
                         else if (read_check[file_no] == 1) 
@@ -553,10 +494,9 @@ int main(int argc, char **argv)
                     if (exit_check == 1) break; 
                 }
                 clock_t start = clock();
-                fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime, file_no+1, nfiles);
                 // Get the next second's worth of phases / jones matrices, if needed
-                // fprintf( stderr, "[%f]  Calculating delays\n", NOW-begintime);
-                // TODO This should be fine for now but may need to manage this better for multipixel
+                fprintf( stderr, "[%f] [%d/%d] Calculating delays\n", NOW-begintime,
+                                        file_no+1, nfiles );
                 get_delays(
                         pointing_array,     // an array of pointings [pointing][ra/dec][characters]
                         npointing,          // number of pointings
@@ -576,40 +516,21 @@ int main(int argc, char **argv)
 
                 for (i = 0; i < npointing * nchan * outpol_incoh * opts.sample_rate; i++)
                     data_buffer_incoh[i] = 0.0;*/
+                fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
+                                        file_no+1, nfiles);
                 
-                #ifdef HAVE_CUDA
                 cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                               npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
                               detected_beam, data_buffer_coh, data_buffer_incoh,
                               streams );
-                #else
-                form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                           nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
-                           detected_beam, data_buffer_coh, data_buffer_incoh );
-                #endif
 
                 // Invert the PFB, if requested
                 if (opts.out_vdif)
                 {
-                    fprintf( stderr, "[%f] [%d/%d]  Inverting the PFB (IFFT)\n",
-                                      NOW-begintime, file_no+1, nfiles);
-                    #ifndef HAVE_CUDA
-                    invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan,
-                            npol, data_buffer_vdif );
-                    #endif
-                }
-
-                if (opts.out_uvdif)
-                {
                     fprintf( stderr, "[%f] [%d/%d]   Inverting the PFB (full)\n", 
                                      NOW-begintime, file_no+1, nfiles);
-                    #ifdef HAVE_CUDA
                     cu_invert_pfb_ord( detected_beam, file_no, npointing, 
-                            opts.sample_rate, nchan, npol, &gi, data_buffer_uvdif );
-                    #else
-                    invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan,
-                            npol, fil_ramps, fil_size, data_buffer_uvdif );
-                    #endif
+                            opts.sample_rate, nchan, npol, &gi, data_buffer_vdif );
                 }
 
                 // Records that this calc section is complete
@@ -617,11 +538,10 @@ int main(int argc, char **argv)
                 calc_total_time += clock() - start;
             }
         }    
-        // Write section
+        // Write section ------------------------------------------------------
         if (thread_no == 2) //(thread_no > 1 && thread_no < npointing + 2)
         {
             p = thread_no - 2;
-            //fprintf( stderr, "Write section p:%d started on thread: %d\n", p, thread_no);
             for (file_no = 0; file_no < nfiles; file_no++)
             {
                 //Work out which memory allocation it's requires
@@ -630,14 +550,12 @@ int main(int argc, char **argv)
                    data_buffer_coh   = data_buffer_coh1;
                    data_buffer_incoh = data_buffer_incoh1;
                    data_buffer_vdif  = data_buffer_vdif1;
-                   data_buffer_uvdif = data_buffer_uvdif2;
                 }
                 else
                 {
                    data_buffer_coh   = data_buffer_coh2;
                    data_buffer_incoh = data_buffer_incoh2;
                    data_buffer_vdif  = data_buffer_vdif2;
-                   data_buffer_uvdif = data_buffer_uvdif2;
                 }
                 
                 // Waits until it's time to write
@@ -658,13 +576,14 @@ int main(int argc, char **argv)
                             NOW-begintime, file_no+1, nfiles, p+1, npointing );
 
                     if (opts.out_coh)
-                        psrfits_write_second( &pf[p], data_buffer_coh, nchan, outpol_coh, p );
+                        psrfits_write_second( &pf[p], data_buffer_coh, nchan,
+                                              outpol_coh, p );
                     if (opts.out_incoh && p == 0)
-                        psrfits_write_second( &pf_incoh[p], data_buffer_incoh, nchan, outpol_incoh, p );
+                        psrfits_write_second( &pf_incoh[p], data_buffer_incoh,
+                                              nchan, outpol_incoh, p );
                     if (opts.out_vdif)
-                        vdif_write_second( &vf[p], &vhdr, data_buffer_vdif, &vgain, p );
-                    if (opts.out_uvdif)
-                        vdif_write_second( &uvf[p], &uvhdr, data_buffer_uvdif, &ugain, p );
+                        vdif_write_second( &vf[p], &vhdr, data_buffer_vdif,
+                                           &vgain, p );
 
                     // Records that this write section is complete
                     write_check[file_no][p] = 1;
@@ -692,41 +611,19 @@ int main(int argc, char **argv)
     destroy_invJi( invJi, npointing, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, npointing, 3*opts.sample_rate, nchan );
     
-    for ( int ch = 0; ch < nchan; ch++)
-    {
-        free( fil_ramps1[ch] );
-        free( fil_ramps2[ch] );
-    }
-    free( fil_ramps1 );
-    free( fil_ramps2 );
     destroy_metafits_info( &mi );
     free( data_buffer_coh    );
     free( data_buffer_incoh  );
     free( data_buffer_vdif   );
-    #ifdef HAVE_CUDA
     cudaFreeHost( data_buffer_coh1   );
     cudaFreeHost( data_buffer_coh2   );
     cudaFreeHost( data_buffer_incoh1 );
     cudaFreeHost( data_buffer_incoh2 );
     cudaFreeHost( data_buffer_vdif1  );
     cudaFreeHost( data_buffer_vdif2  );
-    cudaFreeHost( data_buffer_uvdif1 );
-    cudaFreeHost( data_buffer_uvdif2 );
     cudaFreeHost( data1 );
     cudaFreeHost( data2 );
-    #else
-    free( data_buffer_coh1   );
-    free( data_buffer_coh2   );
-    free( data_buffer_incoh1 );
-    free( data_buffer_incoh2 );
-    free( data_buffer_vdif1 );
-    free( data_buffer_vdif2 );
-    free( data_buffer_uvdif1 );
-    free( data_buffer_uvdif2 );
-    free( data1 );
-    free( data2 );
-    #endif
-    
+        
     free( opts.obsid        );
     free( opts.time_utc     );
     free( opts.pointings    );
@@ -757,20 +654,12 @@ int main(int argc, char **argv)
             free( vf[p].b_scales  );
             free( vf[p].b_offsets );
         }
-        if (opts.out_uvdif)
-        {
-            free( uvf[p].b_scales  );
-            free( uvf[p].b_offsets );
-        }
     }
-    #ifdef HAVE_CUDA
     free_formbeam( &gf );
-    if (opts.out_uvdif)
+    if (opts.out_vdif)
     {
         free_ipfb( &gi );
     }
-    #endif
-
     #ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
     fftw_cleanup_threads();
@@ -815,18 +704,18 @@ void usage() {
     fprintf(stderr, "OUTPUT OPTIONS\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-i, --incoh                ");
-    fprintf(stderr, "Turn on incoherent PSRFITS beam output.                          ");
+    fprintf(stderr, "Turn on incoherent PSRFITS beam output.                             ");
     fprintf(stderr, "[default: OFF]\n");
     fprintf(stderr, "\t-p, --psrfits              ");
     fprintf(stderr, "Turn on coherent PSRFITS output (will be turned on if none of\n");
     fprintf(stderr, "\t                           ");
-    fprintf(stderr, "-i, -p, -u, -v are chosen).                                      ");
-    fprintf(stderr, "[default: OFF]\n");
-    fprintf(stderr, "\t-u, --uvdif                ");
-    fprintf(stderr, "Turn on VDIF output with upsampling                              ");
+    fprintf(stderr, "-i, -p, -u, -v are chosen).                                         ");
     fprintf(stderr, "[default: OFF]\n");
     fprintf(stderr, "\t-v, --vdif                 ");
-    fprintf(stderr, "Turn on VDIF output without upsampling                           ");
+    fprintf(stderr, "Turn on VDIF output with upsampling                                 ");
+    fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-s, --summed               ");
+    fprintf(stderr, "Turn on summed polarisations of the coherent output (only Stokes I) ");
     fprintf(stderr, "[default: OFF]\n");
 
     fprintf(stderr, "\n");
@@ -926,6 +815,7 @@ void make_beam_parse_cmdline(
                 {"incoh",           no_argument,       0, 'i'},
                 {"psrfits",         no_argument,       0, 'p'},
                 {"vdif",            no_argument,       0, 'v'},
+                {"summed",          no_argument,       0, 's'},
                 {"utc-time",        required_argument, 0, 'z'},
                 {"pointings",       required_argument, 0, 'P'},
                 {"data-location",   required_argument, 0, 'd'},
@@ -947,7 +837,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:uvVw:W:z:",
+                             "a:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:svVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -1015,8 +905,8 @@ void make_beam_parse_cmdline(
                 case 'r':
                     opts->sample_rate = atoi(optarg);
                     break;
-                case 'u':
-                    opts->out_uvdif = 1;
+                case 's':
+                    opts->out_summed = 1;
                     break;
                 case 'v':
                     opts->out_vdif = 1;
@@ -1047,15 +937,13 @@ void make_beam_parse_cmdline(
         exit(EXIT_FAILURE);
     }
 
-#ifdef HAVE_CUDA
     // At the moment, -v is not implemented if CUDA is available
     if (opts->out_vdif)
     {
-        fprintf( stderr, "error: -v is not available in the CUDA version. "
+        fprintf( stderr, "error: -v is not available in the multi-pixel version. "
                          "To use -v, please recompile without CUDA.\n" );
         exit(EXIT_FAILURE);
     }
-#endif
 
     // Check that all the required options were supplied
     assert( opts->obsid        != NULL );
@@ -1069,8 +957,7 @@ void make_beam_parse_cmdline(
     assert( opts->cal.cal_type != NO_CALIBRATION );
 
     // If neither -i, -p, nor -v were chosen, set -p by default
-    if ( !opts->out_incoh && !opts->out_coh &&
-         !opts->out_vdif  && !opts->out_uvdif )
+    if ( !opts->out_incoh && !opts->out_coh && !opts->out_vdif )
     {
         opts->out_coh = 1;
     }
