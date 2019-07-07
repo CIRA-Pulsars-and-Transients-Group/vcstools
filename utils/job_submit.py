@@ -3,6 +3,7 @@
 import subprocess
 import config
 import logging
+import socket
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ SLURM_TMPL = """#!/bin/bash -l
 #
 #SBATCH --cpus-per-task={threads}
 #SBATCH --mem-per-cpu={mem}MB
+#SBATCH --nice={nice}
 {header}
 
 ncpus={threads}
@@ -35,7 +37,8 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
                  module_list=[], vcstools_version="master",
                  batch_dir="batch/", depend=None, depend_type='afterok', 
                  submit=True, outfile=None, queue="cpuq", export="NONE",
-                 gpu_res=None, mem=1024, cpu_threads=1):
+                 gpu_res=None, mem=1024, cpu_threads=1, temp_mem=None,
+                 nice=0):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
@@ -187,6 +190,12 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     if gpu_res is not None:
         header.append('#SBATCH --gres=gpu:{0}'.format(gpu_res))
 
+    # add temp SSD memory to combat I/O issues. Only availble on Ozstar
+    hostname = socket.gethostname()
+    if temp_mem is not None and \
+        (hostname.startswith('john') or hostname.startswith('farnarkle')):
+        header.append("#SBATCH --tmp={0}GB".format(temp_mem))
+
     # now join the header into one string
     header = "\n".join(header)
 
@@ -222,7 +231,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
                        cluster=cluster, partition=partition,
                        export=export, account=comp_config['group_account'],
                        module_dir=comp_config['module_dir'],
-                       threads=cpu_threads, mem=mem)
+                       threads=cpu_threads, mem=mem, nice=nice)
 
     # write the formatted template to the job file for submission
     with open(jobfile, "w") as fh:

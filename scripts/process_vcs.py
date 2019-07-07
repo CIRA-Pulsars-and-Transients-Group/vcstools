@@ -620,7 +620,12 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     mdir(P_dir, "Pointings")
     # startjobs = True
 
-    max_pointing = 15 
+    import socket
+    hostname = socket.gethostname()
+    if hostname.startswith('john') or hostname.startswith('farnarkle'):
+        max_pointing = 30
+    else:
+        max_pointing = 15
 
     # set up SLURM requirements
     if len(pointing_list) > max_pointing:
