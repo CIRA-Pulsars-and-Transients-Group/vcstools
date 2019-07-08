@@ -177,7 +177,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None, max_dm = None):
         name_ra_dec = get_psrcat_ra_dec(pulsar_list, max_dm = max_dm)
     elif source_type == 'FRB':
         #TODO it's changed and currently not working atm
-        with open(web_table,"rb") as in_txt:
+        with open(web_table,"r") as in_txt:
             lines = in_txt.readlines()
             data = []
             for l in lines[7:]:
@@ -188,7 +188,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None, max_dm = None):
                     dectemp = ltemp[8].lstrip('<td>')
                     name_ra_dec.append([ltemp[0].lstrip('<td>')[:9],ratemp,dectemp])
     elif source_type == 'GC':
-        with open(web_table,"rb") as in_txt:
+        with open(web_table,"r") as in_txt:
             lines = in_txt.readlines()
             lines = lines[71:]
             data = []
@@ -202,7 +202,7 @@ def grab_source_alog(source_type = 'Pulsar', pulsar_list = None, max_dm = None):
                     name_ra_dec = name_ra_dec[:-2]
                     break
     elif source_type == 'RRATs':
-        with open(web_table,"rb") as in_txt:
+        with open(web_table,"r") as in_txt:
             lines = in_txt.readlines()
             data = []
             for l in lines[1:]:
@@ -584,7 +584,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
     if obs_for_source:
         for sn, source in enumerate(names_ra_dec):
             out_name = "{0}_{1}_beam.txt".format(source[0],beam)
-            with open(out_name,"wb") as output_file:
+            with open(out_name,"w") as output_file:
                 output_file.write('#All of the observation IDs that the {0} beam model calculated a power of {1} or greater for the source: {2}\n'.format(beam,min_power, source[0])) 
                 output_file.write('#Column headers:\n')
                 output_file.write('#Obs ID: Observation ID\n')
