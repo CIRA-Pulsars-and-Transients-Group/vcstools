@@ -698,7 +698,15 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 module_list = [comp_config['container_module']]
                 commands = []
                 commands.append(openmp_line)
-                commands.append("cd {0}".format(P_dir))
+                if hostname.startswith('john') or hostname.startswith('farnarkle'):
+                    #Write outputs to SSDs if on Ozstar
+                    commands.append("cd $JOBFS")
+                    #Work out required SSD size
+                    temp_mem = int(5. * (float(stop) - float(start) + 1.) * \
+                                   float(len(pointing_list)) / 1000.) + 1
+                else:
+                    commands.append("cd {0}".format(P_dir))
+                    temp_mem = None
                 commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} "
                                 "-e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
                                 "-P {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(
@@ -709,6 +717,9 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 commands.append("")
                 for pointing in pointing_list:
                     mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
+                    if hostname.startswith('john') or hostname.startswith('farnarkle'):
+                        #Move outputs off the SSD
+                        commands.append("cp $JOBFS/{0}/* {1}/{0}/".format(pointing, P_dir))
 
                 job_id = submit_slurm(make_beam_small_batch, commands,
                             batch_dir=batch_dir, module_list=module_list,
@@ -716,7 +727,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                             queue='gpuq', vcstools_version=vcstools_version, 
                             submit=True, export="NONE", gpu_res=1,
                             cpu_threads=n_omp_threads,
-                            mem=comp_config['gpu_beamform_mem'])
+                            mem=comp_config['gpu_beamform_mem'], temp_mem=temp_mem)
                 job_id_list.append(job_id)
         job_id_list_list.append(job_id_list)
         
