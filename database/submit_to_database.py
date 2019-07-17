@@ -492,6 +492,12 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     else:
         cal_db_id = None
     
+    if S_mean is not None:
+        #prevent TypeError caused by trying to format Nones given to fluxes for 
+        #highly scattered pulsars
+        S_mean = float("{0:.2f}".format(S_mean))
+        u_S_mean = float("{0:.2f}".format(u_S_mean))
+    
     try:
         client.detection_create(web_address, auth, 
                                observationid = int(obsid),
@@ -501,8 +507,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                observation_type = int(obstype),
                                calibrator = cal_db_id,
                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                               flux = float("{0:.2f}".format(S_mean)),
-                               flux_error = float("{0:.2f}".format(u_S_mean)),
+                               flux = S_mean,
+                               flux_error = u_S_mean,
                                width = float("{0:.2f}".format(w_equiv_ms)),
                                width_error = float("{0:.2f}".format(u_w_equiv_ms)),
                                scattering = float("{0:.5f}".format(scattering)), 
@@ -518,8 +524,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                observation_type = int(obstype),
                                calibrator = cal_db_id,
                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                               flux = float("{0:.2f}".format(S_mean)),
-                               flux_error = float("{0:.2f}".format(u_S_mean)),
+                               flux = S_mean,
+                               flux_error = u_S_mean,
                                width = float("{0:.2f}".format(w_equiv_ms)),
                                width_error = float("{0:.2f}".format(u_w_equiv_ms)),
                                scattering = float("{0:.5f}".format(scattering)), 
