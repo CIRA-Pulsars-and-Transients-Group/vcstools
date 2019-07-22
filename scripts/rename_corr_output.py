@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from astropy.time import Time
 from datetime import datetime
 import argparse

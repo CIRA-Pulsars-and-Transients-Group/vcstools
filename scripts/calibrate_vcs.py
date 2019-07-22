@@ -639,7 +639,7 @@ class RTScal(object):
         """
         logger.info("Writing RTS configuration script for contiguous bandwidth observation")
         fname = "{0}/rts_{1}.in".format(self.rts_out_dir, self.cal_obsid)  # output file name to write
-        with open(fname, 'wb') as f:
+        with open(fname, 'w') as f:
             f.write(self.base_str)
 
         jobids = []

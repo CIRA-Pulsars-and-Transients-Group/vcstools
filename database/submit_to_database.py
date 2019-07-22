@@ -279,7 +279,8 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
         quit()
 
     #rts.in
-    if not os.path.isfile("{0}/rts_{1}.in".format(base_dir, cal_obsid)):
+    rts_files = glob.glob("{0}/rts_{1}*.in".format(base_dir, cal_obsid))
+    if len(rts_files) == 0:
         logger.error("No rts in file. Exiting")
         quit()
 
@@ -295,9 +296,10 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
         out.add(bf, arcname=bf.split("/")[-1])
     for DIJ in DIJ_files:
         out.add(DIJ, arcname=DIJ.split("/")[-1])
+    for rts in rts_files:
+        out.add(rts, arcname=rts.split("/")[-1])
     out.add("{0}/flagged_channels.txt".format(base_dir), arcname="flagged_channels.txt")
     out.add("{0}/flagged_tiles.txt".format(base_dir), arcname="flagged_tiles.txt")
-    out.add("{0}/rts_{1}.in".format(base_dir, cal_obsid), arcname="rts_{0}.in".format(cal_obsid))
     out.add(source_file, arcname=source_file.split("/")[-1])
     out.close()
 
@@ -490,6 +492,12 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     else:
         cal_db_id = None
     
+    if S_mean is not None:
+        #prevent TypeError caused by trying to format Nones given to fluxes for 
+        #highly scattered pulsars
+        S_mean = float("{0:.2f}".format(S_mean))
+        u_S_mean = float("{0:.2f}".format(u_S_mean))
+    
     try:
         client.detection_create(web_address, auth, 
                                observationid = int(obsid),
@@ -499,8 +507,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                observation_type = int(obstype),
                                calibrator = cal_db_id,
                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                               flux = float("{0:.2f}".format(S_mean)),
-                               flux_error = float("{0:.2f}".format(u_S_mean)),
+                               flux = S_mean,
+                               flux_error = u_S_mean,
                                width = float("{0:.2f}".format(w_equiv_ms)),
                                width_error = float("{0:.2f}".format(u_w_equiv_ms)),
                                scattering = float("{0:.5f}".format(scattering)), 
@@ -516,8 +524,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                observation_type = int(obstype),
                                calibrator = cal_db_id,
                                startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                               flux = float("{0:.2f}".format(S_mean)),
-                               flux_error = float("{0:.2f}".format(u_S_mean)),
+                               flux = S_mean,
+                               flux_error = u_S_mean,
                                width = float("{0:.2f}".format(w_equiv_ms)),
                                width_error = float("{0:.2f}".format(u_w_equiv_ms)),
                                scattering = float("{0:.5f}".format(scattering)), 
