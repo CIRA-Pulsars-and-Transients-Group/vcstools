@@ -342,7 +342,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
                      module_list=module_list,
                      slurm_kwargs={"time": secs_to_run, "nice": nice},
                      vcstools_version=vcstools_version, queue="copyq", 
-                     export="NONE")
+                     export="NONE", mem=2048)
 
 
 def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args,
