@@ -59,6 +59,8 @@ def load_config_file():
     hostname = socket.gethostname()
     if hostname.startswith('galaxy'):
         comp_config = GALAXY_CONFIG
+    elif hostname.startswith('nid'):
+        comp_config = GALAXY_CONFIG
     elif hostname.startswith('farnarkle'):
         comp_config = OZSTAR_CONFIG
     elif hostname.startswith('john'):
