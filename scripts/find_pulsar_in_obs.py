@@ -535,7 +535,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
 
 
 def find_sources_in_obs(obsid_list, names_ra_dec, 
-                        obs_for_source = False, dt = 296, beam = 'analytic',
+                        obs_for_source = False, dt_input = 296, beam = 'analytic',
                         min_power = 0.3, cal_check = False, all_volt = False,
                         degrees_check = False):
     """
@@ -561,6 +561,14 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
     for obsid in obsid_list:
         beam_meta_data, full_meta = get_common_obs_metadata(obsid, return_all = True)
         #beam_meta_data = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
+
+        if dt_input * 4 >  beam_meta_data[3]:
+            # If the observation time is very short then a smaller dt time is required 
+            # to get enough ower imformation
+            dt = int(beam_meta_data[3] / 4.)
+        else:
+            dt = dt_input
+        logger.debug("obsid: {0}, time_obs {1} s, dt {2} s".format(obsid, beam_meta_data[3], dt))
 
         #check for raw volatge files
         filedata = full_meta[u'files']
@@ -775,7 +783,7 @@ if __name__ == "__main__":
         dt = 100
     
     find_sources_in_obs(obsid_list, names_ra_dec, 
-                        obs_for_source = args.obs_for_source, dt = dt, beam = args.beam,
+                        obs_for_source = args.obs_for_source, dt_input = dt, beam = args.beam,
                         min_power = args.min_power, cal_check = args.cal_check,
                         all_volt = args.all_volt, degrees_check = degrees_check)
     

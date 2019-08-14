@@ -615,12 +615,12 @@ class RTScal(object):
         logger.info("Grouping individual channels into consecutive subbands (if possible)")
 
         # check if the 128,129 channel pair exists and note to user that the subband will be divided on that boundary
-        if any([128, 129] == self.channels[i:i + 2] for i in xrange(len(self.channels) - 1)):
+        if any([128, 129] == self.channels[i:i + 2] for i in range(len(self.channels) - 1)):
             logger.info("A subband crosses the channel 129 boundary. This subband will be split on that boundary.")
 
         # create a list of lists with consecutive channels grouped within a list
-        hichan_groups = [map(itemgetter(1), g)[::-1] for k, g in groupby(enumerate(self.hichans), lambda i, x: i - x)][::-1]  # reversed order (both of internal lists and globally)
-        lochan_groups = [map(itemgetter(1), g) for k, g in groupby(enumerate(self.lochans), lambda i, x: i - x)]
+        hichan_groups = [list(map(itemgetter(1), g))[::-1] for k, g in groupby(enumerate(self.hichans), lambda ix: ix[0] - ix[1])][::-1]  # reversed order (both of internal lists and globally)
+        lochan_groups = [list(map(itemgetter(1), g)) for k, g in groupby(enumerate(self.lochans), lambda ix: ix[0] - ix[1])]
         logger.debug("High channels (grouped): {0}".format(hichan_groups))
         logger.debug("Low channels  (grouped): {0}".format(lochan_groups))
 
@@ -779,7 +779,7 @@ class RTScal(object):
                     fname = "{0}/rts_{1}_chan{2}-{3}.in".format(basepath, self.cal_obsid, max(c), min(c))
 
                 chan_file_dict[fname] = len(c)
-                with open(fname, 'wb') as f:
+                with open(fname, 'w') as f:
                     f.write(string)
 
                 count += len(c)
@@ -823,7 +823,7 @@ class RTScal(object):
         logger.info("Writing individual subband RTS configuration scripts")
 
         jobids = []
-        for k, v in chan_file_dict.iteritems():
+        for k, v in chan_file_dict.items():
             nnodes = v + 1
             chans = k.split('_')[-1].split(".")[0]
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
