@@ -51,7 +51,7 @@ def yes_no(answer):
     no = set(['N','no','n'])
      
     while True:
-        choice = raw_input(answer).lower()
+        choice = input(answer).lower()
         if choice in yes:
            return True
         elif choice in no:
@@ -711,6 +711,7 @@ if __name__ == "__main__":
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+    logger.propagate = False
     
     #Parse options
     if args.in_cat and args.coords:

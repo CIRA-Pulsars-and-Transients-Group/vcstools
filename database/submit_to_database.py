@@ -626,7 +626,7 @@ if __name__ == "__main__":
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
-    logger.propagate = 0
+    logger.propagate = False
 
     #Checks for MWA database usernames and passwords
     if 'MWA_PULSAR_DB_USER' in os.environ and 'MWA_PULSAR_DB_PASS' in os.environ:

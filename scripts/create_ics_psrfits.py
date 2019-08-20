@@ -47,6 +47,7 @@ if __name__ == "__main__":
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+    logger.propagate = False
 
     if args.base_dir is None:
         data_dir = "/group/mwaops/vcs/{obsid}/combined".format(obsid=args.obsID)

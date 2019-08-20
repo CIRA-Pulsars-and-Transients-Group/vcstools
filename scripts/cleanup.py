@@ -23,7 +23,7 @@ def opt_parser():
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
                                     choices=loglevels.keys(), default="INFO")
-    return parser.parse_args()
+    return parser.parse_args(), loglevels
 
 def munlink_files(folder, file_type):
     while True:
@@ -90,7 +90,7 @@ def remove_beamformed(obs,pointing=None):
 
 
 if __name__ == '__main__':
-    args = opt_parser()
+    args, loglevels = opt_parser()
     if args.version:
         try:
             import version
@@ -108,6 +108,7 @@ if __name__ == '__main__':
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+    logger.propagate = False
 
     if args.raw:
         remove_raw(args.obs)
