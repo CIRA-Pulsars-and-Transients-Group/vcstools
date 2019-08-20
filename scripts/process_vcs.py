@@ -760,6 +760,7 @@ if __name__ == '__main__':
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+    logger.propagate = False
 
     logger.info("Using vcstools/{0}".format(opts.vcstools_version))
     if opts.version:

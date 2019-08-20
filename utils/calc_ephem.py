@@ -244,6 +244,7 @@ if __name__ == "__main__":
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+    logger.propagate = False
 
     if (args.ra is None) or (args.dec is None) or (args.utcdate is None):
         logger.error("You must specify a RA, Dec and UTC date to plot the ephemeris")
