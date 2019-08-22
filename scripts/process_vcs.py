@@ -211,21 +211,23 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             if data_type == 16:
                 commands.append("else")
                 untar = distutils.spawn.find_executable('untar.sh')
-                commands.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.\
-                                format(untar, dl_dir, obsid, time_to_get, 
-                                       time_to_get+increment-1, n_untar, keep, 
-                                       vcs_database_id))
+                commands.append('run "{0}" "-w {1} -o {2} '
+                                '-b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir,
+                                       obsid, time_to_get, time_to_get+increment-1, n_untar,
+                                       keep, vcs_database_id))
 
                 #commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
             commands.append("fi")
 
+            # Download and checks should be done on Zeus's cpuq. This will only work
+            # on Galaxy as the Ozstar workflow is different
             submit_slurm(check_batch, commands, batch_dir=batch_dir, 
                          slurm_kwargs={"time": check_secs_to_run, 
                                        "nice": nice, 
-                                       "mem-per-cpu": "1024MB"},
+                                       "mem-per-cpu": "10GB"},
                          vcstools_version=vcstools_version, submit=False,
                          outfile=batch_dir+check_batch+"_0.out", 
-                         queue="cpuq", export="NONE")
+                         queue="zcpuq", export="NONE")
 
             # Write out the tar batch file if in mode 15
             #if format == 16:
