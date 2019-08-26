@@ -20,6 +20,8 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
                  'gpuq_cluster' : 'galaxy',
                  'gpuq_partition' : 'gpuq',
                  'gpu_beamform_mem' : '1024',
+                 'zcpuq_cluster' : 'zeus',
+                 'zcpuq_partition' : 'workq',
                  'copyq_cluster' : 'zeus',
                  'copyq_partition' : 'copyq',
                  'container_module' : 'shifter',
@@ -42,6 +44,8 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'gpu_beamform_mem' : '3072',
                  'copyq_cluster' : 'farnarkle',
                  'copyq_partition' : 'skylake', #TODO check if there's a better one
+                 'zcpuq_cluster' : 'farnarkle',
+                 'zcpuq_partition' : 'skylake',
                  'container_module' : 'singularity/latest',
                  #removed since I've now installed it on Ozstar
                  'container_command' : ''}
@@ -111,6 +115,7 @@ if __name__ == '__main__':
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+    logger.propagate = False
 
     
     #print config file

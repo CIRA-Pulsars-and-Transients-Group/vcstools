@@ -216,6 +216,7 @@ if __name__ == "__main__":
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
     ch.setLevel(loglevels[args.loglvl])
+    logger.propagate = False
 
 
     if args.gps and not args.utc:

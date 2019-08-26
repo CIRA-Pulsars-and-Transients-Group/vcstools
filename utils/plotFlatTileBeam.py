@@ -150,7 +150,8 @@ if __name__ == "__main__":
     #set log levels    
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])    
+    ch.setLevel(loglevels[args.loglvl])
+    logger.propagate = False
 
     # do the things
     plot_beam_pattern(args.obsid, args.freq, args.times, args.ra, args.dec, args.cutoff)
