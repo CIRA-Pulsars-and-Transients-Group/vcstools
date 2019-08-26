@@ -19,6 +19,8 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
                  'cpuq_partition' : 'gpuq',
                  'gpuq_cluster' : 'galaxy',
                  'gpuq_partition' : 'gpuq',
+                 'zcpuq_cluster' : 'zeus',
+                 'zcpuq_partition' : 'workq',
                  'copyq_cluster' : 'zeus',
                  'copyq_partition' : 'copyq',
                  'container_module' : 'shifter',
@@ -40,6 +42,8 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'gpuq_partition' : 'skylake-gpu',
                  'copyq_cluster' : 'farnarkle',
                  'copyq_partition' : 'skylake', #TODO check if there's a better one
+                 'zcpuq_cluster' : 'farnarkle',
+                 'zcpuq_partition' : 'skylake',
                  'container_module' : 'singularity/latest',
                  'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools-cuda-9.2.simg'}
 

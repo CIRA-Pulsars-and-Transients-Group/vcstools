@@ -140,6 +140,11 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     elif queue == 'copyq':
         cluster   = comp_config['copyq_cluster']
         partition = comp_config['copyq_partition']
+    elif queue == 'zcpuq':
+        # Download and checks should be done on Zeus's cpuq. This will only work
+        # on Galaxy as the Ozstar workflow is different
+        cluster   = comp_config['zcpuq_cluster']
+        partition = comp_config['zcpuq_partition']
     else:
         logger.error("No queue found, please use cpuq, gpuq or copyq")       
 
