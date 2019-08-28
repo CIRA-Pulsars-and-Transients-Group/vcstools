@@ -535,7 +535,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                   metafits_file, nfine_chan, pointing_list, args, 
                   rts_flag_file=None, bf_formats=None, DI_dir=None, 
                   execpath=None, calibration_type='rts', 
-                  vcstools_version="master", nice=0):
+                  vcstools_version="master", nice=0, channels_to_beamform=None):
     """
     This function runs the new version of the beamformer. It is modelled after 
     the old function above and will likely be able to be streamlined after 
@@ -564,37 +564,33 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     #logger.info("Tested version of make_beam = {0}".format(tested_version.strip()))
 
     metafile = "{0}/{1}.meta".format(product_dir, obs_id)
-    metafile_exists = False
+    channels = None
+    # No channels given so first check for a metafile
     if os.path.isfile(metafile):
         logger.info("Found observation metafile: {0}".format(metafile))
-        channels = None
         with open(metafile, 'r') as m:
             for line in m.readlines():
                 if line.startswith("channels"):
                     channels = line.split(",")[1:]
                     channels = np.array(channels, dtype=np.int)
-        if channels is None:
-            logger.info("Channels keyword not found in metafile. Re-querying "
-                        "the database.")
-        else:
-            metafile_exists = True
-            #channels = [int(c) for c in channels]
-    # Grabbing this from the calibrate section for now. This should be streamlined to call an external function (SET)
-    if metafile_exists == False:
-        logger.info("Querying the database for calibrator obs ID {0}...".\
-                    format(obs_id))
-        obs_info = meta.getmeta(service='obs', params={'obs_id': str(obs_id)})
-        channels = obs_info[u'rfstreams'][u"0"][u'frequencies']
+    # If channels is still None get_channels will get it from the metadata
+    channels = meta.get_channels(obs_id, channels=channels)
+    
+    # Make a metafile containing the channels so no future metadata calls are required
+    if not os.path.isfile(metafile):
         with open(metafile, "w") as m:
-            m.write("#Metadata for obs ID {0} required to determine if: normal or picket-fence\n".format(obs_id))
+            m.write("#Metadata for obs ID {0} required to determine if: normal or "
+                    "picket-fence\n".format(obs_id))
             m.write("channels,{0}".format(",".join([str(c) for c in channels])))
-    if len(channels) == 0:
-        logger.error("Error reading in channels: {0}. Exiting")
-        sys.exit(0)
+    channels = np.array(channels, dtype=np.int)
     hichans = [c for c in channels if c>128]
     lochans = [c for c in channels if c<=128]
     lochans.extend(list(reversed(hichans)))
     ordered_channels = lochans
+
+    if channels_to_beamform is None:
+        # If no channels_to_beamform given fold on everything
+        channels_to_beamform = ordered_channels
 
     # Run for each coarse channel. Calculates delays and makes beam
 
@@ -656,6 +652,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         # Run one coarse channel per node
         job_id_list = []
         for gpubox, coarse_chan in enumerate(ordered_channels, 1):
+            if coarse_chan not in channels_to_beamform:
+                continue
             if calibration_type == 'rts':
                 #chan_list = get_frequencies(metafits_file, resort=True)
                 DI_file = "{0}/DI_JonesMatrices_node{1:0>3}.dat".format(DI_dir, gpubox)

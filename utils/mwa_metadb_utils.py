@@ -109,8 +109,9 @@ def get_channels(obsid, channels=None):
     if channels is None:
         print("Obtaining frequency channel data from http://mwa-metadata01.pawsey.org.au/metadata/"
               "for OBS ID: {}".format(obsid))
-        beam_meta_data = meta.getmeta(service='obs', params={'obs_id':obsid})
+        beam_meta_data = getmeta(service='obs', params={'obs_id':obsid})
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
+        print("from get channels {0}".format(channels))
     return channels
 
 
