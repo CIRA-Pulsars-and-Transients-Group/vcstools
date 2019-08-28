@@ -101,6 +101,19 @@ def getmeta(service='obs', params=None):
     return result
 
 
+def get_channels(obsid, channels=None):
+    """
+    Gets the channels ids from the observation's metadata. If channels is not None assumes the
+    channels have already been aquired so it doesn't do an unnecessary database call.
+    """
+    if channels is None:
+        print("Obtaining frequency channel data from http://mwa-metadata01.pawsey.org.au/metadata/"
+              "for OBS ID: {}".format(obsid))
+        beam_meta_data = meta.getmeta(service='obs', params={'obs_id':obsid})
+        channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
+    return channels
+
+
 def is_number(s):
     try:
         int(s)
