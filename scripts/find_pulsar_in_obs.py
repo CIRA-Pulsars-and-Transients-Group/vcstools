@@ -305,9 +305,14 @@ def find_obsids_meta_pages(params={'mode':'VOLTAGE_START'}):
     #need to ask for a page of results at a time
     while len(temp) == 200 or page == 1:
         params['page'] = page
+        logger.debug("Page: {0}   params: {1}".format(page, params))
         temp = getmeta(service='find', params=params)
-        for row in temp:
-            obsid_list.append(row[0])
+        if temp is not None:
+            # if there are non obs in the field (which is rare) None is returned
+            for row in temp:
+                obsid_list.append(row[0])
+        else:
+            temp = []
         page += 1
 
     return obsid_list
