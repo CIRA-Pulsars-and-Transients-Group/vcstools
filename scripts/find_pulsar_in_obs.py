@@ -167,7 +167,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
     elif source_type == 'RRATs':
         website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
         web_table = 'rratalog.txt'
-    if source_type != 'Pulsar':
+    if source_type != 'Pulsar' and source_type != 'rFRB':
         logger.info("Downloading {0} catalogue from {1}".format(source_type, website))
         os.system('wget {0}'.format(website))
 
@@ -189,10 +189,10 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
                     name_ra_dec.append([ltemp[0].lstrip('<td>')[:9],ratemp,dectemp])
 
     elif source_type == "rFRB":
-        for source in pulsar_list:
-            info = get_rFRB_info(source)
-            if info is not None: 
-                name_ra_dec.append([line[0], line[1], line[2]) 
+        info = get_rFRB_info(name=pulsar_list)
+        if info is not None: 
+            for line in info:
+                name_ra_dec.append([line[0], line[1], line[2]]) 
 
     elif source_type == 'GC':
         with open(web_table,"r") as in_txt:
@@ -222,23 +222,36 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
                     name_ra_dec.append([temp[0], temp[4], temp[5]])
     
     #remove web catalogue tables
-    if source_type !='Pulsar':
+    if source_type !='Pulsar' and source_type != 'rFRB':
         os.remove(web_table)
 
     return name_ra_dec
 
-def get_rFRB_info(name)
-    #Returns [name, ra, dec, dm, dm error]
+def get_rFRB_info(name=None):
+    """
+    Gets repeating FRB info from the csv file we maintain.
+    Input:
+        name: a list of repeating FRB names to get info for. The default is None 
+              which gets all rFRBs in the catalogue.
+    Output:
+        [[name, ra, dec, dm, dm error]]
+        A list of all the FRBs which each have a list contining name, ra, dec,
+        dm and dm error
+    """
+    output = []
     db = open(os.environ["KNOWN_RFRB_CSV"], "r")
     for line in db.readlines():
-        line = line.split(",")
-        #some FRBs end with a J name. We will ignore these when comparing by using the first 9 characters
-        if line[0][0:9] == name[0:9]:
-            info = line
-            #convert DM and err to float
-            info[3] = float(info[3])
-            info[4] = float(info[4])
-            return info
+        if not line.startswith("#"):
+            line = line.split(",")
+            #some FRBs end with a J name. We will ignore these when comparing 
+            #by using the first 9 characters
+            FRB, ra, dec, dm, dm_error = line
+            if name is None:
+                #No input FRBs so return all FRBs
+                output.append(line)
+            elif FRB in name:
+                output.append(line)
+    return output
 
 def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
     """
