@@ -187,6 +187,13 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
                     ratemp = ltemp[7].lstrip('<td>')
                     dectemp = ltemp[8].lstrip('<td>')
                     name_ra_dec.append([ltemp[0].lstrip('<td>')[:9],ratemp,dectemp])
+
+    elif source_type == "rFRB":
+        for source in pulsar_list:
+            info = get_rFRB_info(source)
+            if info is not None: 
+                name_ra_dec.append([line[0], line[1], line[2]) 
+
     elif source_type == 'GC':
         with open(web_table,"r") as in_txt:
             lines = in_txt.readlines()
@@ -220,6 +227,18 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
 
     return name_ra_dec
 
+def get_rFRB_info(name)
+    #Returns [name, ra, dec, dm, dm error]
+    db = open(os.environ["KNOWN_RFRB_CSV"], "r")
+    for line in db.readlines():
+        line = line.split(",")
+        #some FRBs end with a J name. We will ignore these when comparing by using the first 9 characters
+        if line[0][0:9] == name[0:9]:
+            info = line
+            #convert DM and err to float
+            info[3] = float(info[3])
+            info[4] = float(info[4])
+            return info
 
 def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
     """
