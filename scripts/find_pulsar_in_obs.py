@@ -152,7 +152,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
     """
     Creates a csv file of source names, RAs and Decs using web catalogues for ['Pulsar', 'FRB', 'GC', 'RRATs'].
     """
-    modes = ['Pulsar', 'FRB', 'GC', 'RRATs']
+    modes = ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs']
     if source_type not in modes:
         logger.error("Input source type not in known catalogues types. Please choose from: {0}".format(modes))
         return None
@@ -755,7 +755,7 @@ if __name__ == "__main__":
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
     sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"', default = None)
     sourargs.add_argument('--max_dm',type=float, default = 250., help='The maximum DM for pulsars. All pulsars with DMs higher than the maximum will not be included in output files. Default=250.0')
-    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue.")
+    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue.")
     sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
     sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing the source\'s coordinates to be searched for in the format "RA,DEC" "RA,DEC". Must be enterered as either: "hh:mm:ss.ss,+dd:mm:ss.ss" or "deg,-deg". Please only use one format.')
     #finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
