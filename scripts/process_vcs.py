@@ -46,6 +46,32 @@ def get_user_email():
     return email.strip()
 
 
+def find_combined_beg_end(obsid, base_path="/group/mwaops/vcs/", channels=None):
+    """
+    looks through the comined files of the input obsid and returns the max and min in gps time
+    Input:
+        obsid: The MWA observation ID
+    Optional Input:
+        base_path: the direct path the base vcs directory. Default: /group/mwaops/vcs/\
+        channels: a list of the frequency channel ids. Default None which then gets the 
+                  from the mwa metadata
+    """
+    #TODO have some sort of check to look for gaps
+    if glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid)):
+        combined_files = glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid))
+    else:
+        channels = meta.get_channels(obsid, channels)
+        combined_files = glob.glob("{0}/{1}/combined/{1}*_ch{2}.dat".\
+                                   format(base_path, obsid, channels[-1]))
+    comb_times = []
+    for comb in combined_files:
+        comb_times.append(int(comb.split("_")[1]))
+    beg = min(comb_times)
+    end = max(comb_times)
+
+    return beg, end
+
+
 def ensure_metafits(data_dir, obs_id, metafits_file):
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
 
@@ -595,8 +621,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                      "calibration_solutions.bin file is. Aborting here")
         quit()
     DI_dir = os.path.abspath(DI_dir)
-    RA = pointing[0]
-    Dec = pointing[1]
+    RA = pointing.split("_")[0]
+    Dec = pointing.split("_")[1]
 
     # make_beam_small requires the start time in UTC, get it from the start
     # GPS time as is done in timeconvert.py
@@ -719,7 +745,7 @@ if __name__ == '__main__':
     group_correlate.add_option("--ft_res", metavar="FREQ RES,TIME RES", type="int", nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. [default=%default]")
 
     group_beamform = OptionGroup(parser, 'Beamforming Options')
-    group_beamform.add_option("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
+    group_beamform.add_option("-p", "--pointing", help="required, R.A. and Dec. of pointing seperated by an underscore, e.g. \"19:23:48.53_-20:31:52.95\"")
     group_beamform.add_option("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) " +\
                                   "or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
     group_beamform.add_option("--bf_out_format", type="choice", choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. [default=%default]".format(bf_out_modes), default='psrfits')
@@ -736,6 +762,8 @@ if __name__ == '__main__':
     parser.add_option("-b", "--begin", type="int", help="First GPS time to process [no default]")
     parser.add_option("-e", "--end", type="int", help="Last GPS time to process [no default]")
     parser.add_option("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%default]")
+    parser.add_option("--all_avail", action="store_true", default=False,
+                      help="Uses all of the available combined files available (does not check for gaps). [default=%default]")
     parser.add_option("-i", "--increment", type="int", default=64, help="Increment in seconds (how much we process at once) [default=%default]")
     parser.add_option("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) [default=%default]")
     parser.add_option("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default " + \
@@ -776,12 +804,19 @@ if __name__ == '__main__':
             sys.exit(0)
 
     #Option parsing
-    if opts.all and (opts.begin or opts.end):
-        logger.error("Please specify EITHER (-b,-e) OR -a")
+    if ( opts.all and (opts.begin or opts.end) ) or \
+       ( opts.all_avail and (opts.begin or opts.end) ) or \
+       ( opts.all_avail and opts.all ) or \
+       ( opts.all and opts.all_avail and (opts.begin or opts.end) ):
+        logger.error("Please use ONLY (-b,-e) OR -a OR --all_avail")
         quit()
     elif opts.all:
         opts.begin, opts.end = meta.obs_max_min(opts.cal_obs\
                                if opts.mode == 'download_cal' else opts.obs)
+    elif opts.all_avail:
+        comp_config = config.load_config_file()
+        opts.begin, opts.end = find_combined_beg_end(opts.obs,
+                                                     base_path=comp_config['base_data_dir'])
     # make sure we can process increments smaller than 64 seconds when not in calibration related mode
     if opts.mode not in ['download_cal','calibrate']:
         if opts.end - opts.begin +1 < opts.increment:
