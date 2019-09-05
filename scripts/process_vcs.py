@@ -731,7 +731,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 job_id_list.append(job_id)
         job_id_list_list.append(job_id_list)
         
-    return job_id_list_list
+    return job_id_list_list, make_beam_small_batch.split('ch')[0]
 
 def database_command(args, obsid):
     DB_FILE = os.environ['CMD_VCS_DB_FILE']
