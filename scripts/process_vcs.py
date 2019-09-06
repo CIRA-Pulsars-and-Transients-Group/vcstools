@@ -53,6 +53,15 @@ def get_user_email():
     return email.strip()
 
 
+def gps_time_lists(start, stop, chunk):
+    time_chunks = []
+    while (start + chunk) < stop:
+        time_chunks.append((start, start + chunk - 1))
+        start += chunk
+    time_chunks.append((start, stop))
+    return time_chunks
+
+
 def ensure_metafits(data_dir, obs_id, metafits_file):
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
 
@@ -574,6 +583,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     channels = line.split(",")[1:]
                     channels = np.array(channels, dtype=np.int)
     # If channels is still None get_channels will get it from the metadata
+    print("chans before get channels {0}".format(channels))
     channels = meta.get_channels(obs_id, channels=channels)
     
     # Make a metafile containing the channels so no future metadata calls are required
@@ -618,12 +628,24 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     mdir(P_dir, "Pointings")
     # startjobs = True
 
+    # Set up supercomputer dependant parameters
     import socket
     hostname = socket.gethostname()
     if hostname.startswith('john') or hostname.startswith('farnarkle'):
         max_pointing = 30
+        #Work out required SSD size
+        #temp_mem = int(5. * (float(stop) - float(start) + 1.) * \
+        #               float(len(pointing_list)) / 1000.) + 1
+        temp_mem = 60
+        # Split it up into 400 chuncks to not use more than 60BG
+        time_chunks = gps_time_lists(start, stop, 400)
     else:
         max_pointing = 15
+        temp_mem = None
+        # Do it all at once on Galaxy
+        time_chunks = gps_time_lists(start, stop, 10000)
+
+
 
     # set up SLURM requirements
     if len(pointing_list) > max_pointing:
@@ -636,9 +658,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     else:
         secs_to_run = datetime.timedelta(seconds=seconds_to_run)
 
-    # VDIF will need gpuq if inverting pfb with '-m' option, otherwise cpuq is fine
-    # In general this needs to be cleaned up, prefferably to be able to intelligently select a
-    # queue and a maximum wall time (SET)
+    # Get the project id (eg G0057) from the metafits file
+    with pyfits.open(metafits_file) as hdul:
+        project_id = hdul[0].header['project']
+    
     n_omp_threads = 3
     openmp_line = "export OMP_NUM_THREADS={0}".format(n_omp_threads)
 
@@ -666,10 +689,13 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 logger.info("Please an accepted calibratin type. Aborting here.")
                 quit()
 
+            # Making pointing directories
+            for pointing in pointing_list:
+                mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
+            
             if "v" in bf_formats:
                 for pointing in pointing_list:
                     ra, dec = pointing.split("_")
-                    mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
                     make_beam_small_batch = "mb_{0}_ch{1}".format(pointing, coarse_chan)
                     module_list = [comp_config['container_module']]
                     commands = []
@@ -699,27 +725,33 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 commands = []
                 commands.append(openmp_line)
                 if hostname.startswith('john') or hostname.startswith('farnarkle'):
-                    #Write outputs to SSDs if on Ozstar
+                    # Write outputs to SSDs if on Ozstar
                     commands.append("cd $JOBFS")
-                    #Work out required SSD size
-                    temp_mem = int(5. * (float(stop) - float(start) + 1.) * \
-                                   float(len(pointing_list)) / 1000.) + 1
                 else:
                     commands.append("cd {0}".format(P_dir))
-                    temp_mem = None
-                commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} "
-                                "-e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
-                                "-P {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(
-                                n_omp_threads, comp_config['container_command'],
-                                make_beam_cmd, obs_id, start, stop, coarse_chan,
-                                jones_option, data_dir, pointing_str, metafits_file,
-                                utctime, bf_formats, rts_flag_file))  
-                commands.append("")
-                for pointing in pointing_list:
-                    mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
+
+                # Loop over each GPS time chunk. Will only be one on Galaxy 
+                for tci, (start, stop) in enumerate(time_chunks):
+                    commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} "
+                                    "-e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
+                                    "-P {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(
+                                    n_omp_threads, comp_config['container_command'],
+                                    make_beam_cmd, obs_id, start, stop, coarse_chan,
+                                    jones_option, data_dir, pointing_str, metafits_file,
+                                    utctime, bf_formats, rts_flag_file))  
+                    commands.append("")
                     if hostname.startswith('john') or hostname.startswith('farnarkle'):
-                        #Move outputs off the SSD
-                        commands.append("cp $JOBFS/{0}/* {1}/{0}/".format(pointing, P_dir))
+                        for pointing in pointing_list:
+                            # Move outputs off the SSD and renames them as if makebeam 
+                            # was only run once
+                            # G0024_1166459712_07:42:49.00_-28:21:43.00_ch132_0001.fits
+                            commands.append("cp $JOBFS/{0}/{1}_{2}_{0}_ch{3}_0001.fits "
+                                    "{4}/{0}/{1}_{2}_{0}_ch{3}_00{5:02}.fits".format(pointing,
+                                    project_id, obs_id, coarse_chan, P_dir, (tci+1)*2-1))
+                            commands.append("cp $JOBFS/{0}/{1}_{2}_{0}_ch{3}_0002.fits "
+                                    "{4}/{0}/{1}_{2}_{0}_ch{3}_00{5:02}.fits".format(pointing,
+                                    project_id, obs_id, coarse_chan, P_dir, (tci+1)*2))
+                    commands.append("")
 
                 job_id = submit_slurm(make_beam_small_batch, commands,
                             batch_dir=batch_dir, module_list=module_list,
