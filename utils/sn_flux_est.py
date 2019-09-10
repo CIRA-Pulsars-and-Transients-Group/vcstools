@@ -75,17 +75,30 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
 def fit_plaw_psr(x_data, y_data, y_err=None, initial=-1.5):
 
     function=plaw_func
+    #convert to logs
+    log_x = []
+    log_y = []
+    for x in x_data:
+        log_x.append(np.log(x))
+    for y in y_data:
+        log_y.append(np.log(y))
+ 
     if y_err is None:
-        sol = curve_fit(function, x_data, y_data, p0=[initial])
+        sol = curve_fit(function, log_x, log_y, p0=[initial])
     else:
-        sol = curve_fit(function, x_data, y_data, sigma=y_err, p0=[initial])
+        log_y_err = []
+        for y in y_err:
+            log_y_err.append(np.log(y))
+        sol = curve_fit(function, log_x, log_y, sigma=log_y_err, p0=[initial])
+
     spind = sol[0][0]
     spind_err = sol[1][0][0]
     logger.debug("solution: {0}".format(sol))
     return spind, spind_err
 
 def plaw_func(nu, a):
-    return (nu**a)
+    #pass the log values of nu
+    return a*nu
 
 def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
 
@@ -133,12 +146,15 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
                 flux_err = flux*0.05
 
             if not np.isnan(flux) and not np.isnan(flux_err):
-                freq_all.append(int(query.split()[0][1:]))
-                flux_all.append(flux)
-                flux_err_all.append(flux_err)
+                freq_all.append(int(query.split()[0][1:])*1e6)
+                flux_all.append(flux*1e-29)
+                flux_err_all.append(flux_err*1e-29)
 
         logger.debug("Number of available freqs, fluxes and flux uncertainties: {0}, {1}, {2}"\
                     .format(len(freq_all), len(flux_all), len(flux_err_all)))
+        logger.debug("Freqs: {0}".format(freq_all))
+        logger.debug("Fluxes: {0}".format(flux_all))
+        logger.debug("Flux Errors: {0}".format(flux_err_all))
 
         if len(flux_all) >1:
             logger.info("Fitting power law to archive data")
@@ -155,7 +171,7 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
         logger.info("calculating flux using spectral index: {0} and error: {1}".format(spind, spind_err))
         flux_est = (f_mean*1e6)**spind
         flux_est_err = flux_est*spind_err 
-        logger.info("Source flux estimate: {0} +/- {1} Jy".format(flux_est, flux_est_err))
+        logger.info("Source flux estimate: {0} +/- {1} Jy".format(flux_est*10**26, flux_est_err*10**26))
         
     return flux_est, flux_est_err
 
