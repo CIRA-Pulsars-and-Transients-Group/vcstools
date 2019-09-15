@@ -311,10 +311,12 @@ int main(int argc, char **argv)
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
     uint8_t *data;
-    uint8_t *data1;
-    uint8_t *data2;
-    cudaMallocHost( (void**)&data1, bytes_per_file * sizeof(uint8_t) );
-    cudaMallocHost( (void**)&data2, bytes_per_file * sizeof(uint8_t) );
+    //uint8_t *data1;
+    //uint8_t *data2;
+    //cudaMallocHost( (void**)&data1, bytes_per_file * sizeof(uint8_t) );
+    //cudaMallocHost( (void**)&data2, bytes_per_file * sizeof(uint8_t) );
+    uint8_t *data1 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
+    uint8_t *data2 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     assert(data1);
     assert(data2);
 
