@@ -45,6 +45,19 @@ def is_number(s):
         return True
     except ValueError:
         return False
+    
+
+def gps_to_utc(gps):
+    # GPS time as is done in timeconvert.py
+    utctime = Time(gps, format='gps', scale='utc').fits
+    # remove (UTC) that some astropy versions leave on the end
+    if utctime.endswith('(UTC)'):
+        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000(UTC)')
+        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
+    else:
+        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000')
+        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
+    return utctime
 
 
 def get_user_email():
@@ -612,16 +625,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     DI_dir = os.path.abspath(DI_dir)
 
     # make_beam_small requires the start time in UTC, get it from the start
-    # GPS time as is done in timeconvert.py
-    utctime = Time(start, format='gps', scale='utc').fits
-    # remove (UTC) that some astropy versions leave on the end
-    if utctime.endswith('(UTC)'):
-        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000(UTC)')
-        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
-    else:
-        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000')
-        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
-
+    utctime = gps_to_utc(start)
 
     logging.info("Running make_beam")
     P_dir = product_dir+"/pointings"
@@ -634,11 +638,12 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     if hostname.startswith('john') or hostname.startswith('farnarkle'):
         max_pointing = 30
         #Work out required SSD size
-        #temp_mem = int(5. * (float(stop) - float(start) + 1.) * \
-        #               float(len(pointing_list)) / 1000.) + 1
-        temp_mem = 60
+        temp_mem = int(5. * (float(stop) - float(start) + 1.) * \
+                       float(len(pointing_list)) / 1000.) + 1
+        #temp_mem = 60
         # Split it up into 400 chuncks to not use more than 60BG
-        time_chunks = gps_time_lists(start, stop, 400)
+        #time_chunks = gps_time_lists(start, stop, 400)
+        time_chunks = gps_time_lists(start, stop, 10000)
     else:
         max_pointing = 15
         temp_mem = None
@@ -732,6 +737,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
                 # Loop over each GPS time chunk. Will only be one on Galaxy 
                 for tci, (start, stop) in enumerate(time_chunks):
+                    utctime = gps_to_utc(start)
                     commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} "
                                     "-e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
                                     "-P {9} -r 10000 -m {10} -z {11} {12} -F {13}".format(
@@ -742,6 +748,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     commands.append("")
                     if hostname.startswith('john') or hostname.startswith('farnarkle'):
                         for pointing in pointing_list:
+                            """
                             # Move outputs off the SSD and renames them as if makebeam 
                             # was only run once
                             # G0024_1166459712_07:42:49.00_-28:21:43.00_ch132_0001.fits
@@ -751,6 +758,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                             commands.append("cp $JOBFS/{0}/{1}_{2}_{0}_ch{3}_0002.fits "
                                     "{4}/{0}/{1}_{2}_{0}_ch{3}_00{5:02}.fits".format(pointing,
                                     project_id, obs_id, coarse_chan, P_dir, (tci+1)*2))
+                            """
+                            commands.append("cp $JOBFS/{0}/{1}_{2}_{0}_ch{3}_00*.fits "
+                                            "{4}/{0}/".format(pointing, project_id,
+                                                              obs_id, coarse_chan, P_dir))
                     commands.append("")
 
                 job_id = submit_slurm(make_beam_small_batch, commands,
@@ -814,8 +825,7 @@ if __name__ == '__main__':
     group_correlate.add_argument("--ft_res", metavar="FREQ RES,TIME RES", type=int, nargs=2, default=(10,1000), help="Frequency (kHz) and Time (ms) resolution for running the correlator. Please make divisible by 10 kHz and 10 ms respectively. ")
 
     group_beamform = parser.add_argument_group('Beamforming Options')
-    group_beamform.add_argument("-p", "--pointing", nargs=2, help="required, R.A. and Dec. of pointing, e.g. \"19:23:48.53\" \"-20:31:52.95\"")
-    group_beamform.add_argument("--pointing_list", type=str, nargs='*', help="A comma sepertated list of pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS, e.g. \"19:23:48.53_-20:31:52.95,19:23:40.00_-20:31:50.00\"")
+    group_beamform.add_argument("-p", "--pointings", type=str, nargs='*', help="A space sepertated list of pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS, e.g. \"19:23:48.53_-20:31:52.95 19:23:40.00_-20:31:50.00\"")
     group_beamform.add_argument("--pointing_file", help="A file containing pointings with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS on each line, e.g. \"19:23:48.53_-20:31:52.95\n19:23:40.00_-20:31:50.00\"")
     group_beamform.add_argument("--DI_dir", default=None, help="Directory containing either Direction Independent Jones Matrices (as created by the RTS) or calibration_solution.bin as created by Andre Offringa's tools.[no default]")
     group_beamform.add_argument("--bf_out_format", type=str, choices=['psrfits','vdif','both'], help="Beam former output format. Choices are {0}. ".format(bf_out_modes), default='psrfits')
@@ -897,16 +907,14 @@ if __name__ == '__main__':
             quit()
     if (args.mode == "beamform" or args.incoh):
         bf_format = ""
-        if not (args.pointing or args.pointing_list or args.pointing_file):
+        if not (args.pointings or args.pointing_file):
             logger.info("Beamformer mode required that you specify pointings "
-                        "using either -p, --pointing_list or --pointing_file.")
+                        "using either -p or --pointing_file.")
             quit()
         #check if they're using more than one of the pointing options
-        if (args.pointing and args.pointing_list) or \
-           (args.pointing and args.pointing_file) or \
-           (args.pointing_list and args.pointing_file):
+        if (args.pointings and args.pointing_file):
             logger.info("Beamformer mode requires only one pointing option. "
-                        "Please use either -p, --pointing_list or --pointing_file.")
+                        "Please use either -p or --pointing_file.")
             quit()
         if (args.bf_out_format == 'psrfits' or args.bf_out_format == 'both'):
             bf_format +=" -p"
@@ -1009,10 +1017,8 @@ if __name__ == '__main__':
                 flagged_tiles_file = None
         ensure_metafits(data_dir, args.obs, metafits_file)
         #Turn the pointings into a list
-        if args.pointing:
-            pointing_list = ["{0}_{1}".format(args.pointing[0],args.pointing[1])]
-        elif args.pointing_list:
-            pointing_list = args.pointing_list
+        if args.pointings:
+            pointing_list = args.pointings
         elif args.pointing_file:
             with open(args.pointing_file) as f:
                 pointing_list = f.readlines()
