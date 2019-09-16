@@ -595,8 +595,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 if line.startswith("channels"):
                     channels = line.split(",")[1:]
                     channels = np.array(channels, dtype=np.int)
+    else:
+        logger.debug("No metafile in {0}".format(metafile))
+    logger.debug("Channels before meta.get_channels: {0}".format(channels))
     # If channels is still None get_channels will get it from the metadata
-    print("chans before get channels {0}".format(channels))
     channels = meta.get_channels(obs_id, channels=channels)
     
     # Make a metafile containing the channels so no future metadata calls are required
