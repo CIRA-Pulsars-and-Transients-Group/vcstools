@@ -26,8 +26,6 @@ import mwa_metadb_utils
 import submit_to_database
 import process_vcs
 
-
-
 logger = logging.getLogger(__name__)
 
 def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
@@ -41,10 +39,22 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
     enter_obs_norm = beam_source_data[obsid][0][1]
     exit_obs_norm = beam_source_data[obsid][0][2]
 
+    #handle negative numbers
+    if beg is not None and end is not None:
+        if beg < 0. or end < 0.:
+            logger.warn("Negative beg/end supplied")
+            beg = None
+            end = None
+
     if beg is None and end is None:
         #find the beginning and end time of the observation FILES you have on disk
         files_beg, files_end = process_vcs.find_combined_beg_end(obsid)
+        if files_beg is None or files_end is None:
+            #use entire obs
+            logger.warn("Using entire obs duration")
+            files_beg, files_end = mwa_metadb_utils.obs_max_min(obsid)
         files_duration = files_end - files_beg + 1
+
     else:
         #uses manually input beginning and end times to find beam coverage
         files_beg = beg
@@ -96,15 +106,13 @@ def fit_plaw_psr(x_data, y_data, y_err=None, alpha_initial=-1.5, c_initial = 30.
         sol = curve_fit(function, x_data, y_data, sigma=y_err, p0=initial)
 
     a = sol[0][0]
-    a_err = sol[1][0][0]
     c = sol[0][1]
-    c_err = sol[1][1][1]
     logger.debug("a: {0}".format(a))
-    logger.debug("a_err: {0}".format(a_err))
     logger.debug("c: {0}".format(c))
-    logger.debug("c_err: {0}".format(c_err))
- 
-    return a, a_err, c, c_err
+    covar_matrix = np.matrix(sol[0][1])
+    logger.debug("Covariance Matrix: {0}".format(covar_matrix))
+
+    return a, c, sol[0][1] 
 
 def plaw_func(nu, a, c):
     #pass the log values of nu
@@ -172,20 +180,15 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
             flux_all[i] = flux_all[i]
             flux_err_all[i] = flux_err_all[i]
 
-        spind, spind_err, c, c_err = fit_plaw_psr(freq_all, flux_all, flux_err_all)
-    
+        spind, c, covar_matrix = fit_plaw_psr(freq_all, flux_all, flux_err_all)
         #flux calc.  
-        logger.info("calculating flux using spectral index: {0} and error: {1}".format(spind, spind_err))
-        flux_est = np.exp(spind*np.log(f_mean)+c)
-        flux_est = flux_est 
-        #get error from variance formula:
-        spind_var = np.exp(c) * f_mean**spind * np.log(f_mean)
-        c_var = np.exp(c) * f_mean**spind
-        spind_var = spind_var**2 * spind_err**2
-        c_var = c_var**2 * c_err**2
-        flux_est_err = np.sqrt(spind_var + c_var)
-        flux_est_err = flux_est_err 
-        
+        flux_est = np.exp(spind*np.log(f_mean)+c) 
+        #calculate error from covariance matrix
+        a_mat = np.matrix([np.log(f_mean), 1])
+        log_flux_err = np.sqrt( a_mat * covar_matrix * a_mat.T )    
+        #to find the error, we take the average log error in linear space
+        b = np.exp(log_flux_err)
+        flux_est_err = flux_est/2. * (b - (1/b))
 
     #Do something different if there is only one flux value in archive
     elif len(flux_all == 1):
@@ -308,7 +311,12 @@ def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"
     
     if t_int is None:
         enter, exit = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end)
-        dur = end-beg
+        if beg > 0. and end > 0.:
+            dur = end-beg
+        else: #use entire obs duration
+            print("1")
+            beg, end = mwa_metadb_utils.obs_max_min(obsid)
+            dur = end - beg
         t_int = dur*(exit-enter)
  
     return beg, end, t_int

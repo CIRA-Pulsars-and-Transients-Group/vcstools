@@ -63,12 +63,17 @@ def find_combined_beg_end(obsid, base_path="/group/mwaops/vcs/", channels=None):
         channels = meta.get_channels(obsid, channels)
         combined_files = glob.glob("{0}/{1}/combined/{1}*_ch{2}.dat".\
                                    format(base_path, obsid, channels[-1]))
-    comb_times = []
-    for comb in combined_files:
-        comb_times.append(int(comb.split("_")[1]))
-    beg = min(comb_times)
-    end = max(comb_times)
-
+    if len(combined_files) > 0:
+        comb_times = []
+        for comb in combined_files:
+            comb_times.append(int(comb.split("_")[1]))
+        beg = min(comb_times)
+        end = max(comb_times)
+    else:
+        logger.warn("No combined files on disk for {0}".format(obsid))   
+        beg = None
+        end = None
+        
     return beg, end
 
 
