@@ -28,9 +28,46 @@ import process_vcs
 
 logger = logging.getLogger(__name__)
 
+def get_sn_from_prof(prof_path):
+    #Gets an estimate of S/N with error from a bestprof
+    #Based on code oringally writted by Nick Swainston
+    
+    _, _, _, _, _ , _, prof_data, nbins = submit_to_database.get_from_bestprof(prof_path)
+    #centre the profile around the max
+    shift = -int(np.argmax(prof_data))+int(nbins)//2
+    prof_data = np.roll(prof_data, shift)
+    
+    #find sigma and check if profile is scattered 
+    sigma, flags = submit_to_database.sigmaClip(prof_data)    
+    bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
+    if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
+        logger.warn("The profile is highly scattered. S/N estimate may be incorrect")
+
+    u_prof = 500. #this is an approximation
+    pulse_width_bins = 0
+    non_pulse_bins = 0
+    p_total = 0.
+    u_p = 0.
+    #work out the above parameters
+    for i, data in enumerate(prof_data):
+        if np.isnan(flags[i]):
+            pulse_width_bins += 1    
+            p_total += data
+            u_p = np.sqrt(u_p**2 + u_prof**2)
+        else:
+            non_pulse_bins += 1
+    u_simga = sigma / np.sqrt(2 * non_pulse_bins - 2)
+
+    #now calc S/N 
+    sn = max(prof_data)/sigma
+    u_sn = sn * np.sqrt(u_prof/max(prof_data)**2 + (u_simga/sigma)**2)
+
+    return sn, u_sn
+
 def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
     #returns the beginning and end time as a fraction that a pulsar is in the primary beam for the obsid files
     #beg and end should only be supplied if the files are not present on the system
+    #if pulsar is not in beam, returns -1, -1
 
     #find the enter and exit times of pulsar normalized with the observing time
     names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar])
@@ -77,44 +114,51 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
         enter_files=0.
     if exit_files>1.:
         exit_files=1.
-    if enter_files>1.:
+    if enter_files>1. or exit_files<0.:
         logger.warn("source {0} is not in the beam for the files on disk".format(pulsar))
-    if exit_files<0.:
-        logger.warn("source {0} is not in the beam for the files on the disk".format(pulsar))
+        enter_files = -1
+        exit_files = -1
 
     return enter_files, exit_files
 
-def fit_plaw_psr(x_data, y_data, y_err=None, alpha_initial=-1.5, c_initial = 30.):
+def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_bound=None, c_bound=None):
 
     initial = [alpha_initial, c_initial]
-    function=plaw_func
+    
+    #make the bounds tuple
+    if alpha_bound is None:
+        alpha_bound = [-np.inf, np.inf]
+    if c_bound is None:
+        c_bound = [-np.inf, np.inf]
+    
+    lower_bound = [alpha_bound[0], c_bound[0]]
+    upper_bound = [alpha_bound[1], c_bound[1]]
+    bounds = (lower_bound, upper_bound)
 
-    if y_err is not None:
-        #figure out the error of log(y)
-        for i, value in enumerate(y_data):
-            y_err[i] = y_err[i]/value
-
-    #x_data = np.log(x_data)
-    #y_data = np.log(y_data)
+    #force the data into numpy float arrays because scipy likes it
+    x_data = np.array(x_data, dtype="float64")
+    y_data = np.array(y_data, dtype="float64")
+    initial = np.array(initial, dtype="float64")
     logger.debug("x_data: {0}".format(x_data))
     logger.debug("y_data: {0}".format(y_data))
     
-    #convert to logs
-    if y_err is None:
-        sol = curve_fit(function, x_data, y_data, p0=initial)
-    else:
-        sol = curve_fit(function, x_data, y_data, sigma=y_err, p0=initial)
+    #fit a line
+    #sol = curve_fit(function, x_data, y_data, p0=initial)
+    function=log_plaw_func
+    sol = curve_fit(function, x_data, y_data, p0=initial, bounds=bounds)
+
 
     a = sol[0][0]
     c = sol[0][1]
     logger.debug("a: {0}".format(a))
     logger.debug("c: {0}".format(c))
-    covar_matrix = np.matrix(sol[0][1])
+    logger.debug("Solution: {0}".format(sol))
+    covar_matrix = np.matrix(sol[1])
     logger.debug("Covariance Matrix: {0}".format(covar_matrix))
 
-    return a, c, sol[0][1] 
+    return a, c, covar_matrix 
 
-def plaw_func(nu, a, c):
+def log_plaw_func(nu, a, c):
     #pass the log values of nu
     return np.exp(a * np.log(nu) + c)
 
@@ -145,33 +189,50 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
                     "S300", "S400", "S600", "S700", "S800", "S900",\
                     "S1400", "S1600", "S2000", "S3000", "S4000", "S5000",\
                     "S6000", "S8000"] 
-    error_queries = []
+    flux_error_queries = []
     for i in flux_queries:
-            error_queries.append(i+"_ERR")
+            flux_error_queries.append(i+"_ERR")
+    all_queries = flux_queries
+    all_queries.append("SPINDX")
 
-    flux_df = psrqpy.QueryATNF(params=flux_queries, psrs=[pulsar]).pandas
+    #for some reason i have to do this
+    if flux_queries[-1] == "SPINDX":
+        flux_queries = flux_queries[:-1]
+
+    df = psrqpy.QueryATNF(params=all_queries, psrs=[pulsar]).pandas
     freq_all=[]
     flux_all=[]
     flux_err_all=[]
-
     #Get all available data from dataframe and check for missing values
     for query in flux_queries:
-        flux = flux_df[query][0]
+        flux = df[query][0]
         #sometimes error values don't exist, causing a key error in pandas
         try:
-            flux_err = flux_df[query+"_ERR"][0]
+            flux_err = df[query+"_ERR"][0]
+            if flux_err == 0.0:
+                logger.warn("Flux erorr for query: {0} is zero. Assuming 20% uncertainty".format(query))
+                flux_err = flux*0.2
         except KeyError:
-            logger.warn("flux error value for {0} not available. Assuming 10% uncertainty".format(query))
-            flux_err = flux*0.1
-
+            logger.warn("flux error value for {0} not available. Assuming 20% uncertainty".format(query))
+            flux_err = flux*0.2
+        
         if not np.isnan(flux) and not np.isnan(flux_err):
             freq_all.append(int(query.split()[0][1:])*1e6) #convert to Hz
             flux_all.append(flux*1e-3) #convert to Jy
             flux_err_all.append(flux_err*1e-3) #convert to Jy
 
+    #Also get spectral index if it exists
+    spind = df["SPINDX"]
+    spind_err = df["SPINDX_ERR"]    
+
     logger.debug("Freqs: {0}".format(freq_all))
     logger.debug("Fluxes: {0}".format(flux_all))
     logger.debug("Flux Errors: {0}".format(flux_err_all))
+
+    #query psrcat for spectral index
+    spind_query = psrqpy.QueryATNF(params=["SPINDX"], psrs=[pulsar]).pandas
+    spind = spind_query["SPINDX"][0]
+    spind_err = spind_query["SPINDX_ERR"][0]
 
     #Attempt to estimate flux
     if len(flux_all) > 1:
@@ -180,7 +241,19 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
             flux_all[i] = flux_all[i]
             flux_err_all[i] = flux_err_all[i]
 
-        spind, c, covar_matrix = fit_plaw_psr(freq_all, flux_all, flux_err_all)
+        #apply spectral index bounds if an error already exists
+        initial_spind = -1.5
+        spind_bounds = None
+        if not np.isnan(spind):
+            initial_spind = spind
+            if not np.isnan(spind_err):
+                #if spind_error exists on cat, use it to create 5 sigma bounds
+                spind_bounds = [spind-spind_err*5, spind+spind_err*5]
+         
+    
+        spind, c, covar_matrix = fit_plaw_psr(freq_all, flux_all, alpha_initial=initial_spind, alpha_bound=spind_bounds)
+        logger.info("Derived spectral index: {0} +/- {1}".format(spind, covar_matrix[0][0][0]))
+        
         #flux calc.  
         flux_est = np.exp(spind*np.log(f_mean)+c) 
         #calculate error from covariance matrix
@@ -189,22 +262,19 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
         #to find the error, we take the average log error in linear space
         b = np.exp(log_flux_err)
         flux_est_err = flux_est/2. * (b - (1/b))
+        flux_est_err = flux_est_err.item(0)
 
     #Do something different if there is only one flux value in archive
     elif len(flux_all == 1):
         logger.warn("Only a single flux value available on the archive")
 
-        #query psrcat for spectral index
-        spind_query = psrqpy.QueryATNF(params=["SPINDX"], psrs=[pulsar]).pandas
-        spind = spind_query["SPINDX"][0]
-        spind_err = spind_query["SPINDX_ERR"][0]
-        
         if not np.isnan(spind) and np.isnan(spind_err):
             logger.warn("Spectral index error not available. Assuming 10% error")
             spind_err = spind*0.1
         if np.isnan(spind):
-            logger.warn("Insufficient archival data to estimate spectral index. Using alpha=-1.4 as per Bates2013")
+            logger.warn("Insufficient archival data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013")
             spind = -1.4
+            spind_err = 1.
        
         #formula for flux: 
         #S_1 = nu_1^a * nu_2 ^-a * S_2     
@@ -250,8 +320,8 @@ def find_pulsar_w50(pulsar):
         W_50 = W_50/1000.
 
     if np.isnan(W_50_err) and not np.isnan(W_50):
-        logger.warn("W_50 error not on archive. returning standard 2% error")
-        W_50_err = W_50*0.02   
+        logger.warn("W_50 error not on archive. returning standard 5% error")
+        W_50_err = W_50*0.05   
     else:
         #convert to seconds
         W_50_err = W_50_err/1000.
@@ -294,7 +364,7 @@ def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"
                 beg, end = process_vcs.find_combined_beg_end(obsid, base_path)
                 dur = end-beg
                 enter, exit = pulsar_beam_coverage(obsid, pulsar)
-                if enter>=0. and exit <=1.:
+                if (enter>=0. and exit <=1.) and (enter>=0 and exit >=0):
                     t_int = dur*(exit-enter)
                 else:
                     t_int=0.
@@ -314,16 +384,14 @@ def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"
         if beg > 0. and end > 0.:
             dur = end-beg
         else: #use entire obs duration
-            print("1")
             beg, end = mwa_metadb_utils.obs_max_min(obsid)
             dur = end - beg
         t_int = dur*(exit-enter)
- 
+
     return beg, end, t_int
 
-def find_t_sys_gain(pulsar, obsid, beg=None, end=None, t_int=None,\
-                    p_ra=None, p_dec=None, obs_metadata=None,\
-                    trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
+                    obs_metadata=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
     A function snippet originally written by Nick Swainston - adapted for general VCS use.
@@ -357,12 +425,12 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, t_int=None,\
    
     obsid, obs_ra, obs_dec, obs_dur, delays, centrefreq, channels = obs_metadata
 
-    #get t_int, beg, end if not supplied
-    if t_int is None or beg is None or end is None:
-        logger.info("Calculating beginning, end and integration times for pulsar coverage")
+    #get beg if not supplied
+    if beg is None:
+        logger.info("Calculating beginning time for pulsar coverage")
         comp_config=config.load_config_file()
         base_path = comp_config["base_product_dir"]
-        beg, end, t_int = find_times(obsid, pulsar, beg=beg, end=end, base_path=base_path)
+        beg, _, _ = find_times(obsid, pulsar, beg=beg, base_path=base_path)
         
     #Find 'start_time' for fpio
     obs_start, obs_end = mwa_metadb_utils.obs_max_min(obsid)
@@ -394,7 +462,14 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, t_int=None,\
     logger.debug("Theta: {0}".format(theta))
     gain = submit_to_database.from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
     gain_err = gain * ((1. - beam_power)*0.12 + 2.*(theta/(0.5*np.pi))**2. + 0.1)
-    
+
+    #sometimes gain_err is a numpy array and sometimes it isnt so i have to to this...
+    try:
+        gain_err.shape
+        gain_err = gain_err[0]
+    except:
+        pass   
+ 
     return t_sys, t_sys_err, gain, gain_err
     
 def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None):
@@ -419,8 +494,8 @@ def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_
     if p_ra is None or p_dec is None:
         logger.info("Obtaining pulsar RA and Dec from ATNF")
         name_ra_dec = fpio.get_psrcat_ra_dec([pulsar])
-        ra = name_ra_dec[0][1]
-        dec = name_ra_dec[0][2]
+        p_ra = name_ra_dec[0][1]
+        p_dec = name_ra_dec[0][2]
     
     #get metadata if not supplied
     if obs_metadata is None:
@@ -439,8 +514,8 @@ def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_
         return 0., 0.
 
     #find system temp and gain
-    t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid, t_int=t_int,\
-                                 beg=beg, end=end, p_ra=ra, p_dec=dec, obs_metadata=obs_metadata)
+    t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid,\
+                                 beg=beg, p_ra=p_ra, p_dec=p_dec, obs_metadata=obs_metadata)
  
     #estimate flux
     s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, f_mean=f_mean)
