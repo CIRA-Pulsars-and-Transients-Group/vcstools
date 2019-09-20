@@ -8,7 +8,8 @@ logger = logging.getLogger(__name__)
 def get_obs_array_phase(obsid):
     """
     For the input obsid will work out the observations array phase in the form 
-    of P1 for phase 1, P2C for phase 2 compact and P2E for phase to extended array.
+    of P1 for phase 1, P2C for phase 2 compact or P2E for phase to extended array 
+    and OTH for other.
     """
     phase_info = getmeta(service='con', params={'obs_id':obsid, 'summary':''})
 
@@ -18,6 +19,8 @@ def get_obs_array_phase(obsid):
         return "P2C"
     elif phase_info[0] == "LB":
         return "P2E"
+    elif phase_info[0] == "OTHER":
+        return "OTH"
     else:
         logger.error("Unknown phase: {0}. Exiting".format(phase_info[0]))
         exit()
