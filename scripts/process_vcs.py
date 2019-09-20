@@ -18,6 +18,7 @@ from reorder_chans import *
 from mdir import mdir
 import numpy as np
 import logging
+import numpy as np
 
 #vcstools functions
 from job_submit import submit_slurm
