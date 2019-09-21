@@ -93,7 +93,7 @@ def deg2sex(ra, dec):
     return coords
 
 
-def get_psrcat_ra_dec(pulsar_list=None, max_dm=None):
+def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000.):
     """
     Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
@@ -105,45 +105,19 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=None):
                (default: uses all pulsars)
     return [[Jname, RAJ, DecJ]]
     """
-    params = ['Jname', 'Raj', 'Decj', 'DM']
-     
-    for p in params:
-        #Gets the output of PSRCAT for each pparameter for each pulsar as a list
-        cmd = ['psrcat', '-c', p]
-        #If input pulsar list add them all to the psrcat command
-        if pulsar_list is not None:
-            for input_pulsar in pulsar_list:
-                cmd.append(input_pulsar)
-        output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
-        if output.startswith(b"WARNING: PSR"):
-            logger.error("Pulsar not on psrcat.")
-            quit()
-        temp = []
-        
-        #process output to extract parameters
-        pulsars = output.split(b'\n')
-        for pulsar in pulsars[4:-1]:
-            data = pulsar.split()
-            #skip empty rows
-            if len(data) > 1:
-                temp.append([data[1].decode()])
-        if p == params[0]:
-            pulsar_ra_dec=temp
-        elif p == 'DM':
-            if max_dm is not None:
-                rows_to_delete = []
-                #removes all pulsars over the DM max
-                for dmi, dm in enumerate(temp):
-                    #if there is a * given as the dm it is likely a gamma ray pulsar.
-                    #Currently it won't delete these from the list just incase we can 
-                    #detect them in radio even though it's unlikely
-                    if '*' not in dm:
-                        if float(dm[0]) > max_dm:
-                            rows_to_delete.append(dmi)
-                pulsar_ra_dec = np.array(pulsar_ra_dec)
-                pulsar_ra_dec = np.delete(pulsar_ra_dec, rows_to_delete, 0)
-        else:
-            pulsar_ra_dec = [pulsar_ra_dec[x] + temp[x] for x in range(len(pulsar_ra_dec))]
+    import psrqpy
+    import pandas
+
+    params = ['JNAME', 'RAJ', 'DECJ', 'DM']
+    query = psrqpy.QueryATNF(params=params, psrs=pulsar_list).pandas
+
+    pulsar_ra_dec = []
+    for row in query.itertuples():
+        # Only record if under the max_dm
+        dm = row.DM
+        if not math.isnan(dm):
+            if float(dm) < max_dm:
+                pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ])
     
     return pulsar_ra_dec
 
