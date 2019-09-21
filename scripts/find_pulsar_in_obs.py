@@ -31,6 +31,7 @@ import subprocess
 import numpy as np
 import ephem
 import csv
+import pandas
 
 #astropy 
 from astropy.io import fits
@@ -93,11 +94,12 @@ def deg2sex(ra, dec):
     return coords
 
 
-def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000.):
+def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
     """
     Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
     If no pulsar_list given then returns all pulsar on the catalogue
+    If include_dm is True then also ouput DM
 
     get_psrcat_ra_dec(pulsar_list = None)
     Args:
@@ -106,7 +108,6 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000.):
     return [[Jname, RAJ, DecJ]]
     """
     import psrqpy
-    import pandas
 
     params = ['JNAME', 'RAJ', 'DECJ', 'DM']
     query = psrqpy.QueryATNF(params=params, psrs=pulsar_list).pandas
@@ -117,16 +118,19 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000.):
         dm = row.DM
         if not math.isnan(dm):
             if float(dm) < max_dm:
-                pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ])
+                if include_dm:
+                    pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ, dm])
+                else:
+                    pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ])
     
     return pulsar_ra_dec
 
 
-def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
+def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False):
     """
     Creates a csv file of source names, RAs and Decs using web catalogues for ['Pulsar', 'FRB', 'GC', 'RRATs'].
     """
-    modes = ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs']
+    modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs']
     if source_type not in modes:
         logger.error("Input source type not in known catalogues types. Please choose from: {0}".format(modes))
         return None
@@ -135,9 +139,6 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
     if source_type == 'FRB':
         website = ' http://www.frbcat.org/frbcat.csv'
         web_table = 'frbcat.csv'
-    elif source_type == 'GC':
-        website = 'http://physwww.physics.mcmaster.ca/~harris/mwgc.dat'
-        web_table = 'mwgc.dat'
     elif source_type == 'RRATs':
         website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
         web_table = 'rratalog.txt'
@@ -148,7 +149,8 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
     #Get each source type into the format [[name, ra, dec]]
     name_ra_dec = []
     if source_type == 'Pulsar':
-        name_ra_dec = get_psrcat_ra_dec(pulsar_list, max_dm = max_dm)
+        name_ra_dec = get_psrcat_ra_dec(pulsar_list, max_dm=max_dm, include_dm=include_dm)
+    
     elif source_type == 'FRB':
         #TODO it's changed and currently not working atm
         with open(web_table,"r") as in_txt:
@@ -166,22 +168,11 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
         info = get_rFRB_info(name=pulsar_list)
         if info is not None: 
             for line in info:
-                name_ra_dec.append([line[0], line[1], line[2]]) 
+                if include_dm:
+                    name_ra_dec.append([line[0], line[1], line[2], line[3]])
+                else:
+                    name_ra_dec.append([line[0], line[1], line[2]]) 
 
-    elif source_type == 'GC':
-        with open(web_table,"r") as in_txt:
-            lines = in_txt.readlines()
-            lines = lines[71:]
-            data = []
-            for l in lines[1:]:
-                ratemp = l[25:37].rstrip().replace(' ',':')
-                dectemp = l[38:51].rstrip().replace(' ',':')
-                temp = [l[1:10].rstrip(),ratemp,dectemp]
-                
-                name_ra_dec.append(temp)
-                if l.startswith('______'):
-                    name_ra_dec = name_ra_dec[:-2]
-                    break
     elif source_type == 'RRATs':
         with open(web_table,"r") as in_txt:
             lines = in_txt.readlines()
@@ -193,13 +184,17 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
                     for entry in columns:
                         if entry not in ['', ' ', '\t']:
                             temp.append(entry.replace('--',''))
-                    name_ra_dec.append([temp[0], temp[4], temp[5]])
+                    if include_dm:
+                        name_ra_dec.append([temp[0], temp[4], temp[5], temp[3]])
+                    else:
+                        name_ra_dec.append([temp[0], temp[4], temp[5]])
     
     #remove web catalogue tables
     if source_type !='Pulsar' and source_type != 'rFRB':
         os.remove(web_table)
 
     return name_ra_dec
+
 
 def get_rFRB_info(name=None):
     """
@@ -226,6 +221,7 @@ def get_rFRB_info(name=None):
             elif FRB in name:
                 output.append(line)
     return output
+
 
 def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
     """
