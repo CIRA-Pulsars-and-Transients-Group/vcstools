@@ -102,7 +102,11 @@ def test_est_pulsar_flux():
 
 def test_est_pulsar_sn():
     """
-    I have tested this function for 10 minutes of on-disk combined files for obs 1225462936, psr J0152-1637. The function estimated a S/N of 99.39 +/- 23.55. I compared this to what was estimated from the profile using est_sn_from_prof() and attained a S/N of 75.26 +/- 1.70
+    I have tested this function various pulsar/observation combinations and compared to the estimated S/N from bestrof files. Here are the results:
+
+    1225462936, psr J0152-1637: The function estimated a S/N of 99.39 +/- 23.55. I compared this to what was estimated from the profile using est_sn_from_prof() and attained a S/N of 75.26 +/- 1.70
+
+    
     """
     
     test_cases=[]
