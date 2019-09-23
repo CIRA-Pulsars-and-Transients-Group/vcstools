@@ -31,6 +31,7 @@ import subprocess
 import numpy as np
 import ephem
 import csv
+import pandas
 
 #astropy 
 from astropy.io import fits
@@ -93,11 +94,12 @@ def deg2sex(ra, dec):
     return coords
 
 
-def get_psrcat_ra_dec(pulsar_list=None, max_dm=None):
+def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
     """
     Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
     If no pulsar_list given then returns all pulsar on the catalogue
+    If include_dm is True then also ouput DM
 
     get_psrcat_ra_dec(pulsar_list = None)
     Args:
@@ -105,54 +107,30 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=None):
                (default: uses all pulsars)
     return [[Jname, RAJ, DecJ]]
     """
-    params = ['Jname', 'Raj', 'Decj', 'DM']
-     
-    for p in params:
-        #Gets the output of PSRCAT for each pparameter for each pulsar as a list
-        cmd = ['psrcat', '-c', p]
-        #If input pulsar list add them all to the psrcat command
-        if pulsar_list is not None:
-            for input_pulsar in pulsar_list:
-                cmd.append(input_pulsar)
-        output = subprocess.Popen(cmd,stdout=subprocess.PIPE).communicate()[0]
-        if output.startswith(b"WARNING: PSR"):
-            logger.error("Pulsar not on psrcat.")
-            quit()
-        temp = []
-        
-        #process output to extract parameters
-        pulsars = output.split(b'\n')
-        for pulsar in pulsars[4:-1]:
-            data = pulsar.split()
-            #skip empty rows
-            if len(data) > 1:
-                temp.append([data[1].decode()])
-        if p == params[0]:
-            pulsar_ra_dec=temp
-        elif p == 'DM':
-            if max_dm is not None:
-                rows_to_delete = []
-                #removes all pulsars over the DM max
-                for dmi, dm in enumerate(temp):
-                    #if there is a * given as the dm it is likely a gamma ray pulsar.
-                    #Currently it won't delete these from the list just incase we can 
-                    #detect them in radio even though it's unlikely
-                    if '*' not in dm:
-                        if float(dm[0]) > max_dm:
-                            rows_to_delete.append(dmi)
-                pulsar_ra_dec = np.array(pulsar_ra_dec)
-                pulsar_ra_dec = np.delete(pulsar_ra_dec, rows_to_delete, 0)
-        else:
-            pulsar_ra_dec = [pulsar_ra_dec[x] + temp[x] for x in range(len(pulsar_ra_dec))]
+    import psrqpy
+
+    params = ['JNAME', 'RAJ', 'DECJ', 'DM']
+    query = psrqpy.QueryATNF(params=params, psrs=pulsar_list).pandas
+
+    pulsar_ra_dec = []
+    for row in query.itertuples():
+        # Only record if under the max_dm
+        dm = row.DM
+        if not math.isnan(dm):
+            if float(dm) < max_dm:
+                if include_dm:
+                    pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ, dm])
+                else:
+                    pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ])
     
     return pulsar_ra_dec
 
 
-def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
+def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False):
     """
     Creates a csv file of source names, RAs and Decs using web catalogues for ['Pulsar', 'FRB', 'GC', 'RRATs'].
     """
-    modes = ['Pulsar', 'FRB', 'GC', 'RRATs']
+    modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs']
     if source_type not in modes:
         logger.error("Input source type not in known catalogues types. Please choose from: {0}".format(modes))
         return None
@@ -161,20 +139,18 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
     if source_type == 'FRB':
         website = ' http://www.frbcat.org/frbcat.csv'
         web_table = 'frbcat.csv'
-    elif source_type == 'GC':
-        website = 'http://physwww.physics.mcmaster.ca/~harris/mwgc.dat'
-        web_table = 'mwgc.dat'
     elif source_type == 'RRATs':
         website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
         web_table = 'rratalog.txt'
-    if source_type != 'Pulsar':
+    if source_type != 'Pulsar' and source_type != 'rFRB':
         logger.info("Downloading {0} catalogue from {1}".format(source_type, website))
         os.system('wget {0}'.format(website))
 
     #Get each source type into the format [[name, ra, dec]]
     name_ra_dec = []
     if source_type == 'Pulsar':
-        name_ra_dec = get_psrcat_ra_dec(pulsar_list, max_dm = max_dm)
+        name_ra_dec = get_psrcat_ra_dec(pulsar_list, max_dm=max_dm, include_dm=include_dm)
+    
     elif source_type == 'FRB':
         #TODO it's changed and currently not working atm
         with open(web_table,"r") as in_txt:
@@ -187,20 +163,16 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
                     ratemp = ltemp[7].lstrip('<td>')
                     dectemp = ltemp[8].lstrip('<td>')
                     name_ra_dec.append([ltemp[0].lstrip('<td>')[:9],ratemp,dectemp])
-    elif source_type == 'GC':
-        with open(web_table,"r") as in_txt:
-            lines = in_txt.readlines()
-            lines = lines[71:]
-            data = []
-            for l in lines[1:]:
-                ratemp = l[25:37].rstrip().replace(' ',':')
-                dectemp = l[38:51].rstrip().replace(' ',':')
-                temp = [l[1:10].rstrip(),ratemp,dectemp]
-                
-                name_ra_dec.append(temp)
-                if l.startswith('______'):
-                    name_ra_dec = name_ra_dec[:-2]
-                    break
+
+    elif source_type == "rFRB":
+        info = get_rFRB_info(name=pulsar_list)
+        if info is not None: 
+            for line in info:
+                if include_dm:
+                    name_ra_dec.append([line[0], line[1], line[2], line[3]])
+                else:
+                    name_ra_dec.append([line[0], line[1], line[2]]) 
+
     elif source_type == 'RRATs':
         with open(web_table,"r") as in_txt:
             lines = in_txt.readlines()
@@ -212,13 +184,43 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=None):
                     for entry in columns:
                         if entry not in ['', ' ', '\t']:
                             temp.append(entry.replace('--',''))
-                    name_ra_dec.append([temp[0], temp[4], temp[5]])
+                    if include_dm:
+                        name_ra_dec.append([temp[0], temp[4], temp[5], temp[3]])
+                    else:
+                        name_ra_dec.append([temp[0], temp[4], temp[5]])
     
     #remove web catalogue tables
-    if source_type !='Pulsar':
+    if source_type !='Pulsar' and source_type != 'rFRB':
         os.remove(web_table)
 
     return name_ra_dec
+
+
+def get_rFRB_info(name=None):
+    """
+    Gets repeating FRB info from the csv file we maintain.
+    Input:
+        name: a list of repeating FRB names to get info for. The default is None 
+              which gets all rFRBs in the catalogue.
+    Output:
+        [[name, ra, dec, dm, dm error]]
+        A list of all the FRBs which each have a list contining name, ra, dec,
+        dm and dm error
+    """
+    output = []
+    db = open(os.environ["KNOWN_RFRB_CSV"], "r")
+    for line in db.readlines():
+        if not line.startswith("#"):
+            line = line.split(",")
+            #some FRBs end with a J name. We will ignore these when comparing 
+            #by using the first 9 characters
+            FRB, ra, dec, dm, dm_error = line
+            if name is None:
+                #No input FRBs so return all FRBs
+                output.append(line)
+            elif FRB in name:
+                output.append(line)
+    return output
 
 
 def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
@@ -741,7 +743,7 @@ if __name__ == "__main__":
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
     sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"', default = None)
     sourargs.add_argument('--max_dm',type=float, default = 250., help='The maximum DM for pulsars. All pulsars with DMs higher than the maximum will not be included in output files. Default=250.0')
-    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue.")
+    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue.")
     sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
     sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing the source\'s coordinates to be searched for in the format "RA,DEC" "RA,DEC". Must be enterered as either: "hh:mm:ss.ss,+dd:mm:ss.ss" or "deg,-deg". Please only use one format.')
     #finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
