@@ -41,7 +41,7 @@ from astropy.time import Time
 
 #MWA scripts
 from mwa_pb import primary_beam
-from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata
+from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata, get_obs_array_phase
 
 import logging
 logger = logging.getLogger(__name__)
@@ -650,23 +650,27 @@ def write_output_source_files(output_data,
             output_file.write('#Column headers:\n')
             output_file.write('#Obs ID: Observation ID\n')
             output_file.write('#Dur:    The duration of the observation in seconds\n')
-            output_file.write('#Enter:  The fraction of the observation when '+\
+            output_file.write('#Enter:  The fraction of the observation when '
                                         'the source entered the beam\n')
-            output_file.write('#Exit:   The fraction of the observation when '+\
+            output_file.write('#Exit:   The fraction of the observation when '
                                         'the source exits the beam\n')
             output_file.write('#Power:  The maximum zenith normalised power of the source.\n')
+            output_file.write("#OAP:    The observation's array phase where P1 is the "
+                                        "phase 1 array, P2C is the phase compact array "
+                                        "and P2E is the phase 2 extended array.\n")
             if cal_check:
                 output_file.write('#Cal ID: Observation ID of an available '+\
                                             'calibration solution\n')
-            output_file.write('#Obs ID   |Dur |Enter|Exit |Power')
+            output_file.write('#Obs ID   |Dur |Enter|Exit |Power| OAP ')
             if cal_check:
                 output_file.write("|Cal ID\n")
             else:
                 output_file.write('\n')
             for data in output_data[source]:
                 obsid, duration, enter, exit, max_power = data
-                output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}'.format(obsid, duration,
-                                  enter, exit, max_power))
+                oap = get_obs_array_phase(obsid)
+                output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}'.format(obsid,
+                                  duration, enter, exit, max_power, oap))
                 if cal_check:
                     #checks the MWA Pulsar Database to see if the obsid has been 
                     #used or has been calibrated
@@ -684,14 +688,15 @@ def write_output_obs_files(output_data, obsid_meta,
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is false.
     """
     for on, obsid in enumerate(output_data):
+        oap = get_obs_array_phase(obsid)
         out_name = "{0}_{1}_beam.txt".format(obsid, beam)
         with open(out_name,"w") as output_file:
             output_file.write('#All of the sources that the {0} beam model calculated a power'
                               'of {1} or greater for observation ID: {2}\n'.format(beam,
                               min_power, obsid))
             output_file.write('#Observation data :RA(deg): {0} DEC(deg): {1} Duration(s): '
-                              '{2}\n'.format(obsid_meta[on][1], obsid_meta[on][2],
-                                             obsid_meta[on][3]))
+                              '{2} Array Phase: {3}\n'.format(obsid_meta[on][1],
+                                  obsid_meta[on][2], obsid_meta[on][3], oap))
             if cal_check:
                 #checks the MWA Pulsar Database to see if the obsid has been 
                 #used or has been calibrated
