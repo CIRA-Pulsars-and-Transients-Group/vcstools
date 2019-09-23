@@ -107,7 +107,7 @@ def get_from_bestprof(file_loc):
             obsid = None
 
         pulsar = str(lines[1].split("_")[-1][:-1])
-        if not pulsar.startswith('J'):
+        if not (pulsar.startswith('J') or pulsar.startswith('B')):
             pulsar = 'J{0}'.format(pulsar)
 
         dm = lines[14][22:-1]
@@ -626,7 +626,7 @@ if __name__ == "__main__":
             obsid = args.obsid
         elif obsid is None:
             logger.error("Please use --obsid. Exiting")
-            sys.exit(0)
+            sys.exit(1)
     elif args.ascii:
         profile, num_bins = get_from_ascii(args.ascii)
         if args.obsid:
@@ -639,7 +639,7 @@ if __name__ == "__main__":
             time_detection = args.stop - args.start
         else:
             logger.error("Please use --start and --stop for ascii files. Exiting")
-            sys.exit(0)
+            sys.exit(1)
         bestprof_data = [obsid, pulsar, dm, period, period_uncer, args.start,
                          time_detection, profile, num_bins]
     elif args.obsid and args.pulsar:
