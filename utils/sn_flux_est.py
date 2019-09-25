@@ -28,6 +28,12 @@ import process_vcs
 
 logger = logging.getLogger(__name__)
 
+try:
+    ATNF_LOC = os.enron('PSRCAT_FILE')
+except:
+    logger.warn("ATNF database could not be found on disk.")
+    ATNF_LOC = None
+
 def get_sn_from_prof(prof_path):
     #Gets an estimate of S/N with error from a bestprof
     #Based on code oringally writted by Nick Swainston
@@ -199,7 +205,7 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
     if flux_queries[-1] == "SPINDX":
         flux_queries = flux_queries[:-1]
 
-    df = psrqpy.QueryATNF(params=all_queries, psrs=[pulsar]).pandas
+    df = psrqpy.QueryATNF(params=all_queries, psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
     freq_all=[]
     flux_all=[]
     flux_err_all=[]
@@ -230,10 +236,11 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
     logger.debug("Flux Errors: {0}".format(flux_err_all))
 
     #query psrcat for spectral index
-    spind_query = psrqpy.QueryATNF(params=["SPINDX"], psrs=[pulsar]).pandas
+    spind_query = psrqpy.QueryATNF(params=["SPINDX"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
     spind = spind_query["SPINDX"][0]
     spind_err = spind_query["SPINDX_ERR"][0]
 
+    logger.info("There are {0} flux values available on the ATNF database for this pulsar".format(len(flux_all)))
     #Attempt to estimate flux
     if len(flux_all) > 1:
         logger.info("Fitting power law to archive data")
@@ -252,6 +259,8 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
          
     
         spind, c, covar_matrix = fit_plaw_psr(freq_all, flux_all, alpha_initial=initial_spind, alpha_bound=spind_bounds)
+        logger.info(np.shape(covar_matrix))
+        logger.info(covar_matrix.item(0))
         logger.info("Derived spectral index: {0} +/- {1}".format(spind, covar_matrix[0][0][0]))
         
         #flux calc.  
@@ -265,7 +274,7 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
         flux_est_err = flux_est_err.item(0)
 
     #Do something different if there is only one flux value in archive
-    elif len(flux_all == 1):
+    elif len(flux_all) == 1:
         logger.warn("Only a single flux value available on the archive")
 
         if not np.isnan(spind) and np.isnan(spind_err):
@@ -295,8 +304,8 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
         s_2_var = s_2_var**2 * s_2_err**2
         flux_est_err = np.sqrt(s_2_var + a_var)
 
-    elif len(flux_all < 1):
-        logger.error("No flux values on archive. Terminating")
+    elif len(flux_all) < 1:
+        logger.error("No flux values on archive. Cannot estimate flux. Terminating")
         sys.exit(1)
 
     
@@ -308,7 +317,7 @@ def find_pulsar_w50(pulsar):
     
     #returns W_50 and error for a pulsar from the ATNF archive IN SECONDS
     logger.debug("Accessing ATNF database")
-    query = psrqpy.QueryATNF(params=["W50"], psrs=[pulsar]).pandas 
+    query = psrqpy.QueryATNF(params=["W50"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas 
     W_50 = query["W50"][0]
     W_50_err = query["W50_ERR"][0]
     if np.isnan(W_50):
@@ -332,7 +341,7 @@ def find_pulsar_w50(pulsar):
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
         coeff = 4.8
         coeff_err = 2.
-        period_query = prsqpy.QueryATNF(params=["P0"], psrs=[pulsar]).pandas
+        period_query = prsqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ANTF_LOC).pandas
         period = float(preiod_query["P0"][0])
         
         #This estimation is worse for msps, add extra uncetainty if period < 50ms
@@ -414,7 +423,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
     #get ra and dec if not supplied
     if p_ra is None or p_dec is None:
         logger.info("Obtaining pulsar RA and Dec from ATNF")
-        ra_dec_q = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[pulsar]).pandas 
+        ra_dec_q = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas 
         p_ra = ra_dec_q["RAJ"]
         p_dec = ra_dec_q["DECJ"]
     
@@ -505,7 +514,7 @@ def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_
     n_p = 2 #constant
     df = 30.72e6 #(24*1.28e6)
     f_mean = obs_metadata[5]*1e6
-    period = float(psrqpy.QueryATNF(params=["P0"], psrs=[pulsar]).pandas["P0"])
+    period = float(psrqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ANTF_LOC).pandas["P0"])
 
     #find integration time
     beg, end, t_int = find_times(obsid, pulsar, beg, end)
@@ -559,10 +568,14 @@ if __name__ == "__main__":
                     ERROR=logging.ERROR)
 
     parser = argparse.ArgumentParser(description="""A utility file for estimating the S/N of a pulsar in an obsid""")
-    parser.add_argument("-o", "--obsid", type=str, help="The Observation ID (e.g. 1221399680)")
+    parser.add_argument("-o", "--obsid", type=int, help="The Observation ID (e.g. 1221399680)")
     parser.add_argument("-p", "--pulsar", type=str, help="The pulsar's name (e.g. J2241-5236)")
     parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level. Default: INFO")
-
+    parser.add_argument("-b", "--beg", type=int, default=None, help="The beginning time of observation. If None, will use beginning given by a metadata call")
+    parser.add_argument("-e", "--end", type=int, default=None, help="The end time of observation. If None, will use the end given by a metadata call")
+    parser.add_argument("--ondisk", action="store_true", help="Use this tag to calculate S/N for files on disk")
+    parser.add_argument("--raj", type=str, default=None, help="The RA of the target. If None, will obtain from a call to ATNF")
+    parser.add_argument("--decj", type=str, default=None, help="The Dec of the target. If None, will obtain from a call to ATNF")
     args = parser.parse_args()
 
     logger.setLevel(loglevels[args.loglvl])
@@ -573,5 +586,36 @@ if __name__ == "__main__":
     logger.addHandler(ch)
     logger.propagate = False
 
-    SN, SN_err = est_pulsar_sn(args.pulsar, args.obsid)
+    if args.obsid==None or args.pulsar==None:
+        logger.error("Obsid and Pulsar name must be supplied. Exiting...")
+        sys.exit(1)
+
+    if args.ondisk==False:
+        #Decide what to use as beg and end
+        if args.beg==None or args.end==None:
+            obsbeg, obsend = mwa_metadb_utils.obs_max_min(args.obsid)
+            if args.beg==None:
+                beg = obsbeg
+            if args.end==None:
+                end = obsend        
+        else:
+            beg = args.beg
+            end = args.end
+
+    #Decide what to use as ra and dec
+    if args.raj==None or ags.decj==None:
+        query = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[args.pulsar], loadfromsb=ATNF_LOC).pandas
+        if args.raj==None:
+            raj = query["RAJ"]
+        if args.decj==None:
+            decj = query["DECJ"]
+    else:
+        raj = args.raj
+        decj = args.decj
+
+    #metadata call to speed up script
+    obs_metadata = mwa_metadb_utils.get_common_obs_metadata(args.obsid)
+
+    SN, SN_err = est_pulsar_sn(args.pulsar, args.obsid,\
+             beg=beg, end=end, p_ra=raj, p_dec=decj, obs_metadata=obs_metadata)
     logger.info("Pulsar S/N: {0} +/- {1}".format(SN, SN_err))

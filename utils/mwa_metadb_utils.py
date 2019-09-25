@@ -1,5 +1,30 @@
 #!/usr/bin/env python3
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def get_obs_array_phase(obsid):
+    """
+    For the input obsid will work out the observations array phase in the form 
+    of P1 for phase 1, P2C for phase 2 compact or P2E for phase to extended array 
+    and OTH for other.
+    """
+    phase_info = getmeta(service='con', params={'obs_id':obsid, 'summary':''})
+
+    if phase_info[0] == "PHASE1":
+        return "P1"
+    elif phase_info[0] == "COMPACT":
+        return "P2C"
+    elif phase_info[0] == "LB":
+        return "P2E"
+    elif phase_info[0] == "OTHER":
+        return "OTH"
+    else:
+        logger.error("Unknown phase: {0}. Exiting".format(phase_info[0]))
+        exit()
+
 
 def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     """
@@ -34,10 +59,6 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     return Alt, Az, Za
 
 
-import logging
-
-logger = logging.getLogger(__name__)
-
 def get_common_obs_metadata(obs, return_all = False):
     """
     Gets needed comon meta data from http://ws.mwatelescope.org/metadata/
@@ -69,7 +90,6 @@ def getmeta(service='obs', params=None):
     a Python dictionary, return a Python dictionary xcontaining the result.
     Taken verbatim from http://mwa-lfd.haystack.mit.edu/twiki/bin/view/Main/MetaDataWeb
     """
-    #import urllib
     import urllib.request
     import json
 
@@ -90,7 +110,7 @@ def getmeta(service='obs', params=None):
         return
 
     try:
-        result = json.load(urllib.request.urlopen(BASEURL + service + '?' + data + "&nocache"))
+        result = json.load(urllib.request.urlopen(BASEURL + service + '?' + data))
     except urllib.error.HTTPError as err:
         logger.error("HTTP error from server: code=%d, response:\n %s" % (err.code, err.read()))
         return

@@ -34,6 +34,7 @@ import mwa_pb.primarybeammap as pbl
 from mwa_pulsar_client import client
 from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 import find_pulsar_in_obs as fpio
+import sn_flux_est as snfe
 
 import matplotlib.pyplot as plt
 import logging
@@ -90,33 +91,50 @@ def sex2deg( ra, dec):
     return [c.ra.deg, c.dec.deg]
     
 def get_from_bestprof(file_loc):
+    """
+    Get info from a bestprof file
+    returns: [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
+    """
+    
+    import re
     with open(file_loc,"r") as bestprof:
         lines = bestprof.readlines()
-        #assumes the input fits files names begins with the obsid
-        obsid = lines[0][22:32]
+        # Find the obsid by finding a 10 digit int in the file name
+        obsid = re.findall(r'(\d{10})', lines[0])[0]
+        print(obsid)
         try:
             obsid = int(obsid)
         except:
             obsid = None
-        pulsar = str(lines[1][26:-1])
-        if not pulsar.startswith('J'):
-            pulsar = 'J' + pulsar
+
+        pulsar = str(lines[1].split("_")[-1][:-1])
+        if not (pulsar.startswith('J') or pulsar.startswith('B')):
+            pulsar = 'J{0}'.format(pulsar)
+
         dm = lines[14][22:-1]
+
         period = lines[15][22:-1]
         period, period_uncer = period.split('  +/- ')
+
+        mjdstart = Time(float(lines[3][22:-1]), format='mjd', scale='utc')
+        # Convert to gps time
+        obsstart = int(mjdstart.gps)
+        
+        # Get obs length in seconds by multipling samples by time per sample
         obslength = float(lines[6][22:-1])*float(lines[5][22:-1])
-        #get profile list
+        
+        # Get the pulse profile
         orig_profile = []
         for l in lines[27:]:
-            discard, temp = l.split()
-            orig_profile.append(float(temp))
+            orig_profile.append(float(l.split()[-1]))
         bin_num = len(orig_profile)
         profile = np.zeros(bin_num)
+        
+        # Remove min
         min_prof = min(orig_profile)
         for p in range(len(orig_profile)):
             profile[p] = orig_profile[p] - min_prof
-        #maybe centre it around the pulse later        
-    return [obsid, pulsar, dm, period, period_uncer,obslength, profile, bin_num]
+    return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
 
 def get_from_ascii(file_loc):
     with open(file_loc,"r") as f_ascii:
@@ -164,7 +182,6 @@ def get_Trec(tab,obsfreq):
     return Trec
 
 
-
 def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
     x = np.copy(data)
     oldstd = np.nanstd(x)
@@ -196,61 +213,8 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
         oldstd = newstd
 
 
-def enter_exit_calc(time_detection, time_obs, metadata, start = None, stop = None):
-    """
-    time_detection: the time in seconds of the dectection from the bestprof file
-    time_obs: the time in seconds of the dectection from the metadata
-    start: input start time of the obs (0 is the true start)
-    end: input end time of the obs
-    metadata: list from the function get_obs_metadata
-    """
-    obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = metadata
-    #check if the obs time is entire obs. The meta data will round down to the nearest 200 seconds
-    #(someitmmes 100 depending on the obs type) 
-    if 0. < (time_detection - time_obs) < 199.:
-        #all available fits files used
-        enter = 0.
-        exit = time_detection
-    else:
-        #check if there is an input start and stop time
-        if time_detection > (time_obs *5.):
-            #some of the comissioning data has terrible metadata 
-            #going to assume it's for the entire data set
-            enter = 0.
-            exit = float(time_detection)
-        #start == None means no default used
-        elif (start == None) and (stop is not None):
-            logger.warning("No start time input so assumed it's 0")
-            enter = 0.
-            exit = stop
-            exit = float(exit)
-        elif (start is not None) and (stop) == None:
-            logger.warning("No stop time input so assumed it's the end of the observation")
-            exit = float(time_detection)
-            enter = args.start
-            enter = float(enter)
-        elif (start is not None) and (stop is not None):
-            enter = start
-            exit = stop
-            enter = float(enter)
-            exit = float(exit)
-        else:
-            #find_pulsar_in_obs wrapping to use it to find start and end
-            names_ra_dec = fpio.grab_source_alog(pulsar_list=[args.pulsar])
-            source_ob_power = fpio.get_beam_power_over_time([obsid,ra_obs,dec_obs,time_obs,delays,
-                                                             centrefreq,channels], names_ra_dec)
-            enter, exit = fpio.beam_enter_exit(source_ob_power[0], time_obs)
-            enter *= float(time_obs) 
-            exit *= float(time_obs)
-        input_detection_time = exit - enter
-        if not int(input_detection_time) == int(time_detection):
-            logger.warning("Input detection time does not equal the dectetion time of the .bestprof file")
-            logger.warning("Input (metadata) time: " + str(input_detection_time))
-            logger.warning("Bestprof time: " + str(time_detection))
-
-            #make sure calculation uses Bestprof time
-            exit = enter + time_detection
-    return enter, exit
+# Removed this function as this will always be calculated from the bestprof
+#def enter_exit_calc(time_detection, time_obs, metadata, start=None, stop=None):
 
 
 def zip_calibration_files(base_dir, cal_obsid, source_file):
@@ -306,26 +270,20 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
     return zip_file_location
 
 
-def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
-                        start = None, stop = None,
-                        trcvr = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                        trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
     time_detection: the time in seconds of the dectection from the bestprof file
     time_obs: the time in seconds of the dectection from the metadata
-    start: input start time of the obs (0 is the true start)
-    end: input end time of the obs
     metadata: list from the function get_obs_metadata
     bestprof_data: list from the function get_from_bestprof
     trcvr: the file location of antena temperatures
     """
-    #calculate the start and stop time of the detection
-    enter, exit = enter_exit_calc(time_detection, time_obs, metadata, start=start, stop=stop)
-    obsdur = enter - exit
-
     #unpack data
-    obsid, pulsar, dm, period, period_uncer, time_detection, profile, num_bins = bestprof_data
-    obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = metadata
+    obsid, pulsar, dm, period, period_uncer, obsstart, time_detection, profile,\
+                num_bins = bestprof_data
+    obsid, ra_obs, dec_obs, time_obs, delays, centrefreq, channels = metadata
     
     
     #Gain calc
@@ -336,10 +294,10 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     
     logger.info("Calculating beam power and antena temperature...")
     #starting from enter for the bestprof duration
-    bandpowers = fpio.get_beam_power_over_time([obsid,ra_obs,dec_obs,time_detection,
-                                                delays,centrefreq,channels],
-                                               np.array([["source",pul_ra, pul_dec]]),
-                                               dt=100, start_time=int(enter))
+    bandpowers = fpio.get_beam_power_over_time([obsid, ra_obs, dec_obs, time_detection,
+                                                delays, centrefreq, channels],
+                                               np.array([["source", pul_ra, pul_dec]]),
+                                               dt=100, start_time=int(obsstart - obsid))
     bandpowers = np.mean(bandpowers)
     
     #supress print statements of the make_primarybeammap function
@@ -425,7 +383,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
         sn = max(profile) / sigma
         u_sn = sn * math.sqrt( math.pow( profile_uncert / max(profile) , 2)  +  
                                math.pow( u_sigma / sigma ,2) )
-
+        
         #adjust profile to be around the off-pulse mean
         off_pulse_mean = np.nanmean(flagged_profile)
         profile -= off_pulse_mean
@@ -585,8 +543,10 @@ if __name__ == "__main__":
     calcargs = parser.add_argument_group('Detection Calculation Options', 'All the values of a pulsar detection (such as flux density, width, scattering) can be calculated by this code using either a .besprof file or a soon to be implemented DSPSR equivalent and automatically uploaded to the MWA Pulsar Database. Analysis files can still be uploaded before this step but this will leave the pulsar values as nulls.')
     calcargs.add_argument('-b','--bestprof',type=str,help='The location of the .bestprof file. Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputting the observation ID and pulsar name.')
     calcargs.add_argument('--ascii',type=str,help='The location of the ascii file (pulsar profile output of DSPSR). Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering).')
-    calcargs.add_argument('--start',type=float,help="The start time of the detection in seconds. For example if the detection begins at the start of the observation you would use --start 0. If this option isn't used, the code will calculate when the pulsar entered the beam", default = None)
-    calcargs.add_argument('--stop',type=float,help="The stop time of the detection in seconds. For example if the detection ended 10 minutes in use --end 600. If this option isn't used, the code will calculate when the pulsar exited the beam", default = None)
+    calcargs.add_argument('--start', type=int,
+            help="The start time of the detection in GPS format.")
+    calcargs.add_argument('--stop', type=int,
+            help="The stop time of the detection in GPS format.")
     calcargs.add_argument('--trcvr',type=str, default = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv", help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
 
     uploadargs = parser.add_argument_group('Upload Options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
@@ -661,14 +621,13 @@ if __name__ == "__main__":
     #get info from .bestprof file
     if args.bestprof:
         bestprof_data = get_from_bestprof(args.bestprof)
-        obsid, pulsar, dm, period, period_uncer, time_detection, profile, num_bins = bestprof_data
-        #The obsid can only be obtained from the bestprof file if the 
-        #fits file name start with the obsid
+        obsid, pulsar, dm, period, period_uncer, obsstart, time_detection,\
+               profile, num_bins = bestprof_data
         if obsid is None and args.obsid:
             obsid = args.obsid
         elif obsid is None:
             logger.error("Please use --obsid. Exiting")
-            sys.exit(0)
+            sys.exit(1)
     elif args.ascii:
         profile, num_bins = get_from_ascii(args.ascii)
         if args.obsid:
@@ -677,9 +636,13 @@ if __name__ == "__main__":
             pulsar = args.pulsar
         dm, period = get_pulsar_dm_p(pulsar)
         period_uncer = float(period) / 10.**10 #assuming it's miniscule
-        time_detection = args.stop - args.start
-        bestprof_data = [obsid, pulsar, dm, period, period_uncer, time_detection, profile, num_bins]
-    
+        if args.stop and args.start:
+            time_detection = args.stop - args.start
+        else:
+            logger.error("Please use --start and --stop for ascii files. Exiting")
+            sys.exit(1)
+        bestprof_data = [obsid, pulsar, dm, period, period_uncer, args.start,
+                         time_detection, profile, num_bins]
     elif args.obsid and args.pulsar:
         num_bins = 128 #used in dspsr calculations
         obsid = args.obsid
@@ -737,9 +700,9 @@ if __name__ == "__main__":
 
     if args.bestprof or args.ascii:
         #Does the flux calculation and submits the results to the MWA pulsar database
-        subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+        subbands = flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, coh, auth,
-                            start = args.start, stop = args.stop, trcvr = args.trcvr)
+                            trcvr=args.trcvr)
 
     if args.cal_dir_to_tar:
         if not args.srclist:
