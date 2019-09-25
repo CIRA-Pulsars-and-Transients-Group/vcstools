@@ -29,11 +29,12 @@ import process_vcs
 logger = logging.getLogger(__name__)
 
 try:
-    ATNF_LOC = os.enron('PSRCAT_FILE')
+    ATNF_LOC = os.environ['PSRCAT_FILE']
 except:
     logger.warn("ATNF database could not be found on disk.")
     ATNF_LOC = None
 
+#---------------------------------------------------------------
 def get_sn_from_prof(prof_path):
     #Gets an estimate of S/N with error from a bestprof
     #Based on code oringally writted by Nick Swainston
@@ -70,6 +71,7 @@ def get_sn_from_prof(prof_path):
 
     return sn, u_sn
 
+#---------------------------------------------------------------
 def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
     #returns the beginning and end time as a fraction that a pulsar is in the primary beam for the obsid files
     #beg and end should only be supplied if the files are not present on the system
@@ -127,6 +129,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
 
     return enter_files, exit_files
 
+#---------------------------------------------------------------
 def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_bound=None, c_bound=None):
 
     initial = [alpha_initial, c_initial]
@@ -164,10 +167,12 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
 
     return a, c, covar_matrix 
 
+#---------------------------------------------------------------
 def log_plaw_func(nu, a, c):
     #pass the log values of nu
     return np.exp(a * np.log(nu) + c)
 
+#---------------------------------------------------------------
 def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
 
     """
@@ -216,10 +221,10 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
         try:
             flux_err = df[query+"_ERR"][0]
             if flux_err == 0.0:
-                logger.warn("Flux erorr for query: {0} is zero. Assuming 20% uncertainty".format(query))
+                logger.warn("Flux erorr for query: {0}, pulsar {1}, is zero. Assuming 20% uncertainty".format(query, pulsar))
                 flux_err = flux*0.2
         except KeyError:
-            logger.warn("flux error value for {0} not available. Assuming 20% uncertainty".format(query))
+            logger.warn("flux error value for {0}, pulsar {1}, not available. Assuming 20% uncertainty".format(query, pulsar))
             flux_err = flux*0.2
         
         if not np.isnan(flux) and not np.isnan(flux_err):
@@ -240,7 +245,7 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
     spind = spind_query["SPINDX"][0]
     spind_err = spind_query["SPINDX_ERR"][0]
 
-    logger.info("There are {0} flux values available on the ATNF database for this pulsar".format(len(flux_all)))
+    logger.info("There are {0} flux values available on the ATNF database for {1}".format(len(flux_all), pulsar))
     #Attempt to estimate flux
     if len(flux_all) > 1:
         logger.info("Fitting power law to archive data")
@@ -305,14 +310,15 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
         flux_est_err = np.sqrt(s_2_var + a_var)
 
     elif len(flux_all) < 1:
-        logger.error("No flux values on archive. Cannot estimate flux. Terminating")
-        sys.exit(1)
+        logger.warn("No flux values on archive for {0}. Cannot estimate flux. Will return Nones".format(pulsar))
+        return None, None
 
     
     logger.info("Source flux estimate at {0} MHz: {1} +/- {2} Jy".format(f_mean/1e6, flux_est, flux_est_err))
     
     return flux_est, flux_est_err
 
+#---------------------------------------------------------------
 def find_pulsar_w50(pulsar):
     
     #returns W_50 and error for a pulsar from the ATNF archive IN SECONDS
@@ -329,19 +335,19 @@ def find_pulsar_w50(pulsar):
         W_50 = W_50/1000.
 
     if np.isnan(W_50_err) and not np.isnan(W_50):
-        logger.warn("W_50 error not on archive. returning standard 5% error")
+        logger.warn("W_50 error not on archive for {0}. returning standard 5% error".format(pulsar))
         W_50_err = W_50*0.05   
     else:
         #convert to seconds
         W_50_err = W_50_err/1000.
 
     if W_50 is None:
-        logger.warn("Applying estimated W_50. Uncertainty will be inflated")
+        logger.warn("Applying estimated W_50 for {0}. Uncertainty will be inflated".format(pulsar))
         #Rankin1993 - W = x*P^0.5 where x=4.8+/-0.5 degrees of rotation at 1GHz
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
         coeff = 4.8
         coeff_err = 2.
-        period_query = prsqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ANTF_LOC).pandas
+        period_query = prsqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
         period = float(preiod_query["P0"][0])
         
         #This estimation is worse for msps, add extra uncetainty if period < 50ms
@@ -358,6 +364,7 @@ def find_pulsar_w50(pulsar):
 
     return W_50, W_50_err
 
+#---------------------------------------------------------------
 def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"):
 
     #Find the total integration time of a pulsar in an obsid
@@ -399,6 +406,7 @@ def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"
 
     return beg, end, t_int
 
+#---------------------------------------------------------------
 def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
                     obs_metadata=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
@@ -422,21 +430,21 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
 
     #get ra and dec if not supplied
     if p_ra is None or p_dec is None:
-        logger.info("Obtaining pulsar RA and Dec from ATNF")
+        logger.debug("Obtaining pulsar RA and Dec from ATNF")
         ra_dec_q = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas 
         p_ra = ra_dec_q["RAJ"]
         p_dec = ra_dec_q["DECJ"]
     
     #get metadata if not supplied
     if obs_metadata is None:
-        logger.info("Obtaining obs metadata")
+        logger.debug("Obtaining obs metadata")
         obs_metadata = mwa_metadb_utils.get_common_obs_metadata(obsid) 
    
     obsid, obs_ra, obs_dec, obs_dur, delays, centrefreq, channels = obs_metadata
 
     #get beg if not supplied
     if beg is None:
-        logger.info("Calculating beginning time for pulsar coverage")
+        logger.debug("Calculating beginning time for pulsar coverage")
         comp_config=config.load_config_file()
         base_path = comp_config["base_product_dir"]
         beg, _, _ = find_times(obsid, pulsar, beg=beg, base_path=base_path)
@@ -480,7 +488,8 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
         pass   
  
     return t_sys, t_sys_err, gain, gain_err
-    
+
+#---------------------------------------------------------------
 def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None):
     
     """
@@ -501,20 +510,20 @@ def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_
 
     #Get some basic pulsar and obs info info
     if p_ra is None or p_dec is None:
-        logger.info("Obtaining pulsar RA and Dec from ATNF")
-        name_ra_dec = fpio.get_psrcat_ra_dec([pulsar])
-        p_ra = name_ra_dec[0][1]
-        p_dec = name_ra_dec[0][2]
+        logger.debug("Obtaining pulsar RA and Dec from ATNF")
+        query = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psr=pulsar, loadfromdb=ATNF_LOC).pandas
+        p_ra = query["RAJ"] 
+        p_dec = query["DECJ"]
     
     #get metadata if not supplied
     if obs_metadata is None:
-        logger.info("Obtaining obs metadata")
+        logger.debug("Obtaining obs metadata")
         obs_metadata = mwa_metadb_utils.get_common_obs_metadata(obsid)    
     
     n_p = 2 #constant
     df = 30.72e6 #(24*1.28e6)
     f_mean = obs_metadata[5]*1e6
-    period = float(psrqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ANTF_LOC).pandas["P0"])
+    period = float(psrqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas["P0"])
 
     #find integration time
     beg, end, t_int = find_times(obsid, pulsar, beg, end)
@@ -529,6 +538,10 @@ def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_
     #estimate flux
     s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, f_mean=f_mean)
     
+    #fluxes may be Nones. If so, return None
+    if s_mean is None and s_mean_err is None:
+        return None, None   
+ 
     #Find W_50
     W_50, W_50_err = find_pulsar_w50(pulsar)
 
@@ -560,6 +573,7 @@ def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_
 
     return SN, SN_err
 
+#--------------------------------------------------------------- 
 if __name__ == "__main__":
 
     loglevels = dict(DEBUG=logging.DEBUG,\
@@ -604,7 +618,7 @@ if __name__ == "__main__":
 
     #Decide what to use as ra and dec
     if args.raj==None or ags.decj==None:
-        query = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[args.pulsar], loadfromsb=ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[args.pulsar], loadfromdb=ATNF_LOC).pandas
         if args.raj==None:
             raj = query["RAJ"]
         if args.decj==None:
