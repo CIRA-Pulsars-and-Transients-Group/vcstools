@@ -34,6 +34,7 @@ import mwa_pb.primarybeammap as pbl
 from mwa_pulsar_client import client
 from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 import find_pulsar_in_obs as fpio
+import sn_flux_est as snfe
 
 import matplotlib.pyplot as plt
 import logging
@@ -269,7 +270,7 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
     return zip_file_location
 
 
-def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
                         trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
@@ -280,8 +281,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     trcvr: the file location of antena temperatures
     """
     #unpack data
-    obsid, pulsar, dm, period, period_uncer, obsstart, time_detection, profile,
-           num_bins = bestprof_data
+    obsid, pulsar, dm, period, period_uncer, obsstart, time_detection, profile,\
+                num_bins = bestprof_data
     obsid, ra_obs, dec_obs, time_obs, delays, centrefreq, channels = metadata
     
     
@@ -382,7 +383,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
         sn = max(profile) / sigma
         u_sn = sn * math.sqrt( math.pow( profile_uncert / max(profile) , 2)  +  
                                math.pow( u_sigma / sigma ,2) )
-
+        
         #adjust profile to be around the off-pulse mean
         off_pulse_mean = np.nanmean(flagged_profile)
         profile -= off_pulse_mean
@@ -620,7 +621,7 @@ if __name__ == "__main__":
     #get info from .bestprof file
     if args.bestprof:
         bestprof_data = get_from_bestprof(args.bestprof)
-        obsid, pulsar, dm, period, period_uncer, obsstart, time_detection,
+        obsid, pulsar, dm, period, period_uncer, obsstart, time_detection,\
                profile, num_bins = bestprof_data
         if obsid is None and args.obsid:
             obsid = args.obsid
@@ -699,9 +700,9 @@ if __name__ == "__main__":
 
     if args.bestprof or args.ascii:
         #Does the flux calculation and submits the results to the MWA pulsar database
-        subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+        subbands = flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, coh, auth,
-                            start = args.start, stop = args.stop, trcvr = args.trcvr)
+                            trcvr=args.trcvr)
 
     if args.cal_dir_to_tar:
         if not args.srclist:

@@ -28,6 +28,12 @@ import process_vcs
 
 logger = logging.getLogger(__name__)
 
+try:
+    ATNF_LOC = os.enron('PSRCAT_FILE')
+except:
+    logger.warn("ATNF database could not be found on disk.")
+    ATNF_LOC = None
+
 def get_sn_from_prof(prof_path):
     #Gets an estimate of S/N with error from a bestprof
     #Based on code oringally writted by Nick Swainston
@@ -199,7 +205,7 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
     if flux_queries[-1] == "SPINDX":
         flux_queries = flux_queries[:-1]
 
-    df = psrqpy.QueryATNF(params=all_queries, psrs=[pulsar]).pandas
+    df = psrqpy.QueryATNF(params=all_queries, psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
     freq_all=[]
     flux_all=[]
     flux_err_all=[]
@@ -230,7 +236,7 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
     logger.debug("Flux Errors: {0}".format(flux_err_all))
 
     #query psrcat for spectral index
-    spind_query = psrqpy.QueryATNF(params=["SPINDX"], psrs=[pulsar]).pandas
+    spind_query = psrqpy.QueryATNF(params=["SPINDX"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
     spind = spind_query["SPINDX"][0]
     spind_err = spind_query["SPINDX_ERR"][0]
 
@@ -254,7 +260,7 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
     
         spind, c, covar_matrix = fit_plaw_psr(freq_all, flux_all, alpha_initial=initial_spind, alpha_bound=spind_bounds)
         logger.info(np.shape(covar_matrix))
-        logger.info(np.item(0))
+        logger.info(covar_matrix.item(0))
         logger.info("Derived spectral index: {0} +/- {1}".format(spind, covar_matrix[0][0][0]))
         
         #flux calc.  
@@ -311,7 +317,7 @@ def find_pulsar_w50(pulsar):
     
     #returns W_50 and error for a pulsar from the ATNF archive IN SECONDS
     logger.debug("Accessing ATNF database")
-    query = psrqpy.QueryATNF(params=["W50"], psrs=[pulsar]).pandas 
+    query = psrqpy.QueryATNF(params=["W50"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas 
     W_50 = query["W50"][0]
     W_50_err = query["W50_ERR"][0]
     if np.isnan(W_50):
@@ -335,7 +341,7 @@ def find_pulsar_w50(pulsar):
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
         coeff = 4.8
         coeff_err = 2.
-        period_query = prsqpy.QueryATNF(params=["P0"], psrs=[pulsar]).pandas
+        period_query = prsqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ANTF_LOC).pandas
         period = float(preiod_query["P0"][0])
         
         #This estimation is worse for msps, add extra uncetainty if period < 50ms
@@ -417,7 +423,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
     #get ra and dec if not supplied
     if p_ra is None or p_dec is None:
         logger.info("Obtaining pulsar RA and Dec from ATNF")
-        ra_dec_q = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[pulsar]).pandas 
+        ra_dec_q = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas 
         p_ra = ra_dec_q["RAJ"]
         p_dec = ra_dec_q["DECJ"]
     
@@ -508,7 +514,7 @@ def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_
     n_p = 2 #constant
     df = 30.72e6 #(24*1.28e6)
     f_mean = obs_metadata[5]*1e6
-    period = float(psrqpy.QueryATNF(params=["P0"], psrs=[pulsar]).pandas["P0"])
+    period = float(psrqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ANTF_LOC).pandas["P0"])
 
     #find integration time
     beg, end, t_int = find_times(obsid, pulsar, beg, end)
@@ -598,7 +604,7 @@ if __name__ == "__main__":
 
     #Decide what to use as ra and dec
     if args.raj==None or ags.decj==None:
-        query = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[args.pulsar]).pandas
+        query = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[args.pulsar], loadfromsb=ATNF_LOC).pandas
         if args.raj==None:
             raj = query["RAJ"]
         if args.decj==None:
