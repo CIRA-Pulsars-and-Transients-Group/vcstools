@@ -48,6 +48,12 @@ from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata, ge
 import logging
 logger = logging.getLogger(__name__)
 
+try:
+    ATNF_LOC = os.environ['PSRCAT_FILE']
+except:
+    logger.warn("ATNF database could not be found on disk.")
+    ATNF_LOC = None
+
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
     no = set(['N','no','n'])
@@ -111,7 +117,7 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
     import psrqpy
 
     params = ['JNAME', 'RAJ', 'DECJ', 'DM']
-    query = psrqpy.QueryATNF(params=params, psrs=pulsar_list).pandas
+    query = psrqpy.QueryATNF(params=params, psrs=pulsar_list, loadfromdb=ATNF_LOC).pandas
 
     pulsar_ra_dec = []
     for row in query.itertuples():
@@ -683,7 +689,10 @@ def write_output_source_files(output_data,
                                   duration, enter, exit, max_power, oap))
                 if SN_est:
                     pulsar_sn, pulsar_sn_err = sfe.est_pulsar_flux(pulsar, obsid=obsid, f_mean=obsid_meta[on][-2]*1e6)
-                    output_file.write('{:5.7f} {:5.7f}'.format(pulsar_sn, pulsar_sn_err))
+                    if pulsar_sn is None:
+                        output_file.write('   None    None')
+                    else:
+                        output_file.write('{:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
                 
                 if cal_check:
                     #checks the MWA Pulsar Database to see if the obsid has been 
@@ -725,10 +734,15 @@ def write_output_obs_files(output_data, obsid_meta,
             output_file.write('#Exit:   The fraction of the observation when '+\
                                         'the source exits the beam\n')
             output_file.write('#Power:  The maximum zenith normalised power of the source.\n')
-            output_file.write('#Source    |Enter|Exit |Power\n')
             if SN_est:
                 output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
                 output_file.write("#S/N Err: The uncertainty of S/N Est\n")
+            
+            output_file.write('#Source    |Enter|Exit |Power')
+            if SN_est:
+                output_file.write('| S/N Est | S/N Err \n')
+            else:
+                output_file.write('\n')
             
             for data in output_data[obsid]:
                 pulsar, enter, exit, max_power = data
@@ -736,7 +750,10 @@ def write_output_obs_files(output_data, obsid_meta,
                                   enter, exit, max_power))
                 if SN_est:
                     pulsar_sn, pulsar_sn_err = sfe.est_pulsar_flux(pulsar, obsid=obsid, f_mean=obsid_meta[on][-2]*1e6)
-                    output_file.write('{:5.7f} {:5.7f}\n'.format(pulsar_sn, pulsar_sn_err))
+                    if pulsar_sn is None:
+                        output_file.write('   None    None\n')
+                    else:
+                        output_file.write('{:9.2f} {:9.2f}\n'.format(pulsar_sn, pulsar_sn_err))
                 else:
                     output_file.write('\n')
                 
