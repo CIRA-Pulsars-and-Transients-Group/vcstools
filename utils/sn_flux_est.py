@@ -35,11 +35,32 @@ except:
     ATNF_LOC = None
 
 #---------------------------------------------------------------
-def get_sn_from_prof(prof_path):
-    #Gets an estimate of S/N with error from a bestprof
-    #Based on code oringally writted by Nick Swainston
-    
-    _, _, _, _, _ , _, prof_data, nbins = submit_to_database.get_from_bestprof(prof_path)
+def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=False):
+    """
+    Gets an estimate of S/N with error from a pulse profile
+    Based on code oringally writted by Nick Swainston
+
+    Inputs:
+    user must supply EITHER a bestprof path OR prof_data and period of your pulse profile
+    the profile data should be a list of floats that makes the pulse profile
+    verbose: a boolean that determines whether to return more detailed information. Discussed below
+
+    Return:
+    [sn, u_sn]: the signal to noise and its uncertainty
+    verbose=True will return much more information in the form: 
+    [sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins w_equiv_ms, u_w_equiv_ms, scattered]
+    """
+    if prof_path is None and (prof_data is None or period is None):
+        logger.warn("Insufficient information to attain SN estimate from profile. Returning Nones")
+        return None, None
+
+    if prof_data is None:
+        _, _, _, period, _ , _, prof_data, nbins = submit_to_database.get_from_bestprof(prof_path)
+        nbins = float(nbins)
+        period = float(period)
+    else:
+        nbins = len(prof_data)
+
     #centre the profile around the max
     shift = -int(np.argmax(prof_data))+int(nbins)//2
     prof_data = np.roll(prof_data, shift)
@@ -47,29 +68,69 @@ def get_sn_from_prof(prof_path):
     #find sigma and check if profile is scattered 
     sigma, flags = submit_to_database.sigmaClip(prof_data)    
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
+    scattered=False
     if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
-        logger.warn("The profile is highly scattered. S/N estimate may be incorrect")
+        logger.warn("The profile is highly scattered. S/N estimate cannot be calculated")
+        if verbose == True:
+            scattered=True
+            #making a new profile with the only bin being the lowest point
+            prof_min_i = np.argmin(prof_data)
+            flags = []
+            for fi in range(len(prof_data)):
+                if fi == prof_min_i:
+                    flags.append(prof_data[fi])
+                else:
+                    flags.append(np.nan)
 
-    u_prof = 500. #this is an approximation
-    pulse_width_bins = 0
-    non_pulse_bins = 0
-    p_total = 0.
-    u_p = 0.
-    #work out the above parameters
-    for i, data in enumerate(prof_data):
-        if np.isnan(flags[i]):
-            pulse_width_bins += 1    
-            p_total += data
-            u_p = np.sqrt(u_p**2 + u_prof**2)
-        else:
-            non_pulse_bins += 1
-    u_simga = sigma / np.sqrt(2 * non_pulse_bins - 2)
+            flags = np.array(flags)
+            prof_data -= min(prof_data)
+            #Assuming width is equal to pulsar period because of the scattering
+            w_equiv_ms = period
+            u_w_equiv_ms = period/nbins 
+        sn = None
+        u_sn = None
+    else:
+        u_prof = 500. #this is an approximation
+        pulse_width_bins = 0
+        non_pulse_bins = 0
+        p_total = 0.
+        u_p = 0.
+        #work out the above parameters
+        for i, data in enumerate(prof_data):
+            if np.isnan(flags[i]):
+                pulse_width_bins += 1    
+                p_total += data
+                u_p = np.sqrt(u_p**2 + u_prof**2)
+            else:
+                non_pulse_bins += 1
+        u_simga = sigma / np.sqrt(2 * non_pulse_bins - 2)
 
-    #now calc S/N 
-    sn = max(prof_data)/sigma
-    u_sn = sn * np.sqrt(u_prof/max(prof_data)**2 + (u_simga/sigma)**2)
+        #now calc S/N 
+        sn = max(prof_data)/sigma
+        u_sn = sn * np.sqrt(u_prof/max(prof_data)**2 + (u_simga/sigma)**2)
 
-    return sn, u_sn
+    if verbose==False:
+        return [sn, u_sn]
+
+    elif scattered==False:
+        off_pulse_mean = np.nanmean(flags)
+        prof_data -= off_pulse_mean
+        flags -= off_pulse_mean
+
+        prof_max = max(prof_data)
+        w_equiv_bins = p_total / prof_max
+        w_equiv_ms = w_equiv_bins / nbins * period # in ms
+        u_w_equiv_bins = np.sqrt(p_total /prof_max)**2 +\
+                                   (p_total * u_prof / (prof_max)**2)**2
+        u_w_equiv_ms = u_w_equiv_bins / nbins * period # in ms
+
+    else:
+        w_equiv_ms = period
+        u_w_equiv_ms = period/nbins
+        w_equiv_bins = w_equiv_ms/period*nbins
+        u_w_equiv_bins = (u_w_equiv_ms/w_equiv_ms)*w_equiv_bins
+        
+    return [sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattered]
 
 #---------------------------------------------------------------
 def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
