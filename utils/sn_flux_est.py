@@ -325,9 +325,7 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
          
     
         spind, c, covar_matrix = fit_plaw_psr(freq_all, flux_all, alpha_initial=initial_spind, alpha_bound=spind_bounds)
-        logger.info(np.shape(covar_matrix))
-        logger.info(covar_matrix.item(0))
-        logger.info("Derived spectral index: {0} +/- {1}".format(spind, covar_matrix[0][0][0]))
+        logger.info("Derived spectral index: {0} +/- {1}".format(spind, covar_matrix.item(0)))
         
         #flux calc.  
         flux_est = np.exp(spind*np.log(f_mean)+c) 
@@ -344,8 +342,8 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
         logger.warn("Only a single flux value available on the archive")
 
         if not np.isnan(spind) and np.isnan(spind_err):
-            logger.warn("Spectral index error not available. Assuming 10% error")
-            spind_err = spind*0.1
+            logger.warn("Spectral index error not available. Assuming 20% error")
+            spind_err = spind*0.2
         if np.isnan(spind):
             logger.warn("Insufficient archival data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013")
             spind = -1.4
@@ -353,13 +351,16 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
        
         #formula for flux: 
         #S_1 = nu_1^a * nu_2 ^-a * S_2     
-        nu_1 = f_mean
-        nu_2 = freq_all[0] * 1e6 #convert to Hz from MHz
-        s_2 = flux_all[0] * 1e-3 #convert to Jy from mJy
-        s_2_err = flux_err_all[0] * 1e-3 
+        nu_1 = f_mean #in Hz
+        nu_2 = freq_all[0] #in Hz 
+        s_2 = flux_all[0] #in Jy
+        s_2_err = flux_err_all[0]  
         a = spind
-        a_err = spind_err        
+        a_err = spind_err
         
+        logger.debug("nu1 {0}".format(nu_1))        
+        logger.debug("nu2 {0}".format(nu_2))        
+        logger.debug("s2 {0}".format(s_2))        
         logger.info("calculating flux using spectral index: {0} and error: {1}".format(spind, spind_err))
         
         flux_est = nu_1**a * nu_2**(-a) * s_2 
