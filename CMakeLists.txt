@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-project(vcstools VERSION 1.4.3)
+project(vcstools VERSION 1.5.0)
 
 # Set up version number
 execute_process(

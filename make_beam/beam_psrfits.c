@@ -15,7 +15,7 @@
 #include "beam_psrfits.h"
 #include "mycomplex.h"
 
-void printf_psrfits( struct psrfits *pf ) {
+void printf_psrfits( struct psrfits *pf) {
     fprintf(stdout, "\nPSRFITS:\n");
     fprintf(stdout, "Basename of output file     [%s]\n", pf->basefilename);
     fprintf(stdout, "Filename of output file     [%s]\n", pf->filename);
@@ -97,156 +97,174 @@ void populate_psrfits_header(
         long int        chan_width,
         int             outpol,
         char           *rec_channel,
-        struct delays  *delay_vals )
+        struct delays  *delay_vals,
+        struct metafits_info mi,
+        int             npointing,
+        int             is_coherent )
 {
-    int is_coherent = 0;
-    if (outpol == 4)
-        is_coherent = 1;
-    else if (outpol != 1)
+    if ( !( outpol == 1 || outpol == 4 ) )
     {
         fprintf( stderr, "warning: populate_psrfits_header: "
                          "unusual number of output pols = %d\n", outpol );
     }
 
 
-    fitsfile *fptr = NULL;
-    int status     = 0;
-
-    fits_open_file(&fptr, metafits, READONLY, &status);
-    fits_read_key(fptr, TSTRING, "PROJECT", pf->hdr.project_id, NULL, &status);
-    fits_close_file(fptr, &status);
-
-    // Now set values for our hdrinfo structure
-    strcpy(pf->hdr.obs_mode,  "SEARCH");
-    strcpy(pf->hdr.observer,  "MWA User");
-    strcpy(pf->hdr.telescope, "MWA");
-    strncpy(pf->hdr.source, obsid, 23);
-    pf->hdr.scanlen = 1.0; // in sec
-
-    strcpy(pf->hdr.frontend, "MWA-RECVR");
-    snprintf(pf->hdr.backend, 24*sizeof(char), "vcstools %s", VERSION_BEAMFORMER );
-
-    // Now let us finally get the time right
-    strcpy(pf->hdr.date_obs,   time_utc);
-    strcpy(pf->hdr.poln_type,  "LIN");
-    strcpy(pf->hdr.track_mode, "TRACK");
-    strcpy(pf->hdr.cal_mode,   "OFF");
-    strcpy(pf->hdr.feed_mode,  "FA");
-
-    pf->hdr.dt   = 1.0/sample_rate;                            // (sec)
-    pf->hdr.fctr = (frequency + (nchan/2.0)*chan_width)/1.0e6; // (MHz)
-    pf->hdr.BW   = (nchan*chan_width)/1.0e6;                   // (MHz)
-
-    // npols + nbits and whether pols are added
-    pf->filenum       = 0;       // This is the crucial one to set to initialize things
-    pf->rows_per_file = 200;     // I assume this is a max subint issue
-
-    pf->hdr.npol         = outpol;
-    pf->hdr.nchan        = nchan;
-    pf->hdr.onlyI        = 0;
-
-    pf->hdr.scan_number   = 1;
-    pf->hdr.rcvr_polns    = 2;
-    pf->hdr.offset_subint = 0;
-
-    if (is_coherent)
-        pf->hdr.summed_polns = 0;
-    else
-        pf->hdr.summed_polns = 1;
-
-    pf->hdr.df         = chan_width/1.0e6; // (MHz)
-    pf->hdr.orig_nchan = pf->hdr.nchan;
-    pf->hdr.orig_df    = pf->hdr.df;
-    pf->hdr.nbits      = 8;
-    pf->hdr.nsblk      = sample_rate;  // block is always 1 second of data
-
-    pf->hdr.ds_freq_fact = 1;
-    pf->hdr.ds_time_fact = 1;
-
-    // some things that we are unlikely to change
-    pf->hdr.fd_hand  = 1;
-    pf->hdr.fd_sang  = 45.0;
-    pf->hdr.fd_xyph  = 0.0;
-    pf->hdr.be_phase = 0;
-    pf->hdr.chan_dm  = 0.0;
-
-    // Now set values for our subint structure
-    pf->tot_rows     = 0;
-    pf->sub.tsubint  = roundf(pf->hdr.nsblk * pf->hdr.dt);
-    pf->sub.offs     = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
-
-    pf->sub.feed_ang = 0.0;
-    pf->sub.pos_ang  = 0.0;
-    pf->sub.par_ang  = 0.0;
-
-    // Specify psrfits data type
-    pf->sub.FITS_typecode = TBYTE;
-
-    pf->sub.bytes_per_subint = (pf->hdr.nbits * pf->hdr.nchan *
-                                pf->hdr.npol  * pf->hdr.nsblk) / 8;
-
-    // Create and initialize the subint arrays
-    pf->sub.dat_freqs   = (float *)malloc(sizeof(float) * pf->hdr.nchan);
-    pf->sub.dat_weights = (float *)malloc(sizeof(float) * pf->hdr.nchan);
-
-    double dtmp = pf->hdr.fctr - 0.5 * pf->hdr.BW + 0.5 * pf->hdr.df;
-    int i;
-    for (i = 0 ; i < pf->hdr.nchan ; i++) {
-        pf->sub.dat_freqs[i] = dtmp + i * pf->hdr.df;
-        pf->sub.dat_weights[i] = 1.0;
-    }
-
-    // the following is definitely needed for 8 bit numbers
-    pf->sub.dat_offsets = (float *)malloc(sizeof(float) * pf->hdr.nchan * pf->hdr.npol);
-    pf->sub.dat_scales  = (float *)malloc(sizeof(float) * pf->hdr.nchan * pf->hdr.npol);
-    for (i = 0 ; i < pf->hdr.nchan * pf->hdr.npol ; i++) {
-        pf->sub.dat_offsets[i] = 0.0;
-        pf->sub.dat_scales[i]  = 1.0;
-    }
-
-    pf->sub.data    = (unsigned char *)malloc(pf->sub.bytes_per_subint);
-    pf->sub.rawdata = pf->sub.data;
-
-    int ch = atoi(rec_channel);
-    if (!is_coherent)
+    fitsfile *fptr;
+    int status;
+    
+    for ( int p=0; p<npointing; p++)
     {
-        sprintf(pf->basefilename, "%s_%s_ch%03d_incoh",
-                pf->hdr.project_id, pf->hdr.source, ch);
-    }
-    else
-    {
-        sprintf(pf->basefilename, "%s_%s_ch%03d",
-                pf->hdr.project_id, pf->hdr.source, ch);
-    }
+        fptr  = NULL;
+        status = 0;
+    
 
-    // Update values that depend on get_delays()
-    if (delay_vals != NULL) {
+        fits_open_file(&fptr, metafits, READONLY, &status);
+        fits_read_key(fptr, TSTRING, "PROJECT", pf[p].hdr.project_id, NULL, &status);
+        fits_close_file(fptr, &status);
 
-        pf->hdr.ra2000  = delay_vals->mean_ra  * DR2D;
-        pf->hdr.dec2000 = delay_vals->mean_dec * DR2D;
+        // Now set values for our hdrinfo structure
+        strcpy(pf[p].hdr.obs_mode,  "SEARCH");
+        strcpy(pf[p].hdr.observer,  "MWA User");
+        strcpy(pf[p].hdr.telescope, "MWA");
+        strncpy(pf[p].hdr.source, obsid, 23);
+        pf[p].hdr.scanlen = 1.0; // in sec
 
-        dec2hms(pf->hdr.ra_str,  pf->hdr.ra2000/15.0, 0);
-        dec2hms(pf->hdr.dec_str, pf->hdr.dec2000,     1);
+        strcpy(pf[p].hdr.frontend, "MWA-RECVR");
+        snprintf(pf[p].hdr.backend, 24*sizeof(char), "vcstools %s", VERSION_BEAMFORMER );
 
-        pf->hdr.azimuth    = delay_vals->az*DR2D;
-        pf->hdr.zenith_ang = 90.0 - (delay_vals->el*DR2D);
+        // Now let us finally get the time right
+        strcpy(pf[p].hdr.date_obs,   time_utc);
+        strcpy(pf[p].hdr.poln_type,  "LIN");
+        strcpy(pf[p].hdr.track_mode, "TRACK");
+        strcpy(pf[p].hdr.cal_mode,   "OFF");
+        strcpy(pf[p].hdr.feed_mode,  "FA");
 
-        pf->hdr.beam_FWHM = 0.25;
-        pf->hdr.start_lst = delay_vals->lmst * 60.0 * 60.0;        // Local Apparent Sidereal Time in seconds
-        pf->hdr.start_sec = roundf(delay_vals->fracmjd*86400.0);   // this will always be a whole second
-        pf->hdr.start_day = delay_vals->intmjd;
-        pf->hdr.MJD_epoch = delay_vals->intmjd + delay_vals->fracmjd;
+        pf[p].hdr.dt   = 1.0/sample_rate;                            // (sec)
+        pf[p].hdr.fctr = (frequency + (nchan/2.0)*chan_width)/1.0e6; // (MHz)
+        pf[p].hdr.BW   = (nchan*chan_width)/1.0e6;                   // (MHz)
+
+        // npols + nbits and whether pols are added
+        pf[p].filenum       = 0;       // This is the crucial one to set to initialize things
+        pf[p].rows_per_file = 200;     // I assume this is a max subint issue
+
+        pf[p].hdr.npol         = outpol;
+        pf[p].hdr.nchan        = nchan;
+        pf[p].hdr.onlyI        = 0;
+
+        pf[p].hdr.scan_number   = 1;
+        pf[p].hdr.rcvr_polns    = 2;
+        pf[p].hdr.offset_subint = 0;
+
+        if (is_coherent)
+            pf[p].hdr.summed_polns = 0;
+        else
+            pf[p].hdr.summed_polns = 1;
+
+        pf[p].hdr.df         = chan_width/1.0e6; // (MHz)
+        pf[p].hdr.orig_nchan = pf[p].hdr.nchan;
+        pf[p].hdr.orig_df    = pf[p].hdr.df;
+        pf[p].hdr.nbits      = 8;
+        pf[p].hdr.nsblk      = sample_rate;  // block is always 1 second of data
+
+        pf[p].hdr.ds_freq_fact = 1;
+        pf[p].hdr.ds_time_fact = 1;
+
+        // some things that we are unlikely to change
+        pf[p].hdr.fd_hand  = 1;
+        pf[p].hdr.fd_sang  = 45.0;
+        pf[p].hdr.fd_xyph  = 0.0;
+        pf[p].hdr.be_phase = 0;
+        pf[p].hdr.chan_dm  = 0.0;
 
         // Now set values for our subint structure
-        pf->sub.lst      = pf->hdr.start_lst;
-        pf->sub.ra       = pf->hdr.ra2000;
-        pf->sub.dec      = pf->hdr.dec2000;
-        slaEqgal(pf->hdr.ra2000*DD2R, pf->hdr.dec2000*DD2R,
-                 &pf->sub.glon, &pf->sub.glat);
-        pf->sub.glon    *= DR2D;
-        pf->sub.glat    *= DR2D;
-        pf->sub.tel_az   = pf->hdr.azimuth;
-        pf->sub.tel_zen  = pf->hdr.zenith_ang;
+        pf[p].tot_rows     = 0;
+        pf[p].sub.tsubint  = roundf(pf[p].hdr.nsblk * pf[p].hdr.dt);
+        pf[p].sub.offs     = roundf(pf[p].tot_rows * pf[p].sub.tsubint) + 0.5*pf[p].sub.tsubint;
+
+        pf[p].sub.feed_ang = 0.0;
+        pf[p].sub.pos_ang  = 0.0;
+        pf[p].sub.par_ang  = 0.0;
+
+        // Specify psrfits data type
+        pf[p].sub.FITS_typecode = TBYTE;
+
+        pf[p].sub.bytes_per_subint = (pf[p].hdr.nbits * pf[p].hdr.nchan *
+                                    pf[p].hdr.npol  * pf[p].hdr.nsblk) / 8;
+
+        // Create and initialize the subint arrays
+        pf[p].sub.dat_freqs   = (float *)malloc(sizeof(float) * pf[p].hdr.nchan);
+        pf[p].sub.dat_weights = (float *)malloc(sizeof(float) * pf[p].hdr.nchan);
+
+        double dtmp = pf[p].hdr.fctr - 0.5 * pf[p].hdr.BW + 0.5 * pf[p].hdr.df;
+        int i;
+        for (i = 0 ; i < pf[p].hdr.nchan ; i++) {
+            pf[p].sub.dat_freqs[i] = dtmp + i * pf[p].hdr.df;
+            pf[p].sub.dat_weights[i] = 1.0;
+        }
+
+        // the following is definitely needed for 8 bit numbers
+        pf[p].sub.dat_offsets = (float *)malloc(sizeof(float) * pf[p].hdr.nchan * pf[p].hdr.npol);
+        pf[p].sub.dat_scales  = (float *)malloc(sizeof(float) * pf[p].hdr.nchan * pf[p].hdr.npol);
+        for (i = 0 ; i < pf[p].hdr.nchan * pf[p].hdr.npol ; i++) {
+            pf[p].sub.dat_offsets[i] = 0.0;
+            pf[p].sub.dat_scales[i]  = 1.0;
+        }
+
+        pf[p].sub.data    = (unsigned char *)malloc(pf[p].sub.bytes_per_subint);
+        pf[p].sub.rawdata = pf[p].sub.data;
+
+        // Update values that depend on get_delays()
+        if (delay_vals != NULL) {
+
+            if (is_coherent) 
+            {
+                pf[p].hdr.ra2000  = delay_vals[p].mean_ra  * DR2D;
+                pf[p].hdr.dec2000 = delay_vals[p].mean_dec * DR2D;
+            } 
+            else
+            {
+                // Use the tile pointing instead of the pencil beam pointing
+                pf[p].hdr.ra2000  = mi.tile_pointing_ra;
+                pf[p].hdr.dec2000 = mi.tile_pointing_dec;
+            }
+
+            dec2hms(pf[p].hdr.ra_str,  pf[p].hdr.ra2000/15.0, 0);
+            dec2hms(pf[p].hdr.dec_str, pf[p].hdr.dec2000,     1);
+
+            pf[p].hdr.azimuth    = delay_vals[p].az*DR2D;
+            pf[p].hdr.zenith_ang = 90.0 - (delay_vals[p].el*DR2D);
+
+            pf[p].hdr.beam_FWHM = 0.25;
+            pf[p].hdr.start_lst = delay_vals[p].lmst * 60.0 * 60.0;        // Local Apparent Sidereal Time in seconds
+            pf[p].hdr.start_sec = roundf(delay_vals[p].fracmjd*86400.0);   // this will always be a whole second
+            pf[p].hdr.start_day = delay_vals[p].intmjd;
+            pf[p].hdr.MJD_epoch = delay_vals[p].intmjd + delay_vals[p].fracmjd;
+
+            // Now set values for our subint structure
+            pf[p].sub.lst      = pf[p].hdr.start_lst;
+            pf[p].sub.ra       = pf[p].hdr.ra2000;
+            pf[p].sub.dec      = pf[p].hdr.dec2000;
+            slaEqgal(pf[p].hdr.ra2000*DD2R, pf[p].hdr.dec2000*DD2R,
+                     &pf[p].sub.glon, &pf[p].sub.glat);
+            pf[p].sub.glon    *= DR2D;
+            pf[p].sub.glat    *= DR2D;
+            pf[p].sub.tel_az   = pf[p].hdr.azimuth;
+            pf[p].sub.tel_zen  = pf[p].hdr.zenith_ang;
+
+            int ch = atoi(rec_channel);
+            if (is_coherent)
+            {
+                sprintf(pf[p].basefilename, "%s_%s/%s_%s_%s_%s_ch%03d",
+                        pf[p].hdr.ra_str, pf[p].hdr.dec_str,
+                        pf[p].hdr.project_id, pf[p].hdr.source, 
+                        pf[p].hdr.ra_str, pf[p].hdr.dec_str, ch);
+            }
+            else
+            {
+                sprintf(pf[p].basefilename, "../incoh/%s_%s_incoh_ch%03d",
+                        pf[p].hdr.project_id, pf[p].hdr.source, ch);
+            }
+        }
     }
 }
 
@@ -282,27 +300,33 @@ void correct_psrfits_stt( struct psrfits *pf )
 
 
 void psrfits_write_second( struct psrfits *pf, float *data_buffer, int nchan,
-        int outpol )
+                           int outpol, int p )
 {
-    int8_t *out_buffer_8 = (int8_t *)malloc( outpol*nchan*pf->hdr.nsblk * sizeof(int8_t) );
+    int sec_size = outpol * nchan * pf->hdr.nsblk;
+    int8_t *out_buffer_8 = (int8_t *)malloc( sec_size * sizeof(int8_t) );
 
 //    if (outpol>1) { // only do this for the coherent beams
 //        flatten_bandpass(pf->hdr.nsblk, nchan, outpol, data_buffer);
 //    }
-
-    float_to_unit8(data_buffer, pf->hdr.nsblk * nchan * outpol, out_buffer_8);
-
+    // pointing_offset makes the buffer start at the memory assigned the pointing
+    int pointing_offset = p * sec_size;
+    float *pointing_buffer  = malloc( sec_size * sizeof(float) );
+    memcpy(pointing_buffer, data_buffer + pointing_offset, sec_size * sizeof(float) );
+    float_to_unit8( pointing_buffer, sec_size, out_buffer_8);
+    
     memcpy( pf->sub.data, out_buffer_8, pf->sub.bytes_per_subint );
-
+    //memset(pf->filename,0,strlen(pf->filename));
+    //memset(pf->hdr.poln_order,0,strlen(pf->hdr.poln_order));
+    
     if (psrfits_write_subint(pf) != 0)
     {
         fprintf(stderr, "error: Write subint failed. File exists?\n");
         exit(EXIT_FAILURE);
     }
-
     pf->sub.offs = roundf(pf->tot_rows * pf->sub.tsubint) + 0.5*pf->sub.tsubint;
     pf->sub.lst += pf->sub.tsubint;
-
+    
+    free( pointing_buffer );
     free( out_buffer_8 );
 }
 

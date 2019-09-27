@@ -25,7 +25,7 @@
 #endif
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
-        float *data_buffer_vdif, float *gain )
+        float *data_buffer_vdif, float *gain, int p )
 {
 
     // Set level occupancy
@@ -34,20 +34,21 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     get_mean_complex(
             (ComplexFloat *)data_buffer_vdif,
+            p*vf->sizeof_buffer/2,
             vf->sizeof_buffer/2.0,
             &rmean, &imean, &cmean );
 
     stddev = get_std_dev_complex(
             (ComplexFloat *)data_buffer_vdif,
+            p*vf->sizeof_buffer/2,
             vf->sizeof_buffer/2.0 );
 
-    //if (fabsf(rmean) > 0.001)
-    if (1)
+    if (fabsf(rmean) > 0.001)
     {
         fprintf( stderr, "warning: vdif_write_second: significantly "
                          "non-zero mean (%f), adjusting data\n", rmean );
         unsigned int i;
-        for (i = 0; i < vf->sizeof_buffer/2; i++)
+        for (i = p*vf->sizeof_buffer/2.0; i < vf->sizeof_buffer/2; i++)
         {
             data_buffer_vdif[2*i+0] -= CRealf(cmean);
             data_buffer_vdif[2*i+1] -= CImagf(cmean);
@@ -65,11 +66,18 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
     // Normalise
     normalise_complex(
             (ComplexFloat *)data_buffer_vdif,
+            p*vf->sizeof_buffer/2,
             vf->sizeof_buffer/2.0,
             1.0/(*gain) );
-
+    
     float *data_buffer_ptr = data_buffer_vdif;
-    size_t offset_out_vdif = 0;
+    
+    //Only using the buffer for the pointing
+    float *pointing_buffer  = malloc( vf->sizeof_buffer * sizeof(float) );
+    memcpy(pointing_buffer, data_buffer_ptr + p * vf->sizeof_buffer,
+           vf->sizeof_buffer * sizeof(float) );
+
+    size_t offset_out_vdif = 0;// p * vf->block_size;
 
     int8_t *out_buffer_8_vdif = (int8_t *)malloc(vf->block_size);
 
@@ -82,13 +90,13 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         offset_out_vdif += VDIF_HEADER_SIZE;
 
         // Convert from float to int8
-        float2int8_trunc( data_buffer_ptr, vf->sizeof_beam, -126.0, 127.0,
+        float2int8_trunc( pointing_buffer, vf->sizeof_beam, -126.0, 127.0,
                           (out_buffer_8_vdif + offset_out_vdif) );
         to_offset_binary( (out_buffer_8_vdif + offset_out_vdif),
                           vf->sizeof_beam );
 
         offset_out_vdif += vf->frame_length - VDIF_HEADER_SIZE; // increment output offset
-        data_buffer_ptr += vf->sizeof_beam;
+        pointing_buffer += vf->sizeof_beam;
         nextVDIFHeader( vhdr, vf->frame_rate );
     }
 
@@ -112,7 +120,7 @@ void vdif_write_data( struct vdifinfo *vf, int8_t *output )
 
     // write a CPSR2 test header for DSPSR
     char ascii_header[MWA_HEADER_SIZE] = MWA_HEADER_INIT;
-    //ascii_header_set( ascii_header, "UTC_START", "%s", vf->date_obs  );
+    //ascii_header_set( ascii_header, "UTC_START", "%s", vf[p].date_obs  );
     ascii_header_set( ascii_header, "DATAFILE",   "%s", filename      );
     ascii_header_set( ascii_header, "INSTRUMENT", "%s", "VDIF"        );
     ascii_header_set( ascii_header, "TELESCOPE",  "%s", vf->telescope );
@@ -143,80 +151,84 @@ void populate_vdif_header(
         int              nchan, 
         long int         chan_width,
         char            *rec_channel,
-        struct delays   *delay_vals )
+        struct delays   *delay_vals,
+        int              npointing )
 {
-    // First how big is a DataFrame
-    vf->bits              = 8;   // this is because it is all the downstream apps support (dspsr/diFX)
-    vf->iscomplex         = 1;   // (it is complex data)
-    vf->nchan             = 2;   // I am hardcoding this to 2 channels per thread - one per pol
-    vf->samples_per_frame = 128; // also hardcoding to 128 time-samples per frame
-    vf->sample_rate       = sample_rate*128;  // = 1280000 (also hardcoding this to the raw channel rate)
-    vf->BW                = 1.28;
+    for ( int p=0; p<npointing; p++ )
+    {
+        // First how big is a DataFrame
+        vf[p].bits              = 8;   // this is because it is all the downstream apps support (dspsr/diFX)
+        vf[p].iscomplex         = 1;   // (it is complex data)
+        vf[p].nchan             = 2;   // I am hardcoding this to 2 channels per thread - one per pol
+        vf[p].samples_per_frame = 128; // also hardcoding to 128 time-samples per frame
+        vf[p].sample_rate       = sample_rate*128;  // = 1280000 (also hardcoding this to the raw channel rate)
+        vf[p].BW                = 1.28;
 
-    vf->frame_length  = (vf->nchan * (vf->iscomplex+1) * vf->samples_per_frame) +
-                        VDIF_HEADER_SIZE;                                         // = 544
-    vf->threadid      = 0;
-    sprintf( vf->stationid, "mw" );
+        vf[p].frame_length  = (vf[p].nchan * (vf[p].iscomplex+1) * vf[p].samples_per_frame) +
+                            VDIF_HEADER_SIZE;                                         // = 544
+        vf[p].threadid      = 0;
+        sprintf( vf[p].stationid, "mw" );
 
-    vf->frame_rate = sample_rate;                                                 // = 10000
-    vf->block_size = vf->frame_length * vf->frame_rate;                           // = 5440000
+        vf[p].frame_rate = sample_rate;                                                 // = 10000
+        vf[p].block_size = vf[p].frame_length * vf[p].frame_rate;                           // = 5440000
 
-    // A single frame (128 samples). Remember vf.nchan is kludged to npol
-    vf->sizeof_beam = vf->samples_per_frame * vf->nchan * (vf->iscomplex+1);      // = 512
+        // A single frame (128 samples). Remember vf.nchan is kludged to npol
+        vf[p].sizeof_beam = vf[p].samples_per_frame * vf[p].nchan * (vf[p].iscomplex+1);      // = 512
 
-    // One full second (1.28 million 2 bit samples)
-    vf->sizeof_buffer = vf->frame_rate * vf->sizeof_beam;                         // = 5120000
+        // One full second (1.28 million 2 bit samples)
+        vf[p].sizeof_buffer = vf[p].frame_rate * vf[p].sizeof_beam;                         // = 5120000
 
-    createVDIFHeader( vhdr, vf->frame_length, vf->threadid, vf->bits, vf->nchan,
-                            vf->iscomplex, vf->stationid);
+        createVDIFHeader( vhdr, vf[p].frame_length, vf[p].threadid, vf[p].bits, vf[p].nchan,
+                                vf[p].iscomplex, vf[p].stationid);
 
-    // Now we have to add the time
-    uint64_t start_day = delay_vals->intmjd;
-    uint64_t start_sec = roundf( delay_vals->fracmjd * 86400.0 );
-    uint64_t mjdsec    = (start_day * 86400) + start_sec; // Note the VDIFEpoch is strange - from the standard
+        // Now we have to add the time
+        uint64_t start_day = delay_vals->intmjd;
+        uint64_t start_sec = roundf( delay_vals->fracmjd * 86400.0 );
+        uint64_t mjdsec    = (start_day * 86400) + start_sec; // Note the VDIFEpoch is strange - from the standard
 
-    setVDIFEpoch( vhdr, start_day );
-    setVDIFMJDSec( vhdr, mjdsec );
-    setVDIFFrameNumber( vhdr, 0 );
+        setVDIFEpoch( vhdr, start_day );
+        setVDIFMJDSec( vhdr, mjdsec );
+        setVDIFFrameNumber( vhdr, 0 );
 
-    // Get the project ID directly from the metafits file
-    fitsfile *fptr = NULL;
-    int status     = 0;
+        // Get the project ID directly from the metafits file
+        fitsfile *fptr = NULL;
+        int status     = 0;
 
-    fits_open_file(&fptr, metafits, READONLY, &status);
-    fits_read_key(fptr, TSTRING, "PROJECT", vf->exp_name, NULL, &status);
-    fits_close_file(fptr, &status);
+        fits_open_file(&fptr, metafits, READONLY, &status);
+        fits_read_key(fptr, TSTRING, "PROJECT", vf[p].exp_name, NULL, &status);
+        fits_close_file(fptr, &status);
 
-    strncpy( vf->scan_name, obsid, 17 );
+        strncpy( vf[p].scan_name, obsid, 17 );
 
-    vf->b_scales   = (float *)malloc( sizeof(float) * vf->nchan );
-    vf->b_offsets  = (float *)malloc( sizeof(float) * vf->nchan );
-    vf->got_scales = 1;
+        vf[p].b_scales   = (float *)malloc( sizeof(float) * vf[p].nchan );
+        vf[p].b_offsets  = (float *)malloc( sizeof(float) * vf[p].nchan );
+        vf[p].got_scales = 1;
 
-    strncpy( vf->telescope, "MWA", 24);
-    strncpy( vf->obs_mode,  "PSR", 8);
+        strncpy( vf[p].telescope, "MWA", 24);
+        strncpy( vf[p].obs_mode,  "PSR", 8);
 
-    // Determine the RA and Dec strings
-    double ra2000  = delay_vals->mean_ra  * DR2D;
-    double dec2000 = delay_vals->mean_dec * DR2D;
+        // Determine the RA and Dec strings
+        double ra2000  = delay_vals[p].mean_ra  * DR2D;
+        double dec2000 = delay_vals[p].mean_dec * DR2D;
 
-    dec2hms(vf->ra_str,  ra2000/15.0, 0); // 0 = no '+' sign
-    dec2hms(vf->dec_str, dec2000,     1); // 1 = with '+' sign
+        dec2hms(vf[p].ra_str,  ra2000/15.0, 0); // 0 = no '+' sign
+        dec2hms(vf[p].dec_str, dec2000,     1); // 1 = with '+' sign
 
-    strncpy( vf->date_obs, time_utc, 24);
+        strncpy( vf[p].date_obs, time_utc, 24);
 
-    vf->MJD_epoch = delay_vals->intmjd + delay_vals->fracmjd;
-    vf->fctr      = (frequency + (nchan/2.0)*chan_width)/1.0e6; // (MHz)
-    strncpy( vf->source, "unset", 24 );
+        vf[p].MJD_epoch = delay_vals->intmjd + delay_vals->fracmjd;
+        vf[p].fctr      = (frequency + (nchan/2.0)*chan_width)/1.0e6; // (MHz)
+        strncpy( vf[p].source, "unset", 24 );
 
-    // The output file basename
-    int ch = atoi(rec_channel);
-    sprintf( vf->basefilename, "%s_%s_ch%03d",
-             vf->exp_name, vf->scan_name, ch);
+        // The output file basename
+        int ch = atoi(rec_channel);
+        sprintf( vf[p].basefilename, "%s_%s_%s_%s_ch%03d",
+                 vf[p].exp_name, vf[p].scan_name, vf[p].ra_str, vf[p].dec_str, ch);
+    }
 }
 
 
-ComplexFloat get_std_dev_complex(ComplexFloat *input, int nsamples)
+ComplexFloat get_std_dev_complex(ComplexFloat *input, int begin, int nsamples)
 {
     // assume zero mean
     float rtotal = 0;
@@ -225,7 +237,7 @@ ComplexFloat get_std_dev_complex(ComplexFloat *input, int nsamples)
     float rsigma = 0;
     int i;
 
-    for (i=0;i<nsamples;i++){
+    for (i=begin;i<nsamples;i++){
          rtotal = rtotal+(CRealf(input[i])*CRealf(input[i]));
          itotal = itotal+(CImagf(input[i])*CImagf(input[i]));
 
@@ -281,7 +293,7 @@ void set_level_occupancy(ComplexFloat *input, int nsamples, float *new_gain)
 }
 
 
-void get_mean_complex( ComplexFloat *input, int nsamples, float *rmean,
+void get_mean_complex( ComplexFloat *input, int begin, int nsamples, float *rmean,
                        float *imean, ComplexFloat *cmean)
 {
     int i;
@@ -291,7 +303,7 @@ void get_mean_complex( ComplexFloat *input, int nsamples, float *rmean,
 
     ComplexFloat ctotal = CMakef( 0.0, 0.0 );
 
-    for (i = 0; i < nsamples; i++)
+    for (i = begin; i < nsamples; i++)
     {
 //if (isnan(CRealf(input[i])) || isnan(CImagf(input[i]))) { fprintf(stderr, "\ninput[%d] = %e + %e*I\n\n", i, CRealf(input[i]), CImagf(input[i])); exit(1); }
         rtotal += CRealf( input[i] );
@@ -304,11 +316,11 @@ void get_mean_complex( ComplexFloat *input, int nsamples, float *rmean,
     *cmean = CSclf( ctotal, 1.0 / (float)nsamples );
 }
 
-void normalise_complex(ComplexFloat *input, int nsamples, float scale)
+void normalise_complex(ComplexFloat *input, int begin, int nsamples, float scale)
 {
-    int i=0;
+    int i;
 
-    for (i=0;i<nsamples;i++){
+    for (i=begin;i<nsamples;i++){
         input[i] = CSclf( input[i], scale );
     }
 }
