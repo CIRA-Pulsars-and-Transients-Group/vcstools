@@ -37,19 +37,29 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *fils_real, float *fils_imag,
                                int ntaps, int npol, float *out )
 {
-    int idx = blockDim.x * blockIdx.x + threadIdx.x;
-
+    int s = blockIdx.x;
+    int nsamples = gridDim.x;
+    //blockDim.x = nchan * npol 
+    //threadIdx.x = npol*ch + pol
+ 
     // Calculate the number of channels
     int nchan = blockDim.x / npol;
+    int p = threadIdx.y;
+    int idx = nchan * npol * nsamples * p + nchan * npol * s + threadIdx.x;
+ 
+    //idx = npol*nchan*(nsamples+ntaps)*p +
+    //      npol*nchan*s_in +
+    //      npol*ch +         pol;
 
     // Calculate the first "out" index
     int o_real = 2*idx;
     int o_imag = o_real + 1;
 
     // Calculate the first "in" index for this thread
-    int i0 = ((idx + blockDim.x - npol) / blockDim.x) * blockDim.x +
-             (threadIdx.x % npol);
-
+    int i0 = ((idx + nchan * npol - npol) / (nchan * npol)) * nchan * npol 
+             + (threadIdx.x % npol) + p * ntaps * nchan * npol;
+    //f = fil_size*ch + tap
+    
     // Calculate the "fils" first column index
     //int f0 = nchan - ((idx/npol + nchan - 1) % nchan) - 1;
     int f0 = (idx/npol) % nchan;
@@ -66,7 +76,7 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
         for (ch = 0; ch < nchan; ch++)
         {
             // The "in" index
-            i = i0 + blockDim.x*tap + npol*ch;
+            i = i0 + nchan * npol*tap + npol*ch;
 
             // The "fils" index
             f = f0 + nchan*(ntaps-1-tap) + nchan*ntaps*ch;
@@ -87,15 +97,15 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
 }
 
 extern "C"
-void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
-                        int nsamples, int nchan, int npol,
+void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
+                        int npointing, int nsamples, int nchan, int npol,
                         struct gpu_ipfb_arrays *g, float *data_buffer_uvdif )
 /* "Invert the PFB" by applying a resynthesis filter, using GPU
  * acceleration.
  *
  * This function expects "detected_beam" to be structured as follows:
  *
- *   detected_beam[2*nsamples][nchan][npol]
+ *   detected_beam[3*nsamples][nchan][npol]
  *
  * Although detected_samples potentially contains 2 seconds' worth of data,
  * this function only inverts 1 second. The appropriate second is worked out
@@ -118,40 +128,49 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     // half of detected_beam if the file number is even, and "ntaps" places
     // from the end of the first half of detected_beam if the file number is
     // odd.
-    int start_s = (file_no % 2 == 0 ? 2*nsamples - g->ntaps : nsamples - g->ntaps);
+    int start_s;
+    
+    if (file_no % 3 == 0)      start_s = 3*nsamples - g->ntaps;
+    else if (file_no % 3 == 1) start_s = nsamples - g->ntaps;
+    else                       start_s = 2*nsamples - g->ntaps;
 
-    int s_in, s, ch, pol, i;
+    int p, s_in, s, ch, pol, i;
+    for (p = 0; p < npointing; p++)
     for (s_in = 0; s_in < nsamples + g->ntaps; s_in++)
     {
-        s = (start_s + s_in) % (2*nsamples);
+        s = (start_s + s_in) % (3*nsamples);
         for (ch = 0; ch < nchan; ch++)
         {
             for (pol = 0; pol < npol; pol++)
             {
                 // Calculate the index for in_real and in_imag;
-                i = npol*nchan*s_in + npol*ch + pol;
-
+                i = npol*nchan*(nsamples + g->ntaps)*p +
+                    npol*nchan*s_in + 
+                    npol*ch + 
+                    pol;
                 // Copy the data across - taking care of the file_no = 0 case
-                if (file_no == 0 && s_in < g->ntaps)
+                // The s_in%(npol*nchan*nsamples) does this for each pointing
+                if (file_no == 0 && (s_in%(npol*nchan*nsamples)) < g->ntaps)
                 {
                     g->in_real[i] = 0.0;
                     g->in_imag[i] = 0.0;
                 }
                 else
                 {
-                    g->in_real[i] = CReald( detected_beam[s][ch][pol] );
-                    g->in_imag[i] = CImagd( detected_beam[s][ch][pol] );
+                    g->in_real[i] = CReald( detected_beam[p][s][ch][pol] );
+                    g->in_imag[i] = CImagd( detected_beam[p][s][ch][pol] );
                 }
             }
         }
     }
-
+    
     // Copy the data to the device
     gpuErrchk(cudaMemcpy( g->d_in_real, g->in_real, g->in_size, cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( g->d_in_imag, g->in_imag, g->in_size, cudaMemcpyHostToDevice ));
-
+    
     // Call the kernel
-    filter_kernel<<<nsamples, nchan*npol>>>( g->d_in_real, g->d_in_imag,
+    dim3 n_cpol_p(nchan*npol, npointing);
+    filter_kernel<<<nsamples, n_cpol_p>>>( g->d_in_real, g->d_in_imag,
                                              g->d_fils_real, g->d_fils_imag,
                                              g->ntaps, npol, g->d_out );
     cudaDeviceSynchronize();
@@ -186,16 +205,17 @@ void cu_load_filter( ComplexDouble **fils, struct gpu_ipfb_arrays *g,
 
 
 void malloc_ipfb( struct gpu_ipfb_arrays *g, int ntaps, int nsamples,
-        int nchan, int npol, int fil_size )
+        int nchan, int npol, int fil_size, int npointing )
 {
     // Flatten the input array (detected_array) for GPU.
     // We only need one second's worth, plus 12 time samples tacked onto the
     // beginning (from the previous second)
 
     g->ntaps     = ntaps;
-    g->in_size   = ((nsamples + ntaps) * nchan * npol) * sizeof(float);
+    g->in_size   = npointing * ((nsamples + ntaps) * nchan * npol) * sizeof(float);
+    // fils_size = nchan * nchan * ntaps = 128 * 128 * 12
     g->fils_size = nchan * fil_size * sizeof(float);
-    g->out_size  = nsamples * nchan * npol * 2 * sizeof(float);
+    g->out_size  = npointing * nsamples * nchan * npol * 2 * sizeof(float);
 
     // Allocate memory on the device
     gpuErrchk(cudaMalloc( (void **)&g->d_in_real,   g->in_size ));

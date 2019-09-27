@@ -4,12 +4,15 @@
  *                                                      *
  ********************************************************/
 
+#include <cuda_runtime.h>
+
 #ifndef FORM_BEAM_H
 #define FORM_BEAM_H
 
 #include "mycomplex.h"
 #include "beam_common.h"
 
+#define NANT  128
 #define NPFB  4
 #define NREC  16
 #define NINC  4
@@ -37,7 +40,8 @@ struct gpu_formbeam_arrays
 
 
 void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
-        int nstation, int nchan, int npol, int outpol_coh, int outpol_incoh );
+                      int nstation, int nchan, int npol, int outpol_coh,
+                      int outpol_incoh, int npointing, double time );
 void free_formbeam( struct gpu_formbeam_arrays *g );
 
 /* Calculating array indices for GPU inputs and outputs */
@@ -48,24 +52,30 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
                             AP2REC(a,p) * (NINC)                + \
                             ANT2INC(a))
 
-#define W_IDX(c,a,p,nc)   ((a) * (NPOL*(nc)) + \
-                           (c) * (NPOL)      + \
-                           (p))
+#define W_IDX(p,a,c,pol,nc)   ((p) * (NPOL*(nc)*NANT)  + \
+                               (a) * (NPOL*(nc))       + \
+                               (c) * (NPOL)            + \
+                               (pol))
 
-#define J_IDX(c,a,p1,p2,nc)   ((a)  * (NPOL*NPOL*(nc)) + \
-                               (c)  * (NPOL*NPOL)      + \
-                               (p1) * (NPOL)           + \
+#define J_IDX(p,a,c,p1,p2,nc) ((p) *  (NPOL*NPOL*(nc)*NANT) + \
+                               (a)  * (NPOL*NPOL*(nc))      + \
+                               (c)  * (NPOL*NPOL)           + \
+                               (p1) * (NPOL)                + \
                                (p2))
 
-#define B_IDX(s,c,p,nc)  ((s)  * (NPOL*(nc)) + \
-                          (c)  * (NPOL)      + \
-                          (p))
+#define B_IDX(p,s,c,pol,ns,nc) ((p)  * (NPOL*(nc)*(ns))   + \
+                                (s)  * (NPOL*(nc))        + \
+                                (c)  * (NPOL)             + \
+                                (pol))
  
-#define C_IDX(s,c,st,nc)  ((s)  * ((nc)*NSTOKES) + \
-                           (st) * (nc)         + \
-                           (c))
+#define C_IDX(p,s,st,c,ns,nst,nc)  ((p)  * ((nc)*(nst)*(ns)) + \
+                                    (s)  * ((nc)*(nst))      + \
+                                    (st) *  (nc)               + \
+                                    (c))
 
-#define I_IDX(s,c,nc)  ((s)*(nc) + (c))
+#define I_IDX(s,c,nc)          ((s)*(nc) + (c))
+
+#define BN_IDX(p,a)            ((p) * NANT + (a))
 
 
 
@@ -96,24 +106,20 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
 
 
 
-#ifdef HAVE_CUDA
-
-void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
-                   ComplexDouble ****J, int file_no, int nstation, int nchan,
+void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ****W,
+                   ComplexDouble *****J, int file_no, 
+                   int npointing, int nstation, int nchan,
                    int npol, int outpol_coh, double invw, struct gpu_formbeam_arrays *g,
-                   ComplexDouble ***detected_beam, float *coh, float *incoh );
+                   ComplexDouble ****detected_beam, float *coh, float *incoh,
+                   cudaStream_t *streams );
 
-#else
+float *create_pinned_data_buffer_psrfits( size_t size );
+        
+float *create_pinned_data_buffer_vdif( size_t size );
 
-void form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***W,
-                ComplexDouble ****J, int file_no, int nstation, int nchan,
-                int npol, int outpol_coh, int outpol_incoh, double invw,
-                ComplexDouble ***detected_beam, float *coh, float *incoh );
-
-void form_stokes( ComplexDouble **detected_beam,
-                  ComplexDouble noise_floor[][2][2],
-                  int nchan, double invw, float *spectrum );
-
-#endif
+void populate_weights_johnes( struct gpu_formbeam_arrays *g,
+                              ComplexDouble ****complex_weights_array,
+                              ComplexDouble *****invJi,
+                              int npointing, int nstation, int nchan, int npol );
 
 #endif

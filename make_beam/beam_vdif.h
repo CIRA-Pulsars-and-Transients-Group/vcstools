@@ -57,8 +57,8 @@ struct vdifinfo {
 };
 
 void vdif_write_data( struct vdifinfo *vf, int8_t *output );
-void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
-        float *data_buffer_vdif, float *gain );
+void vdif_write_second( struct vdifinfo vf[], vdif_header *vhdr,
+        float *data_buffer_vdif, float *gain, int p );
 
 void populate_vdif_header(
         struct vdifinfo *vf,
@@ -71,17 +71,18 @@ void populate_vdif_header(
         int              nchan, 
         long int         chan_width,
         char            *rec_channel,
-        struct delays   *delay_vals );
+        struct delays   *delay_vals,
+        int              npointing );
 
-ComplexFloat get_std_dev_complex( ComplexFloat *input, int nsamples );
+ComplexFloat get_std_dev_complex( ComplexFloat *input, int begin, int nsamples );
 
 void set_level_occupancy( ComplexFloat *input, int nsamples,
                           float *new_gain );
 
-void get_mean_complex( ComplexFloat *input, int nsamples, float *rmean,
+void get_mean_complex( ComplexFloat *input, int begin, int nsamples, float *rmean,
                        float *imean, ComplexFloat *cmean );
 
-void normalise_complex( ComplexFloat *input, int nsamples, float scale );
+void normalise_complex( ComplexFloat *input, int begin, int nsamples, float scale );
 
 void to_offset_binary( int8_t *i, int n );
 

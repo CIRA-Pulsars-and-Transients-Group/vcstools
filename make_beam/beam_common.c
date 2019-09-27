@@ -713,8 +713,19 @@ void dec2hms( char *out, double in, int sflag )
 
     h = (int)in; in -= (double)h; in *= 60.0;
     m = (int)in; in -= (double)m; in *= 60.0;
-
+    if (m >= 60)
+    {
+        // if minutes is 60 convert that to 1 hour
+        h += 1;
+        m -= 60;
+    }
     s = in;
+    if (s >= 59.995)
+    {
+        // if seconds is 60 convert that to 1 minute
+        m += 1;
+        s = 00.00;
+    }
     if (sign==1 && sflag)
     {
         *ptr='+';
@@ -725,5 +736,7 @@ void dec2hms( char *out, double in, int sflag )
         *ptr='-';
         ptr++;
     }
-    sprintf( ptr, "%2.2d:%2.2d:%07.4f", h, m, s );
+    // Limiting the output's pointings' smallest significant figure to 
+    // 0.01 arc seconds
+    sprintf( ptr, "%2.2d:%2.2d:%05.2f", h, m, s );
 }
