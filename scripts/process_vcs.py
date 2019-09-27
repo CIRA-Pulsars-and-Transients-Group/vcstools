@@ -722,7 +722,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     job_id = submit_slurm(make_beam_small_batch, commands,
                                 batch_dir=batch_dir, module_list=module_list,
                                 slurm_kwargs={"time":secs_to_run, "nice":nice},
-                                queue='gpuq', vcstools_version="python2",#forces olf version with vdif 
+                                queue='gpuq', vcstools_version="origbeam",#forces olf version with vdif 
                                 submit=True, export="NONE", gpu_res=1,
                                 cpu_threads=n_omp_threads,
                                 mem=comp_config['gpu_beamform_mem'])
