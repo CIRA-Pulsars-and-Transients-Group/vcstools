@@ -131,7 +131,6 @@ def get_channels(obsid, channels=None):
               "for OBS ID: {}".format(obsid))
         beam_meta_data = getmeta(service='obs', params={'obs_id':obsid})
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
-        print("from get channels {0}".format(channels))
     return channels
 
 

@@ -19,6 +19,7 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
                  'cpuq_partition' : 'gpuq',
                  'gpuq_cluster' : 'galaxy',
                  'gpuq_partition' : 'gpuq',
+                 'gpu_beamform_mem' : '1024',
                  'zcpuq_cluster' : 'zeus',
                  'zcpuq_partition' : 'workq',
                  'copyq_cluster' : 'zeus',
@@ -40,12 +41,15 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'cpuq_partition' : 'skylake',
                  'gpuq_cluster' : 'farnarkle',
                  'gpuq_partition' : 'skylake-gpu',
+                 'gpu_beamform_mem' : '4096',
                  'copyq_cluster' : 'farnarkle',
                  'copyq_partition' : 'skylake', #TODO check if there's a better one
                  'zcpuq_cluster' : 'farnarkle',
                  'zcpuq_partition' : 'skylake',
                  'container_module' : 'singularity/latest',
-                 'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools-cuda-9.2.simg'}
+                 #removed since I've now installed it on Ozstar
+                 'container_command' : ''}
+                 #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'}
 
     
 import logging
@@ -64,6 +68,7 @@ def load_config_file():
     if hostname.startswith('galaxy'):
         comp_config = GALAXY_CONFIG
     elif hostname.startswith('nid'):
+        # gpu and maybe work nodes on galaxy
         comp_config = GALAXY_CONFIG
     elif hostname.startswith('farnarkle'):
         comp_config = OZSTAR_CONFIG

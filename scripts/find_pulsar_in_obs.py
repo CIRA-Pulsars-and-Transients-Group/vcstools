@@ -41,11 +41,18 @@ from astropy.table import Table
 from astropy.time import Time
 
 #MWA scripts
+import sn_flux_est as sfe
 from mwa_pb import primary_beam
 from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata, get_obs_array_phase
 
 import logging
 logger = logging.getLogger(__name__)
+
+try:
+    ATNF_LOC = os.environ['PSRCAT_FILE']
+except:
+    logger.warn("ATNF database could not be found on disk.")
+    ATNF_LOC = None
 
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
@@ -110,7 +117,7 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
     import psrqpy
 
     params = ['JNAME', 'RAJ', 'DECJ', 'DM']
-    query = psrqpy.QueryATNF(params=params, psrs=pulsar_list).pandas
+    query = psrqpy.QueryATNF(params=params, psrs=pulsar_list, loadfromdb=ATNF_LOC).pandas
 
     pulsar_ra_dec = []
     for row in query.itertuples():
@@ -660,10 +667,17 @@ def write_output_source_files(output_data,
             output_file.write("#OAP:    The observation's array phase where P1 is the "
                                         "phase 1 array, P2C is the phase compact array "
                                         "and P2E is the phase 2 extended array.\n")
+            
+            if SN_est:
+                output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
+                output_file.write("#S/N Err: The uncertainty of S/N Est\n")
             if cal_check:
                 output_file.write('#Cal ID: Observation ID of an available '+\
                                             'calibration solution\n')
             output_file.write('#Obs ID   |Dur |Enter|Exit |Power| OAP ')
+            if SN_est:
+                output_file.write("|S/N Est|S/N Err")
+            
             if cal_check:
                 output_file.write("|Cal ID\n")
             else:
@@ -673,6 +687,13 @@ def write_output_source_files(output_data,
                 oap = get_obs_array_phase(obsid)
                 output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}'.format(obsid,
                                   duration, enter, exit, max_power, oap))
+                if SN_est:
+                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_flux(pulsar, obsid=obsid, f_mean=obsid_meta[on][-2]*1e6)
+                    if pulsar_sn is None:
+                        output_file.write('   None    None')
+                    else:
+                        output_file.write('{:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
+                
                 if cal_check:
                     #checks the MWA Pulsar Database to see if the obsid has been 
                     #used or has been calibrated
@@ -685,7 +706,8 @@ def write_output_source_files(output_data,
 
 
 def write_output_obs_files(output_data, obsid_meta,
-                           beam='analytic', min_power=0.3, cal_check=False):
+                           beam='analytic', min_power=0.3,
+                           cal_check=False, SN_est=False):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is false.
     """
@@ -712,12 +734,29 @@ def write_output_obs_files(output_data, obsid_meta,
             output_file.write('#Exit:   The fraction of the observation when '+\
                                         'the source exits the beam\n')
             output_file.write('#Power:  The maximum zenith normalised power of the source.\n')
-            output_file.write('#Source    |Enter|Exit |Power\n')
+            if SN_est:
+                output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
+                output_file.write("#S/N Err: The uncertainty of S/N Est\n")
+            
+            output_file.write('#Source    |Enter|Exit |Power')
+            if SN_est:
+                output_file.write('| S/N Est | S/N Err \n')
+            else:
+                output_file.write('\n')
             
             for data in output_data[obsid]:
                 pulsar, enter, exit, max_power = data
-                output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} \n'.format(pulsar,
+                output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} '.format(pulsar,
                                   enter, exit, max_power))
+                if SN_est:
+                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_flux(pulsar, obsid=obsid, f_mean=obsid_meta[on][-2]*1e6)
+                    if pulsar_sn is None:
+                        output_file.write('   None    None\n')
+                    else:
+                        output_file.write('{:9.2f} {:9.2f}\n'.format(pulsar_sn, pulsar_sn_err))
+                else:
+                    output_file.write('\n')
+                
     return
 
 
@@ -754,6 +793,7 @@ if __name__ == "__main__":
     obargs.add_argument('-o','--obsid',type=str,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
     obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
     obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
+    obargs.add_argument('--sn_est',action='store_true',help='Make a expected signal to noise calculation using the flux densities from the ANTF pulsar catalogue and include them in the output file. Default: False.')
     args=parser.parse_args()
 
     if args.version:
@@ -857,8 +897,10 @@ if __name__ == "__main__":
     if args.obs_for_source:
         write_output_source_files(output_data,
                                   beam=args.beam, min_power=args.min_power,
-                                  cal_check=args.cal_check)
+                                  cal_check=args.cal_check,
+                                  SN_est=args.sn_est)
     else:
         write_output_obs_files(output_data, obsid_meta,
                                beam=args.beam, min_power=args.min_power,
-                               cal_check=args.cal_check)
+                               cal_check=args.cal_check,
+                               SN_est=args.sn_est)

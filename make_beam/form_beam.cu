@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
 #include <cuda_runtime.h>
 
 extern "C" {
@@ -15,6 +16,19 @@ extern "C" {
 #include "form_beam.h"
 #include "mycomplex.h"
 }
+
+
+#define cudaCheckErrors(msg) \
+    do { \
+        cudaError_t __err = cudaGetLastError(); \
+        if (__err != cudaSuccess) { \
+            fprintf(stderr, "Fatal error: %s (%s at %s:%d)\n", \
+                msg, cudaGetErrorString(__err), \
+                __FILE__, __LINE__); \
+            fprintf(stderr, "*** FAILED - ABORTING\n"); \
+            exit(1); \
+        } \
+    } while (0)
 
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -40,6 +54,8 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 #define NSTATION  128
 #define NPOL      2
 #define NSTOKES   4
+// maximum number of pointings (currently)
+#define NPOINTING 4
 
 
 
@@ -49,7 +65,9 @@ __global__ void beamform_kernel( uint8_t *data,
                                  double invw,
                                  ComplexDouble *Bd,
                                  float *C,
-                                 float *I )
+                                 float *I,
+                                 int p,
+                                 int coh_pol)
 /* Layout for input arrays:
  *   data [nsamples] [nchan] [NPFB] [NREC] [NINC] -- see docs
  *   W    [NSTATION] [nchan] [NPOL]               -- weights array
@@ -58,14 +76,24 @@ __global__ void beamform_kernel( uint8_t *data,
  *   Bd   [nsamples] [nchan]   [NPOL]             -- detected beam
  *   C    [nsamples] [NSTOKES] [nchan]            -- coherent full stokes
  *   I    [nsamples] [nchan]                      -- incoherent
+ *   p                                            -- pointing number
+ *   coh_pol                                      -- coherent polorisation number
  */
 {
-    // Translate GPU block/thread numbers into meaningful names
-    int s   = blockIdx.x;  /* The (s)ample number */
-    int c   = blockIdx.y;  /* The (c)hannel number */
-    int nc  = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
-    int ant = threadIdx.x; /* The (ant)enna number */
+    // Translate GPU block/thread numbers into meaning->l names
+    int s    = blockIdx.x;  /* The (s)ample number */
+    int ns   = gridDim.x;   /* The (n)umber of (s)amples (=10000)*/
+    int c    = blockIdx.y;  /* The (c)hannel number */
+    int nc   = gridDim.y;   /* The (n)umber of (c)hannels (=128) */
+    
+    int ant  = threadIdx.x; /* The (ant)enna number */
+    int nant = blockDim.x;  /* The (n_umber of (ant)ennas */
 
+    /*// GPU profiling
+    clock_t start, stop;
+    double setup_t, detect_t, sum_t, stokes_t;
+    if ((p == 0) && (ant == 0) && (c == 0) && (s == 0)) start = clock();*/
+    
     // Calculate the beam and the noise floor
     __shared__ double Ia[NSTATION];
     __shared__ ComplexDouble Bx[NSTATION], By[NSTATION];
@@ -73,12 +101,13 @@ __global__ void beamform_kernel( uint8_t *data,
     ComplexDouble WDx, WDy;
 
     __shared__ ComplexDouble Nxx[NSTATION], Nxy[NSTATION],
-                             Nyx[NSTATION], Nyy[NSTATION];
+                             Nyy[NSTATION];//Nyx[NSTATION]
 
 
     /* Fix from Maceij regarding NaNs in output when running on Athena, 13 April 2018.
        Apparently the different compilers and architectures are treating what were 
        unintialised variables very differently */
+    
     Bx[ant]  = CMaked( 0.0, 0.0 );
     By[ant]  = CMaked( 0.0, 0.0 );
 
@@ -90,116 +119,87 @@ __global__ void beamform_kernel( uint8_t *data,
 
     Nxx[ant] = CMaked( 0.0, 0.0 );
     Nxy[ant] = CMaked( 0.0, 0.0 );
-    Nyx[ant] = CMaked( 0.0, 0.0 );
+    //Nyx[ant] = CMaked( 0.0, 0.0 );
     Nyy[ant] = CMaked( 0.0, 0.0 );
 
-    Ia[ant] = 0.0;
+    if ( p == 0 ) Ia[ant] = 0.0;
 
+    /*if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
+    {
+        stop = clock();
+        setup_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
+        start = clock();
+    }*/
+    
     // Calculate beamform products for each antenna, and then add them together
     // Calculate the coherent beam (B = J*W*D)
     Dx  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,0,nc)]);
     Dy  = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,c,ant,1,nc)]);
 
-    Ia[ant] = DETECT(Dx) + DETECT(Dy);
 
-    if (CReald(W[W_IDX(c,ant,0,nc)]) == 0.0 &&
-        CImagd(W[W_IDX(c,ant,0,nc)]) == 0.0 &&
-        CReald(W[W_IDX(c,ant,1,nc)]) == 0.0 &&
-        CImagd(W[W_IDX(c,ant,1,nc)]) == 0.0)
+    if ( p == 0 )
     {
-        Ia[ant] = 0.0;
+        if (CReald(W[W_IDX(p,ant,c,0,nc)]) == 0.0 &&
+            CImagd(W[W_IDX(p,ant,c,0,nc)]) == 0.0 &&
+            CReald(W[W_IDX(p,ant,c,1,nc)]) == 0.0 &&
+            CImagd(W[W_IDX(p,ant,c,1,nc)]) == 0.0)
+            Ia[ant] = 0.0;
+        else
+            Ia[ant] = DETECT(Dx) + DETECT(Dy);
     }
+    WDx = CMuld( W[W_IDX(p,ant,c,0,nc)], Dx );
+    WDy = CMuld( W[W_IDX(p,ant,c,1,nc)], Dy );
 
-    WDx = CMuld( W[W_IDX(c,ant,0,nc)], Dx );
-    WDy = CMuld( W[W_IDX(c,ant,1,nc)], Dy );
-
-    Bx[ant] = CAddd( CMuld( J[J_IDX(c,ant,0,0,nc)], WDx ),
-                     CMuld( J[J_IDX(c,ant,1,0,nc)], WDy ) );
-    By[ant] = CAddd( CMuld( J[J_IDX(c,ant,0,1,nc)], WDx ),
-                     CMuld( J[J_IDX(c,ant,1,1,nc)], WDy ) );
+    Bx[ant] = CAddd( CMuld( J[J_IDX(p,ant,c,0,0,nc)], WDx ),
+                               CMuld( J[J_IDX(p,ant,c,1,0,nc)], WDy ) );
+    By[ant] = CAddd( CMuld( J[J_IDX(p,ant,c,0,1,nc)], WDx ),
+                               CMuld( J[J_IDX(p,ant,c,1,1,nc)], WDy ) );
 
     Nxx[ant] = CMuld( Bx[ant], CConjd(Bx[ant]) );
     Nxy[ant] = CMuld( Bx[ant], CConjd(By[ant]) );
-    Nyx[ant] = CMuld( By[ant], CConjd(Bx[ant]) );
+    //Nyx[ant] = CMuld( By[ant], CConjd(Bx[ant]) );
     Nyy[ant] = CMuld( By[ant], CConjd(By[ant]) );
 
+    /*if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
+    {
+        stop = clock();
+        detect_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
+        start = clock();
+    }*/
+    
     // Detect the coherent beam
+    // A summation over an array is faster on a GPU if you add half on array 
+    // to its other half as than can be done in parallel. Then this is repeated
+    // with half of the previous array until the array is down to 1.
     __syncthreads();
-    if (ant < 64)
+    for ( int h_ant = nant / 2; h_ant > 0; h_ant = h_ant / 2 )
     {
-        Ia[ant] += Ia[ant+64];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+64] );
-        By[ant] = CAddd( By[ant], By[ant+64] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+64] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+64] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+64] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+64] );
+        if (ant < h_ant)
+        {
+            if (p == 0) Ia[ant] += Ia[ant+h_ant];
+            Bx[ant]  = CAddd( Bx[ant],  Bx[ant  + h_ant] );
+            By[ant]  = CAddd( By[ant],  By[ant  + h_ant] );
+            Nxx[ant] = CAddd( Nxx[ant], Nxx[ant + h_ant] );
+            Nxy[ant] = CAddd( Nxy[ant], Nxy[ant + h_ant] );
+            //Nyx[ant]=CAddd( Nyx[ant], Nyx[ant + h_ant] );
+            Nyy[ant] = CAddd( Nyy[ant], Nyy[ant + h_ant] );
+        }
+        // below makes no difference so removed
+        // else return;
+        __syncthreads();
     }
-    __syncthreads();
-    if (ant < 32)
-    {
-        Ia[ant] += Ia[ant+32];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+32] );
-        By[ant] = CAddd( By[ant], By[ant+32] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+32] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+32] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+32] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+32] );
-    }
-    if (ant < 16)
-    {
-        Ia[ant] += Ia[ant+16];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+16] );
-        By[ant] = CAddd( By[ant], By[ant+16] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+16] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+16] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+16] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+16] );
-    }
-    if (ant < 8)
-    {
-        Ia[ant] += Ia[ant+8];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+8] );
-        By[ant] = CAddd( By[ant], By[ant+8] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+8] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+8] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+8] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+8] );
-    }
-    if (ant < 4)
-    {
-        Ia[ant] += Ia[ant+4];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+4] );
-        By[ant] = CAddd( By[ant], By[ant+4] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+4] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+4] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+4] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+4] );
-    }
-    if (ant < 2)
-    {
-        Ia[ant] += Ia[ant+2];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+2] );
-        By[ant] = CAddd( By[ant], By[ant+2] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+2] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+2] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+2] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+2] );
-    }
-    if (ant < 1)
-    {
-        Ia[ant] += Ia[ant+1];
-        Bx[ant] = CAddd( Bx[ant], Bx[ant+1] );
-        By[ant] = CAddd( By[ant], By[ant+1] );
-        Nxx[ant] = CAddd( Nxx[ant], Nxx[ant+1] );
-        Nxy[ant] = CAddd( Nxy[ant], Nxy[ant+1] );
-        Nyx[ant] = CAddd( Nyx[ant], Nyx[ant+1] );
-        Nyy[ant] = CAddd( Nyy[ant], Nyy[ant+1] );
-    }
-    __syncthreads();
 
+    /*if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
+    {
+        stop = clock();
+        sum_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
+        start = clock();
+
+    }*/
+    
     // Form the stokes parameters for the coherent beam
-    if (ant == 0)
+    // Only doing it for ant 0 so that it only prints once
+    if ( ant == 0 )
     {
         float bnXX = DETECT(Bx[0]) - CReald(Nxx[0]);
         float bnYY = DETECT(By[0]) - CReald(Nyy[0]);
@@ -211,15 +211,25 @@ __global__ void beamform_kernel( uint8_t *data,
         I[I_IDX(s,c,nc)] = Ia[0];
 
         // Stokes I, Q, U, V:
-        C[C_IDX(s,c,0,nc)] = invw*(bnXX + bnYY);
-        C[C_IDX(s,c,1,nc)] = invw*(bnXX - bnYY);
-        C[C_IDX(s,c,2,nc)] =  2.0*invw*CReald( bnXY );
-        C[C_IDX(s,c,3,nc)] = -2.0*invw*CImagd( bnXY );
+        C[C_IDX(p,s,0,c,ns,coh_pol,nc)] = invw*(bnXX + bnYY);
+        if ( coh_pol == 4 )
+        {
+            C[C_IDX(p,s,1,c,ns,coh_pol,nc)] = invw*(bnXX - bnYY);
+            C[C_IDX(p,s,2,c,ns,coh_pol,nc)] =  2.0*invw*CReald( bnXY );
+            C[C_IDX(p,s,3,c,ns,coh_pol,nc)] = -2.0*invw*CImagd( bnXY );
+        }
 
         // The beamformed products
-        Bd[B_IDX(s,c,0,nc)] = Bx[0];
-        Bd[B_IDX(s,c,1,nc)] = By[0];
+        Bd[B_IDX(p,s,c,0,ns,nc)] = Bx[0];
+        Bd[B_IDX(p,s,c,1,ns,nc)] = By[0];
     }
+    /*if ((p == 0) && (ant == 0) && (c == 0) && (s == 0))
+    {
+        stop = clock();
+        stokes_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
+        printf("Time:  setup: % f detect: %f    sum: %f     stokes: %f\n", setup_t, detect_t, sum_t, stokes_t);
+    }*/
+    
 }
 
 __global__ void flatten_bandpass_I_kernel(float *I,
@@ -263,8 +273,7 @@ __global__ void flatten_bandpass_I_kernel(float *I,
 }
 
 
-__global__ void flatten_bandpass_C_kernel(float *C,
-                                          int nstep)/* uint8_t *Iout ) */
+__global__ void flatten_bandpass_C_kernel(float *C, int nstep )
 {
     // For just doing stokes I
     // One block
@@ -275,10 +284,12 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     // ... figure it out later.
 
     // Translate GPU block/thread numbers into meaningful names
-    int chan = threadIdx.x; /* The (c)hannel number */
-    int nchan = blockDim.x; /* The total number of channels */
-    int stokes = threadIdx.y;
-//    int nstokes = blockDim.y;
+    int chan    = threadIdx.x; /* The (c)hannel number */
+    int nchan   = blockDim.x;  /* The (n)umber of (c)hannels */
+    int stokes  = threadIdx.y; /* The (stokes) number */
+    int nstokes = blockDim.y;  /* The (n)umber of (stokes) */
+    
+    int p      = blockIdx.x;  /* The (p)ointing number */
 
     float band;
 
@@ -291,29 +302,30 @@ __global__ void flatten_bandpass_C_kernel(float *C,
     band = 0.0;
 
     // accumulate abs(data) over all time samples and save into band
-    //data_ptr = C + C_IDX(0,chan,stokes,nchan);
+    //data_ptr = C + C_IDX(0,stokes,chan,nchan);
     for (i=0;i<nstep;i++) { // time steps
-        data_ptr = C + C_IDX(i,chan,stokes,nchan);
+        data_ptr = C + C_IDX(p,i,stokes,chan,nstep,nstokes,nchan);
         band += fabsf(*data_ptr);
     }
 
     // now normalise the coherent beam
-    //data_ptr = C + C_IDX(0,chan,stokes,nchan);
+    //data_ptr = C + C_IDX(0,stokes,chan,nchan);
     for (i=0;i<nstep;i++) { // time steps
-        data_ptr = C + C_IDX(i,chan,stokes,nchan);
+        data_ptr = C + C_IDX(p,i,stokes,chan,nstep,nstokes,nchan);
         *data_ptr = (*data_ptr)/( (band/nstep)/new_var );
     }
 
 }
 
 
-
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
-                   ComplexDouble ***complex_weights_array,
-                   ComplexDouble ****invJi, int file_no, int nstation, int nchan,
+                   ComplexDouble ****complex_weights_array,
+                   ComplexDouble *****invJi, int file_no, 
+                   int npointing, int nstation, int nchan,
                    int npol, int outpol_coh, double invw,
                    struct gpu_formbeam_arrays *g,
-                   ComplexDouble ***detected_beam, float *coh, float *incoh )
+                   ComplexDouble ****detected_beam, float *coh, float *incoh,
+                   cudaStream_t *streams )
 /* The CPU version of the beamforming operations, using OpenMP for
  * parallelisation.
  *
@@ -322,8 +334,8 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
  *             documentation.
  *   opts    = passed option parameters, containing meta information about the
  *             obs and the data
- *   W       = complex weights array. [nstation][nchan][npol]
- *   J       = inverse Jones matrix. [nstation][nchan][npol][npol]
+ *   W       = complex weights array. [npointing][nstation][nchan][npol]
+ *   J       = inverse Jones matrix. [npointing][nstation][nchan][npol][npol]
  *   file_no = number of file we are processing, starting at 0.
  *   nstation     = 128
  *   nchan        = 128
@@ -345,90 +357,108 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
  */
 {
     // Setup input values (= populate W and J)
-    int s, ant, ch, pol, pol2;
+    int p, ant, ch, pol, pol2;
     int Wi, Ji;
-    for (ant = 0; ant < nstation; ant++)
-    for (ch  = 0; ch  < nchan   ; ch++ )
-    for (pol = 0; pol < npol    ; pol++)
+    for (p   = 0; p   < npointing; p++  )
+    for (ant = 0; ant < nstation ; ant++)
+    for (ch  = 0; ch  < nchan    ; ch++ )
+    for (pol = 0; pol < npol     ; pol++)
     {
-        Wi = ant * (npol*nchan) +
+        Wi = p   * (npol*nchan*nstation) +
+             ant * (npol*nchan) +
              ch  * (npol) +
              pol;
-        g->W[Wi] = complex_weights_array[ant][ch][pol];
+        g->W[Wi] = complex_weights_array[p][ant][ch][pol];
 
         for (pol2 = 0; pol2 < npol; pol2++)
         {
             Ji = Wi*npol + pol2;
-            g->J[Ji] = invJi[ant][ch][pol][pol2];
+            g->J[Ji] = invJi[p][ant][ch][pol][pol2];
         }
     }
-
     // Copy the data to the device
-    gpuErrchk(cudaMemcpy( g->d_data, data, g->data_size, cudaMemcpyHostToDevice ));
-    gpuErrchk(cudaMemcpy( g->d_W,    g->W, g->W_size,    cudaMemcpyHostToDevice ));
-    gpuErrchk(cudaMemcpy( g->d_J,    g->J, g->J_size,    cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpyAsync( g->d_W,    g->W, g->W_size,    cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpyAsync( g->d_J,    g->J, g->J_size,    cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpyAsync( g->d_data, data, g->data_size, cudaMemcpyHostToDevice ));
 
     // Call the kernels
+    // sammples_chan(index=blockIdx.x  size=gridDim.x,
+    //               index=blockIdx.y  size=gridDim.y)
+    // stat_point   (index=threadIdx.x size=blockDim.x,
+    //               index=threadIdx.y size=blockDim.y)
     dim3 samples_chan(opts->sample_rate, nchan);
-    beamform_kernel<<<samples_chan, NSTATION>>>(
-            g->d_data, g->d_W, g->d_J, invw, g->d_Bd, g->d_coh, g->d_incoh );
-    //cudaDeviceSynchronize();
-    // sync not required between kernel queues since each stream acts like a FIFO queue
-    // so all instances of the above kernel will complete before we move to the next
-    // we are using the "default" stream since we don't specify any stream id
+    dim3 stat(NSTATION);
+    // Send off a parrellel cuda stream for each pointing
+    for ( int p = 0; p < npointing; p++ )
+    {    
+        beamform_kernel<<<samples_chan, stat, 0, streams[p]>>>( g->d_data,
+                            g->d_W, g->d_J, invw, 
+                            g->d_Bd, g->d_coh, g->d_incoh, p, outpol_coh );
+            
+        gpuErrchk( cudaPeekAtLastError() );
 
-    // 1 block per pointing direction, hence the 1 for now
-    flatten_bandpass_I_kernel<<<1, nchan>>>(g->d_incoh, opts->sample_rate);
-    //cudaDeviceSynchronize();
-
-    // now do the same for the coherent beam
-    dim3 chan_stokes(nchan, outpol_coh);
-    flatten_bandpass_C_kernel<<<1, chan_stokes>>>(g->d_coh, opts->sample_rate);
-
-    //cudaDeviceSynchronize(); // Memcpy acts as a synchronize step so don't sync here
+        // Flatten the bandpass 
+        if ( p == 0 )
+        {
+            flatten_bandpass_I_kernel<<<1, nchan, 0, streams[p]>>>(g->d_incoh,
+                                                     opts->sample_rate);
+            gpuErrchk( cudaPeekAtLastError() );
+        }
+        // Now do the same for the coherent beam
+        dim3 chan_stokes(nchan, outpol_coh);
+        flatten_bandpass_C_kernel<<<npointing, chan_stokes, 0, streams[p]>>>(g->d_coh, 
+                                                               opts->sample_rate);
+        gpuErrchk( cudaPeekAtLastError() );
+    }
+    gpuErrchk( cudaDeviceSynchronize() );
+    
     // Copy the results back into host memory
-    gpuErrchk(cudaMemcpy( g->Bd, g->d_Bd,    g->Bd_size,    cudaMemcpyDeviceToHost ));
-    gpuErrchk(cudaMemcpy( incoh, g->d_incoh, g->incoh_size, cudaMemcpyDeviceToHost ));
-    gpuErrchk(cudaMemcpy( coh,   g->d_coh,   g->coh_size,   cudaMemcpyDeviceToHost ));
-
+    gpuErrchk(cudaMemcpyAsync( g->Bd, g->d_Bd,    g->Bd_size,    cudaMemcpyDeviceToHost ));
+    gpuErrchk(cudaMemcpyAsync( incoh, g->d_incoh, g->incoh_size, cudaMemcpyDeviceToHost ));
+    gpuErrchk(cudaMemcpyAsync( coh,   g->d_coh,   g->coh_size,   cudaMemcpyDeviceToHost ));
+    
     // Copy the data back from Bd back into the detected_beam array
     // Make sure we put it back into the correct half of the array, depending
     // on whether this is an even or odd second.
     int offset, i;
-    if (file_no % 2 == 0)
-        offset = 0;
-    else
-        offset = opts->sample_rate;
-
-    for (s   = 0; s   < opts->sample_rate; s++  )
-    for (ch  = 0; ch  < nchan            ; ch++ )
-    for (pol = 0; pol < npol             ; pol++)
+    offset = file_no % 3 * opts->sample_rate;
+    
+    for ( int p   = 0; p   < npointing        ; p++  )
+    for ( int s   = 0; s   < opts->sample_rate; s++  )
+    for ( int ch  = 0; ch  < nchan            ; ch++ )
+    for ( int pol = 0; pol < npol             ; pol++)
     {
-        i = s  * (npol*nchan) +
-            ch * (npol)       +
+        i = p  * (npol*nchan*opts->sample_rate) +
+            s  * (npol*nchan)                   +
+            ch * (npol)                         +
             pol;
 
-        detected_beam[s+offset][ch][pol] = g->Bd[i];
+        detected_beam[p][s+offset][ch][pol] = g->Bd[i];
     }
-
 }
 
 void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
-        int nstation, int nchan, int npol, int outpol_coh, int outpol_incoh )
+                      int nstation, int nchan, int npol, int outpol_coh, 
+                      int outpol_incoh, int npointing, double time )
 {
     // Calculate array sizes for host and device
-    g->coh_size   = sample_rate * outpol_coh   * nchan * sizeof(float);
+    g->coh_size   = npointing * sample_rate * outpol_coh * nchan * sizeof(float);
     g->incoh_size = sample_rate * outpol_incoh * nchan * sizeof(float);
     g->data_size  = sample_rate * nstation * nchan * npol * sizeof(uint8_t);
-    g->Bd_size    = sample_rate * nchan * npol * sizeof(ComplexDouble);
-    g->W_size     = nstation * nchan * npol * sizeof(ComplexDouble);
-    g->J_size     = nstation * nchan * npol * npol * sizeof(ComplexDouble);
+    g->Bd_size    = npointing * sample_rate * nchan * npol * sizeof(ComplexDouble);
+    g->W_size     = npointing * nstation * nchan * npol * sizeof(ComplexDouble);
+    g->J_size     = npointing * nstation * nchan * npol * npol * sizeof(ComplexDouble);
 
     // Allocate host memory
-    g->W  = (ComplexDouble *)malloc( g->W_size );
-    g->J  = (ComplexDouble *)malloc( g->J_size );
-    g->Bd = (ComplexDouble *)malloc( g->Bd_size );
-
+    //g->W  = (ComplexDouble *)malloc( g->W_size );
+    //g->J  = (ComplexDouble *)malloc( g->J_size );
+    //g->Bd = (ComplexDouble *)malloc( g->Bd_size );
+    cudaMallocHost( &g->W, g->W_size );
+    cudaCheckErrors("cudaMallocHost W fail");
+    cudaMallocHost( &g->J, g->J_size );
+    cudaCheckErrors("cudaMallocHost J fail");
+    cudaMallocHost( &g->Bd, g->Bd_size );
+    cudaCheckErrors("cudaMallocHost Bd fail");
 
     // Allocate device memory
     gpuErrchk(cudaMalloc( (void **)&g->d_W,     g->W_size ));
@@ -437,14 +467,19 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
     gpuErrchk(cudaMalloc( (void **)&g->d_data,  g->data_size ));
     gpuErrchk(cudaMalloc( (void **)&g->d_coh,   g->coh_size ));
     gpuErrchk(cudaMalloc( (void **)&g->d_incoh, g->incoh_size ));
+
+    fprintf( stderr, "[%f]  %d GB GPU memory allocated\n", time, (g->W_size + g->J_size + 
+                                            g->Bd_size + g->data_size +
+                                            g->coh_size + g->incoh_size)
+                                            /1000000000 );
 }
 
 void free_formbeam( struct gpu_formbeam_arrays *g )
 {
     // Free memory on host and device
-    free( g->W );
-    free( g->J );
-    free( g->Bd );
+    cudaFreeHost( g->W );
+    cudaFreeHost( g->J );
+    cudaFreeHost( g->Bd );
     cudaFree( g->d_W );
     cudaFree( g->d_J );
     cudaFree( g->d_Bd );
@@ -452,3 +487,54 @@ void free_formbeam( struct gpu_formbeam_arrays *g )
     cudaFree( g->d_coh );
     cudaFree( g->d_incoh );
 }
+
+float *create_pinned_data_buffer_psrfits( size_t size )
+{
+    float *ptr;
+    cudaMallocHost( &ptr, size * sizeof(float) );
+    //cudaError_t status = cudaHostRegister((void**)&ptr, size * sizeof(float),
+    //                                      cudaHostRegisterPortable );
+    cudaCheckErrors("cudaMallocHost data_buffer_psrfits fail");
+    return ptr;
+}
+
+float *create_pinned_data_buffer_vdif( size_t size )
+{
+    float *ptr;
+    cudaMallocHost( &ptr, size * sizeof(float) );
+    //cudaError_t status = cudaHostRegister((void**)&ptr, size * sizeof(float),
+    //                                      cudaHostRegisterPortable );
+    cudaCheckErrors("cudaMallocHost data_buffer_vdif fail");
+    return ptr;
+}
+
+void populate_weights_johnes( struct gpu_formbeam_arrays *g,
+                              ComplexDouble ****complex_weights_array,
+                              ComplexDouble *****invJi,
+                              int npointing, int nstation, int nchan, int npol )
+{
+    // Setup input values (= populate W and J)
+    int p, ant, ch, pol, pol2;
+    int Wi, Ji;
+    for (p   = 0; p   < npointing; p++  )
+    for (ant = 0; ant < nstation ; ant++)
+    for (ch  = 0; ch  < nchan    ; ch++ )
+    for (pol = 0; pol < npol     ; pol++)
+    {
+        Wi = p   * (npol*nchan*nstation) +
+             ant * (npol*nchan) +
+             ch  * (npol) +
+             pol;
+        g->W[Wi] = complex_weights_array[p][ant][ch][pol];
+
+        for (pol2 = 0; pol2 < npol; pol2++)
+        {
+            Ji = Wi*npol + pol2;
+            g->J[Ji] = invJi[p][ant][ch][pol][pol2];
+        }
+    }
+    // Copy the data to the device
+    gpuErrchk(cudaMemcpy( g->d_W, g->W, g->W_size, cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpy( g->d_J, g->J, g->J_size, cudaMemcpyHostToDevice ));
+}
+
