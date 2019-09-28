@@ -926,7 +926,7 @@ if __name__ == '__main__':
         if  (args.bf_out_format == 'vdif' or args.bf_out_format == 'both'):
             #bf_format += " -v" #this is the option for the multipixel version
             #that isn't currently used
-            bf_forat += " -u"
+            bf_format += " -u"
             logger.info("Writing out upsampled VDIF.")
         if (args.incoh):
             bf_format += " -i"
