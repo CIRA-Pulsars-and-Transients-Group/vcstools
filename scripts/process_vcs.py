@@ -529,7 +529,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                   metafits_file, nfine_chan, pointing, args, 
                   rts_flag_file=None, bf_formats=None, DI_dir=None, 
                   execpath=None, calibration_type='rts', 
-                  vcstools_version="master", nice=0):
+                  vcstools_version="origbeam", nice=0):
     """
     This function runs the new version of the beamformer. It is modelled after 
     the old function above and will likely be able to be streamlined after 
@@ -747,7 +747,7 @@ if __name__ == '__main__':
     parser.add_option("-L", "--loglvl", type="string", help="Logger verbosity level. Default: INFO", 
                                         default="INFO")
     parser.add_option("-V", "--version", action="store_true", help="Print version and quit")
-    parser.add_option("--vcstools_version", type="string", default="master", help="VCSTools version to load in jobs (i.e. on the queues) [default=%default]")
+    parser.add_option("--vcstools_version", type="string", default="origbeam", help="VCSTools version to load in jobs (i.e. on the queues) [default=%default]")
     parser.add_option("--nice", type="int", default=0, help="Reduces your priority of Slurm Jobs. [default=%default]")
     parser.add_option_group(group_download)
     parser.add_option_group(group_correlate)
