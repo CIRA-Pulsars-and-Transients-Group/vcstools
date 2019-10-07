@@ -47,6 +47,12 @@ from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata, ge
 import logging
 logger = logging.getLogger(__name__)
 
+try:
+    ATNF_LOC = os.environ['PSRCAT_FILE']
+except:
+    logger.warn("ATNF database could not be found on disk.")
+    ATNF_LOC = None
+
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
     no = set(['N','no','n'])
@@ -110,7 +116,7 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
     import psrqpy
 
     params = ['JNAME', 'RAJ', 'DECJ', 'DM']
-    query = psrqpy.QueryATNF(params=params, psrs=pulsar_list).pandas
+    query = psrqpy.QueryATNF(params=params, psrs=pulsar_list, loadfromdb=ATNF_LOC).pandas
 
     pulsar_ra_dec = []
     for row in query.itertuples():
