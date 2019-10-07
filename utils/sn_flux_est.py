@@ -55,7 +55,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
         return None, None
 
     if prof_data is None:
-        _, _, _, period, _ , _, prof_data, nbins = submit_to_database.get_from_bestprof(prof_path)
+        _, _, _, period, _, _, _, prof_data, nbins = submit_to_database.get_from_bestprof(prof_path)
         nbins = float(nbins)
         period = float(period)
     else:

@@ -104,21 +104,32 @@ def test_est_pulsar_sn():
     """
     I have tested this function various pulsar/observation combinations and compared to the estimated S/N from bestrof files. Here are the results:
 
-    1225462936, psr J0152-1637: The function estimated a S/N of 99.39 +/- 23.55. I compared this to what was estimated from the profile using est_sn_from_prof() and attained a S/N of 75.26 +/- 1.70
+    1225462936, -b 1225462943 -e 1225463543 psr J0152-1637: The function estimated a S/N of 99.39 +/- 23.55. I compared this to what was estimated from the profile analyse_pulse_prof() and attained a S/N of 75.26 +/- 1.70
+    
+    1226062160, -b 1226062167 -e 1226062767 psr J2330-2005: Function estimated a S/N of 62.21 +/- 38.63. Compared this to the profile estimation and attained S/N of 51.51 +/- 1.16
 
+    1225713560, -b 1223042487 -e 1223043087 psr J2241-5236: Function estimated a S/N of . Compared this to the profile estimation and attained S/N of 17.36 +/- 2.41
     
     """
     
     test_cases=[]
+    #Has 3 fluxes on database
     test_cases.append(("J2241-5236", 1225713560, None, None, None, None,\
                     232.29490006709051, 87.173008519118738))
+    #Has 7 fluxes on database
+    test_cases.append(("J0152-1637", 1225462936, 1225462943, 1225463543, None, None,\
+                    99.3856180501139, 23.555069097506475))
+    #Has 7 fluxes on database
     test_cases.append(("J2145-0750", 1221832280, 1221832287, 1221832887, None, None,\
                     120.19178597146058, 43.267175447498218))
     test_cases.append(("J2145-0750", 1221832280, 0, 1, None, None,\
                     0.0, 0.0))
+    #Has 6 fluxes on database
     test_cases.append(("J2330-2005", 1226062160, None, None, "23:00:00", "-20:00:00",\
                     25.403853956665806, 16.326028900697739))
-    
+    #Has no fluxes on database
+    test_cases.append(("J2234-0944", 1223042480, 1223042487, 1223043087, None, None,\
+                    ))
     for psr, obsid, beg, end, ra, dec, exp_sn, exp_sn_err in test_cases:
         sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec)
         assert_almost_equal(exp_sn, sn, decimal=6)
