@@ -839,9 +839,9 @@ if __name__ == '__main__':
     group_beamform.add_argument('--cal_type', type=str, help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
     group_beamform.add_argument("-E", "--execpath", type=str, default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
 
-    parser.add_argument("-m", "--mode", type=str, choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
+    parser.add_argument("-m", "--mode", type=str, choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, help="Observation ID you want to process [no default]")
-    parser.add_argument('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type=int, help="Only required in 'calibrate' and 'download_cal' mode."
+    parser.add_argument('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type=int, help="Only required in 'download_cal' mode."
                           "Observation ID of calibrator you want to process. In case of " 
                           "in-beam calibration should be the same as input to -o (obsID). [no default]", default=None)
     parser.add_argument("-b", "--begin", type=int, help="First GPS time to process [no default]")
@@ -884,14 +884,20 @@ if __name__ == '__main__':
             sys.exit(0)
 
     #Option parsing
+    if not args.obs:
+        logger.error("Observation ID required, please put in with -o or --obs")
+        quit()
     if args.all and (args.begin or args.end):
         logger.error("Please specify EITHER (-b,-e) OR -a")
         quit()
     elif args.all:
         args.begin, args.end = meta.obs_max_min(args.cal_obs\
                                if args.mode == 'download_cal' else args.obs)
+    elif args.mode is not 'download_cal' and (not args.begin or not args.end):
+        logger.error("Please specify EITHER (-b,-e) OR -a")
+        quit()
     # make sure we can process increments smaller than 64 seconds when not in calibration related mode
-    if args.mode not in ['download_cal','calibrate']:
+    if args.mode is not 'download_cal':
         if args.end - args.begin +1 < args.increment:
             args.increment = args.end - args.begin + 1
     e_mail = ""
@@ -902,9 +908,6 @@ if __name__ == '__main__':
       logger.error("Mode required {0}. Please specify with -m or --mode.".format(modes))
 
       quit()
-    if not args.obs:
-        logger.error("Observation ID required, please put in with -o or --obs")
-        quit()
     if args.begin and args.end:
         if args.begin > args.end:
             logger.error("Starting time is after end time")
