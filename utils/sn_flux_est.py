@@ -11,6 +11,11 @@ import numpy as np
 import psrqpy
 import pandas as pd
 
+#matplotlib
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 #Astropy
 from astropy.table import Table
 from astropy.time import Time
@@ -33,6 +38,26 @@ try:
 except:
     logger.warn("ATNF database could not be found on disk.")
     ATNF_LOC = None
+
+#---------------------------------------------------------------
+def plot_flux_estimation(freqs, fluxes, flux_errors, pulsar, obsid, alpha=None, c=None):
+
+    plt.errorbar(freqs, fluxes, yerr=flux_errors, fmt="o", label="Data")
+    plt.yscale("log")
+    plt.xscale("log")
+    plt.title("Flux Density Spectrum for {0}".format(pulsar))
+    plt.xlabel("Frequency MHz")
+    plt.ylabel("Flux Jy")
+
+    if alpha is not None and c is not None:
+        minfreq = min(freqs)
+        maxfreq = max(freqs)
+        x = np.linspace(minfreq/2, maxfreq*2, 200)
+        y = np.exp(alpha * np.log(x) + c)
+        plt.plot(x, y, "--r", label="Fitted Plaw")
+        plt.legend()
+
+    plt.savefig("flux_density_{0}_{1}.png".format(pulsar, obsid))
 
 #---------------------------------------------------------------
 def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=False):
@@ -193,6 +218,33 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
 #---------------------------------------------------------------
 def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_bound=None, c_bound=None):
 
+    def log_plaw_func(nu, a, c):
+        #pass the log values of nu
+        return np.exp(a * np.log(nu) + c)
+
+    def check_fit(alpha, c, covar_matrix):
+        #checks that the fit parameters are sensible 
+        covar_0_0 = covar_matrix.item(0)
+        covar_0_1 = covar_matrix.item(1)
+        covar_1_0 = covar_matrix.item(2)
+        covar_1_1 = covar_matrix.item(3)
+
+        test = True
+        #check the following conditions
+        #alpha
+        if alpha>10 or alpha < -10:
+            test =  False
+        #c
+        elif c>1000 or c<-1000:
+            test = False
+        #covariance matrix
+        elif covar_0_0==0. or covar_0_1==0. or covar_1_0==0.or covar_1_1==0.:
+            test = False
+        elif covar_0_0>1e6 or covar_0_0<-1e6 or covar_0_1>1e6 or covar_0_1<-1e6\
+            or covar_1_0>1e6 or covar_1_0<-1e6 or covar_1_1>1e6 or covar_1_1<-1e6:
+            test = False
+        return test 
+
     initial = [alpha_initial, c_initial]
     
     #make the bounds tuple
@@ -216,25 +268,37 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
     #sol = curve_fit(function, x_data, y_data, p0=initial)
     function=log_plaw_func
     sol = curve_fit(function, x_data, y_data, p0=initial, bounds=bounds)
-
-
+    covar_matrix = np.matrix(sol[1])
     a = sol[0][0]
     c = sol[0][1]
+    
+    #Check the fit
+    test_check = check_fit(a, c, covar_matrix)
+    if test_check==False:
+        logger.warn("Initial parameters could not fit a power law. Trying without bounds...")
+        sol = curve_fit(function, x_data, y_data)
+        covar_matrix = np.matrix(sol[1])
+        a = sol[0][0]
+        c = sol[0][1]
+        test_check = check_fit(a, c, covar_matrix)    
+        if test_check==False:
+            logger.warn("Bad power law fit. Results may be unphysical")
+            logger.warn("a: {0}".format(a))
+            logger.warn("c: {0}".format(c))
+            logger.warn("Covariance Matrix: {0}".format(covar_matrix))
+            return a, c, covar_matrix
+        else:
+            return a, c, covar_matrix
+
     logger.debug("a: {0}".format(a))
     logger.debug("c: {0}".format(c))
     logger.debug("Solution: {0}".format(sol))
-    covar_matrix = np.matrix(sol[1])
     logger.debug("Covariance Matrix: {0}".format(covar_matrix))
 
     return a, c, covar_matrix 
 
 #---------------------------------------------------------------
-def log_plaw_func(nu, a, c):
-    #pass the log values of nu
-    return np.exp(a * np.log(nu) + c)
-
-#---------------------------------------------------------------
-def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
+def est_pulsar_flux(pulsar, obsid, plot_flux=False):
 
     """
     Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency. Frist tries to attain a apectral index from the ATNF database. If this fails, try to work out a spectrla index. If this fails, uses an index of -1.4 with uncertainty of 1.
@@ -248,13 +312,8 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
     output: 
     flux, flux_err: the expected pulsar flux and error at the central frequency of the obs in Jy
     """
-    if obsid is None and f_mean is None:
-        logger.error("Please supply an obsid or mean frequency")
-        sys.exit(1)
-
-    if f_mean is None:
-        logger.info("obtaining mean freq from obs metadata")
-        f_mean = mwa_metadb_utils.get_common_obs_metadata(obsid)[5]*1e6
+    logger.debug("obtaining mean freq from obs metadata")
+    f_mean = mwa_metadb_utils.get_common_obs_metadata(obsid)[5]*1e6
     
     #query psrcat for flux values
     flux_queries = ["S40", "S50", "S60", "S80", "S100", "S150", "S200",\
@@ -320,13 +379,16 @@ def est_pulsar_flux(pulsar, obsid=None, f_mean=None):
         if not np.isnan(spind):
             initial_spind = spind
             if not np.isnan(spind_err):
-                #if spind_error exists on cat, use it to create 5 sigma bounds
+                #if spind_error exists on cat, use it to create 5 sigma bounds for fitting
                 spind_bounds = [spind-spind_err*5, spind+spind_err*5]
          
     
         spind, c, covar_matrix = fit_plaw_psr(freq_all, flux_all, alpha_initial=initial_spind, alpha_bound=spind_bounds)
         logger.info("Derived spectral index: {0} +/- {1}".format(spind, covar_matrix.item(0)))
-        
+        #plot if in debug mode
+        if plot_flux==True:
+            plot_flux_estimation(freq_all, flux_all, flux_err_all, pulsar, obsid, alpha=spind, c=c)        
+
         #flux calc.  
         flux_est = np.exp(spind*np.log(f_mean)+c) 
         #calculate error from covariance matrix
@@ -552,7 +614,8 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
     return t_sys, t_sys_err, gain, gain_err
 
 #---------------------------------------------------------------
-def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None):
+def est_pulsar_sn(pulsar, obsid,\
+                 beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, plot_flux=False):
     
     """
     S/N = (s_mean * gain * sqrt(n_p * t_int * df * (period - W_50)/W_50)) / t_sys
@@ -573,7 +636,7 @@ def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_
     #Get some basic pulsar and obs info info
     if p_ra is None or p_dec is None:
         logger.debug("Obtaining pulsar RA and Dec from ATNF")
-        query = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psr=pulsar, loadfromdb=ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
         p_ra = query["RAJ"] 
         p_dec = query["DECJ"]
     
@@ -598,7 +661,7 @@ def est_pulsar_sn(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None, obs_
                                  beg=beg, p_ra=p_ra, p_dec=p_dec, obs_metadata=obs_metadata)
  
     #estimate flux
-    s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, f_mean=f_mean)
+    s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux)
     
     #fluxes may be Nones. If so, return None
     if s_mean is None and s_mean_err is None:
@@ -646,12 +709,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="""A utility file for estimating the S/N of a pulsar in an obsid""")
     parser.add_argument("-o", "--obsid", type=int, help="The Observation ID (e.g. 1221399680)")
     parser.add_argument("-p", "--pulsar", type=str, help="The pulsar's name (e.g. J2241-5236)")
-    parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level. Default: INFO")
+    parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level. Running in DEBUG mode will output a plot of the power law fit where applicable. Default: INFO")
     parser.add_argument("-b", "--beg", type=int, default=None, help="The beginning time of observation. If None, will use beginning given by a metadata call")
     parser.add_argument("-e", "--end", type=int, default=None, help="The end time of observation. If None, will use the end given by a metadata call")
-    parser.add_argument("--ondisk", action="store_true", help="Use this tag to calculate S/N for files on disk")
-    parser.add_argument("--raj", type=str, default=None, help="The RA of the target. If None, will obtain from a call to ATNF")
-    parser.add_argument("--decj", type=str, default=None, help="The Dec of the target. If None, will obtain from a call to ATNF")
+    parser.add_argument("--pointing", type=str, default=None, help="The pointing of the target in the format '12:34:56_98:76:54'. If None, will obtain from a call to ATNF")
     args = parser.parse_args()
 
     logger.setLevel(loglevels[args.loglvl])
@@ -666,32 +727,20 @@ if __name__ == "__main__":
         logger.error("Obsid and Pulsar name must be supplied. Exiting...")
         sys.exit(1)
 
-    if args.ondisk==False:
-        #Decide what to use as beg and end
-        if args.beg==None or args.end==None:
-            obsbeg, obsend = mwa_metadb_utils.obs_max_min(args.obsid)
-            if args.beg==None:
-                beg = obsbeg
-            if args.end==None:
-                end = obsend        
-        else:
-            beg = args.beg
-            end = args.end
-
     #Decide what to use as ra and dec
-    if args.raj==None or ags.decj==None:
+    if args.pointing==None:
         query = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[args.pulsar], loadfromdb=ATNF_LOC).pandas
-        if args.raj==None:
-            raj = query["RAJ"]
-        if args.decj==None:
-            decj = query["DECJ"]
+        raj = query["RAJ"]
+        decj = query["DECJ"]
     else:
-        raj = args.raj
-        decj = args.decj
+        raj = args.pointing.split("_")[0]
+        decj = args.pointing.split("_")[1]
 
-    #metadata call to speed up script
-    obs_metadata = mwa_metadb_utils.get_common_obs_metadata(args.obsid)
-
+    if args.loglvl=="DEBUG":
+        plot=True
+    else:
+        plot=False
+    
     SN, SN_err = est_pulsar_sn(args.pulsar, args.obsid,\
-             beg=beg, end=end, p_ra=raj, p_dec=decj, obs_metadata=obs_metadata)
+             beg=args.beg, end=args.end, p_ra=raj, p_dec=decj, plot_flux=plot)
     logger.info("Pulsar S/N: {0} +/- {1}".format(SN, SN_err))

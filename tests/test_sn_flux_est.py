@@ -90,13 +90,13 @@ def test_est_pulsar_flux():
     """
     
     test_cases = []
-    test_cases.append(("J2241-5236", 1224252736, None, 0.19431618769079156, 0.02246695016871639))
-    test_cases.append(("J2241-5236", None, 1.5e8, 0.20695827573194084, 0.026340991400397213))
-    test_cases.append(("J2330-2005", 1226062160, None, 0.061795706713084243, 0.035885388925934944))
-    test_cases.append(("J0152-1637", None, 1.5e8, 0.062465964922226662, 0.009151549839825322))
-    
-    for psr, obsid, f_mean, exp_flux, exp_flux_err in test_cases:
-        flux, flux_err = snfe.est_pulsar_flux(psr, obsid=obsid, f_mean=f_mean)
+    test_cases.append(("J2241-5236", 1224252736, 0.18098241304756868, 0.009279186356809042))
+    test_cases.append(("J2330-2005", 1226062160, 0.061795706713084243, 0.035885388925934944))
+    test_cases.append(("J0151-0635", 1225462936, 0.033057081200313143, 0.01252086439796237))   
+
+ 
+    for psr, obsid, exp_flux, exp_flux_err in test_cases:
+        flux, flux_err = snfe.est_pulsar_flux(psr, obsid)
         assert_almost_equal(exp_flux, flux, decimal=6)
         assert_almost_equal(exp_flux_err, flux_err, decimal=6)
 
@@ -108,28 +108,26 @@ def test_est_pulsar_sn():
     
     1226062160, -b 1226062167 -e 1226062767 psr J2330-2005: Function estimated a S/N of 62.21 +/- 38.63. Compared this to the profile estimation and attained S/N of 51.51 +/- 1.16
 
-    1225713560, -b 1223042487 -e 1223043087 psr J2241-5236: Function estimated a S/N of . Compared this to the profile estimation and attained S/N of 17.36 +/- 2.41
+    1225713560, -b 1225713567 -e 1225714167, psr J2241-5236: Function estimated a S/N of 75.61 +/-27.27. Compared this to the profile estimation and attained S/N of 17.36 +/- 2.41
     
     """
     
     test_cases=[]
     #Has 3 fluxes on database
     test_cases.append(("J2241-5236", 1225713560, None, None, None, None,\
-                    232.29490006709051, 87.173008519118738))
+                    216.35506569161737, 78.034094419176355))
     #Has 7 fluxes on database
     test_cases.append(("J0152-1637", 1225462936, 1225462943, 1225463543, None, None,\
                     99.3856180501139, 23.555069097506475))
     #Has 7 fluxes on database
     test_cases.append(("J2145-0750", 1221832280, 1221832287, 1221832887, None, None,\
-                    120.19178597146058, 43.267175447498218))
+                    121.57563894273588, 44.10171935756484))
     test_cases.append(("J2145-0750", 1221832280, 0, 1, None, None,\
                     0.0, 0.0))
     #Has 6 fluxes on database
     test_cases.append(("J2330-2005", 1226062160, None, None, "23:00:00", "-20:00:00",\
                     25.403853956665806, 16.326028900697739))
     #Has no fluxes on database
-    test_cases.append(("J2234-0944", 1223042480, 1223042487, 1223043087, None, None,\
-                    ))
     for psr, obsid, beg, end, ra, dec, exp_sn, exp_sn_err in test_cases:
         sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec)
         assert_almost_equal(exp_sn, sn, decimal=6)
