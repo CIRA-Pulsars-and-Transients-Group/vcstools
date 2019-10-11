@@ -141,17 +141,6 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         logger.error("Input source type not in known catalogues types. Please choose from: {0}".format(modes))
         return None
 
-    #Download the catalogue from the respective website
-    if source_type == 'FRB':
-        website = 'http://frbcat.org/products?search=&min=0&max=1000&page=1'
-        web_table = 'frbcat.json'
-    elif source_type == 'RRATs':
-        website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
-        web_table = 'rratalog.txt'
-    if source_type != 'Pulsar' and source_type != 'rFRB' and source_type != 'FRB':
-        logger.info("Downloading {0} catalogue from {1}".format(source_type, website))
-        os.system('wget {0}'.format(website))
-
     #Get each source type into the format [[name, ra, dec]]
     name_ra_dec = []
     if source_type == 'Pulsar':
@@ -182,25 +171,22 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
                     name_ra_dec.append([line[0], line[1], line[2]]) 
 
     elif source_type == 'RRATs':
-        with open(web_table,"r") as in_txt:
-            lines = in_txt.readlines()
-            data = []
-            for l in lines[1:]:
-                columns = l.strip().replace(" ", '\t').split('\t')
-                temp = []
-                if pulsar_list == None or (columns[0] in pulsar_list):
-                    for entry in columns:
-                        if entry not in ['', ' ', '\t']:
-                            temp.append(entry.replace('--',''))
-                    if include_dm:
-                        name_ra_dec.append([temp[0], temp[4], temp[5], temp[3]])
-                    else:
-                        name_ra_dec.append([temp[0], temp[4], temp[5]])
+        import urllib.request
+        rrats_data = urllib.request.urlopen('http://astro.phys.wvu.edu/rratalog/rratalog.txt').read().decode()
+        data = []
+        for rrat in rrats_data.split("\n")[1:-1]:
+            columns = rrat.strip().replace(" ", '\t').split('\t')
+            temp = []
+            print(columns)
+            if pulsar_list == None or (columns[0] in pulsar_list):
+                for entry in columns:
+                    if entry not in ['', ' ', '\t']:
+                        temp.append(entry.replace('--',''))
+                if include_dm:
+                    name_ra_dec.append([temp[0], temp[4], temp[5], temp[3]])
+                else:
+                    name_ra_dec.append([temp[0], temp[4], temp[5]])
     
-    #remove web catalogue tables
-    if source_type !='Pulsar' and source_type != 'rFRB' and source_type != 'FRB':
-        os.remove(web_table)
-
     return name_ra_dec
 
 
