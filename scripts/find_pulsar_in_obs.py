@@ -93,11 +93,13 @@ def deg2sex(ra, dec):
     """
 
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.deg,u.deg))
-    coords = c.to_string('hmsdms')
-    coords = coords.replace('h',':').replace('d',':').replace('m',':').replace('s','')
+    #coords = c.to_string('hmsdms')
+    #coords = coords.replace('h',':').replace('d',':').replace('m',':').replace('s','')
+    rajs = c.ra.to_string(unit=u.hour, sep=':')
+    decjs = c.dec.to_string(unit=u.degree, sep=':')
 
     # return RA and DEC in "hh:mm:ss.ssss dd:mm:ss.ssss" form
-    return coords
+    return rajs, decjs
 
 
 def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
@@ -134,9 +136,9 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
 
 def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False):
     """
-    Creates a csv file of source names, RAs and Decs using web catalogues for ['Pulsar', 'FRB', 'GC', 'RRATs'].
+    Creates a csv file of source names, RAs and Decs using web catalogues for ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi'].
     """
-    modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs']
+    modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
     if source_type not in modes:
         logger.error("Input source type not in known catalogues types. Please choose from: {0}".format(modes))
         return None
@@ -155,7 +157,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
             logger.debug('FRB name: {}'.format(name))
             ra   = frb['rop_raj']
             dec  = frb['rop_decj']
-            dm   = frb['rmp_dm']
+            dm   = frb['rmp_dm'].split("&")[0]
             if include_dm:
                 name_ra_dec.append([name, ra, dec, dm])
             else:
@@ -186,6 +188,30 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
                     name_ra_dec.append([temp[0], temp[4], temp[5], temp[3]])
                 else:
                     name_ra_dec.append([temp[0], temp[4], temp[5]])
+
+    elif source_type == 'Fermi':
+        # read the fermi targets file
+        try:
+            fermi_loc = os.environ['FERMI_CAND_FILE']
+        except:
+            logger.warn("Fermi candidate file location not found. Returning nothing")
+            return []
+        with open(fermi_loc,"r") as fermi_file:
+            import csv
+            csv_reader = csv.DictReader(fermi_file)
+            for fermi in csv_reader:
+                name = fermi['Source Name'].split()[-1]
+                ra  = fermi[' RA J2000']
+                dec = fermi[' Dec J2000']
+                raj, decj = deg2sex(float(ra), float(dec))
+                pos_u = float(fermi[' a (arcmin)'])
+                if include_dm:
+                    # this actually returns the position uncertainty not dm
+                    name_ra_dec.append([name, raj, decj, pos_u])
+                else:
+                    name_ra_dec.append([name, raj, decj])
+
+
     
     return name_ra_dec
 
@@ -745,7 +771,7 @@ if __name__ == "__main__":
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
     sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"', default = None)
     sourargs.add_argument('--max_dm',type=float, default = 250., help='The maximum DM for pulsars. All pulsars with DMs higher than the maximum will not be included in output files. Default=250.0')
-    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue.")
+    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs', Fermi] to search for all sources in their respective web catalogue.")
     sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
     sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing the source\'s coordinates to be searched for in the format "RA,DEC" "RA,DEC". Must be enterered as either: "hh:mm:ss.ss,+dd:mm:ss.ss" or "deg,-deg". Please only use one format.')
     #finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
