@@ -143,12 +143,12 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
 
     #Download the catalogue from the respective website
     if source_type == 'FRB':
-        website = ' http://www.frbcat.org/frbcat.csv'
-        web_table = 'frbcat.csv'
+        website = 'http://frbcat.org/products?search=&min=0&max=1000&page=1'
+        web_table = 'frbcat.json'
     elif source_type == 'RRATs':
         website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
         web_table = 'rratalog.txt'
-    if source_type != 'Pulsar' and source_type != 'rFRB':
+    if source_type != 'Pulsar' and source_type != 'rFRB' and source_type != 'FRB':
         logger.info("Downloading {0} catalogue from {1}".format(source_type, website))
         os.system('wget {0}'.format(website))
 
@@ -158,17 +158,19 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         name_ra_dec = get_psrcat_ra_dec(pulsar_list, max_dm=max_dm, include_dm=include_dm)
     
     elif source_type == 'FRB':
-        #TODO it's changed and currently not working atm
-        with open(web_table,"r") as in_txt:
-            lines = in_txt.readlines()
-            data = []
-            for l in lines[7:]:
-                ltemp = l.strip('<td>').split('</td>')
-                logger.info(ltemp)
-                if len(ltemp) > 2:
-                    ratemp = ltemp[7].lstrip('<td>')
-                    dectemp = ltemp[8].lstrip('<td>')
-                    name_ra_dec.append([ltemp[0].lstrip('<td>')[:9],ratemp,dectemp])
+        import json
+        import urllib.request
+        frb_data = json.load(urllib.request.urlopen('http://frbcat.org/products?search=&min=0&max=1000&page=1'))
+        for frb in frb_data['products']:
+            name = frb['frb_name']
+            logger.debug('FRB name: {}'.format(name))
+            ra   = frb['rop_raj']
+            dec  = frb['rop_decj']
+            dm   = frb['rmp_dm']
+            if include_dm:
+                name_ra_dec.append([name, ra, dec, dm])
+            else:
+                name_ra_dec.append([name, ra, dec])
 
     elif source_type == "rFRB":
         info = get_rFRB_info(name=pulsar_list)
@@ -196,7 +198,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
                         name_ra_dec.append([temp[0], temp[4], temp[5]])
     
     #remove web catalogue tables
-    if source_type !='Pulsar' and source_type != 'rFRB':
+    if source_type !='Pulsar' and source_type != 'rFRB' and source_type != 'FRB':
         os.remove(web_table)
 
     return name_ra_dec
