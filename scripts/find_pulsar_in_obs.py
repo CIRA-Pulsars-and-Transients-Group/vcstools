@@ -179,7 +179,6 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         for rrat in rrats_data.split("\n")[1:-1]:
             columns = rrat.strip().replace(" ", '\t').split('\t')
             temp = []
-            print(columns)
             if pulsar_list == None or (columns[0] in pulsar_list):
                 for entry in columns:
                     if entry not in ['', ' ', '\t']:
