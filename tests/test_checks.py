@@ -3,6 +3,8 @@
 Tests the find_pulsar_in_obs.py script
 """
 import checks
+
+import pickle
 from numpy.testing import assert_approx_equal, assert_almost_equal
 
 
@@ -15,10 +17,8 @@ def test_get_files_and_sizes():
     for test in tests:
         obsid, mode, file_loc, suffix, number = test
         # Read in file list that was too long to store in this function
-        with open(file_loc, 'r') as file_read:
-            file_list = []
-            for line in file_read:
-                file_list.append(line[:-1])
+        with open(file_loc, 'rb') as file_read:
+            file_list = pickle.load(file_read)
         expected_ans = (file_list, suffix, number)
         ans = checks.get_files_and_sizes(obsid, mode)
         if ans != expected_ans:
