@@ -330,22 +330,6 @@ def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
     return ra_dec_list
 
 
-def calcFWHM(freq):
-    """
-    Calculate the FWHM for the beam assuming ideal response/gaussian-like profile. Will eventually be depricated.
-
-    calcFWHM(freq)
-    Args:
-        freq: observation frequency in MHz
-    """
-    c = 299792458.0                 # speed of light (m/s)
-    Dtile = 4.0                     # tile size (m) - incoherent beam
-    freq = freq * 1e6               # convert from MHz to Hz
-    fwhm = 1.2 * c / (Dtile * freq) # calculate FWHM using standard formula
-
-    return fwhm
-
-
 def find_obsids_meta_pages(params={'mode':'VOLTAGE_START'}):
     """
     Loops over pages for each page for MWA metadata calls
