@@ -136,7 +136,31 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
 
 def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False):
     """
-    Creates a csv file of source names, RAs and Decs using web catalogues for ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi'].
+    Will search different source catalogues and extract all the source names, RAs, Decs and, if requested, DMs
+
+    Parameters
+    ----------
+    source_type: string
+        The type of source you would like to get the catalogue for.
+        Your choices are: ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
+        Default: 'Pulsar'
+    pulsar_list: list
+        List of sources you would like to extract data for.
+        If None is given then it will search for all available sources
+        Default: None
+    max_dm: float
+        If the source_type is 'Pulsar' then you can set a maximum dm and the function will only
+        return pulsars under that value.
+        Default: 1000.
+    include_dm: Bool
+        If True the function will also return the DM if it is available at the end of the list
+        Default: False
+
+    Returns
+    -------
+    result: list list
+        A list for each source which contains a [source_name, RA, Dec (, DM)] 
+        where RA and Dec are in the format HH:MM:SS
     """
     modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
     if source_type not in modes:
@@ -146,7 +170,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
     #Get each source type into the format [[name, ra, dec]]
     name_ra_dec = []
     if source_type == 'Pulsar':
-        name_ra_dec = get_psrcat_ra_dec(pulsar_list, max_dm=max_dm, include_dm=include_dm)
+        name_ra_dec = get_psrcat_ra_dec(pulsar_list=pulsar_list, max_dm=max_dm, include_dm=include_dm)
     
     elif source_type == 'FRB':
         import json
@@ -210,7 +234,13 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
                 else:
                     name_ra_dec.append([name, raj, decj])
 
-
+    #Remove all unwanted sources
+    if pulsar_list is not None:
+        temp = []
+        for line in name_ra_dec:
+            if line[0] in pulsar_list:
+                temp.append(line)
+        name_ra_dec = temp
     
     return name_ra_dec
 
