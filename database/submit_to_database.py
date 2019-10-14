@@ -397,9 +397,11 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     return subbands
 
 """
-Test set:
+Testi set:
+Run these form the vcstools directory
+
 Scattered detection (crab):
-python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof /group/mwaops/k_smith/vcstools/vcstools/tests/test_files/1127939368_J05342200.bestprof -L DEBUG 
+python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof tests/test_files/1127939368_J05342200.bestprof -L DEBUG 
 Expected flux: 7500
 
 Weak detection (it's a 10 min detection):
@@ -411,7 +413,7 @@ python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J2330-2005 --b
 Expected flux: ~180
 
 Strong detection:
-python submit_to_database.py -o 1226062160 --cal_id 1226054696 -p J2330-2005 --bestprof /group/mwaops/k_smith/vcstools/vcstools/tests/test_files/1226062160_J2330-2005.bestprof -L DEBUG
+python submit_to_database.py -o 1226062160 --cal_id 1226054696 -p J2330-2005 --bestprof tests/test_files/1226062160_J2330-2005.bestprof -L DEBUG
 S/N: 51.51 +/- 1.16
 Flux: 156.04 +/- 34.13 mJy
 """

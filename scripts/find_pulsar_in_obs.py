@@ -688,7 +688,7 @@ def write_output_source_files(output_data,
                 output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}'.format(obsid,
                                   duration, enter, exit, max_power, oap))
                 if SN_est:
-                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_flux(pulsar, obsid=obsid, f_mean=obsid_meta[on][-2]*1e6)
+                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid)
                     if pulsar_sn is None:
                         output_file.write('   None    None')
                     else:
@@ -749,7 +749,10 @@ def write_output_obs_files(output_data, obsid_meta,
                 output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} '.format(pulsar,
                                   enter, exit, max_power))
                 if SN_est:
-                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_flux(pulsar, obsid=obsid, f_mean=obsid_meta[on][-2]*1e6)
+                    beg = int(obsid) + 7
+                    end = beg + int(obsid_meta[on][3])
+                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid, beg=beg, end=end,\
+                      obs_metadata=obsid_meta[on], enter=enter, exit=exit)
                     if pulsar_sn is None:
                         output_file.write('   None    None\n')
                     else:

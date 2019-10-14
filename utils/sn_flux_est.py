@@ -41,7 +41,30 @@ except:
 
 #---------------------------------------------------------------
 def plot_flux_estimation(freqs, fluxes, flux_errors, pulsar, obsid, alpha=None, c=None):
+    """
+    Plots a flux density spectrum. Intended to be used with fit_plaw_psr. Will plot the fit power law if alpha and c are provided
 
+    Parameters:
+    -----------
+    freqs: list
+        List of frequencies
+    fluxes: list
+        List of fluxes corresponding to the frequencies
+    flux_errors: list
+        List of uncertainties corresponding to each flux value
+    pulsar: string
+        Name of the pulsar
+    obsid: int
+        The observation ID
+    alpha: int
+        OPTIONAL - The spectral index of the fit
+    c: int
+        OPTIONAL - The y-intervept of the fit
+
+    Returns:
+    --------
+    None    
+    """
     plt.errorbar(freqs, fluxes, yerr=flux_errors, fmt="o", label="Data")
     plt.yscale("log")
     plt.xscale("log")
@@ -62,18 +85,40 @@ def plot_flux_estimation(freqs, fluxes, flux_errors, pulsar, obsid, alpha=None, 
 #---------------------------------------------------------------
 def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=False):
     """
-    Gets an estimate of S/N with error from a pulse profile
+    Estimates the S/N from a pulse profile
     Based on code oringally writted by Nick Swainston
+    NOTE - user must supply EITHER a bestprof path OR prof_data and period of your pulse profile
+    Returns will be in the form of a list and differ for 'verbose' setting
 
-    Inputs:
-    user must supply EITHER a bestprof path OR prof_data and period of your pulse profile
-    the profile data should be a list of floats that makes the pulse profile
-    verbose: a boolean that determines whether to return more detailed information. Discussed below
+    Parameters:
+    -----------
+    prof_path: str
+        OPTIONAL - The location of the bestprof file
+    prof_data: list
+        OPTIONAL - The pulse profile data
+    period: float
+        OPTIONAL - The pulsar's period in ms
+    verbose: boolean
+        Determines whether to return more detailed information. Discussed below
 
-    Return:
-    [sn, u_sn]: the signal to noise and its uncertainty
-    verbose=True will return much more information in the form: 
-    [sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins w_equiv_ms, u_w_equiv_ms, scattered]
+    Returns:
+    --------
+    sn: float
+       The estimated signal to noise ratio
+    sn_err: float
+        The estimated signal to noise uncertainty 
+    flags: list
+        Flagged data in the profile
+    w_equiv_bins: int
+        The profile equivalent width measured in the number of bins
+    u_w_equiv_bins: float
+        The uncertainty in the equivalent witdh measure in number of bins
+    w_equiv_ms: float
+        The profile equivalent width measured in milliseconds
+    u_w_equiv_ms: float
+        The profile equivalent width measured in milliseconds
+    scatteres: boolean
+        Records whether the profile is scatteres
     """
     if prof_path is None and (prof_data is None or period is None):
         logger.warn("Insufficient information to attain SN estimate from profile. Returning Nones")
@@ -158,11 +203,31 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
     return [sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattered]
 
 #---------------------------------------------------------------
-def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
-    #returns the beginning and end time as a fraction that a pulsar is in the primary beam for the obsid files
-    #beg and end should only be supplied if the files are not present on the system
-    #if pulsar is not in beam, returns -1, -1
+def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
+    """
+    Finds the normalised time that a pulsar is in the beam for a given obsid
 
+    Parameters:
+    -----------
+    obsid: int
+        The observation ID
+    pulsar: string
+        The J name of the pulsar
+    beg: int
+        OPTIONAL - The beginning of the observing time
+    end: int
+        OPTINAL - The end of the observing time
+    ondisk: boolean
+        OPTIONAL - Whether or not to use files on-disk to in calculation. Default = False
+
+    Returns:
+    --------
+    enter_files: float
+        The normalised time that the pulsar enters the beam (between 0. and 1.). Returns None if pulsar not in beam
+    exit_files: float
+        The normalised time that the pulsar exits the beam (between 0. and 1.). Returns None if the pulsar not in beam
+    """
+ 
     #find the enter and exit times of pulsar normalized with the observing time
     names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar])
     beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec)
@@ -210,20 +275,51 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None):
         exit_files=1.
     if enter_files>1. or exit_files<0.:
         logger.warn("source {0} is not in the beam for the files on disk".format(pulsar))
-        enter_files = -1
-        exit_files = -1
+        enter_files = None
+        exit_files = None
 
     return enter_files, exit_files
 
 #---------------------------------------------------------------
-def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_bound=None, c_bound=None):
+def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_bound=[-3., 0.],\
+                c_bound=[0., 50.]):
+    """
+    Used primarily by est_pulsar_flux() to fit a power law function to input data. Intended for use with pulsar flux densities
 
+    Parameters:
+    -----------
+    x_data: list
+        A list of frequencies in Hz
+    y_data: list
+        A list of fluxes in Jy correspodning to the input x_data frequencies
+    alpha_initial: float
+        OPTIONAL - An initial estimate for the spectral index. Default = -1.5
+    c_initial: float
+        OPTIONAL - An intiial estimate for the value of the y-intercept. Default = 30.
+    alpha_bound: list
+        OPTIONAL - Boundary conditions for the spectral index. Default = [-3., 0.]
+    c_bound: list
+        OPTIONAL - Boundary conditions for the y-intercept. Default = [0., 50.] 
+
+    Returns:
+    --------
+    a: float
+        The fit spectral index
+    c: float
+        The fit y-intercept
+    covar_matrix: np.matrix
+        The covariance matrix of the fit. Contains the information required to for uncertainty calculations
+    """
     def log_plaw_func(nu, a, c):
         #pass the log values of nu
         return np.exp(a * np.log(nu) + c)
 
-    def check_fit(alpha, c, covar_matrix):
+    def check_fit(sol):
         #checks that the fit parameters are sensible 
+        covar_matrix = np.matrix(sol[1])
+        alpha = sol[0][0]
+        c = sol[0][1]
+        
         covar_0_0 = covar_matrix.item(0)
         covar_0_1 = covar_matrix.item(1)
         covar_1_0 = covar_matrix.item(2)
@@ -248,11 +344,6 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
     initial = [alpha_initial, c_initial]
     
     #make the bounds tuple
-    if alpha_bound is None:
-        alpha_bound = [-np.inf, np.inf]
-    if c_bound is None:
-        c_bound = [-np.inf, np.inf]
-    
     lower_bound = [alpha_bound[0], c_bound[0]]
     upper_bound = [alpha_bound[1], c_bound[1]]
     bounds = (lower_bound, upper_bound)
@@ -273,23 +364,38 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
     c = sol[0][1]
     
     #Check the fit
-    test_check = check_fit(a, c, covar_matrix)
+    
+
+    test_check = check_fit(sol)
     if test_check==False:
         logger.warn("Initial parameters could not fit a power law. Trying without bounds...")
+        sol = curve_fit(function, x_data, y_data, p0=initial)
+
+    test_check = check_fit(sol)
+    if test_check==False:
+        logger.warn("Trying without bounds and initial conditions...")
         sol = curve_fit(function, x_data, y_data)
         covar_matrix = np.matrix(sol[1])
         a = sol[0][0]
         c = sol[0][1]
-        test_check = check_fit(a, c, covar_matrix)    
-        if test_check==False:
-            logger.warn("Bad power law fit. Results may be unphysical")
-            logger.warn("a: {0}".format(a))
-            logger.warn("c: {0}".format(c))
-            logger.warn("Covariance Matrix: {0}".format(covar_matrix))
-            return a, c, covar_matrix
-        else:
-            return a, c, covar_matrix
 
+    test_check = check_fit(sol)    
+    if test_check==False:
+        covar_matrix = np.matrix(sol[1])
+        a = sol[0][0]
+        c = sol[0][1]
+        logger.warn("Bad power law fit. Results may be unphysical")
+        logger.warn("a: {0}".format(a))
+        logger.warn("c: {0}".format(c))
+        logger.warn("Covariance Matrix: {0}".format(covar_matrix))
+        return a, c, covar_matrix
+    else:
+        return a, c, covar_matrix
+
+
+    covar_matrix = np.matrix(sol[1])
+    a = sol[0][0]
+    c = sol[0][1]
     logger.debug("a: {0}".format(a))
     logger.debug("c: {0}".format(c))
     logger.debug("Solution: {0}".format(sol))
@@ -298,22 +404,32 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
     return a, c, covar_matrix 
 
 #---------------------------------------------------------------
-def est_pulsar_flux(pulsar, obsid, plot_flux=False):
-
+def est_pulsar_flux(pulsar, obsid, plot_flux=False, f_mean=None):
     """
-    Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency. Frist tries to attain a apectral index from the ATNF database. If this fails, try to work out a spectrla index. If this fails, uses an index of -1.4 with uncertainty of 1.
+    Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency. 
+    First tries to attain a apectral index from the ATNF database. If this fails, try to work out a spectrla index. If this fails, uses an index of -1.4 with uncertainty of 1.
 
-    INPPUT:
-    pulsar: the puslar's name
-    OPTIONAL:
-    obsid: the Observation ID
-    f_mean: forces a calculation of the flux using this frequency, rather than the obs central freq
-        NOTE - should be supplied in Hz. One of either obsid or f_mean must be supplied. if both, uses f_mean
-    output: 
-    flux, flux_err: the expected pulsar flux and error at the central frequency of the obs in Jy
+    Parameters:
+    -----------
+    pulsar: string
+        The puslar's name. e.g. 'J2241-5236'
+    obsid: int
+        The observation ID
+    plot_flux: boolean
+        OPTIONAL - Whether or not to make a plot of the flux estimation. Default = False
+    f_mean: float
+        OPTIONAL - The frequency for which to estimate the flux in Hz. If not specified, will use the obsid mean frequqncy.
+    
+    Returns:
+    ------- 
+    flux: float
+        The estimated flux in Jy
+    flux_err: float
+        The estimated flux's uncertainty in Jy
     """
-    logger.debug("obtaining mean freq from obs metadata")
-    f_mean = mwa_metadb_utils.get_common_obs_metadata(obsid)[5]*1e6
+    if f_mean==None:
+        logger.debug("obtaining mean freq from obs metadata")
+        f_mean = mwa_metadb_utils.get_common_obs_metadata(obsid)[5]*1e6
     
     #query psrcat for flux values
     flux_queries = ["S40", "S50", "S60", "S80", "S100", "S150", "S200",\
@@ -337,17 +453,21 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False):
     #Get all available data from dataframe and check for missing values
     for query in flux_queries:
         flux = df[query][0]
-        #sometimes error values don't exist, causing a key error in pandas
-        try:
-            flux_err = df[query+"_ERR"][0]
-            if flux_err == 0.0:
-                logger.warn("Flux erorr for query: {0}, pulsar {1}, is zero. Assuming 20% uncertainty".format(query, pulsar))
+        if not np.isnan(flux):
+            #sometimes error values don't exist, causing a key error in pandas
+            try:
+                flux_err = df[query+"_ERR"][0]
+                if flux_err == 0.0:
+                    logger.warn("Flux error for query: {0}, pulsar {1}, is zero. Assuming 20% uncertainty".format(query, pulsar))
+                    flux_err = flux*0.2
+            except KeyError:
+                logger.warn("flux error value for {0}, pulsar {1}, not available. assuming 20% uncertainty".format(query, pulsar))
                 flux_err = flux*0.2
-        except KeyError:
-            logger.warn("flux error value for {0}, pulsar {1}, not available. Assuming 20% uncertainty".format(query, pulsar))
-            flux_err = flux*0.2
-        
-        if not np.isnan(flux) and not np.isnan(flux_err):
+           
+            if np.isnan(flux_err):
+                logger.warn("flux error value for {0}, pulsar {1}, not available. assuming 20% uncertainty".format(query, pulsar))
+                flux_err = flux*0.2
+
             freq_all.append(int(query.split()[0][1:])*1e6) #convert to Hz
             flux_all.append(flux*1e-3) #convert to Jy
             flux_err_all.append(flux_err*1e-3) #convert to Jy
@@ -444,7 +564,21 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False):
 
 #---------------------------------------------------------------
 def find_pulsar_w50(pulsar):
-    
+    """
+    Attempts to find a pulsar's W50 from the ATNF catalogue. If unavailable, will estimate
+
+    Paramters:
+    ---------
+    pulsar: string
+        The J-name of the pulsar. e.g. 'J2241-5236'
+
+    Returns:
+    --------
+    w50: float
+        The pulsar's W50
+    w50_err: float
+        The W50's uncertainty
+    """
     #returns W_50 and error for a pulsar from the ATNF archive IN SECONDS
     logger.debug("Accessing ATNF database")
     query = psrqpy.QueryATNF(params=["W50"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas 
@@ -491,28 +625,33 @@ def find_pulsar_w50(pulsar):
 #---------------------------------------------------------------
 def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"):
 
-    #Find the total integration time of a pulsar in an obsid
-    t_int=None
+    """
+    Find the total integration time of a pulsar in the primary beam of an obsid
+
+    Parameters:
+    ----------
+    obsid: int
+        The observation ID
+    pulsar: string
+        The J name of the pulsar
+    beg: int
+        OPTIONAL - The beginning of the observing time
+    end: int
+        OPTINAL - The end of the observing time
+    base_path: string
+        OPTIONAL - The location of the system's observations. Default = '/group/mwaops/vcs/'
+
+    Returns:
+    -------
+    beg: int
+        The time when the pulsar enters the beam in gps
+    end: int
+        The time when the pulsar exits thebeam in gps
+    t_int: int
+        The total time that the pulsar is in the beam
+    """
     if beg is None or end is None:
-        #see if files are on disk
-        logger.info("Checking if files for {0} are on disk".format(obsid))
-        comb_path = base_path + "/{0}/combined".format(obsid)
-        if os.path.exists(comb_path):
-            #see if the combined folder is not empty
-            if len(glob.glob("{0}/{1}*_ics.dat".format(comb_path, obsid)))>0:
-                logger.info("Files found on disk")
-                beg, end = process_vcs.find_combined_beg_end(obsid, base_path)
-                dur = end-beg
-                enter, exit = pulsar_beam_coverage(obsid, pulsar)
-                if (enter>=0. and exit <=1.) and (enter>=0 and exit >=0):
-                    t_int = dur*(exit-enter)
-                else:
-                    t_int=0.
-            else:
-                logger.warn("Combined folder is empty")
-    
-    if (beg is None or end is None) and t_int is None:
-        logger.info("Files not on disk. Using duration for entire observation")
+        logger.info("Using duration for entire observation")
         beg, end = mwa_metadb_utils.obs_max_min(obsid)
         t_int = end-beg
         enter, exit = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end)
@@ -535,21 +674,36 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
                     obs_metadata=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
+    Finds the system temperature and gain for an observation.
     A function snippet originally written by Nick Swainston - adapted for general VCS use.
-    REQUIRED:
-    pulsar: the J name of the pulsar. e.g. J2241-5236
-    obsid: the observation ID. e.g. 1226406800
 
-    OPTIONAL:
-    beg, end: the beginning and end times of the observation. If unsupplied, will check disk files or use entire obs
-    t_int: the integration time - the time the pulsar is in the beam
-    p_ra, p_dec: the pulsar's RA and Dec. If unsupplied, will try to find it from metadata
-    obs_metadata: metadata list from mwa_meatadb_utils. Will find if unsupplied
-    trcvr: the location of the MWA receiver temp csv file
+    Parameters:
+    -----------
+    pulsar: str
+        the J name of the pulsar. e.g. J2241-5236
+    obsid: int
+        The observation ID. e.g. 1226406800
+    beg: int
+        The beginning of the observing time
+    p_ra: str
+        OPTIONAL - the target's right ascension
+    p_dec: str
+        OPTIONAL - the target's declination
+    obs_metadata: list
+        OPTIONAL - the array generated from mwa_metadb_utils.get_common_obs_metadata(obsid)
+    trcvr: str
+        The location of the MWA receiver temp csv file. Default = '/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv'
 
-    OUTPUT:
-    t_sys, t_sys_err: the system temperature and its uncertainty
-    gain, gain_err: the gain and its uncertainty
+    Returns:
+    --------
+    t_sys: float
+        The system temperature
+    t_sys_err: float
+        The system temperature's uncertainty
+    gain: float
+        The system gain
+    gain_err: float
+        The gain's uncertainty
     """
 
     #get ra and dec if not supplied
@@ -615,23 +769,46 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
 
 #---------------------------------------------------------------
 def est_pulsar_sn(pulsar, obsid,\
-                 beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, plot_flux=False):
+                 beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, plot_flux=False,\
+                enter=None, exit=None):
     
     """
+    Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
     S/N = (s_mean * gain * sqrt(n_p * t_int * df * (period - W_50)/W_50)) / t_sys
     Note that W_50 should be W_equiv but we can't figure that out so we're estimating    
     
-    required:
-    Pulsar: Name of the pulsar e.g. J2241-5236
-    Obsid: Observation ID e.g. 1226406800
+    Parameters:
+    ----------
+    pulsar: string
+        Name of the pulsar e.g. J2241-5236
+    obsid: int
+        Observation ID e.g. 1226406800
+    beg: int
+        OPTIONAL - beginning of the observing time
+    end: int
+        OPTIONAL - end of the observing time
+    p_ra: str
+        OPTIONAL - the target's right ascension
+    p_dec: str
+        OPTIONAL - the target's declination
+    obs_metadata: list
+        OPTIONAL - the array generated from mwa_metadb_utils.get_common_obs_metadata(obsid)
+    plot_flux: boolean
+        OPTIONAL - whether or not to produce a plot of the flux estimation. Default = False
+    enter: float
+        OPTIONAL - The normalised enter time of the pulsar's coverage in the beam (between 0 and 1)
+    exit: float
+        OPTIONAL - The normalised exit time of the pulsar's covreage in the beam (between 0 and 1)
 
-    optional:
-    beg, end: beginning of integration time. NOTE - leve beg and end blank if files are on disk
-    p_ra, p_dec: the source's RA and Dec. Will try to find from the pulsar name if unsupplied
+    Returns:
+    --------
+    sn: float
+        The expected signal to noise ratio for the given inputs
+    sn_err: float
+        The uncertainty in the signal to noise ratio
     """
     #We will attain uncertainties for s_mean, gain, t_sys and W_50.
     # other uncertainties are considered negligible
-
 
     #Get some basic pulsar and obs info info
     if p_ra is None or p_dec is None:
@@ -644,14 +821,27 @@ def est_pulsar_sn(pulsar, obsid,\
     if obs_metadata is None:
         logger.debug("Obtaining obs metadata")
         obs_metadata = mwa_metadb_utils.get_common_obs_metadata(obsid)    
-    
+
     n_p = 2 #constant
     df = 30.72e6 #(24*1.28e6)
     f_mean = obs_metadata[5]*1e6
-    period = float(psrqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas["P0"])
 
+    #estimate flux
+    s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux, f_mean=f_mean)
+    
+    #fluxes may be Nones. If so, return None
+    if s_mean is None and s_mean_err is None:
+        return None, None   
+    
     #find integration time
-    beg, end, t_int = find_times(obsid, pulsar, beg, end)
+    if enter is not None and exit is not None:
+        t_int = exit-enter
+        if beg is not None and end is not None:
+            t_int = t_int*(end-beg)
+        else:
+            t_int = t_int*obs_metadata[3] #duration
+    else:
+        beg, end, t_int = find_times(obsid, pulsar, beg, end)
     if t_int<=0.:
         logger.warn("Pulsar not in beam for obs files or specificed beginning and end times")
         return 0., 0.
@@ -660,17 +850,11 @@ def est_pulsar_sn(pulsar, obsid,\
     t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid,\
                                  beg=beg, p_ra=p_ra, p_dec=p_dec, obs_metadata=obs_metadata)
  
-    #estimate flux
-    s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux)
-    
-    #fluxes may be Nones. If so, return None
-    if s_mean is None and s_mean_err is None:
-        return None, None   
- 
     #Find W_50
     W_50, W_50_err = find_pulsar_w50(pulsar)
 
     #calculate SN
+    period = float(psrqpy.QueryATNF(params=["P0"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas["P0"])
     SN = ((s_mean * gain)/t_sys) * np.sqrt(n_p * t_int * df * (period - W_50)/W_50)
 
     #Calculate SN uncertainty using variance formula. Assuming error from period, df and t_int is zero
