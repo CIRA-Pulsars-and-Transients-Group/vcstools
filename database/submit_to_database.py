@@ -397,8 +397,8 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     return subbands
 
 """
-Testi set:
-Run these form the vcstools directory
+Test set:
+Run these from the vcstools directory
 
 Scattered detection (crab):
 python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof tests/test_files/1127939368_J05342200.bestprof -L DEBUG 
