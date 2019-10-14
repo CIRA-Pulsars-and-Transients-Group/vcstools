@@ -94,7 +94,7 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         except:
             logger.error("Couldn't download {0}. Aborting.".\
                           format(os.basename(metafits_file)))
-            quit()
+            sys.exit(0)
         # clean up
         #os.remove('obscrt.crt')
         #os.remove('obskey.key')
@@ -128,10 +128,10 @@ def create_link(data_dir, target_dir, product_dir, link):
                 return
             else:
                 logger.error("The link {0} already exists but points at {1} while you asked it to point at {2}. Aborting...".format(link, os.readlink(link), target_dir))
-                quit()
+                sys.exit(0)
         else:
             logger.error("{0} is an existing directory and cannot be turned into a link. Aborting...".format(link))
-            quit()
+            sys.exit(0)
     else:
         #needs to point at vis on scratch for gpubox files
         logger.info("Trying to link {0} against {1}".format(link, target_dir))
@@ -166,7 +166,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
         if ics:
             logger.error("Data have not been recombined in the "
                          "archive yet. Exiting")
-            quit()
+            sys.exit(0)
         data_type = 11
         dl_dir = "{0}/{1}".format(data_dir, target_dir)
         dir_description = "Raw"
@@ -180,7 +180,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
         dir_description = "Combined"
     else:
         logger.error("Unable to determine data format from archive. Exiting")
-        quit()
+        sys.exit(0)
     mdir(dl_dir, dir_description)
     create_link(data_dir, target_dir, product_dir, link)
     batch_dir = product_dir+"/batch/"
@@ -624,7 +624,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         logger.error("You need to specify the path to the calibrator files, "
                      "either where the DIJs are or where the Offringa "
                      "calibration_solutions.bin file is. Aborting here")
-        quit()
+        sys.exit(0)
     DI_dir = os.path.abspath(DI_dir)
 
     # make_beam_small requires the start time in UTC, get it from the start
@@ -695,7 +695,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 jones_option = "-O {0} -C {1}".format(DI_file, int(gpubox) - 1)
             else:
                 logger.info("Please an accepted calibratin type. Aborting here.")
-                quit()
+                sys.exit(0)
 
             # Making pointing directories
             for pointing in pointing_list:
@@ -839,9 +839,9 @@ if __name__ == '__main__':
     group_beamform.add_argument('--cal_type', type=str, help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
     group_beamform.add_argument("-E", "--execpath", type=str, default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
 
-    parser.add_argument("-m", "--mode", type=str, choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'calibrate', 'beamform'], help="Mode you want to run. {0}".format(modes))
+    parser.add_argument("-m", "--mode", type=str, choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, help="Observation ID you want to process [no default]")
-    parser.add_argument('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type=int, help="Only required in 'calibrate' and 'download_cal' mode."
+    parser.add_argument('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type=int, help="Only required in 'download_cal' mode."
                           "Observation ID of calibrator you want to process. In case of " 
                           "in-beam calibration should be the same as input to -o (obsID). [no default]", default=None)
     parser.add_argument("-b", "--begin", type=int, help="First GPS time to process [no default]")
@@ -884,14 +884,20 @@ if __name__ == '__main__':
             sys.exit(0)
 
     #Option parsing
+    if not args.obs:
+        logger.error("Observation ID required, please put in with -o or --obs")
+        sys.exit(0)
     if args.all and (args.begin or args.end):
         logger.error("Please specify EITHER (-b,-e) OR -a")
-        quit()
+        sys.exit(0)
     elif args.all:
         args.begin, args.end = meta.obs_max_min(args.cal_obs\
                                if args.mode == 'download_cal' else args.obs)
+    elif args.mode is not 'download_cal' and (not args.begin or not args.end):
+        logger.error("Please specify EITHER (-b,-e) OR -a")
+        sys.exit(0)
     # make sure we can process increments smaller than 64 seconds when not in calibration related mode
-    if args.mode not in ['download_cal','calibrate']:
+    if args.mode is not 'download_cal':
         if args.end - args.begin +1 < args.increment:
             args.increment = args.end - args.begin + 1
     e_mail = ""
@@ -901,25 +907,22 @@ if __name__ == '__main__':
     if not args.mode:
       logger.error("Mode required {0}. Please specify with -m or --mode.".format(modes))
 
-      quit()
-    if not args.obs:
-        logger.error("Observation ID required, please put in with -o or --obs")
-        quit()
+      sys.exit(0)
     if args.begin and args.end:
         if args.begin > args.end:
             logger.error("Starting time is after end time")
-            quit()
+            sys.exit(0)
     if (args.mode == "beamform" or args.incoh):
         bf_format = ""
         if not (args.pointings or args.pointing_file):
             logger.info("Beamformer mode required that you specify pointings "
                         "using either -p or --pointing_file.")
-            quit()
+            sys.exit(0)
         #check if they're using more than one of the pointing options
         if (args.pointings and args.pointing_file):
             logger.info("Beamformer mode requires only one pointing option. "
                         "Please use either -p or --pointing_file.")
-            quit()
+            sys.exit(0)
         if (args.bf_out_format == 'psrfits' or args.bf_out_format == 'both'):
             bf_format +=" -p"
             logger.info("Writing out PSRFITS.")
@@ -989,12 +992,12 @@ if __name__ == '__main__':
         if not args.cal_obs:
             logger.error("You need to also pass the calibrator observation ID."
                          " Aborting here.")
-            quit()
+            sys.exit(0)
         if args.cal_obs == args.obs:
             logging.error("The calibrator obsID cannot be the same as the "
                           "target obsID -- there are not gpubox files for "
                           "VCS data on the archive.")
-            quit()
+            sys.exit(0)
         data_dir = data_dir.replace(str(args.obs), str(args.cal_obs))
         mdir(data_dir, "Calibrator Data")
         download_cal(args.obs, args.cal_obs, data_dir, product_dir, sys.argv, 
@@ -1006,14 +1009,14 @@ if __name__ == '__main__':
             logger.error("You need to specify the path to either where the "
                          "DIJs are or where the offringe calibration_solution.bin"
                          "file is. Aborting here.")
-            quit()
+            sys.exit(0)
         if args.flagged_tiles:
             flagged_tiles_file = os.path.abspath(args.flagged_tiles)
             if not os.path.isfile(args.flagged_tiles):
                 logger.error("Your are not pointing at a file with your input "
                              "to --flagged_tiles. Aborting here as the "
                              "beamformer will not run...")
-                quit()
+                sys.exit(0)
         else:
             if os.path.isfile("{0}/flagged_tiles.txt".format(args.DI_dir)):
                 flagged_tiles_file = "{0}/flagged_tiles.txt".format(args.DI_dir)
@@ -1031,7 +1034,7 @@ if __name__ == '__main__':
         else:
             logger.error("Please use either --pointing, --pointing_list or "
                          "--pointing_file when beamforming. Exiting here.")
-            quit()
+            sys.exit(0)
         logger.debug(pointing_list)
         
         coherent_beam(args.obs, args.begin, args.end, 
@@ -1045,4 +1048,4 @@ if __name__ == '__main__':
     else:
         logger.error("Somehow your non-standard mode snuck through. "
                      "Try again with one of {0}".format(modes))
-        quit()
+        sys.exit(0)

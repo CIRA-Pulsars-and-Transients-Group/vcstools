@@ -93,11 +93,13 @@ def deg2sex(ra, dec):
     """
 
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.deg,u.deg))
-    coords = c.to_string('hmsdms')
-    coords = coords.replace('h',':').replace('d',':').replace('m',':').replace('s','')
+    #coords = c.to_string('hmsdms')
+    #coords = coords.replace('h',':').replace('d',':').replace('m',':').replace('s','')
+    rajs = c.ra.to_string(unit=u.hour, sep=':')
+    decjs = c.dec.to_string(unit=u.degree, sep=':')
 
     # return RA and DEC in "hh:mm:ss.ssss dd:mm:ss.ssss" form
-    return coords
+    return rajs, decjs
 
 
 def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
@@ -134,41 +136,56 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
 
 def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False):
     """
-    Creates a csv file of source names, RAs and Decs using web catalogues for ['Pulsar', 'FRB', 'GC', 'RRATs'].
+    Will search different source catalogues and extract all the source names, RAs, Decs and, if requested, DMs
+
+    Parameters
+    ----------
+    source_type: string
+        The type of source you would like to get the catalogue for.
+        Your choices are: ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
+        Default: 'Pulsar'
+    pulsar_list: list
+        List of sources you would like to extract data for.
+        If None is given then it will search for all available sources
+        Default: None
+    max_dm: float
+        If the source_type is 'Pulsar' then you can set a maximum dm and the function will only
+        return pulsars under that value.
+        Default: 1000.
+    include_dm: Bool
+        If True the function will also return the DM if it is available at the end of the list
+        Default: False
+
+    Returns
+    -------
+    result: list list
+        A list for each source which contains a [source_name, RA, Dec (, DM)] 
+        where RA and Dec are in the format HH:MM:SS
     """
-    modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs']
+    modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
     if source_type not in modes:
         logger.error("Input source type not in known catalogues types. Please choose from: {0}".format(modes))
         return None
 
-    #Download the catalogue from the respective website
-    if source_type == 'FRB':
-        website = ' http://www.frbcat.org/frbcat.csv'
-        web_table = 'frbcat.csv'
-    elif source_type == 'RRATs':
-        website = 'http://astro.phys.wvu.edu/rratalog/rratalog.txt'
-        web_table = 'rratalog.txt'
-    if source_type != 'Pulsar' and source_type != 'rFRB':
-        logger.info("Downloading {0} catalogue from {1}".format(source_type, website))
-        os.system('wget {0}'.format(website))
-
     #Get each source type into the format [[name, ra, dec]]
     name_ra_dec = []
     if source_type == 'Pulsar':
-        name_ra_dec = get_psrcat_ra_dec(pulsar_list, max_dm=max_dm, include_dm=include_dm)
+        name_ra_dec = get_psrcat_ra_dec(pulsar_list=pulsar_list, max_dm=max_dm, include_dm=include_dm)
     
     elif source_type == 'FRB':
-        #TODO it's changed and currently not working atm
-        with open(web_table,"r") as in_txt:
-            lines = in_txt.readlines()
-            data = []
-            for l in lines[7:]:
-                ltemp = l.strip('<td>').split('</td>')
-                logger.info(ltemp)
-                if len(ltemp) > 2:
-                    ratemp = ltemp[7].lstrip('<td>')
-                    dectemp = ltemp[8].lstrip('<td>')
-                    name_ra_dec.append([ltemp[0].lstrip('<td>')[:9],ratemp,dectemp])
+        import json
+        import urllib.request
+        frb_data = json.load(urllib.request.urlopen('http://frbcat.org/products?search=&min=0&max=1000&page=1'))
+        for frb in frb_data['products']:
+            name = frb['frb_name']
+            logger.debug('FRB name: {}'.format(name))
+            ra   = frb['rop_raj']
+            dec  = frb['rop_decj']
+            dm   = frb['rmp_dm'].split("&")[0]
+            if include_dm:
+                name_ra_dec.append([name, ra, dec, dm])
+            else:
+                name_ra_dec.append([name, ra, dec])
 
     elif source_type == "rFRB":
         info = get_rFRB_info(name=pulsar_list)
@@ -180,25 +197,51 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
                     name_ra_dec.append([line[0], line[1], line[2]]) 
 
     elif source_type == 'RRATs':
-        with open(web_table,"r") as in_txt:
-            lines = in_txt.readlines()
-            data = []
-            for l in lines[1:]:
-                columns = l.strip().replace(" ", '\t').split('\t')
-                temp = []
-                if pulsar_list == None or (columns[0] in pulsar_list):
-                    for entry in columns:
-                        if entry not in ['', ' ', '\t']:
-                            temp.append(entry.replace('--',''))
-                    if include_dm:
-                        name_ra_dec.append([temp[0], temp[4], temp[5], temp[3]])
-                    else:
-                        name_ra_dec.append([temp[0], temp[4], temp[5]])
-    
-    #remove web catalogue tables
-    if source_type !='Pulsar' and source_type != 'rFRB':
-        os.remove(web_table)
+        import urllib.request
+        rrats_data = urllib.request.urlopen('http://astro.phys.wvu.edu/rratalog/rratalog.txt').read().decode()
+        data = []
+        for rrat in rrats_data.split("\n")[1:-1]:
+            columns = rrat.strip().replace(" ", '\t').split('\t')
+            temp = []
+            if pulsar_list == None or (columns[0] in pulsar_list):
+                for entry in columns:
+                    if entry not in ['', ' ', '\t']:
+                        temp.append(entry.replace('--',''))
+                if include_dm:
+                    name_ra_dec.append([temp[0], temp[4], temp[5], temp[3]])
+                else:
+                    name_ra_dec.append([temp[0], temp[4], temp[5]])
 
+    elif source_type == 'Fermi':
+        # read the fermi targets file
+        try:
+            fermi_loc = os.environ['FERMI_CAND_FILE']
+        except:
+            logger.warn("Fermi candidate file location not found. Returning nothing")
+            return []
+        with open(fermi_loc,"r") as fermi_file:
+            import csv
+            csv_reader = csv.DictReader(fermi_file)
+            for fermi in csv_reader:
+                name = fermi['Source Name'].split()[-1]
+                ra  = fermi[' RA J2000']
+                dec = fermi[' Dec J2000']
+                raj, decj = deg2sex(float(ra), float(dec))
+                pos_u = float(fermi[' a (arcmin)'])
+                if include_dm:
+                    # this actually returns the position uncertainty not dm
+                    name_ra_dec.append([name, raj, decj, pos_u])
+                else:
+                    name_ra_dec.append([name, raj, decj])
+
+    #Remove all unwanted sources
+    if pulsar_list is not None:
+        temp = []
+        for line in name_ra_dec:
+            if line[0] in pulsar_list:
+                temp.append(line)
+        name_ra_dec = temp
+    
     return name_ra_dec
 
 
@@ -285,22 +328,6 @@ def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
                 ra_dec_list[i][ra_dec_col[n]] = ra_dec_list[i][ra_dec_col[n]][:(11+n)]
 
     return ra_dec_list
-
-
-def calcFWHM(freq):
-    """
-    Calculate the FWHM for the beam assuming ideal response/gaussian-like profile. Will eventually be depricated.
-
-    calcFWHM(freq)
-    Args:
-        freq: observation frequency in MHz
-    """
-    c = 299792458.0                 # speed of light (m/s)
-    Dtile = 4.0                     # tile size (m) - incoherent beam
-    freq = freq * 1e6               # convert from MHz to Hz
-    fwhm = 1.2 * c / (Dtile * freq) # calculate FWHM using standard formula
-
-    return fwhm
 
 
 def find_obsids_meta_pages(params={'mode':'VOLTAGE_START'}):
@@ -394,7 +421,7 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
         min_power: zenith normalised power cut off 
     """
     from scipy.interpolate import UnivariateSpline
-    time_steps = range(0, duration, dt) 
+    time_steps = np.array(range(0, duration, dt), dtype=float)
 
     #For each time step record the min power so even if the source is in 
     #one freq channel it's recorded
@@ -406,7 +433,13 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
         enter = 0.
         exit = 1.
     else:
-        spline = UnivariateSpline(time_steps, powers_freq_min , s=0)
+        powers_freq_min = np.array(powers_freq_min)
+        logger.debug("time_steps: {}".format(time_steps))
+        logger.debug("powers: {}".format(powers_freq_min))
+        try:
+            spline = UnivariateSpline(time_steps, powers_freq_min , s=0.)
+        except:
+            return None, None
         if len(spline.roots()) == 2: 
             enter, exit = spline.roots()
             enter /= duration
@@ -427,7 +460,7 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
 
 def cal_on_database_check(obsid):
     from mwa_pulsar_client import client
-    web_address = 'mwa-pawsey-volt01.pawsey.org.au'
+    web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
     auth = ('mwapulsar','veovys9OUTY=')
     detection_list = client.detection_list(web_address, auth)
     
@@ -619,10 +652,12 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                 source_ob_power = powers[on][sn]
                 if max(source_ob_power) > min_power:
                     duration = obsid_meta[on][3]
+                    logger.debug("Running beam_enter_exit on obsid: {}".format(obsid))
                     enter, exit = beam_enter_exit(source_ob_power,duration,
                                                   dt=dt, min_power=min_power)
-                    source_data.append([obsid, duration, enter, exit,
-                                        max(source_ob_power)[0]])
+                    if enter is not None:
+                        source_data.append([obsid, duration, enter, exit,
+                                            max(source_ob_power)[0]])
             # For each source make a dictionary key that contains a list of
             # lists of the data for each obsid
             output_data[source[0]] = source_data
@@ -684,7 +719,7 @@ def write_output_source_files(output_data,
                     #used or has been calibrated
                     logger.info("Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid))
                     cal_check_result = cal_on_database_check(obsid)
-                    output_file.write(" {0}\n".format(cal_check_result))
+                    output_file.write("   {0}\n".format(cal_check_result))
                 else:
                     output_file.write("\n")
     return
@@ -749,7 +784,7 @@ if __name__ == "__main__":
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
     sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"', default = None)
     sourargs.add_argument('--max_dm',type=float, default = 250., help='The maximum DM for pulsars. All pulsars with DMs higher than the maximum will not be included in output files. Default=250.0')
-    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs'] to search for all sources in their respective web catalogue.")
+    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs', Fermi] to search for all sources in their respective web catalogue.")
     sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
     sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing the source\'s coordinates to be searched for in the format "RA,DEC" "RA,DEC". Must be enterered as either: "hh:mm:ss.ss,+dd:mm:ss.ss" or "deg,-deg". Please only use one format.')
     #finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
