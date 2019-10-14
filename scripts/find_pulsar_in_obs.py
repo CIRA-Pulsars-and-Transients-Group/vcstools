@@ -395,7 +395,7 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
         min_power: zenith normalised power cut off 
     """
     from scipy.interpolate import UnivariateSpline
-    time_steps = range(0, duration, dt) 
+    time_steps = np.array(range(0, duration, dt), dtype=float)
 
     #For each time step record the min power so even if the source is in 
     #one freq channel it's recorded
@@ -407,7 +407,13 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
         enter = 0.
         exit = 1.
     else:
-        spline = UnivariateSpline(time_steps, powers_freq_min , s=0)
+        powers_freq_min = np.array(powers_freq_min)
+        logger.debug("time_steps: {}".format(time_steps))
+        logger.debug("powers: {}".format(powers_freq_min))
+        try:
+            spline = UnivariateSpline(time_steps, powers_freq_min , s=0.)
+        except:
+            return None, None
         if len(spline.roots()) == 2: 
             enter, exit = spline.roots()
             enter /= duration
@@ -428,7 +434,7 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
 
 def cal_on_database_check(obsid):
     from mwa_pulsar_client import client
-    web_address = 'mwa-pawsey-volt01.pawsey.org.au'
+    web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
     auth = ('mwapulsar','veovys9OUTY=')
     detection_list = client.detection_list(web_address, auth)
     
@@ -620,10 +626,12 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                 source_ob_power = powers[on][sn]
                 if max(source_ob_power) > min_power:
                     duration = obsid_meta[on][3]
+                    logger.debug("Running beam_enter_exit on obsid: {}".format(obsid))
                     enter, exit = beam_enter_exit(source_ob_power,duration,
                                                   dt=dt, min_power=min_power)
-                    source_data.append([obsid, duration, enter, exit,
-                                        max(source_ob_power)[0]])
+                    if enter is not None:
+                        source_data.append([obsid, duration, enter, exit,
+                                            max(source_ob_power)[0]])
             # For each source make a dictionary key that contains a list of
             # lists of the data for each obsid
             output_data[source[0]] = source_data
@@ -699,7 +707,7 @@ def write_output_source_files(output_data,
                     #used or has been calibrated
                     logger.info("Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid))
                     cal_check_result = cal_on_database_check(obsid)
-                    output_file.write(" {0}\n".format(cal_check_result))
+                    output_file.write("   {0}\n".format(cal_check_result))
                 else:
                     output_file.write("\n")
     return
