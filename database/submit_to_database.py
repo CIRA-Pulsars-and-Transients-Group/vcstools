@@ -280,8 +280,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     trcvr: the file location of antena temperatures
     """
     #unpack data
-    obsid, pulsar, dm, period, period_uncer, obsstart, time_detection, profile,
-           num_bins = bestprof_data
+    obsid, pulsar, dm, period, period_uncer, obsstart, time_detection, profile, num_bins = bestprof_data
     obsid, ra_obs, dec_obs, time_obs, delays, centrefreq, channels = metadata
     
     
