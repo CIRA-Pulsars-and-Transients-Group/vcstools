@@ -62,18 +62,39 @@ def plot_flux_estimation(freqs, fluxes, flux_errors, pulsar, obsid, alpha=None, 
 #---------------------------------------------------------------
 def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=False):
     """
-    Gets an estimate of S/N with error from a pulse profile
-    Based on code oringally writted by Nick Swainston
+    Estimates the signal to noise ratio from a pulse profile. Returns are in list form. Will return more for verbose==True setting, explained below. 
+    NOTE: user must supply EITHER a betprof path OR prof_data and period of the pulse profile.
+    Based on code oringally writted by Nick Swainston.
 
-    Inputs:
-    user must supply EITHER a bestprof path OR prof_data and period of your pulse profile
-    the profile data should be a list of floats that makes the pulse profile
-    verbose: a boolean that determines whether to return more detailed information. Discussed below
+    Parameters:
+    -----------
+    prof_path: string
+        OPTIONAL - The path of the bestprof file
+    prof_data: list
+        OPTIONAL - A list of floats that contains the pulse profile
+    period: float
+        OPTIONAL - The pulsar's period in ms
+    verbose: boolean
+        OPTIONAL - Determines whether to return more detailed information. Detailed below
 
-    Return:
-    [sn, u_sn]: the signal to noise and its uncertainty
-    verbose=True will return much more information in the form: 
-    [sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins w_equiv_ms, u_w_equiv_ms, scattered]
+    Returns:
+    --------
+    sn: float
+        The estimated signal to noise ratio
+    u_sn: float
+        The estimated signal to noise ratio's its uncertainty
+    flags: list
+        VERBOSE - a list of flagged data points
+    w_equiv_bins: float
+        VERBOSE - the equivalent width of the profile measured in bins
+    u_w_equiv_bins: float
+        VERBOSE - the uncertaintiy in w_equiv_bins
+    w_equiv_ms: float
+        VERBOSE - the equivalent width of the profile measured in ms
+    u_w_equiv_ms: float
+        VERBOSE - the uncertainty in w_equiv_ms
+    scattered: boolean
+        VERBOSE - when true, the profile is highly scattered
     """
     if prof_path is None and (prof_data is None or period is None):
         logger.warn("Insufficient information to attain SN estimate from profile. Returning Nones")
@@ -160,14 +181,32 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
 #---------------------------------------------------------------
 def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
     """
-    Finds the normalised time that a pulsar is in the beam for a given obsidtime that a pulsar is in the primary beam for the obsid files
-    #beg and end should only be supplied if the files are not present on the system
-    #if pulsar is not in beam, returns -1, -1
+    Finds the normalised time that a pulsar is in the beam for a given obsid
+    If pulsar is not in beam, returns None, None
 
+    Parameters:
+    -----------
+    obsid: int
+        The observation ID
+    pulsar: string
+        The pulsar's J name
+    beg: int
+        OPTIONAL - The beginning of the observing time in gps time
+    end: int
+        OPTIONAL - The end of the observing time in gps time
+    ondisk: boolean
+        Whether to use files that are on-disk for beginning and end times. Default=False
+
+    Returns:
+    --------
+    enter_files: float
+        A float between 0 and 1 that describes the normalised time that the pulsar enters the beam
+    exit_files: float
+         a float between 0 and 1 that describes the normalised time that the pulsar exits the beam
+    """
     #find the enter and exit times of pulsar normalized with the observing time
     names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar])
     beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec)
-
     enter_obs_norm = beam_source_data[obsid][0][1]
     exit_obs_norm = beam_source_data[obsid][0][2]
 
@@ -211,8 +250,8 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
         exit_files=1.
     if enter_files>1. or exit_files<0.:
         logger.warn("source {0} is not in the beam for the files on disk".format(pulsar))
-        enter_files = -1
-        exit_files = -1
+        enter_files = None
+        exit_files = None
 
     return enter_files, exit_files
 
