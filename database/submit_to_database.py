@@ -280,6 +280,7 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     bestprof_data: list from the function get_from_bestprof
     trcvr: the file location of antena temperatures
     """
+
     #unpack the bestprof_data
     #[obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
     obsid, pulsar, _, period, _, _, _, profile, num_bins = bestprof_data 
@@ -290,12 +291,13 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     t_sys, u_t_sys, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid)
    
     #estimate S/N
-    sn, u_sn, flagged_profile, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattered = \
-    snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
+    sn, u_sn, flagged_profile, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
   
     logger.debug("Profile scattered? {0}".format(scattered))
     logger.debug("S/N: {0} +/- {1}".format(sn, u_sn)) 
     if scattered == False:
+
+  
         #final calc of the mean fluxdesnity in mJy
         S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
                  math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
