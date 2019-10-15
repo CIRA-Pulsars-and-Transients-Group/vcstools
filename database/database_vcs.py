@@ -8,6 +8,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 DB_FILE = os.environ['CMD_VCS_DB_FILE']
+TIMEOUT=600
 
 def dict_factory(cursor, row):
     d = {}
@@ -27,7 +28,7 @@ def database_command(options, obsid):
                 if vars(options)[a] != None:
                     opts_string += "--" + str(a) + " " + str(vars(options)[a]) + " "
                         
-        con = lite.connect(DB_FILE)
+        con = lite.connect(DB_FILE, timeout=TIMEOUT)
         con.isolation_level = 'EXCLUSIVE'
         con.execute('BEGIN EXCLUSIVE')
         with con:
@@ -60,7 +61,7 @@ def add_database_function():
     
 def database_script_start(vcs_id, command, arguments):
     import datetime
-    con = lite.connect(DB_FILE)
+    con = lite.connect(DB_FILE, timeout=TIMEOUT)
     with con:
         cur = con.cursor()
         cur.execute("INSERT INTO Commands (trackvcs, Command, Arguments, Started) VALUES(?, ?, ?, ?)", (vcs_id, command, arguments, datetime.datetime.now()))
@@ -70,7 +71,7 @@ def database_script_start(vcs_id, command, arguments):
 def database_script_stop(rownum, errorcode):    
     end_time = datetime.datetime.now()
 
-    con = lite.connect(DB_FILE)
+    con = lite.connect(DB_FILE, timeout=TIMEOUT)
     with con:
         cur = con.cursor()
         cur.execute("SELECT Ended FROM Commands WHERE Rownum=?", (rownum,))
@@ -130,7 +131,7 @@ if __name__ == '__main__':
     elif opts.mode == "e":
         database_script_stop(opts.rownum, opts.errorcode)
     elif opts.mode == "vc" or opts.mode == "vs":
-        con = lite.connect(DB_FILE)
+        con = lite.connect(DB_FILE, timeout=TIMEOUT)
         con.row_factory = dict_factory
     
         if opts.mode == "vc":

@@ -117,7 +117,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
         logger.error("We have {0} files but expected {1}".format(files_in_dir, expected_files))
         error = True
     for line in output[1:]:
-        if 'dat' in line:
+        if b'dat' in line:
             logger.warning("Deleted {0} due to wrong size.".format(line.strip()))
             error = True
     if not error:
@@ -133,8 +133,8 @@ def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_siz
             return True, 0
 
     if not startsec:
-        output = subprocess.Popen(["ls -ltr %s/*ics.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5 \" (expected %s)\"}'" %(directory, required_size, required_size)],
-                                  stdout=subprocess.PIPE, shell=True).communicate()[0]
+        #output = subprocess.Popen(["ls -ltr %s/*ics.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5 \" (expected %s)\"}'" %(directory, required_size, required_size)],
+        #                          stdout=subprocess.PIPE, shell=True).communicate()[0]
         command = "ls -l %s/*ics.dat | ((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | " %(directory) + \
             "awk '($5!=%s){print $9}' | tee >> %s/ics_all.txt | xargs rm -rf) 4>&1;" %(required_size, directory) + \
             "cat %s/ics_all.txt; rm -rf %s/ics_all.txt" %(directory, directory)
@@ -154,7 +154,7 @@ def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_siz
         logger.error("We have {0} ics-files but expected {1}".format(files_in_dir, n_secs))
         error = True
     for line in output[1:]:
-        if 'dat' in line:
+        if b'dat' in line:
             error = True
             line = line.strip()
             logger.error("Deleted {0} due to wrong size.".format(line))
