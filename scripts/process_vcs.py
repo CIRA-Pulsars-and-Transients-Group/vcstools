@@ -893,11 +893,12 @@ if __name__ == '__main__':
     elif args.all:
         args.begin, args.end = meta.obs_max_min(args.cal_obs\
                                if args.mode == 'download_cal' else args.obs)
-    elif args.mode is not 'download_cal' and (not args.begin or not args.end):
+    elif args.mode != 'download_cal' and (not args.begin or not args.end):
+        logger.debug(args.mode)
         logger.error("Please specify EITHER (-b,-e) OR -a")
         sys.exit(0)
     # make sure we can process increments smaller than 64 seconds when not in calibration related mode
-    if args.mode is not 'download_cal':
+    if args.mode != 'download_cal':
         if args.end - args.begin +1 < args.increment:
             args.increment = args.end - args.begin + 1
     e_mail = ""
