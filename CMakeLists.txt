@@ -3,17 +3,18 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-project(vcstools VERSION 1.5.0)
+#project(vcstools VERSION 1.5.0)
 
 # Set up version number
 execute_process(
-  COMMAND git log -1 --format=%h
+  COMMAND bash -c "git describe --tags --long | sed 's/-/./' | sed 's/-/_/'"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE VERSION_GIT
+  OUTPUT_VARIABLE VCSTOOLS_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-set(VCSTOOLS_VERSION "${PROJECT_VERSION}_${VERSION_GIT}")
+#set(VCSTOOLS_VERSION "${PROJECT_VERSION}_${VERSION_GIT}")
+message($VCSTOOLS_VERSION)
 
 add_definitions( -DVERSION_BEAMFORMER="${VCSTOOLS_VERSION}" )
 
@@ -40,8 +41,5 @@ endif()
 add_subdirectory(make_beam)
 add_subdirectory(make_psrfits)
 add_subdirectory(read_mwac)
-add_subdirectory(scripts)
-add_subdirectory(utils)
-add_subdirectory(database)
 
 INCLUDE(InstallRequiredSystemLibraries)
