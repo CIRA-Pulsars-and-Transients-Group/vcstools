@@ -619,8 +619,7 @@ if __name__ == "__main__":
     #get info from .bestprof file
     if args.bestprof:
         bestprof_data = get_from_bestprof(args.bestprof)
-        obsid, pulsar, dm, period, period_uncer, obsstart, time_detection,
-               profile, num_bins = bestprof_data
+        obsid, pulsar, dm, period, period_uncer, obsstart, time_detection, profile, num_bins = bestprof_data
         if obsid is None and args.obsid:
             obsid = args.obsid
         elif obsid is None:
