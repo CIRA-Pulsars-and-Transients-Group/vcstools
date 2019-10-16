@@ -400,18 +400,18 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
 
 """
 Test set:
-Run these from the vcstools directory
+Run these from the vcstools/database directory
 
 Scattered detection (crab):
 python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof tests/test_files/1127939368_J05342200.bestprof -L DEBUG 
 Expected flux: 7500
 
 Weak detection (it's a 10 min detection):
-python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J0034-0721 --bestprof /group/mwaops/vcs/1222697776/pointings/00:34:08.87_-07:21:53.40/1222697776_PSR_J0034-0721.pfd.bestprof
+python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J0034-0721 --bestprof ../tests/test_files/1222697776_PSR_J0034-0721.pfd.bestprof
 Expected flux: 640
 
 Medium detection:
-python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J2330-2005 --bestprof /group/mwaops/xuemy/pol_census/1222697776/pfold/1222697776_PSR_J2330-2005.pfd.bestprof
+python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J2330-2005 --bestprof tests/test_files/1222697776_PSR_J2330-2005.pfd.bestprof
 Expected flux: ~180
 
 Strong detection:
