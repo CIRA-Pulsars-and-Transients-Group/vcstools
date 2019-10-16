@@ -50,7 +50,7 @@ length=`ls ${basedir}/combined/*ics.dat | wc -l`
 #OLDIFS=$IFS
 #IFS='.'
 first_file=(`ls ${basedir}/combined/*ics.dat | head -n 1`)
-first_time=${first_file:(-18):10}
+first_time=${first_file:-18:10}
 #IFS=$' \t\n'
 
 time_out=(`timeconvert.py --gps=$first_time 2>/dev/null`)
@@ -65,8 +65,8 @@ bandwidth=`bc -l <<< "1.28 * ${n_chans}"`
 
 # get the centre frequency
 if [ ${lowchan} -eq 0 ];then
-    freq_out=( `fits_db.py $1` )
-    freq=${freq_out[2]}
+    freq=`obs_query.py $1 -cf`
+    #freq=${freq_out}
 else
     freq=`bc -l <<< "(1.28 * ${lowchan} - 0.64) + ${bandwidth} / 2."`
 fi
