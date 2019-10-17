@@ -685,8 +685,8 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
     if p_ra is None or p_dec is None:
         logger.debug("Obtaining pulsar RA and Dec from ATNF")
         ra_dec_q = psrqpy.QueryATNF(params=["RAJ", "DECJ"], psrs=[pulsar], loadfromdb=ATNF_LOC).pandas 
-        p_ra = ra_dec_q["RAJ"]
-        p_dec = ra_dec_q["DECJ"]
+        p_ra = ra_dec_q["RAJ"][0]
+        p_dec = ra_dec_q["DECJ"][0]
     
     #get metadata if not supplied
     if obs_metadata is None:
@@ -704,12 +704,16 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
         
     #Find 'start_time' for fpio
     obs_start, obs_end = mwa_metadb_utils.obs_max_min(obsid)
-    start_time = beg-obs_start
+    start_time = beg-obsid
 
     #Get important info    
     trec_table = Table.read(trcvr,format="csv")
     ntiles = 128 #TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
-    beam_power = fpio.get_beam_power_over_time(obs_metadata,[[pulsar, p_ra, p_dec]],\
+    print("get_beam_poower_over_time inputs:")
+    print("obs_metadata: {}".format(obs_metadata))
+    print("pulsar, ra, dec: {}".format([[pulsar, p_ra, p_dec]]))
+    print("start_time: {}".format(start_time))
+    beam_power = fpio.get_beam_power_over_time(obs_metadata,np.array([[pulsar, p_ra, p_dec]]),\
                                                dt=100, start_time=start_time)
     beam_power = np.mean(beam_power)
 
@@ -729,9 +733,17 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
 
     alts, azs, zas = mwa_metadb_utils.mwa_alt_az_za(obsid, p_ra, p_dec)
     theta = np.radians(zas)
-    logger.debug("Theta: {0}".format(theta))
     gain = submit_to_database.from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
     gain_err = gain * ((1. - beam_power)*0.12 + 2.*(theta/(0.5*np.pi))**2. + 0.1)
+
+    print("Beam Power: {}".format(beam_power))
+    print("Centre Freq: {}MHz".format(centrefreq))
+    print("N tiles: {}".format(ntiles))
+    print("obs_metadata:{}".format(obs_metadata))
+    print("pulsar, p_ra, p_dec: {0}, {1}, {2}".format(pulsar, p_ra, p_dec))
+    print("start time: {}".format(start_time))
+    print("Gain: {}".format(gain))
+    #TODO: delete these^ they're just for testing gain solution    
 
     #sometimes gain_err is a numpy array and sometimes it isnt so i have to to this...
     try:
