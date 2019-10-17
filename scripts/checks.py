@@ -56,9 +56,9 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
     # in case we're checking for downloaded tarballs also need to check ics-files.
     if data_type == 'tar_ics':
         logger.info("Now checking ICS files")
-        error, n_ics = check_recombine_ics(directory=directory, 
-                                           startsec=startsec, 
-                                           n_secs=n_secs,#n_files_expected, 
+        error, n_ics = check_recombine_ics(directory=directory,
+                                           startsec=startsec,
+                                           n_secs=n_secs,#n_files_expected,
                                            obsID=obsID)
         n_files_expected *= 2
         files_in_dir += n_ics
@@ -190,7 +190,7 @@ def get_files_and_sizes(obsID, mode):
     #files = files[mask]
     #sizes=np.array([meta['files'][f]['size'] for f in files])
     logger.info("...Done. Expect all on database to be {0} bytes in size...".format(sizes[0]))
-    
+
     size_check = True
     for s in sizes:
         if not s == sizes[0]:
@@ -239,7 +239,7 @@ def opt_parser(loglevels):
                             "to check the files in. Default is /astro/mwaops/vcs/" + \
                             "[obsID]/[raw,combined]")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                     choices=loglevels.keys(), default="INFO")
     return parser.parse_args()
 
@@ -251,7 +251,7 @@ if __name__ == '__main__':
 
     args = opt_parser(loglevels)
     work_dir_base = '/astro/mwaops/vcs/' + str(args.obsID)
-    
+
     # set up the logger for stand-alone execution
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()

@@ -33,9 +33,9 @@ module load vcstools/{version}
 # NOTE: --gid option removed after discussion in helpdesk ticket GS-9370
 
 
-def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={}, 
+def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
                  module_list=[], vcstools_version="master",
-                 batch_dir="batch/", depend=None, depend_type='afterok', 
+                 batch_dir="batch/", depend=None, depend_type='afterok',
                  submit=True, outfile=None, queue="cpuq", export="NONE",
                  gpu_res=None, mem=1024, cpu_threads=1, temp_mem=None,
                  nice=0):
@@ -48,14 +48,14 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         The base name that is used to create the "`name`.batch" and "`name`.out" files.
 
     commands : list of strs
-        The actual bash script commands you wnat to run. 
+        The actual bash script commands you wnat to run.
         Expects a list where each element is a single line of the bash script.
 
     tmpl : str
-        A template header string with format place holders: export, outfile, 
+        A template header string with format place holders: export, outfile,
         cluster, header and script.
         This is used to create the final string to be written to the job script.
-        For this function, it is required to be SLURM compliant. 
+        For this function, it is required to be SLURM compliant.
         Default: `SLURM_TMPL`
 
     slurm_kwargs : dict [optional]
@@ -64,7 +64,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         Default: `{}` (empty dictionary, i.e. no additional header parameters)
 
     module_list : list of str [optional]
-        A list of module names (including versions if applicable) that will 
+        A list of module names (including versions if applicable) that will
         be included in the header for the batch
         scripts. e.g. ["vcstools/master", "mwa-voltage/master", "presto/master"] would append
             module load vcstools/master
@@ -77,7 +77,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         The version of vcstools to load. Default: master.
 
     batch_dir : str [optional]
-        The LOCAL directory where you want to write the batch scripts 
+        The LOCAL directory where you want to write the batch scripts
         (i.e. it will write to `$PWD/batch_dir`).
         Default: "batch/"
 
@@ -87,7 +87,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         Default: `None`
 
     depend_type : str [optional]
-        The type of slurm dependancy required. For example if you wanted the 
+        The type of slurm dependancy required. For example if you wanted the
         job to run after the jobs have been terminated use 'afterany'.
         Default: "afterok"
 
@@ -105,7 +105,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         Default: "cpuq"
 
     export : str [optional]
-        Switch that lets SLURM use your login environment on the compute 
+        Switch that lets SLURM use your login environment on the compute
         nodes ("ALL") or not ("NONE").
         Default: "None"
 
@@ -128,7 +128,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         The unique SLURM job ID associated with the submitted job.
     """
 
-    #Work out which partition and cluster to use based on the supercomputer 
+    #Work out which partition and cluster to use based on the supercomputer
     #(in config file) and queue required
     comp_config = config.load_config_file()
     if queue == 'cpuq':
@@ -149,7 +149,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
         cluster   = comp_config['zcpuq_cluster']
         partition = comp_config['zcpuq_partition']
     else:
-        logger.error("No queue found, please use cpuq, gpuq or copyq")       
+        logger.error("No queue found, please use cpuq, gpuq or copyq")
 
 
 
@@ -162,30 +162,30 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     jobfile = batch_dir + name + ".batch"
     if not outfile:
         outfile = batch_dir + name + ".out"
-    
+
     # create the header from supplied arguments
     for k,v in slurm_kwargs.items():
         if len(k) > 1:
             k = "--" + k + "="
         else:
             k = "-" + k + " "
-        
+
         header.append("#SBATCH {0}{1}".format(k, v))
 
     # check if there are dependencies, and if so include that in the header
     if depend is not None:
         #assumes append is a list but if not will make an educated guess of how to reformat it
-        if type(depend) is int:
+        if isinstance(depend, int):
             #assume it's ben given a single job id
             header.append("#SBATCH --dependency={0}:{1}".format(depend_type, depend))
-        if type(depend) is str:
+        if isinstance(depend, str):
             if ":" in depend:
                 #assume it has been given an already formated string
                 if depend.startswith(":"):
                     depend = depend[1:]
-            #or a single jobid 
+            #or a single jobid
             header.append("#SBATCH --dependency={0}:{1}".format(depend_type, depend))
-        if type(depend) is list:
+        if isinstance(depend, list):
             depend_str = ""
             for job_id in depend:
                  depend_str += ":" + str(job_id)
@@ -228,11 +228,11 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
 
     #Load computer dependant config file
     comp_config = config.load_config_file()
-    
+
     # format the template script
-    tmpl = tmpl.format(script=commands, outfile=outfile, header=header, 
-                       switches=switches, modules=modules, 
-                       version=vcstools_version, 
+    tmpl = tmpl.format(script=commands, outfile=outfile, header=header,
+                       switches=switches, modules=modules,
+                       version=vcstools_version,
                        cluster=cluster, partition=partition,
                        export=export, account=comp_config['group_account'],
                        module_dir=comp_config['module_dir'],

@@ -19,7 +19,6 @@ import subprocess
 import sys
 from shutil import copyfile as cp
 import math
-from scipy.interpolate import InterpolatedUnivariateSpline
 import glob
 import textwrap as _textwrap
 
@@ -29,13 +28,10 @@ from astropy.time import Time
 
 #MWA software imports
 from mwa_pb import primarybeammap_tant as pbtant
-from mwa_pb import primary_beam
-import mwa_pb.primarybeammap as pbl
 from mwa_pulsar_client import client
 from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 import find_pulsar_in_obs as fpio
 
-import matplotlib.pyplot as plt
 import logging
 logger = logging.getLogger(__name__)
 
@@ -47,10 +43,10 @@ class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
         return _textwrap.wrap(text, width)
 
 
-def send_cmd(cmd): 
-    output = subprocess.Popen(cmd.split(' '), stdin=subprocess.PIPE, 
-                              stdout=subprocess.PIPE, 
-                              stderr=subprocess.STDOUT).communicate()[0].decode() 
+def send_cmd(cmd):
+    output = subprocess.Popen(cmd.split(' '), stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT).communicate()[0].decode()
     return output
 
 
@@ -79,22 +75,22 @@ def sex2deg( ra, dec):
     sex2deg( ra, dec)
     ra - the right ascension in HH:MM:SS
     dec - the declination in DD:MM:SS
-    
+
     Convert sexagesimal coordinates to degrees.
-    """ 
+    """
     from astropy.coordinates import SkyCoord
     from astropy import units as u
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.hourangle,u.deg))
-    
+
     # return RA and DEC in degrees in degrees
     return [c.ra.deg, c.dec.deg]
-    
+
 def get_from_bestprof(file_loc):
     """
     Get info from a bestprof file
     returns: [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
     """
-    
+
     import re
     with open(file_loc,"r") as bestprof:
         lines = bestprof.readlines()
@@ -118,17 +114,17 @@ def get_from_bestprof(file_loc):
         mjdstart = Time(float(lines[3][22:-1]), format='mjd', scale='utc')
         # Convert to gps time
         obsstart = int(mjdstart.gps)
-        
+
         # Get obs length in seconds by multipling samples by time per sample
         obslength = float(lines[6][22:-1])*float(lines[5][22:-1])
-        
+
         # Get the pulse profile
         orig_profile = []
         for l in lines[27:]:
             orig_profile.append(float(l.split()[-1]))
         bin_num = len(orig_profile)
         profile = np.zeros(bin_num)
-        
+
         # Remove min
         min_prof = min(orig_profile)
         for p in range(len(orig_profile)):
@@ -147,7 +143,7 @@ def get_from_ascii(file_loc):
         min_prof = min(orig_profile)
         for p in range(len(orig_profile)):
             profile[p] = orig_profile[p] - min_prof
-        #maybe centre it around the pulse later        
+        #maybe centre it around the pulse later
     return [profile, bin_num]
 
 
@@ -163,8 +159,8 @@ def from_power_to_gain(powers,cfreq,n,coh=True):
         coeff = obswl**2*16*n/(4*np.pi*k_B.value)
     else:
         coeff = obswl**2*16*sqrt(n)/(4*np.pi*k_B.value)
-    logger.debug("Wavelength",obswl,"m")
-    logger.debug("Gain coefficient:",coeff)
+    logger.debug("Wavelength {} m".format(obswl))
+    logger.debug("Gain coefficient: {}".format(coeff))
     SI_to_Jy = 1e-26
     return (powers*coeff)*SI_to_Jy
 
@@ -184,10 +180,10 @@ def get_Trec(tab,obsfreq):
 def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
     x = np.copy(data)
     oldstd = np.nanstd(x)
-    #When the x[x<lolim] and x[x>hilim] commands encounter a nan it produces a 
-    #warning. This is expected because it is ignoring flagged data from a 
+    #When the x[x<lolim] and x[x>hilim] commands encounter a nan it produces a
+    #warning. This is expected because it is ignoring flagged data from a
     #previous trial so the warning is supressed.
-    old_settings = np.seterr(all='ignore') 
+    old_settings = np.seterr(all='ignore')
     for trial in range(ntrials):
         median = np.nanmedian(x)
 
@@ -218,7 +214,7 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
 
 def zip_calibration_files(base_dir, cal_obsid, source_file):
     """
-    Checkes that all the expected calibration files are where they should be 
+    Checkes that all the expected calibration files are where they should be
     and returns the file location of the zipped file
     """
     import tarfile
@@ -282,14 +278,14 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     #unpack data
     obsid, pulsar, dm, period, period_uncer, obsstart, time_detection, profile, num_bins = bestprof_data
     obsid, ra_obs, dec_obs, time_obs, delays, centrefreq, channels = metadata
-    
-    
+
+
     #Gain calc
-    #get antena temperatures    
+    #get antena temperatures
     trec_table = Table.read(trcvr,format="csv")
-    
+
     ntiles = 128#TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
-    
+
     logger.info("Calculating beam power and antena temperature...")
     #starting from enter for the bestprof duration
     bandpowers = fpio.get_beam_power_over_time([obsid, ra_obs, dec_obs, time_detection,
@@ -297,7 +293,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                                np.array([["source", pul_ra, pul_dec]]),
                                                dt=100, start_time=int(obsstart - obsid))
     bandpowers = np.mean(bandpowers)
-    
+
     #supress print statements of the make_primarybeammap function
     sys.stdout = open(os.devnull, 'w')
     beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
@@ -305,36 +301,36 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
      pbtant.make_primarybeammap(int(obsid), delays, centrefreq*1e6, 'analytic', plottype='None')
     #turns print statments back on
     sys.stdout = sys.__stdout__
-    
+
     #TODO can be inaccurate for coherent but is too difficult to simulate
     tant = (Tant_XX + Tant_YY) / 2.
 
     logger.info("Tant: " + str(tant))
     t_sys_table = tant + get_Trec(trec_table,centrefreq)
-    
+
     logger.info("Converting to gain from power...")
     gain = from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,coh)
     logger.debug('Frequency {0} Hz'.format(centrefreq*1e6))
-    
+
     t_sys = np.mean(t_sys_table)
     avg_power = np.mean(bandpowers)
     logger.info("Average Power: " + str(avg_power))
 
     #gain uncertainty through beam position estimates
-    RAs, Decs = sex2deg(ra_obs,dec_obs)
-    Alts, Azs, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
+    RAs, _ = sex2deg(ra_obs,dec_obs)
+    Alts, _, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
     theta = np.radians(Zas)
-    
+
     u_gain_per = (1. - avg_power)*0.12 + (theta/90.)*(theta/90.)*2. + 0.1
-    u_gain = gain * u_gain_per #assumed to be 10% 
-        
+    u_gain = gain * u_gain_per #assumed to be 10%
+
     #then centers it around the max flux (hopefully the centre of the pulse
-    shiftby=-int(np.argmax(profile))+int(num_bins)//2 
+    shiftby=-int(np.argmax(profile))+int(num_bins)//2
     profile = np.roll(profile,shiftby)
 
     logger.info("Calculating signal to noise ratio")
     sigma, flagged_profile  = sigmaClip(profile, alpha=3, tol=0.05, ntrials=10)
-    
+
     #check if the flagged_profile is in the bottom 10% of the profile
     bottom_profile_min = (max(profile) - min(profile))*.1 + min(profile)
     logging.debug("min(flagged_profile): {0}   bottom_profile_min: {1}".\
@@ -369,7 +365,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
         for p in range(len(profile)):
             if math.isnan(flagged_profile[p]):
                 #May increase the pulse width if there are large noise spikes
-                pulse_width_bins += 1    
+                pulse_width_bins += 1
                 p_total += profile[p]
                 u_p_total = math.sqrt(math.pow(u_p_total,2) + math.pow(profile_uncert,2))
             else:
@@ -379,7 +375,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
 
         #calc signal to noise ratio and it's uncertainty
         sn = max(profile) / sigma
-        u_sn = sn * math.sqrt( math.pow( profile_uncert / max(profile) , 2)  +  
+        u_sn = sn * math.sqrt( math.pow( profile_uncert / max(profile) , 2)  +
                                math.pow( u_sigma / sigma ,2) )
 
         #adjust profile to be around the off-pulse mean
@@ -391,7 +387,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
         #the equivalent width (assumes top hat pulsar) in bins and it's uncertainty
         w_equiv_bins = p_total / max(profile)
         w_equiv_ms = w_equiv_bins / float(num_bins) * float(period) # in ms
-        u_w_equiv_bins = math.sqrt(math.pow(u_p_total / max(profile),2) + 
+        u_w_equiv_bins = math.sqrt(math.pow(u_p_total / max(profile),2) +
                                    math.pow(p_total * profile_uncert / math.pow(max(profile),2),2))
         u_w_equiv_ms = u_w_equiv_bins / float(num_bins) * float(period) # in ms
 
@@ -400,9 +396,9 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                  math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
         #constants to make uncertainty calc easier
         S_mean_cons = t_sys / ( math.sqrt(2. * float(time_detection) * bandwidth)) *\
-                 math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000. 
+                 math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
         u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
-                              math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )  
+                              math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
 
         logging.debug("SN: {0}".format(sn))
         logging.info('Smean {0:.2f} +/- {1:.2f} mJy'.format(S_mean, u_S_mean))
@@ -415,8 +411,8 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
         obstype = 1
     else:
         obstype = 2
-        
-    #calc scattering 
+
+    #calc scattering
     scat_height = max(profile) / 2.71828
     scat_bins = 0
     for p in profile:
@@ -432,7 +428,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
             continue
         if not (channels[b] - channels[b-1]) == 1:
             subbands = subbands + 1
-    
+
     #get cal id
     if coh:
         cal_list = client.calibrator_list(web_address, auth)
@@ -447,49 +443,49 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
                                                   caltype = calibrator_type)[u'id'])
     else:
         cal_db_id = None
-    
+
     if S_mean is not None:
-        #prevent TypeError caused by trying to format Nones given to fluxes for 
+        #prevent TypeError caused by trying to format Nones given to fluxes for
         #highly scattered pulsars
         S_mean = float("{0:.2f}".format(S_mean))
         u_S_mean = float("{0:.2f}".format(u_S_mean))
-    
+
     try:
-        client.detection_create(web_address, auth, 
+        client.detection_create(web_address, auth,
                                observationid = int(obsid),
-                               pulsar = str(pulsar), 
-                               subband = int(subbands), 
+                               pulsar = str(pulsar),
+                               subband = int(subbands),
                                coherent = coh,
                                observation_type = int(obstype),
                                calibrator = cal_db_id,
-                               startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                               startcchan = int(minfreq), stopcchan = int(maxfreq),
                                flux = S_mean,
                                flux_error = u_S_mean,
                                width = float("{0:.2f}".format(w_equiv_ms)),
                                width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                               scattering = float("{0:.5f}".format(scattering)), 
+                               scattering = float("{0:.5f}".format(scattering)),
                                scattering_error = float("{0:.5f}".format(u_scattering)),
                                dm = float(dm))
     except:
         logger.info("Detection already on database so updating the values")
-        client.detection_update(web_address, auth, 
+        client.detection_update(web_address, auth,
                                observationid = int(obsid),
-                               pulsar = str(pulsar), 
-                               subband = str(subbands), 
+                               pulsar = str(pulsar),
+                               subband = str(subbands),
                                coherent = coh,
                                observation_type = int(obstype),
                                calibrator = cal_db_id,
-                               startcchan = int(minfreq), stopcchan = int(maxfreq), 
+                               startcchan = int(minfreq), stopcchan = int(maxfreq),
                                flux = S_mean,
                                flux_error = u_S_mean,
                                width = float("{0:.2f}".format(w_equiv_ms)),
                                width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                               scattering = float("{0:.5f}".format(scattering)), 
+                               scattering = float("{0:.5f}".format(scattering)),
                                scattering_error = float("{0:.5f}".format(u_scattering)),
                                dm = float(dm))
-                           
+
     logger.info("Observation submitted to database")
-                              
+
     return subbands
 
 """
@@ -516,14 +512,14 @@ if __name__ == "__main__":
     loglevels = dict(DEBUG=logging.DEBUG,
                      INFO=logging.INFO,
                      WARNING=logging.WARNING)
-    
+
     #Argument parsing
     parser = argparse.ArgumentParser(formatter_class=LineWrapRawTextHelpFormatter, description=_textwrap.dedent("""
     This code is used to submit pulsar detections and observation calibrations to the MWA Pulsar Database. It can calculate all need values (flux density, width, scattering) for each detection and submit them to the pulsar database without having to manually input them. It can also submit diagnostic files such as pulse profiles and calibrations. This code assumes that the observation is coherent and correlated using the RTS so please use --incoh and --andre if your observation is incoherent or correlated using Andre's Tools respectively.
 
     A common use case is to simply upload a calibration file (this can be done before a detection is uploaded)
     > submit_to_database.py --cal_dir_to_tar <calibration directory> --srclist <srclist> -o <obs ID> -O <calibrator obs ID>
-    Another is to record a pulsar detection and its paramters, such as flux density and pulse width, to the database. To do this the bestprof file is needed 
+    Another is to record a pulsar detection and its paramters, such as flux density and pulse width, to the database. To do this the bestprof file is needed
     > submit_to_database.py -b <bestprof file location>
     Diagnostic files (see Upload Options) such as PRESTO plots can be uploaded using:
     > submit_to_database.py  -o <obs ID> -O <calibrator obs ID> -p <pulsar> --ppps <PRESTO prepfold output post script file location>
@@ -534,10 +530,10 @@ if __name__ == "__main__":
     parser.add_argument('-p','--pulsar',type=str,help='The pulsar J name.')
     parser.add_argument('--incoh',action='store_true',help='Used for incoherent detections to accurately calculate gain. The default is coherent.')
     parser.add_argument('--andre',action='store_true',help="Used for calibrations done using Andre Offrina's tools. Default is RTS.")
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                         choices=loglevels.keys(), default="INFO")
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
-        
+
     calcargs = parser.add_argument_group('Detection Calculation Options', 'All the values of a pulsar detection (such as flux density, width, scattering) can be calculated by this code using either a .besprof file or a soon to be implemented DSPSR equivalent and automatically uploaded to the MWA Pulsar Database. Analysis files can still be uploaded before this step but this will leave the pulsar values as nulls.')
     calcargs.add_argument('-b','--bestprof',type=str,help='The location of the .bestprof file. Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputting the observation ID and pulsar name.')
     calcargs.add_argument('--ascii',type=str,help='The location of the ascii file (pulsar profile output of DSPSR). Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering).')
@@ -556,7 +552,7 @@ if __name__ == "__main__":
     uploadargs.add_argument('--ppps',type=str,help="The Presto Prepfold PostScript file location to be uploaded to the database. Expects a single file that is the output of PRESTO's prepfold script.")
     uploadargs.add_argument('-i','--ippd',type=str,help="The Intergrated Pulse Profile (sometimes called a pulse profile) file location. Expects a single file that is the output of DSPSR's pav script.")
     uploadargs.add_argument('-w','--waterfall',type=str,help="The file location of a waterfall plot of pulse phase vs frequency. Expects a single file that is the output of DSPSR's psrplot.")
-        
+
     dspsrargs = parser.add_argument_group('DSPSR Calculation Options', "Requires the --fits_files option. These options are all boolean flags that when used will send off DSPSR jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the DSPS scripts are tested more") #TODO remove when I'm confident with dspsr
     dspsrargs.add_argument('-f','--fits_files',type=str,help='The fits files location to be used in any Detection Calculation processing. Recommended to end in *.fits and surrounded by quotation marks.', default = "/group/mwaops/vcs/${obsid}/fits/*fits")
     dspsrargs.add_argument('--u_archive', action='store_true',help='Used to create an archive file using DSPSR.')
@@ -614,7 +610,11 @@ if __name__ == "__main__":
     if args.fits_files:
         fits_files_loc = args.fits_files
     else:
-        fits_files_loc = '/scratch2/mwaops/vcs/'+str(obsid)+'/fits/*.fits'
+        if args.incoh:
+            fits_files_loc = '/group/mwaops/vcs/{0}/incoh/*.fits'.format(args.obsid)
+        else:
+            #TODO add a pointing for this
+            fits_files_loc = '/group/mwaops/vcs/{0}/pointings/*.fits'.format(args.obsid)
 
     #get info from .bestprof file
     if args.bestprof:
@@ -653,7 +653,7 @@ if __name__ == "__main__":
     else:
         logger.error("Please us either (--obsid and --pulsar) or --bestprof")
         quit()
-        
+
     if args.pulsar or args.bestprof or args.ascii:
         #Checks to see if the pulsar is already on the database
         pul_list_dict = client.pulsar_list(web_address, auth)
@@ -662,7 +662,7 @@ if __name__ == "__main__":
             pul_list_str = pul_list_str + p[u'name']
         if pulsar in pul_list_str:
             logger.info('This pulsar is already on the database')
-            
+
             #gets Ra and DEC from PSRCAT
             pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
             pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
@@ -673,11 +673,11 @@ if __name__ == "__main__":
             pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
 
             #then adds it to the database
-            client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)  
-        
+            client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)
 
 
-        
+
+
 
     #get meta data from obsid
     metadata = get_common_obs_metadata(obsid)
@@ -707,7 +707,7 @@ if __name__ == "__main__":
         args.calibration = zip_calibration_files(args.cal_dir_to_tar, args.cal_id, args.srclist)
 
 
-    if args.pulsar and not (args.bestprof or args.ascii):  
+    if args.pulsar and not (args.bestprof or args.ascii):
         #calc sub-bands
         subbands = 1
         for b in range(len(channels)):
@@ -715,7 +715,7 @@ if __name__ == "__main__":
                 continue
             if not (channels[b] - channels[b-1]) == 1:
                 subbands = subbands + 1
-                
+
         if coh:
             cal_list = client.calibrator_list(web_address, auth)
             cal_already_created = False
@@ -729,59 +729,59 @@ if __name__ == "__main__":
                                                       caltype = calibrator_type)[u'id']
         elif not args.cal_id:
             cal_db_id = None
-            
+
         #uploads files to database if there's the no calc option
         #checks if the observation is on the database
         try:
             temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))
         except:
-            client.detection_create(web_address, auth, 
+            client.detection_create(web_address, auth,
                                     observationid = str(obsid),
                                     pulsar = str(pulsar),
                                     calibrator = int(cal_db_id),
                                     subband = int(subbands),
                                     coherent = coh,
-                                    startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                                    observation_type = int(obstype))  
-            temp_dict = client.detection_get(web_address, auth, observationid =str(obsid))  
-        
+                                    startcchan = int(minfreq), stopcchan = int(maxfreq),
+                                    observation_type = int(obstype))
+            temp_dict = client.detection_get(web_address, auth, observationid =str(obsid))
+
         if not temp_dict:
             #no obsid so creats a blank one and assumes the subbands are continuous
-            client.detection_create(web_address, auth, 
+            client.detection_create(web_address, auth,
                                     observationid = str(obsid),
                                     pulsar = str(pulsar),
                                     calibrator = int(cal_db_id),
                                     subband = int(subbands),
                                     coherent = coh,
-                                    startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                                    observation_type = int(obstype))  
-            temp_dict = client.detection_get(web_address, auth, observationid = str(obsid)) 
-        
+                                    startcchan = int(minfreq), stopcchan = int(maxfreq),
+                                    observation_type = int(obstype))
+            temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))
+
         pulsar_dict_check = False
         for t in range(len(temp_dict)):
             if pulsar == temp_dict[t][u'pulsar']:
                 subbands = temp_dict[t][u'subband']
                 pulsar_dict_check = True
-        
+
         if not pulsar_dict_check:
-            client.detection_create(web_address, auth, 
+            client.detection_create(web_address, auth,
                                     observationid = str(obsid),
                                     pulsar = str(pulsar),
                                     calibrator = int(cal_db_id),
                                     subband = int(subbands),
                                     coherent = coh,
-                                    startcchan = int(minfreq), stopcchan = int(maxfreq), 
-                                    observation_type = int(obstype))  
-            temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))  
+                                    startcchan = int(minfreq), stopcchan = int(maxfreq),
+                                    observation_type = int(obstype))
+            temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))
 
     #Upload analysis files to the database
     if args.bestprof:
         logger.info("Uploading bestprof file to database")
         cp(str(args.bestprof) ,str(obsid) + "_" + str(pulsar) + ".bestprof")
         d_file_loc = str(obsid) + "_" + str(pulsar) + ".bestprof"
-        client.detection_file_upload(web_address, auth, 
+        client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
-                            pulsar = str(pulsar), 
+                            pulsar = str(pulsar),
                             subband = int(subbands),
                             coherent = coh,
                             filetype = 5,
@@ -791,9 +791,9 @@ if __name__ == "__main__":
     #Archive files
     if args.archive:
         logger.info("Uploading archive file to database")
-        client.detection_file_upload(web_address, auth, 
+        client.detection_file_upload(web_address, auth,
                                     observationid = str(obsid),
-                                    pulsar = str(pulsar), 
+                                    pulsar = str(pulsar),
                                     subband = int(subbands),
                                     coherent = coh,
                                     filetype = 1,
@@ -803,7 +803,7 @@ if __name__ == "__main__":
         logger.info("Uploading single_pulse_series file to database")
         client.detection_file_upload(web_address, auth,
                                     observationid = str(obsid),
-                                    pulsar = str(pulsar), 
+                                    pulsar = str(pulsar),
                                     subband = int(subbands),
                                     coherent = coh,
                                     filetype = 2,
@@ -813,41 +813,41 @@ if __name__ == "__main__":
         cp(str(args.ppps) ,str(obsid) + "_" + str(pulsar) + ".prepfold.ps")
         d_file_loc = str(obsid) + "_" + str(pulsar) + ".prepfold.ps"
         logger.info("Uploading Presto Prepfold PostScript file to database")
-        client.detection_file_upload(web_address, auth, 
+        client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
-                            pulsar = str(pulsar), 
+                            pulsar = str(pulsar),
                             subband = int(subbands),
                             coherent = coh,
                             filetype = 3,
                             filepath = str(d_file_loc))
         os.system("rm " + d_file_loc)
-        
+
     if args.ippd:
         cp(str(args.ippd),str(obsid) + "_" + str(pulsar) + ".prof.ps")
         d_file_loc = str(obsid) + "_" + str(pulsar) + ".prof.ps"
         logger.info("Uploading Intergrates Pulse Profile file to database")
-        client.detection_file_upload(web_address, auth, 
+        client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
-                            pulsar = str(pulsar), 
+                            pulsar = str(pulsar),
                             subband = int(subbands),
                             coherent = coh,
                             filetype = 3,
                             filepath = str(d_file_loc))
         os.system("rm " + d_file_loc)
-        
+
     if args.waterfall:
         cp(str(args.waterfall),str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps")
         d_file_loc = str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps"
         logger.info("Uploading waterfall file to database")
-        client.detection_file_upload(web_address, auth, 
+        client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
-                            pulsar = str(pulsar), 
+                            pulsar = str(pulsar),
                             subband = int(subbands),
                             coherent = coh,
                             filetype = 3,
                             filepath = str(d_file_loc))
         os.system("rm " + d_file_loc)
-        
+
     if args.calibration:
         cal_list = client.calibrator_list(web_address, auth)
         cal_already_created = False
@@ -859,33 +859,33 @@ if __name__ == "__main__":
             cal_db_id = client.calibrator_create(web_address, auth,
                                                   observationid = str(args.cal_id),
                                                   caltype = calibrator_type)#[u'id']
-        
+
         if args.andre:
             cp(str(args.calibration),str(args.cal_id) + "_andre_calibrator.bin")
             cal_file_loc = str(args.cal_id) + "_andre_calibrator.bin"
         else:
             cp(str(args.calibration),str(args.cal_id) + "_rts_calibrator.tar")
             cal_file_loc = str(args.cal_id) + "_rts_calibrator.tar"
-        
+
         logger.info("Uploading calibration solution to database")
-        client.calibrator_file_upload(web_address, auth, 
+        client.calibrator_file_upload(web_address, auth,
                                        observationid = str(args.cal_id),
-                                       caltype = calibrator_type, 
+                                       caltype = calibrator_type,
                                        filepath = str(cal_file_loc))
         os.system("rm " + cal_file_loc)
-        
+
         #result = client.detection_find_calibrator(web_address, auth,detection_obsid = 35)
-        
-        
-                                    
-        
+
+
+
+
 
 
     if args.u_archive or args.u_single_pulse_series or args.u_ppps or args.u_ippd  or args.u_waterfall:
         if not glob.glob(fits_files_loc):
             logger.error("No fits files in given location. Use -f to provide file location.")
             quit()
-        
+
         #runs all needed jobs to create all files
         from job_submit import submit_slurm
         dspsr_batch = "{0}_{1}".format(obsid, pulsar)
@@ -907,7 +907,7 @@ if __name__ == "__main__":
                                 "${ar_loc}.ar")
         if args.u_waterfall:
             commands.append('psrplot -pG -jCDTp -j "B {0}" -D {1}_{2}.freq.vs.phase.ps/cps '.\
-                                format(num_bins,obsid,pulsar)+ "${ar_loc}.ar") 
+                                format(num_bins,obsid,pulsar)+ "${ar_loc}.ar")
         if args.u_ppps:
             commands.append("psrcat -e {0} > {0}.eph".format(pulsar))
             commands.append("srun -n 1 -c $ncpus prepfold -ncpus $ncpus -o {0} -topo -runavg -noclip -par {1}.eph -nsub 256 ".format(obsid, pulsar) + "${fits}")
@@ -925,4 +925,4 @@ if __name__ == "__main__":
                               batch_dir="./",
                               slurm_kwargs={"time": "6:50:00", "partition": "workq"},
                               submit=True)
-    
+
