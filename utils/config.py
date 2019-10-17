@@ -8,7 +8,7 @@ Functions to handle parsing the config file for multiple super computers
 
 GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
                  'base_product_dir' : '/group/mwaops/vcs/',
-                 'group_account' : 'mwaops',
+                 'group_account' : '#SBATCH --account=mwaops',
                  'module_dir' : '/group/mwa/software/modulefiles',
                  'presto_module' : 'presto/master',
                  'psrcat_module' : 'psrcat/1.59',
@@ -31,7 +31,7 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
 
 OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'base_product_dir' : '/fred/oz125/vcs/',
-                 'group_account' : 'oz125',
+                 'group_account' : '#SBATCH --account=oz125',
                  #'module_dir' : '/fred/oz125/software/modulefiles\nmodule use /apps/users/pulsar/skylake/modulefiles',
                  'module_dir' : '/fred/oz125/software/modulefiles',
                  'presto_module' : 'module use /apps/users/pulsar/skylake/modulefiles\nmodule load presto/no-python',
@@ -51,9 +51,11 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'container_command' : ''}
                  #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'}
 
-ARM_CONFIG =   {'base_data_dir' : '/o9000/MWA/vcs/',
+ARM_CONFIG =   {#'base_data_dir' : '/o9000/MWA/Pulsar/SMART/',
+                #'base_product_dir' : '/o9000/MWA/Pulsar/SMART/',
+                'base_data_dir' : '/o9000/MWA/vcs/',
                 'base_product_dir' : '/o9000/MWA/vcs/',
-                'group_account' : 'mwa',
+                'group_account' : '',
                 'module_dir' : '/home/app/modulefiles/',
                 #'presto_module' : 'module use /apps/users/pulsar/skylake/modulefiles\nmodule load presto/no-python',
                 #'psrcat_module' : 'psrcat/1.49',
