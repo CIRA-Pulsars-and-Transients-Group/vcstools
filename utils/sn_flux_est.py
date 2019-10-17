@@ -112,7 +112,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
     prof_data = np.roll(prof_data, shift)
     
     #find sigma and check if profile is scattered 
-    sigma, flags = submit_to_database.sigmaClip(prof_data)    
+    sigma, flags = submit_to_database.sigmaClip(prof_data, alpha=3., tol=0.01, ntrials=100)    
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
     scattered=False
     if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):

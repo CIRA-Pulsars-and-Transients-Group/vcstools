@@ -293,8 +293,15 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     #estimate S/N
     sn, u_sn, flagged_profile, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
   
-    logger.debug("Profile scattered? {0}".format(scattered))
-    logger.debug("S/N: {0} +/- {1}".format(sn, u_sn)) 
+    logger.info("Profile scattered? {0}".format(scattered))
+    logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
+    logger.debug("Gain {0} K/Jy".format(gain))
+    logger.debug("Equivalent width in bins: {0}".format(w_equiv_bins))
+    logger.debug("T_sys: {0} K".format(t_sys))
+    logger.debug("Bandwidth: {0}".format(bandwidth))
+    logger.debug("Detection time: {0}".format(time_detection)) 
+    logger.debug("NUmber of bins: {0}".format(num_bins))
+    
     if scattered == False:
 
   
@@ -312,9 +319,6 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
         logger.info("Profile is scattered. Flux cannot be estimated")
         S_mean = None
         u_S_mean = None
-
-    logger.debug("T_sys {0} K".format(t_sys))
-    logger.debug("Gain {0} K/Jy".format(gain))
 
     #calc obstype
     if (maxfreq - minfreq) == 23:
