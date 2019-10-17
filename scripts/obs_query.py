@@ -56,6 +56,7 @@ if __name__ == '__main__':
     #Arguments
     parser = argparse.ArgumentParser(description="""Returns information on a given OBS ID""")
     parser.add_argument("obsid", type=int, help="Input Observation ID")
+    parser.add_argument("-cf", "--centre_freq", action="store_true", help="Only print centre_freq")
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                     choices=loglevels.keys(), default="INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit. Currently this requires an obsid to work. Any number will suffice.")
@@ -85,6 +86,10 @@ if __name__ == '__main__':
 
             sys.exit(0)
 
-
-    print_info(args.obsid, args.out_dir)
+    if args.centre_freq:
+        obsinfo = getmeta(service='obs', params={'obs_id':str(args.obsid)})
+        channels = obsinfo['rfstreams']['0']['frequencies']
+        print("{0}".format((min(channels)+max(channels))//2*1.28))
+    else:
+        print_info(args.obsid, args.out_dir)
 
