@@ -101,7 +101,6 @@ def get_from_bestprof(file_loc):
         lines = bestprof.readlines()
         # Find the obsid by finding a 10 digit int in the file name
         obsid = re.findall(r'(\d{10})', lines[0])[0]
-        print(obsid)
         try:
             obsid = int(obsid)
         except:
@@ -283,12 +282,13 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
 
     #unpack the bestprof_data
     #[obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
-    obsid, pulsar, _, period, _, _, _, profile, num_bins = bestprof_data 
+    obsid, pulsar, _, period, _, beg, t_int, profile, num_bins = bestprof_data 
     period=float(period)
     num_bins=int(num_bins)
 
     #get r_sys and gain
-    t_sys, u_t_sys, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid)
+    t_sys, u_t_sys, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid, obs_metadata=metadata,\
+                                    beg=beg, t_int=t_int)
    
     #estimate S/N
     sn, u_sn, flagged_profile, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)

@@ -645,7 +645,7 @@ def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"
     return beg, end, t_int
 
 #---------------------------------------------------------------
-def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
+def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
                     obs_metadata=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
@@ -660,6 +660,8 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
         The observation ID. e.g. 1226406800
     beg: int
         The beginning of the observing time
+    t_int: float
+        The total time that the target is in the beam
     p_ra: str
         OPTIONAL - the target's right ascension
     p_dec: str
@@ -696,25 +698,24 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
     obsid, obs_ra, obs_dec, obs_dur, delays, centrefreq, channels = obs_metadata
 
     #get beg if not supplied
-    if beg is None:
+    if beg is None or t_int is None:
         logger.debug("Calculating beginning time for pulsar coverage")
         comp_config=config.load_config_file()
         base_path = comp_config["base_product_dir"]
-        beg, _, _ = find_times(obsid, pulsar, beg=beg, base_path=base_path)
+        beg, _, t_int = find_times(obsid, pulsar, beg=beg, base_path=base_path)
         
-    #Find 'start_time' for fpio
+    #Find 'start_time' for fpio - it's usually about 7 seconds
     obs_start, obs_end = mwa_metadb_utils.obs_max_min(obsid)
     start_time = beg-obsid
 
     #Get important info    
     trec_table = Table.read(trcvr,format="csv")
     ntiles = 128 #TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
-    print("get_beam_poower_over_time inputs:")
-    print("obs_metadata: {}".format(obs_metadata))
-    print("pulsar, ra, dec: {}".format([[pulsar, p_ra, p_dec]]))
-    print("start_time: {}".format(start_time))
-    beam_power = fpio.get_beam_power_over_time(obs_metadata,np.array([[pulsar, p_ra, p_dec]]),\
-                                               dt=100, start_time=start_time)
+    
+    beam_power = fpio.get_beam_power_over_time([obsid, obs_ra, obs_dec, t_int, delays,\
+                                                centrefreq, channels],\
+                                                np.array([[pulsar, p_ra, p_dec]]),\
+                                                dt=100, start_time=start_time)
     beam_power = np.mean(beam_power)
 
     # Usa a primary beam function to convolve the sky temperature with the primary beam
@@ -735,15 +736,6 @@ def find_t_sys_gain(pulsar, obsid, beg=None, p_ra=None, p_dec=None,\
     theta = np.radians(zas)
     gain = submit_to_database.from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
     gain_err = gain * ((1. - beam_power)*0.12 + 2.*(theta/(0.5*np.pi))**2. + 0.1)
-
-    print("Beam Power: {}".format(beam_power))
-    print("Centre Freq: {}MHz".format(centrefreq))
-    print("N tiles: {}".format(ntiles))
-    print("obs_metadata:{}".format(obs_metadata))
-    print("pulsar, p_ra, p_dec: {0}, {1}, {2}".format(pulsar, p_ra, p_dec))
-    print("start time: {}".format(start_time))
-    print("Gain: {}".format(gain))
-    #TODO: delete these^ they're just for testing gain solution    
 
     #sometimes gain_err is a numpy array and sometimes it isnt so i have to to this...
     try:
