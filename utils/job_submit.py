@@ -226,9 +226,12 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     # join the commands into a single string
     commands = "\n".join(commands)
 
-    #Load computer dependant config file
+    # load computer dependant config file
     comp_config = config.load_config_file()
-    
+   
+    # little hack to change vcstools/master to vcstools/cpu-master for the shanghai server
+    if (hostname.startswith('x86') or hostname.startswith('arm')) and vcstools_version == 'master':
+        vcstools_version = 'cpu-master'
     # format the template script
     tmpl = tmpl.format(script=commands, outfile=outfile, header=header, 
                        switches=switches, modules=modules, 

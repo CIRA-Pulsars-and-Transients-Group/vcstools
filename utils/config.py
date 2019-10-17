@@ -51,6 +51,28 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'container_command' : ''}
                  #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'}
 
+ARM_CONFIG =   {'base_data_dir' : '/o9000/MWA/vcs/',
+                'base_product_dir' : '/o9000/MWA/vcs/',
+                'group_account' : 'mwa',
+                'module_dir' : '/home/app/modulefiles/',
+                #'presto_module' : 'module use /apps/users/pulsar/skylake/modulefiles\nmodule load presto/no-python',
+                #'psrcat_module' : 'psrcat/1.49',
+                'cpuq_cluster' : 'chess',
+                'cpuq_partition' : 'arm',
+                'gpuq_cluster' : 'chess',
+                'gpuq_partition' : 'all-gpu',
+                'gpu_beamform_mem' : '4096',
+                'copyq_cluster' : 'chess',
+                'copyq_partition' : 'arm', #TODO check if there's a better one
+                'zcpuq_cluster' : 'chess',
+                'zcpuq_partition' : 'arm',
+                #None currently as we haven't worked out container software
+                'container_module' : '',
+                'container_command' : ''}
+                #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'}
+
+
+
     
 import logging
 import os
@@ -65,16 +87,12 @@ def load_config_file():
     """
     #Work out which supercomputer you're using
     hostname = socket.gethostname()
-    if hostname.startswith('galaxy'):
+    if hostname.startswith('galaxy') or hostname.startswith('nid'):
         comp_config = GALAXY_CONFIG
-    elif hostname.startswith('nid'):
-        # gpu and maybe work nodes on galaxy
-        comp_config = GALAXY_CONFIG
-    elif hostname.startswith('farnarkle'):
+    elif hostname.startswith('john') or hostname.startswith('farnarkle'):
         comp_config = OZSTAR_CONFIG
-    elif hostname.startswith('john'):
-        #work nodes on ozstar
-        comp_config = OZSTAR_CONFIG
+    elif hostname.startswith('x86')  or hostname.startswith('arm'):
+        comp_config = ARM_CONFIG
     else:
         logger.error('Unknown computer {}. Exiting'.format(hostname))
         quit()
