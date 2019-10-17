@@ -1,10 +1,6 @@
 # VCS Tools
 
 ----
-## Unreleased
-
-
-----
 ## v1.5.0 (2019-06-28)
 
 Upgraded the beamforming to be multi-pixel so hundreads of tied-array beams can be created at once. This increases the speed of beamforming by a factor of 5.
@@ -17,7 +13,7 @@ Upgraded all scripts to python 3
 ----
 ## v1.4.2 (2019-04-18)
 
-*Removed all functions that use MWA_Tools. Since we now use astropy to more accurately calculate altitude and azimuth, the results differ ~0.1 degrees from the MWA_Tools calculations. This leads to a ~1% difference in tile beam power calculations.
+* Removed all functions that use MWA_Tools. Since we now use astropy to more accurately calculate altitude and azimuth, the results differ ~0.1 degrees from the MWA_Tools calculations. This leads to a ~1% difference in tile beam power calculations.
 
 ----
 ## v1.4.1 (2018-03-28)

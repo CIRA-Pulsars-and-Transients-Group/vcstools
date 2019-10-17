@@ -7,8 +7,8 @@ logger = logging.getLogger(__name__)
 
 def get_obs_array_phase(obsid):
     """
-    For the input obsid will work out the observations array phase in the form 
-    of P1 for phase 1, P2C for phase 2 compact or P2E for phase to extended array 
+    For the input obsid will work out the observations array phase in the form
+    of P1 for phase 1, P2C for phase 2 compact or P2E for phase to extended array
     and OTH for other.
     """
     phase_info = getmeta(service='con', params={'obs_id':obsid, 'summary':''})
@@ -40,8 +40,8 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     from astropy.coordinates import SkyCoord, AltAz, EarthLocation
     from astropy import units as u
 
-    obstime = Time(float(obsid),format='gps') 
-    
+    obstime = Time(float(obsid),format='gps')
+
     if ra is None or dec is None:
         #if no ra and dec given use obsid ra and dec
         ra, dec = get_common_obs_metadata(obsid)[1:3]
@@ -49,12 +49,12 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     if degrees:
         sky_posn = SkyCoord(ra, dec, unit=(u.deg,u.deg))
     else:
-        sky_posn = SkyCoord(ra, dec, unit=(u.hourangle,u.deg)) 
-    #earth_location = EarthLocation.of_site('Murchison Widefield Array') 
-    earth_location = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8) 
-    altaz = sky_posn.transform_to(AltAz(obstime=obstime, location=earth_location)) 
+        sky_posn = SkyCoord(ra, dec, unit=(u.hourangle,u.deg))
+    #earth_location = EarthLocation.of_site('Murchison Widefield Array')
+    earth_location = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8)
+    altaz = sky_posn.transform_to(AltAz(obstime=obstime, location=earth_location))
     Alt = altaz.alt.deg
-    Az  = altaz.az.deg 
+    Az  = altaz.az.deg
     Za  = 90. - Alt
     return Alt, Az, Za
 
@@ -147,7 +147,7 @@ def obs_max_min(obs_id):
     Small function to query the database and return the times of the first and last file
     """
     obsinfo = getmeta(service='obs', params={'obs_id':obs_id})
-    
+
     # Make a list of gps times excluding non-numbers from list
     times = [f[11:21] for f in obsinfo['files'].keys() if is_number(f[11:21])]
     obs_start = int(min(times))
