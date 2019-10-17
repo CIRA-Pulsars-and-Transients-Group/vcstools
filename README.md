@@ -2,9 +2,9 @@ VCStools software tools
 ======
 
 
-Instillation
+Installation
 ======
-The instillation is done in two steps. The first involves installing all the python scripts which is done with the command:
+The installation is done in two steps. The first involves installing all the python scripts which is done with the command:
 ```bash
 python setup.py build --build-scripts=<build_location>
 ```
@@ -34,5 +34,5 @@ Documentation on how to process MWA VCS data can be found [here](https://wiki.mw
 
 Credit
 ======
-If you use the MWA beamformer please give give credit by citing:
+If you use the MWA beamformer please give credit by citing:
 [Ord et al. (2019)](https://ui.adsabs.harvard.edu/abs/2019PASA...36...30O/abstract)
