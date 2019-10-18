@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 try:
     ATNF_LOC = os.environ['PSRCAT_FILE']
 except:
-    logger.warn("ATNF database could not be found on disk.")
+    logger.warning("ATNF database could not be found on disk.")
     ATNF_LOC = None
 
 def yes_no(answer):
@@ -210,7 +210,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         try:
             fermi_loc = os.environ['FERMI_CAND_FILE']
         except:
-            logger.warn("Fermi candidate file location not found. Returning nothing")
+            logger.warning("Fermi candidate file location not found. Returning nothing")
             return []
         with open(fermi_loc,"r") as fermi_file:
             csv_reader = csv.DictReader(fermi_file)
