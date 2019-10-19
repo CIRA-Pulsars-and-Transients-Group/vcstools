@@ -46,7 +46,7 @@ Upgraded all scripts to python 3
 
 ### Removed
 
-  * Support for **-v** when compiled with GPU support
+*   Support for **-v** when compiled with GPU support
 
 ----
 ## v1.3.0 (2018-02-03)
