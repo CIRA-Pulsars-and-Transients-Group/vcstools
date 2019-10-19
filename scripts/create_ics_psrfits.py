@@ -7,13 +7,10 @@ import os
 import subprocess
 import glob
 import getpass
-from itertools import groupby
-from operator import itemgetter
 
 from astropy.time import Time
 from astropy.coordinates import EarthLocation
 from astropy import units as u
-from astropy.io import fits
 
 from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 

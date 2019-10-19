@@ -1,31 +1,28 @@
-#!/usr/bin/env python3 
-   
+#!/usr/bin/env python3
+
 import numpy as np
 from astropy.coordinates import EarthLocation, SkyCoord, AltAz
 from astropy import units as u
 from astropy.time import Time
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
 
 from mwa_pb import primary_beam as pb
 from mwa_metadb_utils import getmeta, mwa_alt_az_za
 
-import sys
 import argparse
 
 import logging
-logger = logging.getLogger(__name__) 
+logger = logging.getLogger(__name__)
 
 def get_obs_metadata(obs):
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
     channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
     freqs = [float(c)*1.28 for c in channels]
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
-    pythodelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    #pythodelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
     ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
-    pointing_EL, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
+    _, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
 
     return {"channels":channels,
             "frequencies":freqs,
@@ -87,10 +84,10 @@ def plot_beam(obs, fname, target, freq, time):
 
     logger.info("Getting observation metadata")
     metadata = get_obs_metadata(obs)
-    
+
     logger.info("Loading data from file (this may take a while...)")
     theta, phi, beam = load_data(fname)
-    
+
     logger.info("Re-normalising beam-pattern")
     az, za = np.meshgrid(np.radians(sorted(set(phi))), np.radians(sorted(set(theta))))
     delays = [metadata['xdelays'], metadata['ydelays']]
@@ -107,24 +104,24 @@ def plot_beam(obs, fname, target, freq, time):
     # start setup for plotting
     lower_contour = 1e-2
     upper_contour = beam.max()
-    
+
     fill_min = 7e-3
     fill_max = 0.95 * beam.max()
     beam[beam <= fill_min] = 0
     beam[beam >= fill_max] = fill_max
 
-    
+
     fig = plt.figure(figsize=(10,8))
     ax = fig.add_subplot(111, polar=True, aspect='equal')
 
     # plot the beam pattern
     logger.info("Plotting beam pattern (this may take a while, too...)")
     cf_levels = np.linspace(lower_contour, upper_contour, num=20)
-    cf_levels_log = np.logspace(np.log10(lower_contour), np.log10(upper_contour), num=20)
+    #cf_levels_log = np.logspace(np.log10(lower_contour), np.log10(upper_contour), num=20)
     logger.info("     contour levels: max,min = {0}, {1}".format(cf_levels.max(), cf_levels.min()))
     cf_cmap = plt.get_cmap('gray_r')
     logger.info("     beam levels: max,min = {0},{1}".format( beam.max(), beam.min()))
-    
+
     #sys.exit()
     logger.info("     plotting tied-array beam pattern contours")
     #cf_norm = LogNorm(vmin=cf_levels.min(), vmax=beam.max())
@@ -136,13 +133,13 @@ def plot_beam(obs, fname, target, freq, time):
     # color bar setup
     logger.info("     assigning colorbar")
     cbar_levels = np.linspace(fill_min, fill_max, num=6)
-    cbar_levels_log = np.logspace(np.log10(fill_min), np.log10(fill_max), num=6)
+    #cbar_levels_log = np.logspace(np.log10(fill_min), np.log10(fill_max), num=6)
     cbar = plt.colorbar(cf, shrink=0.9, pad=0.08)
     cbar.set_label(label="zenith normalised power", size=20, labelpad=20)
     cbar.set_ticks(cbar_levels)
     cbar.set_ticklabels([r"${0:.3f}$".format(x) for x in cbar_levels])
     cbar.ax.tick_params(labelsize=18)
-   
+
     # plot the pointing centre
     logger.info("     plotting observation pointing centre")
     ax.plot(np.radians(metadata["az"]), np.radians(metadata["za"]), ls="", marker="+", ms=8, color='cyan', zorder=1002, label="pointing centre")
@@ -161,14 +158,14 @@ def plot_beam(obs, fname, target, freq, time):
         logger.info("   log-normalised: {0}".format(lognormbpt))
 
         # plot the target position on sky
-        ax.plot(target_az, target_za, ls="", marker="o", color='C3', zorder=1002, label="   target: )".format(bpt))
+        ax.plot(target_az, target_za, ls="", marker="o", color='C3', zorder=1002, label="   target:{} ".format(bpt))
 
         # plot the target on the color bar
         cbar.ax.plot(0.5, lognormbpt, color='C3', marker="o")
 
     # draw grid
     ax.grid(color='k', ls="--", lw=0.5)
-    
+
     # azimuth labels
     ax.set_xticks(np.radians([0, 45, 90, 135, 180, 225, 270, 315]))
     ax.set_xticklabels([r"${0:d}^\circ$".format(int(np.ceil(x))) for x in np.degrees(ax.get_xticks())], color='k')
@@ -178,7 +175,7 @@ def plot_beam(obs, fname, target, freq, time):
     ax.set_ylim(0, np.pi/2)
     ax.set_yticks(np.radians([20, 40, 60, 80]))
     ax.set_yticklabels([r"${0:d}^\circ$".format(int(np.ceil(x))) for x in np.degrees(ax.get_yticks())], color='k')
-    
+
     # title
     ax.set_title("MWA tied-array beam\naz = {0:.2f}, za = {1:.2f}, freq = {2:.2f}MHz\n{3}".format(metadata["az"], metadata["za"], freq, time.iso))
 
