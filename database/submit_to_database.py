@@ -317,8 +317,7 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     logger.info("Average Power: " + str(avg_power))
 
     #gain uncertainty through beam position estimates
-    RAs, _ = sex2deg(ra_obs,dec_obs)
-    Alts, _, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
+    _, _, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
     theta = np.radians(Zas)
 
     u_gain_per = (1. - avg_power)*0.12 + (theta/90.)*(theta/90.)*2. + 0.1

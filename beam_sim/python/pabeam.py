@@ -229,7 +229,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
     results = []
 
     # is this the last process?
-    rank == size - 1
+    rank = size - 1
 
     # we will also calculate the beam area contribution of this part of the sky
     omega_A = 0

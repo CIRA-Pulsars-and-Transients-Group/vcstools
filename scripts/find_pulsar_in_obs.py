@@ -255,7 +255,7 @@ def get_rFRB_info(name=None):
             line = line.split(",")
             #some FRBs end with a J name. We will ignore these when comparing
             #by using the first 9 characters
-            FRB, ra, dec, dm, _ = line
+            FRB = line[0]
             if name is None:
                 #No input FRBs so return all FRBs
                 output.append(line)
@@ -497,7 +497,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         start_time: the time in seconds from the begining of the observation to
                     start calculating at
     """
-    obsid, ra, _, time, delays, centrefreq, channels = beam_meta_data
+    obsid, _, _, time, delays, centrefreq, channels = beam_meta_data
     names_ra_dec = np.array(names_ra_dec)
     logger.info("Calculating beam power for OBS ID: {0}".format(obsid))
 
