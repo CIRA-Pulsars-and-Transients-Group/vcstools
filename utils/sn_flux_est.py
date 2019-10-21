@@ -216,7 +216,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
             beg = None
             end = None
 
-    if beg is None and end is None:
+    if beg is None and end is None and ondisk==True:
         #find the beginning and end time of the observation FILES you have on disk
         files_beg, files_end = process_vcs.find_combined_beg_end(obsid)
         if files_beg is None or files_end is None:
