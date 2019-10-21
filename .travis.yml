@@ -2,6 +2,9 @@ language: python
 python:
   - "3.6"
   - "3.7"
+before_install:
+    # Setup the login so I can clone private repos
+    - echo -e "machine github.com\n  login NickSwainston\n  password $CI_USER_PASSWORD" > ~/.netrc
 # command to install dependencies
 install:
     # installing dependancies manually
