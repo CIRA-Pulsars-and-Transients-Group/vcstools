@@ -703,7 +703,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
     #get beg if not supplied
     if beg is None or t_int is None:
         logger.debug("Calculating beginning time for pulsar coverage")
-        beg, _, t_int = find_times(obsid, pulsar, beg=beg, base_path=base_path)
+        beg, _, t_int = find_times(obsid, pulsar, beg=beg)
         
     #Find 'start_time' for fpio - it's usually about 7 seconds
     obs_start, obs_end = mwa_metadb_utils.obs_max_min(obsid)
