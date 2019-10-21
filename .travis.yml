@@ -37,6 +37,7 @@ install:
     - export PYTHONPATH=$HOME/build/
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
     - export KNOWN_RFRB_CSV=$HOME/build/known_repeating_FRBs.csv
+    - export CMD_VCS_DB_FILE=None
 # command to run tests
 script:
     #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
