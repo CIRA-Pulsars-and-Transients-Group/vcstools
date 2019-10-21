@@ -914,7 +914,7 @@ void make_beam_parse_cmdline(
                     opts->out_vdif = 1;
                     break;
                 case 'V':
-                    fprintf( stderr, "MWA Beamformer v%s\n", VERSION_BEAMFORMER);
+                    fprintf( stderr, "MWA Beamformer %s\n", VERSION_BEAMFORMER);
                     exit(0);
                     break;
                 case 'w':

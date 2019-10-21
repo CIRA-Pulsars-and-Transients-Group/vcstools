@@ -18,30 +18,25 @@ from astropy.io import fits
 import astropy.units as u
 from astropy.constants import c, k_B
 # use updated astropy ephemerides
-from astropy.utils import iers
 
 #utility and processing modules
 import os
-import sys
 from mpi4py import MPI
 import argparse
 import logging
 
 #from mwapy import ephem_utils,metadata
 from mwa_metadb_utils import getmeta
-from mwa_pb import primary_beam as pb 
+from mwa_pb import primary_beam as pb
 
 logger = logging.getLogger(__name__)
 
 
 def get_delay_steps(obs):
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
-    obn = beam_meta_data[u'obsname']
     ra = beam_meta_data[u'metadata'][u'ra_pointing']
     dec = beam_meta_data[u'metadata'][u'dec_pointing']
     duration = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
-    mode = beam_meta_data[u'mode']
-    Tsky = beam_meta_data[u'metadata'][u'sky_temp']
     xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
 
     minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
@@ -55,24 +50,24 @@ def get_delay_steps(obs):
 def getTileLocations(obsid, flags=[], fdir="."):
     """
     Function grab the MWA tile locations for any given observation ID. Downloads the relevant metafits file from the database, saves it as <obdID>_metafits_ppds.fits.
-    
+
     Input:
       obsid - the GPS observation ID
-      flags - RTS tile flags (i.e. the first entry in the metafits correspond to "tile 0", irrespective of what the antenna name is) 
+      flags - RTS tile flags (i.e. the first entry in the metafits correspond to "tile 0", irrespective of what the antenna name is)
 
     Return:
       a list of lists containing the following:
         list[0] = a list of tile positions East of the array centre
         list[1] = a list of tile positions North of the array centre
-        list[2] = a list of tile heights about sea-level 
+        list[2] = a list of tile heights about sea-level
     """
 
-    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(fdir, obsid))     
-    
+    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(fdir, obsid))
+
     east = f[1].data['East'][::2]
     north = f[1].data['North'][::2]
     height = f[1].data['Height'][::2] # height above sea-level
-    
+
     # MWA array centre height above sea-level
     mwacentre_h = 377.827
     height = height - mwacentre_h
@@ -81,14 +76,14 @@ def getTileLocations(obsid, flags=[], fdir="."):
     east = np.delete(east,flags)
     north = np.delete(north,flags)
     height = np.delete(height,flags)
-            
+
     return east, north, height
 
 
 def get_obstime_duration(obsid, fdir="."):
     """
     Funciton to grab the recorded start-time and duration of the observation
-    
+
     Input:
       obsid - the GPS observation ID
 
@@ -100,14 +95,14 @@ def get_obstime_duration(obsid, fdir="."):
 
     # metafits file will already have been downloaded
     f = fits.open('{0}/{1}_metafits_ppds.fits'.format(obsid, fdir))
-    
+
     return [f[0].header['DATE-OBS'], f[0].header['EXPOSURE']]
 
 
 def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827):
     """
     Function to get the target position in alt/az at a given EarthLocation and Time.
-    
+
     Default lat,lon,height is the centre of  MWA.
 
     Input:
@@ -124,25 +119,25 @@ def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827):
         list[2] = target azimuth in degrees
         list[3] = target zenith angle in degrees
     """
-    
+
     # Create Earth location for MWA
     location = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=height*u.m)
-    
+
     # Create sky coordinates for target
     coord = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
-    
+
     # Create a time object for desired observing time
     obstime = Time(time)
-    
+
     # Convert from RA/Dec to Alt/Az
     altaz = coord.transform_to(AltAz(obstime=obstime, location=location))
-    
-    az = altaz.az.rad 
+
+    az = altaz.az.rad
     azdeg = altaz.az.deg
-     
+
     za = np.pi / 2 - altaz.alt.rad
     zadeg = 90 - altaz.alt.deg
-    
+
 
     return az, za, azdeg, zadeg
 
@@ -155,9 +150,9 @@ def calcWaveNumbers(wl, p, t):
       wl - central wavelength for the observation
       p - azimuth/phi (either a scalar or an array)
       t - zenith angle/theta (either a scalar or an array)
-    
+
     Return:
-      [kx, ky, kz] - the 3D wavenumbers 
+      [kx, ky, kz] - the 3D wavenumbers
     """
     # the standard equations are:
     #   a = 2 * pi / lambda
@@ -175,14 +170,14 @@ def calcWaveNumbers(wl, p, t):
 
 # Make generator functions for Azimuth and Zenith so we don't have to create the whole
 # meshgrid at once and then store it.
-# This is far more memory efficient that storing the entire AZ and ZA planes in memory, 
+# This is far more memory efficient that storing the entire AZ and ZA planes in memory,
 # especially with the required resolution.
 def genAZZA(start, stop, step, end=False):
     """
     Generator function to use for iterating over angles (both ZA and Azimuth).
 
     Input:
-      start - angle to start iteration from 
+      start - angle to start iteration from
       stop - angle to finish iteration before
       step - step size between iterations
       end - return the "stop" parameter to make range [start,stop] rather than [start,stop)
@@ -198,9 +193,9 @@ def genAZZA(start, stop, step, end=False):
     if end:
         yield stop
     return
-    
 
-def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg, 
+
+def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                       obsid, delays, time, obsfreq, eff, flagged_tiles,
                       theta_res, phi_res,
                       coplanar, zenith, za_chunk, write):
@@ -223,7 +218,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
       write -  whether to actually write a file to disk
     Return:
       results -  a list of lists cotaining [ZA, Az, beam power], for all ZA and Az in the given band
-    """ 
+    """
     # convert frequency to wavelength
     obswl = obsfreq / c.value
 
@@ -234,7 +229,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
     results = []
 
     # is this the last process?
-    lastrank = rank == size - 1
+    rank = size - 1
 
     # we will also calculate the beam area contribution of this part of the sky
     omega_A = 0
@@ -245,7 +240,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
     for za in za_chunk:
         # for each Az "pixel", 360deg not included
         for az in genAZZA(0, 2 * np.pi, np.radians(phi_res)):
-            
+
             # calculate the relevent wavenumber for (theta,phi)
             kx, ky, kz = calcWaveNumbers(obswl, (np.pi / 2) - az, za)
             array_factor = 0 + 0.j
@@ -255,7 +250,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                 ph = kx * x + ky * y + kz * z
                 ph_target = target_kx * x + target_ky * y + target_kz * z
                 array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
-            
+
             # normalise to unity at pointing position
             array_factor /= len(xpos)
             array_factor_power = np.abs(array_factor)**2
@@ -263,19 +258,19 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
             # keep track of maximum value calculated
             if (array_factor_power > array_factor_max):
                 array_factor_max = array_factor_power
-    
+
             # calculate the tile beam at the given Az,ZA pixel
             #tile_xpol,tile_ypol = pb.MWA_Tile_analytic([[za]],[[az]],freq=obsfreq,delays=[delays,delays],power=True,zenithnorm=True,interp=False)
             tile_xpol, tile_ypol = pb.MWA_Tile_analytic(za, az, freq=obsfreq, delays=delays, power=True, zenithnorm=True)
             tile_pattern = (tile_xpol + tile_ypol) / 2.0
-            
-            # calculate the phased array power pattern 
+
+            # calculate the phased array power pattern
             phased_array_pattern = tile_pattern * array_factor_power
             #phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
-        
-            # append results to a reference list for later  
+
+            # append results to a reference list for later
             results.append([np.degrees(za), np.degrees(az), phased_array_pattern])
-        
+
             # add this contribution to the beam solid angle
             omega_A += np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
 
@@ -299,13 +294,13 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                 # we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
                 # values are calculated using that convetion, so we need to represent that here
                 f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0], res[1], res[2]))
-        
+
     else:
         logger.warn("worker {0} not writing".format(rank))
 
     return omega_A
 
-    
+
 
 ###############
 ## Setup MPI ##
@@ -319,13 +314,13 @@ def parse_options(comm):
     #####################
     ##  OPTION PARSING ##
     #####################
-    parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA. 
-                            This is an MPI-based simulation code and will use all available processes when run 
+    parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA.
+                            This is an MPI-based simulation code and will use all available processes when run
                             (i.e. there is no user choice in how many to use)""",\
                         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("-o","--obsid",type=str,action='store',metavar="obsID",\
-                help="""Observation ID (used to figure out spatial configuration of array). 
+                help="""Observation ID (used to figure out spatial configuration of array).
                     Also used to retrieve observation start-time and duration.""",default=None)
 
     parser.add_argument("--flagged_tiles",type=str,nargs='+',action='store',metavar="tile",\
@@ -343,7 +338,7 @@ def parse_options(comm):
     parser.add_argument("-e","--efficiency",type=float,action='store',metavar="eta",help="Frequency and pointing dependent array efficiency",default=1)
 
     parser.add_argument("--grid_res",type=float,action='store',nargs=2,metavar=("theta_res","phi_res"),
-                help="""Resolution of the Azimuth (Az) and Zenith Angle (ZA) grid to be created in degrees. 
+                help="""Resolution of the Azimuth (Az) and Zenith Angle (ZA) grid to be created in degrees.
                     Be warned: setting these too small will result in a MemoryError and the job will die.""",default=(0.1,0.1))
 
     parser.add_argument("--coplanar",action='store_true',help="Assume the array is co-planar (i.e. height above array centre is 0 for all tiles)")
@@ -353,11 +348,11 @@ def parse_options(comm):
     parser.add_argument("--out_dir",type=str,action='store',help="Location (full path) to write the output data files",default=".")
 
     parser.add_argument("--write",action='store_true',
-                help="""Write the beam pattern to disk when done calculating. 
+                help="""Write the beam pattern to disk when done calculating.
                     If this option is not passed, you will just get a '.stats' files containing basic information about simulation parameters and the calculated gain.""")
-    
+
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbositylevel. Default: INFO", choices=loglevels.keys(), default="INFO")
-   
+
     args = None
     try:
         if comm.Get_rank() == 0:
@@ -435,7 +430,7 @@ if rank == 0:
 
     # get the tile locations from the metafits
     logger.info("getting tile locations from metafits file")
-    xpos, ypos, zpos = getTileLocations(args.obsid, flags, fdir=args.out_dir)   
+    xpos, ypos, zpos = getTileLocations(args.obsid, flags, fdir=args.out_dir)
     if args.coplanar:
         zpos = np.zeros_like(xpos)
 
@@ -449,21 +444,21 @@ assert totalZAevals >= size, "Total number of ZA evalutions must be >= the numbe
 
 
 if rank == 0:
-    # split the sky into ZA chunks based on the number of available processes 
+    # split the sky into ZA chunks based on the number of available processes
     za_array = np.array_split(np.radians(np.linspace(0, 90, ntheta + 1)), size)
-    
+
     # create the object that contains all the data from master
-    data = {'delays':delays, 
-            'time':time, 
-            'x':xpos, 
-            'y':ypos, 
-            'z':zpos, 
+    data = {'delays':delays,
+            'time':time,
+            'x':xpos,
+            'y':ypos,
+            'z':zpos,
             'za_arr':za_array,
-            'targetRA':ra, 
-            'targetDec':dec, 
-            'targetAz':srcAz, 
-            'targetZA':srcZA, 
-            'targetAz_deg':srcAz_deg, 
+            'targetRA':ra,
+            'targetDec':dec,
+            'targetAz':srcAz,
+            'targetZA':srcZA,
+            'targetAz_deg':srcAz_deg,
             'targetZA_deg':srcZA_deg
             }
 else:
@@ -494,12 +489,12 @@ comm.barrier()
 
 # set the base output file name (will be editted based on the worker rank)
 oname = "{0}/{1}_{2}_{3:.2f}MHz_{4}_{5}.dat".format(args.out_dir, args.obsid, time.gps, args.freq / 1e6, ra, dec)
-    
+
 
 # create array factor for given ZA band and write to file
 beam_area = createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                               args.obsid, delays, time, args.freq, args.efficiency, flags,
-                              tres, pres, 
+                              tres, pres,
                               args.coplanar, args.zenith, za_chunk, args.write)
 
 # collect results for the beam area calculation
@@ -517,7 +512,7 @@ comm.barrier()
 if rank == 0:
     eff_area = args.efficiency * (c.value / args.freq)**2 * (4 * np.pi / result)
     gain = (1e-26) * eff_area / (2 * k_B.value)
-    
+
     logger.info("==== Summary ====")
     logger.info("** Pointing **")
     logger.info("(RA, Dec)      : {0} {1}".format(ra, dec))
@@ -547,7 +542,7 @@ if rank == 0:
     logger.info("Effective area          [m^2] : {0:.3f}".format(eff_area))
     logger.info("Effective gain         [K/Jy] : {0:.6f}".format(gain))
 
-    
+
     if args.write:
         nfiles = size
     else:
@@ -584,4 +579,4 @@ if rank == 0:
         f.write("Effective area          [m^2] : {0:.3f}\n".format(eff_area))
         f.write("Effective gain         [K/Jy] : {0:.6f}".format(gain))
 
-    
+
