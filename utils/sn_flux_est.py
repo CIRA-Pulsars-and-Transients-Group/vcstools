@@ -5,7 +5,6 @@ import logging
 import argparse
 import os
 import glob
-import config
 import sys
 import numpy as np
 import psrqpy
@@ -598,7 +597,7 @@ def find_pulsar_w50(pulsar):
     return W_50, W_50_err
 
 #---------------------------------------------------------------
-def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"):
+def find_times(obsid, pulsar, beg=None, end=None):
     """
     Find the total integration time of a pulsar in the primary beam of an obsid
 
@@ -612,8 +611,6 @@ def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"
         OPTIONAL - The beginning of the observing time
     end: int
         OPTINAL - The end of the observing time
-    base_path: string
-        OPTIONAL - The location of the system's observations. Default = '/group/mwaops/vcs/'
 
     Returns:
     -------
@@ -706,8 +703,6 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
     #get beg if not supplied
     if beg is None or t_int is None:
         logger.debug("Calculating beginning time for pulsar coverage")
-        comp_config=config.load_config_file()
-        base_path = comp_config["base_product_dir"]
         beg, _, t_int = find_times(obsid, pulsar, beg=beg, base_path=base_path)
         
     #Find 'start_time' for fpio - it's usually about 7 seconds
