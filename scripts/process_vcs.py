@@ -4,10 +4,8 @@
 import subprocess
 import os
 import sys
-import glob
 import tempfile
 import atexit
-import hashlib
 import datetime
 from time import sleep, strptime, strftime
 import distutils.spawn
@@ -18,7 +16,7 @@ from reorder_chans import *
 from mdir import mdir
 import numpy as np
 import logging
-import numpy as np
+import glob
 
 #vcstools functions
 from job_submit import submit_slurm
@@ -27,11 +25,6 @@ import database_vcs
 import config
 
 logger = logging.getLogger(__name__)
-
-def tmp(suffix=".sh"):
-    t = tempfile.mktemp(suffix=suffix)
-    atexit.register(os.unlink, t)
-    return t
 
 
 def chunks(l, n):
@@ -46,7 +39,7 @@ def is_number(s):
         return True
     except ValueError:
         return False
-    
+
 
 def gps_to_utc(gps):
     # GPS time as is done in timeconvert.py
@@ -74,7 +67,7 @@ def find_combined_beg_end(obsid, base_path="/group/mwaops/vcs/", channels=None):
         obsid: The MWA observation ID
     Optional Input:
         base_path: the direct path the base vcs directory. Default: /group/mwaops/vcs/\
-        channels: a list of the frequency channel ids. Default None which then gets the 
+        channels: a list of the frequency channel ids. Default None which then gets the
                   from the mwa metadata
     """
     #TODO have some sort of check to look for gaps
@@ -91,10 +84,10 @@ def find_combined_beg_end(obsid, base_path="/group/mwaops/vcs/", channels=None):
         beg = min(comb_times)
         end = max(comb_times)
     else:
-        logger.warn("No combined files on disk for {0}".format(obsid))   
+        logger.warn("No combined files on disk for {0}".format(obsid))
         beg = None
         end = None
-        
+
     return beg, end
 
 
@@ -222,7 +215,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".\
                    format(voltdownload,obsid, data_type, time_to_get,
                           (increment-1), parallel, dl_dir)
-        #need to subtract 1 from increment since voltdownload wants how many 
+        #need to subtract 1 from increment since voltdownload wants how many
         #seconds PAST the first one
 
         if head:
@@ -243,7 +236,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
                 #body.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']])
                 #body.append(database_vcs.add_database_function())
                 #body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(
-                #            untar, dl_dir, obsid, time_to_get, 
+                #            untar, dl_dir, obsid, time_to_get,
                 #            time_to_get+increment-1, n_untar, keep, vcs_database_id))
 
                 #submit_slurm(tar_batch, body, batch_dir=batch_dir,
@@ -282,12 +275,12 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
 
             # Download and checks should be done on Zeus's cpuq. This will only work
             # on Galaxy as the Ozstar workflow is different
-            submit_slurm(check_batch, commands, batch_dir=batch_dir, 
-                         slurm_kwargs={"time": check_secs_to_run, 
-                                       "nice": nice, 
+            submit_slurm(check_batch, commands, batch_dir=batch_dir,
+                         slurm_kwargs={"time": check_secs_to_run,
+                                       "nice": nice,
                                        "mem-per-cpu": "10GB"},
                          vcstools_version=vcstools_version, submit=False,
-                         outfile=batch_dir+check_batch+"_0.out", 
+                         outfile=batch_dir+check_batch+"_0.out",
                          queue="zcpuq", export="NONE")
 
             # Write out the tar batch file if in mode 15
@@ -317,11 +310,11 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             body.append('run "{0}" "--obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}" "{7}"'.\
                         format(voltdownload,obsid, data_type, time_to_get,
                                (increment-1),parallel, dl_dir, vcs_database_id))
-            submit_slurm(voltdownload_batch, body, batch_dir=batch_dir, 
-                         module_list=module_list, 
-                         slurm_kwargs={"time": str(volt_secs_to_run), 
+            submit_slurm(voltdownload_batch, body, batch_dir=batch_dir,
+                         module_list=module_list,
+                         slurm_kwargs={"time": str(volt_secs_to_run),
                                        "nice" : nice},
-                         vcstools_version=vcstools_version, 
+                         vcstools_version=vcstools_version,
                          outfile=batch_dir+voltdownload_batch+"_1.out",
                          queue="copyq", export="NONE")
 
@@ -351,11 +344,11 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
     # this deviates from our initially inteded naming conventions of
     # /astro/mwaopos/vcs/[cal_obs_id]/vis but the renaming and linking is a pain otherwise,
     # hence we'll link vis agains /astro/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
-    target_dir = '{0}'.format(cal_obs_id)
+    #target_dir = '{0}'.format(cal_obs_id)
     link = 'vis'
     csvfile = "{0}{1}_dl.csv".format(batch_dir,cal_obs_id)
     obsdownload = distutils.spawn.find_executable("obsdownload.py")
-    get_data = "{0} -o {1} -d {2}".format(obsdownload,cal_obs_id, data_dir)
+    #get_data = "{0} -o {1} -d {2}".format(obsdownload,cal_obs_id, data_dir)
     if head:
         logging.error("I'm sorry, this option is no longer supported. Please "
                       "download through the copyq.")
@@ -401,10 +394,10 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         # commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
         commands.append(make_link)
         commands.append('unzip *.zip')
-        submit_slurm(obsdownload_batch, commands, batch_dir=batch_dir, 
+        submit_slurm(obsdownload_batch, commands, batch_dir=batch_dir,
                      module_list=module_list,
                      slurm_kwargs={"time": secs_to_run, "nice": nice},
-                     vcstools_version=vcstools_version, queue="copyq", 
+                     vcstools_version=vcstools_version, queue="copyq",
                      export="NONE", mem=2048)
 
 
@@ -413,8 +406,7 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 
     vcs_database_id = database_vcs.database_command(args, obsid)
     #Load computer dependant config file
-    comp_config = config.load_config_file()
-    
+
     logger.info("Running recombine on files")
     jobs_per_node = 8
     target_dir = link = 'combined'
@@ -444,15 +436,15 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".\
                         format(batch_dir+recombine_batch+".batch"))
         commands.append('run "{0}" "-m recombine -o {1} -w {2}/combined/ -b {3} -i {4}" "{5}"'.\
-                        format(checks, obsid, data_dir, time_to_get, 
-                               process_nsecs, vcs_database_id)) 
+                        format(checks, obsid, data_dir, time_to_get,
+                               process_nsecs, vcs_database_id))
         commands.append("if [ $? -eq 1 ];then")
         commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))
         commands.append("fi")
-        submit_slurm(check_batch, commands, batch_dir=batch_dir, 
+        submit_slurm(check_batch, commands, batch_dir=batch_dir,
                      module_list=module_list,
                      slurm_kwargs={"time": "15:00", "nice": nice},
-                     vcstools_version=vcstools_version, submit=False, 
+                     vcstools_version=vcstools_version, submit=False,
                      outfile=batch_dir+check_batch+"_0.out",
                      queue='gpuq', export="NONE")
 
@@ -479,12 +471,12 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                         format(recombine, obsid, time_to_get, data_dir,
                                recombine_binary, vcs_database_id))
 
-        submit_slurm(recombine_batch, commands, batch_dir=batch_dir, 
+        submit_slurm(recombine_batch, commands, batch_dir=batch_dir,
                      module_list=module_list,
-                     slurm_kwargs={"time": "06:00:00", "nodes": str(nodes), 
-                                   "ntasks-per-node": jobs_per_node, 
+                     slurm_kwargs={"time": "06:00:00", "nodes": str(nodes),
+                                   "ntasks-per-node": jobs_per_node,
                                    "nice": nice},
-                     vcstools_version=vcstools_version, 
+                     vcstools_version=vcstools_version,
                      outfile=batch_dir+recombine_batch+"_1.out",
                      queue='gpuq', export="NONE")
 
@@ -497,8 +489,6 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
     vcs_database_id = database_vcs.database_command(args, obsid)
     logger.info("Correlating files at {0} kHz and {1} milliseconds".\
                 format(ft_res[0], ft_res[1]))
-    from astropy.time import Time
-    import calendar
 
     batch_dir = product_dir+"/batch/"
     target_dir = link = 'vis'
@@ -551,29 +541,25 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                 #     batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
                 to_corr = 0
                 for file in f:
-                    corr_line = ""
-                    (current_time,ext) = os.path.splitext(os.path.basename(file))
-                    (obsid,gpstime,chan) = current_time.split('_')
+                    (current_time,_) = os.path.splitext(os.path.basename(file))
+                    (obsid,gpstime,_) = current_time.split('_')
                     t = Time(int(gpstime), format='gps', scale='utc')
                     unix_time = int(t.unix)
 
                     body.append('run "srun --export=all {0}" "-o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}" "{9}"'.\
-                                format("offline_correlator", corr_dir, obsid, 
-                                       unix_time, num_frames, integrations, 
+                                format("offline_correlator", corr_dir, obsid,
+                                       unix_time, num_frames, integrations,
                                        int(ft_res[0]/10), gpubox_label, file,
                                        vcs_database_id))
                     to_corr += 1
-                    # with open(corr_batch, 'a') as batch_file:
-                    #     batch_file.write(corr_line)
-                    #     to_corr = to_corr+1
 
                 module_list = ["module switch PrgEnv-cray PrgEnv-gnu"]
-                secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr)) 
+                secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr))
                 # added factor two on 10 April 2017 as galaxy seemed really slow...
                 submit_slurm(corr_batch, body, module_list=module_list,
                              slurm_kwargs={"time": secs_to_run, "nice": nice,
                                            "gres": "gpu:1"},
-                             queue='gpuq', vcstools_version=vcstools_version, 
+                             queue='gpuq', vcstools_version=vcstools_version,
                              batch_dir=batch_dir, export="NONE")
                 # batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
                 # submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
@@ -585,20 +571,20 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                 logger.error("Couldn't find any recombine files. Aborting here.")
 
 
-def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir, 
-                  metafits_file, nfine_chan, pointing_list, args, 
-                  rts_flag_file=None, bf_formats=None, DI_dir=None, 
-                  execpath=None, calibration_type='rts', 
+def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
+                  metafits_file, nfine_chan, pointing_list, args,
+                  rts_flag_file=None, bf_formats=None, DI_dir=None,
+                  execpath=None, calibration_type='rts',
                   vcstools_version="master", nice=0, channels_to_beamform=None):
     """
-    This function runs the new version of the beamformer. It is modelled after 
-    the old function above and will likely be able to be streamlined after 
+    This function runs the new version of the beamformer. It is modelled after
+    the old function above and will likely be able to be streamlined after
     working implementation (SET)
 
     Streamlining underway, as well as full replacement of the old function (SET March 28, 2018)
     """
-    vcs_database_id = database_vcs.database_command(args, obs_id)  
-    
+    _ = database_vcs.database_command(args, obs_id)
+
     #Load computer dependant config file
     comp_config = config.load_config_file()
 
@@ -611,7 +597,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         make_beam_cmd = "make_beam"
         make_beam_version_cmd = "make_beam -V"
 
-    make_beam_version = subprocess.Popen(make_beam_version_cmd, 
+    make_beam_version = subprocess.Popen(make_beam_version_cmd,
                            stdout=subprocess.PIPE, shell=True).communicate()[0]
     #tested_version = "?.?.?"
     logger.info("Current version of make_beam = {0}".format(make_beam_version.strip()))
@@ -632,7 +618,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     logger.debug("Channels before meta.get_channels: {0}".format(channels))
     # If channels is still None get_channels will get it from the metadata
     channels = meta.get_channels(obs_id, channels=channels)
-    
+
     # Make a metafile containing the channels so no future metadata calls are required
     if not os.path.isfile(metafile):
         with open(metafile, "w") as m:
@@ -691,7 +677,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         seconds_to_run = 8 * (stop - start + 1) * max_pointing
     else:
         seconds_to_run = 8 * (stop - start + 1) * len(pointing_list)
-    
+
     if seconds_to_run > 86399.:
         secs_to_run = datetime.timedelta(seconds=86399)
     else:
@@ -700,14 +686,14 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     # Get the project id (eg G0057) from the metafits file
     with pyfits.open(metafits_file) as hdul:
         project_id = hdul[0].header['project']
-    
+
     n_omp_threads = 3
     openmp_line = "export OMP_NUM_THREADS={0}".format(n_omp_threads)
 
     # splits the pointing list into lists of length max_pointing
     pointing_list_list = list(chunks(pointing_list, max_pointing))
     time_now = str(datetime.datetime.now()).replace(" ", "_")
-    
+
     job_id_list_list = []
     for pl, pointing_list in enumerate(pointing_list_list):
         pointing_str = ",".join(pointing_list)
@@ -731,7 +717,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
             # Making pointing directories
             for pointing in pointing_list:
                 mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
-            
+
             #if "v" in bf_formats:
             if "u" in bf_formats:
                 for pointing in pointing_list:
@@ -747,13 +733,13 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                                     n_omp_threads, comp_config['container_command'],
                                     make_beam_cmd, obs_id, start, stop, coarse_chan,
                                     jones_option, data_dir, ra, dec, metafits_file,
-                                    utctime, bf_formats.replace("v", "u"), rts_flag_file))  
+                                    utctime, bf_formats.replace("v", "u"), rts_flag_file))
                     commands.append("")
 
                     job_id = submit_slurm(make_beam_small_batch, commands,
                                 batch_dir=batch_dir, module_list=module_list,
                                 slurm_kwargs={"time":secs_to_run, "nice":nice},
-                                queue='gpuq', vcstools_version="origbeam",#forces olf version with vdif 
+                                queue='gpuq', vcstools_version="origbeam",#forces olf version with vdif
                                 submit=True, export="NONE", gpu_res=1,
                                 cpu_threads=n_omp_threads,
                                 mem=comp_config['gpu_beamform_mem'])
@@ -770,7 +756,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 else:
                     commands.append("cd {0}".format(P_dir))
 
-                # Loop over each GPS time chunk. Will only be one on Galaxy 
+                # Loop over each GPS time chunk. Will only be one on Galaxy
                 for tci, (start, stop) in enumerate(time_chunks):
                     utctime = gps_to_utc(start)
                     commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} "
@@ -779,12 +765,12 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                                     n_omp_threads, comp_config['container_command'],
                                     make_beam_cmd, obs_id, start, stop, coarse_chan,
                                     jones_option, data_dir, pointing_str, metafits_file,
-                                    utctime, bf_formats, rts_flag_file))  
+                                    utctime, bf_formats, rts_flag_file))
                     commands.append("")
                     if hostname.startswith('john') or hostname.startswith('farnarkle'):
                         for pointing in pointing_list:
                             """
-                            # Move outputs off the SSD and renames them as if makebeam 
+                            # Move outputs off the SSD and renames them as if makebeam
                             # was only run once
                             # G0024_1166459712_07:42:49.00_-28:21:43.00_ch132_0001.fits
                             commands.append("cp $JOBFS/{0}/{1}_{2}_{0}_ch{3}_0001.fits "
@@ -802,13 +788,13 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 job_id = submit_slurm(make_beam_small_batch, commands,
                             batch_dir=batch_dir, module_list=module_list,
                             slurm_kwargs={"time":secs_to_run, "nice":nice},
-                            queue='gpuq', vcstools_version=vcstools_version, 
+                            queue='gpuq', vcstools_version=vcstools_version,
                             submit=True, export="NONE", gpu_res=1,
                             cpu_threads=n_omp_threads,
                             mem=comp_config['gpu_beamform_mem'], temp_mem=temp_mem)
                 job_id_list.append(job_id)
         job_id_list_list.append(job_id_list)
-        
+
     return job_id_list_list, make_beam_small_batch.split('ch')[0]
 
 def database_command(args, obsid):
@@ -834,7 +820,7 @@ if __name__ == '__main__':
     loglevels = dict(DEBUG=logging.DEBUG,
                      INFO=logging.INFO,
                      WARNING=logging.WARNING)
-   
+
     modes=['download', 'download_ics', 'download_cal', 'recombine','correlate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
@@ -873,7 +859,7 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--mode", type=str, choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, help="Observation ID you want to process [no default]")
     parser.add_argument('--cal_obs', '-O', metavar="CALIBRATOR OBS ID", type=int, help="Only required in 'download_cal' mode."
-                          "Observation ID of calibrator you want to process. In case of " 
+                          "Observation ID of calibrator you want to process. In case of "
                           "in-beam calibration should be the same as input to -o (obsID). [no default]", default=None)
     parser.add_argument("-b", "--begin", type=int, help="First GPS time to process [no default]")
     parser.add_argument("-e", "--end", type=int, help="Last GPS time to process [no default]")
@@ -888,7 +874,7 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--ncoarse_chan", type=int, default=24, help="Coarse channel count (how many to process) ")
     parser.add_argument("-n", "--nfine_chan", type=int, default=128, help="Number of fine channels per coarse channel ")
     parser.add_argument("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.")
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                         default="INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     parser.add_argument("--vcstools_version", type=str, default="master", help="VCSTools version to load in jobs (i.e. on the queues) ")
@@ -926,11 +912,12 @@ if __name__ == '__main__':
     elif args.all:
         args.begin, args.end = meta.obs_max_min(args.cal_obs\
                                if args.mode == 'download_cal' else args.obs)
-    elif args.mode is not 'download_cal' and (not args.begin or not args.end):
+    elif args.mode != 'download_cal' and (not args.begin or not args.end):
+        logger.debug(args.mode)
         logger.error("Please specify EITHER (-b,-e) OR -a")
         sys.exit(0)
     # make sure we can process increments smaller than 64 seconds when not in calibration related mode
-    if args.mode is not 'download_cal':
+    if args.mode != 'download_cal':
         if args.end - args.begin +1 < args.increment:
             args.increment = args.end - args.begin + 1
     e_mail = ""
@@ -976,7 +963,7 @@ if __name__ == '__main__':
 
     #Load computer dependant config file
     comp_config = config.load_config_file()
-    
+
     if args.work_dir:
         logger.warning("YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE "
                        "FOR PROCESSING -- BE SURE YOU KNOW WHAT YOU ARE DOING!")
@@ -1012,13 +999,13 @@ if __name__ == '__main__':
         logger.info("Mode: {0}".format(args.mode))
         ensure_metafits(data_dir, args.obs, metafits_file)
         vcs_recombine(args.obs, args.begin, args.end, args.increment, data_dir,
-                      product_dir, sys.argv, 
+                      product_dir, sys.argv,
                       vcstools_version=args.vcstools_version, nice=args.nice)
     elif args.mode == 'correlate':
         logger.info("Mode: {0}".format(args.mode))
         ensure_metafits(data_dir, args.obs, metafits_file)
         vcs_correlate(args.obs, args.begin, args.end, args.increment, data_dir,
-                      product_dir, args.ft_res, sys.argv, metafits_file, 
+                      product_dir, args.ft_res, sys.argv, metafits_file,
                       vcstools_version=args.vcstools_version, nice=args.nice)
     elif args.mode == 'download_cal':
         logger.info("Mode: {0}".format(args.mode))
@@ -1033,8 +1020,8 @@ if __name__ == '__main__':
             sys.exit(0)
         data_dir = data_dir.replace(str(args.obs), str(args.cal_obs))
         mdir(data_dir, "Calibrator Data")
-        download_cal(args.obs, args.cal_obs, data_dir, product_dir, sys.argv, 
-                     args.head, vcstools_version=args.vcstools_version, 
+        download_cal(args.obs, args.cal_obs, data_dir, product_dir, sys.argv,
+                     args.head, vcstools_version=args.vcstools_version,
                      nice=args.nice)
     elif args.mode == ('beamform' or 'incoh'):
         logger.info("Mode: {0}".format(args.mode))
@@ -1069,12 +1056,12 @@ if __name__ == '__main__':
                          "--pointing_file when beamforming. Exiting here.")
             sys.exit(0)
         logger.debug(pointing_list)
-        
-        coherent_beam(args.obs, args.begin, args.end, 
+
+        coherent_beam(args.obs, args.begin, args.end,
                       data_dir, product_dir, batch_dir,
                       metafits_file, args.nfine_chan, pointing_list, args,
                       rts_flag_file=flagged_tiles_file,
-                      bf_formats=bf_format, DI_dir=args.DI_dir, 
+                      bf_formats=bf_format, DI_dir=args.DI_dir,
                       calibration_type=args.cal_type,
                       vcstools_version=args.vcstools_version, nice=args.nice,
                       execpath=args.execpath)

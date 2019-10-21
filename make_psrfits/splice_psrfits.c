@@ -6,7 +6,7 @@
 
 void usage()
 {
-    printf( "splice_psrfits from VCSTools v%s\n", VERSION_BEAMFORMER );
+    printf( "splice_psrfits from VCSTools %s\n", VERSION_BEAMFORMER );
     printf( "usage: splice_psrfits <file 1> <file 2> ..... <basefilename>\n\n" );
     printf( "Utility to splice psrfits files together providing they have the same start time\n" );
     printf( "The output will get written to \"[basefilename]_0001.fits\". This file must not already exist.\n" );
@@ -345,7 +345,7 @@ int main(int argc, char *argv[]) {
     {
         if (strcmp( argv[a], "-V" ) == 0)
         {
-            printf( "splice_psrfits from VCS Tools v%s\n",
+            printf( "splice_psrfits from VCS Tools %s\n",
                     VERSION_BEAMFORMER );
             exit(EXIT_SUCCESS);
         }

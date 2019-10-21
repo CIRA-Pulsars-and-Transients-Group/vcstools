@@ -1,0 +1,48 @@
+language: python
+python:
+  - "3.6"
+  - "3.7"
+before_install:
+    # Setup the login so I can clone private repos
+    - echo -e "machine github.com\n  login NickSwainston\n  password $CI_USER_PASSWORD" > ~/.netrc
+# command to install dependencies
+install:
+    # installing dependancies manually
+    - pip install astropy
+    - pip install argparse
+    - pip install numpy
+    - pip install matplotlib
+    - pip install scipy
+    - pip install psrqpy
+    
+    - pip install coveralls
+    - pip install codacy-coverage
+
+    #install vcstoos
+    - python setup.py build --build-scripts=$HOME/build/
+    #install mwa_pb
+    - git clone --single-branch --branch 2to3 https://github.com/MWATelescope/mwa_pb.git
+    - cd mwa_pb
+    - git checkout 52457e9
+    - python setup.py build --build-scripts=$HOME/build/
+    - cd ..
+    - rm $HOME/build/*test.py
+    - rm $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/*test.py
+    #install mwa_client
+    - git clone --single-branch --branch python3 https://github.com/ICRAR/mwa-voltage
+    - cd mwa-voltage/mwa_pulsar_client
+    - python setup.py install
+    - cd ../../
+    # force environment variables
+    - export PYTHONPATH=$HOME/build/
+    - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
+    - export KNOWN_RFRB_CSV=$HOME/build/known_repeating_FRBs.csv
+    - export CMD_VCS_DB_FILE=None
+# command to run tests
+script:
+    #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
+    - coverage run setup.py test
+after_success:
+    - coverage xml
+    - coveralls
+    - python-codacy-coverage -r coverage.xml
