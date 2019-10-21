@@ -712,7 +712,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
         
     #Find 'start_time' for fpio - it's usually about 7 seconds
     obs_start, obs_end = mwa_metadb_utils.obs_max_min(obsid)
-    start_time = beg-obsid
+    start_time = beg-int(obsid)
 
     #Get important info    
     trec_table = Table.read(trcvr,format="csv")

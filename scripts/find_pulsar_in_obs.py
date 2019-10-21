@@ -761,7 +761,6 @@ def write_output_obs_files(output_data, obsid_meta,
             output_file.write('#Exit:   The fraction of the observation when '+\
                                         'the source exits the beam\n')
             output_file.write('#Power:  The maximum zenith normalised power of the source.\n')
-<<<<<<< HEAD
             if SN_est:
                 output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
                 output_file.write("#S/N Err: The uncertainty of S/N Est\n")
@@ -772,10 +771,6 @@ def write_output_obs_files(output_data, obsid_meta,
             else:
                 output_file.write('\n')
             
-=======
-            output_file.write('#Source    |Enter|Exit |Power\n')
-
->>>>>>> development
             for data in output_data[obsid]:
                 pulsar, enter, exit, max_power = data
                 output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} '.format(pulsar,
