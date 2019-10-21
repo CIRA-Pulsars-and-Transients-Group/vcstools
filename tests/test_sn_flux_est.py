@@ -16,8 +16,6 @@ def test_pulsar_beam_coverage():
     test_cases.append((None, None, 0.0, 0.072731816627943369))
     test_cases.append((1223042487, 1223042587, 0.0, 1.0))
     test_cases.append((-1e10, -1e4, 0.0, 0.072731816627943369))
-    test_cases.append((0, 0, -1, -1))
-    test_cases.append((1e20, 1e30, -1, -1))
        
     for beg, end, exp_enter, exp_exit in test_cases:
         out_enter, out_exit = snfe.pulsar_beam_coverage(obsid, pulsar, beg, end)
@@ -33,9 +31,6 @@ def test_find_times():
     test_cases = []
     test_cases.append((None, None, 1223042487.0, 1223042844.3314152, 4913))
     test_cases.append((1223042487, 1223042587, 1223042487, 1223042587, 100.0))
-    test_cases.append((-1e10, -1e4, 1223042487, 1223047400, 357.33141509308575))
-    test_cases.append((0, 0, 1223042487, 1223047400, 0.0))
-    test_cases.append((1e20, 1e30, 1e+20, 1e+30, 0.0))
 
     for beg, end, exp_beg, exp_end, exp_int in test_cases:
         out_beg, out_end, out_int = snfe.find_times(obsid, pulsar, beg=beg, end=end)
@@ -48,26 +43,32 @@ def test_find_t_sys_gain():
     """
     Tests the find_t_sys_gain function
     """
-    obsid = 1223042480
-    pulsar = "J2234+2114" 
-    md = mwa_metadb_utils.get_common_obs_metadata(obsid) #this is to speed up the tests
+    obsid_1=1223042480
+    pulsar_1= "J2234+2114"
+    obsid_2=1222697776
+    pulsar_2= "J2330-2005"
+    md_1 = mwa_metadb_utils.get_common_obs_metadata(obsid_1) #this is to speed up the tests
+    md_2 = mwa_metadb_utils.get_common_obs_metadata(obsid_2) 
 
     test_cases = []
-    test_cases.append((None, None, None, None,\
-                325.17339020027805, 6.5034678040055613, 0.060789018928146123, 0.047390137981582696))
-    test_cases.append((1223042887, None, None, md,\
-                 325.17339020027805, 6.5034678040055613, 0.049205077008620583, 0.038512861880721581))
-    test_cases.append((None, "22:00:00", "20:00:00", md,\
-                325.17339020027805, 6.5034678040055613, 0.014811201472754599, 0.011868437146105981))
+    test_cases.append((pulsar_1, obsid_1, None,  None, None, None, md_1,\
+                325.17339020027805, 6.5034678040055613, 0.058213031891171774, 0.045422291670257645))
+    test_cases.append((pulsar_1, obsid_1, 1223042887, 600, None, None, md_1,\
+                325.17339020027805, 6.5034678040055613, 0.12547449408456718, 0.095633857616224477))
+    test_cases.append((pulsar_2, obsid_2, None, None, None, None, md_2,\
+                295.73944858721245, 5.9147889717442492, 0.29127750035795497, 0.049367868667752078))
+    test_cases.append((pulsar_2, obsid_2, 1222697776, 600, "23:30:26.885", "-20:05:29.63", md_2,\
+                295.73944858721245, 5.9147889717442492, 0.25821682643334642, 0.046061670840738742))
+    
 
-    for beg, p_ra, p_dec, metadata, exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err in test_cases:
+    for pulsar, obsid, beg, t_int, p_ra, p_dec, metadata,\
+        exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err in test_cases:
         t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(\
-                pulsar, obsid, beg=beg, p_ra=p_ra, p_dec=p_dec, obs_metadata=metadata)
+                pulsar, obsid, beg=beg, t_int=t_int, p_ra=p_ra, p_dec=p_dec, obs_metadata=metadata)
         assert_almost_equal(exp_t_sys, t_sys, decimal=6)
         assert_almost_equal(exp_t_sys_err, t_sys_err, decimal=6)
         assert_almost_equal(exp_gain, gain, decimal=6)
         assert_almost_equal(exp_gain_err, gain_err, decimal=6)
-
 
 def test_find_pulsar_w50():
     """
@@ -114,22 +115,24 @@ def test_est_pulsar_sn():
     
     test_cases=[]
     #Has 3 fluxes on database
-    test_cases.append(("J2241-5236", 1225713560, None, None, None, None,\
-                    216.35506569161737, 78.034094419176355))
+    test_cases.append(("J2241-5236", 1225713560, None, None, None, None, None, None,\
+                    210.71414025512468, 76.16497138478212))
     #Has 7 fluxes on database
-    test_cases.append(("J0152-1637", 1225462936, 1225462943, 1225463543, None, None,\
-                    99.3856180501139, 23.555069097506475))
+    test_cases.append(("J0152-1637", 1225462936, 1225462943, 1225463543, None, None, None, None,\
+                    98.531731331930601, 23.412354456126096))
     #Has 7 fluxes on database
-    test_cases.append(("J2145-0750", 1221832280, 1221832287, 1221832887, None, None,\
-                    121.57563894273588, 44.10171935756484))
-    test_cases.append(("J2145-0750", 1221832280, 0, 1, None, None,\
+    test_cases.append(("J2145-0750", 1221832280, 1221832287, 1221832887, None, None, 0.0, 0.6,\
+                    88.458293665262516, 27.415409265327657))
+    test_cases.append(("J2145-0750", 1221832280, 0, 1, None, None, None, None,\
                     0.0, 0.0))
     #Has 6 fluxes on database
-    test_cases.append(("J2330-2005", 1226062160, None, None, "23:00:00", "-20:00:00",\
-                    25.403853956665806, 16.326028900697739))
-    #Has no fluxes on database
-    for psr, obsid, beg, end, ra, dec, exp_sn, exp_sn_err in test_cases:
-        sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec)
+    test_cases.append(("J2330-2005", 1226062160, None, None, "23:00:00", "-20:00:00", None, None,\
+                    43.815648570174972, 28.161677743487953))
+    
+
+    for psr, obsid, beg, end, ra, dec, enter, exit, exp_sn, exp_sn_err in test_cases:
+        sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec,\
+                        enter=enter, exit=exit)
         assert_almost_equal(exp_sn, sn, decimal=6)
         assert_almost_equal(exp_sn_err, sn_err, decimal=6)
 

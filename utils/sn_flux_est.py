@@ -599,7 +599,6 @@ def find_pulsar_w50(pulsar):
 
 #---------------------------------------------------------------
 def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"):
-
     """
     Find the total integration time of a pulsar in the primary beam of an obsid
 
@@ -625,6 +624,7 @@ def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"
     t_int: int
         The total time that the pulsar is in the beam
     """
+    t_int=None
     if beg is None or end is None:
         logger.info("Using duration for entire observation")
         beg, end = mwa_metadb_utils.obs_max_min(obsid)
@@ -635,12 +635,18 @@ def find_times(obsid, pulsar, beg=None, end=None, base_path="/group/mwaops/vcs/"
     
     if t_int is None:
         enter, exit = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end)
-        if beg > 0. and end > 0.:
+        if beg is not None and end is not None:
+            if beg<obsid or end<obsid or beg>(obsid+10000) or end>(obsid+10000): 
+                logger.warn("Beginning/end times supplied are outside the obsid")
+                logger.warn("Have you entered the correct times and obsid?")
             dur = end-beg
         else: #use entire obs duration
             beg, end = mwa_metadb_utils.obs_max_min(obsid)
             dur = end - beg
-        t_int = dur*(exit-enter)
+        if enter is None or exit is None or dur is None:
+            t_int=0
+        else:
+            t_int = dur*(exit-enter)
 
     return beg, end, t_int
 
@@ -820,7 +826,7 @@ def est_pulsar_sn(pulsar, obsid,\
         else:
             t_int = t_int*obs_metadata[3] #duration
     else:
-        beg, end, t_int = find_times(obsid, pulsar, beg, end)
+        beg, end, t_int = find_times(obsid, pulsar, beg=beg, end=end)
     if t_int<=0.:
         logger.warn("Pulsar not in beam for obs files or specificed beginning and end times")
         return 0., 0.
