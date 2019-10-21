@@ -25,6 +25,11 @@ install:
     - cd ..
     - rm $HOME/build/*test.py
     - rm $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/*test.py
+    #install mwa_client
+    - git clone --single-branch --branch python3 https://github.com/ICRAR/mwa-voltage
+    - cd mwa-voltage/mwa_pulsar_client
+    - python setup.py install
+    - cd ../../
     # force environment variables
     - export PYTHONPATH=$HOME/build/
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
