@@ -740,19 +740,20 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
     gain = submit_to_database.from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
     gain_err = gain * ((1. - beam_power)*0.12 + 2.*(theta/(0.5*np.pi))**2. + 0.1)
 
+    # Removed the below error catch because couldn't find an obs that breaks it
     #sometimes gain_err is a numpy array and sometimes it isnt so i have to to this...
-    try:
-        gain_err.shape
-        gain_err = gain_err[0]
-    except:
-        pass
+    #try:
+    #    gain_err.shape
+    #    gain_err = gain_err[0]
+    #except:
+    #    pass
 
     return t_sys, t_sys_err, gain, gain_err
 
 #---------------------------------------------------------------
 def est_pulsar_sn(pulsar, obsid,\
                  beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, plot_flux=False,\
-                 enter=None, exit=None):
+                 enter=None, exit=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
     Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
@@ -829,8 +830,9 @@ def est_pulsar_sn(pulsar, obsid,\
         return 0., 0.
 
     #find system temp and gain
-    t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid,\
-                                 beg=beg, p_ra=p_ra, p_dec=p_dec, obs_metadata=obs_metadata)
+    t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid,
+                                 beg=beg, p_ra=p_ra, p_dec=p_dec, obs_metadata=obs_metadata,
+                                 trcvr=trcvr)
 
     #Find W_50
     W_50, W_50_err = find_pulsar_w50(pulsar)
