@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 try:
     ATNF_LOC = os.environ['PSRCAT_FILE']
 except:
-    logger.warn("ATNF database could not be found on disk.")
+    logger.warning("ATNF database could not be found on disk.")
     ATNF_LOC = None
 
 #---------------------------------------------------------------
@@ -96,7 +96,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
         VERBOSE - when true, the profile is highly scattered
     """
     if prof_path is None and (prof_data is None or period is None):
-        logger.warn("Insufficient information to attain SN estimate from profile. Returning Nones")
+        logger.warning("Insufficient information to attain SN estimate from profile. Returning Nones")
         return None, None
 
     if prof_data is None:
@@ -115,7 +115,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
     scattered=False
     if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
-        logger.warn("The profile is highly scattered. S/N estimate cannot be calculated")
+        logger.warning("The profile is highly scattered. S/N estimate cannot be calculated")
         if verbose == True:
             scattered=True
             #making a new profile with the only bin being the lowest point
@@ -203,33 +203,34 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
     exit_files: float
          a float between 0 and 1 that describes the normalised time that the pulsar exits the beam
     """
-    #find the enter and exit times of pulsar normalized with the observing time
-    names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar])
-    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec)
-    enter_obs_norm = beam_source_data[obsid][0][1]
-    exit_obs_norm = beam_source_data[obsid][0][2]
-
+    if (beg is None or end is None) and ondisk==False:
+        logger.warning("ondisk==False so beg and end can not be None. Returning Nones")
+        return None, None
+    
     #handle negative numbers
-    if beg is not None and end is not None:
-        if beg < 0. or end < 0.:
-            logger.warn("Negative beg/end supplied")
-            beg = None
-            end = None
+    if beg < 0. or end < 0.:
+        logger.warning("Negative beg/end supplied. Returning Nones")
+        return None, None
 
     if beg is None and end is None and ondisk==True:
         #find the beginning and end time of the observation FILES you have on disk
         files_beg, files_end = process_vcs.find_combined_beg_end(obsid)
         if files_beg is None or files_end is None:
             #use entire obs
-            logger.warn("Using entire obs duration")
+            logger.warning("Using entire obs duration")
             files_beg, files_end = mwa_metadb_utils.obs_max_min(obsid)
         files_duration = files_end - files_beg + 1
-
     else:
         #uses manually input beginning and end times to find beam coverage
         files_beg = beg
         files_end = end
         files_duration = files_end - files_beg + 1
+    
+    #find the enter and exit times of pulsar normalized with the observing time
+    names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar])
+    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec)
+    enter_obs_norm = beam_source_data[obsid][0][1]
+    exit_obs_norm = beam_source_data[obsid][0][2]
 
     #find how long the total observation is (because that's what enter and exit uses)
     obs_beg, obs_end, obs_dur = file_maxmin.print_minmax(obsid)
@@ -248,7 +249,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
     if exit_files>1.:
         exit_files=1.
     if enter_files>1. or exit_files<0.:
-        logger.warn("source {0} is not in the beam for the files on disk".format(pulsar))
+        logger.warning("source {0} is not in the beam for the files on disk".format(pulsar))
         enter_files = None
         exit_files = None
 
@@ -342,12 +343,12 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
 
     test_check = check_fit(sol)
     if test_check==False:
-        logger.warn("Initial parameters could not fit a power law. Trying without bounds...")
+        logger.warning("Initial parameters could not fit a power law. Trying without bounds...")
         sol = curve_fit(function, x_data, y_data, p0=initial)
 
     test_check = check_fit(sol)
     if test_check==False:
-        logger.warn("Trying without bounds and initial conditions...")
+        logger.warning("Trying without bounds and initial conditions...")
         sol = curve_fit(function, x_data, y_data)
         covar_matrix = np.matrix(sol[1])
         a = sol[0][0]
@@ -358,10 +359,10 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
         covar_matrix = np.matrix(sol[1])
         a = sol[0][0]
         c = sol[0][1]
-        logger.warn("Bad power law fit. Results may be unphysical")
-        logger.warn("a: {0}".format(a))
-        logger.warn("c: {0}".format(c))
-        logger.warn("Covariance Matrix: {0}".format(covar_matrix))
+        logger.warning("Bad power law fit. Results may be unphysical")
+        logger.warning("a: {0}".format(a))
+        logger.warning("c: {0}".format(c))
+        logger.warning("Covariance Matrix: {0}".format(covar_matrix))
         return a, c, covar_matrix
     else:
         return a, c, covar_matrix
@@ -432,14 +433,14 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, f_mean=None):
             try:
                 flux_err = df[query+"_ERR"][0]
                 if flux_err == 0.0:
-                    logger.warn("Flux error for query: {0}, pulsar {1}, is zero. Assuming 20% uncertainty".format(query, pulsar))
+                    logger.warning("Flux error for query: {0}, pulsar {1}, is zero. Assuming 20% uncertainty".format(query, pulsar))
                     flux_err = flux*0.2
             except KeyError:
-                logger.warn("flux error value for {0}, pulsar {1}, not available. assuming 20% uncertainty".format(query, pulsar))
+                logger.warning("flux error value for {0}, pulsar {1}, not available. assuming 20% uncertainty".format(query, pulsar))
                 flux_err = flux*0.2
            
             if np.isnan(flux_err):
-                logger.warn("flux error value for {0}, pulsar {1}, not available. assuming 20% uncertainty".format(query, pulsar))
+                logger.warning("flux error value for {0}, pulsar {1}, not available. assuming 20% uncertainty".format(query, pulsar))
                 flux_err = flux*0.2
 
             freq_all.append(int(query.split()[0][1:])*1e6) #convert to Hz
@@ -495,13 +496,13 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, f_mean=None):
 
     #Do something different if there is only one flux value in archive
     elif len(flux_all) == 1:
-        logger.warn("Only a single flux value available on the archive")
+        logger.warning("Only a single flux value available on the archive")
 
         if not np.isnan(spind) and np.isnan(spind_err):
-            logger.warn("Spectral index error not available. Assuming 20% error")
+            logger.warning("Spectral index error not available. Assuming 20% error")
             spind_err = spind*0.2
         if np.isnan(spind):
-            logger.warn("Insufficient archival data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013")
+            logger.warning("Insufficient archival data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013")
             spind = -1.4
             spind_err = 1.
        
@@ -528,7 +529,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, f_mean=None):
         flux_est_err = np.sqrt(s_2_var + a_var)
 
     elif len(flux_all) < 1:
-        logger.warn("No flux values on archive for {0}. Cannot estimate flux. Will return Nones".format(pulsar))
+        logger.warning("No flux values on archive for {0}. Cannot estimate flux. Will return Nones".format(pulsar))
         return None, None
 
     
@@ -559,7 +560,7 @@ def find_pulsar_w50(pulsar):
     W_50 = query["W50"][0]
     W_50_err = query["W50_ERR"][0]
     if np.isnan(W_50):
-        logger.warn("W_50 is not on archive")
+        logger.warning("W_50 is not on archive")
         W_50=None
         W_50_err=None
     else:
@@ -567,14 +568,14 @@ def find_pulsar_w50(pulsar):
         W_50 = W_50/1000.
 
     if np.isnan(W_50_err) and not np.isnan(W_50):
-        logger.warn("W_50 error not on archive for {0}. returning standard 5% error".format(pulsar))
+        logger.warning("W_50 error not on archive for {0}. returning standard 5% error".format(pulsar))
         W_50_err = W_50*0.05   
     else:
         #convert to seconds
         W_50_err = W_50_err/1000.
 
     if W_50 is None:
-        logger.warn("Applying estimated W_50 for {0}. Uncertainty will be inflated".format(pulsar))
+        logger.warning("Applying estimated W_50 for {0}. Uncertainty will be inflated".format(pulsar))
         #Rankin1993 - W = x*P^0.5 where x=4.8+/-0.5 degrees of rotation at 1GHz
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
         coeff = 4.8
@@ -634,8 +635,8 @@ def find_times(obsid, pulsar, beg=None, end=None):
         enter, exit = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end)
         if beg is not None and end is not None:
             if beg<obsid or end<obsid or beg>(obsid+10000) or end>(obsid+10000): 
-                logger.warn("Beginning/end times supplied are outside the obsid")
-                logger.warn("Have you entered the correct times and obsid?")
+                logger.warning("Beginning/end times supplied are outside the obsid")
+                logger.warning("Have you entered the correct times and obsid?")
             dur = end-beg
         else: #use entire obs duration
             beg, end = mwa_metadb_utils.obs_max_min(obsid)
@@ -750,7 +751,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
 #---------------------------------------------------------------
 def est_pulsar_sn(pulsar, obsid,\
                  beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, plot_flux=False,\
-                enter=None, exit=None):
+                 enter=None, exit=None):
     
     """
     Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
@@ -823,7 +824,7 @@ def est_pulsar_sn(pulsar, obsid,\
     else:
         beg, end, t_int = find_times(obsid, pulsar, beg=beg, end=end)
     if t_int<=0.:
-        logger.warn("Pulsar not in beam for obs files or specificed beginning and end times")
+        logger.warning("Pulsar not in beam for obs files or specificed beginning and end times")
         return 0., 0.
 
     #find system temp and gain
