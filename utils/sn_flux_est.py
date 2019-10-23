@@ -118,7 +118,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
             #making a new profile with the only bin being the lowest point
             prof_min_i = np.argmin(prof_data)
             flags = []
-            for fi in range(len(prof_data)):
+            for fi, _ in enumerate(prof_data):
                 if fi == prof_min_i:
                     flags.append(prof_data[fi])
                 else:
@@ -461,7 +461,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, f_mean=None):
     #Attempt to estimate flux
     if len(flux_all) > 1:
         logger.info("Fitting power law to archive data")
-        for i in range(len(flux_all)):
+        for i, _ in enumerate(flux_all):
             flux_all[i] = flux_all[i]
             flux_err_all[i] = flux_err_all[i]
 
@@ -708,7 +708,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
         beg, _, t_int = find_times(obsid, pulsar, beg=beg)
 
     #Find 'start_time' for fpio - it's usually about 7 seconds
-    obs_start, _ = mwa_metadb_utils.obs_max_min(obsid)
+    #obs_start, _ = mwa_metadb_utils.obs_max_min(obsid)
     start_time = beg-int(obsid)
 
     #Get important info
@@ -735,7 +735,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
     t_sys = np.mean(t_sys_table)
     t_sys_err = t_sys*0.02 #TODO: figure out what t_sys error is
 
-    alts, _, zas = mwa_metadb_utils.mwa_alt_az_za(obsid, p_ra, p_dec)
+    _, _, zas = mwa_metadb_utils.mwa_alt_az_za(obsid, p_ra, p_dec)
     theta = np.radians(zas)
     gain = submit_to_database.from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
     gain_err = gain * ((1. - beam_power)*0.12 + 2.*(theta/(0.5*np.pi))**2. + 0.1)

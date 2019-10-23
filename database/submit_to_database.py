@@ -286,7 +286,7 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                                     beg=beg, t_int=t_int)
 
     #estimate S/N
-    sn, u_sn, flagged_profile, w_equiv_bins, _, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
+    sn, u_sn, _, w_equiv_bins, _, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
 
     logger.info("Profile scattered? {0}".format(scattered))
     logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
