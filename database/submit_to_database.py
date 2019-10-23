@@ -277,26 +277,26 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     """
     #unpack the bestprof_data
     #[obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
-    obsid, pulsar, _, period, _, beg, t_int, profile, num_bins = bestprof_data 
+    obsid, pulsar, _, period, _, beg, t_int, profile, num_bins = bestprof_data
     period=float(period)
     num_bins=int(num_bins)
 
     #get r_sys and gain
-    t_sys, u_t_sys, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid, obs_metadata=metadata,\
+    t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid, obs_metadata=metadata,\
                                     beg=beg, t_int=t_int)
-   
+
     #estimate S/N
-    sn, u_sn, flagged_profile, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
-  
+    sn, u_sn, flagged_profile, w_equiv_bins, _, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
+
     logger.info("Profile scattered? {0}".format(scattered))
     logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
     logger.debug("Gain {0} K/Jy".format(gain))
     logger.debug("Equivalent width in bins: {0}".format(w_equiv_bins))
     logger.debug("T_sys: {0} K".format(t_sys))
     logger.debug("Bandwidth: {0}".format(bandwidth))
-    logger.debug("Detection time: {0}".format(time_detection)) 
+    logger.debug("Detection time: {0}".format(time_detection))
     logger.debug("NUmber of bins: {0}".format(num_bins))
-    
+
     if scattered == False:
         #final calc of the mean fluxdesnity in mJy
         S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
@@ -400,7 +400,7 @@ Test set:
 Run these from the vcstools/database directory
 
 Scattered detection (crab):
-python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof tests/test_files/1127939368_J05342200.bestprof -L DEBUG 
+python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof tests/test_files/1127939368_J05342200.bestprof -L DEBUG
 Expected flux: 7500
 
 Weak detection (it's a 10 min detection):

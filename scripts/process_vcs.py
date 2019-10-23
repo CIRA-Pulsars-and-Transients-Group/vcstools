@@ -67,7 +67,7 @@ def find_combined_beg_end(obsid, base_path="/group/mwaops/vcs/", channels=None):
         obsid: The MWA observation ID
     Optional Input:
         base_path: the direct path the base vcs directory. Default: /group/mwaops/vcs/\
-        channels: a list of the frequency channel ids. Default None which then gets the 
+        channels: a list of the frequency channel ids. Default None which then gets the
                   from the mwa metadata
     """
     #TODO have some sort of check to look for gaps
@@ -84,10 +84,10 @@ def find_combined_beg_end(obsid, base_path="/group/mwaops/vcs/", channels=None):
         beg = min(comb_times)
         end = max(comb_times)
     else:
-        logger.warn("No combined files on disk for {0}".format(obsid))   
+        logger.warn("No combined files on disk for {0}".format(obsid))
         beg = None
         end = None
-        
+
     return beg, end
 
 

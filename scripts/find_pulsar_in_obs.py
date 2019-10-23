@@ -694,7 +694,7 @@ def write_output_source_files(output_data,
             output_file.write("#OAP:    The observation's array phase where P1 is the "
                                         "phase 1 array, P2C is the phase compact array "
                                         "and P2E is the phase 2 extended array.\n")
-            
+
             if SN_est:
                 output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
                 output_file.write("#S/N Err: The uncertainty of S/N Est\n")
@@ -704,7 +704,7 @@ def write_output_source_files(output_data,
             output_file.write('#Obs ID   |Dur |Enter|Exit |Power| OAP ')
             if SN_est:
                 output_file.write("|S/N Est|S/N Err")
-            
+
             if cal_check:
                 output_file.write("|Cal ID\n")
             else:
@@ -720,7 +720,7 @@ def write_output_source_files(output_data,
                         output_file.write('   None    None')
                     else:
                         output_file.write('{:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
-                
+
                 if cal_check:
                     #checks the MWA Pulsar Database to see if the obsid has been
                     #used or has been calibrated
@@ -764,13 +764,13 @@ def write_output_obs_files(output_data, obsid_meta,
             if SN_est:
                 output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
                 output_file.write("#S/N Err: The uncertainty of S/N Est\n")
-            
+
             output_file.write('#Source    |Enter|Exit |Power')
             if SN_est:
                 output_file.write('| S/N Est | S/N Err \n')
             else:
                 output_file.write('\n')
-            
+
             for data in output_data[obsid]:
                 pulsar, enter, exit, max_power = data
                 output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} '.format(pulsar,
@@ -786,7 +786,7 @@ def write_output_obs_files(output_data, obsid_meta,
                         output_file.write('{:9.2f} {:9.2f}\n'.format(pulsar_sn, pulsar_sn_err))
                 else:
                     output_file.write('\n')
-                
+
     return
 
 
