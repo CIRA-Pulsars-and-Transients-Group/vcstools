@@ -735,9 +735,11 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
     t_sys = np.mean(t_sys_table)
     t_sys_err = t_sys*0.02 #TODO: figure out what t_sys error is
 
-    _, _, zas = mwa_metadb_utils.mwa_alt_az_za(obsid, p_ra, p_dec)
+    logger.debug("pul_ra: {} pul_dec: {}".format(p_ra, p_dec))
+    _, _, zas = mwa_metadb_utils.mwa_alt_az_za(obsid, ra=p_ra, dec=p_dec)
     theta = np.radians(zas)
     gain = submit_to_database.from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
+    logger.debug("beam_power: {} theta: {} pi: {}".format(beam_power, theta, np.pi))
     gain_err = gain * ((1. - beam_power)*0.12 + 2.*(theta/(0.5*np.pi))**2. + 0.1)
 
     # Removed the below error catch because couldn't find an obs that breaks it
