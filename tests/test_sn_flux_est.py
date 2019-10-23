@@ -13,14 +13,23 @@ def test_pulsar_beam_coverage():
     obsid = 1223042480
     pulsar = "J2234+2114"
     test_cases = []
-    test_cases.append((None, None, 0.0, 0.072731816627943369))
     test_cases.append((1223042487, 1223042587, 0.0, 1.0))
-    test_cases.append((-1e10, -1e4, 0.0, 0.072731816627943369))
-       
+    
+    test_none_cases = []
+    test_none_cases.append((None, None, 0.0, 0.072731816627943369))
+    test_none_cases.append((-1e10, -1e4, 0.0, 0.072731816627943369))
+
     for beg, end, exp_enter, exp_exit in test_cases:
         out_enter, out_exit = snfe.pulsar_beam_coverage(obsid, pulsar, beg, end)
         assert_almost_equal(exp_enter, out_enter, decimal=6)
         assert_almost_equal(exp_exit, out_exit, decimal=6)
+
+    #seperately test the none tests because assert_almost_equal doesn't handle Nones
+    for beg, end, exp_enter, exp_exit in test_none_cases:
+        out_enter, out_exit = snfe.pulsar_beam_coverage(obsid, pulsar, beg, end)
+        if out_enter is not None or out_exit is not None:
+            raise AssertionError()
+
  
 def test_find_times():
     """
@@ -63,8 +72,9 @@ def test_find_t_sys_gain():
 
     for pulsar, obsid, beg, t_int, p_ra, p_dec, metadata,\
         exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err in test_cases:
-        t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(\
-                pulsar, obsid, beg=beg, t_int=t_int, p_ra=p_ra, p_dec=p_dec, obs_metadata=metadata)
+        t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(pulsar, obsid, beg=beg,
+                t_int=t_int, p_ra=p_ra, p_dec=p_dec, obs_metadata=metadata,
+                trcvr='database/MWA_Trcvr_tile_56.csv')
         assert_almost_equal(exp_t_sys, t_sys, decimal=6)
         assert_almost_equal(exp_t_sys_err, t_sys_err, decimal=6)
         assert_almost_equal(exp_gain, gain, decimal=6)
