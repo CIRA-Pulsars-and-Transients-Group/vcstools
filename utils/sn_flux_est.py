@@ -571,7 +571,7 @@ def find_pulsar_w50(pulsar):
         #convert to seconds
         W_50_err = W_50_err/1000.
 
-    if np.isnan(W50):
+    if np.isnan(W_50):
         logger.warning("Applying estimated W_50 for {0}. Uncertainty will be inflated".format(pulsar))
         #Rankin1993 - W = x*P^0.5 where x=4.8+/-0.5 degrees of rotation at 1GHz
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
