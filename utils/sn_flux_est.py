@@ -118,7 +118,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
             #making a new profile with the only bin being the lowest point
             prof_min_i = np.argmin(prof_data)
             flags = []
-            for fi in range(len(prof_data)):
+            for fi, _ in enumerate(prof_data):
                 if fi == prof_min_i:
                     flags.append(prof_data[fi])
                 else:
@@ -461,7 +461,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, f_mean=None):
     #Attempt to estimate flux
     if len(flux_all) > 1:
         logger.info("Fitting power law to archive data")
-        for i in range(len(flux_all)):
+        for i, _ in enumerate(flux_all):
             flux_all[i] = flux_all[i]
             flux_err_all[i] = flux_err_all[i]
 
@@ -571,7 +571,7 @@ def find_pulsar_w50(pulsar):
         #convert to seconds
         W_50_err = W_50_err/1000.
 
-    if np.isnan(W50):
+    if np.isnan(W_50):
         logger.warning("Applying estimated W_50 for {0}. Uncertainty will be inflated".format(pulsar))
         #Rankin1993 - W = x*P^0.5 where x=4.8+/-0.5 degrees of rotation at 1GHz
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
@@ -708,7 +708,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
         beg, _, t_int = find_times(obsid, pulsar, beg=beg)
 
     #Find 'start_time' for fpio - it's usually about 7 seconds
-    obs_start, _ = mwa_metadb_utils.obs_max_min(obsid)
+    #obs_start, _ = mwa_metadb_utils.obs_max_min(obsid)
     start_time = beg-int(obsid)
 
     #Get important info
@@ -735,24 +735,27 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
     t_sys = np.mean(t_sys_table)
     t_sys_err = t_sys*0.02 #TODO: figure out what t_sys error is
 
-    alts, _, zas = mwa_metadb_utils.mwa_alt_az_za(obsid, p_ra, p_dec)
+    logger.debug("pul_ra: {} pul_dec: {}".format(p_ra, p_dec))
+    _, _, zas = mwa_metadb_utils.mwa_alt_az_za(obsid, ra=p_ra, dec=p_dec)
     theta = np.radians(zas)
     gain = submit_to_database.from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
+    logger.debug("beam_power: {} theta: {} pi: {}".format(beam_power, theta, np.pi))
     gain_err = gain * ((1. - beam_power)*0.12 + 2.*(theta/(0.5*np.pi))**2. + 0.1)
 
+    # Removed the below error catch because couldn't find an obs that breaks it
     #sometimes gain_err is a numpy array and sometimes it isnt so i have to to this...
-    try:
-        gain_err.shape
-        gain_err = gain_err[0]
-    except:
-        pass
+    #try:
+    #    gain_err.shape
+    #    gain_err = gain_err[0]
+    #except:
+    #    pass
 
     return t_sys, t_sys_err, gain, gain_err
 
 #---------------------------------------------------------------
 def est_pulsar_sn(pulsar, obsid,\
                  beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, plot_flux=False,\
-                 enter=None, exit=None):
+                 enter=None, exit=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
     Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
@@ -829,8 +832,9 @@ def est_pulsar_sn(pulsar, obsid,\
         return 0., 0.
 
     #find system temp and gain
-    t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid,\
-                                 beg=beg, p_ra=p_ra, p_dec=p_dec, obs_metadata=obs_metadata)
+    t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid,
+                                 beg=beg, p_ra=p_ra, p_dec=p_dec, obs_metadata=obs_metadata,
+                                 trcvr=trcvr)
 
     #Find W_50
     W_50, W_50_err = find_pulsar_w50(pulsar)
