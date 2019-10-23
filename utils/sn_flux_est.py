@@ -560,8 +560,8 @@ def find_pulsar_w50(pulsar):
     W_50_err = query["W50_ERR"][0]
     if np.isnan(W_50):
         logger.warn("W_50 is not on archive")
-        W_50=None
-        W_50_err=None
+        W_50=np.nan
+        W_50_err=np.nan
     else:
         #convert to seconds
         W_50 = W_50/1000.
@@ -573,7 +573,7 @@ def find_pulsar_w50(pulsar):
         #convert to seconds
         W_50_err = W_50_err/1000.
 
-    if W_50 is None:
+    if np.isnan(W50):
         logger.warn("Applying estimated W_50 for {0}. Uncertainty will be inflated".format(pulsar))
         #Rankin1993 - W = x*P^0.5 where x=4.8+/-0.5 degrees of rotation at 1GHz
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
@@ -594,6 +594,10 @@ def find_pulsar_w50(pulsar):
         W_50 = (W_50/360.)*period
         W_50_err = (W_50_err/360.)*period
 
+    if np.isnan(W_50):
+        W_50=None
+    if np.isnan(W_50_err):
+        W_50_err=None
     return W_50, W_50_err
 
 #---------------------------------------------------------------
