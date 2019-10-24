@@ -2,15 +2,18 @@
 """
 Tests the sn_flux_est.py script
 """
+import os
 from numpy.testing import assert_almost_equal
 import mwa_metadb_utils
 import psrqpy
 import sn_flux_est as snfe
+
 try:
     ATNF_LOC = os.environ['PSRCAT_FILE']
 except KeyError:
     print("ATNF database could not be found on disk.")
     ATNF_LOC = None
+
 
 def test_pulsar_beam_coverage():
     """
