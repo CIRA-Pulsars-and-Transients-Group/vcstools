@@ -96,6 +96,11 @@ def test_find_pulsar_w50():
     test_cases.append(("J0206-4028", 0.0049000000000000007, 0.00024500000000000005))
     test_cases.append(("J2222-0137", 0.00056999999999999998, 5.0000000000000004e-06))
 
+    # None check
+    w50, w50_err = snfe.find_pulsar_w50('J1614-2230')
+    if w50 is not None or w50_err is not None:
+        raise AssertionError()
+
     for psr, exp_w50, exp_w50_err in test_cases:
         w50, w50_err = snfe.find_pulsar_w50(psr)
         assert_almost_equal(exp_w50, w50, decimal=6)
