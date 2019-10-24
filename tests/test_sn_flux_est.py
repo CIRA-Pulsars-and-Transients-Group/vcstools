@@ -92,14 +92,10 @@ def test_find_pulsar_w50():
     Tests the find_pulsar_w50 function
     """
     test_cases=[]
+    test_cases.append(("J1614-2230", 2.3581508027839326e-06, 1.9651256689866104e-06))
     test_cases.append(("J2241-5236", 7.0000000000000007e-05, 3.5000000000000004e-06))
     test_cases.append(("J0206-4028", 0.0049000000000000007, 0.00024500000000000005))
     test_cases.append(("J2222-0137", 0.00056999999999999998, 5.0000000000000004e-06))
-
-    # None check
-    w50, w50_err = snfe.find_pulsar_w50('J1614-2230')
-    if w50 is not None or w50_err is not None:
-        raise AssertionError()
 
     for psr, exp_w50, exp_w50_err in test_cases:
         w50, w50_err = snfe.find_pulsar_w50(psr)
@@ -122,6 +118,12 @@ def test_est_pulsar_flux():
         flux, flux_err = snfe.est_pulsar_flux(psr, obsid)
         assert_almost_equal(exp_flux, flux, decimal=6)
         assert_almost_equal(exp_flux_err, flux_err, decimal=6)
+    #adding a test that gave a none type error for alpha_bound, c_bound
+    flux, flux_err = snfe.est_pulsar_sn('J1623-2631', 1117643248,
+                                        beg=1117643268, end=1117645615,
+                                        enter=0.000, exit=0.842)
+    assert_almost_equal(54.87670949932577, flux, decimal=6)
+    assert_almost_equal(10.834221841785626, flux_err, decimal=6)
 
 def test_est_pulsar_sn():
     """
