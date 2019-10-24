@@ -559,7 +559,7 @@ def find_pulsar_w50(pulsar, query=None):
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
         coeff = 4.8
         coeff_err = 2.
-        period = float(period_query["P0"][0])
+        period = float(query["P0"][0])
 
         #This estimation is worse for msps, add extra uncetainty if period < 50ms
         if period <0.05:
