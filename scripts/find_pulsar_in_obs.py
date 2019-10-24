@@ -779,7 +779,7 @@ def write_output_obs_files(output_data, obsid_meta,
                     beg = int(obsid) + 7
                     end = beg + int(obsid_meta[on][3])
                     pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid, beg=beg, end=end,\
-                      obs_metadata=obsid_meta[on], enter=enter, exit=exit)
+                      obs_metadata=obsid_meta[on], o_enter=enter, o_exit=exit)
                     if pulsar_sn is None:
                         output_file.write('   None    None\n')
                     else:

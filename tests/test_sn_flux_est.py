@@ -2,15 +2,21 @@
 """
 Tests the sn_flux_est.py script
 """
+import os
 from numpy.testing import assert_almost_equal
 import mwa_metadb_utils
 import psrqpy
 import sn_flux_est as snfe
+
+import logging
+logger = logging.getLogger(__name__)
+
 try:
     ATNF_LOC = os.environ['PSRCAT_FILE']
 except KeyError:
     print("ATNF database could not be found on disk.")
     ATNF_LOC = None
+
 
 def test_pulsar_beam_coverage():
     """
@@ -118,13 +124,7 @@ def test_est_pulsar_flux():
         flux, flux_err = snfe.est_pulsar_flux(psr, obsid)
         assert_almost_equal(exp_flux, flux, decimal=6)
         assert_almost_equal(exp_flux_err, flux_err, decimal=6)
-    #adding a test that gave a none type error for alpha_bound, c_bound
-    flux, flux_err = snfe.est_pulsar_sn('J1623-2631', 1117643248,
-                                        beg=1117643268, end=1117645615,
-                                        enter=0.000, exit=0.842,
-                                        trcvr='database/MWA_Trcvr_tile_56.csv')
-    assert_almost_equal(54.87670949932577, flux, decimal=6)
-    assert_almost_equal(10.834221841785626, flux_err, decimal=6)
+
 
 def test_est_pulsar_sn():
     """
@@ -153,13 +153,17 @@ def test_est_pulsar_sn():
     #Has 6 fluxes on database
     test_cases.append(("J2330-2005", 1226062160, None, None, "23:00:00", "-20:00:00", None, None,\
                     170.21786481066005, 105.7680352306031))
+    #adding a test that gave a none type error for alpha_bound, c_bound
+    test_cases.append(("J1623-2631", 1117643248, 1117643268, 1117645615, None, None, 0.000, 0.842,
+                    54.87670949932577, 10.834221841785626))
 
 
     for psr, obsid, beg, end, ra, dec, enter, exit, exp_sn, exp_sn_err in test_cases:
         sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec,\
-                        enter=enter, exit=exit, trcvr='database/MWA_Trcvr_tile_56.csv')
-        assert_almost_equal(exp_sn, sn, decimal=6)
-        assert_almost_equal(exp_sn_err, sn_err, decimal=6)
+                        o_enter=enter, o_exit=exit, trcvr='database/MWA_Trcvr_tile_56.csv')
+        assert_almost_equal(exp_sn, sn, decimal=5)
+        assert_almost_equal(exp_sn_err, sn_err, decimal=5)
+
 
 if __name__ == "__main__":
     """
