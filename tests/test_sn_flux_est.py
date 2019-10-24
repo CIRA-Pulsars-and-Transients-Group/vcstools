@@ -158,8 +158,8 @@ def test_est_pulsar_sn():
     for psr, obsid, beg, end, ra, dec, enter, exit, exp_sn, exp_sn_err in test_cases:
         sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec,\
                         o_enter=enter, o_exit=exit, trcvr='database/MWA_Trcvr_tile_56.csv')
-        assert_almost_equal(exp_sn, sn, decimal=6)
-        assert_almost_equal(exp_sn_err, sn_err, decimal=6)
+        assert_almost_equal(exp_sn, sn, decimal=5)
+        assert_almost_equal(exp_sn_err, sn_err, decimal=5)
 
 
 if __name__ == "__main__":
