@@ -8,6 +8,9 @@ import mwa_metadb_utils
 import psrqpy
 import sn_flux_est as snfe
 
+import logging
+logger = logging.getLogger(__name__)
+
 try:
     ATNF_LOC = os.environ['PSRCAT_FILE']
 except KeyError:
@@ -29,12 +32,14 @@ def test_pulsar_beam_coverage():
     test_none_cases.append((-1e10, -1e4, 0.0, 0.072731816627943369))
 
     for beg, end, exp_enter, exp_exit in test_cases:
+        logger.debug(beg, end, exp_enter, exp_exit)
         out_enter, out_exit = snfe.pulsar_beam_coverage(obsid, pulsar, beg, end)
         assert_almost_equal(exp_enter, out_enter, decimal=6)
         assert_almost_equal(exp_exit, out_exit, decimal=6)
 
     #seperately test the none tests because assert_almost_equal doesn't handle Nones
     for beg, end, exp_enter, exp_exit in test_none_cases:
+        logger.debug(beg, end, exp_enter, exp_exit)
         out_enter, out_exit = snfe.pulsar_beam_coverage(obsid, pulsar, beg, end)
         if out_enter is not None or out_exit is not None:
             raise AssertionError()
@@ -51,6 +56,7 @@ def test_find_times():
     test_cases.append((1223042487, 1223042587, 1223042487, 1223042587, 100.0))
 
     for beg, end, exp_beg, exp_end, exp_int in test_cases:
+        logger.debug(beg, end, exp_beg, exp_end, exp_int)
         out_beg, out_end, out_int = snfe.find_times(obsid, pulsar, beg=beg, end=end)
         assert_almost_equal(exp_beg, out_beg, decimal=6)
         assert_almost_equal(exp_end, out_end, decimal=6)
@@ -82,6 +88,8 @@ def test_find_t_sys_gain():
 
     for pulsar, obsid, beg, t_int, query, metadata,\
         exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err in test_cases:
+        logger.debug(pulsar, obsid, beg, t_int, query, metadata,
+                     exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err)
         t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(pulsar, obsid, beg=beg,
                 t_int=t_int, query=query, obs_metadata=metadata,
                 trcvr='database/MWA_Trcvr_tile_56.csv')
@@ -101,6 +109,7 @@ def test_find_pulsar_w50():
     test_cases.append(("J2222-0137", 0.00056999999999999998, 5.0000000000000004e-06))
 
     for psr, exp_w50, exp_w50_err in test_cases:
+        logger.debug(psr, exp_w50, exp_w50_err)
         w50, w50_err = snfe.find_pulsar_w50(psr)
         assert_almost_equal(exp_w50, w50, decimal=6)
         assert_almost_equal(exp_w50_err, w50_err, decimal=6)
@@ -118,6 +127,7 @@ def test_est_pulsar_flux():
 
 
     for psr, obsid, exp_flux, exp_flux_err in test_cases:
+        logger.debug(psr, exp_w50, exp_w50_err)
         flux, flux_err = snfe.est_pulsar_flux(psr, obsid)
         assert_almost_equal(exp_flux, flux, decimal=6)
         assert_almost_equal(exp_flux_err, flux_err, decimal=6)
@@ -156,6 +166,7 @@ def test_est_pulsar_sn():
 
 
     for psr, obsid, beg, end, ra, dec, enter, exit, exp_sn, exp_sn_err in test_cases:
+        logger.debug(psr, obsid, beg, end, ra, dec, enter, exit, exp_sn, exp_sn_err)
         sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec,\
                         o_enter=enter, o_exit=exit, trcvr='database/MWA_Trcvr_tile_56.csv')
         assert_almost_equal(exp_sn, sn, decimal=5)
