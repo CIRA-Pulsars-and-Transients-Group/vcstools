@@ -244,8 +244,8 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
     return enter_files, exit_files
 
 #---------------------------------------------------------------
-def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_bound=[-3., 0.],\
-                c_bound=[0., 50.]):
+def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_bound=None,
+                c_bound=None):
     """
     Used primarily by est_pulsar_flux() to fit a power law function to input data. Intended for use with pulsar flux densities
 
@@ -273,6 +273,12 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
     covar_matrix: np.matrix
         The covariance matrix of the fit. Contains the information required to for uncertainty calculations
     """
+    # Parse defaults
+    if alpha_bound is None:
+        alpha_bound = [-3., 0.]
+    if c_bound is None:
+        c_bound = [0., 50.]
+
     def log_plaw_func(nu, a, c):
         #pass the log values of nu
         return np.exp(a * np.log(nu) + c)
