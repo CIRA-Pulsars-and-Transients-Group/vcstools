@@ -6,7 +6,7 @@ before_install:
     # Setup the login so I can clone private repos
     - echo -e "machine github.com\n  login NickSwainston\n  password $CI_USER_PASSWORD" > ~/.netrc
 # command to install dependencies
-install:
+install: travis_wait 30 mvn install
     # installing dependancies manually
     - pip install astropy
     - pip install argparse
@@ -15,7 +15,6 @@ install:
     - pip install scipy
     - pip install psrqpy
 
-    - travis_wait 30 pip install scipy
     - pip install coveralls
     - pip install codacy-coverage
 
