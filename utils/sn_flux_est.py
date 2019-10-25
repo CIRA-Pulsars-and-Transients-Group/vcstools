@@ -21,7 +21,6 @@ from scipy.optimize import curve_fit
 
 #vcstools and mwa_search
 from mwa_pb import primarybeammap_tant as pbtant
-import file_maxmin
 import find_pulsar_in_obs as fpio
 import mwa_metadb_utils
 import submit_to_database
@@ -31,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 try:
     ATNF_LOC = os.environ['PSRCAT_FILE']
-except:
+except KeyError:
     logger.warning("ATNF database could not be found on disk.")
     ATNF_LOC = None
 
@@ -541,7 +540,7 @@ def find_pulsar_w50(pulsar, query=None):
         #returns W_50 and error for a pulsar from the ATNF archive IN SECONDS
         logger.debug("Accessing ATNF database")
         query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
-    
+
     W_50 = query["W50"][0]
     W_50_err = query["W50_ERR"][0]
     if np.isnan(W_50):
@@ -749,6 +748,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
 def est_pulsar_sn(pulsar, obsid,\
                  beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, plot_flux=False,\
                  enter=None, exit=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                 query=None, o_enter=None, o_exit=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
     Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
@@ -773,10 +773,10 @@ def est_pulsar_sn(pulsar, obsid,\
         OPTIONAL - the array generated from mwa_metadb_utils.get_common_obs_metadata(obsid)
     plot_flux: boolean
         OPTIONAL - whether or not to produce a plot of the flux estimation. Default = False
-    enter: float
-        OPTIONAL - The normalised enter time of the pulsar's coverage in the beam (between 0 and 1)
-    exit: float
-        OPTIONAL - The normalised exit time of the pulsar's covreage in the beam (between 0 and 1)
+    o_enter: float
+        OPTIONAL - The normalised o_enter time of the pulsar's coverage in the beam (between 0 and 1)
+    o_exit: float
+        OPTIONAL - The normalised o_exit time of the pulsar's covreage in the beam (between 0 and 1)
 
     Returns:
     --------
@@ -788,9 +788,9 @@ def est_pulsar_sn(pulsar, obsid,\
     #We will attain uncertainties for s_mean, gain, t_sys and W_50.
     # other uncertainties are considered negligible
 
-    if query is None: 
+    if query is None:
         query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=ATNF_LOC).pandas
-    
+
     if p_ra is None or p_dec is None:
         #Get some basic pulsar and obs info info
         p_ra = query["RAJ"][0]
@@ -803,7 +803,6 @@ def est_pulsar_sn(pulsar, obsid,\
 
     n_p = 2 #constant
     df = 30.72e6 #(24*1.28e6)
-    f_mean = obs_metadata[5]*1e6
 
     #estimate flux
     s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux,\
@@ -814,8 +813,8 @@ def est_pulsar_sn(pulsar, obsid,\
         return None, None
 
     #find integration time
-    if enter is not None and exit is not None:
-        t_int = exit-enter
+    if o_enter is not None and o_exit is not None:
+        t_int = o_exit-o_enter
         if beg is not None and end is not None:
             t_int = t_int*(end-beg)
         else:
