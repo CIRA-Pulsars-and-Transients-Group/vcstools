@@ -6,9 +6,7 @@ before_install:
     # Setup the login so I can clone private repos
     - echo -e "machine github.com\n  login NickSwainston\n  password $CI_USER_PASSWORD" > ~/.netrc
 # command to install dependencies
-# travis_wait will stop travis timing out
 install:
-    - travis_wait 30 mvn install
     # installing dependancies manually
     - pip install astropy
     - pip install argparse
@@ -22,6 +20,10 @@ install:
 
     #install vcstoos
     - python setup.py build --build-scripts=$HOME/build/
+    # travis_wait will stop travis timing out
+    - cd $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/
+    - travis_wait 30 mvn install
+    - cd -
     #install mwa_pb
     - git clone --single-branch --branch 2to3 https://github.com/MWATelescope/mwa_pb.git
     - cd mwa_pb
