@@ -7,7 +7,8 @@ before_install:
     - echo -e "machine github.com\n  login NickSwainston\n  password $CI_USER_PASSWORD" > ~/.netrc
 # command to install dependencies
 # travis_wait will stop travis timing out
-install: travis_wait 30 mvn install
+install:
+    - travis_wait 30 mvn install
     # installing dependancies manually
     - pip install astropy
     - pip install argparse
