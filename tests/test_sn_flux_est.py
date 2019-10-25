@@ -73,14 +73,10 @@ def test_find_t_sys_gain():
     q_1 = psrqpy.QueryATNF(psrs=[pulsar_1], loadfromdb=ATNF_LOC)
     q_2 = psrqpy.QueryATNF(psrs=[pulsar_2], loadfromdb=ATNF_LOC)
     test_cases = []
-    test_cases.append((pulsar_1, obsid_1, None,  None, q_1, md_1,\
-                325.17339020027805, 6.5034678040055613, 0.058213031891171774, 0.045422291670257645))
     test_cases.append((pulsar_1, obsid_1, 1223042887, 600, q_1, md_1,\
                 325.17339020027805, 6.5034678040055613, 0.12547449408456718, 0.095633857616224477))
     test_cases.append((pulsar_2, obsid_2, None, None, q_2, md_2,\
                 295.73944858721245, 5.9147889717442492, 0.29127750035795497, 0.049367868667752078))
-    test_cases.append((pulsar_2, obsid_2, 1222697776, 600, q_2, md_2,\
-                295.73944858721245, 5.9147889717442492, 0.25821682643334642, 0.046061670840738742))
 
 
     for pulsar, obsid, beg, t_int, query, metadata,\
@@ -99,9 +95,6 @@ def test_find_pulsar_w50():
     """
     test_cases=[]
     test_cases.append(("J1614-2230", 2.3581508027839326e-06, 1.9651256689866104e-06))
-    test_cases.append(("J2241-5236", 7.0000000000000007e-05, 3.5000000000000004e-06))
-    test_cases.append(("J0206-4028", 0.0049000000000000007, 0.00024500000000000005))
-    test_cases.append(("J2222-0137", 0.00056999999999999998, 5.0000000000000004e-06))
 
     for psr, exp_w50, exp_w50_err in test_cases:
         w50, w50_err = snfe.find_pulsar_w50(psr)
@@ -115,10 +108,7 @@ def test_est_pulsar_flux():
     """
 
     test_cases = []
-    test_cases.append(("J2241-5236", 1224252736, 0.18098241304756868, 0.009279186356809042))
     test_cases.append(("J2330-2005", 1226062160, 0.061795706713084243, 0.035885388925934944))
-    test_cases.append(("J0151-0635", 1225462936, 0.033057081200313143, 0.01252086439796237))
-
 
     for psr, obsid, exp_flux, exp_flux_err in test_cases:
         flux, flux_err = snfe.est_pulsar_flux(psr, obsid)
@@ -142,14 +132,6 @@ def test_est_pulsar_sn():
     #Has 3 fluxes on database
     test_cases.append(("J2241-5236", 1225713560, None, None, None, None, None, None,\
                     210.73514723357826, 76.172577391391144))
-    #Has 7 fluxes on database
-    test_cases.append(("J0152-1637", 1225462936, 1225462943, 1225463543, None, None, None, None,\
-                    98.531425033866824, 23.412303096333339))
-    #Has 7 fluxes on database
-    test_cases.append(("J2145-0750", 1221832280, 1221832287, 1221832887, None, None, 0.0, 0.6,\
-                    88.458172558188394, 27.415375512046026))
-    test_cases.append(("J2145-0750", 1221832280, 0, 1, None, None, None, None,\
-                    0.0, 0.0))
     #Has 6 fluxes on database
     test_cases.append(("J2330-2005", 1226062160, None, None, "23:00:00", "-20:00:00", None, None,\
                     170.21786481066005, 105.7680352306031))
@@ -160,7 +142,7 @@ def test_est_pulsar_sn():
 
     for psr, obsid, beg, end, ra, dec, enter, exit, exp_sn, exp_sn_err in test_cases:
         sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec,\
-                        o_enter=enter, o_exit=exit, trcvr='database/MWA_Trcvr_tile_56.csv')
+                    o_enter=enter, o_exit=exit, trcvr='database/MWA_Trcvr_tile_56.csv')
         assert_almost_equal(exp_sn, sn, decimal=5)
         assert_almost_equal(exp_sn_err, sn_err, decimal=5)
 
