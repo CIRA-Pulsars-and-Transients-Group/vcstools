@@ -747,7 +747,6 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
 #---------------------------------------------------------------
 def est_pulsar_sn(pulsar, obsid,\
                  beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, plot_flux=False,\
-                 enter=None, exit=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
                  query=None, o_enter=None, o_exit=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
