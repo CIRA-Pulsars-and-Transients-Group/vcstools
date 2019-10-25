@@ -33,11 +33,16 @@ install:
     - cd mwa-voltage/mwa_pulsar_client
     - python setup.py install
     - cd ../../
+    #download psrcat database
+    - wget https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/psrcat_pkg.tar.gz
+    - gunzip psrcat_pkg.tar.gz
+    - tar -xvf psrcat_pkg.tar
     # force environment variables
     - export PYTHONPATH=$HOME/build/
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
     - export KNOWN_RFRB_CSV=$HOME/build/known_repeating_FRBs.csv
     - export CMD_VCS_DB_FILE=None
+    - export PSRCAT_FILE=$HOME/build/psrcat_tar/psrcat.db
 # command to run tests
 script:
     #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
