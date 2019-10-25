@@ -16,6 +16,7 @@ from reorder_chans import *
 from mdir import mdir
 import numpy as np
 import logging
+import glob
 
 #vcstools functions
 from job_submit import submit_slurm
@@ -57,6 +58,37 @@ def get_user_email():
     command="echo `ldapsearch -x \"uid=$USER\" mail |grep \"^mail\"|cut -f2 -d' '`"
     email = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).communicate()[0]
     return email.strip()
+
+
+def find_combined_beg_end(obsid, base_path="/group/mwaops/vcs/", channels=None):
+    """
+    looks through the comined files of the input obsid and returns the max and min in gps time
+    Input:
+        obsid: The MWA observation ID
+    Optional Input:
+        base_path: the direct path the base vcs directory. Default: /group/mwaops/vcs/\
+        channels: a list of the frequency channel ids. Default None which then gets the
+                  from the mwa metadata
+    """
+    #TODO have some sort of check to look for gaps
+    if glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid)):
+        combined_files = glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid))
+    else:
+        channels = meta.get_channels(obsid, channels)
+        combined_files = glob.glob("{0}/{1}/combined/{1}*_ch{2}.dat".\
+                                   format(base_path, obsid, channels[-1]))
+    if len(combined_files) > 0:
+        comb_times = []
+        for comb in combined_files:
+            comb_times.append(int(comb.split("_")[1]))
+        beg = min(comb_times)
+        end = max(comb_times)
+    else:
+        logger.warn("No combined files on disk for {0}".format(obsid))
+        beg = None
+        end = None
+
+    return beg, end
 
 
 def gps_time_lists(start, stop, chunk):
@@ -832,6 +864,8 @@ if __name__ == '__main__':
     parser.add_argument("-b", "--begin", type=int, help="First GPS time to process [no default]")
     parser.add_argument("-e", "--end", type=int, help="Last GPS time to process [no default]")
     parser.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. ")
+    parser.add_argument("--all_avail", action="store_true", default=False,
+                      help="Uses all of the available combined files available (does not check for gaps). [default=False]")
     parser.add_argument("-i", "--increment", type=int, default=64, help="Increment in seconds (how much we process at once) ")
     parser.add_argument("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) ")
     parser.add_argument("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default "

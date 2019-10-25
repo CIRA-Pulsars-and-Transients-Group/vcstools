@@ -2,8 +2,12 @@ language: python
 python:
   - "3.6"
   - "3.7"
+before_install:
+    # Setup the login so I can clone private repos
+    - echo -e "machine github.com\n  login NickSwainston\n  password $CI_USER_PASSWORD" > ~/.netrc
 # command to install dependencies
-install:
+# travis_wait will stop travis timing out
+install: travis_wait 30 mvn install
     # installing dependancies manually
     - pip install astropy
     - pip install argparse
@@ -11,7 +15,7 @@ install:
     - pip install matplotlib
     - pip install scipy
     - pip install psrqpy
-    
+
     - pip install coveralls
     - pip install codacy-coverage
 
@@ -25,10 +29,16 @@ install:
     - cd ..
     - rm $HOME/build/*test.py
     - rm $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/*test.py
+    #install mwa_client
+    - git clone --single-branch --branch python3 https://github.com/ICRAR/mwa-voltage
+    - cd mwa-voltage/mwa_pulsar_client
+    - python setup.py install
+    - cd ../../
     # force environment variables
     - export PYTHONPATH=$HOME/build/
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
     - export KNOWN_RFRB_CSV=$HOME/build/known_repeating_FRBs.csv
+    - export CMD_VCS_DB_FILE=None
 # command to run tests
 script:
     #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
