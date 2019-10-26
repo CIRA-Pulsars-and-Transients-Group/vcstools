@@ -39,8 +39,9 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     from astropy.time import Time
     from astropy.coordinates import SkyCoord, AltAz, EarthLocation
     from astropy import units as u
-    from astropy import utils
-    utils.iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
+    from astropy.utils import iers
+    iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
+    logger.info(iers.IERS_A_URL)
 
     obstime = Time(float(obsid),format='gps')
 

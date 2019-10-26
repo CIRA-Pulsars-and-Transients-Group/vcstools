@@ -22,6 +22,7 @@ def test_pulsar_beam_coverage():
     """
     Tests the pulsar_beam_coverage funtion
     """
+    print("test_pulsar_beam_coverage")
     obsid = 1223042480
     pulsar = "J2234+2114"
     test_cases = []
@@ -47,6 +48,7 @@ def test_find_times():
     """
     Tests the find_times function
     """
+    print("find_times")
     obsid = 1223042480
     pulsar = "J2234+2114"
     test_cases = []
@@ -64,6 +66,7 @@ def test_find_t_sys_gain():
     """
     Tests the find_t_sys_gain function
     """
+    print("find_t_sys_gain")
     obsid_1=1223042480
     pulsar_1= "J2234+2114"
     obsid_2=1222697776
@@ -93,6 +96,7 @@ def test_find_pulsar_w50():
     """
     Tests the find_pulsar_w50 function
     """
+    print("find_pulsar_w50")
     test_cases=[]
     test_cases.append(("J1614-2230", 2.3581508027839326e-06, 1.9651256689866104e-06))
 
@@ -106,6 +110,7 @@ def test_est_pulsar_flux():
     """
     Tests the est_pulsar_flux function
     """
+    print("est_pulsar_flux")
 
     test_cases = []
     test_cases.append(("J2330-2005", 1226062160, 0.061795706713084243, 0.035885388925934944))
@@ -127,7 +132,7 @@ def test_est_pulsar_sn():
     1225713560, -b 1225713567 -e 1225714167, psr J2241-5236: Function estimated a S/N of 75.61 +/-27.27. Compared this to the profile estimation and attained S/N of 17.36 +/- 2.41
 
     """
-
+    print("est_pulsar_sn")
     test_cases=[]
     #Has 3 fluxes on database
     test_cases.append(("J2241-5236", 1225713560, None, None, None, None, None, None,\
