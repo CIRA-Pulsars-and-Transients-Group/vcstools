@@ -51,7 +51,7 @@ install:
 script:
     #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
     #trying to stop travis timing out
-    - sn_flux_est.py -p J2241-5236 -o 1225713560
+    - sn_flux_est.py -p J2241-5236 -o 1225713560 -L DEBUG
     - travis_wait 30 coverage run setup.py test
 after_success:
     - coverage xml
