@@ -38,6 +38,7 @@ install:
     - gunzip psrcat_pkg.tar.gz
     - tar -xvf psrcat_pkg.tar
     # force environment variables
+    - export PATH=$PATH:$HOME/build/
     - export PYTHONPATH=$HOME/build/
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
     - export KNOWN_RFRB_CSV=$HOME/build/known_repeating_FRBs.csv
