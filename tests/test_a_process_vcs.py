@@ -6,9 +6,7 @@ Tests the find_pulsar_in_obs.py script
 from astropy.utils import iers
 iers.IERS_A_URL = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all'
 from astroplan import download_IERS_A
-from astroplan import download_IERS_B
 download_IERS_A()
-download_IERS_B()
 
 
 import process_vcs
