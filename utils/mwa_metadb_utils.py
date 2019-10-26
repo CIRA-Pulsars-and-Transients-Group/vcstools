@@ -36,14 +36,14 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
         dec    : The declintation in HH:MM:SS
         degrees: If true the ra and dec is given in degrees (Default:False)
     """
-    from astropy.time import Time
-    from astropy.coordinates import SkyCoord, AltAz, EarthLocation
-    from astropy import units as u
     from astropy.utils import iers
     iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
     logger.info(iers.IERS_A_URL)
 
-    obstime = Time(float(obsid),format='gps')
+    from astropy.time import Time
+    from astropy.coordinates import SkyCoord, AltAz, EarthLocation
+    from astropy import units as u
+        obstime = Time(float(obsid),format='gps')
 
     if ra is None or dec is None:
         #if no ra and dec given use obsid ra and dec
