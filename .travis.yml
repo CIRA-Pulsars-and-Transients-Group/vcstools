@@ -42,13 +42,13 @@ install:
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
     - export KNOWN_RFRB_CSV=$HOME/build/known_repeating_FRBs.csv
     - export CMD_VCS_DB_FILE=None
-    - pwd
-      ls :$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/
+    - ls $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/psrcat_tar
     - export PSRCAT_FILE=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/psrcat_tar/psrcat.db
 # command to run tests
 script:
     #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
     #trying to stop travis timing out
+    - sn_flux_est.py -p J2241-5236 -o 1225713560
     - travis_wait 30 coverage run setup.py test
 after_success:
     - coverage xml
