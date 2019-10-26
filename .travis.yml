@@ -49,7 +49,7 @@ install:
 script:
     #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
     #trying to stop travis timing out
-    - coverage run setup.py test
+    - travis_wait 30 coverage run setup.py test
 after_success:
     - coverage xml
     - coveralls
