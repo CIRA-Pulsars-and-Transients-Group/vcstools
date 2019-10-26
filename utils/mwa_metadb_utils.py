@@ -43,7 +43,7 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     from astropy.time import Time
     from astropy.coordinates import SkyCoord, AltAz, EarthLocation
     from astropy import units as u
-        obstime = Time(float(obsid),format='gps')
+    obstime = Time(float(obsid),format='gps')
 
     if ra is None or dec is None:
         #if no ra and dec given use obsid ra and dec
