@@ -21,9 +21,8 @@ install:
     #install vcstoos
     - python setup.py build --build-scripts=$HOME/build/
     #install mwa_pb
-    - git clone --single-branch --branch 2to3 https://github.com/MWATelescope/mwa_pb.git
+    - git clone https://github.com/MWATelescope/mwa_pb.git
     - cd mwa_pb
-    - git checkout 52457e9
     - python setup.py build --build-scripts=$HOME/build/
     - cd ..
     - rm $HOME/build/*test.py
