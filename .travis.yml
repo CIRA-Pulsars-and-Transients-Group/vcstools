@@ -15,6 +15,7 @@ install:
     - pip install scipy
     - pip install psrqpy
     - pip install skyfield
+    - pip install h5py
 
     - pip install coveralls
     - pip install codacy-coverage
@@ -44,6 +45,7 @@ install:
     - export KNOWN_RFRB_CSV=$HOME/build/known_repeating_FRBs.csv
     - export CMD_VCS_DB_FILE=None
     - ls $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/psrcat_tar
+    - ls $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/mwa_pb/data
     - export PSRCAT_FILE=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/psrcat_tar/psrcat.db
 # command to run tests
 script:
