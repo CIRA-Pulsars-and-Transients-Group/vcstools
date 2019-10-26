@@ -2,6 +2,13 @@
 """
 Tests the find_pulsar_in_obs.py script
 """
+#hack to force the iers download from a url that works
+from astropy.utils import iers
+iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
+from astroplan import download_IERS_A
+download_IERS_A()
+
+
 import process_vcs
 
 def test_gps_to_utc():

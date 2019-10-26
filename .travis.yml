@@ -9,6 +9,7 @@ before_install:
 install:
     # installing dependancies manually
     - pip install astropy
+    - pip install astroplan
     - pip install argparse
     - pip install numpy
     - pip install matplotlib
