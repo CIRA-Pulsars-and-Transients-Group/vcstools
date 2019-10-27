@@ -21,7 +21,8 @@ install:
     - pip install coveralls
     - pip install codacy-coverage
 
-    #install vcstoos
+    #install vcstools
+    - git describe --tags --long --dirty
     - python setup.py build --build-scripts=$HOME/build/
     #install mwa_pb
     - git clone https://github.com/MWATelescope/mwa_pb.git
