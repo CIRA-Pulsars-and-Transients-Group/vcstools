@@ -23,7 +23,7 @@ install:
 
     #install vcstools
     - git fetch -v -t #should fix describe errors
-    - git describe --tags --long --dirty
+    - git describe --tags --long --dirty --always
     - python setup.py build --build-scripts=$HOME/build/
     #install mwa_pb
     - git clone https://github.com/MWATelescope/mwa_pb.git
