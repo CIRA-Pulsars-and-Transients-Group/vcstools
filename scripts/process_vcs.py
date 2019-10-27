@@ -15,7 +15,7 @@ from astropy.time import Time
 #from astropy.utils import iers
 #iers.IERS_A_URL = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all'
 from astropy.utils.iers import conf
-conf.iers_auto_url_mirror = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all'
+conf.iers_auto_url_mirror = 'ftp://cddis.gsfc.nasa.gov/pub/products/iers/finals2000A.all'
 from reorder_chans import *
 from mdir import mdir
 import numpy as np
