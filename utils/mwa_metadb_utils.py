@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-
+from astropy.utils import iers
+iers.IERS_A_URL = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all'
 import logging
 
 logger = logging.getLogger(__name__)

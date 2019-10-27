@@ -12,6 +12,8 @@ import distutils.spawn
 import sqlite3 as lite
 from astropy.io import fits as pyfits
 from astropy.time import Time
+from astropy.utils import iers
+iers.IERS_A_URL = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all'
 from reorder_chans import *
 from mdir import mdir
 import numpy as np
