@@ -26,7 +26,7 @@ install:
     - git describe --tags --long --dirty
     - python setup.py build --build-scripts=$HOME/build/
     #install mwa_pb
-    - git clone --single-branch --branch 2to3 https://github.com/MWATelescope/mwa_pb.git
+    - git clone https://github.com/MWATelescope/mwa_pb.git
     - git checkout 52457e9
     - cd mwa_pb
     - python setup.py build --build-scripts=$HOME/build/
