@@ -50,8 +50,8 @@ script:
     #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
     #trying to stop travis timing out
     #- travis_wait 30 coverage run setup.py test
-    - python3 $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/tests/test_a_process_vcs.py
-    - sn_flux_est.py -p J2241-5236 -o 1225713560 -L DEBUG
+    #- python3 $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/tests/test_a_process_vcs.py
+    #- sn_flux_est.py -p J2241-5236 -o 1225713560 -L DEBUG
     - coverage run setup.py test
 after_success:
     - coverage xml
