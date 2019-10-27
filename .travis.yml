@@ -22,7 +22,7 @@ install:
     - pip install codacy-coverage
 
     #install vcstools
-    - git fetch origin #should fix describe errors
+    - git fetch -r origin #should fix describe errors
     - git describe --tags --long --dirty
     - python setup.py build --build-scripts=$HOME/build/
     #install mwa_pb
