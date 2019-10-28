@@ -39,5 +39,5 @@ If you use the MWA beamformer please give credit by citing:
 Status
 ------
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/c5935a38ea9d4ec7a5c78fe107766cda)](https://www.codacy.com/manual/CIRA-Pulsars-and-Transients-Group/vcstools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&amp;utm_campaign=Badge_Grade)
-[![Coverage Status](https://coveralls.io/repos/github/CIRA-Pulsars-and-Transients-Group/vcstools/badge.svg)](https://coveralls.io/github/CIRA-Pulsars-and-Transients-Group/vcstools)
+[![Codacy Badge](https://api.codacy.com/project/badge/Coverage/c5935a38ea9d4ec7a5c78fe107766cda)](https://www.codacy.com/manual/CIRA-Pulsars-and-Transients-Group/vcstools?utm_source=github.com&utm_medium=referral&utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&utm_campaign=Badge_Coverage)
 [![Build Status](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools.svg?branch=master)](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools)

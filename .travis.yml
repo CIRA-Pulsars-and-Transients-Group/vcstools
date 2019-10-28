@@ -8,6 +8,7 @@ before_install:
 # command to install dependencies
 install:
     # installing dependancies manually
+    - pip install -U pip
     - pip install astropy
     - pip install astroplan
     - pip install argparse
@@ -15,16 +16,17 @@ install:
     - pip install matplotlib
     - pip install scipy
     - pip install psrqpy
-    - pip install skyfield
+    #- pip install skyfield
     - pip install h5py
 
     - pip install coveralls
     - pip install codacy-coverage
+    - export CODACY_PROJECT_TOKEN=727d068b9ee14da98bbd90c04eb3e91d
 
     #install vcstools
     - git fetch -v -t #should fix describe errors
     - git describe --tags --long --dirty --always
-    - python setup.py build --build-scripts=$HOME/build/
+    - python setup.py build --build-scripts=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/
     #install mwa_pb
     - git clone https://github.com/MWATelescope/mwa_pb.git
     - cd mwa_pb
@@ -45,20 +47,15 @@ install:
     - tar -xvf psrcat_pkg.tar
     # force environment variables
     - export PATH=$PATH:$HOME/build/
-    - export PYTHONPATH=$HOME/build/
+    - export PYTHONPATH=$PYTHONPATH:$HOME/build/
+    - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
-    - export KNOWN_RFRB_CSV=$HOME/build/known_repeating_FRBs.csv
+    - export KNOWN_RFRB_CSV=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/known_repeating_FRBs.csv
     - export CMD_VCS_DB_FILE=None
     - export PSRCAT_FILE=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/psrcat_tar/psrcat.db
 # command to run tests
 script:
-    #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
-    #trying to stop travis timing out
-    #- travis_wait 30 coverage run setup.py test
-    #- python3 $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/tests/test_a_process_vcs.py
-    #- sn_flux_est.py -p J2241-5236 -o 1225713560 -L DEBUG
     - coverage run setup.py test
 after_success:
     - coverage xml
-    - coveralls
     - python-codacy-coverage -r coverage.xml
