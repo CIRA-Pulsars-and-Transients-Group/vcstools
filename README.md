@@ -1,10 +1,9 @@
 VCStools software tools
 ======
 
-
-Instillation
-======
-The instillation is done in two steps. The first involves installing all the python scripts which is done with the command:
+Installation
+------
+The installation is done in two steps. The first involves installing all the python scripts which is done with the command:
 ```bash
 python setup.py build --build-scripts=<build_location>
 ```
@@ -29,10 +28,16 @@ For this reason we have created a docker image which is much easier to install a
 You will have to make your own entry in config.py for your supercomputer which we are happy to help with.
 
 Help
-======
+------
 Documentation on how to process MWA VCS data can be found [here](https://wiki.mwatelescope.org/display/MP/Documentation)
 
 Credit
-======
-If you use the MWA beamformer please give give credit by citing:
+------
+If you use the MWA beamformer please give credit by citing:
 [Ord et al. (2019)](https://ui.adsabs.harvard.edu/abs/2019PASA...36...30O/abstract)
+
+Status
+------
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/c5935a38ea9d4ec7a5c78fe107766cda)](https://www.codacy.com/manual/CIRA-Pulsars-and-Transients-Group/vcstools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&amp;utm_campaign=Badge_Grade)
+[![Codacy Badge](https://api.codacy.com/project/badge/Coverage/c5935a38ea9d4ec7a5c78fe107766cda)](https://www.codacy.com/manual/CIRA-Pulsars-and-Transients-Group/vcstools?utm_source=github.com&utm_medium=referral&utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&utm_campaign=Badge_Coverage)
+[![Build Status](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools.svg?branch=master)](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools)

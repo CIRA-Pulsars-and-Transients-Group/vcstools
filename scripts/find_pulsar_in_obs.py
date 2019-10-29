@@ -27,20 +27,15 @@ import os
 import sys
 import math
 import argparse
-import subprocess
 import numpy as np
-import ephem
 import csv
-import pandas
 
-#astropy 
-from astropy.io import fits
+#astropy
 from astropy.coordinates import SkyCoord
 from astropy import units as u
-from astropy.table import Table
-from astropy.time import Time
 
 #MWA scripts
+import sn_flux_est as sfe
 from mwa_pb import primary_beam
 from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata, get_obs_array_phase
 
@@ -50,13 +45,13 @@ logger = logging.getLogger(__name__)
 try:
     ATNF_LOC = os.environ['PSRCAT_FILE']
 except:
-    logger.warn("ATNF database could not be found on disk.")
+    logger.warning("ATNF database could not be found on disk.")
     ATNF_LOC = None
 
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
     no = set(['N','no','n'])
-     
+
     while True:
         choice = input(answer).lower()
         if choice in yes:
@@ -130,7 +125,7 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
                     pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ, dm])
                 else:
                     pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ])
-    
+
     return pulsar_ra_dec
 
 
@@ -159,7 +154,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
     Returns
     -------
     result: list list
-        A list for each source which contains a [source_name, RA, Dec (, DM)] 
+        A list for each source which contains a [source_name, RA, Dec (, DM)]
         where RA and Dec are in the format HH:MM:SS
     """
     modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
@@ -171,7 +166,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
     name_ra_dec = []
     if source_type == 'Pulsar':
         name_ra_dec = get_psrcat_ra_dec(pulsar_list=pulsar_list, max_dm=max_dm, include_dm=include_dm)
-    
+
     elif source_type == 'FRB':
         import json
         import urllib.request
@@ -189,17 +184,16 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
 
     elif source_type == "rFRB":
         info = get_rFRB_info(name=pulsar_list)
-        if info is not None: 
+        if info is not None:
             for line in info:
                 if include_dm:
                     name_ra_dec.append([line[0], line[1], line[2], line[3]])
                 else:
-                    name_ra_dec.append([line[0], line[1], line[2]]) 
+                    name_ra_dec.append([line[0], line[1], line[2]])
 
     elif source_type == 'RRATs':
         import urllib.request
         rrats_data = urllib.request.urlopen('http://astro.phys.wvu.edu/rratalog/rratalog.txt').read().decode()
-        data = []
         for rrat in rrats_data.split("\n")[1:-1]:
             columns = rrat.strip().replace(" ", '\t').split('\t')
             temp = []
@@ -217,10 +211,9 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         try:
             fermi_loc = os.environ['FERMI_CAND_FILE']
         except:
-            logger.warn("Fermi candidate file location not found. Returning nothing")
+            logger.warning("Fermi candidate file location not found. Returning nothing")
             return []
         with open(fermi_loc,"r") as fermi_file:
-            import csv
             csv_reader = csv.DictReader(fermi_file)
             for fermi in csv_reader:
                 name = fermi['Source Name'].split()[-1]
@@ -241,7 +234,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
             if line[0] in pulsar_list:
                 temp.append(line)
         name_ra_dec = temp
-    
+
     return name_ra_dec
 
 
@@ -249,7 +242,7 @@ def get_rFRB_info(name=None):
     """
     Gets repeating FRB info from the csv file we maintain.
     Input:
-        name: a list of repeating FRB names to get info for. The default is None 
+        name: a list of repeating FRB names to get info for. The default is None
               which gets all rFRBs in the catalogue.
     Output:
         [[name, ra, dec, dm, dm error]]
@@ -261,9 +254,9 @@ def get_rFRB_info(name=None):
     for line in db.readlines():
         if not line.startswith("#"):
             line = line.split(",")
-            #some FRBs end with a J name. We will ignore these when comparing 
+            #some FRBs end with a J name. We will ignore these when comparing
             #by using the first 9 characters
-            FRB, ra, dec, dm, dm_error = line
+            FRB = line[0]
             if name is None:
                 #No input FRBs so return all FRBs
                 output.append(line)
@@ -280,7 +273,7 @@ def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
     """
     for i in range(len(ra_dec_list)):
         #catching errors in old psrcat RAs
-        if len(ra_dec_list[i][ra_col]) >5:    
+        if len(ra_dec_list[i][ra_col]) >5:
             if  ra_dec_list[i][ra_col][5] == '.':
                 ra_dec_list[i][ra_col] = ra_dec_list[i][ra_col][:5] + ":" +\
                         str(int(float('0'+ra_dec_list[i][ra_col][5:])*60.))
@@ -418,12 +411,12 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
         powers: list of powers fo the duration every dt and freq powers[times][freqs]
         dt: the time interval of how often powers are calculated
         duration: duration of the observation according to the metadata in seconds
-        min_power: zenith normalised power cut off 
+        min_power: zenith normalised power cut off
     """
     from scipy.interpolate import UnivariateSpline
     time_steps = np.array(range(0, duration, dt), dtype=float)
 
-    #For each time step record the min power so even if the source is in 
+    #For each time step record the min power so even if the source is in
     #one freq channel it's recorded
     powers_freq_min = []
     for p in powers:
@@ -440,7 +433,7 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
             spline = UnivariateSpline(time_steps, powers_freq_min , s=0.)
         except:
             return None, None
-        if len(spline.roots()) == 2: 
+        if len(spline.roots()) == 2:
             enter, exit = spline.roots()
             enter /= duration
             exit /= duration
@@ -463,7 +456,7 @@ def cal_on_database_check(obsid):
     web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
     auth = ('mwapulsar','veovys9OUTY=')
     detection_list = client.detection_list(web_address, auth)
-    
+
     cal_used = False
     cal_avail = False
     for d in detection_list:
@@ -471,7 +464,7 @@ def cal_on_database_check(obsid):
             if d[u'calibrator'] is not None:
                 cal_used = True
                 #TODO add a check if there is a cal file option
-    
+
     #No cal
     check_result = 'N'
     if cal_avail:
@@ -480,32 +473,32 @@ def cal_on_database_check(obsid):
     elif cal_used:
         #Cal used
         check_result = 'U'
-    
+
     return check_result
 
 
 def get_beam_power_over_time(beam_meta_data, names_ra_dec,
-                             dt=296, centeronly=True, verbose=False, 
+                             dt=296, centeronly=True, verbose=False,
                              option='analytic', degrees=False,
                              start_time=0):
     """
     Calulates the power (gain at coordinate/gain at zenith) for each source over time.
 
     get_beam_power_over_time(beam_meta_data, names_ra_dec,
-                             dt=296, centeronly=True, verbose=False,          
+                             dt=296, centeronly=True, verbose=False,
                              option = 'analytic')
     Args:
-        beam_meta_data: [obsid,ra, dec, time, delays,centrefreq, channels] 
+        beam_meta_data: [obsid,ra, dec, time, delays,centrefreq, channels]
                         obsid metadata obtained from meta.get_common_obs_metadata
         names_ra_dec: and array in the format [[source_name, RAJ, DecJ]]
         dt: time step in seconds for power calculations (default 296)
         centeronly: only calculates for the centre frequency (default True)
         verbose: prints extra data to (default False)
         option: primary beam model [analytic, advanced, full_EE]
-        start_time: the time in seconds from the begining of the observation to 
+        start_time: the time in seconds from the begining of the observation to
                     start calculating at
     """
-    obsid, ra, dec, time, delays, centrefreq, channels = beam_meta_data
+    obsid, _, _, time, delays, centrefreq, channels = beam_meta_data
     names_ra_dec = np.array(names_ra_dec)
     logger.info("Calculating beam power for OBS ID: {0}".format(obsid))
 
@@ -551,7 +544,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
         sys.stdout = open(os.devnull, 'w')
     for itime in range(Ntimes):
         # this differ's from the previous ephem_utils method by 0.1 degrees
-        Alts, Azs, Zas = mwa_alt_az_za(midtimes[itime], ra=RAs, dec=Decs, degrees=True)
+        _, Azs, Zas = mwa_alt_az_za(midtimes[itime], ra=RAs, dec=Decs, degrees=True)
         # go from altitude to zenith angle
         theta = np.radians(Zas)
         phi = np.radians(Azs)
@@ -580,7 +573,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     return Powers
 
 
-def find_sources_in_obs(obsid_list, names_ra_dec, 
+def find_sources_in_obs(obsid_list, names_ra_dec,
                         obs_for_source=False, dt_input=100, beam='analytic',
                         min_power=0.3, cal_check=False, all_volt=False,
                         degrees_check=False):
@@ -594,7 +587,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         beam: beam simulation type ['analytic', 'advanced', 'full_EE']
         min_power: if above the minium power assumes it's in the beam
         cal_check: checks the MWA pulsar database if there is a calibration for the obsid
-        all_volt: Use all voltages observations including some inital test data 
+        all_volt: Use all voltages observations including some inital test data
                   with incorrect formats
         degrees_check: if false ra and dec is in hms, if true in degrees
     Output [output_data, obsid_meta]:
@@ -618,7 +611,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         #beam_meta_data = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
 
         if dt_input * 4 >  beam_meta_data[3]:
-            # If the observation time is very short then a smaller dt time is required 
+            # If the observation time is very short then a smaller dt time is required
             # to get enough ower imformation
             dt = int(beam_meta_data[3] / 4.)
         else:
@@ -634,7 +627,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                 check = True
         if check or all_volt:
             powers.append(get_beam_power_over_time(beam_meta_data, names_ra_dec,
-                                    dt=dt, centeronly=True, verbose=False, 
+                                    dt=dt, centeronly=True, verbose=False,
                                     option=beam, degrees=degrees_check))
             obsid_meta.append(beam_meta_data)
         else:
@@ -689,7 +682,7 @@ def write_output_source_files(output_data,
         with open(out_name,"w") as output_file:
             output_file.write('#All of the observation IDs that the {0} beam model '
                               'calculated a power of {1} or greater for the source: '
-                              '{2}\n'.format(beam, min_power, source)) 
+                              '{2}\n'.format(beam, min_power, source))
             output_file.write('#Column headers:\n')
             output_file.write('#Obs ID: Observation ID\n')
             output_file.write('#Dur:    The duration of the observation in seconds\n')
@@ -701,10 +694,17 @@ def write_output_source_files(output_data,
             output_file.write("#OAP:    The observation's array phase where P1 is the "
                                         "phase 1 array, P2C is the phase compact array "
                                         "and P2E is the phase 2 extended array.\n")
+
+            if SN_est:
+                output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
+                output_file.write("#S/N Err: The uncertainty of S/N Est\n")
             if cal_check:
                 output_file.write('#Cal ID: Observation ID of an available '+\
                                             'calibration solution\n')
             output_file.write('#Obs ID   |Dur |Enter|Exit |Power| OAP ')
+            if SN_est:
+                output_file.write("|S/N Est|S/N Err")
+
             if cal_check:
                 output_file.write("|Cal ID\n")
             else:
@@ -714,8 +714,15 @@ def write_output_source_files(output_data,
                 oap = get_obs_array_phase(obsid)
                 output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}'.format(obsid,
                                   duration, enter, exit, max_power, oap))
+                if SN_est:
+                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid)
+                    if pulsar_sn is None:
+                        output_file.write('   None    None')
+                    else:
+                        output_file.write('{:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
+
                 if cal_check:
-                    #checks the MWA Pulsar Database to see if the obsid has been 
+                    #checks the MWA Pulsar Database to see if the obsid has been
                     #used or has been calibrated
                     logger.info("Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid))
                     cal_check_result = cal_on_database_check(obsid)
@@ -726,7 +733,8 @@ def write_output_source_files(output_data,
 
 
 def write_output_obs_files(output_data, obsid_meta,
-                           beam='analytic', min_power=0.3, cal_check=False):
+                           beam='analytic', min_power=0.3,
+                           cal_check=False, SN_est=False):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is false.
     """
@@ -741,7 +749,7 @@ def write_output_obs_files(output_data, obsid_meta,
                               '{2} Array Phase: {3}\n'.format(obsid_meta[on][1],
                                   obsid_meta[on][2], obsid_meta[on][3], oap))
             if cal_check:
-                #checks the MWA Pulsar Database to see if the obsid has been 
+                #checks the MWA Pulsar Database to see if the obsid has been
                 #used or has been calibrated
                 logger.info("Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid))
                 cal_check_result = cal_on_database_check(obsid)
@@ -753,12 +761,32 @@ def write_output_obs_files(output_data, obsid_meta,
             output_file.write('#Exit:   The fraction of the observation when '+\
                                         'the source exits the beam\n')
             output_file.write('#Power:  The maximum zenith normalised power of the source.\n')
-            output_file.write('#Source    |Enter|Exit |Power\n')
-            
+            if SN_est:
+                output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
+                output_file.write("#S/N Err: The uncertainty of S/N Est\n")
+
+            output_file.write('#Source    |Enter|Exit |Power')
+            if SN_est:
+                output_file.write('| S/N Est | S/N Err \n')
+            else:
+                output_file.write('\n')
+
             for data in output_data[obsid]:
                 pulsar, enter, exit, max_power = data
-                output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} \n'.format(pulsar,
+                output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} '.format(pulsar,
                                   enter, exit, max_power))
+                if SN_est:
+                    beg = int(obsid) + 7
+                    end = beg + int(obsid_meta[on][3])
+                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid, beg=beg, end=end,\
+                      obs_metadata=obsid_meta[on], o_enter=enter, o_exit=exit)
+                    if pulsar_sn is None:
+                        output_file.write('   None    None\n')
+                    else:
+                        output_file.write('{:9.2f} {:9.2f}\n'.format(pulsar_sn, pulsar_sn_err))
+                else:
+                    output_file.write('\n')
+
     return
 
 
@@ -776,7 +804,7 @@ if __name__ == "__main__":
     parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
     parser.add_argument('-b','--beam',type=str, default = 'analytic', help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
     parser.add_argument('-m','--min_power',type=float,help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3', default=0.3)
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                     choices=loglevels.keys(), default="INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
 
@@ -795,6 +823,7 @@ if __name__ == "__main__":
     obargs.add_argument('-o','--obsid',type=str,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
     obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
     obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
+    obargs.add_argument('--sn_est',action='store_true',help='Make a expected signal to noise calculation using the flux densities from the ANTF pulsar catalogue and include them in the output file. Default: False.')
     args=parser.parse_args()
 
     if args.version:
@@ -815,7 +844,7 @@ if __name__ == "__main__":
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     logger.propagate = False
-    
+
     #Parse options
     if args.in_cat and args.coords:
         logger.error("Can't use --in_cat and --coords. Please input your cooridantes "
@@ -844,7 +873,7 @@ if __name__ == "__main__":
             if ":" not in c:
                 degrees_check = True
     else:
-        names_ra_dec = grab_source_alog(source_type=args.source_type, 
+        names_ra_dec = grab_source_alog(source_type=args.source_type,
                                         pulsar_list=args.pulsar,
                                         max_dm=args.max_dm)
 
@@ -862,7 +891,7 @@ if __name__ == "__main__":
             logger.info("Using option --obs_for_source")
         else:
             logger.info("Not using option --obs_for_source")
-    
+
     #get obs IDs
     logger.info("Gathering observation IDs")
     if args.obsid:
@@ -881,25 +910,27 @@ if __name__ == "__main__":
         #use all obsids
         obsid_list = find_obsids_meta_pages({'mode':'VOLTAGE_START'})
 
-    
+
     if args.beam == 'full_EE':
         dt = 300
     else:
         dt = 100
-    
+
     logger.info("Getting observation metadata and calculating the tile beam")
-    output_data, obsid_meta = find_sources_in_obs(obsid_list, names_ra_dec, 
+    output_data, obsid_meta = find_sources_in_obs(obsid_list, names_ra_dec,
                                 obs_for_source=args.obs_for_source, dt_input=dt,
                                 beam=args.beam, min_power=args.min_power,
                                 cal_check=args.cal_check, all_volt=args.all_volt,
                                 degrees_check=degrees_check)
-    
+
     logger.info("Writing data to files")
     if args.obs_for_source:
         write_output_source_files(output_data,
                                   beam=args.beam, min_power=args.min_power,
-                                  cal_check=args.cal_check)
+                                  cal_check=args.cal_check,
+                                  SN_est=args.sn_est)
     else:
         write_output_obs_files(output_data, obsid_meta,
                                beam=args.beam, min_power=args.min_power,
-                               cal_check=args.cal_check)
+                               cal_check=args.cal_check,
+                               SN_est=args.sn_est)
