@@ -3,7 +3,7 @@ import sqlite3 as lite
 try:
     DB_FILE = os.environ['CMD_VCS_DB_FILE']
 except:
-    print "environmental variable JOB_DB_FILE must be defined"
+    print("environmental variable JOB_DB_FILE must be defined")
     
 con = lite.connect(DB_FILE)
 with con:

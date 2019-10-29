@@ -7,11 +7,11 @@ import socket
 
 logger = logging.getLogger(__name__)
 
-SLURM_TMPL = """#!/bin/bash -l
+SLURM_TMPL = """{shebag}
 
 #SBATCH --export={export}
 #SBATCH --output={outfile}
-#SBATCH --account={account}
+{account}
 #SBATCH --clusters={cluster}
 #SBATCH --partition={partition}
 #
@@ -38,7 +38,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
                  batch_dir="batch/", depend=None, depend_type='afterok',
                  submit=True, outfile=None, queue="cpuq", export="NONE",
                  gpu_res=None, mem=1024, cpu_threads=1, temp_mem=None,
-                 nice=0):
+                 nice=0, shebag='#!/bin/bash -l'):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
@@ -226,11 +226,20 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     # join the commands into a single string
     commands = "\n".join(commands)
 
-    #Load computer dependant config file
+    # load computer dependant config file
     comp_config = config.load_config_file()
 
+    # some little hacks to make jobs work on the shanghai server
+    if hostname.startswith('x86') or hostname.startswith('arm'):
+        if vcstools_version == 'master':
+            vcstools_version = 'cpu-master'
+        if export == "NONE":
+            export = "ALL"
+        if shebag == "#!/bin/bash -l":
+            shebag = "#!/bin/bash"
+
     # format the template script
-    tmpl = tmpl.format(script=commands, outfile=outfile, header=header,
+    tmpl = tmpl.format(shebag=shebag, script=commands, outfile=outfile, header=header,
                        switches=switches, modules=modules,
                        version=vcstools_version,
                        cluster=cluster, partition=partition,
