@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-
+#from astropy.utils import iers
+#iers.IERS_A_URL = 'https://astroconda.org/aux/astropy_mirror/iers_a_1/finals2000A.all'
+from astropy.utils.iers import conf
+conf.iers_auto_url_mirror = 'ftp://cddis.gsfc.nasa.gov/pub/products/iers/finals2000A.all'
 import logging
 import argparse
 
@@ -37,10 +40,13 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
         dec    : The declintation in HH:MM:SS
         degrees: If true the ra and dec is given in degrees (Default:False)
     """
+    from astropy.utils import iers
+    iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
+    logger.info(iers.IERS_A_URL)
+
     from astropy.time import Time
     from astropy.coordinates import SkyCoord, AltAz, EarthLocation
     from astropy import units as u
-
     obstime = Time(float(obsid),format='gps')
 
     if ra is None or dec is None:

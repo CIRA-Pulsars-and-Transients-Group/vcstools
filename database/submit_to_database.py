@@ -23,14 +23,13 @@ import glob
 import textwrap as _textwrap
 
 #Astropy imports
-from astropy.table import Table
 from astropy.time import Time
 
 #MWA software imports
-from mwa_pb import primarybeammap_tant as pbtant
 from mwa_pulsar_client import client
-from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
+from mwa_metadb_utils import get_common_obs_metadata
 import find_pulsar_in_obs as fpio
+import sn_flux_est as snfe
 
 import logging
 logger = logging.getLogger(__name__)
@@ -96,7 +95,6 @@ def get_from_bestprof(file_loc):
         lines = bestprof.readlines()
         # Find the obsid by finding a 10 digit int in the file name
         obsid = re.findall(r'(\d{10})', lines[0])[0]
-        print(obsid)
         try:
             obsid = int(obsid)
         except:
@@ -265,7 +263,7 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
     return zip_file_location
 
 
-def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
                         trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
@@ -275,121 +273,29 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
     bestprof_data: list from the function get_from_bestprof
     trcvr: the file location of antena temperatures
     """
-    #unpack data
-    obsid, pulsar, dm, period, period_uncer, obsstart, time_detection, profile, num_bins = bestprof_data
-    obsid, ra_obs, dec_obs, time_obs, delays, centrefreq, channels = metadata
+    #unpack the bestprof_data
+    #[obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
+    obsid, pulsar, _, period, _, beg, t_int, profile, num_bins = bestprof_data
+    period=float(period)
+    num_bins=int(num_bins)
 
+    #get r_sys and gain
+    t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid, obs_metadata=metadata,\
+                                    beg=beg, t_int=t_int)
 
-    #Gain calc
-    #get antena temperatures
-    trec_table = Table.read(trcvr,format="csv")
+    #estimate S/N
+    sn, u_sn, _, w_equiv_bins, _, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
 
-    ntiles = 128#TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
+    logger.info("Profile scattered? {0}".format(scattered))
+    logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
+    logger.debug("Gain {0} K/Jy".format(gain))
+    logger.debug("Equivalent width in bins: {0}".format(w_equiv_bins))
+    logger.debug("T_sys: {0} K".format(t_sys))
+    logger.debug("Bandwidth: {0}".format(bandwidth))
+    logger.debug("Detection time: {0}".format(time_detection))
+    logger.debug("NUmber of bins: {0}".format(num_bins))
 
-    logger.info("Calculating beam power and antena temperature...")
-    #starting from enter for the bestprof duration
-    bandpowers = fpio.get_beam_power_over_time([obsid, ra_obs, dec_obs, time_detection,
-                                                delays, centrefreq, channels],
-                                               np.array([["source", pul_ra, pul_dec]]),
-                                               dt=100, start_time=int(obsstart - obsid))
-    bandpowers = np.mean(bandpowers)
-
-    #supress print statements of the make_primarybeammap function
-    sys.stdout = open(os.devnull, 'w')
-    beamsky_sum_XX,beam_sum_XX,Tant_XX,beam_dOMEGA_sum_XX,\
-     beamsky_sum_YY,beam_sum_YY,Tant_YY,beam_dOMEGA_sum_YY =\
-     pbtant.make_primarybeammap(int(obsid), delays, centrefreq*1e6, 'analytic', plottype='None')
-    #turns print statments back on
-    sys.stdout = sys.__stdout__
-
-    #TODO can be inaccurate for coherent but is too difficult to simulate
-    tant = (Tant_XX + Tant_YY) / 2.
-
-    logger.info("Tant: " + str(tant))
-    t_sys_table = tant + get_Trec(trec_table,centrefreq)
-
-    logger.info("Converting to gain from power...")
-    gain = from_power_to_gain(bandpowers,centrefreq*1e6,ntiles,coh)
-    logger.debug('Frequency {0} Hz'.format(centrefreq*1e6))
-
-    t_sys = np.mean(t_sys_table)
-    avg_power = np.mean(bandpowers)
-    logger.info("Average Power: " + str(avg_power))
-
-    #gain uncertainty through beam position estimates
-    _, _, Zas = mwa_alt_az_za(obsid, pul_ra, pul_dec)
-    theta = np.radians(Zas)
-
-    u_gain_per = (1. - avg_power)*0.12 + (theta/90.)*(theta/90.)*2. + 0.1
-    u_gain = gain * u_gain_per #assumed to be 10%
-
-    #then centers it around the max flux (hopefully the centre of the pulse
-    shiftby=-int(np.argmax(profile))+int(num_bins)//2
-    profile = np.roll(profile,shiftby)
-
-    logger.info("Calculating signal to noise ratio")
-    sigma, flagged_profile  = sigmaClip(profile, alpha=3, tol=0.05, ntrials=10)
-
-    #check if the flagged_profile is in the bottom 10% of the profile
-    bottom_profile_min = (max(profile) - min(profile))*.1 + min(profile)
-    logging.debug("min(flagged_profile): {0}   bottom_profile_min: {1}".\
-                  format(np.nanmin(flagged_profile), bottom_profile_min))
-    if (np.nanmin(flagged_profile) > bottom_profile_min) or ( not np.isnan(flagged_profile).any() ):
-        #something weird has happened so may be a very scattered profile like the crab
-        logging.warning('The profile is extremely scattered so an accurate flux density could not be calculated so only the pulse width and scattering are being uploaded to the database.')
-        #making a new profile with the only bin being the lowest point
-        prof_min_i = np.argmin(profile)
-        flagged_profile = []
-        for fi in range(len(profile)):
-            if fi == prof_min_i:
-                flagged_profile.append(profile[fi])
-            else:
-                flagged_profile.append(np.nan)
-        flagged_profile = np.array(flagged_profile)
-        profile -= min(profile)
-        S_mean = None
-        u_S_mean = None
-        #Assuming width is equal to pulsar period because of the scattering
-        w_equiv_ms = float(period)
-        u_w_equiv_ms = float(period) / float(num_bins)
-    else:
-        #The pulse is not scattered so calculate its properties
-
-        #calculate the width equivalent bins and it's uncertainty
-        profile_uncert = 500. #uncertainty approximation as none is given
-        pulse_width_bins = 0
-        off_pulse_width_bins = 0
-        p_total = 0.
-        u_p_total = 0. #p uncertainty
-        for p in range(len(profile)):
-            if math.isnan(flagged_profile[p]):
-                #May increase the pulse width if there are large noise spikes
-                pulse_width_bins += 1
-                p_total += profile[p]
-                u_p_total = math.sqrt(math.pow(u_p_total,2) + math.pow(profile_uncert,2))
-            else:
-                off_pulse_width_bins += 1
-
-        u_sigma = sigma / math.sqrt( 2 * off_pulse_width_bins - 2)
-
-        #calc signal to noise ratio and it's uncertainty
-        sn = max(profile) / sigma
-        u_sn = sn * math.sqrt( math.pow( profile_uncert / max(profile) , 2)  +
-                               math.pow( u_sigma / sigma ,2) )
-
-        #adjust profile to be around the off-pulse mean
-        off_pulse_mean = np.nanmean(flagged_profile)
-        profile -= off_pulse_mean
-        flagged_profile -= off_pulse_mean
-        profile_uncert = 500. #uncertainty approximation as none is given
-
-        #the equivalent width (assumes top hat pulsar) in bins and it's uncertainty
-        w_equiv_bins = p_total / max(profile)
-        w_equiv_ms = w_equiv_bins / float(num_bins) * float(period) # in ms
-        u_w_equiv_bins = math.sqrt(math.pow(u_p_total / max(profile),2) +
-                                   math.pow(p_total * profile_uncert / math.pow(max(profile),2),2))
-        u_w_equiv_ms = u_w_equiv_bins / float(num_bins) * float(period) # in ms
-
+    if scattered == False:
         #final calc of the mean fluxdesnity in mJy
         S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
                  math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
@@ -399,11 +305,11 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
         u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
                               math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
 
-        logging.debug("SN: {0}".format(sn))
-        logging.info('Smean {0:.2f} +/- {1:.2f} mJy'.format(S_mean, u_S_mean))
-
-    logger.debug("T_sys {0} K".format(t_sys))
-    logger.debug("Gain {0} K/Jy".format(gain))
+        logger.info('Smean {0:.2f} +/- {1:.2f} mJy'.format(S_mean, u_S_mean))
+    else:
+        logger.info("Profile is scattered. Flux cannot be estimated")
+        S_mean = None
+        u_S_mean = None
 
     #calc obstype
     if (maxfreq - minfreq) == 23:
@@ -489,21 +395,24 @@ def flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
 
 """
 Test set:
+Run these from the vcstools/database directory
+
 Scattered detection (crab):
-python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof /group/mwaops/vcs/1127939368/pointings/05:34:31.97_+22:00:52.06/1127939368_PSR_0534+2200.pfd.bestprof
+python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof tests/test_files/1127939368_J05342200.bestprof -L DEBUG
 Expected flux: 7500
 
 Weak detection (it's a 10 min detection):
-python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J0034-0721 --bestprof /group/mwaops/vcs/1222697776/pointings/00:34:08.87_-07:21:53.40/1222697776_PSR_J0034-0721.pfd.bestprof
+python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J0034-0721 --bestprof ../tests/test_files/1222697776_PSR_J0034-0721.pfd.bestprof
 Expected flux: 640
 
 Medium detection:
-python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J2330-2005 --bestprof /group/mwaops/xuemy/pol_census/1222697776/pfold/1222697776_PSR_J2330-2005.pfd.bestprof
+python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J2330-2005 --bestprof tests/test_files/1222697776_PSR_J2330-2005.pfd.bestprof
 Expected flux: ~180
 
 Strong detection:
-python submit_to_database.py -o 1117643248 -O 1117666768 -p J1752-2806 --bestprof /group/mwaops/vcs/1117643248/pointings/17:52:24.00_-28:06:00.00/1117643248_coh_master_branch_test_PSR_J1752-2806.pfd.bestprof
-Expected flux: 1170
+python submit_to_database.py -o 1226062160 --cal_id 1226054696 -p J2330-2005 --bestprof tests/test_files/1226062160_J2330-2005.bestprof -L DEBUG
+S/N: 51.51 +/- 1.16
+Flux: 156.04 +/- 34.13 mJy
 """
 
 if __name__ == "__main__":
@@ -618,7 +527,8 @@ if __name__ == "__main__":
     #get info from .bestprof file
     if args.bestprof:
         bestprof_data = get_from_bestprof(args.bestprof)
-        obsid, pulsar, dm, period, period_uncer, obsstart, time_detection, profile, num_bins = bestprof_data
+        obsid, pulsar, dm, period, period_uncer, obsstart, time_detection,\
+               profile, num_bins = bestprof_data
         if obsid is None and args.obsid:
             obsid = args.obsid
         elif obsid is None:
@@ -697,7 +607,7 @@ if __name__ == "__main__":
     if args.bestprof or args.ascii:
         #Does the flux calculation and submits the results to the MWA pulsar database
         subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
-                            pul_ra, pul_dec, coh, auth, trcvr = args.trcvr)
+                            pul_ra, pul_dec, coh, auth, trcvr=args.trcvr)
 
     if args.cal_dir_to_tar:
         if not args.srclist:

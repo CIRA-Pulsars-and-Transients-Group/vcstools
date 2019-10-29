@@ -2,38 +2,60 @@ language: python
 python:
   - "3.6"
   - "3.7"
+before_install:
+    # Setup the login so I can clone private repos
+    - echo -e "machine github.com\n  login NickSwainston\n  password $CI_USER_PASSWORD" > ~/.netrc
 # command to install dependencies
 install:
     # installing dependancies manually
+    - pip install -U pip
     - pip install astropy
+    - pip install astroplan
     - pip install argparse
     - pip install numpy
     - pip install matplotlib
     - pip install scipy
     - pip install psrqpy
-    
+    #- pip install skyfield
+    - pip install h5py
+
     - pip install coveralls
     - pip install codacy-coverage
+    - export CODACY_PROJECT_TOKEN=727d068b9ee14da98bbd90c04eb3e91d
 
-    #install vcstoos
-    - python setup.py build --build-scripts=$HOME/build/
+    #install vcstools
+    - git fetch -v -t #should fix describe errors
+    - git describe --tags --long --dirty --always
+    - python setup.py build --build-scripts=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/
     #install mwa_pb
-    - git clone --single-branch --branch 2to3 https://github.com/MWATelescope/mwa_pb.git
+    - git clone https://github.com/MWATelescope/mwa_pb.git
     - cd mwa_pb
     - git checkout 52457e9
     - python setup.py build --build-scripts=$HOME/build/
-    - cd ..
-    - rm $HOME/build/*test.py
+    - cd mwa_pb/data
+    - wget http://cerberus.mwa128t.org/mwa_full_embedded_element_pattern.h5
+    - cd $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/
     - rm $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/*test.py
+    #install mwa_client
+    - git clone --single-branch --branch python3 https://github.com/ICRAR/mwa-voltage
+    - cd mwa-voltage/mwa_pulsar_client
+    - python setup.py install
+    - cd ../../
+    #download psrcat database
+    - wget https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/psrcat_pkg.tar.gz
+    - gunzip psrcat_pkg.tar.gz
+    - tar -xvf psrcat_pkg.tar
     # force environment variables
-    - export PYTHONPATH=$HOME/build/
+    - export PATH=$PATH:$HOME/build/
+    - export PYTHONPATH=$PYTHONPATH:$HOME/build/
+    - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
-    - export KNOWN_RFRB_CSV=$HOME/build/known_repeating_FRBs.csv
+    - export KNOWN_RFRB_CSV=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/known_repeating_FRBs.csv
+    - export CMD_VCS_DB_FILE=None
+    - export PSRCAT_FILE=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/psrcat_tar/psrcat.db
 # command to run tests
 script:
-    #- pytest --ignore=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/
     - coverage run setup.py test
 after_success:
     - coverage xml
-    - coveralls
     - python-codacy-coverage -r coverage.xml

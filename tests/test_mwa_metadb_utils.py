@@ -2,8 +2,23 @@
 """
 Tests the mwa_metadb_utils.py script
 """
-from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata, get_obs_array_phase 
-from numpy.testing import assert_approx_equal, assert_almost_equal
+from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_obs_array_phase
+from numpy.testing import assert_almost_equal
+
+
+def test_mwa_alt_az_za():
+    """Test the mwa_alt_az_za function"""
+    # obsid, alt, az, za
+    tests = [(1117101752, -71.10724927808731, 145.74310748819693, 161.1072492780873),
+             (1252177744, -14.709910184536241, 264.22976419794514, 104.70991018453624),
+             (1247832024, 68.90133642304133, 161.50105995238945, 21.09866357695867),
+             (1188439520, 60.78396503767497, 161.03537536398974, 29.216034962325033)]
+
+    for obsid, exp_alt, exp_az, exp_za in tests:
+        alt, az, za = mwa_alt_az_za(obsid)
+        assert_almost_equal(alt, exp_alt, decimal=5)
+        assert_almost_equal(az,  exp_az,  decimal=5)
+        assert_almost_equal(za,  exp_za,  decimal=5)
 
 def test_get_obs_array_phase():
     """Test FWHM calculation"""
