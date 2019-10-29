@@ -228,7 +228,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
 
     # load computer dependant config file
     comp_config = config.load_config_file()
-   
+
     # some little hacks to make jobs work on the shanghai server
     if hostname.startswith('x86') or hostname.startswith('arm'):
         if vcstools_version == 'master':
@@ -239,9 +239,9 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
             shebag = "#!/bin/bash"
 
     # format the template script
-    tmpl = tmpl.format(shebag=shebag, script=commands, outfile=outfile, header=header, 
-                       switches=switches, modules=modules, 
-                       version=vcstools_version, 
+    tmpl = tmpl.format(shebag=shebag, script=commands, outfile=outfile, header=header,
+                       switches=switches, modules=modules,
+                       version=vcstools_version,
                        cluster=cluster, partition=partition,
                        export=export, account=comp_config['group_account'],
                        module_dir=comp_config['module_dir'],
