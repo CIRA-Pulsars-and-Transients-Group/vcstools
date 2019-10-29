@@ -673,7 +673,8 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
     return output_data, obsid_meta
 
 def write_output_source_files(output_data,
-                              beam='analytic', min_power=0.3, cal_check=False):
+                              beam='analytic', min_power=0.3, cal_check=False,
+                              SN_est=False):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is true.
     """

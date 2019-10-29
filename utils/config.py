@@ -73,9 +73,8 @@ ARM_CONFIG =   {'base_data_dir' : '/o9000/MWA/Pulsar/vcs/',
 
 
 
-    
+
 import logging
-import os
 import socket
 import argparse
 
@@ -109,8 +108,8 @@ if __name__ == '__main__':
 
     # Option parsing
     parser = argparse.ArgumentParser("Creates a config file (only required to be run on install or when a new supercomputer is added) and has functions for reading them.")
-    
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                         choices=loglevels.keys(), default="INFO")
 
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
@@ -135,9 +134,9 @@ if __name__ == '__main__':
     logger.addHandler(ch)
     logger.propagate = False
 
-    
+
     #print config file
     config = load_config_file()
     for i in config.keys():
         logger.info("{0}\t{1}".format(i,config[i]))
-    
+

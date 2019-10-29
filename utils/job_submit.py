@@ -33,7 +33,7 @@ module load vcstools/{version}
 # NOTE: --gid option removed after discussion in helpdesk ticket GS-9370
 
 
-def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
+def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                  module_list=[], vcstools_version="master",
                  batch_dir="batch/", depend=None, depend_type='afterok',
                  submit=True, outfile=None, queue="cpuq", export="NONE",
@@ -127,6 +127,8 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     jobid : int
         The unique SLURM job ID associated with the submitted job.
     """
+    if slurm_kwargs is None:
+        slurm_kwargs={}
 
     #Work out which partition and cluster to use based on the supercomputer
     #(in config file) and queue required

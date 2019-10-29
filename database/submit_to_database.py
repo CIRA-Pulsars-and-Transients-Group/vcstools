@@ -23,13 +23,11 @@ import glob
 import textwrap as _textwrap
 
 #Astropy imports
-from astropy.table import Table
 from astropy.time import Time
 
 #MWA software imports
-from mwa_pb import primarybeammap_tant as pbtant
 from mwa_pulsar_client import client
-from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
+from mwa_metadb_utils import get_common_obs_metadata
 import find_pulsar_in_obs as fpio
 import sn_flux_est as snfe
 
