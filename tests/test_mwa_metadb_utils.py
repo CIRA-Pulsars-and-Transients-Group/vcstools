@@ -3,7 +3,7 @@
 Tests the mwa_metadb_utils.py script
 """
 from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_obs_array_phase
-from numpy.testing import assert_approx_equal
+from numpy.testing import assert_almost_equal
 
 
 def test_mwa_alt_az_za():
