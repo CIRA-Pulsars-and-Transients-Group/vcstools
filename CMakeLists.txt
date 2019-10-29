@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0012 NEW)
 cmake_policy(SET CMP0048 NEW)
 
-#project(vcstools VERSION 1.5.0)
+project(vcstools)
 
 # Set up version number
 execute_process(
@@ -32,7 +32,7 @@ find_package(PSRFITS_UTILS)
 find_package(FFTW3 COMPONENTS single openmp)
 find_package(XGPU)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -O2 -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
 
 # Add the subdirectories for the three target projects
 if (XGPU_FOUND)

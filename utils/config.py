@@ -51,13 +51,11 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'container_command' : ''}
                  #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'}
 
-ARM_CONFIG =   {#'base_data_dir' : '/o9000/MWA/Pulsar/SMART/',
-                #'base_product_dir' : '/o9000/MWA/Pulsar/SMART/',
-                'base_data_dir' : '/o9000/MWA/vcs/',
-                'base_product_dir' : '/o9000/MWA/vcs/',
+ARM_CONFIG =   {'base_data_dir' : '/o9000/MWA/Pulsar/vcs/',
+                'base_product_dir' : '/o9000/MWA/Pulsar/vcs/',
                 'group_account' : '',
                 'module_dir' : '/home/app/modulefiles/',
-                #'presto_module' : 'module use /apps/users/pulsar/skylake/modulefiles\nmodule load presto/no-python',
+                'presto_module' : 'presto/cpu-master',
                 #'psrcat_module' : 'psrcat/1.49',
                 'cpuq_cluster' : 'chess',
                 'cpuq_partition' : 'arm',
@@ -70,8 +68,8 @@ ARM_CONFIG =   {#'base_data_dir' : '/o9000/MWA/Pulsar/SMART/',
                 'zcpuq_partition' : 'arm',
                 #None currently as we haven't worked out container software
                 'container_module' : '',
+                #'container_command' : 'docker run 192.168.6.123:5000/vcstools'}
                 'container_command' : ''}
-                #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'}
 
 
 

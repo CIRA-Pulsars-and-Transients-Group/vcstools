@@ -229,14 +229,15 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs={},
     # load computer dependant config file
     comp_config = config.load_config_file()
    
-    # little hack to change vcstools/master to vcstools/cpu-master for the shanghai server
-    if (hostname.startswith('x86') or hostname.startswith('arm')):
+    # some little hacks to make jobs work on the shanghai server
+    if hostname.startswith('x86') or hostname.startswith('arm'):
         if vcstools_version == 'master':
             vcstools_version = 'cpu-master'
         if export == "NONE":
             export = "ALL"
         if shebag == "#!/bin/bash -l":
             shebag = "#!/bin/bash"
+
     # format the template script
     tmpl = tmpl.format(shebag=shebag, script=commands, outfile=outfile, header=header, 
                        switches=switches, modules=modules, 
