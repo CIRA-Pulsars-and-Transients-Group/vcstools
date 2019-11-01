@@ -16,9 +16,9 @@ def test_mwa_alt_az_za():
 
     for obsid, exp_alt, exp_az, exp_za in tests:
         alt, az, za = mwa_alt_az_za(obsid)
-        assert_almost_equal(alt, exp_alt, decimal=5)
-        assert_almost_equal(az,  exp_az,  decimal=5)
-        assert_almost_equal(za,  exp_za,  decimal=5)
+        assert_almost_equal(alt, exp_alt, decimal=4)
+        assert_almost_equal(az,  exp_az,  decimal=4)
+        assert_almost_equal(za,  exp_za,  decimal=4)
 
 def test_get_obs_array_phase():
     """Test FWHM calculation"""
