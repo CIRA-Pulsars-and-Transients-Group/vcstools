@@ -671,7 +671,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     utctime = gps_to_utc(start)
 
     if dpp:
-        # running the Data Processing Pipeline so make a symlink to /astro so we 
+        # running the Data Processing Pipeline so make a symlink to /astro so we
         # don't run out of space on /group
         target_dir = link = "dpp_pointings"
         P_dir = os.path.join(product_dir, link)
