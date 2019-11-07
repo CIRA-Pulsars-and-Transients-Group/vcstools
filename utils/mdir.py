@@ -28,7 +28,7 @@ def mdir(path, description, gid=30832):
         if (os.path.exists(path)):
             logger.info("{0} Directory Already Exists\n".format(description))
         else:
-            logger.error("Could not make new directories\n")
+            logger.error("{0} Could not make new directories\n".format(description))
             sys.exit(0)
 
 
