@@ -310,7 +310,8 @@ int main(int argc, char **argv)
     
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
-    uint8_t *data;
+    uint8_t *data_read;
+    uint8_t *data_calc;
     //uint8_t *data1;
     //uint8_t *data2;
     //cudaMallocHost( (void**)&data1, bytes_per_file * sizeof(uint8_t) );
@@ -387,6 +388,16 @@ int main(int argc, char **argv)
         for ( p = 0; p < npointing; p++ ) write_check[file_no][p] = 0;//False
     } 
     
+    
+    // read data test
+    data_read = data1;
+    fprintf( stderr, "[%f]  Read test before\n", NOW-begintime);
+    read_data( filenames[0], data1, bytes_per_file  );
+    fprintf( stderr, "[%f]  Read test after\n", NOW-begintime);
+    fprintf( stderr, "[%f]  Read test before\n", NOW-begintime);
+    read_data( filenames[0], data_read, bytes_per_file  );
+    fprintf( stderr, "[%f]  Read test after\n", NOW-begintime);
+    
     // Set up timing for each section
     long read_total_time, calc_total_time, write_total_time;
 
@@ -403,7 +414,7 @@ int main(int argc, char **argv)
     int exit_check = 0;
     // Sets up a parallel for loop for each of the available thread and 
     // assigns a section to each thread
-    #pragma omp parallel for shared(read_check, calc_check, write_check, pf) private( thread_no, file_no, p, exit_check, data, data_buffer_coh, data_buffer_incoh, data_buffer_vdif )
+    #pragma omp parallel for shared(read_check, calc_check, write_check, pf, data_read, data_calc) private( thread_no, file_no, p, exit_check, data_buffer_coh, data_buffer_incoh, data_buffer_vdif )
     for (thread_no = 0; thread_no < nthread; ++thread_no)
     {
         // Read section -------------------------------------------------------
@@ -412,8 +423,8 @@ int main(int argc, char **argv)
             for (file_no = 0; file_no < nfiles; file_no++)
             {
                 //Work out which memory allocation it's requires
-                if (file_no%2 == 0) data = data1;
-                else data = data2;
+                if (file_no%2 == 0) data_read = data1;
+                else data_read = data2;
                 
                 //Waits until it can read 
                 exit_check = 0; 
@@ -438,7 +449,7 @@ int main(int argc, char **argv)
                     // Read in data from next file
                     fprintf( stderr, "[%f] [%d/%d] Reading in data from %s \n", NOW-begintime,
                             file_no+1, nfiles, filenames[file_no]);
-                    read_data( filenames[file_no], data, bytes_per_file  );
+                    read_data( filenames[file_no], data_read, bytes_per_file  );
                     
                     // Records that this read section is complete
                     read_check[file_no] = 1;
@@ -456,14 +467,14 @@ int main(int argc, char **argv)
                 //Work out which memory allocation it's requires
                 if (file_no%2 == 0)
                 {
-                   data = data1;
+                   data_calc = data1;
                    data_buffer_coh   = data_buffer_coh1;
                    data_buffer_incoh = data_buffer_incoh1;
                    data_buffer_vdif  = data_buffer_vdif1;
                 }
                 else
                 {
-                   data = data2;
+                   data_calc = data2;
                    data_buffer_coh   = data_buffer_coh2;
                    data_buffer_incoh = data_buffer_incoh2;
                    data_buffer_vdif  = data_buffer_vdif2;
@@ -521,7 +532,7 @@ int main(int argc, char **argv)
                 fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
                                         file_no+1, nfiles);
                 
-                cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
+                cu_form_beam( data_calc, &opts, complex_weights_array, invJi, file_no,
                               npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
                               detected_beam, data_buffer_coh, data_buffer_incoh,
                               streams );
