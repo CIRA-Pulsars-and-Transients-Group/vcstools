@@ -35,23 +35,35 @@ except KeyError:
     ATNF_LOC = None
 
 #---------------------------------------------------------------
-def plot_flux_estimation(freqs, fluxes, flux_errors, pulsar, obsid, alpha=None, c=None):
+def plot_flux_estimation(nu_atnf, S_atnf, S_atnf_e, my_nu, my_S, my_S_e, a, K, covar_mat, pulsar, obsid):
+    """
+    Parameters:
+    """
+    nu_range = list(nu_atnf)
+    nu_range.append(my_nu)
+    S_range = list(S_atnf)
+    S_range.append(my_S)
 
-    plt.errorbar(freqs, fluxes, yerr=flux_errors, fmt="o", label="Data")
-    plt.yscale("log")
-    plt.xscale("log")
-    plt.title("Flux Density Spectrum for {0}".format(pulsar))
-    plt.xlabel("Frequency MHz")
-    plt.ylabel("Flux Jy")
+    nu_cont = np.logspace(np.log10(min(nu_range)), np.log10(max(nu_range)), num=500)
+    S_cont, S_cont_e = flux_from_plaw(nu_cont, K, a, covar_mat)
 
-    if alpha is not None and c is not None:
-        minfreq = min(freqs)
-        maxfreq = max(freqs)
-        x = np.linspace(minfreq/2, maxfreq*2, 200)
-        y = np.exp(alpha * np.log(x) + c)
-        plt.plot(x, y, "--r", label="Fitted Plaw")
-        plt.legend()
+    nu_range=[]
+    S_range=[]
+    for element in nu_cont:
+        nu_range.append(element)
+    for element in S_cont:
+        S_range.append(element)
 
+    plt.fill_between(nu_cont, S_cont - S_cont_e, S_cont + S_cont_e, facecolor='gray') # Model errors
+    plt.plot(nu_cont, S_cont, 'k--', label="model") # Modelled line
+    plt.errorbar(nu_atnf, S_atnf, yerr=S_atnf_e, fmt='o', label="ATNF data points") # Original data points
+    plt.errorbar(my_nu, my_S, yerr=my_S_e, fmt='o', label="Extrapolated data points") # Extrapolated data point
+    plt.axis([0.5*min(nu_range), 2.0*max(nu_range), 0.5*min(S_range), 2.0*max(S_range)])
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Flux (Jy)')
+    plt.legend()
     plt.savefig("flux_density_{0}_{1}.png".format(pulsar, obsid))
 
 #---------------------------------------------------------------
@@ -243,10 +255,9 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
     return enter_files, exit_files
 
 #---------------------------------------------------------------
-def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_bound=None,
-                c_bound=None):
+def least_squares_fit_plaw(x_data, y_data, y_err):
     """
-    Used primarily by est_pulsar_flux() to fit a power law function to input data. Intended for use with pulsar flux densities
+    Used primarily by est_pulsar_flux() to to attain a power law function. Intended for use with pulsar flux densities
 
     Parameters:
     -----------
@@ -254,14 +265,8 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
         A list of frequencies in Hz
     y_data: list
         A list of fluxes in Jy correspodning to the input x_data frequencies
-    alpha_initial: float
-        OPTIONAL - An initial estimate for the spectral index. Default = -1.5
-    c_initial: float
-        OPTIONAL - An intiial estimate for the value of the y-intercept. Default = 30.
-    alpha_bound: list
-        OPTIONAL - Boundary conditions for the spectral index. Default = [-3., 0.]
-    c_bound: list
-        OPTIONAL - Boundary conditions for the y-intercept. Default = [0., 50.]
+    y_err: list
+        A list containing the corresponding error values for y_data in Hz
 
     Returns:
     --------
@@ -269,107 +274,91 @@ def fit_plaw_psr(x_data, y_data, alpha_initial=-1.5, c_initial = 30., alpha_boun
         The fit spectral index
     c: float
         The fit y-intercept
-    covar_matrix: np.matrix
+    covar_mat: np.matrix
         The covariance matrix of the fit. Contains the information required to for uncertainty calculations
+
     """
-    # Parse defaults
-    if alpha_bound is None:
-        alpha_bound = [-3., 0.]
-    if c_bound is None:
-        c_bound = [0., 50.]
+    #convert everything to numpy arrays
+    x_data = np.array(x_data)
+    y_data = np.array(y_data)
+    y_err = np.array(y_err)
 
-    def log_plaw_func(nu, a, c):
-        #pass the log values of nu
-        return np.exp(a * np.log(nu) + c)
+    #Set up matrices in log space
+    Y = np.log(y_data)
+    X = np.vstack((np.ones(len(x_data)), np.log(x_data))).T
 
-    def check_fit(sol):
-        #checks that the fit parameters are sensible
-        covar_matrix = np.matrix(sol[1])
-        alpha = sol[0][0]
-        c = sol[0][1]
+    #Set up errors. We will use the avg. length of the errors in logspace 
+    Y_err = 0.5 * np.log((y_data + y_err)/(y_data - y_err))
 
-        covar_0_0 = covar_matrix.item(0)
-        covar_0_1 = covar_matrix.item(1)
-        covar_1_0 = covar_matrix.item(2)
-        covar_1_1 = covar_matrix.item(3)
+    #Convert the errors to weights
+    W = np.diag(1/Y_err**2)
 
-        test = True
-        #check the following conditions
-        #alpha
-        if alpha>10 or alpha < -10:
-            test =  False
-        #c
-        elif c>1000 or c<-1000:
-            test = False
-        #covariance matrix
-        elif covar_0_0==0. or covar_0_1==0. or covar_1_0==0.or covar_1_1==0.:
-            test = False
-        elif covar_0_0>1e6 or covar_0_0<-1e6 or covar_0_1>1e6 or covar_0_1<-1e6\
-            or covar_1_0>1e6 or covar_1_0<-1e6 or covar_1_1>1e6 or covar_1_1<-1e6:
-            test = False
-        return test
+    #for reference: https://en.wikipedia.org/wiki/Weighted_least_squares
+    # B =(X'*W*X)' * X'WY
+    XW     = np.matmul(X.T, W)
+    XWX    = np.matmul(XW, X)
+    XWY    = np.matmul(XW, Y)
+    XWXinv = np.linalg.pinv(XWX)
+    b      = np.matmul(XWXinv, XWY) 
 
-    initial = [alpha_initial, c_initial]
+    c = b[0]
+    a = b[1]
+    #convert c from log tospace to linear space
+    K = np.exp(c)
 
-    #make the bounds tuple
-    lower_bound = [alpha_bound[0], c_bound[0]]
-    upper_bound = [alpha_bound[1], c_bound[1]]
-    bounds = (lower_bound, upper_bound)
+    #The covariance matrix
+    covar_mat = XWXinv
 
-    #force the data into numpy float arrays because scipy likes it
-    x_data = np.array(x_data, dtype="float64")
-    y_data = np.array(y_data, dtype="float64")
-    initial = np.array(initial, dtype="float64")
-    logger.debug("x_data: {0}".format(x_data))
-    logger.debug("y_data: {0}".format(y_data))
-
-    #fit a line
-    #sol = curve_fit(function, x_data, y_data, p0=initial)
-    function=log_plaw_func
-    sol = curve_fit(function, x_data, y_data, p0=initial, bounds=bounds)
-    covar_matrix = np.matrix(sol[1])
-    a = sol[0][0]
-    c = sol[0][1]
-
-    #Check the fit
-
-
-    test_check = check_fit(sol)
-    if test_check==False:
-        logger.warning("Initial parameters could not fit a power law. Trying without bounds...")
-        sol = curve_fit(function, x_data, y_data, p0=initial)
-
-    test_check = check_fit(sol)
-    if test_check==False:
-        logger.warning("Trying without bounds and initial conditions...")
-        sol = curve_fit(function, x_data, y_data)
-        covar_matrix = np.matrix(sol[1])
-        a = sol[0][0]
-        c = sol[0][1]
-
-    test_check = check_fit(sol)
-    if test_check==False:
-        covar_matrix = np.matrix(sol[1])
-        a = sol[0][0]
-        c = sol[0][1]
-        logger.warning("Bad power law fit. Results may be unphysical")
-        logger.warning("a: {0}".format(a))
-        logger.warning("c: {0}".format(c))
-        logger.warning("Covariance Matrix: {0}".format(covar_matrix))
-        return a, c, covar_matrix
-    else:
-        return a, c, covar_matrix
-
-
-    covar_matrix = np.matrix(sol[1])
-    a = sol[0][0]
-    c = sol[0][1]
     logger.debug("a: {0}".format(a))
-    logger.debug("c: {0}".format(c))
-    logger.debug("Solution: {0}".format(sol))
-    logger.debug("Covariance Matrix: {0}".format(covar_matrix))
+    logger.debug("K: {0}".format(K))
+    logger.debug("Covariance Matrix: {0}".format(covar_mat))
 
-    return a, c, covar_matrix
+    return a, K, covar_mat
+
+def flux_from_plaw(freq, K, a, covar_mat):
+    """
+    Calculates the flux and error from a power law fit by extrapolating to the desired frequency.
+    The power law is of the form S = c * nu**a
+
+    Parameters:
+    -----------
+    freq: float
+        The frequency for which we want to calculate a flux for (nu)
+    K: float
+        The value of K from the power law function
+    a: float
+        The value of a (spectral index) from the power law function
+    covar_matrix: numpy matrix
+        The covariance matrix from our power law fit. The main diagonal elements are sigma_c^2, sigma_a^2 respectively
+
+    Returns:
+    --------
+    flux: float
+        The calculated flux
+    flux_err: float
+        The uncertainty of the calculated flux 
+    """
+
+    def plaw_func(nu, K, a):
+        #Power law function
+        return K*nu**a
+
+    flux = plaw_func(freq, K, a)
+
+    #Calculate the error. For reference: https://en.wikipedia.org/wiki/Propagation_of_uncertainty 
+    log_freq = np.log(freq)
+    
+    dc2 = covar_mat[0, 0]
+    da2 = covar_mat[1, 1]
+    dac = covar_mat[0, 1]
+
+    flux_err_log = np.sqrt(dc2 + da2*log_freq**2 + 2*dac*log_freq)
+
+    #convert the error to linear space. We will use the 'average' logspace error     
+    z = np.exp(2*flux_err_log)
+    flux_err = flux*(z-1)/(z+1)
+
+    return flux, flux_err
 
 #---------------------------------------------------------------
 def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
@@ -420,14 +409,17 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
             try:
                 flux_err = query[flux_query+"_ERR"][0]
                 if flux_err == 0.0:
-                    logger.warning("Flux error for query: {0}, pulsar {1}, is zero. Assuming 20% uncertainty".format(query[flux_query][0], pulsar))
+                    logger.warning("{0} flux error for query: {1}, is zero. Assuming 20% uncertainty"\
+                            .format(pulsar, query[flux_query][0]))
                     flux_err = flux*0.2
             except KeyError:
-                logger.warning("flux error value for {0}, pulsar {1}, not available. assuming 20% uncertainty".format(query[flux_query][0], pulsar))
+                logger.warning("{0} flux error value {1}, not available. assuming 20% uncertainty"\
+                            .format(pulsar, query[flux_query][0]))
                 flux_err = flux*0.2
 
             if np.isnan(flux_err):
-                logger.warning("flux error value for {0}, pulsar {1}, not available. assuming 20% uncertainty".format(query[flux_query][0], pulsar))
+                logger.warning("{0} flux error value for {0} not available. assuming 20% uncertainty"\
+                            .format(pulsar, query[flux_query][0]))
                 flux_err = flux*0.2
 
             freq_all.append(int(flux_query.split()[0][1:])*1e6) #convert to Hz
@@ -441,49 +433,35 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
     logger.debug("Freqs: {0}".format(freq_all))
     logger.debug("Fluxes: {0}".format(flux_all))
     logger.debug("Flux Errors: {0}".format(flux_err_all))
-    logger.info("There are {0} flux values available on the ATNF database for {1}".format(len(flux_all), pulsar))
+    logger.info("{0} there are {1} flux values available on the ATNF database"\
+                .format(pulsar, len(flux_all)))
     #Attempt to estimate flux
     if len(flux_all) > 1:
-        logger.info("Fitting power law to archive data")
+        logger.info("{0} calculating power law from archive data".format(pulsar))
         for i, _ in enumerate(flux_all):
             flux_all[i] = flux_all[i]
             flux_err_all[i] = flux_err_all[i]
 
-        #apply spectral index bounds if an error already exists
-        initial_spind = -1.5
-        spind_bounds = None
-        if not np.isnan(spind):
-            initial_spind = spind
-            if not np.isnan(spind_err):
-                #if spind_error exists on cat, use it to create 5 sigma bounds for fitting
-                spind_bounds = [spind-spind_err*5, spind+spind_err*5]
+        #Find params from least squares fit
+        spind, K, covar_mat = least_squares_fit_plaw(freq_all, flux_all, flux_err_all)
+        logger.info("{0} derived spectral index: {1} +/- {2}".format(pulsar, spind, covar_mat.item(3)))
 
-
-        spind, c, covar_matrix = fit_plaw_psr(freq_all, flux_all, alpha_initial=initial_spind, alpha_bound=spind_bounds)
-        logger.info("Derived spectral index: {0} +/- {1}".format(spind, covar_matrix.item(0)))
-        #plot if in debug mode
+        #Get flux estimation
+        flux_est, flux_est_err = flux_from_plaw(f_mean, K, spind, covar_mat)        
+        #Plot estimation if in debug mode
         if plot_flux==True:
-            plot_flux_estimation(freq_all, flux_all, flux_err_all, pulsar, obsid, alpha=spind, c=c)
-
-        #flux calc.
-        flux_est = np.exp(spind*np.log(f_mean)+c)
-        #calculate error from covariance matrix
-        a_mat = np.matrix([np.log(f_mean), 1])
-        log_flux_err = np.sqrt( a_mat * covar_matrix * a_mat.T )
-        #to find the error, we take the average log error in linear space
-        b = np.exp(log_flux_err)
-        flux_est_err = flux_est/2. * (b - (1/b))
-        flux_est_err = flux_est_err.item(0)
-
+            plot_flux_estimation(freq_all, flux_all, flux_err_all, f_mean, flux_est, flux_est_err, spind, K,\
+                                covar_mat, pulsar, obsid)
+   
     #Do something different if there is only one flux value in archive
     elif len(flux_all) == 1:
         logger.warning("Only a single flux value available on the archive")
 
         if not np.isnan(spind) and np.isnan(spind_err):
-            logger.warning("Spectral index error not available. Assuming 20% error")
+            logger.warning("{} spectral index error not available. Assuming 20% error".format(pulsar))
             spind_err = spind*0.2
         if np.isnan(spind):
-            logger.warning("Insufficient archival data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013")
+            logger.warning("{} insufficient archival data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013".format(pulsar))
             spind = -1.4
             spind_err = 1.
 
@@ -499,7 +477,8 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
         logger.debug("nu1 {0}".format(nu_1))
         logger.debug("nu2 {0}".format(nu_2))
         logger.debug("s2 {0}".format(s_2))
-        logger.info("calculating flux using spectral index: {0} and error: {1}".format(spind, spind_err))
+        logger.info("{0} calculating flux using spectral index: {1} and error: {2}"\
+                    .format(pulsar, spind, spind_err))
 
         flux_est = nu_1**a * nu_2**(-a) * s_2
         #variance formula error est
@@ -510,11 +489,12 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
         flux_est_err = np.sqrt(s_2_var + a_var)
 
     elif len(flux_all) < 1:
-        logger.warning("No flux values on archive for {0}. Cannot estimate flux. Will return Nones".format(pulsar))
+        logger.warning("{} no flux values on archive. Cannot estimate flux. Will return Nones".format(pulsar))
         return None, None
 
 
-    logger.info("Source flux estimate at {0} MHz: {1} +/- {2} Jy".format(f_mean/1e6, flux_est, flux_est_err))
+    logger.info("{0} flux estimate at {1} MHz: {2} +/- {3} Jy"\
+                .format(pulsar, f_mean/1e6, flux_est, flux_est_err))
 
     return flux_est, flux_est_err
 
@@ -544,7 +524,6 @@ def find_pulsar_w50(pulsar, query=None):
     W_50 = query["W50"][0]
     W_50_err = query["W50_ERR"][0]
     if np.isnan(W_50):
-        logger.warning("W_50 is not on archive")
         W_50=np.nan
         W_50_err=np.nan
     else:
@@ -552,14 +531,14 @@ def find_pulsar_w50(pulsar, query=None):
         W_50 = W_50/1000.
 
     if np.isnan(W_50_err) and not np.isnan(W_50):
-        logger.warning("W_50 error not on archive for {0}. returning standard 5% error".format(pulsar))
+        logger.warning("{} W_50 error not on archive. returning standard 5% error".format(pulsar))
         W_50_err = W_50*0.05
     else:
         #convert to seconds
         W_50_err = W_50_err/1000.
 
     if np.isnan(W_50):
-        logger.warning("Applying estimated W_50 for {0}. Uncertainty will be inflated".format(pulsar))
+        logger.warning("{} applying estimated W_50. Uncertainty will be inflated".format(pulsar))
         #Rankin1993 - W = x*P^0.5 where x=4.8+/-0.5 degrees of rotation at 1GHz
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
         coeff = 4.8
@@ -821,7 +800,8 @@ def est_pulsar_sn(pulsar, obsid,\
     else:
         beg, end, t_int = find_times(obsid, pulsar, beg=beg, end=end)
     if t_int<=0.:
-        logger.warning("Pulsar not in beam for obs files or specificed beginning and end times")
+        logger.warning("{} not in beam for obs files or specificed beginning and end times"\
+                    .format(pulsar))
         return 0., 0.
 
     #find system temp and gain
@@ -858,6 +838,7 @@ def est_pulsar_sn(pulsar, obsid,\
     logger.debug("period: {0}".format(period))
     logger.debug("W_50: {0} +/- {1}".format(W_50, W_50_err))
     logger.debug("t_sys: {0} +/- {1}".format(t_sys, t_sys_err))
+    logger.info("Pulsar S/N: {0} +/- {1}".format(SN, SN_err))
 
     return SN, SN_err
 
@@ -892,9 +873,9 @@ if __name__ == "__main__":
 
     query = psrqpy.QueryATNF(psrs=[args.pulsar], loadfromdb=ATNF_LOC).pandas
     #Decide what to use as ra and dec
-    if args.pointing==None:
-        raj = query["RAJ"][0]
-        decj = query["DECJ"][0]
+    if args.pointing is None:
+        raj = None
+        decj = None
     else:
         raj = args.pointing.split("_")[0]
         decj = args.pointing.split("_")[1]
@@ -906,4 +887,3 @@ if __name__ == "__main__":
 
     SN, SN_err = est_pulsar_sn(args.pulsar, args.obsid,\
              beg=args.beg, end=args.end, p_ra=raj, p_dec=decj, plot_flux=plot, query=query)
-    logger.info("Pulsar S/N: {0} +/- {1}".format(SN, SN_err))
