@@ -661,8 +661,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
         query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
         p_ra = query["RAJ"][0]
         p_dec = query["DECJ"][0]
-    elif query is not None:
-        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
+    elif p_ra is None and p_dec is None and query is not None:
         p_ra = query["RAJ"][0]
         p_dec= query["DECJ"][0]
 
