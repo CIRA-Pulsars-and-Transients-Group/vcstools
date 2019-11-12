@@ -410,16 +410,16 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
                 flux_err = query[flux_query+"_ERR"][0]
                 if flux_err == 0.0:
                     logger.warning("{0} flux error for query: {1}, is zero. Assuming 20% uncertainty"\
-                            .format(pulsar, query[flux_query][0]))
+                            .format(pulsar, flux_query))
                     flux_err = flux*0.2
             except KeyError:
                 logger.warning("{0} flux error value {1}, not available. assuming 20% uncertainty"\
-                            .format(pulsar, query[flux_query][0]))
+                            .format(pulsar, flux_query))
                 flux_err = flux*0.2
 
             if np.isnan(flux_err):
                 logger.warning("{0} flux error value for {1} not available. assuming 20% uncertainty"\
-                            .format(pulsar, query[flux_query][0]))
+                            .format(pulsar, flux_query))
                 flux_err = flux*0.2
 
             freq_all.append(int(flux_query.split()[0][1:])*1e6) #convert to Hz
@@ -615,7 +615,7 @@ def find_times(obsid, pulsar, beg=None, end=None):
     return beg, end, t_int
 
 #---------------------------------------------------------------
-def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
+def find_t_sys_gain(pulsar, obsid, beg=None, end=None, t_int=None, p_ra=None, p_dec=None,\
                     obs_metadata=None, query=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
@@ -675,7 +675,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, t_int=None, p_ra=None, p_dec=None,\
     #get beg if not supplied
     if beg is None or t_int is None:
         logger.debug("Calculating beginning time for pulsar coverage")
-        beg, _, t_int = find_times(obsid, pulsar, beg=beg)
+        beg, _, t_int = find_times(obsid, pulsar, beg=beg, end=end)
 
     #Find 'start_time' for fpio - it's usually about 7 seconds
     #obs_start, _ = mwa_metadb_utils.obs_max_min(obsid)
@@ -805,7 +805,7 @@ def est_pulsar_sn(pulsar, obsid,\
 
     #find system temp and gain
     t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid,\
-                                beg=beg, p_ra=p_ra, p_dec=p_dec, query=query,\
+                                beg=beg, end=end, p_ra=p_ra, p_dec=p_dec, query=query,\
                                 obs_metadata=obs_metadata, trcvr=trcvr)
 
     #Find W_50
