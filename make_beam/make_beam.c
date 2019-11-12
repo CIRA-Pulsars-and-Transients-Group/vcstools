@@ -81,6 +81,9 @@ int main(int argc, char **argv)
     opts.out_coh       = 0;  // Default = PSRFITS (coherent)   output turned OFF
     opts.out_vdif      = 0;  // Default = VDIF                 output turned OFF
     opts.out_uvdif     = 0;  // Default = upsampled VDIF       output turned OFF
+    opts.out_bf        = 1;  // Default = beamform all (non-flagged) antennas
+    opts.out_ant       = 0;  // The antenna number (0-127) to write out if out_bf = 0
+    opts.out_pol       = 0;  // The pol (0-1) to write out if out_bf = 0
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -487,6 +490,10 @@ void usage() {
     fprintf(stderr, "\t-v, --vdif                 ");
     fprintf(stderr, "Turn on VDIF output without upsampling                           ");
     fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-A, --antpol=ant[XY]       ");
+    fprintf(stderr, "Do not beamform. Instead, only operate on the specified ant/pol\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "stream (e.g. \"-A 119Y\")\n" );
 
     fprintf(stderr, "\n");
     fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
@@ -573,6 +580,8 @@ void usage() {
 void make_beam_parse_cmdline(
         int argc, char **argv, struct make_beam_opts *opts )
 {
+    char pol; // Only if needed for the -A option
+
     if (argc > 1) {
 
         int c;
@@ -585,6 +594,7 @@ void make_beam_parse_cmdline(
                 {"incoh",           no_argument,       0, 'i'},
                 {"psrfits",         no_argument,       0, 'p'},
                 {"vdif",            no_argument,       0, 'v'},
+                {"antpol",          required_argument, 0, 'A'},
                 {"utc-time",        required_argument, 0, 'z'},
                 {"dec",             required_argument, 0, 'D'},
                 {"ra",              required_argument, 0, 'R'},
@@ -607,7 +617,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:b:B:C:d:D:e:f:F:hiJ:m:n:o:O:pr:R:uvVw:W:z:",
+                             "a:A:b:B:C:d:D:e:f:F:hiJ:m:n:o:O:pr:R:uvVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -616,6 +626,11 @@ void make_beam_parse_cmdline(
 
                 case 'a':
                     opts->nstation = atoi(optarg);
+                    break;
+                case 'A':
+                    opts->out_bf = 0; // Turn off normal beamforming
+                    sscanf(optarg, "%d%c", &opts->out_ant, &pol ); // e.g. "91Y"
+                    opts->out_pol = pol - 'X'; // i.e. convert from ['X','Y'] to [0,1]
                     break;
                 case 'b':
                     opts->begin = atol(optarg);

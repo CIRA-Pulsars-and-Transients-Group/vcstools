@@ -86,6 +86,9 @@ struct make_beam_opts {
     int                out_coh;       // Default = PSRFITS (coherent)   output turned OFF
     int                out_vdif;      // Default = VDIF                 output turned OFF
     int                out_uvdif;     // Default = upsampled VDIF       output turned OFF
+    int                out_bf;        // Default = beamform over all (non-flagged) antennas
+    int                out_ant;       // The antenna number (0-127) to write out if out_bf = 0
+    int                out_pol;       // The pol (0-1) to write out if out_bf = 0
 
     struct calibration cal;           // Variables for calibration settings
 };
