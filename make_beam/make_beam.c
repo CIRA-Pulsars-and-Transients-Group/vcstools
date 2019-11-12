@@ -83,7 +83,6 @@ int main(int argc, char **argv)
     opts.out_uvdif     = 0;  // Default = upsampled VDIF       output turned OFF
     opts.out_bf        = 1;  // Default = beamform all (non-flagged) antennas
     opts.out_ant       = 0;  // The antenna number (0-127) to write out if out_bf = 0
-    opts.out_pol       = 0;  // The pol (0-1) to write out if out_bf = 0
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -289,6 +288,10 @@ int main(int argc, char **argv)
 
     int file_no = 0;
 
+    int offset;
+    unsigned int s;
+    int ch, pol;
+
     printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
     for (file_no = 0; file_no < nfiles; file_no++) {
 
@@ -320,15 +323,35 @@ int main(int argc, char **argv)
         for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
             data_buffer_incoh[i] = 0.0;
 
+        if (!opts.out_bf) // don't beamform, but only procoess one ant/pol combination
+        {
+            // Populate the detected_beam, data_buffer_coh, and data_buffer_incoh arrays
+            // detected_beam = [2*opts.sample_rate][nchan][npol] = [20000][128][2] (ComplexDouble)
+            if (file_no % 2 == 0)
+                offset = 0;
+            else
+                offset = opts.sample_rate;
+
+            for (s   = 0; s   < opts.sample_rate; s++  )
+            for (ch  = 0; ch  < nchan           ; ch++ )
+            for (pol = 0; pol < npol            ; pol++)
+            {
+                detected_beam[s+offset][ch][pol] = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,ch,opts.out_ant,pol,nchan)]);
+                detected_beam[s+offset][ch][pol] = CMuld(detected_beam[s+offset][ch][pol], CMaked(128.0, 0.0));
+            }
+        }
+        else // beamform (the default mode)
+        {
 #ifdef HAVE_CUDA
-        cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                      nstation, nchan, npol, outpol_coh, invw, &gf,
-                      detected_beam, data_buffer_coh, data_buffer_incoh );
+            cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
+                    nstation, nchan, npol, outpol_coh, invw, &gf,
+                    detected_beam, data_buffer_coh, data_buffer_incoh );
 #else
-        form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                   nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
-                   detected_beam, data_buffer_coh, data_buffer_incoh );
+            form_beam( data, &opts, complex_weights_array, invJi, file_no,
+                    nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
+                    detected_beam, data_buffer_coh, data_buffer_incoh );
 #endif
+        }
 
         // Invert the PFB, if requested
         if (opts.out_vdif)
@@ -374,7 +397,6 @@ int main(int argc, char **argv)
     destroy_invJi( invJi, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, 2*opts.sample_rate, nchan );
 
-    int ch;
     for (ch = 0; ch < nchan; ch++)
     {
         free( fil_ramps[ch] );
@@ -490,10 +512,10 @@ void usage() {
     fprintf(stderr, "\t-v, --vdif                 ");
     fprintf(stderr, "Turn on VDIF output without upsampling                           ");
     fprintf(stderr, "[default: OFF]\n");
-    fprintf(stderr, "\t-A, --antpol=ant[XY]       ");
-    fprintf(stderr, "Do not beamform. Instead, only operate on the specified ant/pol\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "stream (e.g. \"-A 119Y\")\n" );
+    fprintf(stderr, "\t-A, --antpol=ant           ");
+    fprintf(stderr, "Do not beamform. Instead, only operate on the specified ant\n");
+    fprintf(stderr, "\t                           ");
+    fprintf(stderr, "stream (0-127)\n" );
 
     fprintf(stderr, "\n");
     fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
@@ -580,8 +602,6 @@ void usage() {
 void make_beam_parse_cmdline(
         int argc, char **argv, struct make_beam_opts *opts )
 {
-    char pol; // Only if needed for the -A option
-
     if (argc > 1) {
 
         int c;
@@ -629,8 +649,7 @@ void make_beam_parse_cmdline(
                     break;
                 case 'A':
                     opts->out_bf = 0; // Turn off normal beamforming
-                    sscanf(optarg, "%d%c", &opts->out_ant, &pol ); // e.g. "91Y"
-                    opts->out_pol = pol - 'X'; // i.e. convert from ['X','Y'] to [0,1]
+                    opts->out_ant = atoi(optarg); // 0-127
                     break;
                 case 'b':
                     opts->begin = atol(optarg);
