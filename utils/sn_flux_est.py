@@ -287,7 +287,7 @@ def least_squares_fit_plaw(x_data, y_data, y_err):
     Y = np.log(y_data)
     X = np.vstack((np.ones(len(x_data)), np.log(x_data))).T
 
-    #Set up errors. We will use the avg. length of the errors in logspace 
+    #Set up errors. We will use the avg. length of the errors in logspace
     Y_err = 0.5 * np.log((y_data + y_err)/(y_data - y_err))
 
     #Convert the errors to weights
@@ -299,7 +299,7 @@ def least_squares_fit_plaw(x_data, y_data, y_err):
     XWX    = np.matmul(XW, X)
     XWY    = np.matmul(XW, Y)
     XWXinv = np.linalg.pinv(XWX)
-    b      = np.matmul(XWXinv, XWY) 
+    b      = np.matmul(XWXinv, XWY)
 
     c = b[0]
     a = b[1]
@@ -336,7 +336,7 @@ def flux_from_plaw(freq, K, a, covar_mat):
     flux: float
         The calculated flux
     flux_err: float
-        The uncertainty of the calculated flux 
+        The uncertainty of the calculated flux
     """
 
     def plaw_func(nu, K, a):
@@ -345,16 +345,16 @@ def flux_from_plaw(freq, K, a, covar_mat):
 
     flux = plaw_func(freq, K, a)
 
-    #Calculate the error. For reference: https://en.wikipedia.org/wiki/Propagation_of_uncertainty 
+    #Calculate the error. For reference: https://en.wikipedia.org/wiki/Propagation_of_uncertainty
     log_freq = np.log(freq)
-    
+
     dc2 = covar_mat[0, 0]
     da2 = covar_mat[1, 1]
     dac = covar_mat[0, 1]
 
     flux_err_log = np.sqrt(dc2 + da2*log_freq**2 + 2*dac*log_freq)
 
-    #convert the error to linear space. We will use the 'average' logspace error     
+    #convert the error to linear space. We will use the 'average' logspace error
     z = np.exp(2*flux_err_log)
     flux_err = flux*(z-1)/(z+1)
 
@@ -418,7 +418,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
                 flux_err = flux*0.2
 
             if np.isnan(flux_err):
-                logger.warning("{0} flux error value for {0} not available. assuming 20% uncertainty"\
+                logger.warning("{0} flux error value for {1} not available. assuming 20% uncertainty"\
                             .format(pulsar, query[flux_query][0]))
                 flux_err = flux*0.2
 
@@ -447,12 +447,12 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
         logger.info("{0} derived spectral index: {1} +/- {2}".format(pulsar, spind, covar_mat.item(3)))
 
         #Get flux estimation
-        flux_est, flux_est_err = flux_from_plaw(f_mean, K, spind, covar_mat)        
+        flux_est, flux_est_err = flux_from_plaw(f_mean, K, spind, covar_mat)
         #Plot estimation if in debug mode
         if plot_flux==True:
             plot_flux_estimation(freq_all, flux_all, flux_err_all, f_mean, flux_est, flux_est_err, spind, K,\
                                 covar_mat, pulsar, obsid)
-   
+
     #Do something different if there is only one flux value in archive
     elif len(flux_all) == 1:
         logger.warning("Only a single flux value available on the archive")
