@@ -125,11 +125,14 @@ def test_est_pulsar_sn():
     """
     I have tested this function various pulsar/observation combinations and compared to the estimated S/N from bestrof files. Here are the results:
 
-    1225462936, -b 1225462943 -e 1225463543 psr J0152-1637: The function estimated a S/N of 100.92 +/- 22.48. I compared this to what was estimated from the profile analyse_pulse_prof() and attained a S/N of 75.26 +/- 1.70
+    1225462936, -b 1225462943 -e 1225463543 psr J0152-1637: The function estimated a S/N of 100.92 +/- 22.48.
+    I compared this to what was estimated from the profile analyse_pulse_prof() and attained a S/N of 75.26 +/- 1.70
 
-    1226062160, -b 1226062167 -e 1226062767 psr J2330-2005: Function estimated a S/N of 412.26 +/- 103.80. Compared this to the profile estimation and attained S/N of 51.51 +/- 1.16
+    1226062160, -b 1226062167 -e 1226062767 psr J2330-2005: Function estimated a S/N of 412.26 +/- 103.80.
+    I compared this to the profile estimation and attained S/N of 51.51 +/- 1.16
 
-    1225713560, -b 1225713567 -e 1225714167, psr J2241-5236: Function estimated a S/N of 119.82 +/- 41.61. Compared this to the profile estimation and attained S/N of 17.36 +/- 2.41
+    1225713560, -b 1225713567 -e 1225714167, psr J2241-5236: Function estimated a S/N of 119.82 +/- 41.61.
+    I Compared this to the profile estimation and attained S/N of 17.36 +/- 2.41
 
     """
     print("est_pulsar_sn")
