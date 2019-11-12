@@ -313,13 +313,13 @@ int main(int argc, char **argv)
     uint8_t *data_read;
     uint8_t *data_calc;
     //uint8_t *data1;
-    //uint8_t *data2;
+    //uint8_t *data1;
     //cudaMallocHost( (void**)&data1, bytes_per_file * sizeof(uint8_t) );
-    //cudaMallocHost( (void**)&data2, bytes_per_file * sizeof(uint8_t) );
+    //cudaMallocHost( (void**)&data1, bytes_per_file * sizeof(uint8_t) );
     uint8_t *data1 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
-    uint8_t *data2 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
+    //uint8_t *data1 = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     assert(data1);
-    assert(data2);
+    //assert(data1);
 
     // Create output buffer arrays
     float *data_buffer_coh    = NULL;
@@ -395,7 +395,7 @@ int main(int argc, char **argv)
     read_data( filenames[0], data1, bytes_per_file  );
     fprintf( stderr, "[%f]  Read test after\n", NOW-begintime);
     fprintf( stderr, "[%f]  Read test before\n", NOW-begintime);
-    read_data( filenames[0], data_read, bytes_per_file  );
+    read_data( filenames[1], data_read, bytes_per_file  );
     fprintf( stderr, "[%f]  Read test after\n", NOW-begintime);
     
     // Set up timing for each section
@@ -424,7 +424,7 @@ int main(int argc, char **argv)
             {
                 //Work out which memory allocation it's requires
                 if (file_no%2 == 0) data_read = data1;
-                else data_read = data2;
+                else data_read = data1;
                 
                 //Waits until it can read 
                 exit_check = 0; 
@@ -474,7 +474,7 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                   data_calc = data2;
+                   data_calc = data1;
                    data_buffer_coh   = data_buffer_coh2;
                    data_buffer_incoh = data_buffer_incoh2;
                    data_buffer_vdif  = data_buffer_vdif2;
@@ -635,7 +635,7 @@ int main(int argc, char **argv)
     cudaFreeHost( data_buffer_vdif1  );
     cudaFreeHost( data_buffer_vdif2  );
     cudaFreeHost( data1 );
-    cudaFreeHost( data2 );
+    cudaFreeHost( data1 );
         
     free( opts.obsid        );
     free( opts.time_utc     );
