@@ -716,7 +716,7 @@ def write_output_source_files(output_data,
                 output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}'.format(obsid,
                                   duration, enter, exit, max_power, oap))
                 if SN_est:
-                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid)
+                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(source, obsid)
                     if pulsar_sn is None:
                         output_file.write('   None    None')
                     else:
