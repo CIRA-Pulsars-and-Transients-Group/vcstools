@@ -606,7 +606,7 @@ if __name__ == "__main__":
 
     if args.bestprof or args.ascii:
         #Does the flux calculation and submits the results to the MWA pulsar database
-        subbands = flux_cal_and_sumbit(time_detection, time_obs, metadata, bestprof_data,
+        subbands = flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, coh, auth, trcvr=args.trcvr)
 
     if args.cal_dir_to_tar:
