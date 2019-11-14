@@ -3,7 +3,7 @@
 #Run this script from a directory with an RTS solution and it will create the analyasis plots for you
 
 ATTEMPT_NUM=$(find . -mindepth 1 -maxdepth 1 -type d | wc -l)
-ATTEMPT_NUM=$(($ATTEMPT_NUM+1))
+ATTEMPT_NUM=$((ATTEMPT_NUM+1))
 mkdir "attempt_number_${ATTEMPT_NUM}"
 
 cp BandpassCalibration_node0* ./attempt_number_"${ATTEMPT_NUM}"
