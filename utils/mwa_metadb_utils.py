@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+import argparse
 
 logger = logging.getLogger(__name__)
 
@@ -156,4 +157,45 @@ def obs_max_min(obs_id):
     obs_end = int(max(times))
     return obs_start, obs_end
 
+def write_obs_info(obs_id):
+    """
+    Writes obs info to a file in the current direcory
+    """
+    data_dict = getmeta(service='obs', params={'obs_id':str(obs_id)})
+    filename = str(obs_id)+"_info.txt"
+    logger.info("Writing to file: {0}".format(filename))
+    data_dict = getmeta(params={"obsid":args.obsid})
 
+    f = open(filename, "w+")
+    f.write("-------------------------    Obs Info    --------------------------\n")
+    f.write("Obs Name:        {}\n".format(data_dict["obsname"]))
+    f.write("Creator:         {}\n".format(data_dict["rfstreams"]["0"]["creator"]))
+    f.write("Start time:      {}\n".format(data_dict["starttime"]))
+    f.write("Stop time:       {}\n".format(data_dict["stoptime"]))
+    f.write("Duration:        {}\n".format(data_dict["stoptime"]-data_dict["starttime"]))
+    f.write("RA Pointing:     {}\n".format(data_dict["metadata"]["ra_pointing"]))
+    f.write("DEC Pointing:    {}\n".format(data_dict["metadata"]["dec_pointing"]))
+    f.write("Data Ready?:     {}\n".format(data_dict["dataready"]))
+    f.write("Channels:        {}\n".format(data_dict["rfstreams"]["0"]["frequencies"]))
+    f.close()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="""Returns information on an input Obs ID""")
+    parser.add_argument("obsid", type=int, help="Input Observation ID")
+    parser.add_argument("-w", "--write", action="store_true", help="OPTIONAL - Use to write results to file.")
+    args = parser.parse_args()
+
+    if args.write == False:
+        data_dict = getmeta(params={"obsid":args.obsid})
+        print("-------------------------    Obs Info    --------------------------")
+        print("Obs Name:        {}".format(data_dict["obsname"]))
+        print("Creator:         {}".format(data_dict["rfstreams"]["0"]["creator"]))
+        print("Start time:      {}".format(data_dict["starttime"]))
+        print("Stop time:       {}".format(data_dict["stoptime"]))
+        print("Duration:        {}".format(data_dict["stoptime"]-data_dict["starttime"]))
+        print("RA Pointing:     {}".format(data_dict["metadata"]["ra_pointing"]))
+        print("DEC Pointing:    {}".format(data_dict["metadata"]["dec_pointing"]))
+        print("Data Ready?:     {}".format(data_dict["dataready"]))
+        print("Channels:        {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
+    else:
+        write_obs_info(args.obsid)
