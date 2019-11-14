@@ -226,7 +226,9 @@ if __name__ == '__main__':
     parser.add_argument("-w", "--write", action="store_true", help="OPTIONAL - Use to write results to file.")
     args = parser.parse_args()
 
-    if args.write == False:
+    if args.write:
+        write_obs_info(args.obsid)
+    else:
         data_dict = getmeta(params={"obsid":args.obsid})
         channels = data_dict["rfstreams"]["0"]["frequencies"]
         centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
@@ -245,5 +247,3 @@ if __name__ == '__main__':
         print("DEC Pointing (deg): {}".format(data_dict["metadata"]["dec_pointing"]))
         print("Channels:           {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
         print("Centrefreq (MHz):   {}".format(centre_freq))
-    else:
-        write_obs_info(args.obsid)
