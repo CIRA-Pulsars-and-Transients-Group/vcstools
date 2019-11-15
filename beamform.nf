@@ -10,6 +10,14 @@ params.didir = "${params.basedir}/${params.obsid}/cal/${params.calid}/rts"
 params.channels = null
 
 
+pointings = Channel
+    .from(params.pointings.split(","))
+    .collect()
+    .flatten()
+    .collate( 15 )
+    .view()
+
+
 process ensure_metafits {
 
     """
@@ -48,8 +56,6 @@ process get_channels {
     with open("${params.obsid}_channels.txt", "w") as outfile:
         spamwriter = csv.writer(outfile, delimiter=',')
         spamwriter.writerow(channels)
-        #for c in channels:
-        #    outfile.write("{}\\n".format(c))
     """
 }
 
@@ -60,12 +66,12 @@ range = Channel.from( ['001', '002', '003', '004', '005', '006',\
 
 channelsfile
     .splitCsv()
-    //.join(" ")
     .into{ chanlist; chantemp }
 
 chantemp
     .flatten()
     .merge(range)
+    //.view()
     .set{channels}
 
 
@@ -74,11 +80,14 @@ process beamform {
     cpus 3
     queue 'gpuq'
     time '1h'
-    memory '4 GB'
+    memory '12 GB'
+    errorStrategy 'retry'
+    maxRetries 3
 
     input:
     tuple val(channel), val(ch) from channels
     val utc from utctime
+    each point from pointings
 
     output:
     file "*/*fits" into unspliced
@@ -87,20 +96,22 @@ process beamform {
     """
     make_beam -o $params.obsid -b $params.begin -e $params.end -a 128 -n 128 \
 -f $channel -J ${params.didir}/DI_JonesMatrices_node${ch}.dat \
--d ${params.basedir}/${params.obsid}/combined -P $params.pointings \
+-d ${params.basedir}/${params.obsid}/combined -P ${point.join(",")} \
 -r 10000 -m ${params.basedir}/${params.obsid}/${params.obsid}_metafits_ppds.fits \
 -p -z $utc
     """
 }
 
 unspliced
+    .flatten()
     .map { it -> [it.baseName.split("ch")[0], it ] }
     .groupTuple(size: 24)
+    .map { it -> it[1] }
     //.view()
     .set{ unspliced_files }
 
 process splice {
-    publishDir "${params.basedir}/${params.obsid}/pointings/${params.pointings}", mode: 'move'
+    publishDir "${params.basedir}/${params.obsid}/pointings/${unspliced[0].baseName.split("_")[2]}_${unspliced[0].baseName.split("_")[3]}", mode: 'move'
 
     executor 'slurm'
     cpus 3
@@ -110,7 +121,7 @@ process splice {
 
     input:
     val chan from chanlist
-    tuple val(basename), file(unspliced) from unspliced_files
+    each file(unspliced) from unspliced_files
 
     output:
     file "${params.obsid}*fits" into output_fits
