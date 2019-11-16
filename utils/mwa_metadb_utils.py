@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+import argparse
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,41 @@ def getmeta(service='obs', params=None):
     return result
 
 
+def calc_ta_fwhm(freq, array_phase='P2C'):
+    """
+    Calculates the approximate FWHM of the tied array beam in degrees.
+
+    Parameters:
+    -----------
+    freq: float
+        Frequency in MHz
+    array_phase: string
+        OPTIONAL - The different array phase (from P1, P2C, P2E) to work out the maximum baseline length. Default = 'P2C'
+    Returns:
+    --------
+    fwhm: float
+        FWHM in degrees
+    """
+    from scipy.constants import c
+    from math import degrees
+
+    # Work out baseline in meters
+    if array_phase == 'P1':
+        # True max_baseline is 2800 but due to the minimal amount of long baselines
+        # the following is more realisitic
+        max_baseline = 2200.
+    if array_phase == 'P2C':
+        # True max_baseline is 700.
+        max_baseline = 360.
+    elif array_phase == 'P2E':
+        max_baseline = 5300.
+
+    wavelength = c / (freq * 1e6)
+    fwhm = degrees(wavelength / max_baseline)
+
+    return fwhm
+
+
 def get_channels(obsid, channels=None):
     """
     Gets the channels ids from the observation's metadata. If channels is not None assumes the
@@ -156,4 +192,58 @@ def obs_max_min(obs_id):
     obs_end = int(max(times))
     return obs_start, obs_end
 
+def write_obs_info(obsid):
+    """
+    Writes obs info to a file in the current direcory
+    """
+    data_dict = getmeta(service='obs', params={'obs_id':str(obsid)})
+    filename = str(obsid)+"_info.txt"
+    logger.info("Writing to file: {0}".format(filename))
 
+    channels = data_dict["rfstreams"]["0"]["frequencies"]
+    centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
+    array_phase = get_obs_array_phase(obsid)
+
+    f = open(filename, "w+")
+    f.write("-------------------------    Obs Info    --------------------------\n")
+    f.write("Obs Name:           {}\n".format(data_dict["obsname"]))
+    f.write("Creator:            {}\n".format(data_dict["rfstreams"]["0"]["creator"]))
+    f.write("Array phase:        {}\n".format(array_phase))
+    f.write("~FWHM (arcminute)   {:4.2f}\n".format(calc_ta_fwhm(centre_freq,
+                                                           array_phase=array_phase)*60.))
+    f.write("Start time:         {}\n".format(data_dict["starttime"]))
+    f.write("Stop time:          {}\n".format(data_dict["stoptime"]))
+    f.write("Duration (s):       {}\n".format(data_dict["stoptime"]-data_dict["starttime"]))
+    f.write("RA Pointing (deg):  {}\n".format(data_dict["metadata"]["ra_pointing"]))
+    f.write("DEC Pointing (deg): {}\n".format(data_dict["metadata"]["dec_pointing"]))
+    f.write("Channels:           {}\n".format(channels))
+    f.write("Centrefreq (MHz):   {}\n".format(centre_freq))
+    f.close()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="""Returns information on an input Obs ID""")
+    parser.add_argument("obsid", type=int, help="Input Observation ID")
+    parser.add_argument("-w", "--write", action="store_true", help="OPTIONAL - Use to write results to file.")
+    args = parser.parse_args()
+
+    if args.write:
+        write_obs_info(args.obsid)
+    else:
+        data_dict = getmeta(params={"obsid":args.obsid})
+        channels = data_dict["rfstreams"]["0"]["frequencies"]
+        centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
+        array_phase = get_obs_array_phase(args.obsid)
+
+        print("-------------------------    Obs Info    --------------------------")
+        print("Obs Name:           {}".format(data_dict["obsname"]))
+        print("Creator:            {}".format(data_dict["rfstreams"]["0"]["creator"]))
+        print("Array phase:        {}".format(array_phase))
+        print("~FWHM (arcminute)   {:4.2f}".format(calc_ta_fwhm(centre_freq,
+                                              array_phase=array_phase)*60.))
+        print("Start time:         {}".format(data_dict["starttime"]))
+        print("Stop time:          {}".format(data_dict["stoptime"]))
+        print("Duration (s):       {}".format(data_dict["stoptime"]-data_dict["starttime"]))
+        print("RA Pointing (deg):  {}".format(data_dict["metadata"]["ra_pointing"]))
+        print("DEC Pointing (deg): {}".format(data_dict["metadata"]["dec_pointing"]))
+        print("Channels:           {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
+        print("Centrefreq (MHz):   {}".format(centre_freq))
