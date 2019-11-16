@@ -159,6 +159,7 @@ def create_link(data_dir, target_dir, product_dir, link):
 
     # add product_dir and data_dir to link and target_dir respectively
     link = link.replace(product_dir, '') # just in case...
+    link = link.replace('/', '')
     link = os.path.join(product_dir, link)
     target_dir = target_dir.replace(data_dir,'')
     if target_dir.startswith("/"):
