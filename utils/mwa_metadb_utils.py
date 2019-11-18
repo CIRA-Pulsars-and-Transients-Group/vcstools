@@ -244,10 +244,55 @@ def write_obs_info(obsid):
     f.write("Centrefreq (MHz):   {}\n".format(centre_freq))
     f.close()
 
+
+def get_best_cal_obs(obsid):
+    """
+    For the input MWA observation ID find all calibration observations within 2 days
+    that have the same observing channels and list them from closest in time to furthest.
+
+    Parameters
+    ----------
+    obsid: int
+        The MWA observation ID (gps time)
+
+    Returns
+    -------
+    cal_ids: list of lists
+        All calibration observations within 2 days that have the same observing channels and
+        list them from closest in time to furthest
+        [[obsid, mins_away, cal_target]]
+    """
+    from operator import itemgetter
+
+    obs_meta = getmeta(params={'obs_id':str(obsid)})
+    cenchan = obs_meta[u'rfstreams'][u"0"][u'frequencies'][12]
+    two_days_secs = 2*24*60*60
+
+    all_cals = find_obsids_meta_pages(params={'calibration':1,
+                                              'mintime': obsid-two_days_secs,
+                                              'maxtime': obsid+two_days_secs,
+                                              'cenchan': cenchan})
+
+    cal_info = []
+    for cal in all_cals:
+        #get the cal target
+        cal_target = getmeta(params={'obs_id':str(cal)})["obsname"]
+        #calculate the time away from the obs and append it to the list
+        cal_info.append([cal, abs(obsid-cal)/60., cal_target])
+
+    #sort by time
+    cal_info = sorted(cal_info, key=itemgetter(1))
+
+    return cal_info
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="""Returns information on an input Obs ID""")
     parser.add_argument("obsid", type=int, help="Input Observation ID")
     parser.add_argument("-w", "--write", action="store_true", help="OPTIONAL - Use to write results to file.")
+    parser.add_argument("-c", "--cal_best", action="store_true", help="If this option is used it will list "
+                        "calibration observations within 2 days that have the same observing channels and "
+                        "list them from closest in time to furthest.")
     args = parser.parse_args()
 
     if args.write:
@@ -271,3 +316,10 @@ if __name__ == '__main__':
         print("DEC Pointing (deg): {}".format(data_dict["metadata"]["dec_pointing"]))
         print("Channels:           {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
         print("Centrefreq (MHz):   {}".format(centre_freq))
+
+    if args.cal_best:
+        all_cals = get_best_cal_obs(args.obsid)
+        print()
+        print("{:14}|{:8}|{}".format("Calibration ID", "Hrs away", "Cal Target"))
+        for cal in all_cals:
+            print("{:14}|{:8.2f}|{}".format(cal[0], cal[1]/60., cal[2]))
