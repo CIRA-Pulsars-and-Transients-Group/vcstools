@@ -8,3 +8,5 @@ build_logs/
 .eggs/
 dist/
 vcstools.egg-info/
+.nextflow*
+work*
