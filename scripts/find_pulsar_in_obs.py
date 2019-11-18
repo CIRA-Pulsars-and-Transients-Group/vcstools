@@ -37,7 +37,8 @@ from astropy import units as u
 #MWA scripts
 import sn_flux_est as sfe
 from mwa_pb import primary_beam
-from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata, get_obs_array_phase
+from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata,
+                             get_obs_array_phase, find_obsids_meta_pages
 
 import logging
 logger = logging.getLogger(__name__)
@@ -322,28 +323,6 @@ def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
 
     return ra_dec_list
 
-
-def find_obsids_meta_pages(params={'mode':'VOLTAGE_START'}):
-    """
-    Loops over pages for each page for MWA metadata calls
-    """
-    obsid_list = []
-    temp =[]
-    page = 1
-    #need to ask for a page of results at a time
-    while len(temp) == 200 or page == 1:
-        params['page'] = page
-        logger.debug("Page: {0}   params: {1}".format(page, params))
-        temp = getmeta(service='find', params=params)
-        if temp is not None:
-            # if there are non obs in the field (which is rare) None is returned
-            for row in temp:
-                obsid_list.append(row[0])
-        else:
-            temp = []
-        page += 1
-
-    return obsid_list
 
 def singles_source_search(ra, dec):
     """

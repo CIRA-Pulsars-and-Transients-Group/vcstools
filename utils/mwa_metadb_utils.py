@@ -5,6 +5,30 @@ import argparse
 logger = logging.getLogger(__name__)
 
 
+def find_obsids_meta_pages(params=None):
+    """
+    Loops over pages for each page for MWA metadata calls
+    """
+    if params is None:
+        params = {'mode':'VOLTAGE_START'}
+    obsid_list = []
+    temp =[]
+    page = 1
+    #need to ask for a page of results at a time
+    while len(temp) == 200 or page == 1:
+        params['page'] = page
+        logger.debug("Page: {0}   params: {1}".format(page, params))
+        temp = getmeta(service='find', params=params)
+        if temp is not None:
+            # if there are non obs in the field (which is rare) None is returned
+            for row in temp:
+                obsid_list.append(row[0])
+        else:
+            temp = []
+        page += 1
+
+    return obsid_list
+
 def get_obs_array_phase(obsid):
     """
     For the input obsid will work out the observations array phase in the form
