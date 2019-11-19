@@ -37,6 +37,14 @@ int cleanup(void *to_clean)
     free(pf->sub.rawdata);
     return 1;
 }
+
+float round_three(float var)
+{
+    // round to the nearest three decimal places
+    float value = (int)(var * 1000 + .5);
+    return (float)value / 1000;
+}
+
 int append(char **to_append, void *total, int n){
 
     // this would perhaps be better as C++
@@ -117,7 +125,7 @@ int append(char **to_append, void *total, int n){
     float diff_freq = first_chan_of_to_append - last_chan_of_total;
     int chans_to_pad = 0;
 
-    if (diff_freq != df){
+    if (round_three(diff_freq) != round_three(df)){
         fprintf( stderr, "warning: channels are not contiguous; attempting "
                          "to pad\n" );
         fprintf( stderr, "         trying to append channel %f to channel %f.\n",
@@ -229,6 +237,8 @@ int append(char **to_append, void *total, int n){
         // nchan*npol blocks
         // loop over npol
 
+        printf("Read subint %d (file 0-%d, pol 1-4, row %d/%d)\n", sub,
+                    n, pf->rownum-1, pf->rows_per_file);
         for (f=0;f<n;f++) {
 
             pf = &list[f]; // get the psrfits struct - it is already open
@@ -237,11 +247,7 @@ int append(char **to_append, void *total, int n){
 
             if (rv) { fits_report_error(stderr, rv); return rv;}
             int p=0; // the current Polarisation
-
             for (p=0;p<pf_total->hdr.npol;p++) {
-
-                printf("Read subint %d (file %d, pol %d, row %d/%d)\n", sub,
-                    f, p, pf->rownum-1, pf->rows_per_file);
                 // ok so I now increment the start offset by the file number
                 start_offset = p*pf_total->hdr.nchan + f*(pf->hdr.nchan + chans_to_pad);
 
