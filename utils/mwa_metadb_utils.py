@@ -233,8 +233,9 @@ def write_obs_info(obsid):
     f.write("Obs Name:           {}\n".format(data_dict["obsname"]))
     f.write("Creator:            {}\n".format(data_dict["rfstreams"]["0"]["creator"]))
     f.write("Array phase:        {}\n".format(array_phase))
-    f.write("~FWHM (arcminute)   {:4.2f}\n".format(calc_ta_fwhm(centre_freq,
-                                                           array_phase=array_phase)*60.))
+    if array_phase != 'OTH':
+        f.write("~FWHM (arcminute)   {:4.2f}\n".format(calc_ta_fwhm(centre_freq,
+                                                       array_phase=array_phase)*60.))
     f.write("Start time:         {}\n".format(data_dict["starttime"]))
     f.write("Stop time:          {}\n".format(data_dict["stoptime"]))
     f.write("Duration (s):       {}\n".format(data_dict["stoptime"]-data_dict["starttime"]))
@@ -265,20 +266,36 @@ def get_best_cal_obs(obsid):
     from operator import itemgetter
 
     obs_meta = getmeta(params={'obs_id':str(obsid)})
-    cenchan = obs_meta[u'rfstreams'][u"0"][u'frequencies'][12]
+    channels = obs_meta[u'rfstreams'][u"0"][u'frequencies']
+    cenchan = channels[12]
+    if channels[-1] - channels[0] == 23:
+        contig = 1
+    else:
+        contig = 0
     two_days_secs = 2*24*60*60
 
     all_cals = find_obsids_meta_pages(params={'calibration':1,
                                               'mintime': obsid-two_days_secs,
                                               'maxtime': obsid+two_days_secs,
-                                              'cenchan': cenchan})
+                                              'cenchan': cenchan,
+                                              'contigfreq': contig,
+                                              'dataquality': 126})
 
     cal_info = []
     for cal in all_cals:
-        #get the cal target
-        cal_target = getmeta(params={'obs_id':str(cal)})["obsname"]
+        #get the cal metadata
+        cal_meta = getmeta(params={'obs_id':str(cal)})
+
+        #check there are a factor of 24 files (no gpu boxes are down)
+        gpubox_files = []
+        for f in cal_meta['files'].keys():
+            if 'gpubox' in f:
+                gpubox_files.append(f)
+        if len(gpubox_files)%24 != 0 :
+            continue
+
         #calculate the time away from the obs and append it to the list
-        cal_info.append([cal, abs(obsid-cal)/60., cal_target])
+        cal_info.append([cal, abs(obsid-cal)/60., cal_meta['obsname']])
 
     #sort by time
     cal_info = sorted(cal_info, key=itemgetter(1))
@@ -307,8 +324,9 @@ if __name__ == '__main__':
         print("Obs Name:           {}".format(data_dict["obsname"]))
         print("Creator:            {}".format(data_dict["rfstreams"]["0"]["creator"]))
         print("Array phase:        {}".format(array_phase))
-        print("~FWHM (arcminute)   {:4.2f}".format(calc_ta_fwhm(centre_freq,
-                                              array_phase=array_phase)*60.))
+        if array_phase != 'OTH':
+            print("~FWHM (arcminute)   {:4.2f}".format(calc_ta_fwhm(centre_freq,
+                                                       array_phase=array_phase)*60.))
         print("Start time:         {}".format(data_dict["starttime"]))
         print("Stop time:          {}".format(data_dict["stoptime"]))
         print("Duration (s):       {}".format(data_dict["stoptime"]-data_dict["starttime"]))
