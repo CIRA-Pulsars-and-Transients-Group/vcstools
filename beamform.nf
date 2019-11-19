@@ -36,17 +36,21 @@ process get_all_beg_end {
     """
 }
 
-obs_all
-    .trim()
-    .map { it.split(",") }
-    .flatten()
-    .collect()
-    //.view()
-    .into { obs_beg_end; obs_beg }
+if ( obs_all ) {
+    obs_all
+        .trim()
+        .map { it.split(",") }
+        .flatten()
+        .collect()
+        //.view()
+        .into { obs_beg_end; obs_beg }
+}
 
 if ( params.all == false ) {
     obs_temp = Channel
         .from( params.begin, params.end )
+        .collect()
+        .view()
         .into { obs_beg_end; obs_beg }
 }
 
@@ -61,6 +65,8 @@ process ensure_metafits {
                     "${params.basedir}/${params.obsid}/${params.obsid}_metafits_ppds.fits")
     """
 }
+
+//obs_beg.view()
 
 process gps_to_utc {
     input:
