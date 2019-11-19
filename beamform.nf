@@ -36,7 +36,7 @@ process get_all_beg_end {
     """
 }
 
-if ( obs_all ) {
+if ( params.all ) {
     obs_all
         .trim()
         .map { it.split(",") }
@@ -45,12 +45,11 @@ if ( obs_all ) {
         //.view()
         .into { obs_beg_end; obs_beg }
 }
-
-if ( params.all == false ) {
+else {
     obs_temp = Channel
         .from( params.begin, params.end )
         .collect()
-        .view()
+        //.view()
         .into { obs_beg_end; obs_beg }
 }
 
