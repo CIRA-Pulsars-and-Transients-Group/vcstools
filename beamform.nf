@@ -61,6 +61,7 @@ process ensure_metafits {
                     "${params.basedir}/${params.obsid}/${params.obsid}_metafits_ppds.fits")
     """
 }
+
 process gps_to_utc {
     input:
     tuple val(begin), val(end) from obs_beg
