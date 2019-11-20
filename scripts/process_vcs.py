@@ -390,7 +390,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         # we create the link using bash and not our create_link function
         # as we'd like to do this only once the data have arrived,
         # i.e. the download worked.
-        make_link = "ln -s {0} {1}/{2}".format(data_dir, product_dir, link)
+        make_link = "ln -sfn {0} {1}/{2}".format(data_dir, product_dir, link)
         obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
         secs_to_run = "03:00:00" # sometimes the staging can take a while...
         module_list = ["setuptools"]
