@@ -388,18 +388,19 @@ int main(int argc, char **argv)
         for ( p = 0; p < npointing; p++ ) write_check[file_no][p] = 0;//False
     } 
     
-    
-    // read data test
-    data_read = data1;
-    fprintf( stderr, "[%f]  Read test before\n", NOW-begintime);
-    read_data( filenames[0], data1, bytes_per_file  );
-    fprintf( stderr, "[%f]  Read test after\n", NOW-begintime);
-    fprintf( stderr, "[%f]  Read test before\n", NOW-begintime);
-    read_data( filenames[1], data_read, bytes_per_file  );
-    fprintf( stderr, "[%f]  Read test after\n", NOW-begintime);
-    
     // Set up timing for each section
     long read_total_time, calc_total_time, write_total_time;
+
+    read_total_time = 0;
+    // read data test
+    for (file_no = 0; file_no < 10; file_no++) {
+        clock_t start = clock();
+        fprintf( stderr, "[%f]  Read test before [%d]\n", NOW-begintime, file_no );
+        read_data( filenames[file_no], data1, bytes_per_file  );
+        fprintf( stderr, "[%f]  Read test after  [%d]\n", NOW-begintime, file_no );
+        read_total_time += clock() - start;
+    }
+    fprintf( stderr, "[%f]  Read tests took an average of %f s\n", NOW-begintime, read_total_time / 10 / CLOCKS_PER_SEC );
 
     int nthread;
     #pragma omp parallel 
