@@ -75,6 +75,7 @@ int main(int argc, char **argv)
     opts.chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
     opts.sample_rate   = 10000;  // The VCS sample rate (Hz)
     opts.custom_flags  = NULL;   // Use custom list for flagging antennas
+    opts.max_serial_pointing = 4; // Maximum number of pointings to run in serial
 
     // Output options
     opts.out_incoh     = 0;  // Default = PSRFITS (incoherent) output turned OFF
@@ -402,210 +403,220 @@ int main(int argc, char **argv)
     }
     fprintf( stderr, "[%f]  Read tests took an average of %f s\n", NOW-begintime, read_total_time / 10 / CLOCKS_PER_SEC );
 
-    int nthread;
-    #pragma omp parallel 
+
+    if ( npointing > opts.max_serial_pointing ) 
     {
-        #pragma omp master
+        int nthread;
+        #pragma omp parallel 
         {
-            nthread = omp_get_num_threads();
-            fprintf( stderr, "[%f]  Number of CPU threads: %d\n", NOW-begintime, nthread);
-        }
-    }
-    int thread_no;
-    int exit_check = 0;
-    // Sets up a parallel for loop for each of the available thread and 
-    // assigns a section to each thread
-    #pragma omp parallel for shared(read_check, calc_check, write_check, pf, data_read, data_calc) private( thread_no, file_no, p, exit_check, data_buffer_coh, data_buffer_incoh, data_buffer_vdif )
-    for (thread_no = 0; thread_no < nthread; ++thread_no)
-    {
-        // Read section -------------------------------------------------------
-        if (thread_no == 0)
-        {
-            for (file_no = 0; file_no < nfiles; file_no++)
+            #pragma omp master
             {
-                //Work out which memory allocation it's requires
-                if (file_no%2 == 0) data_read = data1;
-                else data_read = data1;
-                
-                //Waits until it can read 
-                exit_check = 0; 
-                while (1) 
-                { 
-                    #pragma omp critical (read_queue) 
-                    { 
-                        if (file_no == 0) 
-                            exit_check = 1;//First read 
-                        else if ( (read_check[file_no - 1] == 1) && (file_no == 1))  
-                            exit_check = 1;//Second read
-                        else if ( (read_check[file_no - 1] == 1) && (calc_check[file_no - 2] == 1) )
-                            exit_check = 1;//Rest of the reads
-                        else
-                            exit_check = 0;
-                    } 
-                    if (exit_check) break; 
-                }
-                clock_t start = clock();
-                #pragma omp critical (read_queue)
+                nthread = omp_get_num_threads();
+                fprintf( stderr, "[%f]  Number of CPU threads: %d\n", NOW-begintime, nthread);
+            }
+        }
+        int thread_no;
+        int exit_check = 0;
+        // Sets up a parallel for loop for each of the available thread and 
+        // assigns a section to each thread
+        #pragma omp parallel for shared(read_check, calc_check, write_check, pf, data_read, data_calc) private( thread_no, file_no, p, exit_check, data_buffer_coh, data_buffer_incoh, data_buffer_vdif )
+        for (thread_no = 0; thread_no < nthread; ++thread_no)
+        {
+            // Read section -------------------------------------------------------
+            if (thread_no == 0)
+            {
+                for (file_no = 0; file_no < nfiles; file_no++)
                 {
-                    // Read in data from next file
-                    fprintf( stderr, "[%f] [%d/%d] Reading in data from %s \n", NOW-begintime,
-                            file_no+1, nfiles, filenames[file_no]);
-                    read_data( filenames[file_no], data_read, bytes_per_file  );
+                    //Work out which memory allocation it's requires
+                    if (file_no%2 == 0) data_read = data1;
+                    else data_read = data1;
                     
-                    // Records that this read section is complete
-                    read_check[file_no] = 1;
-                }
-                read_total_time += clock() - start;
-            }
-        }
-
-        // Calc section -------------------------------------------------------
-        if (thread_no == 1)
-        {
-            int write_array_check = 1;
-            for (file_no = 0; file_no < nfiles; file_no++)
-            {
-                //Work out which memory allocation it's requires
-                if (file_no%2 == 0)
-                {
-                   data_calc = data1;
-                   data_buffer_coh   = data_buffer_coh1;
-                   data_buffer_incoh = data_buffer_incoh1;
-                   data_buffer_vdif  = data_buffer_vdif1;
-                }
-                else
-                {
-                   data_calc = data1;
-                   data_buffer_coh   = data_buffer_coh2;
-                   data_buffer_incoh = data_buffer_incoh2;
-                   data_buffer_vdif  = data_buffer_vdif2;
-                }
-
-                // Waits until it can start the calc
-                exit_check = 0;
-                while (1)
-                {
-                    #pragma omp critical (calc_queue)
-                    {
-                        // First two checks
-                        if ( (file_no < 2) && (read_check[file_no] == 1) ) exit_check = 1;
-                        // Rest of the checks. Checking if output memory is ready to be changed
-                        else if (read_check[file_no] == 1) 
-                        {    
-                            write_array_check = 1;
-                            // Loop through each pointing's write_check
-                            for (int pc=0; pc<npointing; pc++)
-                            {   
-                                if (write_check[file_no - 2][pc] == 0) 
-                                {
-                                    // Not complete so changing check to False
-                                    write_array_check = 0;
-                                }
-                            }
-                            if (write_array_check == 1) exit_check = 1;
-                        }
+                    //Waits until it can read 
+                    exit_check = 0; 
+                    while (1) 
+                    { 
+                        #pragma omp critical (read_queue) 
+                        { 
+                            if (file_no == 0) 
+                                exit_check = 1;//First read 
+                            else if ( (read_check[file_no - 1] == 1) && (file_no == 1))  
+                                exit_check = 1;//Second read
+                            else if ( (read_check[file_no - 1] == 1) && (calc_check[file_no - 2] == 1) )
+                                exit_check = 1;//Rest of the reads
+                            else
+                                exit_check = 0;
+                        } 
+                        if (exit_check) break; 
                     }
-                    if (exit_check == 1) break; 
+                    clock_t start = clock();
+                    #pragma omp critical (read_queue)
+                    {
+                        // Read in data from next file
+                        fprintf( stderr, "[%f] [%d/%d] Reading in data from %s \n", NOW-begintime,
+                                file_no+1, nfiles, filenames[file_no]);
+                        read_data( filenames[file_no], data_read, bytes_per_file  );
+                        
+                        // Records that this read section is complete
+                        read_check[file_no] = 1;
+                    }
+                    read_total_time += clock() - start;
                 }
-                clock_t start = clock();
-                // Get the next second's worth of phases / jones matrices, if needed
-                fprintf( stderr, "[%f] [%d/%d] Calculating delays\n", NOW-begintime,
-                                        file_no+1, nfiles );
-                get_delays(
-                        pointing_array,     // an array of pointings [pointing][ra/dec][characters]
-                        npointing,          // number of pointings
-                        opts.frequency,         // middle of the first frequency channel in Hz
-                        &opts.cal,              // struct holding info about calibration
-                        opts.sample_rate,       // = 10000 samples per sec
-                        opts.time_utc,          // utc time string
-                        (double)file_no,        // seconds offset from time_utc at which to calculate delays
-                        NULL,                   // Don't update delay_vals
-                        &mi,                    // Struct containing info from metafits file
-                        complex_weights_array,  // complex weights array (answer will be output here)
-                        invJi );                // invJi array           (answer will be output here)
-
-
-                /*for (i = 0; i < npointing * nchan * outpol_coh * opts.sample_rate; i++)
-                    data_buffer_coh[i] = 0.0;
-
-                for (i = 0; i < npointing * nchan * outpol_incoh * opts.sample_rate; i++)
-                    data_buffer_incoh[i] = 0.0;*/
-                fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
-                                        file_no+1, nfiles);
-                
-                cu_form_beam( data_calc, &opts, complex_weights_array, invJi, file_no,
-                              npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
-                              detected_beam, data_buffer_coh, data_buffer_incoh,
-                              streams );
-
-                // Invert the PFB, if requested
-                if (opts.out_vdif)
-                {
-                    fprintf( stderr, "[%f] [%d/%d]   Inverting the PFB (full)\n", 
-                                     NOW-begintime, file_no+1, nfiles);
-                    cu_invert_pfb_ord( detected_beam, file_no, npointing, 
-                            opts.sample_rate, nchan, npol, &gi, data_buffer_vdif );
-                }
-
-                // Records that this calc section is complete
-                calc_check[file_no] = 1;
-                calc_total_time += clock() - start;
             }
-        }    
-        // Write section ------------------------------------------------------
-        if (thread_no == 2) //(thread_no > 1 && thread_no < npointing + 2)
-        {
-            p = thread_no - 2;
-            for (file_no = 0; file_no < nfiles; file_no++)
+
+            // Calc section -------------------------------------------------------
+            if (thread_no == 1)
             {
-                //Work out which memory allocation it's requires
-                if (file_no%2 == 0)
+                int write_array_check = 1;
+                for (file_no = 0; file_no < nfiles; file_no++)
                 {
-                   data_buffer_coh   = data_buffer_coh1;
-                   data_buffer_incoh = data_buffer_incoh1;
-                   data_buffer_vdif  = data_buffer_vdif1;
-                }
-                else
-                {
-                   data_buffer_coh   = data_buffer_coh2;
-                   data_buffer_incoh = data_buffer_incoh2;
-                   data_buffer_vdif  = data_buffer_vdif2;
-                }
-                
-                // Waits until it's time to write
-                exit_check = 0;
-                while (1)
-                {
-                    #pragma omp critical (write_queue)
-                    if (calc_check[file_no] == 1) exit_check = 1;
-                    if (exit_check == 1) break;
-                }
-                
-                clock_t start = clock();
+                    //Work out which memory allocation it's requires
+                    if (file_no%2 == 0)
+                    {
+                    data_calc = data1;
+                    data_buffer_coh   = data_buffer_coh1;
+                    data_buffer_incoh = data_buffer_incoh1;
+                    data_buffer_vdif  = data_buffer_vdif1;
+                    }
+                    else
+                    {
+                    data_calc = data1;
+                    data_buffer_coh   = data_buffer_coh2;
+                    data_buffer_incoh = data_buffer_incoh2;
+                    data_buffer_vdif  = data_buffer_vdif2;
+                    }
 
-                for ( p = 0; p < npointing; p++)
-                {
-                    //printf_psrfits(&pf[p]);
-                    fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n",
-                            NOW-begintime, file_no+1, nfiles, p+1, npointing );
+                    // Waits until it can start the calc
+                    exit_check = 0;
+                    while (1)
+                    {
+                        #pragma omp critical (calc_queue)
+                        {
+                            // First two checks
+                            if ( (file_no < 2) && (read_check[file_no] == 1) ) exit_check = 1;
+                            // Rest of the checks. Checking if output memory is ready to be changed
+                            else if (read_check[file_no] == 1) 
+                            {    
+                                write_array_check = 1;
+                                // Loop through each pointing's write_check
+                                for (int pc=0; pc<npointing; pc++)
+                                {   
+                                    if (write_check[file_no - 2][pc] == 0) 
+                                    {
+                                        // Not complete so changing check to False
+                                        write_array_check = 0;
+                                    }
+                                }
+                                if (write_array_check == 1) exit_check = 1;
+                            }
+                        }
+                        if (exit_check == 1) break; 
+                    }
+                    clock_t start = clock();
+                    start = clock();
+                    // Get the next second's worth of phases / jones matrices, if needed
+                    fprintf( stderr, "[%f] [%d/%d] Calculating delays\n", NOW-begintime,
+                                            file_no+1, nfiles );
+                    get_delays(
+                            pointing_array,     // an array of pointings [pointing][ra/dec][characters]
+                            npointing,          // number of pointings
+                            opts.frequency,         // middle of the first frequency channel in Hz
+                            &opts.cal,              // struct holding info about calibration
+                            opts.sample_rate,       // = 10000 samples per sec
+                            opts.time_utc,          // utc time string
+                            (double)file_no,        // seconds offset from time_utc at which to calculate delays
+                            NULL,                   // Don't update delay_vals
+                            &mi,                    // Struct containing info from metafits file
+                            complex_weights_array,  // complex weights array (answer will be output here)
+                            invJi );                // invJi array           (answer will be output here)
 
-                    if (opts.out_coh)
-                        psrfits_write_second( &pf[p], data_buffer_coh, nchan,
-                                              outpol_coh, p );
-                    if (opts.out_incoh && p == 0)
-                        psrfits_write_second( &pf_incoh[p], data_buffer_incoh,
-                                              nchan, outpol_incoh, p );
+
+                    /*for (i = 0; i < npointing * nchan * outpol_coh * opts.sample_rate; i++)
+                        data_buffer_coh[i] = 0.0;
+
+                    for (i = 0; i < npointing * nchan * outpol_incoh * opts.sample_rate; i++)
+                        data_buffer_incoh[i] = 0.0;*/
+                    fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
+                                            file_no+1, nfiles);
+                    
+                    cu_form_beam( data_calc, &opts, complex_weights_array, invJi, file_no,
+                                npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
+                                detected_beam, data_buffer_coh, data_buffer_incoh,
+                                streams );
+
+                    // Invert the PFB, if requested
                     if (opts.out_vdif)
-                        vdif_write_second( &vf[p], &vhdr, data_buffer_vdif,
-                                           &vgain, p );
+                    {
+                        fprintf( stderr, "[%f] [%d/%d]   Inverting the PFB (full)\n", 
+                                        NOW-begintime, file_no+1, nfiles);
+                        cu_invert_pfb_ord( detected_beam, file_no, npointing, 
+                                opts.sample_rate, nchan, npol, &gi, data_buffer_vdif );
+                    }
 
-                    // Records that this write section is complete
-                    write_check[file_no][p] = 1;
+                    // Records that this calc section is complete
+                    calc_check[file_no] = 1;
+                    calc_total_time += clock() - start;
                 }
-                write_total_time += clock() - start;
+            }    
+            // Write section ------------------------------------------------------
+            if (thread_no == 2) //(thread_no > 1 && thread_no < npointing + 2)
+            {
+                for (file_no = 0; file_no < nfiles; file_no++)
+                {
+                    // Work out which memory allocation it's requires
+                    if (file_no%2 == 0)
+                    {
+                    data_buffer_coh   = data_buffer_coh1;
+                    data_buffer_incoh = data_buffer_incoh1;
+                    data_buffer_vdif  = data_buffer_vdif1;
+                    }
+                    else
+                    {
+                    data_buffer_coh   = data_buffer_coh2;
+                    data_buffer_incoh = data_buffer_incoh2;
+                    data_buffer_vdif  = data_buffer_vdif2;
+                    }
+                    
+                    // Waits until it's time to write
+                    exit_check = 0;
+                    while (1)
+                    {
+                        #pragma omp critical (write_queue)
+                        if (calc_check[file_no] == 1) exit_check = 1;
+                        if (exit_check == 1) break;
+                    }
+                    
+                    clock_t start = clock();
+                    start = clock();
+
+                    for ( p = 0; p < npointing; p++)
+                    {
+                        //printf_psrfits(&pf[p]);
+                        fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n",
+                                NOW-begintime, file_no+1, nfiles, p+1, npointing );
+
+                        if (opts.out_coh)
+                            psrfits_write_second( &pf[p], data_buffer_coh, nchan,
+                                                outpol_coh, p );
+                        if (opts.out_incoh && p == 0)
+                            psrfits_write_second( &pf_incoh[p], data_buffer_incoh,
+                                                nchan, outpol_incoh, p );
+                        if (opts.out_vdif)
+                            vdif_write_second( &vf[p], &vhdr, data_buffer_vdif,
+                                            &vgain, p );
+
+                        // Records that this write section is complete
+                        write_check[file_no][p] = 1;
+                    }
+                    write_total_time += clock() - start;
+                }
             }
         }
     }
+    else
+    {
+        // Run in read, calc and write in serial
+    }
+    
 
     fprintf( stderr, "[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
     int read_ms = read_total_time * 1000 / CLOCKS_PER_SEC;
@@ -801,6 +812,13 @@ void usage() {
     fprintf(stderr, "[default: 0]\n");
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "calibration file given by the -O option.\n");
+    fprintf(stderr, "\t-M, --max-serial-pointing=N     ");
+    fprintf(stderr, "The maximum number of pointings to run in serial before running\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the reads and writes in parrallel (decreases the I/O)");
+    fprintf(stderr, "[default: 0]\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "calibration file given by the -O option.\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "OTHER OPTIONS\n");
@@ -823,35 +841,36 @@ void make_beam_parse_cmdline(
         while (1) {
 
             static struct option long_options[] = {
-                {"obsid",           required_argument, 0, 'o'},
-                {"begin",           required_argument, 0, 'b'},
-                {"end",             required_argument, 0, 'e'},
-                {"incoh",           no_argument,       0, 'i'},
-                {"psrfits",         no_argument,       0, 'p'},
-                {"vdif",            no_argument,       0, 'v'},
-                {"summed",          no_argument,       0, 's'},
-                {"utc-time",        required_argument, 0, 'z'},
-                {"pointings",       required_argument, 0, 'P'},
-                {"data-location",   required_argument, 0, 'd'},
-                {"metafits-file",   required_argument, 0, 'm'},
-                {"coarse-chan",     required_argument, 0, 'f'},
-                {"antennas",        required_argument, 0, 'a'},
-                {"num-fine-chans",  required_argument, 0, 'n'},
-                {"fine-chan-width", required_argument, 0, 'w'},
-                {"sample-rate",     required_argument, 0, 'r'},
-                {"custom-flags",    required_argument, 0, 'F'},
-                {"dijones-file",    required_argument, 0, 'J'},
-                {"bandpass-file",   required_argument, 0, 'B'},
-                {"rts-chan-width",  required_argument, 0, 'W'},
-                {"offringa-file",   required_argument, 0, 'O'},
-                {"offringa-chan",   required_argument, 0, 'C'},
-                {"help",            required_argument, 0, 'h'},
-                {"version",         required_argument, 0, 'V'}
+                {"obsid",               required_argument, 0, 'o'},
+                {"begin",               required_argument, 0, 'b'},
+                {"end",                 required_argument, 0, 'e'},
+                {"incoh",               no_argument,       0, 'i'},
+                {"psrfits",             no_argument,       0, 'p'},
+                {"vdif",                no_argument,       0, 'v'},
+                {"summed",              no_argument,       0, 's'},
+                {"utc-time",            required_argument, 0, 'z'},
+                {"pointings",           required_argument, 0, 'P'},
+                {"data-location",      required_argument, 0, 'd'},
+                {"metafits-file",       required_argument, 0, 'm'},
+                {"coarse-chan",         required_argument, 0, 'f'},
+                {"antennas",            required_argument, 0, 'a'},
+                {"num-fine-chans",      required_argument, 0, 'n'},
+                {"fine-chan-width",     required_argument, 0, 'w'},
+                {"sample-rate",         required_argument, 0, 'r'},
+                {"custom-flags",        required_argument, 0, 'F'},
+                {"max-serial-pointing", required_argument, 0, 'M'},
+                {"dijones-file",        required_argument, 0, 'J'},
+                {"bandpass-file",       required_argument, 0, 'B'},
+                {"rts-chan-width",      required_argument, 0, 'W'},
+                {"offringa-file",       required_argument, 0, 'O'},
+                {"offringa-chan",       required_argument, 0, 'C'},
+                {"help",                required_argument, 0, 'h'},
+                {"version",             required_argument, 0, 'V'}
             };
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:svVw:W:z:",
+                             "a:b:B:C:d:e:f:F:hiJ:m:Mn:o:O:pP:r:svVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -899,6 +918,9 @@ void make_beam_parse_cmdline(
                     break;
                 case 'm':
                     opts->metafits = strdup(optarg);
+                    break;
+                case 'M':
+                    opts->max_serial_pointing = strdup(optarg);
                     break;
                 case 'n':
                     opts->nchan = atoi(optarg);
