@@ -311,8 +311,6 @@ int main(int argc, char **argv)
     
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
-    uint8_t *data_read;
-    uint8_t *data_calc;
 
     //cudaMallocHost( (void**)&data1, bytes_per_file * sizeof(uint8_t) );
     //cudaMallocHost( (void**)&data1, bytes_per_file * sizeof(uint8_t) );
@@ -407,12 +405,13 @@ int main(int argc, char **argv)
         int exit_check = 0;
         // Sets up a parallel for loop for each of the available thread and 
         // assigns a section to each thread
-        #pragma omp parallel for shared(read_check, calc_check, write_check, pf, data_read, data_calc) private( start, thread_no, file_no, p, exit_check, data_buffer_coh, data_buffer_incoh, data_buffer_vdif )
+        #pragma omp parallel for shared(read_check, calc_check, write_check, pf) private( start, thread_no, file_no, p, exit_check, data_buffer_coh, data_buffer_incoh, data_buffer_vdif )
         for (thread_no = 0; thread_no < nthread; ++thread_no)
         {
             // Read section -------------------------------------------------------
             if (thread_no == 0)
             {
+                uint8_t *data_read;
                 for (file_no = 0; file_no < nfiles; file_no++)
                 {
                     //Work out which memory allocation it's requires
@@ -455,6 +454,7 @@ int main(int argc, char **argv)
             // Calc section -------------------------------------------------------
             if (thread_no == 1)
             {
+                uint8_t *data_calc;
                 int write_array_check = 1;
                 for (file_no = 0; file_no < nfiles; file_no++)
                 {
@@ -656,10 +656,9 @@ int main(int argc, char **argv)
 
             
             // Write out for each pointing
-            start = clock();
             for ( p = 0; p < npointing; p++)
             {
-                //printf_psrfits(&pf[p]);
+                start = clock();
                 fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n",
                         NOW-begintime, file_no+1, nfiles, p+1, npointing );
 
@@ -672,8 +671,8 @@ int main(int argc, char **argv)
                 if (opts.out_vdif)
                     vdif_write_second( &vf[p], &vhdr, data_buffer_vdif,
                                     &vgain, p );
+                write_time[file_no][p] = clock() - start;
             }
-            write_time[file_no][p] = clock() - start;
         }
     }
     
@@ -691,7 +690,7 @@ int main(int argc, char **argv)
     read_mean  = read_sum  / nfiles;
     delay_mean = delay_sum / nfiles;
     calc_mean  = calc_sum  / nfiles;
-    write_mean = write_sum / nfiles;
+    write_mean = write_sum / nfiles / npointing;
 
     // Calculate the standard deviations
     float read_std = 0, delay_std = 0, calc_std = 0, write_std = 0;
@@ -723,7 +722,7 @@ int main(int argc, char **argv)
     fprintf( stderr, "[%f]  Mean  calc  processing time: %9.3f +\\- %8.3f s\n", 
                      NOW-begintime, calc_mean / CLOCKS_PER_SEC, calc_std / CLOCKS_PER_SEC);
     fprintf( stderr, "[%f]  Total write processing time: %9.3f s\n", 
-                     NOW-begintime, write_sum / CLOCKS_PER_SEC);
+                     NOW-begintime, write_sum  * npointing / CLOCKS_PER_SEC);
     fprintf( stderr, "[%f]  Mean  write processing time: %9.3f +\\- %8.3f s\n", 
                      NOW-begintime, write_mean / CLOCKS_PER_SEC, write_std / CLOCKS_PER_SEC);
     
