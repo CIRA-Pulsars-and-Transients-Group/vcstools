@@ -30,17 +30,21 @@ struct gpu_formbeam_arrays
     size_t Bd_size;
     size_t W_size;
     size_t J_size;
+    size_t JD_size;
     ComplexDouble *W, *d_W;
     ComplexDouble *J, *d_J;
     ComplexDouble *Bd, *d_Bd;
+    ComplexDouble *JDx, *d_JDx;
+    ComplexDouble *JDy, *d_JDy;
     uint8_t *d_data;
     float   *d_coh;
     float   *d_incoh;
+    float   *d_Ia;
 };
 
 
 void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
-                      int nstation, int nchan, int npol, int outpol_coh,
+                      int nstation, int nchan, int npol, int nchunk, int outpol_coh,
                       int outpol_incoh, int npointing, double time );
 void free_formbeam( struct gpu_formbeam_arrays *g );
 
@@ -57,11 +61,15 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
                                (c) * (NPOL)            + \
                                (pol))
 
-#define J_IDX(p,a,c,p1,p2,nc) ((p) *  (NPOL*NPOL*(nc)*NANT) + \
-                               (a)  * (NPOL*NPOL*(nc))      + \
-                               (c)  * (NPOL*NPOL)           + \
-                               (p1) * (NPOL)                + \
-                               (p2))
+#define J_IDX(p,a,c,p1,p2,nc)   ((p)  * (NPOL*NPOL*(nc)*NANT) + \
+                                 (a)  * (NPOL*NPOL*(nc))      + \
+                                 (c)  * (NPOL*NPOL)           + \
+                                 (p1) * (NPOL)                + \
+                                 (p2))
+
+#define JD_IDX(s,c,a,nc)      ((s) * (NANT*(nc)) + \
+                               (c) * (NANT)      + \
+                               (a))
 
 #define B_IDX(p,s,c,pol,ns,nc) ((p)  * (NPOL*(nc)*(ns))   + \
                                 (s)  * (NPOL*(nc))        + \
@@ -111,7 +119,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ***
                    int npointing, int nstation, int nchan,
                    int npol, int outpol_coh, double invw, struct gpu_formbeam_arrays *g,
                    ComplexDouble ****detected_beam, float *coh, float *incoh,
-                   cudaStream_t *streams );
+                   cudaStream_t *streams, int incoh_check, int nchunk  );
 
 float *create_pinned_data_buffer_psrfits( size_t size );
         

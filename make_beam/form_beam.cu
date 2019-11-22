@@ -101,10 +101,10 @@ __global__ void invj_the_data( uint8_t       *data,
     //JDx = Jxx*Dx + Jxy*Dy
     //JDy = Jyx*Dx + Jyy*Dy
     //TODO The Jyx/Jxy terms ay be the wrong way around, double check this
-    JDx[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(ant,c,0,0,nc)], Dx ),
-                                    CMuld( J[J_IDX(ant,c,1,0,nc)], Dy ) );
-    JDy[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(ant,c,0,1,nc)], Dx ),
-                                    CMuld( J[J_IDX(ant,c,1,1,nc)], Dy ) );
+    JDx[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(0,ant,c,0,0,nc)], Dx ),
+                                     CMuld( J[J_IDX(0,ant,c,0,1,nc)], Dy ) );
+    JDy[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(0,ant,c,1,0,nc)], Dx ),
+                                     CMuld( J[J_IDX(0,ant,c,1,1,nc)], Dy ) );
 
 
 }
@@ -353,7 +353,7 @@ __global__ void flatten_bandpass_C_kernel( float *C, int nstep )
 
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
                    ComplexDouble ****complex_weights_array,
-                   ComplexDouble ****invJi, int file_no,
+                   ComplexDouble *****invJi, int file_no,
                    int npointing, int nstation, int nchan,
                    int npol, int outpol_coh, double invw,
                    struct gpu_formbeam_arrays *g,
@@ -405,11 +405,12 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
 
         for (pol2 = 0; pol2 < npol; pol2++)
         {
-            Ji = ant * (npol*npol*nchan) +
+            Ji = p   * (npol*npol*nchan*nstation) +
+                 ant * (npol*npol*nchan) +
                  ch  * (npol*npol) +
                  pol * (npol) +
                  pol2;
-            g->J[Ji] = invJi[ant][ch][pol][pol2];
+            g->J[Ji] = invJi[p][ant][ch][pol][pol2];
         }
     }
     // Copy the data to the device
@@ -419,10 +420,10 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     // Divide the gpu calculation into multiple time chunks so there is enough room on the GPU
     for (int ichunk = 0; ichunk < nchunk; ichunk++)
     {
-        int dataoffset = ichunk * g->data_size / sizeof(uint8_t);
+        //int dataoffset = ichunk * g->data_size / sizeof(uint8_t);
         gpuErrchk(cudaMemcpyAsync( g->d_data,
-                                data + ichunk * g->data_size / sizeof(uint8_t),
-                                g->data_size, cudaMemcpyHostToDevice ));
+                                   data + ichunk * g->data_size / sizeof(uint8_t),
+                                   g->data_size, cudaMemcpyHostToDevice ));
 
         // Call the kernels
         // samples_chan(index=blockIdx.x  size=gridDim.x,
@@ -435,7 +436,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
 
         // convert the data and multiply it by J
         invj_the_data<<<chan_samples, stat>>>( g->d_data, g->d_J, g->d_W, g->d_JDx, g->d_JDy,
-                                            g->d_Ia, incoh_check );
+                                               g->d_Ia, incoh_check );
 
         // Send off a parrellel cuda stream for each pointing
         for ( int p = 0; p < npointing; p++ )
@@ -499,7 +500,7 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
     g->data_size  = sample_rate * nstation * nchan * npol / nchunk * sizeof(uint8_t);
     g->Bd_size    = npointing * sample_rate * nchan * npol * sizeof(ComplexDouble);
     g->W_size     = npointing * nstation * nchan * npol * sizeof(ComplexDouble);
-    g->J_size     = nstation * nchan * npol * npol * sizeof(ComplexDouble);
+    g->J_size     = npointing * nstation * nchan * npol * npol * sizeof(ComplexDouble);
     g->JD_size    = sample_rate * nstation * nchan / nchunk * sizeof(ComplexDouble);
 
     // Allocate host memory
@@ -522,7 +523,7 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
     fprintf( stderr, "[%f] JD_size    %d  MB GPU mem\n", time, g->JD_size*3 /1000000 );
 
     int GPU_mem = (g->W_size + g->J_size + g->Bd_size + g->data_size +
-                    g->coh_size + g->incoh_size + 3*g->JD_size) /1000000000;
+                   g->coh_size + g->incoh_size + 3*g->JD_size) /1000000000;
 
     fprintf( stderr, "[%f]  %d GB GPU memory allocated\n", time, GPU_mem );
 
