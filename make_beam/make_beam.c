@@ -345,11 +345,11 @@ int main(int argc, char **argv)
         cudaStreamCreate(&(streams[p])) ;
 
     fprintf( stderr, "[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
-     
+
     // Set up timing for each section
     long read_time[nfiles], delay_time[nfiles], calc_time[nfiles], write_time[nfiles][npointing];
     clock_t start;
-    
+
     int file_no;
     for (file_no = 0; file_no < nfiles; file_no++)
     {
@@ -383,7 +383,7 @@ int main(int argc, char **argv)
         fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
                                 file_no+1, nfiles);
         start = clock();
-        
+
         cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                     npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
                     detected_beam, data_buffer_coh, data_buffer_incoh,
@@ -392,14 +392,14 @@ int main(int argc, char **argv)
         // Invert the PFB, if requested
         if (opts.out_vdif)
         {
-            fprintf( stderr, "[%f] [%d/%d]   Inverting the PFB (full)\n", 
+            fprintf( stderr, "[%f] [%d/%d]   Inverting the PFB (full)\n",
                             NOW-begintime, file_no+1, nfiles);
-            cu_invert_pfb_ord( detected_beam, file_no, npointing, 
+            cu_invert_pfb_ord( detected_beam, file_no, npointing,
                     opts.sample_rate, nchan, npol, &gi, data_buffer_vdif );
         }
         calc_time[file_no] = clock() - start;
 
-        
+
         // Write out for each pointing
         for ( p = 0; p < npointing; p++)
         {
@@ -487,7 +487,7 @@ int main(int argc, char **argv)
     cudaFreeHost( data_buffer_incoh );
     cudaFreeHost( data_buffer_vdif  );
     cudaFreeHost( data );
-    
+
     free( opts.obsid        );
     free( opts.time_utc     );
     free( opts.pointings    );
