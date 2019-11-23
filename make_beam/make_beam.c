@@ -441,10 +441,10 @@ int main(int argc, char **argv)
     for (file_no = 0; file_no < nfiles; file_no++)
     {
         read_std  += pow((float)read_time[file_no]  - read_mean,  2);
-        delay_std += pow((float)delay_time[file_no] - delay_mean, 2);
-        calc_std  += pow((float)calc_time[file_no]  - calc_mean,  2);
+        delay_std += pow((float)delay_time[file_no] - delay_mean / npointing, 2);
+        calc_std  += pow((float)calc_time[file_no]  - calc_mean / npointing,  2);
         for ( p = 0; p < npointing; p++)
-            write_std += pow((float)write_time[file_no][p] - write_mean, 2);
+            write_std += pow((float)write_time[file_no][p] - write_mean / npointing, 2);
     }
     read_std  = sqrt( read_std  / nfiles );
     delay_std = sqrt( delay_std / nfiles / npointing );
