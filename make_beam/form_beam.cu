@@ -421,7 +421,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     // Make sure we put it back into the correct half of the array, depending
     // on whether this is an even or odd second.
     int offset, i;
-    offset = file_no % 3 * opts->sample_rate;
+    offset = file_no % 2 * opts->sample_rate;
     
     for ( int p   = 0; p   < npointing        ; p++  )
     for ( int s   = 0; s   < opts->sample_rate; s++  )

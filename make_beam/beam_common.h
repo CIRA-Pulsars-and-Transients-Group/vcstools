@@ -79,7 +79,6 @@ struct make_beam_opts {
     unsigned int       chan_width;    // The bandwidth of an individual fine chanel (Hz)
     unsigned int       sample_rate;   // The VCS sample rate (Hz)
     char              *custom_flags;  // Use custom list for flagging antennas
-    int                max_serial_pointing; // Maximum number of pointings to run in serial
 
     // Output options
     int                out_incoh;     // Default = PSRFITS (incoherent) output turned OFF

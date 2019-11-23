@@ -105,7 +105,7 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
  *
  * This function expects "detected_beam" to be structured as follows:
  *
- *   detected_beam[3*nsamples][nchan][npol]
+ *   detected_beam[2*nsamples][nchan][npol]
  *
  * Although detected_samples potentially contains 2 seconds' worth of data,
  * this function only inverts 1 second. The appropriate second is worked out
@@ -128,17 +128,14 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
     // half of detected_beam if the file number is even, and "ntaps" places
     // from the end of the first half of detected_beam if the file number is
     // odd.
-    int start_s;
     
-    if (file_no % 3 == 0)      start_s = 3*nsamples - g->ntaps;
-    else if (file_no % 3 == 1) start_s = nsamples - g->ntaps;
-    else                       start_s = 2*nsamples - g->ntaps;
+    int start_s = (file_no % 2 == 0 ? 2*nsamples - g->ntaps : nsamples - g->ntaps);
 
     int p, s_in, s, ch, pol, i;
     for (p = 0; p < npointing; p++)
     for (s_in = 0; s_in < nsamples + g->ntaps; s_in++)
     {
-        s = (start_s + s_in) % (3*nsamples);
+        s = (start_s + s_in) % (2*nsamples);
         for (ch = 0; ch < nchan; ch++)
         {
             for (pol = 0; pol < npol; pol++)
