@@ -25,22 +25,23 @@
 #endif
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
-        float *data_buffer_vdif, float *gain, int p )
+                        float *data_buffer_vdif, float *gain, int p )
 {
 
     // Set level occupancy
     float rmean, imean;
     ComplexFloat cmean, stddev;
+    int begin = p*vf->sizeof_buffer/2.0;
 
     get_mean_complex(
             (ComplexFloat *)data_buffer_vdif,
-            p*vf->sizeof_buffer/2,
+            begin,
             vf->sizeof_buffer/2.0,
             &rmean, &imean, &cmean );
 
     stddev = get_std_dev_complex(
             (ComplexFloat *)data_buffer_vdif,
-            p*vf->sizeof_buffer/2,
+            begin,
             vf->sizeof_buffer/2.0 );
 
     if (fabsf(rmean) > 0.001)
@@ -48,7 +49,7 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         fprintf( stderr, "warning: vdif_write_second: significantly "
                          "non-zero mean (%f), adjusting data\n", rmean );
         unsigned int i;
-        for (i = p*vf->sizeof_buffer/2.0; i < vf->sizeof_buffer/2; i++)
+        for (i = begin; i < begin + vf->sizeof_buffer/2.0; i++)
         {
             data_buffer_vdif[2*i+0] -= CRealf(cmean);
             data_buffer_vdif[2*i+1] -= CImagf(cmean);
@@ -61,12 +62,14 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
     vf->got_scales = 1;
     set_level_occupancy(
             (ComplexFloat *)data_buffer_vdif,
-            vf->sizeof_buffer/2.0, gain);
+            begin,
+            vf->sizeof_buffer/2.0,
+            gain);
 
     // Normalise
     normalise_complex(
-            (ComplexFloat *)data_buffer_vdif,
-            p*vf->sizeof_buffer/2,
+            (ComplexFloat *)data_buffer_vdif ,
+            begin,
             vf->sizeof_buffer/2.0,
             1.0/(*gain) );
     
@@ -175,7 +178,7 @@ void populate_vdif_header(
         // A single frame (128 samples). Remember vf.nchan is kludged to npol
         vf[p].sizeof_beam = vf[p].samples_per_frame * vf[p].nchan * (vf[p].iscomplex+1);      // = 512
 
-        // One full second (1.28 million 2 bit samples)
+        // One full second (1.28 million 2 bit samples) (sample_rate * nchan * npol * 2(real+complex) )
         vf[p].sizeof_buffer = vf[p].frame_rate * vf[p].sizeof_beam;                         // = 5120000
 
         createVDIFHeader( vhdr, vf[p].frame_length, vf[p].threadid, vf[p].bits, vf[p].nchan,
@@ -237,9 +240,9 @@ ComplexFloat get_std_dev_complex(ComplexFloat *input, int begin, int nsamples)
     float rsigma = 0;
     int i;
 
-    for (i=begin;i<nsamples;i++){
-         rtotal = rtotal+(CRealf(input[i])*CRealf(input[i]));
-         itotal = itotal+(CImagf(input[i])*CImagf(input[i]));
+    for ( i = begin ; i < begin + nsamples; i++ ){
+         rtotal += (CRealf(input[i])*CRealf(input[i]));
+         itotal += (CImagf(input[i])*CImagf(input[i]));
 
      }
     rsigma = sqrtf((1.0/(nsamples-1))*rtotal);
@@ -248,7 +251,7 @@ ComplexFloat get_std_dev_complex(ComplexFloat *input, int begin, int nsamples)
     return CMakef( rsigma, isigma );
 }
 
-void set_level_occupancy(ComplexFloat *input, int nsamples, float *new_gain)
+void set_level_occupancy(ComplexFloat *input, int begin, int nsamples, float *new_gain)
 {
     //float percentage = 0.0;
     //float occupancy = 17.0;
@@ -261,7 +264,7 @@ void set_level_occupancy(ComplexFloat *input, int nsamples, float *new_gain)
     while (percentage_clipped > 0 && percentage_clipped > limit) {
         int count = 0;
         int clipped = 0;
-        for (i = 0; i < nsamples; i++) {
+        for ( i = begin; i < begin + nsamples; i++ ) {
             if (isnan(CRealf(input[i])) || isnan(CImagf(input[i])))
             {
                 fprintf( stderr, "error: set_level_occupancy: input[%d] = "
@@ -303,7 +306,7 @@ void get_mean_complex( ComplexFloat *input, int begin, int nsamples, float *rmea
 
     ComplexFloat ctotal = CMakef( 0.0, 0.0 );
 
-    for (i = begin; i < nsamples; i++)
+    for (i = begin; i < begin + nsamples; i++)
     {
 //if (isnan(CRealf(input[i])) || isnan(CImagf(input[i]))) { fprintf(stderr, "\ninput[%d] = %e + %e*I\n\n", i, CRealf(input[i]), CImagf(input[i])); exit(1); }
         rtotal += CRealf( input[i] );
@@ -320,7 +323,7 @@ void normalise_complex(ComplexFloat *input, int begin, int nsamples, float scale
 {
     int i;
 
-    for (i=begin;i<nsamples;i++){
+    for ( i = begin; i < begin + nsamples; i++ ){
         input[i] = CSclf( input[i], scale );
     }
 }

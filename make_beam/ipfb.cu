@@ -35,7 +35,8 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 
 __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *fils_real, float *fils_imag,
-                               int ntaps, int npol, float *out )
+                               int ntaps, int npol, int buffer_offset,
+                               float *out )
 {
     int s = blockIdx.x;
     int nsamples = gridDim.x;
@@ -44,21 +45,20 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
  
     // Calculate the number of channels
     int nchan = blockDim.x / npol;
-    int p = threadIdx.y;
-    int idx = nchan * npol * nsamples * p + nchan * npol * s + threadIdx.x;
+    int idx = nchan * npol * s + threadIdx.x;
  
     //idx = npol*nchan*(nsamples+ntaps)*p +
     //      npol*nchan*s_in +
     //      npol*ch +         pol;
 
     // Calculate the first "out" index
-    int o_real = 2*idx;
-    int o_imag = o_real + 1;
+    int o_real = 2 * idx + buffer_offset / 2;
+    int o_imag = o_real + 1 + buffer_offset / 2;
 
     // Calculate the first "in" index for this thread
-    int i0 = ((idx + nchan * npol - npol) / (nchan * npol)) * nchan * npol 
-             + (threadIdx.x % npol) + p * ntaps * nchan * npol;
-    //f = fil_size*ch + tap
+    int i0 = ((idx + blockDim.x - npol) / blockDim.x) * blockDim.x +
+             (threadIdx.x % npol) + 
+             buffer_offset;
     
     // Calculate the "fils" first column index
     //int f0 = nchan - ((idx/npol + nchan - 1) % nchan) - 1;
@@ -76,7 +76,9 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
         for (ch = 0; ch < nchan; ch++)
         {
             // The "in" index
-            i = i0 + nchan * npol*tap + npol*ch;
+            i = tap * npol * nchan +
+                ch  * npol         +
+                i0;
 
             // The "fils" index
             f = f0 + nchan*(ntaps-1-tap) + nchan*ntaps*ch;
@@ -99,7 +101,8 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
 extern "C"
 void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
                         int npointing, int nsamples, int nchan, int npol,
-                        struct gpu_ipfb_arrays *g, float *data_buffer_uvdif )
+                        int sizeof_buffer,
+                        struct gpu_ipfb_arrays *g, float *data_buffer_vdif )
 /* "Invert the PFB" by applying a resynthesis filter, using GPU
  * acceleration.
  *
@@ -141,9 +144,9 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
             for (pol = 0; pol < npol; pol++)
             {
                 // Calculate the index for in_real and in_imag;
-                i = npol*nchan*(nsamples + g->ntaps)*p +
-                    npol*nchan*s_in + 
-                    npol*ch + 
+                i = p    * npol * nchan * (nsamples + g->ntaps) +
+                    s_in * npol * nchan +
+                    ch   * npol +
                     pol;
                 // Copy the data across - taking care of the file_no = 0 case
                 // The s_in%(npol*nchan*nsamples) does this for each pointing
@@ -166,14 +169,16 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
     gpuErrchk(cudaMemcpy( g->d_in_imag, g->in_imag, g->in_size, cudaMemcpyHostToDevice ));
     
     // Call the kernel
-    dim3 n_cpol_p(nchan*npol, npointing);
-    filter_kernel<<<nsamples, n_cpol_p>>>( g->d_in_real, g->d_in_imag,
-                                             g->d_fils_real, g->d_fils_imag,
-                                             g->ntaps, npol, g->d_out );
+    for (p = 0; p < npointing; p++)
+        filter_kernel<<<nsamples, nchan*npol>>>( g->d_in_real,   g->d_in_imag,
+                                                 g->d_fils_real, g->d_fils_imag,
+                                                 g->ntaps, npol, p * sizeof_buffer,
+                                                 g->d_out );
+        gpuErrchk( cudaPeekAtLastError() );
     cudaDeviceSynchronize();
 
     // Copy the result back into host memory
-    gpuErrchk(cudaMemcpy( data_buffer_uvdif, g->d_out, g->out_size, cudaMemcpyDeviceToHost ));
+    gpuErrchk(cudaMemcpy( data_buffer_vdif, g->d_out, g->out_size, cudaMemcpyDeviceToHost ));
 }
 
 

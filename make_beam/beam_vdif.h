@@ -76,7 +76,7 @@ void populate_vdif_header(
 
 ComplexFloat get_std_dev_complex( ComplexFloat *input, int begin, int nsamples );
 
-void set_level_occupancy( ComplexFloat *input, int nsamples,
+void set_level_occupancy( ComplexFloat *input, int begin, int nsamples,
                           float *new_gain );
 
 void get_mean_complex( ComplexFloat *input, int begin, int nsamples, float *rmean,

@@ -392,10 +392,11 @@ int main(int argc, char **argv)
         // Invert the PFB, if requested
         if (opts.out_vdif)
         {
-            fprintf( stderr, "[%f] [%d/%d]   Inverting the PFB (full)\n",
+            fprintf( stderr, "[%f] [%d/%d] Inverting the PFB (full)\n",
                             NOW-begintime, file_no+1, nfiles);
             cu_invert_pfb_ord( detected_beam, file_no, npointing,
-                    opts.sample_rate, nchan, npol, &gi, data_buffer_vdif );
+                               opts.sample_rate, nchan, npol, vf->sizeof_buffer,
+                               &gi, data_buffer_vdif );
         }
         calc_time[file_no] = clock() - start;
 
@@ -409,13 +410,13 @@ int main(int argc, char **argv)
 
             if (opts.out_coh)
                 psrfits_write_second( &pf[p], data_buffer_coh, nchan,
-                                    outpol_coh, p );
+                                      outpol_coh, p );
             if (opts.out_incoh && p == 0)
                 psrfits_write_second( &pf_incoh[p], data_buffer_incoh,
-                                    nchan, outpol_incoh, p );
+                                      nchan, outpol_incoh, p );
             if (opts.out_vdif)
                 vdif_write_second( &vf[p], &vhdr, data_buffer_vdif,
-                                &vgain, p );
+                                   &vgain, p );
             write_time[file_no][p] = clock() - start;
         }
     }
@@ -682,7 +683,7 @@ void make_beam_parse_cmdline(
                 {"summed",              no_argument,       0, 's'},
                 {"utc-time",            required_argument, 0, 'z'},
                 {"pointings",           required_argument, 0, 'P'},
-                {"data-location",      required_argument, 0, 'd'},
+                {"data-location",       required_argument, 0, 'd'},
                 {"metafits-file",       required_argument, 0, 'm'},
                 {"coarse-chan",         required_argument, 0, 'f'},
                 {"antennas",            required_argument, 0, 'a'},
@@ -801,13 +802,6 @@ void make_beam_parse_cmdline(
         exit(EXIT_FAILURE);
     }
 
-    // At the moment, -v is not implemented if CUDA is available
-    if (opts->out_vdif)
-    {
-        fprintf( stderr, "error: -v is not available in the multi-pixel version. "
-                         "To use -v, please recompile without CUDA.\n" );
-        exit(EXIT_FAILURE);
-    }
 
     // Check that all the required options were supplied
     assert( opts->obsid        != NULL );
