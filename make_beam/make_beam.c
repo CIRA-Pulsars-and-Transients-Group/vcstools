@@ -415,8 +415,9 @@ int main(int argc, char **argv)
                 psrfits_write_second( &pf_incoh[p], data_buffer_incoh,
                                       nchan, outpol_incoh, p );
             if (opts.out_vdif)
-                vdif_write_second( &vf[p], &vhdr, data_buffer_vdif,
-                                   &vgain, p );
+                vdif_write_second( &vf[p], &vhdr,
+                                   data_buffer_vdif + p * vf->sizeof_buffer,
+                                   &vgain );
             write_time[file_no][p] = clock() - start;
         }
     }
