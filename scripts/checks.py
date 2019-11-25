@@ -179,6 +179,8 @@ def get_files_and_sizes(obsID, mode):
         return
     logger.info("Retrieving file info from MWA database for all {0} files...".format(suffix))
     meta = getmeta(service='obs', params={'obs_id':obsID, 'nocache':1})
+    # 'nocache' is used above so we get don't use the cached metadata as that could
+    # be out of data so we force it to get up to date values
     files = np.array(list(meta['files'].keys()))
     files_masked = []
     sizes = []
