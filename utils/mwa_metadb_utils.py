@@ -110,7 +110,7 @@ def get_common_obs_metadata(obs, return_all = False):
         return [obs, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
 
 
-def getmeta(service='obs', params=None):
+def getmeta(servicetype='metadata', service='obs', params=None):
     """
     Function to call a JSON web service and return a dictionary:
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
@@ -121,7 +121,7 @@ def getmeta(service='obs', params=None):
     import json
 
     # Append the service name to this base URL, eg 'con', 'obs', etc.
-    BASEURL = 'http://ws.mwatelescope.org/metadata/'
+    BASEURL = 'http://ws.mwatelescope.org/'
 
 
     if params:
@@ -130,14 +130,8 @@ def getmeta(service='obs', params=None):
     else:
         data = ''
 
-    if service.strip().lower() in ['obs', 'find', 'con']:
-        service = service.strip().lower()
-    else:
-        logger.error("invalid service name: %s" % service)
-        return
-
     try:
-        result = json.load(urllib.request.urlopen(BASEURL + service + '?' + data))
+        result = json.load(urllib.request.urlopen(BASEURL + servicetype + '/' + service + '?' + data))
     except urllib.error.HTTPError as err:
         logger.error("HTTP error from server: code=%d, response:\n %s" % (err.code, err.read()))
         return
@@ -146,6 +140,31 @@ def getmeta(service='obs', params=None):
         return
 
     return result
+
+
+def get_files(obsid, meta=None):
+    """
+    Queries the metadata to find all the file names
+    Parameters:
+    -----------
+    obsid: str
+        The ID (gps time) of the observation you are querying
+    meta: dict
+        The output of the getmeta function. This is an optional input that can
+        be used if you just want to extract the relevant info and save a 
+        metadata call
+    
+    Output:
+    -------
+    files: list
+        A list of all the file names
+    """
+    if meta is None:
+        files_meta = getmeta(servicetype='metadata', service='data_files', params={'obs_id':str(obsid)})
+    else:
+        files_meta = meta['files']
+    
+    return list(files_meta.keys())
 
 
 def calc_ta_fwhm(freq, array_phase='P2C'):
@@ -204,14 +223,13 @@ def is_number(s):
         return False
 
 
-def obs_max_min(obs_id):
+def obs_max_min(obsid, meta=None):
     """
     Small function to query the database and return the times of the first and last file
     """
-    obsinfo = getmeta(service='obs', params={'obs_id':obs_id})
 
     # Make a list of gps times excluding non-numbers from list
-    times = [f[11:21] for f in obsinfo['files'].keys() if is_number(f[11:21])]
+    times = [f[11:21] for f in get_files(obsid, meta=meta) if is_number(f[11:21])]
     obs_start = int(min(times))
     obs_end = int(max(times))
     return obs_start, obs_end
@@ -220,13 +238,14 @@ def write_obs_info(obsid):
     """
     Writes obs info to a file in the current direcory
     """
-    data_dict = getmeta(service='obs', params={'obs_id':str(obsid)})
+    data_dict = getmeta(service='obs', params={'obs_id':str(obsid), 'nocache':1})
     filename = str(obsid)+"_info.txt"
     logger.info("Writing to file: {0}".format(filename))
 
     channels = data_dict["rfstreams"]["0"]["frequencies"]
     centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
     array_phase = get_obs_array_phase(obsid)
+    start, stop = obs_max_min(obsid, meta=data_dict)
 
     f = open(filename, "w+")
     f.write("-------------------------    Obs Info    --------------------------\n")
@@ -236,9 +255,9 @@ def write_obs_info(obsid):
     if array_phase != 'OTH':
         f.write("~FWHM (arcminute)   {:4.2f}\n".format(calc_ta_fwhm(centre_freq,
                                                        array_phase=array_phase)*60.))
-    f.write("Start time:         {}\n".format(data_dict["starttime"]))
-    f.write("Stop time:          {}\n".format(data_dict["stoptime"]))
-    f.write("Duration (s):       {}\n".format(data_dict["stoptime"]-data_dict["starttime"]))
+    f.write("Start time:         {}\n".format(start))
+    f.write("Stop time:          {}\n".format(stop))
+    f.write("Duration (s):       {}\n".format(stop-start))
     f.write("RA Pointing (deg):  {}\n".format(data_dict["metadata"]["ra_pointing"]))
     f.write("DEC Pointing (deg): {}\n".format(data_dict["metadata"]["dec_pointing"]))
     f.write("Channels:           {}\n".format(channels))
@@ -284,7 +303,7 @@ def get_best_cal_obs(obsid):
     cal_info = []
     for cal in all_cals:
         #get the cal metadata
-        cal_meta = getmeta(params={'obs_id':str(cal)})
+        cal_meta = getmeta(params={'obs_id':str(cal), 'nocache':1})
 
         #check there are a factor of 24 files (no gpu boxes are down)
         gpubox_files = []
@@ -315,10 +334,11 @@ if __name__ == '__main__':
     if args.write:
         write_obs_info(args.obsid)
     else:
-        data_dict = getmeta(params={"obsid":args.obsid})
+        data_dict = getmeta(params={"obsid":args.obsid, 'nocache':1})
         channels = data_dict["rfstreams"]["0"]["frequencies"]
         centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
         array_phase = get_obs_array_phase(args.obsid)
+        start, stop = obs_max_min(args.obsid, meta=data_dict)
 
         print("-------------------------    Obs Info    --------------------------")
         print("Obs Name:           {}".format(data_dict["obsname"]))
@@ -327,9 +347,9 @@ if __name__ == '__main__':
         if array_phase != 'OTH':
             print("~FWHM (arcminute)   {:4.2f}".format(calc_ta_fwhm(centre_freq,
                                                        array_phase=array_phase)*60.))
-        print("Start time:         {}".format(data_dict["starttime"]))
-        print("Stop time:          {}".format(data_dict["stoptime"]))
-        print("Duration (s):       {}".format(data_dict["stoptime"]-data_dict["starttime"]))
+        print("Start time:         {}".format(start))
+        print("Stop time:          {}".format(stop))
+        print("Duration (s):       {}".format(stop-start))
         print("RA Pointing (deg):  {}".format(data_dict["metadata"]["ra_pointing"]))
         print("DEC Pointing (deg): {}".format(data_dict["metadata"]["dec_pointing"]))
         print("Channels:           {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
