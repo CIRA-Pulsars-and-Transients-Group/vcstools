@@ -151,9 +151,9 @@ def get_files(obsid, meta=None):
         The ID (gps time) of the observation you are querying
     meta: dict
         The output of the getmeta function. This is an optional input that can
-        be used if you just want to extract the relevant info and save a 
+        be used if you just want to extract the relevant info and save a
         metadata call
-    
+
     Output:
     -------
     files: list
