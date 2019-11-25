@@ -163,7 +163,7 @@ def get_files(obsid, meta=None):
         files_meta = getmeta(servicetype='metadata', service='data_files', params={'obs_id':str(obsid)})
     else:
         files_meta = meta['files']
-    
+
     return list(files_meta.keys())
 
 
