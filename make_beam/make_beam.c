@@ -390,7 +390,7 @@ int main(int argc, char **argv)
         cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                     npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
                     detected_beam, data_buffer_coh, data_buffer_incoh,
-                    streams );
+                    streams, opts.out_incoh, nchunk );
 
         // Invert the PFB, if requested
         if (opts.out_vdif)
