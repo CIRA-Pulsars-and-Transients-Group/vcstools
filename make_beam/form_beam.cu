@@ -447,21 +447,25 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
                             g->d_Bd, g->d_coh, g->d_incoh );
 
             gpuErrchk( cudaPeekAtLastError() );
-
-            // Flatten the bandpass
-            if ( p == 0 )
-            {
-                flatten_bandpass_I_kernel<<<1, nchan, 0, streams[p]>>>( g->d_incoh,
-                                                                        opts->sample_rate );
-                gpuErrchk( cudaPeekAtLastError() );
-            }
-            // Now do the same for the coherent beam
-            dim3 chan_stokes(nchan, outpol_coh);
-            flatten_bandpass_C_kernel<<<npointing, chan_stokes, 0, streams[p]>>>( g->d_coh,
-                                                                        opts->sample_rate );
-            gpuErrchk( cudaPeekAtLastError() );
         }
-        gpuErrchk( cudaDeviceSynchronize() );
+    }
+    gpuErrchk( cudaDeviceSynchronize() );
+
+
+    // Flatten the bandpass
+    if ( incoh_check )
+    {
+        flatten_bandpass_I_kernel<<<1, nchan, 0, streams[0]>>>( g->d_incoh,
+                                                                opts->sample_rate );
+        gpuErrchk( cudaPeekAtLastError() );
+    }
+    for ( int p = 0; p < npointing; p++ )
+    {
+        // Now do the same for the coherent beam
+        dim3 chan_stokes(nchan, outpol_coh);
+        flatten_bandpass_C_kernel<<<npointing, chan_stokes, 0, streams[p]>>>( g->d_coh,
+                                                                    opts->sample_rate );
+        gpuErrchk( cudaPeekAtLastError() );
     }
     gpuErrchk( cudaDeviceSynchronize() );
 
