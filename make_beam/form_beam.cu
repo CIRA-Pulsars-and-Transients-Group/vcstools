@@ -98,12 +98,14 @@ __global__ void invj_the_data( uint8_t       *data,
     }
 
     // Calculate the first step (J*D) of the coherent beam (B = J*W*D)
-    //JDx = Jxx*Dx + Jxy*Dy
-    //JDy = Jyx*Dx + Jyy*Dy
-    //TODO The Jyx/Jxy terms ay be the wrong way around, double check this
+    // Nick: by my math the order should be:
+    // JDx = Jxx*Dx + Jxy*Dy
+    // JDy = Jyx*Dx + Jyy*Dy
+    // But switching yx and xy is the way it was done previously and appears
+    // to give higher signal to noise
     JDx[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(0,ant,c,0,0,nc)], Dx ),
-                                     CMuld( J[J_IDX(0,ant,c,0,1,nc)], Dy ) );
-    JDy[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(0,ant,c,1,0,nc)], Dx ),
+                                     CMuld( J[J_IDX(0,ant,c,1,0,nc)], Dy ) );
+    JDy[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(0,ant,c,0,1,nc)], Dx ),
                                      CMuld( J[J_IDX(0,ant,c,1,1,nc)], Dy ) );
 
 
