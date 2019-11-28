@@ -184,6 +184,9 @@ int main(int argc, char **argv)
                              p, pointing_array[p][0], pointing_array[p][1]);
     }
 
+    // How many chunks to split a second into so there is enough memory on the gpu
+    int nchunk = 2;
+
     // Allocate memory
     char **filenames = create_filenames( &opts );
     ComplexDouble  ****complex_weights_array = create_complex_weights( npointing, nstation, nchan, npol );
@@ -331,8 +334,8 @@ int main(int argc, char **argv)
     // Declaring pointers to the structs so the memory can be alternated
     struct gpu_formbeam_arrays gf;
     struct gpu_ipfb_arrays gi;
-    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol,
-            outpol_coh, outpol_incoh, npointing, NOW-begintime );
+    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, nchunk,
+                     outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
     if (opts.out_vdif)
     {
@@ -387,7 +390,7 @@ int main(int argc, char **argv)
         cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                     npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
                     detected_beam, data_buffer_coh, data_buffer_incoh,
-                    streams );
+                    streams, opts.out_incoh, nchunk );
 
         // Invert the PFB, if requested
         if (opts.out_vdif)
@@ -901,13 +904,11 @@ void destroy_complex_weights( ComplexDouble ****array, int npointing, int nstati
     free( array );
 }
 
-
 ComplexDouble *****create_invJi( int npointing, int nstation, int nchan, int npol )
 // Allocate memory for (inverse) Jones matrices
 {
     int p, ant, pol, ch; // Loop variables
     ComplexDouble *****invJi;
-    
     invJi = (ComplexDouble *****)malloc( npointing * sizeof(ComplexDouble ****) );
     for (p = 0; p < npointing; p++)
     {
@@ -944,7 +945,6 @@ void destroy_invJi( ComplexDouble *****array, int npointing, int nstation, int n
 
                 free( array[p][ant][ch] );
             }
-
             free( array[p][ant] );
         }
         free( array[p] );
