@@ -25,6 +25,7 @@ import find_pulsar_in_obs as fpio
 import mwa_metadb_utils
 import submit_to_database
 import process_vcs
+import prof_utils
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
         return None, None
 
     if prof_data is None:
-        _, _, _, period, _, _, _, prof_data, nbins = submit_to_database.get_from_bestprof(prof_path)
+        _, _, _, period, _, _, _, prof_data, nbins = prof_utils.get_from_bestprof(prof_path)
         nbins = float(nbins)
         period = float(period)
     else:
@@ -119,7 +120,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
     prof_data = np.roll(prof_data, shift)
 
     #find sigma and check if profile is scattered
-    sigma, flags = submit_to_database.sigmaClip(prof_data, alpha=3., tol=0.01, ntrials=100)
+    sigma, flags = prof_utils.sigmaClip(prof_data, alpha=3., tol=0.01, ntrials=100)
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
     scattered=False
     if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
