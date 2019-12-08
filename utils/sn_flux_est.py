@@ -35,9 +35,38 @@ except KeyError:
     ATNF_LOC = None
 
 #---------------------------------------------------------------
-def plot_flux_estimation(nu_atnf, S_atnf, S_atnf_e, my_nu, my_S, my_S_e, a, K, covar_mat, pulsar, obsid):
+def plot_flux_estimation(nu_atnf, S_atnf, S_atnf_e, my_nu, my_S, my_S_e, a, pulsar, obsid,\
+                        K=None, covar_mat=None, a_err=None):
     """
+    Used for plotting the estimated flux density against the known flux values.
+    Can plot against either a least-sqaures fit flux or a spectral-index calculated flux.
+    For the former, supply the covariance matrix and the K value.
+    For the latter supply the spectral index error.
+
     Parameters:
+    -----------
+    nu_atnf: list
+        The frequencies in which the known flux values correspond to (Hz)
+    S_atnf: list
+        The known flux values (Jy)
+    S_atnf_e: list
+        The uncertainties correspodning to the known fluxes
+    my_nu: float
+        The frequency you're estimating the flux at (Hz)
+    my_S: float
+        The estimated flux (Jy)
+    my_S_e: float
+        The uncertainty in the estimated flux (Jy)
+    pulsar: string
+        The name of the pulsar
+    obsid: int
+        The observation ID
+    K: float
+        The K value of the least-squares fit. Use only when a least-sqaures fit has been done
+    covar_mat: numpy.matrix object
+        The covariance matrix from the least-squares fit. Use only when a least-squares fit has been done
+    a_err: float
+        The error in the spectral index. Use only when the flux has been estimated without least-squares
     """
     nu_range = list(nu_atnf)
     nu_range.append(my_nu)
@@ -45,7 +74,14 @@ def plot_flux_estimation(nu_atnf, S_atnf, S_atnf_e, my_nu, my_S, my_S_e, a, K, c
     S_range.append(my_S)
 
     nu_cont = np.logspace(np.log10(min(nu_range)), np.log10(max(nu_range)), num=500)
-    S_cont, S_cont_e = flux_from_plaw(nu_cont, K, a, covar_mat)
+    if covar_mat is not None and K is not None:
+        S_cont, S_cont_e = flux_from_plaw(nu_cont, K, a, covar_mat)
+        a_err = covar_mat.item(3)
+    elif a_err is not None:
+        S_cont, S_cont_e = flux_from_spind(nu_cont, nu_atnf[0], S_atnf[0], S_atnf_e[0], a, a_err)
+    else:
+        logger.warn("Requires more information to plot. Please refer to docs for more info.")
+        return
 
     nu_range=[]
     S_range=[]
@@ -54,17 +90,24 @@ def plot_flux_estimation(nu_atnf, S_atnf, S_atnf_e, my_nu, my_S, my_S_e, a, K, c
     for element in S_cont:
         S_range.append(element)
 
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.grid()
+    plt.text(0.05, 0.1, "Derived α = {0} +/- {1}".format(round(a, 2), round(a_err, 2)),\
+            fontsize=10, color="black", transform=ax.transAxes)
+    plt.text(0.05, 0.05, "Flux est at {0}MHz: {1} +/- {2}mJy".format(round(my_nu/1e6, 2), round(my_S*1000, 2), round(my_S_e*1000, 2)),\
+            fontsize=10, color="black", transform=ax.transAxes)
     plt.fill_between(nu_cont, S_cont - S_cont_e, S_cont + S_cont_e, facecolor='gray') # Model errors
     plt.plot(nu_cont, S_cont, 'k--', label="model") # Modelled line
     plt.errorbar(nu_atnf, S_atnf, yerr=S_atnf_e, fmt='o', label="ATNF data points") # Original data points
     plt.errorbar(my_nu, my_S, yerr=my_S_e, fmt='o', label="Extrapolated data points") # Extrapolated data point
-    plt.axis([0.5*min(nu_range), 2.0*max(nu_range), 0.5*min(S_range), 2.0*max(S_range)])
-    plt.xscale('log')
+    plt.axis([0.75*min(nu_range), 1.25*max(nu_range), 0.5*min(S_range), 1.5*max(S_range)])
     plt.yscale('log')
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Flux (Jy)')
+    plt.title("{0} Flux Estimate - {1}".format(pulsar, obsid))
     plt.legend()
     plt.savefig("flux_density_{0}_{1}.png".format(pulsar, obsid))
+    plt.close()
 
 #---------------------------------------------------------------
 def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=False):
@@ -315,6 +358,7 @@ def least_squares_fit_plaw(x_data, y_data, y_err):
 
     return a, K, covar_mat
 
+#---------------------------------------------------------------
 def flux_from_plaw(freq, K, a, covar_mat):
     """
     Calculates the flux and error from a power law fit by extrapolating to the desired frequency.
@@ -359,6 +403,50 @@ def flux_from_plaw(freq, K, a, covar_mat):
     flux_err = flux*(z-1)/(z+1)
 
     return flux, flux_err
+
+#---------------------------------------------------------------
+def flux_from_spind(nu_1, nu_2, s_2, s_2_err, a, a_err):
+    """
+    Calculates a flux value based on the spectral index, a using the formula:
+    S_1 = nu_1^a * nu_2 ^-a * S_2
+    Unvcertainty in nu is negligable
+
+    Parameters:
+    -----------
+    nu_1: float
+        The frequency at the desired flux estimation (Hz)
+    nu_2: float
+        The frequency at the known flux value (Hz)
+    s_2: float
+        The known flux value (Jy)
+    S_2_err: float
+        The uncertainty in the known flux value (Jy)
+    a: float
+        The spectral index
+    a_err: float
+        The uncertainty in the spectral index
+
+    Returns:
+    --------
+    flux_est: float
+        The estimated flux (Jy)
+    flux_est_err: float
+        The uncertainty in the estimated flux - calculated using the variance formula (Jy)
+    """
+
+    logger.debug("nu1 {0}".format(nu_1))
+    logger.debug("nu2 {0}".format(nu_2))
+    logger.debug("s2 {0}".format(s_2))
+
+    flux_est = nu_1**a * nu_2**(-a) * s_2
+    #variance formula error est
+    s_2_var = nu_1**a * nu_2**(-a)
+    s_2_var = s_2_var**2 * s_2_err**2
+    a_var = s_2 * nu_1**a * nu_2**(-a) * (np.log(nu_1)-np.log(nu_2))
+    a_var = a_var**2 * a_err**2
+    flux_est_err = np.sqrt(s_2_var + a_var)
+
+    return flux_est, flux_est_err
 
 #---------------------------------------------------------------
 def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
@@ -450,43 +538,28 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
         flux_est, flux_est_err = flux_from_plaw(f_mean, K, spind, covar_mat)
         #Plot estimation if in debug mode
         if plot_flux==True:
-            plot_flux_estimation(freq_all, flux_all, flux_err_all, f_mean, flux_est, flux_est_err, spind, K,\
-                                covar_mat, pulsar, obsid)
+            plot_flux_estimation(freq_all, flux_all, flux_err_all, f_mean, flux_est, flux_est_err, spind,\
+                                pulsar, obsid, covar_mat=covar_mat, K=K)
 
     #Do something different if there is only one flux value in archive
     elif len(flux_all) == 1:
-        logger.warning("Only a single flux value available on the archive")
+        logger.info("{} Only a single flux value available on the archive".format(pulsar))
 
         if not np.isnan(spind) and np.isnan(spind_err):
-            logger.warning("{} spectral index error not available. Assuming 20% error".format(pulsar))
+            logger.info("{} spectral index error not available. Assuming 20% error".format(pulsar))
             spind_err = spind*0.2
         if np.isnan(spind):
             logger.warning("{} insufficient archival data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013".format(pulsar))
             spind = -1.4
             spind_err = 1.
 
-        #formula for flux:
-        #S_1 = nu_1^a * nu_2 ^-a * S_2
-        nu_1 = f_mean #in Hz
-        nu_2 = freq_all[0] #in Hz
-        s_2 = flux_all[0] #in Jy
-        s_2_err = flux_err_all[0]
-        a = spind
-        a_err = spind_err
+        #estimate flux
+        flux_est, flux_est_err = flux_from_spind(f_mean, freq_all[0], flux_all[0], flux_err_all[0],\
+                                                spind, spind_err)
 
-        logger.debug("nu1 {0}".format(nu_1))
-        logger.debug("nu2 {0}".format(nu_2))
-        logger.debug("s2 {0}".format(s_2))
-        logger.info("{0} calculating flux using spectral index: {1} and error: {2}"\
-                    .format(pulsar, spind, spind_err))
-
-        flux_est = nu_1**a * nu_2**(-a) * s_2
-        #variance formula error est
-        s_2_var = nu_1**a * nu_2**(-a)
-        a_var = s_2 * nu_1**a * nu_2**(-a) * (np.log(nu_1)-np.log(nu_2))
-        a_var = a_var**2 * a_err**2
-        s_2_var = s_2_var**2 * s_2_err**2
-        flux_est_err = np.sqrt(s_2_var + a_var)
+        if plot_flux==True:
+            plot_flux_estimation(freq_all, flux_all, flux_err_all, f_mean, flux_est, flux_est_err, spind,\
+                                pulsar, obsid, a_err=spind_err)
 
     elif len(flux_all) < 1:
         logger.warning("{} no flux values on archive. Cannot estimate flux. Will return Nones".format(pulsar))
@@ -852,10 +925,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="""A utility file for estimating the S/N of a pulsar in an obsid""")
     parser.add_argument("-o", "--obsid", type=int, help="The Observation ID (e.g. 1221399680)")
     parser.add_argument("-p", "--pulsar", type=str, help="The pulsar's name (e.g. J2241-5236)")
-    parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level. Running in DEBUG mode will output a plot of the power law fit where applicable. Default: INFO")
-    parser.add_argument("-b", "--beg", type=int, default=None, help="The beginning time of observation. If None, will use beginning given by a metadata call")
-    parser.add_argument("-e", "--end", type=int, default=None, help="The end time of observation. If None, will use the end given by a metadata call")
-    parser.add_argument("--pointing", type=str, default=None, help="The pointing of the target in the format '12:34:56_98:76:54'. If None, will obtain from a call to ATNF")
+    parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level. Default: INFO")
+    parser.add_argument("-b", "--beg", type=int, default=None, help="The beginning time of observation. If None, will use beginning given by a metadata call. Default: None")
+    parser.add_argument("-e", "--end", type=int, default=None, help="The end time of observation. If None, will use the end given by a metadata call. Default: None")
+    parser.add_argument("--pointing", type=str, default=None, help="The pointing of the target in the format '12:34:56_98:76:54'. If None, will obtain from a call to ATNF. Default: None")
+    parser.add_argument("--plot_est", action="store_true", help="Use this tag to create a plot of flux estimation.")
     args = parser.parse_args()
 
     logger.setLevel(loglevels[args.loglvl])
@@ -879,10 +953,5 @@ if __name__ == "__main__":
         raj = args.pointing.split("_")[0]
         decj = args.pointing.split("_")[1]
 
-    if args.loglvl=="DEBUG":
-        plot=True
-    else:
-        plot=False
-
     SN, SN_err = est_pulsar_sn(args.pulsar, args.obsid,\
-             beg=args.beg, end=args.end, p_ra=raj, p_dec=decj, plot_flux=plot, query=query)
+             beg=args.beg, end=args.end, p_ra=raj, p_dec=decj, plot_flux=args.plot_est, query=query)
