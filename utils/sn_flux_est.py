@@ -90,7 +90,7 @@ def plot_flux_estimation(nu_atnf, S_atnf, S_atnf_e, my_nu, my_S, my_S_e, a, puls
     for element in S_cont:
         S_range.append(element)
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+    _, ax = plt.subplots(figsize=(12, 8))
     ax.grid()
     plt.text(0.05, 0.1, "Derived α = {0} +/- {1}".format(round(a, 2), round(a_err, 2)),\
             fontsize=10, color="black", transform=ax.transAxes)
@@ -926,9 +926,12 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--obsid", type=int, help="The Observation ID (e.g. 1221399680)")
     parser.add_argument("-p", "--pulsar", type=str, help="The pulsar's name (e.g. J2241-5236)")
     parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level. Default: INFO")
-    parser.add_argument("-b", "--beg", type=int, default=None, help="The beginning time of observation. If None, will use beginning given by a metadata call. Default: None")
-    parser.add_argument("-e", "--end", type=int, default=None, help="The end time of observation. If None, will use the end given by a metadata call. Default: None")
-    parser.add_argument("--pointing", type=str, default=None, help="The pointing of the target in the format '12:34:56_98:76:54'. If None, will obtain from a call to ATNF. Default: None")
+    parser.add_argument("-b", "--beg", type=int, default=None, help="The beginning time of observation.\
+                        If None, will use beginning given by a metadata call. Default: None")
+    parser.add_argument("-e", "--end", type=int, default=None, help="The end time of observation.\
+                        If None, will use the end given by a metadata call. Default: None")
+    parser.add_argument("--pointing", type=str, default=None, help="The pointing of the target in the format '12:34:56_98:76:54'.\
+                        If None, will obtain from a call to ATNF. Default: None")
     parser.add_argument("--plot_est", action="store_true", help="Use this tag to create a plot of flux estimation.")
     args = parser.parse_args()
 
