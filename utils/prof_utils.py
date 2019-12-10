@@ -81,7 +81,7 @@ def get_from_bestprof(file_loc):
 
         # Remove min
         min_prof = min(orig_profile)
-        for p, val in enumerate(orig_profile):
+        for p, _ in enumerate(orig_profile):
             profile[p] = orig_profile[p] - min_prof
 
     return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
