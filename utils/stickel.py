@@ -125,7 +125,7 @@ class Stickel:
         B2 = np.roll(self.xdata, -1)
         B1[0]  = self.xdata[0]
         B2[-1] = self.xdata[-1]
-        
+
         return np.diag((-B1+B2)/2)
 
     def _midpointtruncmatrix(self, d):

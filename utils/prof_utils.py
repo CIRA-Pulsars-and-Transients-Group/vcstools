@@ -3,7 +3,6 @@
 import numpy as np
 import re
 import sys
-import sys
 import logging
 import argparse
 from scipy.interpolate import UnivariateSpline
@@ -24,7 +23,7 @@ def get_from_bestprof(file_loc):
     -----------
     file_loc: string
         The path to the bestprof file
-    
+
     Returns:
     --------
     [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]: list
@@ -54,7 +53,7 @@ def get_from_bestprof(file_loc):
         obsid = re.findall(r'(\d{10})', lines[0])[0]
         try:
             obsid = int(obsid)
-        except:
+        except ValueError:
             obsid = None
 
         pulsar = str(lines[1].split("_")[-1][:-1])
@@ -82,7 +81,7 @@ def get_from_bestprof(file_loc):
 
         # Remove min
         min_prof = min(orig_profile)
-        for p in range(len(orig_profile)):
+        for p, val in enumerate(orig_profile):
             profile[p] = orig_profile[p] - min_prof
 
     return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
@@ -90,19 +89,19 @@ def get_from_bestprof(file_loc):
 def get_from_ascii(file_loc):
     """
     Retrieves the profile from an ascii file
-    
+
     Parameters:
     -----------
     file_loc: string
         The location of the ascii file
-    
+
     Returns:
     --------
     [profile, bin_num]: list
         profile: list
             A list of floats containing the profile data
         len(profile): int
-            The number of bins in the profile 
+            The number of bins in the profile
     """
 
     f = open(file_loc)
@@ -112,12 +111,12 @@ def get_from_ascii(file_loc):
     for line in lines:
         thisline=line.split()
         profile.append(float(thisline[3]))
-        
+
     return [profile, len(profile)]
 
 def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
     """
-    Sigma clipping operation: 
+    Sigma clipping operation:
     Compute the data's median, m, and its standard deviation, sigma.
     Keep only the data that falls in the range (m-alpha*sigma,m+alpha*sigma) for some value of alpha, and discard everything else.
 
@@ -133,7 +132,7 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
         OPTIONAL - The fractional change in the standard deviation that determines when the tolerance is hit. Default=0.1
     ntrils: int
         OPTIONAL - The maximum number of times to apply the operation. Default=10
-    
+
     Returns:
     --------
     oldstd: float
@@ -291,7 +290,7 @@ def find_minima_maxima(profile, ignore_threshold=0.02, min_comp_len=5):
                 comp_minima.append(root)
             else:
                 comp_maxima.append(root)
-        #Turn the root locations into locations on profile, not on component        
+        #Turn the root locations into locations on profile, not on component
         for root in comp_minima:
             abs_root = root + comp_idx[key][0]
             minima.append(abs_root)
@@ -316,14 +315,14 @@ def find_widths(profile):
     -----------
     profile: list
         The profile to find the widths of
-    
-    Return: 
+
+    Return:
     W10: float
         The W10 width of the profile measured in number of bins
     W50: float
         The W50 width of the profile measured in number of bins
     Weq: float
-        The equivalent width of the profile measured in number of bins   
+        The equivalent width of the profile measured in number of bins
     """
     #perform spline operations
     x = np.array(list(range(len(profile))))
@@ -363,7 +362,7 @@ def regularize_prof(profile, reg_param=5e-8):
         The pulse profile
     reg_param: float
         OPTIONAL - the regularization parameter used for smoothing the profile. Default:5e-8
-    
+
     Returns:
     --------
     on_pulse_prof: list
@@ -402,7 +401,7 @@ def regularize_prof(profile, reg_param=5e-8):
     for i, val in enumerate(on_pulse_prof):
         if val<0:
             on_pulse_prof[i]=0
-        
+
     return on_pulse_prof, noise_mean, noise_std
 
 def prof_eval(profile, reg_param=5e-8, plot_name=None, ignore_threshold=None, min_comp_len=5):
@@ -494,10 +493,12 @@ if __name__ == '__main__':
                     WARNING=logging.WARNING,\
                     ERROR=logging.ERROR)
 
-    parser = argparse.ArgumentParser(description="""A utility file for calculating a variety of pulss profile properties""", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description="""A utility file for calculating a variety of pulss profile properties""",\
+                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--bestprof", type=str, help="The pathname of the file containing the pulse profile. Use if in .pfd.bestprof format")
     parser.add_argument("--ascii", type=str, help="The pathname of the file containing the pulse profile. Use if in ascii text format")
-    parser.add_argument("--reg_param", type=float, default=5e-8, help="The value of the regularization parameter used for a regularization process dscribed by Stickel 2010")
+    parser.add_argument("--reg_param", type=float, default=5e-8,\
+                        help="The value of the regularization parameter used for a regularization process dscribed by Stickel 2010")
     parser.add_argument("--plot_name", type=str, help="The name of the output plot file. If empty, will not plot anything")
     parser.add_argument("--ignore_threshold", type=float, default=0.02, help="Maxima with values below this fraction of the profile maximum will be ignored.")
     parser.add_argument("--min_comp_len", type=int, default=5, help="The minimum length in bins that a profile component must be to be considered real")
