@@ -19,8 +19,10 @@ def test_get_files_and_sizes():
         # Read in file list that was too long to store in this function
         with open(file_loc, 'rb') as file_read:
             file_list = pickle.load(file_read)
-        expected_ans = (file_list, suffix, number)
+        #sort the file lists to prevent change in their ordering causing errors
+        expected_ans = (sorted(file_list), suffix, number)
         ans = checks.get_files_and_sizes(obsid, mode)
+        ans = (sorted(ans[0]), ans[1], ans[2])
         if ans != expected_ans:
             raise AssertionError()
 
