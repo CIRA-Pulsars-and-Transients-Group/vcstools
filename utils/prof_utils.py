@@ -329,6 +329,7 @@ def find_maxima_err(model, noise_std, maxima):
         roots = list(spline.roots())
         roots.append(mx/len(model))
         roots = sorted(roots)
+        print(roots)
         index = roots.index(mx/len(model))
         mx_less = roots[index-1]
         mx_more = roots[index+1]
@@ -403,18 +404,23 @@ def regularize_prof(profile, reg_param=5e-8):
     """
     #clip the profile to find the on-pulse
     noise_std, clipped_prof = sigmaClip(profile)
-    #Reverse the nan-profile. Then replace nans with zero:
+
+    #Some noisy profiles have nans in the middle of the actual pulse... fix:
+    for i, val in enumerate(clipped_prof):
+        if np.isnan(val):
+            clipped_prof[i]=0.
+
+    clipped_prof = fill_clipped_prof(clipped_prof)
+
+    #Reverse the clipped profile to attain the on-pulse
     on_pulse_prof = []
     on_pulse_bins = []
     for i, val in enumerate(clipped_prof):
-        if np.isnan(val):
+        if val==0.:
             on_pulse_prof.append(profile[i])
             on_pulse_bins.append(i)
         else:
             on_pulse_prof.append(0)
-
-    #Some noisy profiles have nans in the middle of the actual pulse... fix:
-    on_pulse_prof = fill_clipped_prof(on_pulse_prof, profile)
 
     #regularization with Stickel - smoothing
     x = np.linspace(0,len(profile)-1, len(profile), dtype=int)
@@ -526,7 +532,7 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
     for num in range(n_comps-1, max_N):
         fit_dict[str(num+1)]={"popt":[], "pcov":[], "fit":[], "chisq":[]}
         guess += [next(centre_guess), next(width_guess), next(max_guess)]
-        popt, pcov = curve_fit(multi_gauss, x, y, bounds=bounds, p0=guess, maxfev=100000)
+        popt, pcov = curve_fit(multi_gauss, x, y, bounds=bounds,  p0=guess, maxfev=100000)
         fit = multi_gauss(x, *popt)
         chisq = chsq(y, fit, noise_std)
         fit_dict[str(num+1)]["popt"] = popt
@@ -551,8 +557,8 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
     fit = fit_dict[best_fit]["fit"]
     chisq = fit_dict[best_fit]["chisq"]
 
+    #plot the best fit
     if plot_name:
-        #plot the best fit
         plt.figure(figsize=(20, 12))
         plt.plot(x, y, label="Observed")
         for j in range(0, 3*int(best_fit), 3):
@@ -630,14 +636,14 @@ def prof_eval_stickel(profile, reg_param=5e-8, plot_name=None, ignore_threshold=
     logger.info("W50:                   {0} +/- {1}".format(W50, W50_e))
     logger.info("Weq:                   {0} +/- {1}".format(Weq, Weq_e))
     logger.info("Maxima:                {0}".format(maxima))
+    logger.info("Maxima error:          {0}".format(maxima_e))
 
     #plotting
+    print(plot_name)
     if plot_name:
         std_prof = np.array(profile) - noise_mean
         std_prof = std_prof/np.max(std_prof)
         plt.figure(figsize=(20, 12))
-        plt.plot(on_pulse_prof, label="Regularized profile")
-        plt.plot(std_prof, label="Original Profile")
         plt.title(plot_name.split("/")[-1], fontsize=22)
         plt.xticks(fontsize=18)
         plt.yticks(fontsize=18)
@@ -645,8 +651,10 @@ def prof_eval_stickel(profile, reg_param=5e-8, plot_name=None, ignore_threshold=
         plt.xlabel("Bins", fontsize=20)
         plt.ylabel("Intensity", fontsize=20)
         for i, mx in enumerate(maxima):
-            plt.axvline(x=(mx + maxima_e[i])/len(y), ls=":", lw=2, color="gray")
-            plt.axvline(x=(mx - maxima_e[i])/len(y), ls=":", lw=2, color="gray")
+            plt.axvline(x=(mx + maxima_e[i])/len(profile), ls=":", lw=2, color="gray")
+            plt.axvline(x=(mx - maxima_e[i])/len(profile), ls=":", lw=2, color="gray")
+        plt.plot(std_prof, label="Original Profile", color="black")
+        plt.plot(on_pulse_prof, label="Regularized profile", color="red")
         plt.legend(loc="upper right", prop={'size': 16})
         plt.savefig(plot_name)
 
@@ -696,10 +704,9 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
     noise_std, clipped = sigmaClip(y)
     y = y - np.nanmean(clipped)
     y = y/max(y)
-    print(noise_std)
 
     #fit gaussians
-    fit, _, popt, _ = fit_gaussian(y, max_N=6, chi_threshold=chi_threshold)
+    fit, _, popt, _ = fit_gaussian(y, max_N=6, chi_threshold=chi_threshold, min_comp_len=min_comp_len)
     fit = np.array(fit)
 
     #Find widths + error
@@ -734,8 +741,6 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
     if plot_name:
         x = np.linspace(0, 1, len(y))
         plt.figure(figsize=(30, 18))
-        plt.plot(x, fit, label="Gaussian Model")
-        plt.plot(x, y, label="Original Profile")
         for j in range(0, len(popt), 3):
             z = multi_gauss(x, *popt[j:j+3])
             plt.plot(x, z, "--", label="Gaussian Component {}".format(int((j+3)/3)))
@@ -748,6 +753,8 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
         for i, mx in enumerate(maxima):
             plt.axvline(x=(mx + maxima_e[i])/len(y), ls=":", lw=2, color="gray")
             plt.axvline(x=(mx - maxima_e[i])/len(y), ls=":", lw=2, color="gray")
+        plt.plot(x, y, label="Original Profile", color="black")
+        plt.plot(x, fit, label="Gaussian Model", color="red")
         plt.legend(loc="upper right", prop={'size': 16})
         plt.savefig(plot_name)
 
@@ -802,11 +809,11 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if args.gaussian:
-        prof_eval_gfit(args.profile, max_N=args.max_N, chi_threshold=args.chi_threshold, ignore_threshold=args.ignore_threshold,\
+        prof_eval_gfit(profile, max_N=args.max_N, chi_threshold=args.chi_threshold, ignore_threshold=args.ignore_threshold,\
                         plot_name=args.plot_name, min_comp_len=args.min_comp_len)
     elif args.stickel:
-        prof_eval_stickel(profile, reg_param=args.reg_param, plot_name=args.reg_param, ignore_threshold=args.ignore_threshold,\
+        prof_eval_stickel(profile, reg_param=args.reg_param, plot_name=args.plot_name, ignore_threshold=args.ignore_threshold,\
                         min_comp_len=args.min_comp_len)
     else:
-        logger.error("Please specify either a gaussian or regularizaion based fitting method")
+        logger.error("Please specify either a gaussian or regularization based fitting method")
         sys.exit(1)
