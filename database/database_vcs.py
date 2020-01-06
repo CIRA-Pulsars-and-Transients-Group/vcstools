@@ -5,7 +5,12 @@ import os, datetime, logging
 import sqlite3 as lite
 
 logger = logging.getLogger(__name__)
-DB_FILE = os.environ['CMD_VCS_DB_FILE']
+
+try:
+    DB_FILE = os.environ['CMD_VCS_DB_FILE']
+except KeyError:
+    logger.error("Environmental variable CMD_VCS_DB_FILE must be defined")
+    sys.exit(1)
 TIMEOUT=600
 
 def dict_factory(cursor, row):
@@ -74,7 +79,7 @@ def database_script_stop(rownum, errorcode):
         cur.execute("SELECT Ended FROM Commands WHERE Rownum=?", (rownum,))
         ended = cur.fetchone()[0]
         if ended is not None:
-            logging.warn("Overwriting existing completion time: %s" % ended)
+            logger.warn("Overwriting existing completion time: %s" % ended)
         cur.execute("UPDATE Commands SET Ended=?, Exit=? WHERE Rownum=?", (end_time, errorcode, rownum))
 
 
@@ -144,7 +149,7 @@ if __name__ == '__main__':
 
         if opts.recent is not None:
             query += ''' WHERE Started > "%s"''' % str(datetime.datetime.now() - relativedelta(hours=opts.recent))
-            logging.debug(query)
+            logger.debug(query)
         if opts.vcs_id:
             query += " WHERE trackvcs='" + str(opts.vcs_id) + "'"
 
