@@ -314,8 +314,10 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             #        submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" })
 
 
-
-            module_list=["mwa-voltage/master"]
+            
+            #module_list=["mwa-voltage/master"]
+            #removed the master version load because by default we load the python 3 version
+            module_list=[]
             body = []
             if vcs_database_id is not None:
                 body.append(database_vcs.add_database_function())
