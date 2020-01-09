@@ -99,7 +99,7 @@ def get_from_ascii(file_loc):
 
     Returns:
     --------
-    [profile, bin_num]: list
+    [profile, len(profile)]: list
         profile: list
             A list of floats containing the profile data
         len(profile): int
@@ -115,6 +115,45 @@ def get_from_ascii(file_loc):
         profile.append(float(thisline[3]))
 
     return [profile, len(profile)]
+
+def get_stokes_from_ascii(file_loc):
+    """
+    Retrieves the all stokes components from an ascii file
+
+    Parameters:
+    -----------
+    file_loc: string
+        The location of the ascii file
+
+    Returns:
+    --------
+    [I, Q, U, V, len(profile)]: list
+        I: list
+            Stokes I
+        Q: list
+            Stokes Q
+        U: list
+            Stokes U
+        V: list
+            Stokes V
+        len(profile): int
+            The number of bins in the profile
+    """
+    f = open(file_loc)
+    lines = iter(f.readlines())
+    next(lines) #skip first line
+    I=[]
+    Q=[]
+    U=[]
+    V=[]
+    for line in lines:
+        thisline=line.split()
+        I.append(float(thisline[3]))
+        Q.append(float(thisline[4]))
+        U.append(float(thisline[5]))
+        V.append(float(thisline[6]))
+
+    return [I, Q, U, V, len(I)]
 
 def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
     """
@@ -329,7 +368,6 @@ def find_maxima_err(model, noise_std, maxima):
         roots = list(spline.roots())
         roots.append(mx/len(model))
         roots = sorted(roots)
-        print(roots)
         index = roots.index(mx/len(model))
         mx_less = roots[index-1]
         mx_more = roots[index+1]
@@ -338,45 +376,89 @@ def find_maxima_err(model, noise_std, maxima):
 
     return maxima_err
 
-def find_widths(profile):
+def find_widths(profile, std=None):
     """
-    Attempts to find the W_10, W_50 and equivalent width of a profile by using a spline approach
+    Attempts to find the W_10, W_50 and equivalent width of a profile by using a spline approach.
+    W10 and W50 errors are estimated by using: sigma_x = sigma_y/(dy/dx)
+    Weq errors are estimated by finding the average difference in Weq when you add and subtract the std from the on-pulse profile
 
     Parameters:
     -----------
     profile: list
         The profile to find the widths of
+    std: float
+        OPTIONAL - The standard deviation of the noise. If unsupplied, will return Nones for uncertainty values. Default: None
 
     Returns:
     --------
-    W10: float
-        The W10 width of the profile measured in number of bins
-    W50: float
-        The W50 width of the profile measured in number of bins
-    Weq: float
-        The equivalent width of the profile measured in number of bins
+    [W10, W50, Weq, W10_e, W50_e, Weq_e]: list
+        W10: float
+            The W10 width of the profile measured in number of bins
+        W50: float
+            The W50 width of the profile measured in number of bins
+        Weq: float
+            The equivalent width of the profile measured in number of bins
+        W10_e: float
+            The uncertainty in W10
+        W50_e:
+            The uncertainty in W50
+        Weq_e:
+            The uncertainty in Weq
     """
     #perform spline operations
+    profile = np.array(profile)
     x = np.array(list(range(len(profile))))
-    spline0 = UnivariateSpline(x, profile, s=0)
-    spline10 = UnivariateSpline(x, profile - np.full(len(x), 0.1), s=0)
-    spline50 = UnivariateSpline(x, profile - np.full(len(x), 0.5), s=0)
+    amp_y = max(profile) - min(profile)
+    spline10 = UnivariateSpline(x, profile - np.full(len(x), 0.1*amp_y), s=0)
+    spline50 = UnivariateSpline(x, profile - np.full(len(x), 0.5*amp_y), s=0)
 
     #find Weq
-    integral = spline0.integral(0, len(profile)-1)
-    Weq = integral/max(profile)
+    _, off_pulse = sigmaClip(profile)
+    on_pulse=[]
+    for i, data in enumerate(off_pulse):
+        if np.isnan(data):
+            on_pulse.append(profile[i])
+    x = np.array(list(range(len(on_pulse))))
+    spline0 = UnivariateSpline(x, on_pulse, s=0)
+    integral = spline0.integral(0, len(on_pulse)-1)
+    Weq = integral/max(on_pulse)
 
     #find W10 and W50
     W10_roots = spline10.roots()
     W50_roots = spline50.roots()
-    W10=0
-    W50=0
-    for i in range(0, len(W10_roots), 2):
-        W10 += W10_roots[i+1] - W10_roots[i]
-    for i in range(0, len(W50_roots), 2):
-        W50 += W50_roots[i+1] - W50_roots[i]
+    W10 = W10_roots[-1] - W10_roots[0]
+    W50 = W50_roots[-1] - W50_roots[0]
 
-    return W10, W50, Weq
+    if std:
+        #W10 root errors
+        W10_roots_e = []
+        for root in W10_roots:
+            W10_roots_e.append(std/spline10.derivatives(root)[1]) #index 1 is the first order derivative
+        W10_e = abs(W10_roots_e[-1]) + abs(W10_roots_e[0]) + 0.5 #add 0.5 bins to error for time resolution
+
+        #W50 root errors
+        W50_roots_e = []
+        for root in W50_roots:
+            W50_roots_e.append(std/spline50.derivatives(root)[1])
+        W50_e = abs(W50_roots_e[-1]) + abs(W50_roots_e[0]) + 0.5
+
+        #Weq errors
+        on_pulse_less = (on_pulse - std).clip(min=0)
+        on_pulse_more = (on_pulse + std).clip(min=0)
+
+        spline0 = UnivariateSpline(x, on_pulse_less, s=0)
+        integral = spline0.integral(0, len(profile)-1)
+        Weq_less = integral/max(on_pulse - std)
+
+        spline0 = UnivariateSpline(x, on_pulse_more, s=0)
+        integral = spline0.integral(0, len(profile)-1)
+        Weq_more = integral/max(on_pulse + std)
+        Weq_e = (abs(Weq-Weq_less) + abs(Weq-Weq_more))/2
+
+    else:
+        W10_e = W50_e = Weq_e = None
+
+    return [W10, W50, Weq, W10_e, W50_e, Weq_e]
 
 def regularize_prof(profile, reg_param=5e-8):
     """
@@ -618,15 +700,7 @@ def prof_eval_stickel(profile, reg_param=5e-8, plot_name=None, ignore_threshold=
     logger.debug("Profile noise STD: {}".format(noise_std))
 
     #find widths:
-    W10, W50, Weq = find_widths(on_pulse_prof)
-    #Width uncertainties: Find the average difference between widths the profiles with noise std added and subtracted. Then add 0.5 bins
-    less_std_prof, _, _  = regularize_prof(np.array(profile) - noise_std, reg_param=reg_param)
-    W10_less, W50_less, Weq_less = find_widths(less_std_prof)
-    more_std_prof, _, _ = regularize_prof(np.array(profile) + noise_std, reg_param=reg_param)
-    W10_more, W50_more, Weq_more = find_widths(more_std_prof)
-    W10_e = (abs(W10-W10_less) + abs(W10-W10_more))/2 + 0.5
-    W50_e = (abs(W50-W50_less) + abs(W50-W50_more))/2 + 0.5
-    Weq_e = (abs(Weq-Weq_less) + abs(Weq-Weq_more))/2 + 0.5
+    W10, W50, Weq, W10_e, W50_e, Weq_e = find_widths(on_pulse_prof, noise_std)
 
     #find max, min, error
     _, maxima = find_minima_maxima(on_pulse_prof, ignore_threshold=ignore_threshold, min_comp_len=min_comp_len)
@@ -639,7 +713,6 @@ def prof_eval_stickel(profile, reg_param=5e-8, plot_name=None, ignore_threshold=
     logger.info("Maxima error:          {0}".format(maxima_e))
 
     #plotting
-    print(plot_name)
     if plot_name:
         std_prof = np.array(profile) - noise_mean
         std_prof = std_prof/np.max(std_prof)
@@ -710,12 +783,7 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
     fit = np.array(fit)
 
     #Find widths + error
-    W10, W50, Weq = find_widths(fit)
-    W10_less, W50_less, Weq_less = find_widths(fit - noise_std)
-    W10_more, W50_more, Weq_more = find_widths(fit + noise_std)
-    W10_e = (abs(W10-W10_less) + abs(W10-W10_more))/2 + 0.5
-    W50_e = (abs(W50-W50_less) + abs(W50-W50_more))/2 + 0.5
-    Weq_e = (abs(Weq-Weq_less) + abs(Weq-Weq_more))/2 + 0.5
+    W10, W50, Weq, W10_e, W50_e, Weq_e = find_widths(fit, noise_std)
 
     #find max, min, error
     for i, val in enumerate(clipped):
@@ -758,7 +826,7 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
         plt.legend(loc="upper right", prop={'size': 16})
         plt.savefig(plot_name)
 
-        return [W10, W10_e, W50, W50_e, Weq, Weq_e, maxima, maxima_e]
+    return [W10, W10_e, W50, W50_e, Weq, Weq_e, maxima, maxima_e]
 
 if __name__ == '__main__':
 
