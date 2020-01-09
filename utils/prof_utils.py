@@ -11,7 +11,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from astropy.time import Time
 from scipy.optimize import curve_fit
-from scipy.stats import chisquare
 
 from stickel import Stickel
 
@@ -575,7 +574,6 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
     max_y = max(y)
     len_y = len(y)
     y = np.array(y)/max_y
-    noise_mean = np.nanmean(np.array(clipped)/max_y)
     noise_std = np.nanstd(np.array(clipped)/max_y)
 
     #Find profile components
