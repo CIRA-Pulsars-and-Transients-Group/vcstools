@@ -16,6 +16,7 @@ from stickel import Stickel
 
 logger = logging.getLogger(__name__)
 
+#---------------------------------------------------------------
 def get_from_bestprof(file_loc):
     """
     Get info from a bestprof file
@@ -87,6 +88,7 @@ def get_from_bestprof(file_loc):
 
     return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
 
+#---------------------------------------------------------------
 def get_from_ascii(file_loc):
     """
     Retrieves the profile from an ascii file
@@ -115,6 +117,7 @@ def get_from_ascii(file_loc):
 
     return [profile, len(profile)]
 
+#---------------------------------------------------------------
 def get_stokes_from_ascii(file_loc):
     """
     Retrieves the all stokes components from an ascii file
@@ -154,6 +157,7 @@ def get_stokes_from_ascii(file_loc):
 
     return [I, Q, U, V, len(I)]
 
+#---------------------------------------------------------------
 def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
     """
     Sigma clipping operation:
@@ -209,6 +213,7 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
 
         oldstd = newstd
 
+#---------------------------------------------------------------
 def fill_clipped_prof(clipped_prof, search_scope=None, nan_type=0.):
     """
     Intended for use on noisy profiles. Fills nan values that are surrounded by non-nans to avoid discontinuities in the profile
@@ -246,6 +251,7 @@ def fill_clipped_prof(clipped_prof, search_scope=None, nan_type=0.):
 
     return clipped_prof
 
+#---------------------------------------------------------------
 def find_components(profile, min_comp_len=5):
     """
     Given a profile in which the noise is clipped to 0, finds the components that are clumped together.
@@ -287,6 +293,7 @@ def find_components(profile, min_comp_len=5):
 
     return component_dict, component_idx
 
+#---------------------------------------------------------------
 def find_minima_maxima(profile, ignore_threshold=0, min_comp_len=0):
     """
     Finds all minima and maxima of the input profile. Assumes that the profile has noise zero-clipped.
@@ -342,6 +349,7 @@ def find_minima_maxima(profile, ignore_threshold=0, min_comp_len=0):
 
     return minima, maxima
 
+#---------------------------------------------------------------
 def find_maxima_err(model, noise_std, maxima):
     """
     Finds the uncertainty in a maxima by using the noise_std to find the distance to the points on the model that intersect at maxima-noise_std
@@ -375,6 +383,7 @@ def find_maxima_err(model, noise_std, maxima):
 
     return maxima_err
 
+#---------------------------------------------------------------
 def find_widths(profile, std=None):
     """
     Attempts to find the W_10, W_50 and equivalent width of a profile by using a spline approach.
@@ -459,6 +468,7 @@ def find_widths(profile, std=None):
 
     return [W10, W50, Weq, W10_e, W50_e, Weq_e]
 
+#---------------------------------------------------------------
 def regularize_prof(profile, reg_param=5e-8):
     """
     Applies the following operations to a pulse profile:
@@ -522,6 +532,101 @@ def regularize_prof(profile, reg_param=5e-8):
 
     return on_pulse_prof, noise_mean, noise_std
 
+#---------------------------------------------------------------
+def analyse_pulse_prof(prof_path=None, prof_data=None, period=None):
+    """
+    Estimates the signal to noise ratio from a pulse profile. Returns are in list form. Will return more for verbose==True setting, explained below.
+    NOTE: user must supply EITHER a betprof path OR prof_data and period of the pulse profile.
+    Based on code oringally writted by Nick Swainston.
+
+    Parameters:
+    -----------
+    prof_path: string
+        OPTIONAL - The path of the bestprof file
+    prof_data: list
+        OPTIONAL - A list of floats that contains the pulse profile
+    period: float
+        OPTIONAL - The pulsar's period in ms
+    verbose: boolean
+        OPTIONAL - Determines whether to return more detailed information. Detailed below
+
+    Returns:
+    --------
+    sn: float
+        The estimated signal to noise ratio
+    u_sn: float
+        The estimated signal to noise ratio's its uncertainty
+    flags: list
+        VERBOSE - a list of flagged data points
+    w_equiv_bins: float
+        VERBOSE - the equivalent width of the profile measured in bins
+    u_w_equiv_bins: float
+        VERBOSE - the uncertaintiy in w_equiv_bins
+    w_equiv_ms: float
+        VERBOSE - the equivalent width of the profile measured in ms
+    u_w_equiv_ms: float
+        VERBOSE - the uncertainty in w_equiv_ms
+    scattered: boolean
+        VERBOSE - when true, the profile is highly scattered
+    """
+    if prof_path is None and (prof_data is None or period is None):
+        logger.warning("Insufficient information to attain SN estimate from profile. Returning Nones")
+        return None, None
+
+    if prof_data is None:
+        _, _, _, period, _, _, _, prof_data, nbins = get_from_bestprof(prof_path)
+        nbins = float(nbins)
+        period = float(period)
+    else:
+        nbins = len(prof_data)
+
+    #centre the profile around the max
+    shift = -int(np.argmax(prof_data))+int(nbins)//2
+    prof_data = np.roll(prof_data, shift)
+
+    #find std and check if profile is scattered
+    sigma, flags = sigmaClip(prof_data, alpha=3., tol=0.01, ntrials=100)
+    bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
+    scattered=False
+    if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
+        logger.warning("The profile is highly scattered. S/N estimate cannot be calculated")
+        scattered=True
+        #making a new profile with the only bin being the lowest point
+        prof_min_i = np.argmin(prof_data)
+        flags = []
+        for fi, _ in enumerate(prof_data):
+            if fi == prof_min_i:
+                flags.append(prof_data[fi])
+            else:
+                flags.append(np.nan)
+        flags = np.array(flags)
+        prof_data -= min(prof_data)
+    else:
+        prof_e = 500. #this is an approximation
+        non_pulse_bins = 0
+        #work out the above parameters
+        for i, data in enumerate(prof_data):
+            if not np.isnan(flags[i]):
+                non_pulse_bins += 1
+        sigma_e = sigma / np.sqrt(2 * non_pulse_bins - 2)
+        #now calc S/N
+        sn = max(prof_data)/sigma
+        sn_e = sn * np.sqrt(prof_e/max(prof_data)**2 + (sigma_e/sigma)**2)
+
+    if scattered==False:
+        W10, W10_e, W50, W50_e, Weq, Weq_e, maxima, maxima_e = prof_eval_gfit(prof_data)
+    else:
+        #Assuming width is equal to pulsar period because of the scattering
+        Weq = nbins
+        Weq_e = 0.5
+        W10 = W10_e = W50 = W50_e = sn = sn_e = maxima = maxima_e = None
+
+    prof_dict = {"sn":sn, "sn_e":sn_e, "weq":Weq, "weq_e":Weq_e, "w50":W50, "w50_e":W50_e "w10_e":W10_e,\
+                "period":period, "bins":nbins, "off_pulse":off_pulse, "scattered":scattered, "maxima":maxima,\
+                "maxima_e":maxima_e}
+    return prof_dict #[sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattered]
+
+#---------------------------------------------------------------
 def multi_gauss(x, *params):
     y = np.zeros_like(x)
     for i in range(0, len(params), 3):
@@ -531,6 +636,7 @@ def multi_gauss(x, *params):
         y = y + amp * np.exp( -((x - ctr)/wid)**2)
     return y
 
+#---------------------------------------------------------------
 def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=None):
     """
     Fits multiple gaussian components to a pulse profile and finds the best number to use for a fit.
@@ -650,9 +756,11 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
 
     return [fit, chisq, popt, pcov]
 
+#---------------------------------------------------------------
 def prof_eval_stickel(profile, reg_param=5e-8, plot_name=None, ignore_threshold=None, min_comp_len=None):
     """
-    Transforms a profile by removing noise and applying a regularization process and subsequently finds W10, W50, Weq and maxima
+    Transforms a profile by removing noise and applying a regularization process and subsequently finds W10, W50, Weq and maxima.
+    Typically, gaussian fitting is more reliable, but this is an option if you know what you're doing.
 
     Parameters:
     -----------
@@ -731,6 +839,7 @@ def prof_eval_stickel(profile, reg_param=5e-8, plot_name=None, ignore_threshold=
 
     return [W10, W10_e, W50, W50_e, Weq, Weq_e, maxima, maxima_e]
 
+#---------------------------------------------------------------
 def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, plot_name=None, min_comp_len=None):
     """
     Fits multiple gaussians to a profile and subsequently finds W10, W50, Weq and maxima
@@ -826,6 +935,7 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
 
     return [W10, W10_e, W50, W50_e, Weq, Weq_e, maxima, maxima_e]
 
+#---------------------------------------------------------------
 if __name__ == '__main__':
 
     loglevels = dict(DEBUG=logging.DEBUG,\
