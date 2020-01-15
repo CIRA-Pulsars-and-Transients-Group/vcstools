@@ -191,7 +191,16 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                                     beg=beg, t_int=t_int)
 
     #estimate S/N
-    sn, u_sn, _, w_equiv_bins, _, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
+    prof_dict = prof_utils.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
+    sn = prof_dict["sn"]
+    u_sn = prof_dict["sn_e"]
+    w_equiv_bins = prof_dict["weq"]
+    u_w_equiv_bins =  prof_dict["weq_e"]
+    w_equiv_ms = period/num_bins * w_equiv_bins
+    u_w_equiv_ms = period/num_bins * u_w_equiv_bins
+    scattering = prof_dict["wscat"]
+    scattering_error = prof_dict["wscat_e"]
+    scattered = prof_dict["scattered"]
 
     logger.info("Profile scattered? {0}".format(scattered))
     logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
@@ -223,15 +232,6 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
         obstype = 1
     else:
         obstype = 2
-
-    #calc scattering
-    scat_height = max(profile) / 2.71828
-    scat_bins = 0
-    for p in profile:
-        if p > scat_height:
-            scat_bins = scat_bins + 1
-    scattering = float(scat_bins + 1) * float(period) /1000. #in s
-    u_scattering = 1. * float(period) /1000. # assumes the uncertainty is one bin
 
     #calc sub-bands
     subbands = 1
