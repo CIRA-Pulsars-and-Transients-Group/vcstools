@@ -653,7 +653,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
 
 def write_output_source_files(output_data,
                               beam='analytic', min_power=0.3, cal_check=False,
-                              SN_est=False):
+                              SN_est=False, plot_est=False):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is true.
     """
@@ -695,7 +695,7 @@ def write_output_source_files(output_data,
                 output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}'.format(obsid,
                                   duration, enter, exit, max_power, oap))
                 if SN_est:
-                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(source, obsid)
+                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(source, obsid, plot_flux=plot_est)
                     if pulsar_sn is None:
                         output_file.write('   None    None')
                     else:
@@ -714,7 +714,7 @@ def write_output_source_files(output_data,
 
 def write_output_obs_files(output_data, obsid_meta,
                            beam='analytic', min_power=0.3,
-                           cal_check=False, SN_est=False):
+                           cal_check=False, SN_est=False, plot_est=False):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is false.
     """
@@ -759,7 +759,7 @@ def write_output_obs_files(output_data, obsid_meta,
                     beg = int(obsid) + 7
                     end = beg + int(obsid_meta[on][3])
                     pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid, beg=beg, end=end,\
-                      obs_metadata=obsid_meta[on], o_enter=enter, o_exit=exit)
+                      obs_metadata=obsid_meta[on], o_enter=enter, o_exit=exit, plot_flux=plot_est)
                     if pulsar_sn is None:
                         output_file.write('   None    None\n')
                     else:
@@ -800,11 +800,14 @@ if __name__ == "__main__":
     #observation options
     obargs = parser.add_argument_group('Observation ID options', 'The different options to control which observation IDs are used. Default is all observation IDs with voltages.')
     obargs.add_argument('--FITS_dir',type=str,help='Instead of searching all OBS IDs, only searchs for the obsids in the given directory. Does not check if the .fits files are within the directory. Default = /group/mwaops/vcs')
-    obargs.add_argument('-o','--obsid',type=str,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
+    obargs.add_argument('-o','--obsid',type=int,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
     obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
     obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
     obargs.add_argument('--sn_est',action='store_true',help='Make a expected signal to noise calculation using the flux densities from the ANTF pulsar catalogue and include them in the output file. Default: False.')
+    obargs.add_argument('--plot_est',action='store_true',help='If used, will output flux estimation plots while sn_est arg is true. Default: False.')
     args=parser.parse_args()
+
+
 
     if args.version:
         try:
@@ -908,9 +911,9 @@ if __name__ == "__main__":
         write_output_source_files(output_data,
                                   beam=args.beam, min_power=args.min_power,
                                   cal_check=args.cal_check,
-                                  SN_est=args.sn_est)
+                                  SN_est=args.sn_est, plot_est=args.plot_est)
     else:
         write_output_obs_files(output_data, obsid_meta,
                                beam=args.beam, min_power=args.min_power,
                                cal_check=args.cal_check,
-                               SN_est=args.sn_est)
+                               SN_est=args.sn_est, plot_est=args.plot_est)
