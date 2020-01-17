@@ -17,6 +17,16 @@ from stickel import Stickel
 logger = logging.getLogger(__name__)
 
 #---------------------------------------------------------------
+class LittleClipError(Exception):
+    '''Raise when not enough data is clipped'''
+    pass
+
+#---------------------------------------------------------------
+class LargeClipError(Exception):
+    '''Raise when too much data is clipped'''
+    pass
+
+#---------------------------------------------------------------
 def get_from_bestprof(file_loc):
     """
     Get info from a bestprof file
@@ -213,6 +223,35 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
         oldstd = newstd
 
 #---------------------------------------------------------------
+def check_clip(clipped_prof, toomuch=0.8, toolittle=0.):
+    """
+    Determines whether a clipped profile from sigmaClip() has been appropriately clipped by checking the number of nans.
+    Raises a LittleClipError or a LargeClipError if too little or toomuch of the data has been clipped respectively.
+
+    Parameters:
+    -----------
+    clipped_prof: list
+        The clipped profile from sigmaClip()
+    toomuch: float
+        OPTIONAL - The fraction of the clipped profile beyond which is considered overclipped. Default: 0.8
+    toolittle: float
+        OPTIOANL - The fraction of the clipped profile bleow which is considered underclipped. Default: 0.
+
+    Returns:
+    --------
+    None
+    """
+    num_nans = 0
+    for i in clipped_prof:
+        if np.isnan(i):
+            num_nans += 1
+    if num_nans == toolittle*len(clipped_prof):
+        raise LittleClipError("Not enough data has been clipped. Condsier trying a smaller alpha value when clipping.")
+    elif num_nans >= toomuch*len(clipped_prof):
+        raise LargeClipError("A large portion of the data has been clipped. Condsier trying a larger alpha value when clipping.")
+    return
+
+#---------------------------------------------------------------
 def fill_clipped_prof(clipped_prof, search_scope=None, nan_type=0.):
     """
     Intended for use on noisy profiles. Fills nan values that are surrounded by non-nans to avoid discontinuities in the profile
@@ -367,24 +406,59 @@ def find_maxima_err(model, noise_std, maxima):
     maxima_err: list
         A list with length equal to that of the maxima list containing an uncertainty value for each maximum point
     """
-    x = np.linspace(0, 1, len(model))
+    x = np.linspace(0, len(model)-1, len(model))
     maxima_err = []
     for i, mx in enumerate(maxima):
         if model[int(mx+0.5)] > noise_std:
             spline = UnivariateSpline(x, model - np.full(len(x), model[int(mx+0.5)]-noise_std), s=0)
             roots = list(spline.roots())
-            roots.append(mx/len(model))
+            roots.append(mx)
             roots = sorted(roots)
-            index = roots.index(mx/len(model))
+            index = roots.index(mx)
             mx_less = roots[index-1]
             mx_more = roots[index+1]
             err = (mx_more - mx_less)/2
-            maxima_err.append(err*len(model))
+            maxima_err.append(err)
         else:
             logger.warn("Maxima {} too small to calculate error. Returning None")
             maxima_err.append(None)
 
     return maxima_err
+
+#---------------------------------------------------------------
+def find_x_err_J(x, popt, pcov):
+    """
+    Finds the error in the horizontal position of a gaussian fit at the point x.
+    Uses the equation sigma_x = sigma_y/d2ydx2 where:
+    sigma_x = error in x
+    d2ydx2 = second derivative of the gaussian function at point x
+    sigma_y = J*C*J_T
+    J = Jacobian evalutated at point x
+    C = covariance matrix of gaussian fit
+    J_T = transposed jacobian
+
+    Parameters:
+    -----------
+    x: list
+        A list of points to evaluate the error at
+    popt: list
+        The parameters used to describe the gaussian fit
+    pcov: numpy.matrix
+        The covariance matrix corresponding to popt
+
+    Returns:
+    --------
+    x_err: list
+        The error evaluated at each point, x
+    """
+    x_err = []
+    for point in x:
+        J = jacobian(point, *popt)
+        d2dx2 = multi_gauss_d2dx2(point, *popt)
+        JC = np.matmul(J, pcov)
+        sigma_y = np.sqrt( np.matmul(JC, np.transpose(J)).item(0) )
+        x_err.append(sigma_y / abs(d2dx2))
+    return x_err
 
 #---------------------------------------------------------------
 def find_widths(profile, std=None, alpha=2):
@@ -418,7 +492,7 @@ def find_widths(profile, std=None, alpha=2):
     """
     #perform spline operations
     profile = np.array(profile)
-    x = np.array(list(range(len(profile))))
+    x = np.linspace(0, len(profile)-1, len(profile))
     amp_y = max(profile) - min(profile)
     spline10 = UnivariateSpline(x, profile - np.full(len(x), 0.1*amp_y), s=0)
     spline50 = UnivariateSpline(x, profile - np.full(len(x), 0.5*amp_y), s=0)
@@ -430,7 +504,7 @@ def find_widths(profile, std=None, alpha=2):
     for i, data in enumerate(off_pulse):
         if np.isnan(data):
             on_pulse.append(profile[i])
-    x = np.array(list(range(len(on_pulse))))
+    x = np.linspace(0, len(on_pulse)-1, len(on_pulse))
     spline0 = UnivariateSpline(x, on_pulse, s=0)
     integral = spline0.integral(0, len(on_pulse)-1)
     Weq = integral/max(on_pulse)
@@ -654,23 +728,68 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, alpha=2):
 def multi_gauss(x, *params):
     y = np.zeros_like(x)
     for i in range(0, len(params), 3):
-        ctr = params[i]
-        amp = params[i+1]
-        wid = params[i+2]
-        y = y + amp * np.exp( -((x - ctr)/wid)**2)
+        a = params[i]
+        b = params[i+1]
+        c = params[i+2]
+        y = y +  a * np.exp( -(((x-b)**2) / (2*c**2)) )
+    return y
+
+def multi_gauss_ddx(x, *params):
+    #derivative of gaussian
+    y = np.zeros_like(x)
+    for i in range(0, len(params), 3):
+        a = params[i]
+        b = params[i+1]
+        c = params[i+2]
+        y = y - a/c**2 * (x - b) * np.exp( -(((x-b)**2) / (2*c**2)) )
     return y
 
 def multi_gauss_d2dx2(x, *params):
     #double derivative of gaussian
     y = np.zeros_like(x)
     for i in range(0, len(params), 3):
-        b = params[i]
-        a = params[i+1]
+        a = params[i]
+        b = params[i+1]
         c = params[i+2]
-        y = y + a/c**2 * np.exp( -((x - b)**2 / 2*c) ) * (b**2 - 2*b*x - c + x**2)
+        y = y + (multi_gauss(x, a, b, c) / c**2) * (((x - b)**2)/(c**2) - 1)
     return y
+
+def jacobian(x, *params):
+    """
+    Evaluates the jacobian matrix of a gaussian fit at a single point, x
+
+    Parameters:
+    -----------
+    x: float
+        The point to evaluate
+    *params: list
+        A list containing three parameters per gaussian component in the order: Amp, Mean, Width
+
+    Returns:
+    --------
+    J: numpy.matrix
+        The Jacobian matrix
+    """
+    def dda(a, b, c, x):
+        return np.exp( -(((x-b)**2) / (2*c**2)) )
+    def ddb(a, b, c, x):
+        return (a/c**2) * (x - b) * np.exp( -(((x-b)**2) / (2*c**2)) )
+    def ddc(a, b, c, x):
+        return (a/c**3) * (x - b)**2 * np.exp( -(((x-b)**2) / (2*c**2)) )
+    J = []
+    for i in range(0, len(params), 3):
+        a = params[i]
+        b = params[i+1]
+        c = params[i+2]
+        mypars = [a, b, c, x]
+        J.append(dda(*mypars))
+        J.append(ddb(*mypars))
+        J.append(ddc(*mypars))
+    J = np.asmatrix(J)
+    return J
+
 #---------------------------------------------------------------
-def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=None, alpha=2):
+def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=2):
     """
     Fits multiple gaussian components to a pulse profile and finds the best number to use for a fit.
     Will always fit at least one gaussian per profile component.
@@ -690,11 +809,13 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
 
     Returns:
     --------
-    [fit, chisq, popt, pcov]: list
+    [fit, redchisq, best_bic, popt, pcov]: list
         fit: list
             The data containing the multi-component gaussian fit to the input profile
-        chisq: float
+        redchisq: float
             The reduced chi-sqaured value of the fit
+        best_bic: float
+            The bayesian information criterion for the fit
         popt: list
             A list of floats where each 3 numbers describes a single gaussain and are 'ctr', 'amp' and 'wid' respectively
         pcov: numpy matrix
@@ -709,6 +830,10 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
 
     #Take noise mean and normalize the profile
     _, clipped = sigmaClip(profile, alpha=alpha)
+
+    #Check the clipped profile
+
+
     y = np.array(profile) - np.nanmean(np.array(clipped))
     max_y = max(y)
     len_y = len(y)
@@ -716,6 +841,7 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
     noise_std = np.nanstd(np.array(clipped)/max_y)
     plt.plot(clipped)
     plt.savefig("test_flag.png")
+
     #Find profile components
     clipped = fill_clipped_prof(clipped, search_scope=int(len(profile)/100))
     on_pulse=[]
@@ -732,9 +858,9 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
     comp_width = []
     for i in range(max_N//len(comp_idx.keys())+1):
         for key in comp_idx.keys():
-            comp_centres.append(np.mean(comp_idx[key])/len_y)
-            comp_width.append((max(comp_idx[key])-min(comp_idx[key]))/(4*len_y))
-            comp_max.append(max(comp_dict[key])*0.8)
+            comp_centres.append(np.mean(comp_idx[key]))
+            comp_max.append(max(comp_dict[key])*0.5)
+            comp_width.append((max(comp_idx[key])-min(comp_idx[key])))
     centre_guess = iter(comp_centres)
     width_guess=iter(comp_width)
     max_guess=iter(comp_max)
@@ -743,42 +869,48 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
     logger.debug("Number of profile components: {0} ({1})".format(n_comps, comp_centres[:n_comps]))
 
     #Fit up to max_N gaussians to the profile. Evaluate profile fit using reduced chi squared
-    x=np.linspace(0, 1, len(y))
-    bounds=(0, 1)
+    x=np.linspace(0, len(y)-1, len(y))
+    bounds_arr=[[],[]]
     guess = []
     fit_dict = {}
     for i in range(n_comps-1):
-        guess+=[next(centre_guess), next(width_guess), next(max_guess)]
+        guess+=[next(max_guess), next(centre_guess), next(width_guess)]
     for num in range(n_comps-1, max_N):
-        fit_dict[str(num+1)]={"popt":[], "pcov":[], "fit":[], "chisq":[]}
-        guess += [next(centre_guess), next(width_guess), next(max_guess)]
-        popt, pcov = curve_fit(multi_gauss, x, y, bounds=bounds,  p0=guess, maxfev=100000)
+        bounds_arr[0].append(0)
+        bounds_arr[0].append(0)
+        bounds_arr[0].append(0)
+        bounds_arr[1].append(max(y))
+        bounds_arr[1].append(len(y))
+        bounds_arr[1].append(len(y))
+        bounds_tuple=(tuple(bounds_arr[0]), tuple(bounds_arr[1]))
+        guess += [next(max_guess), next(centre_guess), next(width_guess)]
+        popt, pcov = curve_fit(multi_gauss, x, y, bounds=bounds_tuple,  p0=guess, maxfev=100000)
         fit = multi_gauss(x, *popt)
         chisq = chsq(y, fit, noise_std)
+        #Bayesian information criterion for gaussian noise
+        k = 3*(num+1)
+        bic = chisq + k*np.log(len(y))
+        fit_dict[str(num+1)]={"popt":[], "pcov":[], "fit":[], "chisq":[], "bic":[]}
         fit_dict[str(num+1)]["popt"] = popt
         fit_dict[str(num+1)]["pcov"] = pcov
         fit_dict[str(num+1)]["fit"] = fit
-        fit_dict[str(num+1)]["chisq"] = chisq/(len(y)-1)
-        logger.debug("Reduced chi squared for {0} components: {1}".format(num+1, fit_dict[str(num+1)]["chisq"]))
-        k = 3*(num+1)
-        bic = chisq + k*np.log(len(y))
-        logger.info("Bayesian Information Criterion: {}".format(bic))
-        if abs(1-chisq/(len(y)-1)) < chi_threshold:
-            break
+        fit_dict[str(num+1)]["redchisq"] = chisq/(len(y)-1)
+        fit_dict[str(num+1)]["bic"] = bic
+        logger.debug("Reduced chi squared for               {0} components: {1}".format(num+1, fit_dict[str(num+1)]["redchisq"]))
+        logger.debug("Bayesian Information Criterion for    {0} components: {1}".format(num+1, fit_dict[str(num+1)]["bic"]))
 
-    #Find the best fit
-    best_chi_diff=np.inf
-    best_fit=None
-    for key in fit_dict.keys():
-        diff = abs(1 - fit_dict[key]["chisq"])
-        if diff < best_chi_diff:
-            best_chi_diff = diff
-            best_fit = key
-    logger.info("Fit {0} gaussians for a reduced chi sqaured of {1}".format(best_fit, fit_dict[best_fit]["chisq"]))
+    #Find the best fit according to the BIC
+    best_bic = np.inf
+    best_fit = None
+    for n_components in fit_dict.keys():
+        if fit_dict[n_components]["bic"] < best_bic:
+            best_bic = fit_dict[n_components]["bic"]
+            best_fit = n_components
+    logger.info("Fit {0} gaussians for a reduced chi sqaured of {1}".format(best_fit, fit_dict[best_fit]["redchisq"]))
     popt = fit_dict[best_fit]["popt"]
     pcov = fit_dict[best_fit]["pcov"]
     fit = fit_dict[best_fit]["fit"]
-    chisq = fit_dict[best_fit]["chisq"]
+    redchisq = fit_dict[best_fit]["redchisq"]
 
     #plot the best fit
     if plot_name:
@@ -791,7 +923,7 @@ def fit_gaussian(profile, max_N=6, chi_threshold=0, min_comp_len=0, plot_name=No
         plt.legend()
         plt.savefig(plot_name)
 
-    return [fit, chisq, popt, pcov]
+    return [fit, redchisq, best_bic, popt, pcov]
 
 #---------------------------------------------------------------
 def prof_eval_stickel(profile, reg_param=5e-8, plot_name=None, ignore_threshold=None, min_comp_len=None, alpha=2):
@@ -880,7 +1012,7 @@ def prof_eval_stickel(profile, reg_param=5e-8, plot_name=None, ignore_threshold=
     return fit_dict
 
 #---------------------------------------------------------------
-def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, plot_name=None, min_comp_len=None, alpha=2):
+def prof_eval_gfit(profile, max_N=6, ignore_threshold=0.02, plot_name=None, min_comp_len=None, alpha=2):
     """
     Fits multiple gaussians to a profile and subsequently finds W10, W50, Weq and maxima
 
@@ -922,11 +1054,13 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
     #Normalize, find the std
     y = np.array(profile)/max(profile)
     noise_std, clipped = sigmaClip(y, alpha=alpha)
+    check_clip(clipped, toomuch=0.8, toolittle=0.)
+
     y = y - np.nanmean(clipped)
     y = y/max(y)
 
     #fit gaussians
-    fit, chisq, popt, pcov = fit_gaussian(y, max_N=6, chi_threshold=chi_threshold, min_comp_len=min_comp_len, alpha=alpha)
+    fit, chisq, bic, popt, pcov = fit_gaussian(y, max_N=max_N, min_comp_len=min_comp_len, alpha=alpha)
     fit = np.array(fit)
     n_rows, _ = np.shape(pcov)
     num_gauss = n_rows/3
@@ -946,7 +1080,8 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
         else:
             on_pulse.append(fit[i])
     _, maxima = find_minima_maxima(on_pulse, ignore_threshold=max(on_pulse)/100, min_comp_len=int(len(profile)/100))
-    maxima_e = find_maxima_err(fit, noise_std, maxima)
+    maxima_e = find_x_err_J(np.array(maxima), popt, pcov)
+    maxima_e = np.array(maxima_e)
 
     logger.info("W10:                   {0} +/- {1}".format(W10, W10_e))
     logger.info("W50:                   {0} +/- {1}".format(W50, W50_e))
@@ -957,7 +1092,7 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
 
     #plotting
     if plot_name:
-        x = np.linspace(0, 1, len(y))
+        x = np.linspace(0, len(y)-1, len(y))
         plt.figure(figsize=(30, 18))
         for j in range(0, len(popt), 3):
             z = multi_gauss(x, *popt[j:j+3])
@@ -965,12 +1100,12 @@ def prof_eval_gfit(profile, max_N=6, chi_threshold=0.05, ignore_threshold=0.02, 
         plt.title(plot_name.split("/")[-1].split(".")[0], fontsize=22)
         plt.xticks(fontsize=18)
         plt.yticks(fontsize=18)
-        plt.xlim(0, 1)
+        plt.xlim(0, len(y))
         plt.xlabel("Bins", fontsize=20)
         plt.ylabel("Intensity", fontsize=20)
         for i, mx in enumerate(maxima):
-            plt.axvline(x=(mx + maxima_e[i])/len(y), ls=":", lw=2, color="gray")
-            plt.axvline(x=(mx - maxima_e[i])/len(y), ls=":", lw=2, color="gray")
+            plt.axvline(x=(mx + maxima_e[i]), ls=":", lw=2, color="gray")
+            plt.axvline(x=(mx - maxima_e[i]), ls=":", lw=2, color="gray")
         plt.plot(x, y, label="Original Profile", color="black")
         plt.plot(x, fit, label="Gaussian Model", color="red")
         plt.legend(loc="upper right", prop={'size': 16})
@@ -1009,8 +1144,6 @@ if __name__ == '__main__':
                         help="The value of the regularization parameter used for a regularization process dscribed by Stickel 2010")
 
     g_inputs = parser.add_argument_group("Gaussian Inputs")
-    g_inputs.add_argument("--chi_threshold", type=float, default=0.05,\
-                        help="The script will stop trying new fits when the reduced chi-squared is within this amount to unity")
     g_inputs.add_argument("--max_N", type=int, default=6, help="The maximum number of gaussian components to attempt to fit")
 
     other_inputs = parser.add_argument_group("Other Inputs")
@@ -1034,7 +1167,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if args.gaussian:
-        prof_eval_gfit(profile, max_N=args.max_N, chi_threshold=args.chi_threshold, ignore_threshold=args.ignore_threshold,\
+        prof_eval_gfit(profile, max_N=args.max_N, ignore_threshold=args.ignore_threshold,\
                         plot_name=args.plot_name, min_comp_len=args.min_comp_len, alpha=args.alpha)
     elif args.stickel:
         prof_eval_stickel(profile, reg_param=args.reg_param, plot_name=args.plot_name, ignore_threshold=args.ignore_threshold,\
