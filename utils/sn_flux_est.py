@@ -229,7 +229,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, verbose=Fals
     return [sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattered]
 
 #---------------------------------------------------------------
-def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, pow=0.3):
+def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, power=0.3):
     """
     Finds the normalised time that a pulsar is in the beam for a given obsid
     If pulsar is not in beam, returns None, None
@@ -274,7 +274,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, pow=0.
 
     #find the enter and exit times of pulsar normalized with the observing time
     names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar])
-    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec, min_pow=pow)
+    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec, min_pow=power)
     enter_obs_norm = beam_source_data[obsid][0][1]
     exit_obs_norm = beam_source_data[obsid][0][2]
 
