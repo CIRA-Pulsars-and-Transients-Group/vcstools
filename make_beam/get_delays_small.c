@@ -176,8 +176,8 @@ void get_delays(
         struct delays          delay_vals[],
         struct metafits_info  *mi,
         ComplexDouble       ****complex_weights_array,  // output: cmplx[npointing][ant][ch][pol]
-        ComplexDouble      *****invJi                   // output: invJi[npointing][ant][ch][pol][pol]
-        ) {
+        ComplexDouble      *****invJi )                 // output: invJi[npointing][ant][ch][pol][pol]
+{
     
     int row;     // For counting through nstation*npol rows in the metafits file
     int ant;     // Antenna number
