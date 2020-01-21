@@ -300,11 +300,10 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             # on Galaxy as the Ozstar workflow is different
             submit_slurm(check_batch, commands, batch_dir=batch_dir,
                          slurm_kwargs={"time": check_secs_to_run,
-                                       "nice": nice,
-                                       "mem-per-cpu": "10GB"},
+                                       "nice": nice},
                          vcstools_version=vcstools_version, submit=False,
                          outfile=batch_dir+check_batch+"_0.out",
-                         queue="zcpuq", export="NONE")
+                         queue="zcpuq", export="NONE", mem=10240)
 
             # Write out the tar batch file if in mode 15
             #if format == 16:
@@ -314,8 +313,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             #        submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" })
 
 
-
-            module_list=["mwa-voltage/master"]
+            #module_list=["mwa-voltage/master"]
+            #removed the master version load because by default we load the python 3 version
+            module_list=[]
             body = []
             if vcs_database_id is not None:
                 body.append(database_vcs.add_database_function())
@@ -344,7 +344,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
                                        "nice" : nice},
                          vcstools_version=vcstools_version,
                          outfile=batch_dir+voltdownload_batch+"_1.out",
-                         queue="copyq", export="NONE")
+                         queue="copyq", export="NONE", mem=5120)
 
             # submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
             continue
