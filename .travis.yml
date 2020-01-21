@@ -33,7 +33,8 @@ install:
     - git checkout 52457e9
     - python setup.py build --build-scripts=$HOME/build/
     - cd mwa_pb/data
-    - wget http://cerberus.mwa128t.org/mwa_full_embedded_element_pattern.h5
+    #if cerberus is down use the backup server
+    - wget -t 1 http://cerberus.mwa128t.org/mwa_full_embedded_element_pattern.h5; if [ $? == "4" ]; then wget http://orthrus.mwa128t.org/mwa_full_embedded_element_pattern.h5; fi
     - cd $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/
     - rm $HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb/scripts/*test.py
     #install mwa_client
