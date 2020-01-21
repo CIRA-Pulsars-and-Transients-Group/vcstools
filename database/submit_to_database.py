@@ -191,15 +191,15 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                                     beg=beg, t_int=t_int)
 
     #estimate S/N
-    prof_dict = prof_utils.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
+    prof_dict = prof_utils.analyse_pulse_prof(prof_data=profile, period=period)
     sn = prof_dict["sn"]
     u_sn = prof_dict["sn_e"]
-    w_equiv_bins = prof_dict["weq"]
-    u_w_equiv_bins =  prof_dict["weq_e"]
+    w_equiv_bins = prof_dict["Weq"]
+    u_w_equiv_bins =  prof_dict["Weq_e"]
     w_equiv_ms = period/num_bins * w_equiv_bins
     u_w_equiv_ms = period/num_bins * u_w_equiv_bins
-    scattering = prof_dict["wscat"]
-    scattering_error = prof_dict["wscat_e"]
+    scattering = prof_dict["Wscat"]*period/num_bins
+    u_scattering = prof_dict["Wscat_e"]*period/num_bins
     scattered = prof_dict["scattered"]
 
     logger.info("Profile scattered? {0}".format(scattered))
