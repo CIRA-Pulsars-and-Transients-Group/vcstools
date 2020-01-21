@@ -323,7 +323,7 @@ def find_components(profile, min_comp_len=5):
 
     del_comps = []
     for comp_key in component_dict.keys():
-        if len(component_dict[comp_key]) < min_comp_len:
+        if len(component_dict[comp_key]) < min_comp_len or max(component_dict[comp_key]) < 0.:
             del_comps.append(comp_key)
     for i in del_comps:
         del component_dict[i]
@@ -387,46 +387,47 @@ def find_minima_maxima(profile, ignore_threshold=0, min_comp_len=0):
 
     return minima, maxima
 
-#---------------------------------------------------------------
-def find_maxima_err(model, noise_std, maxima):
+def find_minima_maxima_gauss(popt, pcov, x_length):
     """
-    Finds the uncertainty in a maxima by using the noise_std to find the distance to the points on the model that intersect at maxima-noise_std
+    Finds all roots of a gaussian function
 
     Parameters:
     -----------
-    model: list
-        The model to test
-    noise_std: float
-        The standard deviation of the noise from the profile used to make the model
-    maxima: list
-        The location of the maximum points in bin numbers
+    popt: list
+        A list of length 3N where N is the number of gaussians. This list contains the parameters amp, mean, centre respectively
+    x_length: int
+        The length of the list used to fit the gaussian
 
     Returns:
     --------
-    maxima_err: list
-        A list with length equal to that of the maxima list containing an uncertainty value for each maximum point
+    minima: list
+        A list of the minimum points of the fit
+    maxima: list
+        A list of the maximum points of the fit
     """
-    x = np.linspace(0, len(model)-1, len(model))
-    maxima_err = []
-    for i, mx in enumerate(maxima):
-        if model[int(mx+0.5)] > noise_std:
-            spline = UnivariateSpline(x, model - np.full(len(x), model[int(mx+0.5)]-noise_std), s=0)
-            roots = list(spline.roots())
-            roots.append(mx)
-            roots = sorted(roots)
-            index = roots.index(mx)
-            mx_less = roots[index-1]
-            mx_more = roots[index+1]
-            err = (mx_more - mx_less)/2
-            maxima_err.append(err)
-        else:
-            logger.warn("Maxima {} too small to calculate error. Returning None")
-            maxima_err.append(None)
+    #Create the derivative list and spline it to find roots
+    x = np.linspace(0, x_length-1, x_length)
+    dy = multi_gauss_ddx(x, *popt)
+    spline_dy = UnivariateSpline(x, dy, s=0)
+    roots = spline_dy.roots()
 
-    return maxima_err
+    #Find which are max and min
+    maxima = []
+    minima = []
+    for root in roots:
+        idx = int(root + 0.5)
+        if dy[idx-1] > dy[idx]:
+            maxima.append(root)
+        else:
+            minima.append(root)
+
+    minima_e = find_x_err(minima, popt, pcov)
+    maxima_e = find_x_err(maxima, popt, pcov)
+
+    return minima, maxima, minima_e, maxima_e
 
 #---------------------------------------------------------------
-def find_x_err_J(x, popt, pcov):
+def find_x_err(x, popt, pcov):
     """
     Finds the error in the horizontal position of a gaussian fit at the point x.
     Uses the equation sigma_x = sigma_y/d2ydx2 where:
@@ -452,8 +453,8 @@ def find_x_err_J(x, popt, pcov):
         The error evaluated at each point, x
     """
     x_err = []
-    for point in x:
-        J = jacobian(point, *popt)
+    for i, point in enumerate(x):
+        J = jacobian_slope(point, *popt)
         d2dx2 = multi_gauss_d2dx2(point, *popt)
         JC = np.matmul(J, pcov)
         sigma_y = np.sqrt( np.matmul(JC, np.transpose(J)).item(0) )
@@ -461,7 +462,7 @@ def find_x_err_J(x, popt, pcov):
     return x_err
 
 #---------------------------------------------------------------
-def find_widths(profile, std=None, alpha=2):
+def find_widths(popt, pcov, fit):
     """
     Attempts to find the W_10, W_50 and equivalent width of a profile by using a spline approach.
     W10 and W50 errors are estimated by using: sigma_x = sigma_y/(dy/dx)
@@ -490,15 +491,23 @@ def find_widths(profile, std=None, alpha=2):
         Weq_e:
             The uncertainty in Weq
     """
+    def error_in_x_pos(pcov, popt, x):
+        J = jacobian_slope(x, *popt)
+        JC = np.matmul(J, pcov)
+        sigma_y = np.sqrt(np.matmul(JC, np.transpose(J)).item(0))
+        ddx = multi_gauss_ddx(x, *popt)
+        return sigma_y/ddx
+
     #perform spline operations
-    profile = np.array(profile)
-    x = np.linspace(0, len(profile)-1, len(profile))
+    profile = np.array(fit)
+    x = np.linspace(0, len(fit)-1, len(fit))
     amp_y = max(profile) - min(profile)
-    spline10 = UnivariateSpline(x, profile - np.full(len(x), 0.1*amp_y), s=0)
-    spline50 = UnivariateSpline(x, profile - np.full(len(x), 0.5*amp_y), s=0)
-    spline_s = UnivariateSpline(x, profile - np.full(len(x), 1/np.exp(1)*amp_y), s=0)
+    spline10 = UnivariateSpline(x, fit - np.full(len(x), 0.1*amp_y), s=0)
+    spline50 = UnivariateSpline(x, fit - np.full(len(x), 0.5*amp_y), s=0)
+    spline_s = UnivariateSpline(x, fit - np.full(len(x), 1/np.exp(1)*amp_y), s=0)
 
     #find Weq
+    """
     _, off_pulse = sigmaClip(profile, alpha=alpha)
     on_pulse=[]
     for i, data in enumerate(off_pulse):
@@ -508,6 +517,8 @@ def find_widths(profile, std=None, alpha=2):
     spline0 = UnivariateSpline(x, on_pulse, s=0)
     integral = spline0.integral(0, len(on_pulse)-1)
     Weq = integral/max(on_pulse)
+    """
+    Weq = integral_multi_gauss(*popt)/max(fit)
 
     #find W10, W50 and Wscat
     W10_roots = spline10.roots()
@@ -517,106 +528,28 @@ def find_widths(profile, std=None, alpha=2):
     W50 = W50_roots[-1] - W50_roots[0]
     Wscat = Wscat_roots[-1] - Wscat_roots[0]
 
-    if std:
-        #W10 root errors
-        W10_roots_e = []
-        for root in W10_roots:
-            W10_roots_e.append(std/spline10.derivatives(root)[1]) #index 1 is the first order derivative
-        W10_e = abs(W10_roots_e[-1]) + abs(W10_roots_e[0]) + 0.5 #add 0.5 bins to error for time resolution
+    #W10 root errors
+    err_10_1 = error_in_x_pos(pcov, popt, W10_roots[0])
+    err_10_2 = error_in_x_pos(pcov, popt, W10_roots[-1])
+    W10_e = np.sqrt(err_10_1**2 + err_10_2**2)
 
-        #W50 root errors
-        W50_roots_e = []
-        for root in W50_roots:
-            W50_roots_e.append(std/spline50.derivatives(root)[1])
-        W50_e = abs(W50_roots_e[-1]) + abs(W50_roots_e[0]) + 0.5
+    #W50 root errors
+    err_50_1 = error_in_x_pos(pcov, popt, W50_roots[0])
+    err_50_2 = error_in_x_pos(pcov, popt, W50_roots[-1])
+    W50_e = np.sqrt(err_50_1**2 + err_50_2**2)
 
-        #Wscat root errors
-        Wscat_roots_e = []
-        for root in Wscat_roots:
-            Wscat_roots_e.append(std/spline_s.derivatives(root)[1])
-        Wscat_e = abs(Wscat_roots_e[-1]) + abs(Wscat_roots_e[0]) + 0.5
+    #Wscat root errors
+    err_scat_1 = error_in_x_pos(pcov, popt, Wscat_roots[0])
+    err_scat_2 = error_in_x_pos(pcov, popt, Wscat_roots[-1])
+    Wscat_e = np.sqrt(err_scat_1**2 + err_scat_2**2)
 
-        #Weq errors
-        on_pulse_less = (on_pulse - std).clip(min=0)
-        on_pulse_more = (on_pulse + std).clip(min=0)
-
-        spline0 = UnivariateSpline(x, on_pulse_less, s=0)
-        integral = spline0.integral(0, len(profile)-1)
-        Weq_less = integral/max(on_pulse - std)
-
-        spline0 = UnivariateSpline(x, on_pulse_more, s=0)
-        integral = spline0.integral(0, len(profile)-1)
-        Weq_more = integral/max(on_pulse + std)
-        Weq_e = (abs(Weq-Weq_less) + abs(Weq-Weq_more))/2
-
-    else:
-        W10_e = W50_e = Weq_e = Wscat_e = None
+    #Weq errors
+    J = jacobian_weq(list(fit).index(max(fit)), max(fit), *popt)
+    print("Jacobian: {}".format(J))
+    JC = np.matmul(J, pcov)
+    Weq_e = np.sqrt(np.matmul(JC, np.transpose(J)).item(0))
 
     return [W10, W50, Weq, W10_e, Wscat, Wscat_e, W50_e, Weq_e]
-
-#---------------------------------------------------------------
-def regularize_prof(profile, reg_param=5e-8, alpha=2):
-    """
-    Applies the following operations to a pulse profile:
-    1) Sigma Clip
-    2) Find the on-pulse bins from Sigma Clip
-    3) Fill unnecessary nans from the clipping process
-    4) Apply Stickel 2010 regularization
-    5) Normalize the profile
-    6) Set the off-pulse to zero
-
-    Parameters:
-    -----------
-    profile: list
-        The pulse profile
-    reg_param: float
-        OPTIONAL - the regularization parameter used for smoothing the profile. Default:5e-8
-
-    Returns:
-    --------
-    on_pulse_prof: list
-        The pulse profile after the above operations
-    noise_mean: float
-        The mean of the profile noise
-    """
-    #clip the profile to find the on-pulse
-    noise_std, clipped_prof = sigmaClip(profile, alpha=alpha)
-
-    #Some noisy profiles have nans in the middle of the actual pulse... fix:
-    for i, val in enumerate(clipped_prof):
-        if np.isnan(val):
-            clipped_prof[i]=0.
-
-    clipped_prof = fill_clipped_prof(clipped_prof)
-
-    #Reverse the clipped profile to attain the on-pulse
-    on_pulse_prof = []
-    on_pulse_bins = []
-    for i, val in enumerate(clipped_prof):
-        if val==0.:
-            on_pulse_prof.append(profile[i])
-            on_pulse_bins.append(i)
-        else:
-            on_pulse_prof.append(0)
-
-    #regularization with Stickel - smoothing
-    x = np.linspace(0,len(profile)-1, len(profile), dtype=int)
-    y = np.array(on_pulse_prof)
-    data = np.column_stack((x, y))
-    stkl = Stickel(data)
-    stkl.smooth_y(reg_param)
-    on_pulse_prof = stkl.yhat
-
-    #subract noise mean and normalize profile
-    noise_mean = np.nanmean(clipped_prof)
-    on_pulse_prof = np.array(on_pulse_prof) - noise_mean
-    on_pulse_prof = on_pulse_prof/np.max(on_pulse_prof)
-    #reset noise to 0
-    for i, val in enumerate(on_pulse_prof):
-        if val<0:
-            on_pulse_prof[i]=0
-
-    return on_pulse_prof, noise_mean, noise_std
 
 #---------------------------------------------------------------
 def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, alpha=2):
@@ -672,6 +605,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, alpha=2):
 
     #find std and check if profile is scattered
     sigma, flags = sigmaClip(prof_data, tol=0.01, ntrials=100, alpha=alpha)
+    check_clip(flags)
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
     scattered=False
     if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
@@ -712,7 +646,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, alpha=2):
         maxima = prof_dict["maxima"]
         maxima_e = prof_dict["maxima_e"]
         chisq = prof_dict["redchisq"]
-        num_gaus = prof_dict["num_gauss"]
+        num_gauss = prof_dict["num_gauss"]
     else:
         #Assuming width is equal to pulsar period because of the scattering
         Weq = nbins
@@ -720,11 +654,20 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, alpha=2):
         W10 = W10_e = W50 = W50_e = Wscat = Wscat_e = sn = sn_e = maxima = maxima_e = chisq = num_gauss = None
 
     prof_dict = {"sn":sn, "sn_e":sn_e, "Weq":Weq, "Weq_e":Weq_e, "W50":W50, "W50_e":W50_e, "W10_e":W10_e,\
-                "Wscat":Wscat, "Wscat_e":Wscat_e, "period":period, "bins":nbins, "off_pulse":off_pulse,\
+                "Wscat":Wscat, "Wscat_e":Wscat_e, "period":period, "bins":nbins, "off_pulse":flags,\
                 "scattered":scattered, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq, "num_gauss":num_gauss}
     return prof_dict
 
 #---------------------------------------------------------------
+def integral_multi_gauss(*params):
+    y=0
+    for i in range(0, len(params), 3):
+        a = params[i]
+        b = params[i+1]
+        c = params[i+2]
+        y = y + a*c*np.sqrt(2*np.pi)
+    return y
+
 def multi_gauss(x, *params):
     y = np.zeros_like(x)
     for i in range(0, len(params), 3):
@@ -754,9 +697,67 @@ def multi_gauss_d2dx2(x, *params):
         y = y + (multi_gauss(x, a, b, c) / c**2) * (((x - b)**2)/(c**2) - 1)
     return y
 
-def jacobian(x, *params):
+def partial_gauss_dda(x, a, b, c):
+        return np.exp((-(b - x)**2)/(2*c**2))
+def partial_gauss_ddb(x, a, b, c):
+        return a*(x - b) * np.exp((-(b - x)**2)/(2*c**2))/c**2
+def partial_gauss_ddc(x, a, b, c):
+        return a*(x - b)**2 * np.exp((-(b - x)**2)/(2*c**2))/c**3
+
+def jacobian_weq(x, peak, *params):
     """
-    Evaluates the jacobian matrix of a gaussian fit at a single point, x
+    Evaluates the Jacobian matrix of a gaussian integral divided by a peak position for
+    the equivalent width calculation.
+    W = equivalent width
+    f = gaussian integral
+
+    Parameters:
+    -----------
+    *params: list
+        A list containing three parameters per gaussian component in the order: Amp, Mean, Width
+
+    Returns:
+    --------
+    J: numpy.matrix
+        The Jacobian matrix
+    """
+    def f(a, b, c):
+        return a * c * np.sqrt(2 * np.pi)
+    def W(peak, a, b, c):
+        return f(a, b, c)/peak
+    def dfda(a, b, c):
+        return c * np.sqrt(2 * np.pi)
+    def dfdc(a, b, c):
+        return a * np.sqrt(2*np.pi)
+    def dwdf(peak, a, b, c):
+        return W(peak, a, b, c)/peak
+    def dwdpeak(peak, a, b, c):
+        return -W(peak, a, b, c)/peak
+    def dwda(x, peak, a, b, c):
+        print("dwda : {0}, {1}, {2}, {3}".format(dwdf(peak, a, b, c), dfda(a, b, c),\
+               dwdpeak(peak, a, b, c), partial_gauss_dda(x, a, b, c)))
+        return dwdf(peak, a, b, c) * dfda(a, b, c) +\
+               dwdpeak(peak, a, b, c) * partial_gauss_dda(x, a, b, c)
+    def dwdc(x, peak, a, b, c):
+        return dwdf(peak, a, b, c) * dfdc(a, b, c) +\
+               dwdpeak(peak, a, b, c) * partial_gauss_ddc(x, a, b, c)
+
+    J = []
+    for i in range(0, len(params), 3):
+        a = params[i]
+        b = params[i+1]
+        c = params[i+2]
+        mypars = [x, peak, a, b, c]
+        J.append(dwda(*mypars))
+        J.append(0)
+        J.append(dwdc(*mypars))
+    J = np.asmatrix(J)
+    return J
+
+#---------------------------------------------------------------
+def jacobian_slope(x, *params):
+    """
+    Evaluates the Jacobian matrix of a gaussian slope at a single point, x
 
     Parameters:
     -----------
@@ -771,11 +772,11 @@ def jacobian(x, *params):
         The Jacobian matrix
     """
     def dda(a, b, c, x):
-        return np.exp( -(((x-b)**2) / (2*c**2)) )
+        return -multi_gauss(x, a, b, c) * (x - b)/(c**2)/a
     def ddb(a, b, c, x):
-        return (a/c**2) * (x - b) * np.exp( -(((x-b)**2) / (2*c**2)) )
+        return multi_gauss(x, a, b, c) * (1 - (x - b)**2/(c**2))/c**2
     def ddc(a, b, c, x):
-        return (a/c**3) * (x - b)**2 * np.exp( -(((x-b)**2) / (2*c**2)) )
+        return multi_gauss(x, a, b, c) * (x - b)/(c**3) * (2 - (x-b)**2/(c**2))
     J = []
     for i in range(0, len(params), 3):
         a = params[i]
@@ -832,7 +833,7 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=2):
     _, clipped = sigmaClip(profile, alpha=alpha)
 
     #Check the clipped profile
-
+    check_clip(clipped)
 
     y = np.array(profile) - np.nanmean(np.array(clipped))
     max_y = max(y)
@@ -841,6 +842,7 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=2):
     noise_std = np.nanstd(np.array(clipped)/max_y)
     plt.plot(clipped)
     plt.savefig("test_flag.png")
+    plt.close()
 
     #Find profile components
     clipped = fill_clipped_prof(clipped, search_scope=int(len(profile)/100))
@@ -873,9 +875,10 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=2):
     bounds_arr=[[],[]]
     guess = []
     fit_dict = {}
-    for i in range(n_comps-1):
-        guess+=[next(max_guess), next(centre_guess), next(width_guess)]
+    #for i in range(n_comps-1):
+    #    guess+=[next(max_guess), next(centre_guess), next(width_guess)]
     for num in range(n_comps-1, max_N):
+        guess += [next(max_guess), next(centre_guess), next(width_guess)]
         bounds_arr[0].append(0)
         bounds_arr[0].append(0)
         bounds_arr[0].append(0)
@@ -883,7 +886,6 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=2):
         bounds_arr[1].append(len(y))
         bounds_arr[1].append(len(y))
         bounds_tuple=(tuple(bounds_arr[0]), tuple(bounds_arr[1]))
-        guess += [next(max_guess), next(centre_guess), next(width_guess)]
         popt, pcov = curve_fit(multi_gauss, x, y, bounds=bounds_tuple,  p0=guess, maxfev=100000)
         fit = multi_gauss(x, *popt)
         chisq = chsq(y, fit, noise_std)
@@ -922,97 +924,12 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=2):
         plt.plot(x, fit, label="Model")
         plt.legend()
         plt.savefig(plot_name)
+        plt.close()
 
     return [fit, redchisq, best_bic, popt, pcov]
 
 #---------------------------------------------------------------
-def prof_eval_stickel(profile, reg_param=5e-8, plot_name=None, ignore_threshold=None, min_comp_len=None, alpha=2):
-    """
-    Transforms a profile by removing noise and applying a regularization process and subsequently finds W10, W50, Weq and maxima.
-    Typically, gaussian fitting is more reliable, but this is an option if you know what you're doing.
-
-    Parameters:
-    -----------
-    profile: list
-        The pulse profile to evaluate
-    reg_param: float
-        OPTIONAL - the regularization parameter used for smoothing the profile. Default:5e-8
-    plot_name: string
-        OPTIONAL - The name of the plot to output. If None, will not plot anything. Default: None
-    min_comp_len: float
-        OPTIONAL - Minimum length of a component to be considered real. Measured in bins. If none, will use 1% of total profile lengths. Default: None
-    ignore_threshold: float
-        OPTIONAL -  Maxima with values below this number will be ignored. Default: 0
-
-    Returns:
-    --------
-    [W10, W10_e, W50, W50_e, Weq, Weq_e, maxima, maxima_e]: list
-        W10: float
-            The W10 width of the profile measured in number of bins
-        W10_e: float
-            The uncertainty in the W10
-        W50: float
-            The W50 width of the profile measured in number of bins
-        W50_e: float
-            The uncertainty in the W50
-        Weq: float
-            The equivalent width of the profile measured in number of bins
-        Weq_e: float
-            The uncertainty in the equivalent width
-        maxima: list
-            A list of floats corresponding to the bin location of any profile maxima
-        maxima_e: list
-            A list of floats, each correspinding to the error of the maxima of the same index. Measured in bins
-    """
-    #initialize minimum component length
-    if min_comp_len is None:
-        min_comp_len = int(len(profile)/100)
-
-    #regularize the profile
-    profile = np.array(profile)/max(profile) #for meaningful noise mean and std prints
-    on_pulse_prof, noise_mean, noise_std = regularize_prof(profile, reg_param=reg_param, alpha=alpha)
-    logger.debug("Profile noise mean: {}".format(noise_mean))
-    logger.debug("Profile noise STD: {}".format(noise_std))
-
-    #find widths:
-    W10, W50, Weq, W10_e, Wscat, Wscat_e, W50_e, Weq_e = find_widths(on_pulse_prof, noise_std, alpha=alpha)
-
-    #find max, min, error
-    _, maxima = find_minima_maxima(on_pulse_prof, ignore_threshold=ignore_threshold, min_comp_len=min_comp_len)
-    maxima_e = find_maxima_err(on_pulse_prof, noise_std, maxima)
-
-    logger.info("W10:                   {0} +/- {1}".format(W10, W10_e))
-    logger.info("W50:                   {0} +/- {1}".format(W50, W50_e))
-    logger.info("Wscat:                 {0} +/- {1}".format(Wscat, Wscat_e))
-    logger.info("Weq:                   {0} +/- {1}".format(Weq, Weq_e))
-    logger.info("Maxima:                {0}".format(maxima))
-    logger.info("Maxima error:          {0}".format(maxima_e))
-
-    #plotting
-    if plot_name:
-        std_prof = np.array(profile) - noise_mean
-        std_prof = std_prof/np.max(std_prof)
-        plt.figure(figsize=(20, 12))
-        plt.title(plot_name.split("/")[-1], fontsize=22)
-        plt.xticks(fontsize=18)
-        plt.yticks(fontsize=18)
-        plt.xlim(0, len(std_prof))
-        plt.xlabel("Bins", fontsize=20)
-        plt.ylabel("Intensity", fontsize=20)
-        for i, mx in enumerate(maxima):
-            plt.axvline(x=(mx + maxima_e[i])/len(profile), ls=":", lw=2, color="gray")
-            plt.axvline(x=(mx - maxima_e[i])/len(profile), ls=":", lw=2, color="gray")
-        plt.plot(std_prof, label="Original Profile", color="black")
-        plt.plot(on_pulse_prof, label="Regularized profile", color="red")
-        plt.legend(loc="upper right", prop={'size': 16})
-        plt.savefig(plot_name)
-
-    fit_dict = {"W10":W10, "W10_e":W10_e, "W50":W50, "W50_e":W50_e, "Wscat":Wscat, "Wscat_e":Wscat_e,
-                "Weq":Weq, "Weq_e":Weq_e, "maxima":maxima, "maxima_e":maxima_e}
-    return fit_dict
-
-#---------------------------------------------------------------
-def prof_eval_gfit(profile, max_N=6, ignore_threshold=0.02, plot_name=None, min_comp_len=None, alpha=2):
+def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, plot_name=None, min_comp_len=None, alpha=2):
     """
     Fits multiple gaussians to a profile and subsequently finds W10, W50, Weq and maxima
 
@@ -1025,9 +942,9 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=0.02, plot_name=None, min_
     plot_name: string
         OPTIONAL - If not none, will make a plot of the best fit with this name. Default: None
     ignore_threshold: float
-        OPTIONAL -  Maxima with values below this number will be ignored. Default: 0.02
+        OPTIONAL -  Maxima with values below this number will be ignored. If none, will use 3*noise. Default: None
     min_comp_len: float
-        OPTIONAL - Minimum length of a component to be considered real. Measured in bins. If none, will use 1% of total profile lengths. Default: None
+        OPTIONAL - Minimum length of a component to be considered real. Measured in bins. If none, will use 1% of total profile lengths + 2. Default: None
 
     Returns:
     --------
@@ -1047,14 +964,19 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=0.02, plot_name=None, min_
         maxima_e: list
             A list of floats, each correspinding to the error of the maxima of the same index. Measured in bins
     """
-    #initialize minimum component length
+    #initialize minimum component length and ignore threshold
     if min_comp_len is None:
-        min_comp_len = int(len(profile)/100)
+        min_comp_len = int(len(profile)/100 + 0.5) + 2
+    if min_comp_len < 5:
+        min_comp_len = 5
 
     #Normalize, find the std
     y = np.array(profile)/max(profile)
     noise_std, clipped = sigmaClip(y, alpha=alpha)
     check_clip(clipped, toomuch=0.8, toolittle=0.)
+
+    if ignore_threshold is None:
+        ignore_threshold = 3 * noise_std
 
     y = y - np.nanmean(clipped)
     y = y/max(y)
@@ -1066,7 +988,7 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=0.02, plot_name=None, min_
     num_gauss = n_rows/3
 
     #Find widths + error
-    W10, W50, Weq, W10_e, Wscat, Wscat_e, W50_e, Weq_e = find_widths(fit, noise_std, alpha=alpha)
+    W10, W50, Weq, W10_e, Wscat, Wscat_e, W50_e, Weq_e = find_widths(popt, pcov, fit)
 
     #find max, min, error
     for i, val in enumerate(clipped):
@@ -1079,9 +1001,8 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=0.02, plot_name=None, min_
             on_pulse.append(0)
         else:
             on_pulse.append(fit[i])
-    _, maxima = find_minima_maxima(on_pulse, ignore_threshold=max(on_pulse)/100, min_comp_len=int(len(profile)/100))
-    maxima_e = find_x_err_J(np.array(maxima), popt, pcov)
-    maxima_e = np.array(maxima_e)
+
+    _, maxima, _, maxima_e = find_minima_maxima_gauss(popt, pcov, len(fit))
 
     logger.info("W10:                   {0} +/- {1}".format(W10, W10_e))
     logger.info("W50:                   {0} +/- {1}".format(W50, W50_e))
@@ -1110,7 +1031,7 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=0.02, plot_name=None, min_
         plt.plot(x, fit, label="Gaussian Model", color="red")
         plt.legend(loc="upper right", prop={'size': 16})
         plt.savefig(plot_name)
-
+        plt.close()
     fit_dict = {"W10":W10, "W10_e":W10_e, "W50":W50, "W50_e":W50_e, "Wscat":Wscat, "Wscat_e":Wscat_e,\
                 "Weq":Weq, "Weq_e":Weq_e, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq,\
                 "num_gauss":num_gauss}
