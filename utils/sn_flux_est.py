@@ -156,7 +156,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
 
     #find the enter and exit times of pulsar normalized with the observing time
     names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar])
-    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec)
+    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec, min_power=min_power)
     enter_obs_norm = beam_source_data[obsid][0][1]
     exit_obs_norm = beam_source_data[obsid][0][2]
 
