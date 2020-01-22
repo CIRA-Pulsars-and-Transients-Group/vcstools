@@ -67,12 +67,10 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
             vf->sizeof_buffer/2.0,
             *gain );
     
-    float *data_buffer_ptr = data_buffer_vdif;
-    
     //Only using the buffer for the pointing
-    float *pointing_buffer  = malloc( vf->sizeof_buffer * sizeof(float) );
-    memcpy(pointing_buffer, data_buffer_ptr + p * vf->sizeof_buffer,
-           vf->sizeof_buffer * sizeof(float) );
+    //float *pointing_buffer  = malloc( vf->sizeof_buffer * sizeof(float) );
+    //memcpy(pointing_buffer, data_buffer_ptr + p * vf->sizeof_buffer,
+    //       vf->sizeof_buffer * sizeof(float) );
 
     float *data_buffer_ptr = data_buffer_vdif;
     size_t offset_out_vdif = 0;
@@ -250,14 +248,13 @@ void set_level_occupancy(ComplexFloat *input, int nsamples, float *new_gain)
 {
     //float percentage = 0.0;
     //float occupancy = 17.0;
-    float limit = 0.00001;
-    float step = 0.001;
+    //float limit = 0.00001;
+    //float step = 0.001;
     int i = 0;
     float gain = *new_gain;
 
     float percentage_clipped = 100;
     //while (percentage_clipped > 0 && percentage_clipped > limit) {
-        int count = 0;
         int clipped = 0;
         for (i = 0; i < nsamples; i++) {
             if (isnan(CRealf(input[i])) || isnan(CImagf(input[i])))

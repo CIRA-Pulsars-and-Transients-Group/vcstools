@@ -39,7 +39,7 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
                                float *out )
 {
     int s = blockIdx.x;
-    int nsamples = gridDim.x;
+    //int nsamples = gridDim.x;
     //blockDim.x = nchan * npol 
     //threadIdx.x = npol*ch + pol
  
