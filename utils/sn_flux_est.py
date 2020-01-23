@@ -25,7 +25,6 @@ import find_pulsar_in_obs as fpio
 import mwa_metadb_utils
 import submit_to_database
 import process_vcs
-import prof_utils
 
 logger = logging.getLogger(__name__)
 
