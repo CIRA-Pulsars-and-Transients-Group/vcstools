@@ -110,7 +110,7 @@ def plot_flux_estimation(nu_atnf, S_atnf, S_atnf_e, my_nu, my_S, my_S_e, a, puls
     plt.close()
 
 #---------------------------------------------------------------
-def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False):
+def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, min_power=0.3):
     """
     Finds the normalised time that a pulsar is in the beam for a given obsid
     If pulsar is not in beam, returns None, None
