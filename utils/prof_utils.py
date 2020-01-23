@@ -12,8 +12,6 @@ import matplotlib.pyplot as plt
 from astropy.time import Time
 from scipy.optimize import curve_fit
 
-from stickel import Stickel
-
 logger = logging.getLogger(__name__)
 
 #---------------------------------------------------------------
@@ -459,7 +457,7 @@ def find_x_err(x, popt, pcov):
         The error evaluated at each point, x
     """
     x_err = []
-    for i, point in enumerate(x):
+    for _, point in enumerate(x):
         J = jacobian_slope(point, *popt)
         d2dx2 = multi_gauss_d2dx2(point, *popt)
         JC = np.matmul(J, pcov)
@@ -608,7 +606,7 @@ def est_sn_from_prof(prof_data, period, alpha=3.):
         prof_e = 500. #this is an approximation
         non_pulse_bins = 0
         #work out the above parameters
-        for i, data in enumerate(prof_data):
+        for _, data in enumerate(prof_data):
             if not np.isnan(flags[i]):
                 non_pulse_bins += 1
         sigma_e = sigma / np.sqrt(2 * non_pulse_bins - 2)
@@ -623,7 +621,7 @@ def integral_multi_gauss(*params):
     y=0
     for i in range(0, len(params), 3):
         a = params[i]
-        b = params[i+1]
+        _ = params[i+1]
         c = params[i+2]
         y = y + a*c*np.sqrt(2*np.pi)
     return y
@@ -775,7 +773,6 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=3.):
 
     y = np.array(profile) - np.nanmean(np.array(clipped))
     max_y = max(y)
-    len_y = len(y)
     y = np.array(y)/max_y
     noise_std = np.nanstd(np.array(clipped)/max_y)
     plt.plot(clipped)
@@ -1065,7 +1062,7 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         try:
             prof_dict = prof_eval_gfit(profile, max_N=6, ignore_threshold=ignore_threshold, min_comp_len=min_comp_len, alpha=alpha, period=period)
             attempts_dict[alpha] = prof_dict
-        except(LittleClipError, LargeClipError, NoComponentsError) as e:
+        except(LittleClipError, LargeClipError, NoComponentsError):
             pass
     logger.setLevel(loglvl)
 
@@ -1116,7 +1113,8 @@ if __name__ == '__main__':
     inputs.add_argument("--alpha", type=float, default=2, help="Used by the clipping function to determine the noise level. A lower value indicates\
                         a higher verbosity level in the noise clipping function.")
     inputs.add_argument("--auto", action="store_true", help="Used to automatically find the best alpha value to clip this profile")
-    inputs.add_argument("--period", type=float, help="The period of the puslar in ms. Found automatically if .bestprof supplied. Used in S/N calculation. Not required")
+    inputs.add_argument("--period", type=float, help="The period of the puslar in ms. Found automatically if bestprof supplied.\
+                        Used in S/N calculation. Not required")
 
     g_inputs = parser.add_argument_group("Gaussian Inputs")
     g_inputs.add_argument("--max_N", type=int, default=6, help="The maximum number of gaussian components to attempt to fit")
