@@ -606,7 +606,7 @@ def est_sn_from_prof(prof_data, period, alpha=3.):
         prof_e = 500. #this is an approximation
         non_pulse_bins = 0
         #work out the above parameters
-        for _, data in enumerate(prof_data):
+        for i, _ in enumerate(prof_data):
             if not np.isnan(flags[i]):
                 non_pulse_bins += 1
         sigma_e = sigma / np.sqrt(2 * non_pulse_bins - 2)
@@ -621,7 +621,6 @@ def integral_multi_gauss(*params):
     y=0
     for i in range(0, len(params), 3):
         a = params[i]
-        _ = params[i+1]
         c = params[i+2]
         y = y + a*c*np.sqrt(2*np.pi)
     return y
