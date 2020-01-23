@@ -30,6 +30,7 @@ from mwa_pulsar_client import client
 from mwa_metadb_utils import get_common_obs_metadata
 import find_pulsar_in_obs as fpio
 import sn_flux_est as snfe
+import prof_utils
 
 import logging
 logger = logging.getLogger(__name__)
@@ -84,68 +85,6 @@ def sex2deg( ra, dec):
     # return RA and DEC in degrees in degrees
     return [c.ra.deg, c.dec.deg]
 
-def get_from_bestprof(file_loc):
-    """
-    Get info from a bestprof file
-    returns: [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
-    """
-
-    import re
-    with open(file_loc,"r") as bestprof:
-        lines = bestprof.readlines()
-        # Find the obsid by finding a 10 digit int in the file name
-        obsid = re.findall(r'(\d{10})', lines[0])[0]
-        try:
-            obsid = int(obsid)
-        except:
-            obsid = None
-
-        pulsar = str(lines[1].split("_")[-1][:-1])
-        if not (pulsar.startswith('J') or pulsar.startswith('B')):
-            pulsar = 'J{0}'.format(pulsar)
-
-        dm = lines[14][22:-1]
-
-        period = lines[15][22:-1]
-        period, period_uncer = period.split('  +/- ')
-
-        mjdstart = Time(float(lines[3][22:-1]), format='mjd', scale='utc')
-        # Convert to gps time
-        obsstart = int(mjdstart.gps)
-
-        # Get obs length in seconds by multipling samples by time per sample
-        obslength = float(lines[6][22:-1])*float(lines[5][22:-1])
-
-        # Get the pulse profile
-        orig_profile = []
-        for l in lines[27:]:
-            orig_profile.append(float(l.split()[-1]))
-        bin_num = len(orig_profile)
-        profile = np.zeros(bin_num)
-
-        # Remove min
-        min_prof = min(orig_profile)
-        for p in range(len(orig_profile)):
-            profile[p] = orig_profile[p] - min_prof
-    return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
-
-def get_from_ascii(file_loc):
-    with open(file_loc,"r") as f_ascii:
-        lines = f_ascii.readlines()
-
-        orig_profile = []
-        for l in lines[1:]:
-            orig_profile.append(float(l.split(" ")[-1]))
-        bin_num = len(orig_profile)
-        profile = np.zeros(bin_num)
-        min_prof = min(orig_profile)
-        for p in range(len(orig_profile)):
-            profile[p] = orig_profile[p] - min_prof
-        #maybe centre it around the pulse later
-    return [profile, bin_num]
-
-
-
 
 def from_power_to_gain(powers,cfreq,n,coh=True):
     from astropy.constants import c,k_B
@@ -173,38 +112,6 @@ def get_Trec(tab,obsfreq):
     if Trec == 0.0:
         logger.debug("ERROR getting Trec")
     return Trec
-
-
-def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
-    x = np.copy(data)
-    oldstd = np.nanstd(x)
-    #When the x[x<lolim] and x[x>hilim] commands encounter a nan it produces a
-    #warning. This is expected because it is ignoring flagged data from a
-    #previous trial so the warning is supressed.
-    old_settings = np.seterr(all='ignore')
-    for trial in range(ntrials):
-        median = np.nanmedian(x)
-
-        lolim = median - alpha * oldstd
-        hilim = median + alpha * oldstd
-        x[x<lolim] = np.nan
-        x[x>hilim] = np.nan
-
-        newstd = np.nanstd(x)
-        tollvl = (oldstd - newstd) / newstd
-
-        if tollvl <= tol:
-            logger.info("Took {0} trials to reach tolerance".format(trial+1))
-            np.seterr(**old_settings)
-            return oldstd, x
-
-        if trial + 1 == ntrials:
-            logger.warning("Reached number of trials without reaching tolerance level")
-            np.seterr(**old_settings)
-            return oldstd, x
-
-        oldstd = newstd
-
 
 # Removed this function as this will always be calculated from the bestprof
 #def enter_exit_calc(time_detection, time_obs, metadata, start=None, stop=None):
@@ -284,7 +191,16 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                                     beg=beg, t_int=t_int)
 
     #estimate S/N
-    sn, u_sn, _, w_equiv_bins, _, w_equiv_ms, u_w_equiv_ms, scattered = snfe.analyse_pulse_prof(prof_data=profile, period=period, verbose=True)
+    prof_dict = prof_utils.auto_gfit(profile, period = period, plot_name="{0}_{1}_gaussian_fit.png".format(obsid, pulsar))
+    sn = prof_dict["sn"]
+    u_sn = prof_dict["sn_e"]
+    w_equiv_bins = prof_dict["Weq"]
+    u_w_equiv_bins =  prof_dict["Weq_e"]
+    w_equiv_ms = period/num_bins * w_equiv_bins
+    u_w_equiv_ms = period/num_bins * u_w_equiv_bins
+    scattering = prof_dict["Wscat"]*period/num_bins
+    u_scattering = prof_dict["Wscat_e"]*period/num_bins
+    scattered = prof_dict["scattered"]
 
     logger.info("Profile scattered? {0}".format(scattered))
     logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
@@ -316,15 +232,6 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
         obstype = 1
     else:
         obstype = 2
-
-    #calc scattering
-    scat_height = max(profile) / 2.71828
-    scat_bins = 0
-    for p in profile:
-        if p > scat_height:
-            scat_bins = scat_bins + 1
-    scattering = float(scat_bins + 1) * float(period) /1000. #in s
-    u_scattering = 1. * float(period) /1000. # assumes the uncertainty is one bin
 
     #calc sub-bands
     subbands = 1
@@ -526,7 +433,7 @@ if __name__ == "__main__":
 
     #get info from .bestprof file
     if args.bestprof:
-        bestprof_data = get_from_bestprof(args.bestprof)
+        bestprof_data = prof_utils.get_from_bestprof(args.bestprof)
         obsid, pulsar, dm, period, period_uncer, obsstart, time_detection,\
                profile, num_bins = bestprof_data
         if obsid is None and args.obsid:
@@ -535,7 +442,7 @@ if __name__ == "__main__":
             logger.error("Please use --obsid. Exiting")
             sys.exit(1)
     elif args.ascii:
-        profile, num_bins = get_from_ascii(args.ascii)
+        profile, num_bins = prof_utils.get_from_ascii(args.ascii)
         if args.obsid:
             obsid = args.obsid
         if args.pulsar:
