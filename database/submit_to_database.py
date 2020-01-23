@@ -191,7 +191,7 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                                     beg=beg, t_int=t_int)
 
     #estimate S/N
-    prof_dict = prof_utils.analyse_pulse_prof(prof_data=profile, period=period)
+    prof_dict = prof_utils.auto_gfit(profile, period = period, plot_name="{0}_{1}_gaussian_fit.png".format(obsid, pulsar))
     sn = prof_dict["sn"]
     u_sn = prof_dict["sn_e"]
     w_equiv_bins = prof_dict["Weq"]
