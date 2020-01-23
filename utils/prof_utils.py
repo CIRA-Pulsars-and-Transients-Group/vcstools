@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 class LittleClipError(Exception):
     """Raise when not enough data is clipped"""
     pass
-
 #---------------------------------------------------------------
 class LargeClipError(Exception):
     """Raise when too much data is clipped"""
@@ -171,7 +170,7 @@ def get_stokes_from_ascii(file_loc):
     return [I, Q, U, V, len(I)]
 
 #---------------------------------------------------------------
-def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
+def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
     """
     Sigma clipping operation:
     Compute the data's median, m, and its standard deviation, sigma.
@@ -187,7 +186,7 @@ def sigmaClip(data, alpha=3, tol=0.1, ntrials=10):
         OPTIONAL - Determines the number of sigmas to use to determine the upper and lower limits. Default=3
     tol: float
         OPTIONAL - The fractional change in the standard deviation that determines when the tolerance is hit. Default=0.1
-    ntrils: int
+    ntrials: int
         OPTIONAL - The maximum number of times to apply the operation. Default=10
 
     Returns:
@@ -252,7 +251,6 @@ def check_clip(clipped_prof, toomuch=0.8, toolittle=0.):
         raise LittleClipError("Not enough data has been clipped. Condsier trying a smaller alpha value when clipping.")
     elif num_nans >= toomuch*len(clipped_prof):
         raise LargeClipError("A large portion of the data has been clipped. Condsier trying a larger alpha value when clipping.")
-    return
 
 #---------------------------------------------------------------
 def fill_clipped_prof(clipped_prof, search_scope=None, nan_type=0.):
@@ -401,6 +399,8 @@ def find_minima_maxima_gauss(popt, pcov, x_length):
     -----------
     popt: list
         A list of length 3N where N is the number of gaussians. This list contains the parameters amp, mean, centre respectively
+    pcov: np.matrix
+        The covariance matric corresponding to the parameters from popt
     x_length: int
         The length of the list used to fit the gaussian
 
@@ -468,7 +468,7 @@ def find_x_err(x, popt, pcov):
     return x_err
 
 #---------------------------------------------------------------
-def find_widths(popt, pcov, fit, std, alpha):
+def find_widths(profile, popt, pcov, alpha=3):
     """
     Attempts to find the W_10, W_50 and equivalent width of a profile by using a spline approach.
     W10 and W50 errors are estimated by using: sigma_x = sigma_y/(dy/dx)
@@ -477,25 +477,33 @@ def find_widths(popt, pcov, fit, std, alpha):
     Parameters:
     -----------
     profile: list
-        The profile to find the widths of
-    std: float
-        OPTIONAL - The standard deviation of the noise. If unsupplied, will return Nones for uncertainty values. Default: None
+        A list of floats that make up the profile
+    popt: list
+        The parameters that are used to create the multi-gaussian fit
+    pcov: np.matrix
+        The covariance matrix corresponding to the parameters from popt
+    alpha: float
+        OPTIONAL - The alpha value to be used in sigmaClip(). Default: 3
 
     Returns:
     --------
-    [W10, W50, Weq, W10_e, W50_e, Weq_e]: list
+    [W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e]: list
         W10: float
             The W10 width of the profile measured in number of bins
         W50: float
             The W50 width of the profile measured in number of bins
         Weq: float
             The equivalent width of the profile measured in number of bins
+        Wscat: float
+            The scattering width of the profile measured in number of bins
         W10_e: float
             The uncertainty in W10
-        W50_e:
+        W50_e: float
             The uncertainty in W50
-        Weq_e:
+        Weq_e: float
             The uncertainty in Weq
+        Wscar_e: float
+            The unceratinty in Wscat
     """
     def error_in_x_pos(pcov, popt, x):
         J = jacobian_slope(x, *popt)
@@ -504,16 +512,16 @@ def find_widths(popt, pcov, fit, std, alpha):
         ddx = multi_gauss_ddx(x, *popt)
         return sigma_y/ddx
 
-    #perform spline operations
-    profile = np.array(fit)
-    x = np.linspace(0, len(fit)-1, len(fit))
-    amp_y = max(profile) - min(profile)
-    spline10 = UnivariateSpline(x, fit - np.full(len(x), 0.1*amp_y), s=0)
-    spline50 = UnivariateSpline(x, fit - np.full(len(x), 0.5*amp_y), s=0)
-    spline_s = UnivariateSpline(x, fit - np.full(len(x), 1/np.exp(1)*amp_y), s=0)
+    #perform spline operations on the fit
+    x = np.linspace(0, len(profile)-1, len(profile))
+    fit = multi_gauss(x, *popt)
+    amp_fit = max(fit) - min(fit)
+    spline10 = UnivariateSpline(x, fit - np.full(len(x), 0.1*amp_fit), s=0)
+    spline50 = UnivariateSpline(x, fit - np.full(len(x), 0.5*amp_fit), s=0)
+    spline_s = UnivariateSpline(x, fit - np.full(len(x), 1/np.exp(1)*amp_fit), s=0)
 
-    #find Weq
-    _, off_pulse = sigmaClip(profile, alpha=alpha)
+    #find Weq using the real profile
+    std, off_pulse = sigmaClip(profile, alpha=alpha)
     on_pulse=[]
     for i, data in enumerate(off_pulse):
         if np.isnan(data):
@@ -522,8 +530,6 @@ def find_widths(popt, pcov, fit, std, alpha):
     spline0 = UnivariateSpline(x, on_pulse, s=0)
     integral = spline0.integral(0, len(on_pulse)-1)
     Weq = integral/max(on_pulse)
-
-    #Weq = integral_multi_gauss(*popt)/max(fit)
 
     #find W10, W50 and Wscat
     W10_roots = spline10.roots()
@@ -550,8 +556,6 @@ def find_widths(popt, pcov, fit, std, alpha):
 
     #Weq errors - using covariance formula
     on_pulse_less = (on_pulse - std).clip(min=0)
-    on_pulse_more = (on_pulse + std).clip(min=0)
-
     spline0 = UnivariateSpline(x, on_pulse_less, s=0)
     integral = spline0.integral(0, len(profile)-1)
     dwdint = 1/max(on_pulse)**2
@@ -559,65 +563,36 @@ def find_widths(popt, pcov, fit, std, alpha):
     int_e = abs(integral/max(on_pulse - std) - integral/max(on_pulse))
     max_e = std
     Weq_e = np.sqrt( dwdint**2 * int_e**2 + dwdmax**2 * max_e**2 + 2*dwdint*dwdmax*int_e*max_e )
-    """
-    J = jacobian_weq(list(fit).index(max(fit)), max(fit), *popt)
-    print("Jacobian: {}".format(J))
-    JC = np.matmul(J, pcov)
-    Weq_e = np.sqrt(np.matmul(JC, np.transpose(J)).item(0))
-    """
 
-    return [W10, W50, Weq, W10_e, Wscat, Wscat_e, W50_e, Weq_e]
+    return [W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e]
 
 #---------------------------------------------------------------
-def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, alpha=2):
+def est_sn_from_prof(prof_data, period, alpha=3.):
     """
-    Estimates the signal to noise ratio from a pulse profile. Returns are in list form. Will return more for verbose==True setting, explained below.
-    NOTE: user must supply EITHER a betprof path OR prof_data and period of the pulse profile.
+    Estimates the signal to noise ratio from a pulse profile
     Based on code oringally writted by Nick Swainston.
 
     Parameters:
     -----------
-    prof_path: string
-        OPTIONAL - The path of the bestprof file
-    prof_data: list
-        OPTIONAL - A list of floats that contains the pulse profile
+    prof_data: string
+        A list of floats that contains the pulse profile
     period: float
-        OPTIONAL - The pulsar's period in ms
-    verbose: boolean
-        OPTIONAL - Determines whether to return more detailed information. Detailed below
+        The pulsar's period in ms
+    alpha: float
+        OPTIONAL - The alpha value to be used in sigmaClip(). Default: 3
 
     Returns:
     --------
+    [sn, sn_e, scattered]
     sn: float
         The estimated signal to noise ratio
     u_sn: float
-        The estimated signal to noise ratio's its uncertainty
-    flags: list
-        VERBOSE - a list of flagged data points
-    w_equiv_bins: float
-        VERBOSE - the equivalent width of the profile measured in bins
-    u_w_equiv_bins: float
-        VERBOSE - the uncertaintiy in w_equiv_bins
-    w_equiv_ms: float
-        VERBOSE - the equivalent width of the profile measured in ms
-    u_w_equiv_ms: float
-        VERBOSE - the uncertainty in w_equiv_ms
+        The uncertainty in sn
     scattered: boolean
-        VERBOSE - when true, the profile is highly scattered
+        When true, the profile is highly scattered
     """
-    if prof_path is None and (prof_data is None or period is None):
-        logger.warning("Insufficient information to attain SN estimate from profile. Returning Nones")
-        return None, None
-
-    if prof_data is None:
-        _, _, _, period, _, _, _, prof_data, nbins = get_from_bestprof(prof_path)
-        nbins = float(nbins)
-        period = float(period)
-    else:
-        nbins = len(prof_data)
-
     #centre the profile around the max
-    shift = -int(np.argmax(prof_data))+int(nbins)//2
+    shift = -int(np.argmax(prof_data))+int(len(prof_data))//2
     prof_data = np.roll(prof_data, shift)
 
     #find std and check if profile is scattered
@@ -628,16 +603,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, alpha=2):
     if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
         logger.warning("The profile is highly scattered. S/N estimate cannot be calculated")
         scattered=True
-        #making a new profile with the only bin being the lowest point
-        prof_min_i = np.argmin(prof_data)
-        flags = []
-        for fi, _ in enumerate(prof_data):
-            if fi == prof_min_i:
-                flags.append(prof_data[fi])
-            else:
-                flags.append(np.nan)
-        flags = np.array(flags)
-        prof_data -= min(prof_data)
+        sn = sn_e = None
     else:
         prof_e = 500. #this is an approximation
         non_pulse_bins = 0
@@ -650,30 +616,7 @@ def analyse_pulse_prof(prof_path=None, prof_data=None, period=None, alpha=2):
         sn = max(prof_data)/sigma
         sn_e = sn * np.sqrt(prof_e/max(prof_data)**2 + (sigma_e/sigma)**2)
 
-    if scattered==False:
-        prof_dict = prof_eval_gfit(prof_data)
-        W10 = prof_dict["W10"]
-        W10_e = prof_dict["W10_e"]
-        W50 = prof_dict["W50"]
-        W50_e = prof_dict["W50_e"]
-        Wscat = prof_dict["Wscat"]
-        Wscat_e = prof_dict["Wscat_e"]
-        Weq = prof_dict["Weq"]
-        Weq_e = prof_dict["Weq_e"]
-        maxima = prof_dict["maxima"]
-        maxima_e = prof_dict["maxima_e"]
-        chisq = prof_dict["redchisq"]
-        num_gauss = prof_dict["num_gauss"]
-    else:
-        #Assuming width is equal to pulsar period because of the scattering
-        Weq = nbins
-        Weq_e = 0.5
-        W10 = W10_e = W50 = W50_e = Wscat = Wscat_e = sn = sn_e = maxima = maxima_e = chisq = num_gauss = None
-
-    prof_dict = {"sn":sn, "sn_e":sn_e, "Weq":Weq, "Weq_e":Weq_e, "W50":W50, "W50_e":W50_e, "W10_e":W10_e,\
-                "Wscat":Wscat, "Wscat_e":Wscat_e, "period":period, "bins":nbins, "off_pulse":flags,\
-                "scattered":scattered, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq, "num_gauss":num_gauss}
-    return prof_dict
+    return [sn, sn_e, scattered]
 
 #---------------------------------------------------------------
 def integral_multi_gauss(*params):
@@ -721,54 +664,6 @@ def partial_gauss_ddb(x, a, b, c):
 def partial_gauss_ddc(x, a, b, c):
         return a*(x - b)**2 * np.exp((-(b - x)**2)/(2*c**2))/c**3
 
-def jacobian_weq(x, peak, *params):
-    """
-    Evaluates the Jacobian matrix of a gaussian integral divided by a peak position for
-    the equivalent width calculation.
-    W = equivalent width
-    f = gaussian integral
-
-    Parameters:
-    -----------
-    *params: list
-        A list containing three parameters per gaussian component in the order: Amp, Mean, Width
-
-    Returns:
-    --------
-    J: numpy.matrix
-        The Jacobian matrix
-    """
-    def f(a, b, c):
-        return a * c * np.sqrt(2 * np.pi)
-    def W(peak, a, b, c):
-        return f(a, b, c)/peak
-    def dfda(a, b, c):
-        return c * np.sqrt(2 * np.pi)
-    def dfdc(a, b, c):
-        return a * np.sqrt(2*np.pi)
-    def dwdf(peak, a, b, c):
-        return W(peak, a, b, c)/peak
-    def dwdpeak(peak, a, b, c):
-        return -W(peak, a, b, c)/peak
-    def dwda(x, peak, a, b, c):
-        return dwdf(peak, a, b, c) * dfda(a, b, c) +\
-               dwdpeak(peak, a, b, c) * partial_gauss_dda(x, a, b, c)
-    def dwdc(x, peak, a, b, c):
-        return dwdf(peak, a, b, c) * dfdc(a, b, c) +\
-               dwdpeak(peak, a, b, c) * partial_gauss_ddc(x, a, b, c)
-
-    J = []
-    for i in range(0, len(params), 3):
-        a = params[i]
-        b = params[i+1]
-        c = params[i+2]
-        mypars = [x, peak, a, b, c]
-        J.append(dwda(*mypars))
-        J.append(0)
-        J.append(dwdc(*mypars))
-    J = np.asmatrix(J)
-    return J
-
 #---------------------------------------------------------------
 def jacobian_slope(x, *params):
     """
@@ -806,7 +701,6 @@ def jacobian_slope(x, *params):
 
 #---------------------------------------------------------------
 def plot_fit(plot_name, y, fit, popt, maxima=None, maxima_e=None):
-
     x = np.linspace(0, len(y)-1, len(y))
     plt.figure(figsize=(30, 18))
 
@@ -830,10 +724,9 @@ def plot_fit(plot_name, y, fit, popt, maxima=None, maxima_e=None):
     plt.legend(loc="upper right", prop={'size': 16})
     plt.savefig(plot_name)
     plt.close()
-    return
 
 #---------------------------------------------------------------
-def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=2):
+def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=3.):
     """
     Fits multiple gaussian components to a pulse profile and finds the best number to use for a fit.
     Will always fit at least one gaussian per profile component.
@@ -846,10 +739,12 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=2):
         A list containing the profile data
     max_N: int
         OPTIONAL - The maximum number of gaussain components to attempt to fit. Default: 6
-    chi_threshold: float
-        OPTIONAL - The script will stop trying new fits when the reduced chi-squared is within this amount to unity. Default: 0
+    min_comp_len: float
+        OPTIONAL - Minimum length of a component to be considered real. Measured in bins. Default: 0
     plot_name: string
         OPTIONAL - If not none, will make a plot of the best fit with this name. Default: None
+    alpha: float
+        OPTIONAL - The alpha value to be used in sigmaClip(). Default: 3
 
     Returns:
     --------
@@ -959,7 +854,7 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=2):
     return [fit, redchisq, best_bic, popt, pcov]
 
 #---------------------------------------------------------------
-def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, plot_name=None, min_comp_len=None, alpha=2):
+def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, plot_name=None, alpha=3., period=None):
     """
     Fits multiple gaussians to a profile and subsequently finds W10, W50, Weq and maxima
 
@@ -967,12 +862,18 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, plot_name=None, min_
     -----------
     profile: list
         The pulse profile to evaluate
-    plot_name: string
-        OPTIONAL - If not none, will make a plot of the best fit with this name. Default: None
+    max_N: int
+        OPTIONAL - The maximum number of gaussian components to attempt to fit. Default: 6
     ignore_threshold: float
         OPTIONAL -  Maxima with values below this number will be ignored. If none, will use 3*noise. Default: None
     min_comp_len: float
         OPTIONAL - Minimum length of a component to be considered real. Measured in bins. If none, will use 1% of total profile lengths + 2. Default: None
+    plot_name: string
+        OPTIONAL - If not none, will make a plot of the best fit with this name. Default: None
+    alpha: float
+        OPTIONAL - The alpha value passed to the sigmaClip() function. Default: 3
+    period: float
+        OPTIONAL - The puslar's period in ms. If not none, will attempt a S/N calculation. Default: None
 
     Returns:
     --------
@@ -1014,6 +915,12 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, plot_name=None, min_
             The input profile
         fit: list
             The best fit made into a list form
+        sn: float
+            The estimated signal to noise ratio, obtained from the profile. Will be None is period unsupplied
+        sn_e: float
+            The uncertainty in sn. Will be None is period unsupplied
+        scattered: boolean
+            True is the profile is scattered. Will be None is period unsupplied
     """
     #initialize minimum component length and ignore threshold
     if min_comp_len is None:
@@ -1039,7 +946,7 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, plot_name=None, min_
     num_gauss = n_rows/3
 
     #Find widths + error
-    W10, W50, Weq, W10_e, Wscat, Wscat_e, W50_e, Weq_e = find_widths(popt, pcov, fit, noise_std, alpha)
+    W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e = find_widths(y, popt, pcov, alpha=alpha)
 
     #find max, min, error
     for i, val in enumerate(clipped):
@@ -1055,12 +962,11 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, plot_name=None, min_
 
     _, maxima, _, maxima_e = find_minima_maxima_gauss(popt, pcov, len(fit))
 
-    logger.info("W10:                   {0} +/- {1}".format(W10, W10_e))
-    logger.info("W50:                   {0} +/- {1}".format(W50, W50_e))
-    logger.info("Wscat:                 {0} +/- {1}".format(Wscat, Wscat_e))
-    logger.info("Weq:                   {0} +/- {1}".format(Weq, Weq_e))
-    logger.info("Maxima:                {0}".format(maxima))
-    logger.info("Maxima error:          {0}".format(maxima_e))
+    #estimate SN
+    if period:
+        sn, sn_e, scattered = est_sn_from_prof(y, period, alpha=alpha)
+    else:
+        sn = sn_e = scattered = None
 
     #plotting
     if plot_name:
@@ -1069,11 +975,20 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, plot_name=None, min_
     fit_dict = {"W10":W10, "W10_e":W10_e, "W50":W50, "W50_e":W50_e, "Wscat":Wscat, "Wscat_e":Wscat_e,\
                 "Weq":Weq, "Weq_e":Weq_e, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq,\
                 "num_gauss":num_gauss, "bic":bic, "gaussian_params":popt, "cov_mat":pcov, "alpha":alpha,\
-                "profile":y, "fit":fit}
+                "profile":y, "fit":fit, "sn":sn, "sn_e":sn_e, "scattered":scattered}
+
+    logger.info("W10:                   {0} +/- {1}".format(W10, W10_e))
+    logger.info("W50:                   {0} +/- {1}".format(W50, W50_e))
+    logger.info("Wscat:                 {0} +/- {1}".format(Wscat, Wscat_e))
+    logger.info("Weq:                   {0} +/- {1}".format(Weq, Weq_e))
+    logger.info("Maxima:                {0}".format(maxima))
+    logger.info("Maxima error:          {0}".format(maxima_e))
+    if fit_dict["sn"]:
+        logger.info("S/N estimate:          {0} +/- {1}".format(fit_dict["sn"], fit_dict["sn_e"]))
 
     return fit_dict
 
-def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_len=None):
+def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_len=None, period=None):
     """
     runs the gaussian fit evaluation for a range of values of alpha. This is necessary as there is no way to know
     a priori which alpha to use beforehand. Alpha is the input for sigmaClip() and can be interpreted as the level
@@ -1132,6 +1047,12 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
             The input profile
         fit: list
             The best fit made into a list form
+        sn: float
+            The estimated signal to noise ratio, obtained from the profile. Will be None is period unsupplied
+        sn_e: float
+            The uncertainty in sn. Will be None is period unsupplied
+        scattered: boolean
+            True is the profile is scattered. Will be None is period unsupplied
     """
     alphas = np.linspace(1, 5, 9)
     attempts_dict = {}
@@ -1142,7 +1063,7 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
     #loop over the gaussian evaluation fucntion, excepting in-built errors
     for alpha in alphas:
         try:
-            prof_dict = prof_eval_gfit(profile, max_N=6, ignore_threshold=ignore_threshold, min_comp_len=min_comp_len, alpha=alpha)
+            prof_dict = prof_eval_gfit(profile, max_N=6, ignore_threshold=ignore_threshold, min_comp_len=min_comp_len, alpha=alpha, period=period)
             attempts_dict[alpha] = prof_dict
         except(LittleClipError, LargeClipError, NoComponentsError) as e:
             pass
@@ -1158,6 +1079,9 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
     best_alpha = alphas[chi_diff.index(best_chi)]
     fit_dict = attempts_dict[best_alpha]
 
+    if plot_name:
+        plot_fit(plot_name, fit_dict["profile"], fit_dict["fit"], fit_dict["gaussian_params"], maxima=fit_dict["maxima_e"], maxima_e=fit_dict["maxima"])
+
     logger.info("### Best fit results ###")
     logger.info("Best model found with BIC of {0} and reduced Chi of {1} using an alpha value of {2}"\
                 .format(fit_dict["bic"], fit_dict["redchisq"], best_alpha))
@@ -1167,9 +1091,8 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
     logger.info("Weq:                   {0} +/- {1}".format(fit_dict["Weq"], fit_dict["Weq_e"]))
     logger.info("Maxima:                {0}".format(fit_dict["maxima"]))
     logger.info("Maxima error:          {0}".format(fit_dict["maxima_e"]))
-
-    if plot_name:
-        plot_fit(plot_name, fit_dict["profile"], fit_dict["fit"], fit_dict["gaussian_params"], maxima=fit_dict["maxima_e"], maxima_e=fit_dict["maxima"])
+    if fit_dict["sn"]:
+        logger.info("S/N estimate:          {0} +/- {1}".format(fit_dict["sn"], fit_dict["sn_e"]))
 
     return fit_dict
 
@@ -1193,6 +1116,7 @@ if __name__ == '__main__':
     inputs.add_argument("--alpha", type=float, default=2, help="Used by the clipping function to determine the noise level. A lower value indicates\
                         a higher verbosity level in the noise clipping function.")
     inputs.add_argument("--auto", action="store_true", help="Used to automatically find the best alpha value to clip this profile")
+    inputs.add_argument("--period", type=float, help="The period of the puslar in ms. Found automatically if .bestprof supplied. Used in S/N calculation. Not required")
 
     g_inputs = parser.add_argument_group("Gaussian Inputs")
     g_inputs.add_argument("--max_N", type=int, default=6, help="The maximum number of gaussian components to attempt to fit")
@@ -1210,16 +1134,17 @@ if __name__ == '__main__':
     logger.addHandler(ch)
 
     if args.bestprof:
-        profile = get_from_bestprof(args.bestprof)[-2]
+        _, _, _, period, _, _, _, profile, _  = get_from_bestprof(args.bestprof)[-2]
     elif args.ascii:
         profile = get_from_ascii(args.ascii)[0]
+        period = args.period
     else:
         logger.error("Please supply either an ascii or bestprof profile")
         sys.exit(1)
 
     if args.auto:
         auto_gfit(profile, max_N=args.max_N, ignore_threshold=args.ignore_threshold,\
-                        plot_name=args.plot_name, min_comp_len=args.min_comp_len)
+                        plot_name=args.plot_name, min_comp_len=args.min_comp_len, period=period)
     else :
         prof_eval_gfit(profile, max_N=args.max_N, ignore_threshold=args.ignore_threshold,\
-                        plot_name=args.plot_name, min_comp_len=args.min_comp_len, alpha=args.alpha)
+                        plot_name=args.plot_name, min_comp_len=args.min_comp_len, alpha=args.alpha, period=period)
