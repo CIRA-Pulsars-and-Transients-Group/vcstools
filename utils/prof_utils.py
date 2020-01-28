@@ -807,7 +807,7 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=3.):
     guess = []
     fit_dict = {}
 
-    for num in range(n_comps-1, max_N):
+    for num in range(1, max_N):
         guess += [next(max_guess), next(centre_guess), next(width_guess)]
         bounds_arr[0].append(0)
         bounds_arr[0].append(0)
@@ -1128,7 +1128,7 @@ if __name__ == '__main__':
     logger.addHandler(ch)
 
     if args.bestprof:
-        _, _, _, period, _, _, _, profile, _  = get_from_bestprof(args.bestprof)[-2]
+        _, _, _, period, _, _, _, profile, _  = get_from_bestprof(args.bestprof)
     elif args.ascii:
         profile = get_from_ascii(args.ascii)[0]
         period = args.period
