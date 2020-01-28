@@ -624,12 +624,16 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                 source_ob_power = powers[on][sn]
                 if max(source_ob_power) > min_power:
                     duration = obsid_meta[on][3]
+                    centre_freq = obsid_meta[on][5] #MHz
+                    channels = obsid_meta[on][6]
+                    bandwidth = (channels[-1] - channels[0] + 1.)*1.28 #MHz
                     logger.debug("Running beam_enter_exit on obsid: {}".format(obsid))
                     enter, exit = beam_enter_exit(source_ob_power,duration,
                                                   dt=dt, min_power=min_power)
                     if enter is not None:
                         source_data.append([obsid, duration, enter, exit,
-                                            max(source_ob_power)[0]])
+                                            max(source_ob_power)[0],
+                                            centre_freq, bandwidth])
             # For each source make a dictionary key that contains a list of
             # lists of the data for each obsid
             output_data[source[0]] = source_data
@@ -674,6 +678,9 @@ def write_output_source_files(output_data,
             output_file.write("#OAP:    The observation's array phase where P1 is the "
                                         "phase 1 array, P2C is the phase compact array "
                                         "and P2E is the phase 2 extended array.\n")
+            output_file.write("#Freq:   The centre frequency of the observation in MHz\n")
+            output_file.write("#Band:   Bandwidth of the observation in MHz. If it is greater "
+                                        "than 30.72 than it is a picket fence observation\n")
 
             if SN_est:
                 output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
@@ -681,7 +688,7 @@ def write_output_source_files(output_data,
             if cal_check:
                 output_file.write('#Cal ID: Observation ID of an available '+\
                                             'calibration solution\n')
-            output_file.write('#Obs ID   |Dur |Enter|Exit |Power| OAP ')
+            output_file.write('#Obs ID   |Dur |Enter|Exit |Power| OAP | Freq | Band ')
             if SN_est:
                 output_file.write("|S/N Est|S/N Err")
 
@@ -690,10 +697,10 @@ def write_output_source_files(output_data,
             else:
                 output_file.write('\n')
             for data in output_data[source]:
-                obsid, duration, enter, exit, max_power = data
+                obsid, duration, enter, exit, max_power, freq, band = data
                 oap = get_obs_array_phase(obsid)
-                output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}'.format(obsid,
-                                  duration, enter, exit, max_power, oap))
+                output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}   {:6.2f} {:6.2f}'.\
+                           format(obsid, duration, enter, exit, max_power, oap, freq, band))
                 if SN_est:
                     pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(source, obsid, plot_flux=plot_est)
                     if pulsar_sn is None:
