@@ -774,9 +774,6 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=3.):
     max_y = max(y)
     y = np.array(y)/max_y
     noise_std = np.nanstd(np.array(clipped)/max_y)
-    plt.plot(clipped)
-    plt.savefig("test_flag.png")
-    plt.close()
 
     #Find profile components
     clipped = fill_clipped_prof(clipped, search_scope=int(len(profile)/100))
