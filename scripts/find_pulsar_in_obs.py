@@ -697,10 +697,10 @@ def write_output_source_files(output_data,
             else:
                 output_file.write('\n')
             for data in output_data[source]:
-                obsid, duration, enter, exit, max_power, freq, band = data
+                obsid, duration, enter, leave, max_power, freq, band = data
                 oap = get_obs_array_phase(obsid)
                 output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}   {:6.2f} {:6.2f}'.\
-                           format(obsid, duration, enter, exit, max_power, oap, freq, band))
+                           format(obsid, duration, enter, leave, max_power, oap, freq, band))
                 if SN_est:
                     pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(source, obsid, plot_flux=plot_est)
                     if pulsar_sn is None:
