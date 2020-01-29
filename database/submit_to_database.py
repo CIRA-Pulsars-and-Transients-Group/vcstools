@@ -35,7 +35,7 @@ import prof_utils
 import logging
 logger = logging.getLogger(__name__)
 
-web_address = 'https://mwa-pawsey-volt01.pawsey.org.au'
+web_address = 'https://pulsar-cat.icrar.uwa.edu.au/'
 
 class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
