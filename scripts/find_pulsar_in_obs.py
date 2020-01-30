@@ -138,7 +138,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
     ----------
     source_type: string
         The type of source you would like to get the catalogue for.
-        Your choices are: ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
+        Your choices are: ['Pulsar', 'FRB', 'rFRB', 'POI' 'RRATs', 'Fermi']
         Default: 'Pulsar'
     pulsar_list: list
         List of sources you would like to extract data for.
@@ -158,7 +158,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         A list for each source which contains a [source_name, RA, Dec (, DM)]
         where RA and Dec are in the format HH:MM:SS
     """
-    modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
+    modes = ['Pulsar', 'FRB', 'rFRB', 'POI', 'RRATs', 'Fermi']
     if source_type not in modes:
         logger.error("Input source type not in known catalogues types. Please choose from: {0}".format(modes))
         return None
@@ -191,6 +191,14 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
                     name_ra_dec.append([line[0], line[1], line[2], line[3]])
                 else:
                     name_ra_dec.append([line[0], line[1], line[2]])
+
+    elif source_type == "POI":
+        #POI = points of interest
+        db = open(os.environ["POI_CSV"], "r")
+        for line in db.readlines():
+            if not line.startswith("#"):
+                line = line.split(",")
+                name_ra_dec.append([line[0], line[1], line[2]])
 
     elif source_type == 'RRATs':
         import urllib.request
