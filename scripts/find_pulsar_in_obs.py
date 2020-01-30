@@ -199,7 +199,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
             if not line.startswith("#"):
                 line = line.split(",")
                 name_ra_dec.append([line[0], line[1], line[2]])
- 
+
     elif source_type == 'RRATs':
         import urllib.request
         rrats_data = urllib.request.urlopen('http://astro.phys.wvu.edu/rratalog/rratalog.txt').read().decode()
