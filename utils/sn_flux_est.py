@@ -156,8 +156,12 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, min_po
     #find the enter and exit times of pulsar normalized with the observing time
     names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar])
     beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec, min_power=min_power)
-    enter_obs_norm = beam_source_data[obsid][0][1]
-    exit_obs_norm = beam_source_data[obsid][0][2]
+    if beam_source_data[obsid]:
+        enter_obs_norm = beam_source_data[obsid][0][1]
+        exit_obs_norm = beam_source_data[obsid][0][2]
+    else:
+        logger.warn("{} not in beam".format(pulsar))
+        return None, None
 
     #times the source enters and exits beam
     time_enter = obs_beg + obs_dur*enter_obs_norm
@@ -518,7 +522,7 @@ def find_pulsar_w50(pulsar, query=None):
     return W_50, W_50_err
 
 #---------------------------------------------------------------
-def find_times(obsid, pulsar, beg=None, end=None):
+def find_times(obsid, pulsar, beg=None, end=None, min_z_power=0.3):
     """
     Find the total integration time of a pulsar in the primary beam of an obsid
 
@@ -547,12 +551,17 @@ def find_times(obsid, pulsar, beg=None, end=None):
         logger.info("Using duration for entire observation")
         beg, end = mwa_metadb_utils.obs_max_min(obsid)
         t_int = end - beg + 1
-        enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end)
+        enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end, min_z_power=min_z_power)
         beg = beg + enter_norm * t_int
         end = beg + exit_norm * t_int
 
+    #type assurances
+    beg = int(beg)
+    end = int(end)
+    obsid = int(obsid)
+
     if t_int is None:
-        enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end)
+        enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end, min_z_power=min_z_power)
         if beg is not None and end is not None:
             if beg<obsid or end<obsid or beg>(obsid+10000) or end>(obsid+10000):
                 logger.warning("Beginning/end times supplied are outside the obsid")
@@ -570,7 +579,7 @@ def find_times(obsid, pulsar, beg=None, end=None):
 
 #---------------------------------------------------------------
 def find_t_sys_gain(pulsar, obsid, beg=None, end=None, t_int=None, p_ra=None, p_dec=None,\
-                    obs_metadata=None, query=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                    obs_metadata=None, query=None, min_z_power=0.3, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
     Finds the system temperature and gain for an observation.
@@ -629,7 +638,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, t_int=None, p_ra=None, p_
     #get beg if not supplied
     if beg is None or t_int is None:
         logger.debug("Calculating beginning time for pulsar coverage")
-        beg, _, t_int = find_times(obsid, pulsar, beg=beg, end=end)
+        beg, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, min_z_power=min_z_power)
 
     #Find 'start_time' for fpio - it's usually about 7 seconds
     #obs_start, _ = mwa_metadb_utils.obs_max_min(obsid)
@@ -679,7 +688,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, t_int=None, p_ra=None, p_
 #---------------------------------------------------------------
 def est_pulsar_sn(pulsar, obsid,\
                  beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, plot_flux=False,\
-                 query=None, o_enter=None, o_exit=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                 query=None, o_enter=None, o_exit=None, min_z_power=0.3, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
     Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
@@ -751,7 +760,7 @@ def est_pulsar_sn(pulsar, obsid,\
         else:
             t_int = t_int*obs_metadata[3] #duration
     else:
-        beg, end, t_int = find_times(obsid, pulsar, beg=beg, end=end)
+        beg, end, t_int = find_times(obsid, pulsar, beg=beg, end=end, min_z_power=min_z_power)
     if t_int<=0.:
         logger.warning("{} not in beam for obs files or specificed beginning and end times"\
                     .format(pulsar))
@@ -760,7 +769,7 @@ def est_pulsar_sn(pulsar, obsid,\
     #find system temp and gain
     t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid,\
                                 beg=beg, end=end, p_ra=p_ra, p_dec=p_dec, query=query,\
-                                obs_metadata=obs_metadata, trcvr=trcvr)
+                                obs_metadata=obs_metadata, trcvr=trcvr, min_z_power=min_z_power)
 
     #Find W_50
     W_50, W_50_err = find_pulsar_w50(pulsar, query=query)
@@ -804,6 +813,7 @@ if __name__ == "__main__":
                     ERROR=logging.ERROR)
 
     parser = argparse.ArgumentParser(description="""A utility file for estimating the S/N of a pulsar in an obsid""")
+
     parser.add_argument("-o", "--obsid", type=int, help="The Observation ID (e.g. 1221399680)")
     parser.add_argument("-p", "--pulsar", type=str, help="The pulsar's name (e.g. J2241-5236)")
     parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level. Default: INFO")
@@ -813,6 +823,8 @@ if __name__ == "__main__":
                         If None, will use the end given by a metadata call. Default: None")
     parser.add_argument("--pointing", type=str, default=None, help="The pointing of the target in the format '12:34:56_98:76:54'.\
                         If None, will obtain from a call to ATNF. Default: None")
+    parser.add_argument("min_z_power", type=float, default=0.3, help="The minimum zenith normalised power used to determine if the pulsar\
+                        is in the beam or not")
     parser.add_argument("--plot_est", action="store_true", help="Use this tag to create a plot of flux estimation.")
     args = parser.parse_args()
 
