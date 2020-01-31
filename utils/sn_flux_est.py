@@ -226,7 +226,14 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, min_po
 
 #---------------------------------------------------------------
 def ATNF_data_plot(pulsar_list):
+    """
+    Given a list of pulsars, plots the data for each one from ATNF
 
+    Parameters:
+    -----------
+    pulsar_list: list
+        A list of the J names of pulsars to plot
+    """
     K=None
     covar_mat=None
     a_err=None
@@ -553,7 +560,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
     if not spind or spind_err:
         spind, spind_err, K, covar_mat = find_spind(pulsar, freq_all, flux_all, flux_err_all)
 
-    if K and covar_mat.all() and spind:
+    if K and covar_mat is not None and spind:
         flux_est, flux_est_err = flux_from_plaw(f_mean, K, spind, covar_mat)
     elif spind and spind_err:
         flux_est, flux_est_err = flux_from_spind(f_mean, freq_all[0], flux_all[0], flux_err_all[0],\
