@@ -824,7 +824,7 @@ if __name__ == "__main__":
     logger.addHandler(ch)
     logger.propagate = False
 
-    if args.obsid==None or args.pulsar==None:
+    if not args.obsid or not args.pulsar:
         logger.error("Obsid and Pulsar name must be supplied. Exiting...")
         sys.exit(1)
 
