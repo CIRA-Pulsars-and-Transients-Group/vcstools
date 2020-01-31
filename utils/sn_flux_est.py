@@ -156,7 +156,7 @@ def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
     plt.close()
 
 #---------------------------------------------------------------
-def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, min_power=0.3):
+def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, min_z_power=0.3):
     """
     Finds the normalised time that a pulsar is in the beam for a given obsid
     If pulsar is not in beam, returns None, None
@@ -201,7 +201,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, min_po
 
     #find the enter and exit times of pulsar normalized with the observing time
     names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar])
-    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec, min_power=min_power)
+    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec, min_power=min_z_power)
     if beam_source_data[obsid]:
         enter_obs_norm = beam_source_data[obsid][0][1]
         exit_obs_norm = beam_source_data[obsid][0][2]
@@ -982,7 +982,7 @@ if __name__ == "__main__":
             decj = args.pointing.split("_")[1]
 
         SN, SN_err = est_pulsar_sn(pulsar, args.obsid,\
-                beg=args.beg, end=args.end, p_ra=raj, p_dec=decj, plot_flux=args.plot_est, query=query)
+                beg=args.beg, end=args.end, p_ra=raj, p_dec=decj, plot_flux=args.plot_est, query=query, min_z_power=args.min_z_power)
     elif args.mode == "ATNF":
         if args.pulsar==None:
             logger.error("Pulsar name must be supplied. Exiting...")
