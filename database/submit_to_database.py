@@ -196,7 +196,8 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
 
     if not prof_dict:
         logger.info("Profile couldn't be fit. Using old style of profile analysis")
-        sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattering, u_scattering, scattered = prof_utils.analyse_pulse_prof(profile, period, verbose=True)
+        sn, u_sn, _, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattering, u_scattering, scattered =\
+            prof_utils.analyse_pulse_prof(profile, period, verbose=True)
         w_equiv_ms = period/num_bins * w_equiv_bins
         u_w_equiv_ms = period/num_bins * u_w_equiv_bins
     else:

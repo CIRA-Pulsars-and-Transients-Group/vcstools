@@ -661,12 +661,12 @@ def analyse_pulse_prof(prof_data, period, verbose=True):
     prof_data = np.roll(prof_data, shift)
 
     #find sigma and check if profile is scattered
-    sigma, flags = submit_to_database.sigmaClip(prof_data, alpha=3., tol=0.01, ntrials=100)
+    sigma, flags = sigmaClip(prof_data, alpha=3., tol=0.01, ntrials=100)
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
     scattered=False
     if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
         logger.warning("The profile is highly scattered. S/N estimate cannot be calculated")
-        if verbose == True:
+        if verbose:
             scattered=True
             #making a new profile with the only bin being the lowest point
             prof_min_i = np.argmin(prof_data)
@@ -704,10 +704,10 @@ def analyse_pulse_prof(prof_data, period, verbose=True):
         sn = max(prof_data)/sigma
         u_sn = sn * np.sqrt(u_prof/max(prof_data)**2 + (u_simga/sigma)**2)
 
-    if verbose==False:
+    if not verbose:
         return [sn, u_sn]
 
-    elif scattered==False:
+    elif not scattered:
         off_pulse_mean = np.nanmean(flags)
         prof_data -= off_pulse_mean
         flags -= off_pulse_mean
