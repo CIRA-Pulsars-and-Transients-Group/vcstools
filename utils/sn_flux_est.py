@@ -953,8 +953,7 @@ if __name__ == "__main__":
                         is in the beam or not")
     parser.add_argument("--plot_est", action="store_true", help="Use this tag to create a plot of flux estimation.")
     parser.add_argument("--mode", type=str, help="""MODES: 'SNFE' = Estimate S/N and flux for a single pulsar in an obsid\n
-
-                                                'ATNF' = Plot the SED for any number of pulsars using data from ATNF.""")
+                                                'ATNF' = Plot the spectral energy distribution for any number of pulsars using data from ATNF.""")
     args = parser.parse_args()
 
     logger.setLevel(loglevels[args.loglvl])
