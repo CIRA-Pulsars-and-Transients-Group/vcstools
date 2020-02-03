@@ -982,7 +982,7 @@ if __name__ == "__main__":
         SN, SN_err = est_pulsar_sn(pulsar, args.obsid,\
                 beg=args.beg, end=args.end, p_ra=raj, p_dec=decj, plot_flux=args.plot_est, query=query, min_z_power=args.min_z_power)
     elif args.mode == "ATNF":
-        if args.pulsar==None:
+        if not args.pulsar:
             logger.error("Pulsar name must be supplied. Exiting...")
             sys.exit(1)
         ATNF_data_plot(args.pulsar)
