@@ -389,7 +389,7 @@ def find_minima_maxima(profile, ignore_threshold=0, min_comp_len=0):
 
     return minima, maxima
 
-def find_minima_maxima_gauss(popt, pcov, x_length):
+def find_minima_maxima_gauss(popt, pcov, x_length, min_comp_len=0):
     """
     Finds all roots of a gaussian function
 
@@ -615,6 +615,126 @@ def est_sn_from_prof(prof_data, period, alpha=3.):
         sn_e = sn * np.sqrt(prof_e/max(prof_data)**2 + (sigma_e/sigma)**2)
 
     return [sn, sn_e, scattered]
+
+#---------------------------------------------------------------
+def analyse_pulse_prof(prof_data, period, verbose=True):
+    """
+    Estimates the signal to noise ratio from a pulse profile. Returns are in list form. Will return more for verbose==True setting, explained below.
+    NOTE: user must supply EITHER a betprof path OR prof_data and period of the pulse profile.
+    Based on code oringally writted by Nick Swainston.
+    This is the old version of 'est_sn_from_prof' but is useful when we can't fit gaussians
+
+    Parameters:
+    -----------
+    prof_data: list
+        A list of floats that contains the pulse profile. Default
+    period: float
+        The pulsar's period in ms
+    verbose: boolean
+        OPTIONAL - Determines whether to return more detailed information. Detailed below. Default: True
+    Returns:
+    --------
+    sn: float
+        The estimated signal to noise ratio
+    u_sn: float
+        The estimated signal to noise ratio's its uncertainty
+    flags: list
+        VERBOSE - a list of flagged data points
+    w_equiv_bins: float
+        VERBOSE - the equivalent width of the profile measured in bins
+    u_w_equiv_bins: float
+        VERBOSE - the uncertaintiy in w_equiv_bins
+    w_equiv_ms: float
+        VERBOSE - the equivalent width of the profile measured in ms
+    u_w_equiv_ms: float
+        VERBOSE - the uncertainty in w_equiv_ms
+    scattering: float
+        VERBOSE: - the scattering width in
+    u_scattering: float
+    scattered: boolean
+        VERBOSE - when true, the profile is highly scattered
+    """
+
+    nbins = len(prof_data)
+    #centre the profile around the max
+    shift = -int(np.argmax(prof_data))+int(nbins)//2
+    prof_data = np.roll(prof_data, shift)
+
+    #find sigma and check if profile is scattered
+    sigma, flags = sigmaClip(prof_data, alpha=3., tol=0.01, ntrials=100)
+    bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
+    scattered=False
+    if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
+        logger.warning("The profile is highly scattered. S/N estimate cannot be calculated")
+        if verbose:
+            scattered=True
+            #making a new profile with the only bin being the lowest point
+            prof_min_i = np.argmin(prof_data)
+            flags = []
+            for fi, _ in enumerate(prof_data):
+                if fi == prof_min_i:
+                    flags.append(prof_data[fi])
+                else:
+                    flags.append(np.nan)
+
+            flags = np.array(flags)
+            prof_data -= min(prof_data)
+            #Assuming width is equal to pulsar period because of the scattering
+            w_equiv_ms = period
+            u_w_equiv_ms = period/nbins
+        sn = None
+        u_sn = None
+    else:
+        u_prof = 500. #this is an approximation
+        pulse_width_bins = 0
+        non_pulse_bins = 0
+        p_total = 0.
+        u_p = 0.
+        #work out the above parameters
+        for i, data in enumerate(prof_data):
+            if np.isnan(flags[i]):
+                pulse_width_bins += 1
+                p_total += data
+                u_p = np.sqrt(u_p**2 + u_prof**2)
+            else:
+                non_pulse_bins += 1
+        u_simga = sigma / np.sqrt(2 * non_pulse_bins - 2)
+
+        #now calc S/N
+        sn = max(prof_data)/sigma
+        u_sn = sn * np.sqrt(u_prof/max(prof_data)**2 + (u_simga/sigma)**2)
+
+    if not verbose:
+        return [sn, u_sn]
+
+    elif not scattered:
+        off_pulse_mean = np.nanmean(flags)
+        prof_data -= off_pulse_mean
+        flags -= off_pulse_mean
+
+        prof_max = max(prof_data)
+        w_equiv_bins = p_total / prof_max
+        w_equiv_ms = w_equiv_bins / nbins * period # in ms
+        u_w_equiv_bins = np.sqrt(p_total /prof_max)**2 +\
+                                   (p_total * u_prof / (prof_max)**2)**2
+        u_w_equiv_ms = u_w_equiv_bins / nbins * period # in ms
+
+    else:
+        w_equiv_ms = period
+        u_w_equiv_ms = period/nbins
+        w_equiv_bins = w_equiv_ms/period*nbins
+        u_w_equiv_bins = (u_w_equiv_ms/w_equiv_ms)*w_equiv_bins
+
+    #calc scattering
+    scat_height = max(profile) / 2.71828
+    scat_bins = 0
+    for p in profile:
+        if p > scat_height:
+            scat_bins = scat_bins + 1
+    scattering = float(scat_bins + 1) * float(period) /1000. #in s
+    u_scattering = 1. * float(period) /1000. # assumes the uncertainty is one bin
+
+    return [sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattering, u_scattering, scattered]
 
 #---------------------------------------------------------------
 def integral_multi_gauss(*params):
@@ -918,8 +1038,8 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, p
     #initialize minimum component length and ignore threshold
     if min_comp_len is None:
         min_comp_len = int(len(profile)/100 + 0.5) + 2
-    if min_comp_len < 5:
-        min_comp_len = 5
+    if min_comp_len < 3:
+        min_comp_len = 3
 
     #Normalize, find the std
     y = np.array(profile)/max(profile)
@@ -953,7 +1073,7 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, p
         else:
             on_pulse.append(fit[i])
 
-    _, maxima, _, maxima_e = find_minima_maxima_gauss(popt, pcov, len(fit))
+    _, maxima, _, maxima_e = find_minima_maxima_gauss(popt, pcov, len(fit), min_comp_len=min_comp_len)
 
     #estimate SN
     if period:
@@ -1058,9 +1178,13 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         try:
             prof_dict = prof_eval_gfit(profile, max_N=6, ignore_threshold=ignore_threshold, min_comp_len=min_comp_len, alpha=alpha, period=period)
             attempts_dict[alpha] = prof_dict
-        except(LittleClipError, LargeClipError, NoComponentsError):
+        except(LittleClipError, LargeClipError, NoComponentsError) as e:
+            logger.setLevel(loglvl)
+            logger.info(e)
+            logger.info("Skipping slpha value: {}".format(alpha))
+            logger.setLevel(logging.WARNING) #squelch logging for the loop
             pass
-    logger.setLevel(loglvl)
+
 
     #Evaluate the best profile based on reduced chi-squared.
     chi_diff = []
@@ -1068,6 +1192,11 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
     for alpha_key in attempts_dict.keys():
         chi_diff.append(abs(1 - attempts_dict[alpha_key]["redchisq"]))
         alphas.append(alpha_key)
+
+    if not chi_diff: #sometimes things go wrong :/
+        logger.error("Profile could not be fit. Returning empty dictionary!")
+        return {}
+
     best_chi = min(chi_diff)
     best_alpha = alphas[chi_diff.index(best_chi)]
     fit_dict = attempts_dict[best_alpha]

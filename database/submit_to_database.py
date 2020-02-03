@@ -193,15 +193,23 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     #estimate S/N
     prof_dict = prof_utils.auto_gfit(profile,\
                 period = period, plot_name="{0}_{1}_{2}_bins_gaussian_fit.png".format(obsid, pulsar, num_bins))
-    sn = prof_dict["sn"]
-    u_sn = prof_dict["sn_e"]
-    w_equiv_bins = prof_dict["Weq"]
-    u_w_equiv_bins =  prof_dict["Weq_e"]
-    w_equiv_ms = period/num_bins * w_equiv_bins
-    u_w_equiv_ms = period/num_bins * u_w_equiv_bins
-    scattering = prof_dict["Wscat"]*period/num_bins
-    u_scattering = prof_dict["Wscat_e"]*period/num_bins
-    scattered = prof_dict["scattered"]
+
+    if not prof_dict:
+        logger.info("Profile couldn't be fit. Using old style of profile analysis")
+        sn, u_sn, _, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattering, u_scattering, scattered =\
+            prof_utils.analyse_pulse_prof(profile, period, verbose=True)
+        w_equiv_ms = period/num_bins * w_equiv_bins
+        u_w_equiv_ms = period/num_bins * u_w_equiv_bins
+    else:
+        sn = prof_dict["sn"]
+        u_sn = prof_dict["sn_e"]
+        w_equiv_bins = prof_dict["Weq"]
+        u_w_equiv_bins =  prof_dict["Weq_e"]
+        w_equiv_ms = period/num_bins * w_equiv_bins
+        u_w_equiv_ms = period/num_bins * u_w_equiv_bins
+        scattering = prof_dict["Wscat"]*period/num_bins/1000 #convert to seconds
+        u_scattering = prof_dict["Wscat_e"]*period/num_bins/1000
+        scattered = prof_dict["scattered"]
 
     logger.info("Profile scattered? {0}".format(scattered))
     logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
