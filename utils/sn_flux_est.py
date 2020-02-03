@@ -683,8 +683,6 @@ def find_times(obsid, pulsar, beg=None, end=None, min_z_power=0.3):
         end = beg + exit_norm * t_int
 
     #type assurances
-    beg = int(beg)
-    end = int(end)
     obsid = int(obsid)
 
     if t_int is None:
