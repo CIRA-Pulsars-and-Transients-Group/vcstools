@@ -229,9 +229,9 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, ondisk=False, min_z_
     return enter_files, exit_files
 
 #---------------------------------------------------------------
-def ATNF_data_plot(pulsar_list):
+def ATNF_spectral_data_plot(pulsar_list):
     """
-    Given a list of pulsars, plots the data for each one from ATNF
+    Given a list of pulsars, plots the available spectral energy distribution for each one using data from ATNF
 
     Parameters:
     -----------
@@ -984,7 +984,7 @@ if __name__ == "__main__":
         if not args.pulsar:
             logger.error("Pulsar name must be supplied. Exiting...")
             sys.exit(1)
-        ATNF_data_plot(args.pulsar)
+        ATNF_spectral_data_plot(args.pulsar)
     else:
         logger.error("Valid mode not selected. Please refer to documentation for options")
         sys.exit(1)
