@@ -88,7 +88,6 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
     logger.info(base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range.")
     required_size = required_size
     # we need to get the number of unique seconds from the file names
-    meta = getmeta(service='obs', params={'obs_id':obsID})
     files = np.array(get_files(obsID))
     mask = np.array(['.dat' in file for file in files])
     if not startsec:

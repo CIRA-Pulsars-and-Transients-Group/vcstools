@@ -1183,7 +1183,6 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
             logger.info(e)
             logger.info("Skipping slpha value: {}".format(alpha))
             logger.setLevel(logging.WARNING) #squelch logging for the loop
-            pass
 
 
     #Evaluate the best profile based on reduced chi-squared.
