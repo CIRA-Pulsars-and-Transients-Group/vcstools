@@ -113,7 +113,7 @@ def test_est_pulsar_flux():
     print("est_pulsar_flux")
 
     test_cases = []
-    test_cases.append(("J2330-2005", 1226062160, 0.061795706713084243, 0.035885388925934944))
+    test_cases.append(("J2330-2005", 1226062160, 0.15964747164099558, 0.02807867696250783))
 
     for psr, obsid, exp_flux, exp_flux_err in test_cases:
         flux, flux_err = snfe.est_pulsar_flux(psr, obsid)
@@ -125,31 +125,34 @@ def test_est_pulsar_sn():
     """
     I have tested this function various pulsar/observation combinations and compared to the estimated S/N from bestrof files. Here are the results:
 
-    1225462936, -b 1225462943 -e 1225463543 psr J0152-1637: The function estimated a S/N of 99.39 +/- 23.55. I compared this to what was estimated from the profile analyse_pulse_prof() and attained a S/N of 75.26 +/- 1.70
+    1225462936, -b 1225462943 -e 1225463543 psr J0152-1637: The function estimated a S/N of 100.92 +/- 22.48.
+    I compared this to what was estimated from the profile analyse_pulse_prof() and attained a S/N of 75.26 +/- 1.70
 
-    1226062160, -b 1226062167 -e 1226062767 psr J2330-2005: Function estimated a S/N of 62.21 +/- 38.63. Compared this to the profile estimation and attained S/N of 51.51 +/- 1.16
+    1226062160, -b 1226062167 -e 1226062767 psr J2330-2005: Function estimated a S/N of 412.26 +/- 103.80.
+    I compared this to the profile estimation and attained S/N of 51.51 +/- 1.16
 
-    1225713560, -b 1225713567 -e 1225714167, psr J2241-5236: Function estimated a S/N of 75.61 +/-27.27. Compared this to the profile estimation and attained S/N of 17.36 +/- 2.41
+    1225713560, -b 1225713567 -e 1225714167, psr J2241-5236: Function estimated a S/N of 119.82 +/- 41.61.
+    I Compared this to the profile estimation and attained S/N of 17.36 +/- 2.41
 
     """
     print("est_pulsar_sn")
     test_cases=[]
     #Has 3 fluxes on database
     test_cases.append(("J2241-5236", 1225713560, None, None, None, None, None, None,\
-                    210.73514723357826, 76.172577391391144))
+                    317.75361997000766, 111.37467565933801))
     #Has 6 fluxes on database
     test_cases.append(("J2330-2005", 1226062160, None, None, "23:00:00", "-20:00:00", None, None,\
-                    170.21786481066005, 105.7680352306031))
+                    293.1886829824123, 93.36097783427014))
     #adding a test that gave a none type error for alpha_bound, c_bound
-    test_cases.append(("J1623-2631", 1117643248, 1117643268, 1117645615, None, None, 0.000, 0.842,
-                    54.87670949932577, 10.834221841785626))
+    test_cases.append(("J1623-2631", 1117643248, 1117643268, 1117645615, None, None, 0.000, 0.842,\
+                    49.81658085212985, 12.307207767010034))
 
 
     for psr, obsid, beg, end, ra, dec, enter, exit, exp_sn, exp_sn_err in test_cases:
         sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec,\
                     o_enter=enter, o_exit=exit, trcvr='database/MWA_Trcvr_tile_56.csv')
-        assert_almost_equal(exp_sn, sn, decimal=5)
-        assert_almost_equal(exp_sn_err, sn_err, decimal=5)
+        assert_almost_equal(exp_sn, sn, decimal=2)
+        assert_almost_equal(exp_sn_err, sn_err, decimal=2)
 
 
 if __name__ == "__main__":

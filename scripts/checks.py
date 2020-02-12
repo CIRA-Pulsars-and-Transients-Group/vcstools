@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 import traceback
 import logging
-from mwa_metadb_utils import getmeta
+from mwa_metadb_utils import getmeta, get_files
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +88,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
     logger.info(base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range.")
     required_size = required_size
     # we need to get the number of unique seconds from the file names
-    meta = getmeta(service='obs', params={'obs_id':obsID})
-    files = np.array(list(meta['files'].keys()))
+    files = np.array(get_files(obsID))
     mask = np.array(['.dat' in file for file in files])
     if not startsec:
         times = [time[11:21] for time in files[mask]]
@@ -178,7 +177,9 @@ def get_files_and_sizes(obsID, mode):
         logger.error("Wrong mode supplied. Options are raw, tar_ics, and ics")
         return
     logger.info("Retrieving file info from MWA database for all {0} files...".format(suffix))
-    meta = getmeta(service='obs', params={'obs_id':obsID})
+    meta = getmeta(service='obs', params={'obs_id':obsID, 'nocache':1})
+    # 'nocache' is used above so we get don't use the cached metadata as that could
+    # be out of data so we force it to get up to date values
     files = np.array(list(meta['files'].keys()))
     files_masked = []
     sizes = []

@@ -37,7 +37,8 @@ from astropy import units as u
 #MWA scripts
 import sn_flux_est as sfe
 from mwa_pb import primary_beam
-from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata, get_obs_array_phase
+from mwa_metadb_utils import mwa_alt_az_za, get_common_obs_metadata,\
+                             get_obs_array_phase, find_obsids_meta_pages
 
 import logging
 logger = logging.getLogger(__name__)
@@ -137,7 +138,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
     ----------
     source_type: string
         The type of source you would like to get the catalogue for.
-        Your choices are: ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
+        Your choices are: ['Pulsar', 'FRB', 'rFRB', 'POI' 'RRATs', 'Fermi']
         Default: 'Pulsar'
     pulsar_list: list
         List of sources you would like to extract data for.
@@ -157,7 +158,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         A list for each source which contains a [source_name, RA, Dec (, DM)]
         where RA and Dec are in the format HH:MM:SS
     """
-    modes = ['Pulsar', 'FRB', 'rFRB', 'RRATs', 'Fermi']
+    modes = ['Pulsar', 'FRB', 'rFRB', 'POI', 'RRATs', 'Fermi']
     if source_type not in modes:
         logger.error("Input source type not in known catalogues types. Please choose from: {0}".format(modes))
         return None
@@ -190,6 +191,14 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
                     name_ra_dec.append([line[0], line[1], line[2], line[3]])
                 else:
                     name_ra_dec.append([line[0], line[1], line[2]])
+
+    elif source_type == "POI":
+        #POI = points of interest
+        db = open(os.environ["POI_CSV"], "r")
+        for line in db.readlines():
+            if not line.startswith("#"):
+                line = line.split(",")
+                name_ra_dec.append([line[0], line[1], line[2]])
 
     elif source_type == 'RRATs':
         import urllib.request
@@ -322,28 +331,6 @@ def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
 
     return ra_dec_list
 
-
-def find_obsids_meta_pages(params={'mode':'VOLTAGE_START'}):
-    """
-    Loops over pages for each page for MWA metadata calls
-    """
-    obsid_list = []
-    temp =[]
-    page = 1
-    #need to ask for a page of results at a time
-    while len(temp) == 200 or page == 1:
-        params['page'] = page
-        logger.debug("Page: {0}   params: {1}".format(page, params))
-        temp = getmeta(service='find', params=params)
-        if temp is not None:
-            # if there are non obs in the field (which is rare) None is returned
-            for row in temp:
-                obsid_list.append(row[0])
-        else:
-            temp = []
-        page += 1
-
-    return obsid_list
 
 def singles_source_search(ra, dec):
     """
@@ -645,12 +632,16 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                 source_ob_power = powers[on][sn]
                 if max(source_ob_power) > min_power:
                     duration = obsid_meta[on][3]
+                    centre_freq = obsid_meta[on][5] #MHz
+                    channels = obsid_meta[on][6]
+                    bandwidth = (channels[-1] - channels[0] + 1.)*1.28 #MHz
                     logger.debug("Running beam_enter_exit on obsid: {}".format(obsid))
                     enter, exit = beam_enter_exit(source_ob_power,duration,
                                                   dt=dt, min_power=min_power)
                     if enter is not None:
                         source_data.append([obsid, duration, enter, exit,
-                                            max(source_ob_power)[0]])
+                                            max(source_ob_power)[0],
+                                            centre_freq, bandwidth])
             # For each source make a dictionary key that contains a list of
             # lists of the data for each obsid
             output_data[source[0]] = source_data
@@ -674,7 +665,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
 
 def write_output_source_files(output_data,
                               beam='analytic', min_power=0.3, cal_check=False,
-                              SN_est=False):
+                              SN_est=False, plot_est=False):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is true.
     """
@@ -695,6 +686,9 @@ def write_output_source_files(output_data,
             output_file.write("#OAP:    The observation's array phase where P1 is the "
                                         "phase 1 array, P2C is the phase compact array "
                                         "and P2E is the phase 2 extended array.\n")
+            output_file.write("#Freq:   The centre frequency of the observation in MHz\n")
+            output_file.write("#Band:   Bandwidth of the observation in MHz. If it is greater "
+                                        "than 30.72 than it is a picket fence observation\n")
 
             if SN_est:
                 output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
@@ -702,7 +696,7 @@ def write_output_source_files(output_data,
             if cal_check:
                 output_file.write('#Cal ID: Observation ID of an available '+\
                                             'calibration solution\n')
-            output_file.write('#Obs ID   |Dur |Enter|Exit |Power| OAP ')
+            output_file.write('#Obs ID   |Dur |Enter|Exit |Power| OAP | Freq | Band ')
             if SN_est:
                 output_file.write("|S/N Est|S/N Err")
 
@@ -711,12 +705,12 @@ def write_output_source_files(output_data,
             else:
                 output_file.write('\n')
             for data in output_data[source]:
-                obsid, duration, enter, exit, max_power = data
+                obsid, duration, enter, leave, max_power, freq, band = data
                 oap = get_obs_array_phase(obsid)
-                output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}'.format(obsid,
-                                  duration, enter, exit, max_power, oap))
+                output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}   {:6.2f} {:6.2f}'.\
+                           format(obsid, duration, enter, leave, max_power, oap, freq, band))
                 if SN_est:
-                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid)
+                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(source, obsid, plot_flux=plot_est)
                     if pulsar_sn is None:
                         output_file.write('   None    None')
                     else:
@@ -735,7 +729,7 @@ def write_output_source_files(output_data,
 
 def write_output_obs_files(output_data, obsid_meta,
                            beam='analytic', min_power=0.3,
-                           cal_check=False, SN_est=False):
+                           cal_check=False, SN_est=False, plot_est=False):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is false.
     """
@@ -780,7 +774,7 @@ def write_output_obs_files(output_data, obsid_meta,
                     beg = int(obsid) + 7
                     end = beg + int(obsid_meta[on][3])
                     pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid, beg=beg, end=end,\
-                      obs_metadata=obsid_meta[on], o_enter=enter, o_exit=exit)
+                      obs_metadata=obsid_meta[on], o_enter=enter, o_exit=exit, plot_flux=plot_est)
                     if pulsar_sn is None:
                         output_file.write('   None    None\n')
                     else:
@@ -821,11 +815,14 @@ if __name__ == "__main__":
     #observation options
     obargs = parser.add_argument_group('Observation ID options', 'The different options to control which observation IDs are used. Default is all observation IDs with voltages.')
     obargs.add_argument('--FITS_dir',type=str,help='Instead of searching all OBS IDs, only searchs for the obsids in the given directory. Does not check if the .fits files are within the directory. Default = /group/mwaops/vcs')
-    obargs.add_argument('-o','--obsid',type=str,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
+    obargs.add_argument('-o','--obsid',type=int,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
     obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
     obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
     obargs.add_argument('--sn_est',action='store_true',help='Make a expected signal to noise calculation using the flux densities from the ANTF pulsar catalogue and include them in the output file. Default: False.')
+    obargs.add_argument('--plot_est',action='store_true',help='If used, will output flux estimation plots while sn_est arg is true. Default: False.')
     args=parser.parse_args()
+
+
 
     if args.version:
         try:
@@ -929,9 +926,9 @@ if __name__ == "__main__":
         write_output_source_files(output_data,
                                   beam=args.beam, min_power=args.min_power,
                                   cal_check=args.cal_check,
-                                  SN_est=args.sn_est)
+                                  SN_est=args.sn_est, plot_est=args.plot_est)
     else:
         write_output_obs_files(output_data, obsid_meta,
                                beam=args.beam, min_power=args.min_power,
                                cal_check=args.cal_check,
-                               SN_est=args.sn_est)
+                               SN_est=args.sn_est, plot_est=args.plot_est)

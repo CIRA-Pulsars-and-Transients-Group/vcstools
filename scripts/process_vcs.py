@@ -21,10 +21,19 @@ import glob
 #vcstools functions
 from job_submit import submit_slurm
 import mwa_metadb_utils as meta
-import database_vcs
+
 import config
 
 logger = logging.getLogger(__name__)
+
+try:
+    DB_FILE = os.environ['CMD_VCS_DB_FILE']
+except KeyError:
+    logger.warning("Environmental variable CMD_VCS_DB_FILE is not defined so the "
+                   "vcs command database will not be used")
+    DB_FILE = None
+else:
+    import database_vcs
 
 
 def chunks(l, n):
@@ -136,31 +145,51 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         copy2("{0}".format(metafits_file), "{0}".format(product_dir))
 
 def create_link(data_dir, target_dir, product_dir, link):
+    """
+    Creates a symbolic link product_dir/link that points to data_dir/target_dir
+
+    Parameters:
+    -----------
+    data_dir: string
+        The absolute path to the base directory of the true location of the files.
+        For our uses this is often a scratch partition like /astro on Galaxy
+    target_dir: string
+        The folder you would like to be linked to
+    product_dir: string
+        The absolute path of the link you would like to create
+    link: string
+        The name of the link you would like to create. Often the same as target_dir
+    """
     data_dir = os.path.abspath(data_dir)
     product_dir = os.path.abspath(product_dir)
     if data_dir == product_dir:
+        # base directories are the same so doing nothing
         return
+
+    # add product_dir and data_dir to link and target_dir respectively
     link = link.replace(product_dir, '') # just in case...
-    link = product_dir + '/' + link
+    link = link.replace('/', '')
+    link = os.path.join(product_dir, link)
     target_dir = target_dir.replace(data_dir,'')
     if target_dir.startswith("/"):
         target_dir = target_dir[1:]
-    if data_dir.endswith("/"):
-        data_dir = data_dir[:-1]
-    target_dir = data_dir + '/' + target_dir
+    target_dir = os.path.join(data_dir, target_dir)
+
     # check if link exists and whether it already points to where we'd like it to
     if os.path.exists(link):
         if os.path.islink(link):
             if os.readlink(link) == target_dir:
                 return
             else:
-                logger.error("The link {0} already exists but points at {1} while you asked it to point at {2}. Aborting...".format(link, os.readlink(link), target_dir))
-                sys.exit(0)
+                logger.warning("The link {0} already exists but points at {1} while you "
+                               "asked it to point at {2}. Deleting the link and creating"
+                               "a new one".format(link, os.readlink(link), target_dir))
+                os.unlink(link)
+                os.symlink(target_dir, link)
         else:
             logger.error("{0} is an existing directory and cannot be turned into a link. Aborting...".format(link))
             sys.exit(0)
     else:
-        #needs to point at vis on scratch for gpubox files
         logger.info("Trying to link {0} against {1}".format(link, target_dir))
         os.symlink(target_dir, link)
 
@@ -175,11 +204,9 @@ def get_frequencies(metafits,resort=False):
         return freq_array
 
 def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
-                 product_dir, parallel, args,
+                 product_dir, parallel, vcs_database_id,
                  ics=False, n_untar=2, keep="", vcstools_version="master",
                  nice=0):
-
-    vcs_database_id = database_vcs.database_command(args, obsid)
     #Load computer dependant config file
     comp_config = config.load_config_file()
 
@@ -216,7 +243,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
         if time_to_get + increment > stop_time:
             increment = stop_time - time_to_get + 1
         get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".\
-                   format(voltdownload,obsid, data_type, time_to_get,
+                   format(voltdownload, obsid, data_type, time_to_get,
                           (increment-1), parallel, dl_dir)
         #need to subtract 1 from increment since voltdownload wants how many
         #seconds PAST the first one
@@ -232,28 +259,12 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             check_secs_to_run = "15:00"
             if data_type == 16:
                 check_secs_to_run = "10:15:00"
-                #tar_batch = "untar_{0}".format(time_to_get)
-                #tar_secs_to_run = "10:00:00"
-                #body = []
-                #untar = distutils.spawn.find_executable('untar.sh')
-                #body.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']])
-                #body.append(database_vcs.add_database_function())
-                #body.append('run "{0}"  "-w {1} -o {2} -b {3} -e {4} -j {5} {6}" "{7}"'.format(
-                #            untar, dl_dir, obsid, time_to_get,
-                #            time_to_get+increment-1, n_untar, keep, vcs_database_id))
-
-                #submit_slurm(tar_batch, body, batch_dir=batch_dir,
-                #             slurm_kwargs={"time": str(tar_secs_to_run), "partition": "workq",
-                #                           "nice": nice},
-                #             vcstools_version=vcstools_version, submit=False,
-                #             outfile=batch_dir+tar_batch+".out", cluster="zeus", export="NONE")
 
             checks = distutils.spawn.find_executable("checks.py")
             # Write out the checks batch file but don't submit it
             commands = []
-            #commands.append("module load numpy")
-            commands.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']))
-            commands.append(database_vcs.add_database_function())
+            if vcs_database_id is not None:
+                commands.append(database_vcs.add_database_function())
             commands.append("newcount=0")
             commands.append("let oldcount=$newcount-1")
             commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".\
@@ -261,17 +272,26 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             commands.append("oldcount=$newcount; let newcount=$newcount+1")
             commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".\
                             format(batch_dir+voltdownload_batch+".batch"))
-            commands.append('run "{0}" "-m download -o {1} -w {2} -b {3} -i {4} --data_type {5}" "{6}"'.format(checks, obsid, dl_dir, time_to_get, increment, str(data_type),vcs_database_id))
+            checks_command = "-m download -o {0} -w {1} -b {2} -i {3} --data_type {4}".format(obsid,
+                              dl_dir, time_to_get, increment, data_type)
+            if vcs_database_id is None:
+                commands.append('{0} {1}'.format(checks, checks_command))
+            else:
+                commands.append('run "{0}" "{1}" "{2}"'.format(checks, checks_command, vcs_database_id))
             commands.append("if [ $? -eq 1 ];then")
             commands.append("sbatch {0}".format(batch_dir+voltdownload_batch+".batch"))
             # if we have tarballs we send the untar jobs to the workq
             if data_type == 16:
                 commands.append("else")
                 untar = distutils.spawn.find_executable('untar.sh')
-                commands.append('run "{0}" "-w {1} -o {2} '
-                                '-b {3} -e {4} -j {5} {6}" "{7}"'.format(untar, dl_dir,
-                                       obsid, time_to_get, time_to_get+increment-1, n_untar,
-                                       keep, vcs_database_id))
+                untar_command = "-w {0} -o {1} -b {2} -e {3} -j {4} {5}".format(dl_dir,
+                                 obsid, time_to_get, time_to_get+increment-1, n_untar,
+                                 keep)
+                if vcs_database_id is None:
+                    commands.append('{0} {1}'.format(untar, untar_command))
+                else:
+                    commands.append('run "{0}" "{1}" "{2}"'.format(untar,
+                                    untar_command, vcs_database_id))
 
                 #commands.append("sbatch {0}.batch".format(batch_dir+tar_batch))
             commands.append("fi")
@@ -280,11 +300,10 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             # on Galaxy as the Ozstar workflow is different
             submit_slurm(check_batch, commands, batch_dir=batch_dir,
                          slurm_kwargs={"time": check_secs_to_run,
-                                       "nice": nice,
-                                       "mem-per-cpu": "10GB"},
+                                       "nice": nice},
                          vcstools_version=vcstools_version, submit=False,
                          outfile=batch_dir+check_batch+"_0.out",
-                         queue="zcpuq", export="NONE")
+                         queue="zcpuq", export="NONE", mem=10240)
 
             # Write out the tar batch file if in mode 15
             #if format == 16:
@@ -294,11 +313,12 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
             #        submit_slurm(tar_batch,body,batch_dir=working_dir+"/batch/", slurm_kwargs={"time":"1:00:00", "partition":"gpuq" })
 
 
-
-            module_list=["mwa-voltage/master"]
+            #module_list=["mwa-voltage/master"]
+            #removed the master version load because by default we load the python 3 version
+            module_list=[]
             body = []
-            body.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']))
-            body.append(database_vcs.add_database_function())
+            if vcs_database_id is not None:
+                body.append(database_vcs.add_database_function())
             body.append("oldcount=0")
             body.append("let newcount=$oldcount+1")
             body.append("if [ ${newcount} -gt 10 ]; then")
@@ -310,16 +330,21 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
                         format(batch_dir+check_batch+".batch"))
             body.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".\
                         format(batch_dir+check_batch+".batch"))
-            body.append('run "{0}" "--obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}" "{7}"'.\
-                        format(voltdownload,obsid, data_type, time_to_get,
-                               (increment-1),parallel, dl_dir, vcs_database_id))
+            voltdownload_command = "--obs={0} --type={1} --from={2} --duration={3} --parallel={4}"\
+                                   " --dir={5}".format(obsid, data_type, time_to_get, increment-1,
+                                   parallel, dl_dir)
+            if vcs_database_id is None:
+                body.append("{0} {1}".format(voltdownload, voltdownload_command))
+            else:
+                body.append('run "{0}" "{1}" "{2}"'.format(voltdownload, voltdownload_command,
+                                                           vcs_database_id))
             submit_slurm(voltdownload_batch, body, batch_dir=batch_dir,
                          module_list=module_list,
                          slurm_kwargs={"time": str(volt_secs_to_run),
                                        "nice" : nice},
                          vcstools_version=vcstools_version,
                          outfile=batch_dir+voltdownload_batch+"_1.out",
-                         queue="copyq", export="NONE")
+                         queue="copyq", export="NONE", mem=5120)
 
             # submit_cmd = subprocess.Popen(volt_submit_line,shell=True,stdout=subprocess.PIPE)
             continue
@@ -332,10 +357,9 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
 
 
 
-def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
+def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id, head=False,
                  vcstools_version="master", nice=0):
 
-    vcs_database_id = database_vcs.database_command(args, obs_id)
     #Load computer dependant config file
     comp_config = config.load_config_file()
 
@@ -370,14 +394,14 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         # we create the link using bash and not our create_link function
         # as we'd like to do this only once the data have arrived,
         # i.e. the download worked.
-        make_link = "ln -s {0} {1}/{2}".format(data_dir, product_dir, link)
+        make_link = "ln -sfn {0} {1}/{2}".format(data_dir, product_dir, link)
         obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
         secs_to_run = "03:00:00" # sometimes the staging can take a while...
         module_list = ["setuptools"]
         commands = []
         commands.append("module load manta-ray-client")
-        commands.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']))
-        commands.append(database_vcs.add_database_function())
+        if vcs_database_id is not None:
+            commands.append(database_vcs.add_database_function())
         commands.append("csvfile={0}".format(csvfile))
         # commands.append('source /group/mwaops/PULSAR/psrBash.profile')
         # commands.append('module load setuptools')
@@ -394,20 +418,18 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, args, head=False,
         commands.append('echo "obs_id={0}, job_type=d, download_type=vis" > {1}'.\
                         format(cal_obs_id,csvfile))
         commands.append('mwa_client --csv={0} --dir={1}'.format(csvfile,data_dir))
-        # commands.append('run "{0}" "-o {1} -d {2}" "{3}"'.format(obsdownload,cal_obs_id, data_dir,vcs_database_id))
         commands.append(make_link)
         commands.append('unzip *.zip')
         submit_slurm(obsdownload_batch, commands, batch_dir=batch_dir,
                      module_list=module_list,
                      slurm_kwargs={"time": secs_to_run, "nice": nice},
                      vcstools_version=vcstools_version, queue="copyq",
-                     export="NONE", mem=2048)
+                     export="NONE", mem=4096)
 
 
-def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir, args,
-                  vcstools_version="master", nice=0):
+def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir,
+                  vcs_database_id, vcstools_version="master", nice=0):
 
-    vcs_database_id = database_vcs.database_command(args, obsid)
     #Load computer dependant config file
 
     logger.info("Running recombine on files")
@@ -429,8 +451,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         check_batch = "check_recombine_{0}".format(time_to_get)
         module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3", "numpy/1.13.3", "mwa-voltage/master"]
         commands = []
-        commands.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']))
-        commands.append(database_vcs.add_database_function())
+        if vcs_database_id is not None:
+            commands.append(database_vcs.add_database_function())
         commands.append("newcount=0")
         commands.append("let oldcount=$newcount-1")
         commands.append("sed -i -e \"s/oldcount=${{oldcount}}/oldcount=${{newcount}}/\" {0}".\
@@ -438,9 +460,13 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         commands.append("oldcount=$newcount; let newcount=$newcount+1")
         commands.append("sed -i -e \"s/_${{oldcount}}.out/_${{newcount}}.out/\" {0}".\
                         format(batch_dir+recombine_batch+".batch"))
-        commands.append('run "{0}" "-m recombine -o {1} -w {2}/combined/ -b {3} -i {4}" "{5}"'.\
-                        format(checks, obsid, data_dir, time_to_get,
-                               process_nsecs, vcs_database_id))
+        checks_command = "-m recombine -o {0} -w {1}/combined/ -b {2} -i {3}".format(obsid,
+                          data_dir, time_to_get, process_nsecs)
+        if vcs_database_id is None:
+            commands.append("{0} {1}".format(checks, checks_command))
+        else:
+            commands.append('run "{0}" "{1}" "{2}"'.format(checks, checks_command,
+                                                           vcs_database_id))
         commands.append("if [ $? -eq 1 ];then")
         commands.append("sbatch {0}".format(batch_dir+recombine_batch+".batch"))
         commands.append("fi")
@@ -454,11 +480,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3",
                        "numpy/1.13.3", "mwa-voltage/master", "mpi4py", "cfitsio"]
         commands = []
-        commands.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']))
-        commands.append(database_vcs.add_database_function())
-        #commands.append("module switch PrgEnv-cray PrgEnv-gnu")
-        #commands.append("module load mpi4py")
-        #commands.append("module load cfitsio")
+        if vcs_database_id is not None:
+            commands.append(database_vcs.add_database_function())
         commands.append("oldcount=0")
         commands.append("let newcount=$oldcount+1")
         commands.append("if [ ${newcount} -gt 10 ]; then")
@@ -470,9 +493,13 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                         format(batch_dir+check_batch+".batch"))
         commands.append("sbatch -d afterany:${{SLURM_JOB_ID}} {0}".\
                         format(batch_dir+check_batch+".batch"))
-        commands.append('run "srun --export=all python3 {0}" "-o {1} -s {2} -w {3} -e {4}" "{5}"'.\
-                        format(recombine, obsid, time_to_get, data_dir,
-                               recombine_binary, vcs_database_id))
+        recombine_command = "-o {0} -s {1} -w {2} -e {3}".format(obsid, time_to_get,
+                            data_dir, recombine_binary)
+        if vcs_database_id is None:
+            commands.append("srun --export=all python3 {0} {1}".format(recombine, recombine_command))
+        else:
+            commands.append('run "srun --export=all python3 {0}" "{1}" "{2}"'.format(recombine,
+                            recombine_command, vcs_database_id))
 
         submit_slurm(recombine_batch, commands, batch_dir=batch_dir,
                      module_list=module_list,
@@ -486,10 +513,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 
 
 
-def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, args, metafits,
-                  vcstools_version="master", nice=0):
+def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
+                  vcs_database_id, metafits, vcstools_version="master", nice=0):
 
-    vcs_database_id = database_vcs.database_command(args, obsid)
     logger.info("Correlating files at {0} kHz and {1} milliseconds".\
                 format(ft_res[0], ft_res[1]))
 
@@ -533,15 +559,8 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
             if (len(f) > 0):
                 corr_batch = "correlator_{0}_gpubox{1:0>2}".format(inc_start,gpubox_label)
                 body = []
-                body.append("export CMD_VCS_DB_FILE={0}".format(os.environ['CMD_VCS_DB_FILE']))
-                body.append(database_vcs.add_database_function())
-                #body.append("source /group/mwaops/PULSAR/psrBash.profile")
-                #body.append("module swap craype-ivybridge craype-sandybridge")
-
-                # with open(corr_batch, 'w') as batch_file:
-                #     batch_file.write("#!/bin/bash -l\n#SBATCH --nodes=1\n#SBATCH --account=mwaops\n#SBATCH --export=NONE\n#SBATCH --output={0}.out\n".format(corr_batch[:-6]))
-                #     batch_file.write('source /group/mwaops/PULSAR/psrBash.profile\n')
-                #     batch_file.write('module swap craype-ivybridge craype-sandybridge\n')
+                if vcs_database_id is not None:
+                    body.append(database_vcs.add_database_function())
                 to_corr = 0
                 for file in f:
                     (current_time,_) = os.path.splitext(os.path.basename(file))
@@ -549,11 +568,16 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                     t = Time(int(gpstime), format='gps', scale='utc')
                     unix_time = int(t.unix)
 
-                    body.append('run "srun --export=all {0}" "-o {1}/{2} -s {3} -r {4} -i {5} -f 128 -n {6} -c {7:0>2} -d {8}" "{9}"'.\
-                                format("offline_correlator", corr_dir, obsid,
-                                       unix_time, num_frames, integrations,
-                                       int(ft_res[0]/10), gpubox_label, file,
-                                       vcs_database_id))
+                    offline_correlator_command = "-o {0}/{1} -s {2} -r {3} -i {4} -f 128 -n {5} "\
+                                                 "-c {6:0>2} -d {7}".format(corr_dir, obsid,
+                                                 unix_time, num_frames, integrations,
+                                                 int(ft_res[0]/10), gpubox_label, file)
+                    if vcs_database_id is None:
+                        body.append("srun --export=all {0} {1}".format("offline_correlator",
+                                    offline_correlator_command))
+                    else:
+                        body.append('run "srun --export=all {0}" "{1}" "{2}"'.format("offline_correlator",
+                                    offline_correlator_command, vcs_database_id))
                     to_corr += 1
 
                 module_list = ["module switch PrgEnv-cray PrgEnv-gnu"]
@@ -564,21 +588,16 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res, arg
                                            "gres": "gpu:1"},
                              queue='gpuq', vcstools_version=vcstools_version,
                              batch_dir=batch_dir, export="NONE")
-                # batch_submit_line = "sbatch --workdir={0} --time={1} --partition=gpuq --gid=mwaops {2} \n".format(corr_dir,secs_to_run,corr_batch)
-                # submit_cmd = subprocess.Popen(batch_submit_line,shell=True,stdout=subprocess.PIPE)
-                # jobid=""
-                # for line in submit_cmd.stdout:
-                #     if "Submitted" in line:
-                #         (word1,word2,word3,jobid) = line.split()
             else:
                 logger.error("Couldn't find any recombine files. Aborting here.")
 
 
 def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
-                  metafits_file, nfine_chan, pointing_list, args,
+                  metafits_file, nfine_chan, pointing_list,
                   rts_flag_file=None, bf_formats=None, DI_dir=None,
                   execpath=None, calibration_type='rts',
-                  vcstools_version="master", nice=0, channels_to_beamform=None):
+                  vcstools_version="master", nice=0, channels_to_beamform=None,
+                  dpp=False):
     """
     This function runs the new version of the beamformer. It is modelled after
     the old function above and will likely be able to be streamlined after
@@ -586,7 +605,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
     Streamlining underway, as well as full replacement of the old function (SET March 28, 2018)
     """
-    _ = database_vcs.database_command(args, obs_id)
 
     #Load computer dependant config file
     comp_config = config.load_config_file()
@@ -650,9 +668,16 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     # make_beam_small requires the start time in UTC, get it from the start
     utctime = gps_to_utc(start)
 
-    logging.info("Running make_beam")
-    P_dir = product_dir+"/pointings"
-    mdir(P_dir, "Pointings")
+    if dpp:
+        # running the Data Processing Pipeline so make a symlink to /astro so we
+        # don't run out of space on /group
+        target_dir = link = "dpp_pointings"
+        P_dir = os.path.join(product_dir, link)
+        mdir(os.path.join(data_dir, target_dir), "DPP Pointings")
+        create_link(data_dir, target_dir, product_dir, link)
+    else:
+        P_dir = os.path.join(product_dir, "pointings")
+        mdir(P_dir, "Pointings")
     # startjobs = True
 
     # Set up supercomputer dependant parameters
@@ -697,6 +722,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     pointing_list_list = list(chunks(pointing_list, max_pointing))
     time_now = str(datetime.datetime.now()).replace(" ", "_")
 
+    logging.info("Running make_beam")
     job_id_list_list = []
     for pl, pointing_list in enumerate(pointing_list_list):
         pointing_str = ",".join(pointing_list)
@@ -985,16 +1011,22 @@ if __name__ == '__main__':
     logger.info("Processing Obs ID {0} from GPS times {1} till {2}".\
                 format(args.obs, args.begin, args.end))
 
+    # Record command in database
+    if DB_FILE is not None:
+        vcs_database_id = database_vcs.database_command(sys.argv, args.obs)
+    else:
+        vcs_database_id = None
+
     if args.mode == 'download_ics':
         logger.info("Mode: {0}".format(args.mode))
         vcs_download(args.obs, args.begin, args.end, args.increment, args.head,
-                     data_dir, product_dir, args.parallel_dl, sys.argv,
+                     data_dir, product_dir, args.parallel_dl, vcs_database_id,
                      ics=True, vcstools_version=args.vcstools_version,
                      nice=args.nice)
     elif args.mode == 'download':
         logger.info("Mode: {0}".format(args.mode))
         vcs_download(args.obs, args.begin, args.end, args.increment, args.head,
-                     data_dir, product_dir, args.parallel_dl, sys.argv,
+                     data_dir, product_dir, args.parallel_dl, vcs_database_id,
                      n_untar=args.untar_jobs,
                      keep='-k' if args.keep_tarball else "",
                      vcstools_version=args.vcstools_version, nice=args.nice)
@@ -1002,13 +1034,13 @@ if __name__ == '__main__':
         logger.info("Mode: {0}".format(args.mode))
         ensure_metafits(data_dir, args.obs, metafits_file)
         vcs_recombine(args.obs, args.begin, args.end, args.increment, data_dir,
-                      product_dir, sys.argv,
+                      product_dir, vcs_database_id,
                       vcstools_version=args.vcstools_version, nice=args.nice)
     elif args.mode == 'correlate':
         logger.info("Mode: {0}".format(args.mode))
         ensure_metafits(data_dir, args.obs, metafits_file)
         vcs_correlate(args.obs, args.begin, args.end, args.increment, data_dir,
-                      product_dir, args.ft_res, sys.argv, metafits_file,
+                      product_dir, args.ft_res, vcs_database_id, metafits_file,
                       vcstools_version=args.vcstools_version, nice=args.nice)
     elif args.mode == 'download_cal':
         logger.info("Mode: {0}".format(args.mode))
@@ -1023,7 +1055,7 @@ if __name__ == '__main__':
             sys.exit(0)
         data_dir = data_dir.replace(str(args.obs), str(args.cal_obs))
         mdir(data_dir, "Calibrator Data")
-        download_cal(args.obs, args.cal_obs, data_dir, product_dir, sys.argv,
+        download_cal(args.obs, args.cal_obs, data_dir, product_dir, vcs_database_id,
                      args.head, vcstools_version=args.vcstools_version,
                      nice=args.nice)
     elif args.mode == ('beamform' or 'incoh'):
@@ -1062,7 +1094,7 @@ if __name__ == '__main__':
 
         coherent_beam(args.obs, args.begin, args.end,
                       data_dir, product_dir, batch_dir,
-                      metafits_file, args.nfine_chan, pointing_list, args,
+                      metafits_file, args.nfine_chan, pointing_list,
                       rts_flag_file=flagged_tiles_file,
                       bf_formats=bf_format, DI_dir=args.DI_dir,
                       calibration_type=args.cal_type,
