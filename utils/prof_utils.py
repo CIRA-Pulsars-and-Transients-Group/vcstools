@@ -25,6 +25,9 @@ class LargeClipError(Exception):
 class NoComponentsError(Exception):
     """Raise when there are no feasible profile components"""
     pass
+class ProfileLengthError(Exception):
+    """Raise when a profile's legnth is too small to be fit"""
+    pass
 
 #---------------------------------------------------------------
 def get_from_bestprof(file_loc):
@@ -216,7 +219,7 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
             return oldstd, x
 
         if trial + 1 == ntrials:
-            logger.warn("Reached number of trials without reaching tolerance level")
+            logger.info("Reached number of trials without reaching tolerance level")
             np.seterr(**old_settings)
             return oldstd, x
 
@@ -726,9 +729,9 @@ def analyse_pulse_prof(prof_data, period, verbose=True):
         u_w_equiv_bins = (u_w_equiv_ms/w_equiv_ms)*w_equiv_bins
 
     #calc scattering
-    scat_height = max(profile) / 2.71828
+    scat_height = max(prof_data) / 2.71828
     scat_bins = 0
-    for p in profile:
+    for p in prof_data:
         if p > scat_height:
             scat_bins = scat_bins + 1
     scattering = float(scat_bins + 1) * float(period) /1000. #in s
@@ -1167,6 +1170,9 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         scattered: boolean
             True is the profile is scattered. Will be None is period unsupplied
     """
+    if len(profile)<100:
+        raise ProfileLengthError("Profile must have length > 100")
+
     alphas = np.linspace(1, 5, 9)
     attempts_dict = {}
 
@@ -1181,10 +1187,10 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         except(LittleClipError, LargeClipError, NoComponentsError) as e:
             logger.setLevel(loglvl)
             logger.info(e)
-            logger.info("Skipping slpha value: {}".format(alpha))
+            logger.info("Skipping alpha value: {}".format(alpha))
             logger.setLevel(logging.WARNING) #squelch logging for the loop
-
-
+    logger.setLevel(loglvl)
+    
     #Evaluate the best profile based on reduced chi-squared.
     chi_diff = []
     alphas = []
