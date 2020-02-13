@@ -16,9 +16,6 @@ import matplotlib.pyplot as plt
 #Astropy
 from astropy.table import Table
 
-#scipy
-from scipy.optimize import curve_fit
-
 #vcstools and mwa_search
 from mwa_pb import primarybeammap_tant as pbtant
 import find_pulsar_in_obs as fpio

@@ -22,9 +22,6 @@ import math
 import glob
 import textwrap as _textwrap
 
-#Astropy imports
-from astropy.time import Time
-
 #MWA software imports
 from mwa_pulsar_client import client
 from mwa_metadb_utils import get_common_obs_metadata

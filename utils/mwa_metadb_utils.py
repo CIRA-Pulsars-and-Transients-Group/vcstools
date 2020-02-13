@@ -234,6 +234,7 @@ def obs_max_min(obsid, meta=None):
     obs_end = int(max(times))
     return obs_start, obs_end
 
+
 def write_obs_info(obsid):
     """
     Writes obs info to a file in the current direcory
