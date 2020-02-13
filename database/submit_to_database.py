@@ -191,8 +191,11 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                                     beg=beg, t_int=t_int)
 
     #estimate S/N
-    prof_dict = prof_utils.auto_gfit(profile,\
-                period = period, plot_name="{0}_{1}_{2}_bins_gaussian_fit.png".format(obsid, pulsar, num_bins))
+    try:
+        prof_dict = prof_utils.auto_gfit(profile,\
+                    period = period, plot_name="{0}_{1}_{2}_bins_gaussian_fit.png".format(obsid, pulsar, num_bins))
+    except prof_utils.ProfileLengthError:
+        prof_dict=None
 
     if not prof_dict:
         logger.info("Profile couldn't be fit. Using old style of profile analysis")
