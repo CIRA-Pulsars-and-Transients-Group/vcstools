@@ -123,6 +123,7 @@ def get_from_ascii(file_loc):
     f = open(file_loc)
     lines = iter(f.readlines())
     next(lines) #skip first line
+    f.close()
     profile=[]
     for line in lines:
         thisline=line.split()
@@ -156,6 +157,7 @@ def get_stokes_from_ascii(file_loc):
     """
     f = open(file_loc)
     lines = iter(f.readlines())
+    f.close()
     next(lines) #skip first line
     I=[]
     Q=[]
