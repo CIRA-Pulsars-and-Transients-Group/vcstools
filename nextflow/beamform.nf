@@ -6,10 +6,21 @@ params.begin = null
 params.end = null
 params.all = false
 
+params.summed = false
+
 params.basedir = '/group/mwaops/vcs'
 params.didir = "${params.basedir}/${params.obsid}/cal/${params.calid}/rts"
 params.channels = null
 
+
+//----------------
+
+if ( params.summed ) {
+    bf_out = " -p -s "
+}
+else {
+    bf_out = " -p "
+}
 
 pointings = Channel
     .from(params.pointings.split(","))
@@ -133,18 +144,21 @@ process beamform {
 
     //TODO add other beamform options and flags -F
     """
+    module use /group/mwa/software/modulefiles
+    module load vcstools
     make_beam -o $params.obsid -b $begin -e $end -a 128 -n 128 \
 -f $channel -J ${params.didir}/DI_JonesMatrices_node${ch}.dat \
 -d ${params.basedir}/${params.obsid}/combined -P ${point.join(",")} \
 -r 10000 -m ${params.basedir}/${params.obsid}/${params.obsid}_metafits_ppds.fits \
--p -z $utc
+${bf_out} -z $utc
     """
 }
 
 unspliced
     .flatten()
     .map { it -> [it.baseName.split("ch")[0], it ] }
-    .groupTuple(size: 24)
+    //.view()
+    .groupTuple()
     .map { it -> it[1] }
     //.view()
     .set{ unspliced_files }
@@ -162,6 +176,9 @@ process splice {
     output:
     file "${params.obsid}*fits" into output_fits
     """
+    module use /group/mwa/software/modulefiles
+    module load mwa_search
+    module load vcstools
     splice_wrapper.py -o ${params.obsid} -c ${chan.join(" ")}
     """
 }
