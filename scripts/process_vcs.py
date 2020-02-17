@@ -573,10 +573,10 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
                                                  unix_time, num_frames, integrations,
                                                  int(ft_res[0]/10), gpubox_label, file)
                     if vcs_database_id is None:
-                        body.append("srun --export=all {0} {1}".format("offline_correlator",
+                        body.append("{0} {1}".format("offline_correlator",
                                     offline_correlator_command))
                     else:
-                        body.append('run "srun --export=all {0}" "{1}" "{2}"'.format("offline_correlator",
+                        body.append('run "{0}" "{1}" "{2}"'.format("offline_correlator",
                                     offline_correlator_command, vcs_database_id))
                     to_corr += 1
 
