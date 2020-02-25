@@ -7,6 +7,7 @@ params.end = null
 params.all = false
 
 params.summed = false
+params.vcstools_version = 'master'
 
 params.basedir = '/group/mwaops/vcs'
 params.didir = "${params.basedir}/${params.obsid}/cal/${params.calid}/rts"
@@ -63,6 +64,9 @@ else {
         //.view()
         .into { obs_beg_end; obs_beg }
 }
+
+//Working out how many output fits files there will be
+//int nfiles = (int)
 
 process ensure_metafits {
 
@@ -145,7 +149,7 @@ process beamform {
     //TODO add other beamform options and flags -F
     """
     module use /group/mwa/software/modulefiles
-    module load vcstools
+    module load vcstools/$params.vcstools_version
     make_beam -o $params.obsid -b $begin -e $end -a 128 -n 128 \
 -f $channel -J ${params.didir}/DI_JonesMatrices_node${ch}.dat \
 -d ${params.basedir}/${params.obsid}/combined -P ${point.join(",")} \
