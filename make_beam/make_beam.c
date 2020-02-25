@@ -351,13 +351,12 @@ int main(int argc, char **argv)
 
     // Set up timing for each section
     long read_time[nfiles], delay_time[nfiles], calc_time[nfiles], write_time[nfiles][npointing];
-    clock_t start;
-
     int file_no;
+
     for (file_no = 0; file_no < nfiles; file_no++)
     {
         // Read in data from next file
-        start = clock();
+        clock_t start = clock();
         fprintf( stderr, "[%f] [%d/%d] Reading in data from %s \n", NOW-begintime,
                 file_no+1, nfiles, filenames[file_no]);
         read_data( filenames[file_no], data, bytes_per_file  );
