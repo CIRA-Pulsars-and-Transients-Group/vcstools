@@ -190,7 +190,7 @@ int main(int argc, char **argv)
     // Allocate memory
     char **filenames = create_filenames( &opts );
     ComplexDouble  ****complex_weights_array = create_complex_weights( npointing, nstation, nchan, npol );
-    ComplexDouble *****invJi                 = create_invJi( npointing, nstation, nchan, npol );
+    ComplexDouble  ****invJi                 = create_invJi( nstation, nchan, npol );
     ComplexDouble  ****detected_beam         = create_detected_beam( npointing, 2*opts.sample_rate, nchan, npol );
 
     // Read in info from metafits file
@@ -481,7 +481,7 @@ int main(int argc, char **argv)
     // Free up memory
     destroy_filenames( filenames, &opts );
     destroy_complex_weights( complex_weights_array, npointing, nstation, nchan );
-    destroy_invJi( invJi, npointing, nstation, nchan, npol );
+    destroy_invJi( invJi, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, npointing, 2*opts.sample_rate, nchan );
     
     destroy_metafits_info( &mi );
@@ -904,50 +904,42 @@ void destroy_complex_weights( ComplexDouble ****array, int npointing, int nstati
     free( array );
 }
 
-ComplexDouble *****create_invJi( int npointing, int nstation, int nchan, int npol )
+ComplexDouble ****create_invJi( int nstation, int nchan, int npol )
 // Allocate memory for (inverse) Jones matrices
 {
-    int p, ant, pol, ch; // Loop variables
-    ComplexDouble *****invJi;
-    invJi = (ComplexDouble *****)malloc( npointing * sizeof(ComplexDouble ****) );
-    for (p = 0; p < npointing; p++)
+    int ant, pol, ch; // Loop variables
+    ComplexDouble ****invJi;
+    invJi = (ComplexDouble ****)malloc( nstation * sizeof(ComplexDouble ***) );
+
+    for (ant = 0; ant < nstation; ant++)
     {
-        invJi[p] = (ComplexDouble ****)malloc( nstation * sizeof(ComplexDouble ***) );
+        invJi[ant] =(ComplexDouble ***)malloc( nchan * sizeof(ComplexDouble **) );
 
-        for (ant = 0; ant < nstation; ant++)
+        for (ch = 0; ch < nchan; ch++)
         {
-            invJi[p][ant] =(ComplexDouble ***)malloc( nchan * sizeof(ComplexDouble **) );
+            invJi[ant][ch] = (ComplexDouble **)malloc( npol * sizeof(ComplexDouble *) );
 
-            for (ch = 0; ch < nchan; ch++)
-            {
-                invJi[p][ant][ch] = (ComplexDouble **)malloc( npol * sizeof(ComplexDouble *) );
-
-                for (pol = 0; pol < npol; pol++)
-                    invJi[p][ant][ch][pol] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
-            }
+            for (pol = 0; pol < npol; pol++)
+                invJi[ant][ch][pol] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
         }
     }
     return invJi;
 }
 
 
-void destroy_invJi( ComplexDouble *****array, int npointing, int nstation, int nchan, int npol )
+void destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol )
 {
-    int p, ant, ch, pol;
-    for (p = 0; p < npointing; p++)
+    int ant, ch, pol;
+    for (ant = 0; ant < nstation; ant++)
     {
-        for (ant = 0; ant < nstation; ant++)
+        for (ch = 0; ch < nchan; ch++)
         {
-            for (ch = 0; ch < nchan; ch++)
-            {
-                for (pol = 0; pol < npol; pol++)
-                    free( array[p][ant][ch][pol] );
+            for (pol = 0; pol < npol; pol++)
+                free( array[ant][ch][pol] );
 
-                free( array[p][ant][ch] );
-            }
-            free( array[p][ant] );
+            free( array[ant][ch] );
         }
-        free( array[p] );
+        free( array[ant] );
     }
     free( array );
 }

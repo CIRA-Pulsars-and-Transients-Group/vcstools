@@ -103,10 +103,10 @@ __global__ void invj_the_data( uint8_t       *data,
     // JDy = Jyx*Dx + Jyy*Dy
     // But switching yx and xy is the way it was done previously and appears
     // to give higher signal to noise
-    JDx[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(0,ant,c,0,0,nc)], Dx ),
-                                     CMuld( J[J_IDX(0,ant,c,1,0,nc)], Dy ) );
-    JDy[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(0,ant,c,0,1,nc)], Dx ),
-                                     CMuld( J[J_IDX(0,ant,c,1,1,nc)], Dy ) );
+    JDx[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(ant,c,0,0,nc)], Dx ),
+                                     CMuld( J[J_IDX(ant,c,1,0,nc)], Dy ) );
+    JDy[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(ant,c,0,1,nc)], Dx ),
+                                     CMuld( J[J_IDX(ant,c,1,1,nc)], Dy ) );
 
 
 }
@@ -147,7 +147,7 @@ __global__ void beamform_kernel( ComplexDouble *JDx,
     int nc   = gridDim.x;   /* The (n)umber of (c)hannels (=128) */
     int s    = blockIdx.y;  /* The (s)ample number */
     int ns   = gridDim.y*nchunk;   /* The (n)umber of (s)amples (=10000)*/
-    
+
     int ant  = threadIdx.x; /* The (ant)enna number */
     int nant = blockDim.x;  /* The (n)_umber of (ant)ennas */
 
@@ -155,7 +155,7 @@ __global__ void beamform_kernel( ComplexDouble *JDx,
     clock_t start, stop;
     double setup_t, detect_t, sum_t, stokes_t;
     if ((p == 0) && (ant == 0) && (c == 0) && (s == 0)) start = clock();*/
-    
+
     // Calculate the beam and the noise floor
     __shared__ double Ia[NSTATION];
     __shared__ ComplexDouble Bx[NSTATION], By[NSTATION];
@@ -165,9 +165,9 @@ __global__ void beamform_kernel( ComplexDouble *JDx,
 
 
     /* Fix from Maceij regarding NaNs in output when running on Athena, 13 April 2018.
-    Apparently the different compilers and architectures are treating what were 
+    Apparently the different compilers and architectures are treating what were
     unintialised variables very differently */
-    
+
     Bx[ant]  = CMaked( 0.0, 0.0 );
     By[ant]  = CMaked( 0.0, 0.0 );
 
@@ -184,7 +184,7 @@ __global__ void beamform_kernel( ComplexDouble *JDx,
         setup_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
         start = clock();
     }*/
-    
+
     // Calculate beamform products for each antenna, and then add them together
     // Calculate the coherent beam (B = J*W*D)
     Bx[ant] = CMuld( W[W_IDX(p,ant,c,0,nc)], JDx[JD_IDX(s,c,ant,nc)] );
@@ -201,9 +201,9 @@ __global__ void beamform_kernel( ComplexDouble *JDx,
         detect_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
         start = clock();
     }*/
-    
+
     // Detect the coherent beam
-    // A summation over an array is faster on a GPU if you add half on array 
+    // A summation over an array is faster on a GPU if you add half on array
     // to its other half as than can be done in parallel. Then this is repeated
     // with half of the previous array until the array is down to 1.
     __syncthreads();
@@ -231,7 +231,7 @@ __global__ void beamform_kernel( ComplexDouble *JDx,
         start = clock();
 
     }*/
-    
+
     // Form the stokes parameters for the coherent beam
     // Only doing it for ant 0 so that it only prints once
     if ( ant == 0 )
@@ -263,7 +263,7 @@ __global__ void beamform_kernel( ComplexDouble *JDx,
         stokes_t = (double)(stop - start) / CLOCKS_PER_SEC * NPOINTING * NANT;
         printf("Time:  setup: % f detect: %f    sum: %f     stokes: %f\n", setup_t, detect_t, sum_t, stokes_t);
     }*/
-    
+
 }
 
 __global__ void flatten_bandpass_I_kernel( float *I,
@@ -322,7 +322,7 @@ __global__ void flatten_bandpass_C_kernel( float *C, int nstep )
     int nchan   = blockDim.x;  /* The (n)umber of (c)hannels */
     int stokes  = threadIdx.y; /* The (stokes) number */
     int nstokes = blockDim.y;  /* The (n)umber of (stokes) */
-    
+
     int p      = blockIdx.x;  /* The (p)ointing number */
 
     float band;
@@ -355,7 +355,7 @@ __global__ void flatten_bandpass_C_kernel( float *C, int nstep )
 
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
                    ComplexDouble ****complex_weights_array,
-                   ComplexDouble *****invJi, int file_no,
+                   ComplexDouble ****invJi, int file_no,
                    int npointing, int nstation, int nchan,
                    int npol, int outpol_coh, double invw,
                    struct gpu_formbeam_arrays *g,
@@ -405,14 +405,14 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
              pol;
         g->W[Wi] = complex_weights_array[p][ant][ch][pol];
 
+        if ( p == 0 )
         for (pol2 = 0; pol2 < npol; pol2++)
         {
-            Ji = p   * (npol*npol*nchan*nstation) +
-                 ant * (npol*npol*nchan) +
+            Ji = ant * (npol*npol*nchan) +
                  ch  * (npol*npol) +
                  pol * (npol) +
                  pol2;
-            g->J[Ji] = invJi[p][ant][ch][pol][pol2];
+            g->J[Ji] = invJi[ant][ch][pol][pol2];
         }
     }
     // Copy the data to the device
@@ -475,13 +475,13 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
     gpuErrchk(cudaMemcpyAsync( g->Bd, g->d_Bd,    g->Bd_size,    cudaMemcpyDeviceToHost ));
     gpuErrchk(cudaMemcpyAsync( incoh, g->d_incoh, g->incoh_size, cudaMemcpyDeviceToHost ));
     gpuErrchk(cudaMemcpyAsync( coh,   g->d_coh,   g->coh_size,   cudaMemcpyDeviceToHost ));
-    
+
     // Copy the data back from Bd back into the detected_beam array
     // Make sure we put it back into the correct half of the array, depending
     // on whether this is an even or odd second.
     int offset, i;
     offset = file_no % 2 * opts->sample_rate;
-    
+
     for ( int p   = 0; p   < npointing        ; p++  )
     for ( int s   = 0; s   < opts->sample_rate; s++  )
     for ( int ch  = 0; ch  < nchan            ; ch++ )
@@ -506,7 +506,7 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
     g->data_size  = sample_rate * nstation * nchan * npol / nchunk * sizeof(uint8_t);
     g->Bd_size    = npointing * sample_rate * nchan * npol * sizeof(ComplexDouble);
     g->W_size     = npointing * nstation * nchan * npol * sizeof(ComplexDouble);
-    g->J_size     = npointing * nstation * nchan * npol * npol * sizeof(ComplexDouble);
+    g->J_size     = nstation * nchan * npol * npol * sizeof(ComplexDouble);
     g->JD_size    = sample_rate * nstation * nchan / nchunk * sizeof(ComplexDouble);
 
     // Allocate host memory
