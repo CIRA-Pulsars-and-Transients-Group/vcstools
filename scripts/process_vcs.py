@@ -573,10 +573,10 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
                                                  unix_time, num_frames, integrations,
                                                  int(ft_res[0]/10), gpubox_label, file)
                     if vcs_database_id is None:
-                        body.append("srun --export=all {0} {1}".format("offline_correlator",
+                        body.append("{0} {1}".format("offline_correlator",
                                     offline_correlator_command))
                     else:
-                        body.append('run "srun --export=all {0}" "{1}" "{2}"'.format("offline_correlator",
+                        body.append('run "{0}" "{1}" "{2}"'.format("offline_correlator",
                                     offline_correlator_command, vcs_database_id))
                     to_corr += 1
 
@@ -715,9 +715,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     with pyfits.open(metafits_file) as hdul:
         project_id = hdul[0].header['project']
 
-    n_omp_threads = 3
-    openmp_line = "export OMP_NUM_THREADS={0}".format(n_omp_threads)
-
     # splits the pointing list into lists of length max_pointing
     pointing_list_list = list(chunks(pointing_list, max_pointing))
     time_now = str(datetime.datetime.now()).replace(" ", "_")
@@ -747,6 +744,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
             for pointing in pointing_list:
                 mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
 
+            n_omp_threads = 1
             #if "v" in bf_formats:
             if "u" in bf_formats:
                 for pointing in pointing_list:
@@ -754,7 +752,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     make_beam_small_batch = "mb_{0}_ch{1}".format(pointing, coarse_chan)
                     module_list = [comp_config['container_module']]
                     commands = []
-                    commands.append(openmp_line)
                     commands.append("cd {0}/{1}".format(P_dir,pointing))
                     commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} "
                                     "-e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
@@ -778,7 +775,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(pl, time_now, coarse_chan)
                 module_list = [comp_config['container_module']]
                 commands = []
-                commands.append(openmp_line)
                 if hostname.startswith('john') or hostname.startswith('farnarkle'):
                     # Write outputs to SSDs if on Ozstar
                     commands.append("cd $JOBFS")
