@@ -25,7 +25,7 @@
 #endif
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
-        float *data_buffer_vdif, float *gain, int p )
+                        float *data_buffer_vdif, float *gain )
 {
 
     // Set level occupancy
@@ -34,13 +34,11 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
 
     get_mean_complex(
             (ComplexFloat *)data_buffer_vdif,
-            p*vf->sizeof_buffer/2,
             vf->sizeof_buffer/2.0,
             &rmean, &imean, &cmean );
 
     stddev = get_std_dev_complex(
             (ComplexFloat *)data_buffer_vdif,
-            p*vf->sizeof_buffer/2,
             vf->sizeof_buffer/2.0 );
 
     if (fabsf(rmean) > 0.001)
@@ -48,7 +46,7 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         fprintf( stderr, "warning: vdif_write_second: significantly "
                          "non-zero mean (%f), adjusting data\n", rmean );
         unsigned int i;
-        for (i = p*vf->sizeof_buffer/2.0; i < vf->sizeof_buffer/2; i++)
+        for (i = 0; i < vf->sizeof_buffer/2; i++)
         {
             data_buffer_vdif[2*i+0] -= CRealf(cmean);
             data_buffer_vdif[2*i+1] -= CImagf(cmean);
@@ -66,18 +64,16 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
     // Normalise
     normalise_complex(
             (ComplexFloat *)data_buffer_vdif,
-            p*vf->sizeof_buffer/2,
             vf->sizeof_buffer/2.0,
-            1.0/(*gain) );
-    
-    float *data_buffer_ptr = data_buffer_vdif;
+            *gain );
     
     //Only using the buffer for the pointing
-    float *pointing_buffer  = malloc( vf->sizeof_buffer * sizeof(float) );
-    memcpy(pointing_buffer, data_buffer_ptr + p * vf->sizeof_buffer,
-           vf->sizeof_buffer * sizeof(float) );
+    //float *pointing_buffer  = malloc( vf->sizeof_buffer * sizeof(float) );
+    //memcpy(pointing_buffer, data_buffer_ptr + p * vf->sizeof_buffer,
+    //       vf->sizeof_buffer * sizeof(float) );
 
-    size_t offset_out_vdif = 0;// p * vf->block_size;
+    float *data_buffer_ptr = data_buffer_vdif;
+    size_t offset_out_vdif = 0;
 
     int8_t *out_buffer_8_vdif = (int8_t *)malloc(vf->block_size);
 
@@ -90,13 +86,13 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         offset_out_vdif += VDIF_HEADER_SIZE;
 
         // Convert from float to int8
-        float2int8_trunc( pointing_buffer, vf->sizeof_beam, -126.0, 127.0,
+        float2int8_trunc( data_buffer_ptr, vf->sizeof_beam, -126.0, 127.0,
                           (out_buffer_8_vdif + offset_out_vdif) );
         to_offset_binary( (out_buffer_8_vdif + offset_out_vdif),
                           vf->sizeof_beam );
 
         offset_out_vdif += vf->frame_length - VDIF_HEADER_SIZE; // increment output offset
-        pointing_buffer += vf->sizeof_beam;
+        data_buffer_ptr += vf->sizeof_beam;
         nextVDIFHeader( vhdr, vf->frame_rate );
     }
 
@@ -120,7 +116,7 @@ void vdif_write_data( struct vdifinfo *vf, int8_t *output )
 
     // write a CPSR2 test header for DSPSR
     char ascii_header[MWA_HEADER_SIZE] = MWA_HEADER_INIT;
-    //ascii_header_set( ascii_header, "UTC_START", "%s", vf[p].date_obs  );
+    //ascii_header_set( ascii_header, "UTC_START", "%s", vf->date_obs  );
     ascii_header_set( ascii_header, "DATAFILE",   "%s", filename      );
     ascii_header_set( ascii_header, "INSTRUMENT", "%s", "VDIF"        );
     ascii_header_set( ascii_header, "TELESCOPE",  "%s", vf->telescope );
@@ -228,7 +224,7 @@ void populate_vdif_header(
 }
 
 
-ComplexFloat get_std_dev_complex(ComplexFloat *input, int begin, int nsamples)
+ComplexFloat get_std_dev_complex(ComplexFloat *input, int nsamples)
 {
     // assume zero mean
     float rtotal = 0;
@@ -237,7 +233,7 @@ ComplexFloat get_std_dev_complex(ComplexFloat *input, int begin, int nsamples)
     float rsigma = 0;
     int i;
 
-    for (i=begin;i<nsamples;i++){
+    for (i=0;i<nsamples;i++){
          rtotal = rtotal+(CRealf(input[i])*CRealf(input[i]));
          itotal = itotal+(CImagf(input[i])*CImagf(input[i]));
 
@@ -252,14 +248,13 @@ void set_level_occupancy(ComplexFloat *input, int nsamples, float *new_gain)
 {
     //float percentage = 0.0;
     //float occupancy = 17.0;
-    float limit = 0.00001;
-    float step = 0.001;
+    //float limit = 0.00001;
+    //float step = 0.001;
     int i = 0;
     float gain = *new_gain;
 
     float percentage_clipped = 100;
-    while (percentage_clipped > 0 && percentage_clipped > limit) {
-        int count = 0;
+    //while (percentage_clipped > 0 && percentage_clipped > limit) {
         int clipped = 0;
         for (i = 0; i < nsamples; i++) {
             if (isnan(CRealf(input[i])) || isnan(CImagf(input[i])))
@@ -268,32 +263,26 @@ void set_level_occupancy(ComplexFloat *input, int nsamples, float *new_gain)
                                  "NaN\n", i );
                 exit(EXIT_FAILURE);
             }
-            if (gain*CRealf(input[i]) >= 0 && gain*CRealf(input[i]) < 64)
-            {
-                count++;
-            }
-            if (fabs(gain*CRealf(input[i])) > 127)
+            if (fabs(gain*CRealf(input[i])) > 127 || fabs(gain*CImagf(input[i])) > 127 )
             {
                 clipped++;
             }
         }
         percentage_clipped = ((float) clipped/nsamples) * 100;
-        if (percentage_clipped < limit) {
-            gain = gain + step;
+        //The reduction in the gain was commented out until we work our a robust solution
+        //if (percentage_clipped > limit) {
+        //    gain = gain - step;
+        //}
+        if (clipped > 0)
+        {
+            fprintf(stdout,"warning: percentage samples clipped %f percent\n",percentage_clipped);
         }
-        else {
-            gain = gain - step;
-        }
-        //percentage = ((float)count/nsamples)*100.0;
-        //fprintf(stdout,"Gain set to %f (linear)\n",gain);
-        //fprintf(stdout,"percentage of samples in the first 64 (+ve) levels - %f percent \n",percentage);
-        //fprintf(stdout,"percentage clipped %f percent\n",percentage_clipped);
-    }
+    //}
     *new_gain = gain;
 }
 
 
-void get_mean_complex( ComplexFloat *input, int begin, int nsamples, float *rmean,
+void get_mean_complex( ComplexFloat *input, int nsamples, float *rmean,
                        float *imean, ComplexFloat *cmean)
 {
     int i;
@@ -303,7 +292,7 @@ void get_mean_complex( ComplexFloat *input, int begin, int nsamples, float *rmea
 
     ComplexFloat ctotal = CMakef( 0.0, 0.0 );
 
-    for (i = begin; i < nsamples; i++)
+    for (i = 0; i < nsamples; i++)
     {
 //if (isnan(CRealf(input[i])) || isnan(CImagf(input[i]))) { fprintf(stderr, "\ninput[%d] = %e + %e*I\n\n", i, CRealf(input[i]), CImagf(input[i])); exit(1); }
         rtotal += CRealf( input[i] );
@@ -316,11 +305,11 @@ void get_mean_complex( ComplexFloat *input, int begin, int nsamples, float *rmea
     *cmean = CSclf( ctotal, 1.0 / (float)nsamples );
 }
 
-void normalise_complex(ComplexFloat *input, int begin, int nsamples, float scale)
+void normalise_complex(ComplexFloat *input, int nsamples, float scale)
 {
-    int i;
+    int i=0;
 
-    for (i=begin;i<nsamples;i++){
+    for (i=0;i<nsamples;i++){
         input[i] = CSclf( input[i], scale );
     }
 }

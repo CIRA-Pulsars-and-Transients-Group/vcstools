@@ -103,7 +103,7 @@ void get_delays(
         struct delays          delay_vals[],
         struct metafits_info  *mi,
         ComplexDouble      ****complex_weights_array,  // output
-        ComplexDouble     *****invJi                   // output
+        ComplexDouble      ****invJi                   // output
 );
 
 
