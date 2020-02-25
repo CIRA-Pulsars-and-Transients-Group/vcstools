@@ -1192,7 +1192,7 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
             logger.info("Skipping alpha value: {}".format(alpha))
             logger.setLevel(logging.WARNING) #squelch logging for the loop
     logger.setLevel(loglvl)
-    
+
     #Evaluate the best profile based on reduced chi-squared.
     chi_diff = []
     alphas = []
