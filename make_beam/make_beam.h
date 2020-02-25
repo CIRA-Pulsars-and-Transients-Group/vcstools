@@ -21,16 +21,15 @@ char **create_filenames( struct make_beam_opts *opts );
 void  destroy_filenames( char **filenames, struct make_beam_opts *opts );
 
 ComplexDouble ****create_complex_weights( int npointing, int nstation, int nchan, int npol );
-void             destroy_complex_weights( ComplexDouble ****array, int npointing,
-                                          int nstation, int nchan );
+void              destroy_complex_weights( ComplexDouble ****array, int npointing,
+                                           int nstation, int nchan );
 
-ComplexDouble *****create_invJi( int npointing, int nstation, int nchan, int pol );
-void              destroy_invJi( ComplexDouble *****array, int npointing,
-                                 int nstation, int nchan, int npol );
+ComplexDouble ****create_invJi( int nstation, int nchan, int pol );
+void              destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol );
 
 ComplexDouble ****create_detected_beam( int npointing, int nsamples, int nchan, int npol );
-void            destroy_detected_beam( ComplexDouble ****array, int npointing, 
-                                       int nsamples, int nchan );
+void              destroy_detected_beam( ComplexDouble ****array, int npointing,
+                                         int nsamples, int nchan );
 
 float *create_data_buffer_psrfits( size_t size );
 float *create_data_buffer_vdif( size_t size );

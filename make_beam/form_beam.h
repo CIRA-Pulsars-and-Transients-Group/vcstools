@@ -61,11 +61,10 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
                                (c) * (NPOL)            + \
                                (pol))
 
-#define J_IDX(p,a,c,p1,p2,nc)   ((p)  * (NPOL*NPOL*(nc)*NANT) + \
-                                 (a)  * (NPOL*NPOL*(nc))      + \
-                                 (c)  * (NPOL*NPOL)           + \
-                                 (p1) * (NPOL)                + \
-                                 (p2))
+#define J_IDX(a,c,p1,p2,nc)   ((a)  * (NPOL*NPOL*(nc))      + \
+                               (c)  * (NPOL*NPOL)           + \
+                               (p1) * (NPOL)                + \
+                               (p2))
 
 #define JD_IDX(s,c,a,nc)      ((s) * (NANT*(nc)) + \
                                (c) * (NANT)      + \
@@ -115,7 +114,7 @@ void free_formbeam( struct gpu_formbeam_arrays *g );
 
 
 void cu_form_beam( uint8_t *data, struct make_beam_opts *opts, ComplexDouble ****W,
-                   ComplexDouble *****J, int file_no, 
+                   ComplexDouble ****J, int file_no, 
                    int npointing, int nstation, int nchan,
                    int npol, int outpol_coh, double invw, struct gpu_formbeam_arrays *g,
                    ComplexDouble ****detected_beam, float *coh, float *incoh,
