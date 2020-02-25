@@ -946,7 +946,7 @@ if __name__ == "__main__":
                         If None, will use the end given by a metadata call. Default: None")
     parser.add_argument("--pointing", type=str, default=None, help="The pointing of the target in the format '12:34:56_98:76:54'.\
                         If None, will obtain from a call to ATNF. Default: None")
-    parser.add_argument("min_z_power", type=float, default=0.3, help="The minimum zenith normalised power used to determine if the pulsar\
+    parser.add_argument("--min_z_power", type=float, default=0.3, help="The minimum zenith normalised power used to determine if the pulsar\
                         is in the beam or not")
     parser.add_argument("--plot_est", action="store_true", help="Use this tag to create a plot of flux estimation.")
     parser.add_argument("--mode", type=str, help="""MODES: 'SNFE' = Estimate S/N and flux for a single pulsar in an obsid\n
