@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 class LittleClipError(Exception):
     """Raise when not enough data is clipped"""
     pass
-#---------------------------------------------------------------
 class LargeClipError(Exception):
     """Raise when too much data is clipped"""
     pass
@@ -228,7 +227,7 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
         oldstd = newstd
 
 #---------------------------------------------------------------
-def check_clip(clipped_prof, toomuch=0.8, toolittle=0.):
+def check_clip(clipped_prof, toomuch=0.8, toolittle_frac=0., toolittle_absolute=4):
     """
     Determines whether a clipped profile from sigmaClip() has been appropriately clipped by checking the number of nans.
     Raises a LittleClipError or a LargeClipError if too little or toomuch of the data has been clipped respectively.
@@ -240,17 +239,15 @@ def check_clip(clipped_prof, toomuch=0.8, toolittle=0.):
     toomuch: float
         OPTIONAL - The fraction of the clipped profile beyond which is considered overclipped. Default: 0.8
     toolittle: float
-        OPTIOANL - The fraction of the clipped profile bleow which is considered underclipped. Default: 0.
-
-    Returns:
-    --------
-    None
+        OPTIONAL - The fraction of the clipped profile below which is considered underclipped. Default: 0.
+    toolittle_absolute: int
+        OPTIONAL - If a profile has this many or less on-pulse bins, it is deemed not sufficient. Default: 4
     """
     num_nans = 0
     for i in clipped_prof:
         if np.isnan(i):
             num_nans += 1
-    if num_nans == toolittle*len(clipped_prof):
+    if num_nans <= toolittle_frac*len(clipped_prof) or num_nans <= toolittle_absolute:
         raise LittleClipError("Not enough data has been clipped. Condsier trying a smaller alpha value when clipping.")
     elif num_nans >= toomuch*len(clipped_prof):
         raise LargeClipError("A large portion of the data has been clipped. Condsier trying a larger alpha value when clipping.")
@@ -357,6 +354,7 @@ def find_minima_maxima(profile, ignore_threshold=0, min_comp_len=0):
     maxima: list
         A list of floats corresponding to the bin location of the profile maxima
     """
+
     #If there is more than one component, find each one
     comp_dict, comp_idx = find_components(profile, min_comp_len)
 
@@ -525,6 +523,7 @@ def find_widths(profile, popt, pcov, alpha=3):
 
     #find Weq using the real profile
     std, off_pulse = sigmaClip(profile, alpha=alpha)
+    check_clip(off_pulse)
     on_pulse=[]
     for i, data in enumerate(off_pulse):
         if np.isnan(data):
@@ -667,6 +666,7 @@ def analyse_pulse_prof(prof_data, period, verbose=True):
 
     #find sigma and check if profile is scattered
     sigma, flags = sigmaClip(prof_data, alpha=3., tol=0.01, ntrials=100)
+    check_clip(flags)
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
     scattered=False
     if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
@@ -889,10 +889,8 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=3.):
             test_statistic+=((float(observed)-float(expected))/float(err))**2
         return test_statistic
 
-    #Take noise mean and normalize the profile
+    #Take noise mean and normalize the profile and check the clipped profile
     _, clipped = sigmaClip(profile, alpha=alpha)
-
-    #Check the clipped profile
     check_clip(clipped)
 
     y = np.array(profile) - np.nanmean(np.array(clipped))
@@ -941,7 +939,7 @@ def fit_gaussian(profile, max_N=6, min_comp_len=0, plot_name=None, alpha=3.):
         bounds_arr[1].append(len(y))
         bounds_arr[1].append(len(y))
         bounds_tuple=(tuple(bounds_arr[0]), tuple(bounds_arr[1]))
-        popt, pcov = curve_fit(multi_gauss, x, y, bounds=bounds_tuple,  p0=guess, maxfev=100000)
+        popt, pcov = curve_fit(multi_gauss, x, y, bounds=bounds_tuple, p0=guess, maxfev=100000)
         fit = multi_gauss(x, *popt)
         chisq = chsq(y, fit, noise_std)
         #Bayesian information criterion for gaussian noise
@@ -1049,7 +1047,7 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, p
     #Normalize, find the std
     y = np.array(profile)/max(profile)
     noise_std, clipped = sigmaClip(y, alpha=alpha)
-    check_clip(clipped, toomuch=0.8, toolittle=0.)
+    check_clip(clipped)
 
     if ignore_threshold is None:
         ignore_threshold = 3 * noise_std
@@ -1186,7 +1184,7 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         try:
             prof_dict = prof_eval_gfit(profile, max_N=6, ignore_threshold=ignore_threshold, min_comp_len=min_comp_len, alpha=alpha, period=period)
             attempts_dict[alpha] = prof_dict
-        except(LittleClipError, LargeClipError, NoComponentsError) as e:
+        except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError) as e:
             logger.setLevel(loglvl)
             logger.info(e)
             logger.info("Skipping alpha value: {}".format(alpha))
