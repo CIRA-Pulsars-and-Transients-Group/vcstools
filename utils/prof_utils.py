@@ -239,11 +239,9 @@ def check_clip(clipped_prof, toomuch=0.8, toolittle_frac=0., toolittle_absolute=
     toomuch: float
         OPTIONAL - The fraction of the clipped profile beyond which is considered overclipped. Default: 0.8
     toolittle: float
-        OPTIOANL - The fraction of the clipped profile bleow which is considered underclipped. Default: 0.
-
-    Returns:
-    --------
-    None
+        OPTIONAL - The fraction of the clipped profile below which is considered underclipped. Default: 0.
+    toolittle_absolute: int
+        OPTIONAL - If a profile has this many or less on-pulse bins, it is deemed not sufficient. Default: 4
     """
     num_nans = 0
     for i in clipped_prof:
