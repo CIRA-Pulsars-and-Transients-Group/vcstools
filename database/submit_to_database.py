@@ -484,7 +484,7 @@ if __name__ == "__main__":
     if args.pulsar:
         #Overrule what's in the bestprof if pulsar name is supplied
         pulsar = args.pulsar
-    logger.debug("Pulsar name: {}".format(puslar))
+    logger.debug("Pulsar name: {}".format(pulsar))
 
     if args.pulsar or args.bestprof or args.ascii:
         #Checks to see if the pulsar is already on the database
