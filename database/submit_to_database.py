@@ -169,7 +169,7 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
 
 def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
-                        trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                        pulsar=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
     time_detection: the time in seconds of the dectection from the bestprof file
     time_obs: the time in seconds of the dectection from the metadata
@@ -179,7 +179,9 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     """
     #unpack the bestprof_data
     #[obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
-    obsid, pulsar, _, period, _, beg, t_int, profile, num_bins = bestprof_data
+    obsid, prof_psr, _, period, _, beg, t_int, profile, num_bins = bestprof_data
+    if not pulsar:
+        pulsar = prof_psr
     period=float(period)
     num_bins=int(num_bins)
 
@@ -479,6 +481,11 @@ if __name__ == "__main__":
         logger.error("Please us either (--obsid and --pulsar) or --bestprof")
         quit()
 
+    if args.pulsar:
+        #Overrule what's in the bestprof if pulsar name is supplied
+        pulsar = args.pulsar
+    logger.debug("Pulsar name: {}".format(puslar))
+
     if args.pulsar or args.bestprof or args.ascii:
         #Checks to see if the pulsar is already on the database
         pul_list_dict = client.pulsar_list(web_address, auth)
@@ -523,7 +530,7 @@ if __name__ == "__main__":
     if args.bestprof or args.ascii:
         #Does the flux calculation and submits the results to the MWA pulsar database
         subbands = flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
-                            pul_ra, pul_dec, coh, auth, trcvr=args.trcvr)
+                            pul_ra, pul_dec, coh, auth, pulsar=pulsar, trcvr=args.trcvr)
 
     if args.cal_dir_to_tar:
         if not args.srclist:
