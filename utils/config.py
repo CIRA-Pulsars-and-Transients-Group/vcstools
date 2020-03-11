@@ -41,7 +41,7 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'cpuq_partition' : 'skylake',
                  'gpuq_cluster' : 'farnarkle',
                  'gpuq_partition' : 'skylake-gpu',
-                 'gpu_beamform_mem' : '4096',
+                 'gpu_beamform_mem' : '8192',
                  'copyq_cluster' : 'farnarkle',
                  'copyq_partition' : 'skylake', #TODO check if there's a better one
                  'zcpuq_cluster' : 'farnarkle',
