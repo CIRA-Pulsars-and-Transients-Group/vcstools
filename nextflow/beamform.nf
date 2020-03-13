@@ -28,7 +28,7 @@ pointings = Channel
     .collect()
     .flatten()
     .collate( 15 )
-    .view()
+    //.view()
 
 // Handling begin and end times
 process get_all_beg_end {
@@ -66,7 +66,15 @@ else {
 }
 
 //Working out how many output fits files there will be
-//int nfiles = (int)
+total_time = params.end - params.begin + 1 
+int nfiles = (int) total_time / 200
+if ( total_time%200 != 0) {
+    nfiles += 1
+}
+n_expected_splice_files = nfiles * 24
+
+println n_expected_splice_files
+exit 0
 
 process ensure_metafits {
 
@@ -162,7 +170,7 @@ unspliced
     .flatten()
     .map { it -> [it.baseName.split("ch")[0], it ] }
     //.view()
-    .groupTuple()
+    .groupTuple(size:  n_expected_splice_files)
     .map { it -> it[1] }
     //.view()
     .set{ unspliced_files }
