@@ -210,10 +210,18 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
                 for entry in columns:
                     if entry not in ['', ' ', '\t']:
                         temp.append(entry.replace('--',''))
+                #Removing bad formating for the database
+                ra = temp[4]
+                if ra.endswith(":"):
+                    ra = ra[:-1]
+                dec = temp[5]
+                if dec.endswith(":"):
+                    dec = dec[:-1]
+
                 if include_dm:
-                    name_ra_dec.append([temp[0], temp[4], temp[5], temp[3]])
+                    name_ra_dec.append([temp[0], ra, dec, temp[3]])
                 else:
-                    name_ra_dec.append([temp[0], temp[4], temp[5]])
+                    name_ra_dec.append([temp[0], ra, dec])
 
     elif source_type == 'Fermi':
         # read the fermi targets file
