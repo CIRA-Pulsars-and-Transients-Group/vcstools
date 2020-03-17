@@ -621,72 +621,75 @@ def est_sn_from_prof(prof_data, period, alpha=3.):
     return [sn, sn_e, scattered]
 
 #---------------------------------------------------------------
-def analyse_pulse_prof(prof_data, period, verbose=True):
+def analyse_pulse_prof(prof_data, period, alpha=3):
     """
-    Estimates the signal to noise ratio from a pulse profile. Returns are in list form. Will return more for verbose==True setting, explained below.
-    NOTE: user must supply EITHER a betprof path OR prof_data and period of the pulse profile.
+    Estimates the signal to noise ratio and many other properties from a pulse profile.
     Based on code oringally writted by Nick Swainston.
     This is the old version of 'est_sn_from_prof' but is useful when we can't fit gaussians
 
     Parameters:
     -----------
     prof_data: list
-        A list of floats that contains the pulse profile. Default
+        A list of floats that contains the pulse profile.
     period: float
         The pulsar's period in ms
-    verbose: boolean
-        OPTIONAL - Determines whether to return more detailed information. Detailed below. Default: True
+    alpha: float
+        OPTIONAL - The alpha value to use when clipping using sigmaClip(). Default: 3
+
     Returns:
     --------
-    sn: float
-        The estimated signal to noise ratio
-    u_sn: float
-        The estimated signal to noise ratio's its uncertainty
-    flags: list
-        VERBOSE - a list of flagged data points
-    w_equiv_bins: float
-        VERBOSE - the equivalent width of the profile measured in bins
-    u_w_equiv_bins: float
-        VERBOSE - the uncertaintiy in w_equiv_bins
-    w_equiv_ms: float
-        VERBOSE - the equivalent width of the profile measured in ms
-    u_w_equiv_ms: float
-        VERBOSE - the uncertainty in w_equiv_ms
-    scattering: float
-        VERBOSE: - the scattering width in
-    u_scattering: float
-    scattered: boolean
-        VERBOSE - when true, the profile is highly scattered
+    prof_dict: dictionary
+        contains keys:
+        sn: float
+            The estimated signal to noise ratio
+        u_sn: float
+            The estimated signal to noise ratio's its uncertainty
+        flags: list
+            A list of flagged data points
+        w_equiv_bins: float
+            The equivalent width of the profile measured in bins
+        u_w_equiv_bins: float
+            The uncertaintiy in w_equiv_bins
+        w_equiv_ms: float
+            The equivalent width of the profile measured in ms
+        u_w_equiv_ms: float
+            The uncertainty in w_equiv_ms
+        scattering: float
+            The scattering width in ms
+        u_scattering: float
+            The uncertainty in the scattering width in ms
+        scattered: boolean
+            When true, the profile is highly scattered
     """
-
+    prof_dict = {}
     nbins = len(prof_data)
     #centre the profile around the max
     shift = -int(np.argmax(prof_data))+int(nbins)//2
     prof_data = np.roll(prof_data, shift)
 
     #find sigma and check if profile is scattered
-    sigma, flags = sigmaClip(prof_data, alpha=3., tol=0.01, ntrials=100)
+    sigma, flags = sigmaClip(prof_data, alpha=alpha, tol=0.01, ntrials=100)
     check_clip(flags)
+
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
     scattered=False
     if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
-        logger.warning("The profile is highly scattered. S/N estimate cannot be calculated")
-        if verbose:
-            scattered=True
-            #making a new profile with the only bin being the lowest point
-            prof_min_i = np.argmin(prof_data)
-            flags = []
-            for fi, _ in enumerate(prof_data):
-                if fi == prof_min_i:
-                    flags.append(prof_data[fi])
-                else:
-                    flags.append(np.nan)
+        logger.info("The profile is highly scattered. S/N estimate cannot be calculated")
+        scattered=True
+        #making a new profile with the only bin being the lowest point
+        prof_min_i = np.argmin(prof_data)
+        flags = []
+        for fi, _ in enumerate(prof_data):
+            if fi == prof_min_i:
+                flags.append(prof_data[fi])
+            else:
+                flags.append(np.nan)
 
-            flags = np.array(flags)
-            prof_data -= min(prof_data)
-            #Assuming width is equal to pulsar period because of the scattering
-            w_equiv_ms = period
-            u_w_equiv_ms = period/nbins
+        flags = np.array(flags)
+        prof_data -= min(prof_data)
+        #Assuming width is equal to pulsar period because of the scattering
+        w_equiv_ms = period
+        u_w_equiv_ms = period/nbins
         sn = None
         u_sn = None
     else:
@@ -709,10 +712,7 @@ def analyse_pulse_prof(prof_data, period, verbose=True):
         sn = max(prof_data)/sigma
         u_sn = sn * np.sqrt(u_prof/max(prof_data)**2 + (u_simga/sigma)**2)
 
-    if not verbose:
-        return [sn, u_sn]
-
-    elif not scattered:
+    if not scattered:
         off_pulse_mean = np.nanmean(flags)
         prof_data -= off_pulse_mean
         flags -= off_pulse_mean
@@ -739,7 +739,111 @@ def analyse_pulse_prof(prof_data, period, verbose=True):
     scattering = float(scat_bins + 1) * float(period) /1000. #in s
     u_scattering = 1. * float(period) /1000. # assumes the uncertainty is one bin
 
-    return [sn, u_sn, flags, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattering, u_scattering, scattered]
+    prof_dict["sn"] = sn
+    prof_dict["sn_e"] = u_sn
+    prof_dict["flags"] = flags
+    prof_dict["w_equiv_bins"] = w_equiv_bins
+    prof_dict["w_equiv_bins_e"] = u_w_equiv_bins
+    prof_dict["w_equiv_ms"] = w_equiv_ms
+    prof_dict["w_equiv_ms_e"] = u_w_equiv_ms
+    prof_dict["scattering"] = scattering
+    prof_dict["scattering_e"] = u_scattering
+    prof_dict["scattered"] = scattered
+
+    return prof_dict
+
+def auto_analyse_pulse_prof(prof_data, period):
+    """
+    Automatically finds the best alpha value to use for analyse_pulse_prof() and returns the best resulting dictionary
+
+    Parameters:
+    -----------
+    prof_data: list
+        A list of floats that contains the pulse profile.
+    preiod: float
+        The period of the pulsar
+
+    Returns:
+    --------
+    fit_dict: dictionary
+        contains keys:
+        sn: float
+            The estimated signal to noise ratio
+        u_sn: float
+            The estimated signal to noise ratio's its uncertainty
+        flags: list
+            A list of flagged data points
+        w_equiv_bins: float
+            The equivalent width of the profile measured in bins
+        u_w_equiv_bins: float
+            The uncertaintiy in w_equiv_bins
+        w_equiv_ms: float
+            The equivalent width of the profile measured in ms
+        u_w_equiv_ms: float
+            The uncertainty in w_equiv_ms
+        scattering: float
+            The scattering width in ms
+        u_scattering: float
+            The uncertainty in the scattering width in ms
+        scattered: boolean
+            When true, the profile is highly scattered
+
+    """
+    if not isinstance(period, float):
+        period = float(period)
+
+    alphas = np.linspace(1, 5, 9)
+    attempts_dict = {}
+
+    loglvl = logger.level
+    logger.setLevel(logging.WARNING) #squelch logging for the loop
+
+    #loop over the gaussian evaluation fucntion, excepting in-built errors
+    for alpha in alphas:
+        try:
+            prof_dict = analyse_pulse_prof(prof_data, period, alpha=alpha)
+            attempts_dict[alpha] = prof_dict
+        except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError) as e:
+            logger.setLevel(loglvl)
+            logger.info(e)
+            logger.info("Skipping alpha value: {}".format(alpha))
+            logger.setLevel(logging.WARNING) #squelch logging for the loop
+    logger.setLevel(loglvl)
+
+    #Evaluate the best profile based on the SN error.
+    sne = []
+    sne_alphas = []
+    scattered_trials = []
+    if attempts_dict:
+        for alpha_key in attempts_dict.keys():
+            scattered_trials.append(attempts_dict[alpha_key]["scattered"])
+            if not attempts_dict[alpha_key]["scattered"]:
+                sne.append(attempts_dict[alpha_key]["sn_e"])
+                sne_alphas.append(alpha_key)
+
+    if sne: #there is an SN estimate available. Only look through these analyses as candidates
+        best_sne = min(sne)
+        best_alpha = sne_alphas[sne.index(best_sne)]
+        fit_dict = attempts_dict[best_alpha]
+    elif scattered_trials:
+        mse = []
+        scattered_alphas = []
+        for alpha_key in attempts_dict.keys():
+            if attempts_dict[alpha_key]["scattered"]:
+                #use mean square of width errors as a metric for the best fit
+                mse.append(np.sqrt(attempts_dict[alpha_key]["w_equiv_bins_e"]**2 + attempts_dict[alpha_key]["scattering_e"]**2))
+                scattered_alphas.append(alpha_key)
+        best_mse = min(mse)
+        best_alpha = scattered_alphas[mse.index(best_mse)]
+        fit_dict = attempts_dict[best_alpha]
+
+    if not attempts_dict: #sometimes things go wrong :/
+        logger.error("Profile could not be fit. Returning empty dictionary!")
+        return {}
+
+    logger.info("Best profile analysis using an alpha value of {}".format(best_alpha))
+
+    return fit_dict
 
 #---------------------------------------------------------------
 def integral_multi_gauss(*params):
