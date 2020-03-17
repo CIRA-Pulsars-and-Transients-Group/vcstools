@@ -205,23 +205,23 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         rrats_data = urllib.request.urlopen('http://astro.phys.wvu.edu/rratalog/rratalog.txt').read().decode()
         for rrat in rrats_data.split("\n")[1:-1]:
             columns = rrat.strip().replace(" ", '\t').split('\t')
-            temp = []
+            rrat_cat_line = []
             if pulsar_list == None or (columns[0] in pulsar_list):
                 for entry in columns:
                     if entry not in ['', ' ', '\t']:
-                        temp.append(entry.replace('--',''))
+                        rrat_cat_line.append(entry.replace('--',''))
                 #Removing bad formating for the database
-                ra = temp[4]
+                ra = rrat_cat_line[4]
                 if ra.endswith(":"):
                     ra = ra[:-1]
-                dec = temp[5]
+                dec = rrat_cat_line[5]
                 if dec.endswith(":"):
                     dec = dec[:-1]
 
                 if include_dm:
-                    name_ra_dec.append([temp[0], ra, dec, temp[3]])
+                    name_ra_dec.append([rrat_cat_line[0], ra, dec, rrat_cat_line[3]])
                 else:
-                    name_ra_dec.append([temp[0], ra, dec])
+                    name_ra_dec.append([rrat_cat_line[0], ra, dec])
 
     elif source_type == 'Fermi':
         # read the fermi targets file
@@ -246,11 +246,11 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
 
     #Remove all unwanted sources
     if pulsar_list is not None:
-        temp = []
+        rrat_cat_filtered = []
         for line in name_ra_dec:
             if line[0] in pulsar_list:
-                temp.append(line)
-        name_ra_dec = temp
+                rrat_cat_filtered.append(line)
+        name_ra_dec = rrat_cat_filtered
 
     return name_ra_dec
 
