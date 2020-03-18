@@ -91,8 +91,11 @@ def test_find_t_sys_gain():
     q_1 = psrqpy.QueryATNF(psrs=[pulsar_1], loadfromdb=ATNF_LOC)
     q_2 = psrqpy.QueryATNF(psrs=[pulsar_2], loadfromdb=ATNF_LOC)
     test_cases = []
+    #test_cases.append((pulsar_1, obsid_1, 1223042887, q_1, md_1, full_md_1,\
+    #            325.16928459135534, 6.5033856918271065, 0.1405071004856564, 0.1065230048864121))
+    
     test_cases.append((pulsar_1, obsid_1, 1223042887, q_1, md_1, full_md_1,\
-                325.16928459135534, 6.5033856918271065, 0.1405071004856564, 0.1065230048864121))
+                325.17339020027805, 6.5034678040055613, 0.12547449408456718, 0.095633857616224477))
     test_cases.append((pulsar_2, obsid_2, None, q_2, md_2, full_md_2,\
                 295.7376541472588, 5.914753082945176, 0.29127648654611227, 0.0493677683642759))
 
