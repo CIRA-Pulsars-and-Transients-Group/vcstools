@@ -52,7 +52,7 @@ def test_find_times():
     obsid = 1223042480
     pulsar = "J2234+2114"
     test_cases = []
-    test_cases.append((None, None, 1223042487.0, 1223042844.4768934, 4914))
+    test_cases.append((None, None, 1223042487.0, 1223042844.4768934, 357.4768934249878))
     test_cases.append((1223042487, 1223042587, 1223042487, 1223042587, 100.0))
 
     for beg, end, exp_beg, exp_end, exp_int in test_cases:
