@@ -118,7 +118,7 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False, query=No
         query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'DM'], psrs=pulsar_list, loadfromdb=ATNF_LOC).pandas
 
     pulsar_ra_dec = []
-    for i, psr in enumerate(query["PSRJ"]):
+    for i, _ in enumerate(query["PSRJ"]):
         # Only record if under the max_dm
         dm = query["DM"][i]
         if not math.isnan(dm):
