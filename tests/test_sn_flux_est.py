@@ -97,7 +97,7 @@ def test_find_t_sys_gain():
     test_cases.append((pulsar_1, obsid_1, 1223042887, q_1, md_1, full_md_1,\
                 325.17339020027805, 6.5034678040055613, 0.1405071004856564, 0.1065230048864121))
     test_cases.append((pulsar_2, obsid_2, None, q_2, md_2, full_md_2,\
-                295.73944858721256, 5.914753082945176, 0.29127648654611227, 0.0493677683642759))
+                295.73944858721256, 5.914788971744251, 0.29127648654611227, 0.0493677683642759))
 
 
     for pulsar, obsid, beg, query, metadata, full_meta,\
@@ -174,7 +174,7 @@ def test_est_pulsar_sn():
                     49.81658085212985, 12.307207767010034))
 
     for psr, obsid, beg, end, ra, dec, md, full_md, exp_sn, exp_sn_err in test_cases:
-        sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec, obs_metadata=md, full_meta=full_md, tcvr="database/MWA_Trcvr_tile_56.csv")
+        sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec, obs_metadata=md, full_meta=full_md, trcvr="database/MWA_Trcvr_tile_56.csv")
         assert_almost_equal(exp_sn, sn, decimal=2)
         assert_almost_equal(exp_sn_err, sn_err, decimal=2)
 
