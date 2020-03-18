@@ -114,7 +114,7 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False, query=No
     import psrqpy
 
     #params = ['JNAME', 'RAJ', 'DECJ', 'DM']
-    if not query:
+    if query is None:
         query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'DM'], psrs=pulsar_list, loadfromdb=ATNF_LOC).pandas
 
     pulsar_ra_dec = []
