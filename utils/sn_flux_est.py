@@ -716,7 +716,7 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
     return enter_time, exit_time, t_int
 
 #---------------------------------------------------------------
-def find_t_sys_gain(pulsar, obsid, beg=None, end=None, t_int=None, p_ra=None, p_dec=None,\
+def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
                     obs_metadata=None, full_meta=None, query=None, min_z_power=0.3, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
@@ -773,14 +773,12 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, t_int=None, p_ra=None, p_
 
     obsid, obs_ra, obs_dec, _, delays, centrefreq, channels = obs_metadata
 
-    #get beg if not supplied
-    if beg is None or t_int is None:
-        logger.debug("Calculating beginning time for pulsar coverage")
-        enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+    #get enter time
+    logger.debug("Calculating beginning time for pulsar coverage")
+    enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
 
-    #Find 'start_time' for fpio - it's usually about 7 seconds
     #obs_start, _ = mwa_metadb_utils.obs_max_min(obsid)
-    start_time = enter-int(obsid)
+    start_time =  enter-int(obsid)
 
     #Get important info
     trec_table = Table.read(trcvr,format="csv")
