@@ -214,8 +214,8 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
         return None, None
 
     #times the source enters and exits beam
-    time_enter = obs_beg + obs_dur*enter_obs_norm
-    time_exit = obs_beg + obs_dur*exit_obs_norm
+    time_enter = obs_beg + obs_dur*enter_obs_norm -1
+    time_exit = obs_beg + obs_dur*exit_obs_norm -1
 
     #normalised time the source enters/exits the beam in the files
     enter_files = (time_enter-files_beg)/files_duration
@@ -698,20 +698,20 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
     if t_int is None:
         enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end, metadata=metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
         if beg is not None and end is not None:
-            if beg<obsid or end<obsid or beg>(obsid+10000) or end>(obsid+10000):
-                logger.warning("Beginning/end times supplied are outside the obsid")
-                logger.warning("Have you entered the correct times and obsid?")
             dur = end-beg
         else: #use entire obs duration
             beg = obs_beg
             end = obs_end
             dur = end - beg + 1
-        enter_time = beg + enter_norm * dur
-        exit_time = beg + exit_norm * dur
-        if enter_norm is None or exit_norm is None or dur is None:
-            t_int=0
-        else:
+        if enter_norm is not None and exit_norm is not None:
+            enter_time = beg + enter_norm * dur
+            exit_time = beg + exit_norm * dur
             t_int = dur*(exit_norm-enter_norm)
+        else:
+            logger.warn("Integration time calculation failed")
+            enter_time = 0
+            exit_time = 0
+            t_int=0
 
     return enter_time, exit_time, t_int
 
@@ -795,7 +795,6 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     sys.stdout = open(os.devnull, 'w')
     _, _, Tsky_XX, _, _, _, Tsky_YY, _ = pbtant.make_primarybeammap(int(obsid), delays, centrefreq*1e6, 'analytic', plottype='None')
     sys.stdout = sys.__stdout__
-
 
     #TODO can be inaccurate for coherent but is too difficult to simulate
     t_sky = (Tsky_XX + Tsky_YY) / 2.
