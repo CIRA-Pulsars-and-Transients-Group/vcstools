@@ -684,11 +684,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     import socket
     hostname = socket.gethostname()
     if hostname.startswith('john') or hostname.startswith('farnarkle'):
-        max_pointing = 30
+        max_pointing = 120
         #Work out required SSD size
-        temp_mem = int(5. * (float(stop) - float(start) + 1.) * \
-                       float(len(pointing_list)) / 1000.) + 1
-        #temp_mem = 60
+        temp_mem = int(0.0012 * (float(stop) - float(start) + 1.) * \
+                       float(len(pointing_list)) ) + 1
         # Split it up into 400 chuncks to not use more than 60BG
         #time_chunks = gps_time_lists(start, stop, 400)
         time_chunks = gps_time_lists(start, stop, 10000)
