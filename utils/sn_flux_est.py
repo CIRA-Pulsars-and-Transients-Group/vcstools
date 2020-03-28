@@ -731,8 +731,8 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
         The observation ID. e.g. 1226406800
     beg: int
         The beginning of the observing time
-    t_int: float
-        The total time that the target is in the beam
+    end: float
+        The end of the observing time
     p_ra: str
         OPTIONAL - the target's right ascension
     p_dec: str
