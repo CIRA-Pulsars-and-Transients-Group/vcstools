@@ -187,7 +187,7 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
 
     #get r_sys and gain
     t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid, obs_metadata=metadata,\
-                                    beg=beg, t_int=t_int)
+                                    beg=beg, end=(t_int + beg - 1))
 
     #estimate S/N
     try:
