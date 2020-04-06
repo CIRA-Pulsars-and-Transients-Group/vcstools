@@ -20,8 +20,11 @@ add_definitions( -DVERSION_BEAMFORMER="${VCSTOOLS_VERSION}" )
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
-message("Finding CUDA")
-find_package(CUDA)
+
+if (${CMAKE_BEAMFORMER})
+  message("Finding CUDA")
+  find_package(CUDA)
+endif()
 
 message("Finding OpenMP")
 include(FindOpenMP)
@@ -43,7 +46,12 @@ endif()
 if (XGPU_FOUND)
     add_subdirectory(offline_correlator)
 endif()
-add_subdirectory(make_beam)
+if (${CMAKE_BEAMFORMER})
+  message("Compiling make_beam")
+  add_subdirectory(make_beam)
+else()
+  message("Not compiling make_beam")
+endif()
 add_subdirectory(make_psrfits)
 add_subdirectory(read_mwac)
 
