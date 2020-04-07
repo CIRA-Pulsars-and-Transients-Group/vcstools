@@ -461,14 +461,12 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
                                                                 opts->sample_rate );
         gpuErrchk( cudaPeekAtLastError() );
     }
-    for ( int p = 0; p < npointing; p++ )
-    {
-        // Now do the same for the coherent beam
-        dim3 chan_stokes(nchan, outpol_coh);
-        flatten_bandpass_C_kernel<<<npointing, chan_stokes, 0, streams[p]>>>( g->d_coh,
-                                                                    opts->sample_rate );
-        gpuErrchk( cudaPeekAtLastError() );
-    }
+    // Now do the same for the coherent beam
+    dim3 chan_stokes(nchan, outpol_coh);
+    flatten_bandpass_C_kernel<<<npointing, chan_stokes, 0, streams[0]>>>( g->d_coh,
+                                                                opts->sample_rate );
+    gpuErrchk( cudaPeekAtLastError() );
+
     gpuErrchk( cudaDeviceSynchronize() );
 
     // Copy the results back into host memory
