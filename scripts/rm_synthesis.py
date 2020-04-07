@@ -24,7 +24,7 @@ def rmfit_quad(archive, phase_min, phase_max):
     Parameters:
     -----------
     archive: string
-        The name of the archive file to tak as an input
+        The name of the archive file to take as an input
     phase_min: float
         The minimum phase to begin the fit, should be a float between 0 and 1
     phase_max: float
@@ -328,7 +328,7 @@ if __name__ == '__main__':
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     required = parser.add_argument_group("Required Inputs:")
-    required.add_argument("-f", "--archive", type=str, help="The name of the archive (.ar) file to work with")
+    required.add_argument("-f", "--archive", required=True, type=str, help="The name of the archive (.ar) file to work with")
 
     fitting = parser.add_argument_group("Fitting Options:")
     fitting.add_argument("--phase_ranges", type=float, nargs="+", help="The phase range(s) to fit the RM to. If unsupplied, will find the on-pulse and fit that range.\
