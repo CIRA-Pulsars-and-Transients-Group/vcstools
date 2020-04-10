@@ -123,7 +123,7 @@ def write_rm_to_file(filename, rm_dict):
         f.write("######################################\n")
     f.close()
 
-def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, plotname=None, phi_range=(-100, 100), plot_range=(-100, 100)):
+def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, plotname=None, phi_range=(-100, 100), phi_res=0.1, plot_range=(-100, 100)):
     """
     Performs RM synthesis on input data
 
@@ -143,8 +143,10 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, plotname=Non
         Stokes U values
     U_e: list
         Stokes U uncertainties
-    phi_range: tuple:
+    phi_range: tuple
         OPTIONAL - The range of RMs to search over. Default: (-400, 400)
+    phi_res: float
+        OPTINAL - The resolution of RMs to search over. Default: 0.1
     phase_range: tuple
         OPTIONAL - The phase range of the profile used in fitting. Will be displayed on plot. Default: None
     plotname: string
@@ -160,7 +162,7 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, plotname=Non
         The uncertainty in the rotation measure
     """
     p = rm_synth.PolObservation(freq_hz, (I, Q, U), IQUerr=(I_e, Q_e, U_e))
-    phi_axis = np.arange(*phi_range, 0.1)
+    phi_axis = np.arange(*phi_range, phi_res)
     p.rmsynthesis(phi_axis)
     p.rmclean(cutoff=3.)
     p.get_fdf_peak()
@@ -333,6 +335,7 @@ if __name__ == '__main__':
     fitting = parser.add_argument_group("Fitting Options:")
     fitting.add_argument("--phase_ranges", type=float, nargs="+", help="The phase range(s) to fit the RM to. If unsupplied, will find the on-pulse and fit that range.\
                          Supports multiple ranges. eg. 0.1 0.15 0.55 0.62 will fit from 0.1 to 0.15 and from 0.55 or 0.62.")
+    fitting.add_argument("--phi_res", type=float, default=0.1, help="The resolution of RMs to synthesise.")
     fitting.add_argument("--phi_range", type=float, default=(-100, 100), nargs="+", help="The range of RMs so synthsize. Giving a smaller window will speed up operations.")
 
     output = parser.add_argument_group("Output Options:")
@@ -358,11 +361,12 @@ if __name__ == '__main__':
     logger.addHandler(ch)
     logger.propagate = False
 
-    kwargs_rms = {}
-    kwargs_rms["phi_range"] = args.phi_range
-    kwargs_rms["plot_range"] = args.plot_range
-    kwargs_gfit = {}
-    kwargs_gfit["cliptype"] = args.cliptype
+    kwargs_rms                  = {}
+    kwargs_rms["phi_range"]     = args.phi_range
+    kwargs_rms["plot_range"]    = args.plot_range
+    kwargs_rms["phi_res"]       = args.phi_res
+    kwargs_gfit                 = {}
+    kwargs_gfit["cliptype"]     = args.cliptype
     rm_dict, _ = rm_synth_pipe(args.archive, work_dir=args.work_dir, plot=args.plot, label=args.label, write=args.write,\
                  phase_ranges=args.phase_ranges, keep_QUV=args.keep_QUV, kwargs_rms=kwargs_rms, kwargs_gfit=kwargs_gfit)
     for i in rm_dict.keys():
