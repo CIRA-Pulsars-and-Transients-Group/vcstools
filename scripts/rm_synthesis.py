@@ -49,7 +49,7 @@ def find_on_pulse_ranges(I, **kwargs):
         The pulse profile
     **kwargs:
         Keyword arguments for prof_utils.auto_gfit
-    
+
     Returns:
     --------
     phases: list
@@ -63,6 +63,43 @@ def find_on_pulse_ranges(I, **kwargs):
 
     return phases
 
+def read_rmsynth_out(filename):
+    """
+    Reads the ouput file from rm_synth_pipe()
+
+    Parameters:
+    -----------
+    filename:
+        The name of the file ouput from rm_synth_pipe()
+
+    Returns:
+    --------
+    rm_dict: dictionary
+        Contains the following keys:
+        i: dictionary
+            There are i entries where i is the number of different phase ranges
+            Contains the following keys:
+            rm: float
+                The rotation measure of this run
+            rm_e: float
+                The uncertainty in rm
+            phase_ranges: tuple
+                The range of phases used for this run
+    """
+    rm_dict={}
+    f = open(filename, "r")
+    lines = f.readlines()
+    j=0
+    for line in lines:
+        if line.split()[0] == "Phase:":
+            rm_dict[str(j)] = {}
+            rm_dict[str(j)]["phase_range"] = (float(line.split()[1]), float(line.split()[-1]))
+        if line.split()[0] == "Rotation":
+            rm_dict[str(j)]["rm"] = float(line.split()[2])
+            rm_dict[str(j)]["rm_e"] = float(line.split()[-1])
+            j += 1
+    return rm_dict
+
 def read_rmfit_QUVflux(QUVflux):
     """
     Reads the freq, I, Q and U values with their errors from a QUVflux.out file generated from rmfit
@@ -71,7 +108,7 @@ def read_rmfit_QUVflux(QUVflux):
     -----------
     QUVflux: string
         The QUVflux.out file
-    
+
     Returns:
     --------
     List containing:
@@ -98,7 +135,7 @@ def read_rmfit_QUVflux(QUVflux):
     Q_e     = np.array([i[5] for i in f])
     U       = np.array([i[6] for i in f])
     U_e     = np.array([i[7] for i in f])
-    
+
     return [freq_hz, I, I_e, Q, Q_e, U, U_e]
 
 def write_rm_to_file(filename, rm_dict):
@@ -123,7 +160,44 @@ def write_rm_to_file(filename, rm_dict):
         f.write("######################################\n")
     f.close()
 
-def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, plotname=None, phi_range=(-300, 300)):
+def find_best_range(I, Q, U, phase_ranges):
+    """
+    Finds the phase range with the largest ratio of lin pol to stokes I
+
+    Parameters:
+    -----------
+    I: list
+        Stokes I
+    Q: list
+        Stokes Q
+    U: list
+        Stokes U
+    phase_ranges: list
+        A list where every 2 entries is a phase range from 0 to 1. ie. [0.1 0.3 0.4 0.8]
+
+    Returns:
+    ---------
+    best_phase_range: list
+        The most suitable phase range
+    best_max: float
+        The maximum linear polarisation value
+    """
+    lin_pol = np.sqrt(np.array(Q)**2 + np.array(U)**2)
+    I_pol_ratio = list(lin_pol / np.array(I))
+    int_ranges = []
+
+    best_max = 0
+    for i, phase_min, phase_max in zip(range(len(phase_ranges)//2), phase_ranges[0::2], phase_ranges[1::2]):
+        int_min = int(len(I)*phase_min)
+        int_max = int(len(I)*phase_max)
+        print(max(I_pol_ratio[int_min:int_max]))
+        if max(I_pol_ratio[int_min:int_max]) > best_max:
+            best_phase_range = [phase_min, phase_max]
+            best_max = max(I_pol_ratio[int_min:int_max])
+
+    return best_phase_range, best_max
+
+def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single=False, plotname=None, phi_range=(-100, 100), phi_res=0.1, plot_range=(-100, 100)):
     """
     Performs RM synthesis on input data
 
@@ -143,12 +217,16 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, plotname=Non
         Stokes U values
     U_e: list
         Stokes U uncertainties
+    phi_range: tuple
+        OPTIONAL - The range of RMs to search over. Default: (-400, 400)
+    phi_res: float
+        OPTINAL - The resolution of RMs to search over. Default: 0.1
     phase_range: tuple
-        OPTIONAL - The phase range used in fitting. Will be displayed on plot. Default: None
+        OPTIONAL - The phase range of the profile used in fitting. Will be displayed on plot. Default: None
     plotname: string
         OPTIONAL - The name of the plot. If None, will not plot: Default: None
-    phi_range: tuple
-        OPTIONAL - The range of phi to plot. Default: (-300, 300)
+    plot_range: tuple
+        OPTIONAL - The range of phi to plot. Default: (-100, 100)
 
     Returns:
     --------
@@ -158,14 +236,12 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, plotname=Non
         The uncertainty in the rotation measure
     """
     p = rm_synth.PolObservation(freq_hz, (I, Q, U), IQUerr=(I_e, Q_e, U_e))
-    phi_axis = np.arange(-400,400,0.1)
+    phi_axis = np.arange(*phi_range, phi_res)
     p.rmsynthesis(phi_axis)
     p.rmclean(cutoff=3.)
     p.get_fdf_peak()
     p.print_rmstats()
 
-    pk01=np.max(abs(p.rm_cleaned)[4100:])
-    rm01=p.phi[4100+np.argmax(abs(p.rm_cleaned)[4100:])]
     rm = p.cln_fdf_peak_rm
     rm_e = p.cln_fdf_peak_rm_err
     norm_factor = max(abs(p.fdf))
@@ -173,26 +249,26 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, plotname=Non
     if plotname:
         plt.figure(figsize=(12, 10))
         rm_string='RM: {0:7.3f}+/-{1:6.3f}'.format(p.cln_fdf_peak_rm, p.cln_fdf_peak_rm_err)
-        phase_string = "Phase range: {0:7.3f} - {1:7.3f}".format(float(phase_range[0]), float(phase_range[1]))
-        min_phi = min(phi_range)
-        phi_len = len(phi_range)
-        plt.text(min(phi_range)+0.1*phi_len, 0.9, rm_string, fontsize=14)
-        plt.text(min(phi_range)+0.1*phi_len, 0.8, phase_string, fontsize=14)
-        
+        phi_min = min(plot_range)
+        plt.text(min(plot_range)+0.1*abs(phi_min), 0.9, rm_string, fontsize=14)
+        if phase_range:
+            phase_string = "Phase range: {0:7.3f} - {1:7.3f}".format(float(phase_range[0]), float(phase_range[1]))
+            plt.text(min(plot_range)+0.1*abs(phi_min), 0.8, phase_string, fontsize=14)
+
         plt.plot(p.rmsf_phi,abs(p.rmsf),'k-', linewidth=0.5)
         plt.plot(p.phi,abs(p.fdf/norm_factor),'r-', linewidth=0.5)
         plt.plot(p.phi,abs(p.rm_cleaned/norm_factor),'b-', linewidth=0.5)
         plt.plot(p.phi,abs(p.rm_comps/norm_factor),'g-', linewidth=0.5)
-        plt.legend(('RMSF','Dirty FDF','Clean FDF','FDF Model Components'),loc='best')
+        plt.legend(('RMSF','Dirty FDF','Clean FDF','FDF Model Components'), loc='best')
         plt.xlabel('RM (rad/m2)')
-        plt.ylabel('Amplitude')
-        plt.xlim(*phi_range)
+        plt.ylabel('Amplitude (Arbitrary Units)')
+        plt.xlim(*plot_range)
         plt.ylim(0, 1)
         plt.savefig(plotname, bbox_inches='tight')
-    
+
     return rm, rm_e
-    
-def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", phase_ranges=None, keep_QUV=False, kwargs_rms={}, kwargs_gfit={}):
+
+def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", phase_ranges=None, keep_QUV=False, force_single=False, kwargs_rms={}, kwargs_gfit={}):
     """
     Performs all the nexessary operations on an archive file to attain a rotation measure through the RM synthesis technique
 
@@ -212,7 +288,10 @@ def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", pha
         OPTIONAL - If True, will write the result to a file. Default: False
     label: string
         OPTIONAL - A label used to identify the output files. If None, will generate a 64 bit string
-    keep_QUV: boolean 
+    keep_QUV: boolean
+        OPTIONAL - If True, will keep the QUVflux.out file generated from rmfit
+    force_single: boolean
+        OPTIONAL - If True, will find the phase range with the greates lin_pol ratio and fit with only this (only if kwargs_rms['phase_range'] is None). Default: False
     kwagrs_rms: dict
         keyword arguments for IQU_rm_synth()
     kwargs_gfit: dict
@@ -229,7 +308,7 @@ def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", pha
                 The rotation measure of this run
             rm_e: float
                 The uncertainty in rm
-            phase_ranges: tuple
+            phase_range: tuple
                 The range of phases used for this run
             plotname: str
                 The name of the output plot. None if no plot
@@ -258,6 +337,8 @@ def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", pha
     #find the phase range(s) to fit:
     if not phase_ranges:
         phase_ranges = find_on_pulse_ranges(I, **kwargs_gfit)
+        if force_single:
+            phase_ranges, _ = find_best_range(I, Q, U, phase_ranges)
     logger.info("Using phase ranges: {}".format(phase_ranges))
 
     #run rmfit with -w option
@@ -269,7 +350,7 @@ def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", pha
         #read the QUVflux.out file
         QUVflux = "QUVflux.out"
         rmfreq, rmI, rmI_e, rmQ, rmQ_e, rmU, rmU_e, = read_rmfit_QUVflux(QUVflux)
-    
+
         #make plot name if needed
         if plot:
             plotname = "{}_".format(label)
@@ -282,14 +363,14 @@ def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", pha
         kwargs_rms["phase_range"] = (phase_min, phase_max)
 
         #perform RM synthesis
-        rm, rm_e = IQU_rm_synth(rmfreq, rmI, rmI_e, rmQ, rmQ_e, rmU, rmU_e, **kwargs_rms)
+        rm, rm_e = IQU_rm_synth(rmfreq, rmI, rmQ, rmU, rmI_e, rmQ_e, rmU_e, **kwargs_rms)
         rm_dict[str(i)]["rm"]           = rm
         rm_dict[str(i)]["rm_e"]         = rm_e
         rm_dict[str(i)]["phase_range"]  = (phase_min, phase_max)
         rm_dict[str(i)]["plotname"]     = plotname
         rm_dict[str(i)]["label"]        = label
 
-        #move plot out of workign dir
+        #move plot out of working dir
         if plotname:
             os.rename(plotname, "../{}".format(plotname))
 
@@ -308,7 +389,7 @@ def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", pha
         os.rename(filename, "../{}".format(filename))
     else:
         filename = None
-    
+
     os.chdir("../")
     allfiles = glob.glob("{}/*".format(randomgen))
     for afile in allfiles:
@@ -318,7 +399,7 @@ def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", pha
     return rm_dict, filename
 
 if __name__ == '__main__':
-  
+
     loglevels = dict(DEBUG=logging.DEBUG,
                      INFO=logging.INFO,
                      WARNING=logging.WARNING,
@@ -332,13 +413,16 @@ if __name__ == '__main__':
 
     fitting = parser.add_argument_group("Fitting Options:")
     fitting.add_argument("--phase_ranges", type=float, nargs="+", help="The phase range(s) to fit the RM to. If unsupplied, will find the on-pulse and fit that range.\
-                         Supports multiple ranges. eg. 0.1 0.15 0.55 0.62 will fit from 0.1 to 0.15 and from 0.55 ro 0.62.")
+                         Supports multiple ranges. eg. 0.1 0.15 0.55 0.62 will fit from 0.1 to 0.15 and from 0.55 or 0.62.")
+    fitting.add_argument("--phi_res", type=float, default=0.1, help="The resolution of RMs to synthesise.")
+    fitting.add_argument("--phi_range", type=float, default=(-100, 100), nargs="+", help="The range of RMs so synthsize. Giving a smaller window will speed up operations.")
+    fitting.add_argument("--force_single", action="store_true", help="use this tag to force using only a single phase range (if phase_ranges is unsupplied)")
 
     output = parser.add_argument_group("Output Options:")
     output.add_argument("--label", type=str, help="A label for the output.")
     output.add_argument("--write", action="store_true", help="Use this tag to write the results to a labelled file")
     output.add_argument("--plot", action="store_true", help="Use this tag to plot the result.")
-    output.add_argument("--phi_range", type=float, default=(-300, 300), nargs="+", help="The range of phi for the output plot.")
+    output.add_argument("--plot_range", type=float, default=(-100, 100), nargs="+", help="The range of phi (RM) for the output plot.")
     output.add_argument("--keep_QUV", action="store_true", help="Use this tag to keep the QUVflux.out file from rmfit.")
 
     gfit = parser.add_argument_group("Gaussian Fit Options")
@@ -357,12 +441,14 @@ if __name__ == '__main__':
     logger.addHandler(ch)
     logger.propagate = False
 
-    kwargs_rms = {}
-    kwargs_rms["phi_range"] = args.phi_range
-    kwargs_gfit = {}
-    kwargs_gfit["cliptype"] = args.cliptype
-    rm_dict, _ = rm_synth_pipe(args.archive, work_dir=args.work_dir, plot=args.plot, label=args.label, write=args.write, phase_ranges=args.phase_ranges,\
-                 keep_QUV=args.keep_QUV, kwargs_rms=kwargs_rms, kwargs_gfit=kwargs_gfit)
+    kwargs_rms                  = {}
+    kwargs_rms["phi_range"]     = args.phi_range
+    kwargs_rms["plot_range"]    = args.plot_range
+    kwargs_rms["phi_res"]       = args.phi_res
+    kwargs_gfit                 = {}
+    kwargs_gfit["cliptype"]     = args.cliptype
+    rm_dict, _ = rm_synth_pipe(args.archive, work_dir=args.work_dir, plot=args.plot, label=args.label, write=args.write,\
+                 phase_ranges=args.phase_ranges, keep_QUV=args.keep_QUV, force_single=args.force_single, kwargs_rms=kwargs_rms, kwargs_gfit=kwargs_gfit)
     for i in rm_dict.keys():
         rm          = rm_dict[i]["rm"]
         rm_e        = rm_dict[i]["rm_e"]
