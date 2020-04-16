@@ -245,7 +245,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                        switches=switches, modules=modules,
                        version=vcstools_version,
                        cluster=cluster, partition=partition,
-                       export=export, account=comp_config['group_account'],
+                       export=export, account=comp_config['group_account'][queue],
                        module_dir=comp_config['module_dir'],
                        threads=cpu_threads, mem=mem, nice=nice)
 
