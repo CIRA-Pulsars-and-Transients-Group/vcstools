@@ -193,7 +193,7 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     try:
         prof_dict = prof_utils.auto_gfit(profile,\
                     period = period, plot_name="{0}_{1}_{2}_bins_gaussian_fit.png".format(obsid, pulsar, num_bins))
-    except prof_utils.ProfileLengthError:
+    except (prof_utils.ProfileLengthError, prof_utils.NoFitError) as _:
         prof_dict=None
 
     if not prof_dict:
