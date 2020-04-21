@@ -101,11 +101,12 @@ __global__ void invj_the_data( uint8_t       *data,
     // Nick: by my math the order should be:
     // JDx = Jxx*Dx + Jxy*Dy
     // JDy = Jyx*Dx + Jyy*Dy
-    // But switching yx and xy is the way it was done previously and appears
-    // to give higher signal to noise
+    // This is what I have implemented (as it produces higher signal-to-noise
+    // ratio detections). The original code (the single-pixel beamformer)
+    // switched the yx and xy terms but we get similar SNs
     JDx[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(ant,c,0,0,nc)], Dx ),
-                                     CMuld( J[J_IDX(ant,c,1,0,nc)], Dy ) );
-    JDy[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(ant,c,0,1,nc)], Dx ),
+                                     CMuld( J[J_IDX(ant,c,0,1,nc)], Dy ) );
+    JDy[JD_IDX(s,c,ant,nc)] = CAddd( CMuld( J[J_IDX(ant,c,1,0,nc)], Dx ),
                                      CMuld( J[J_IDX(ant,c,1,1,nc)], Dy ) );
 
 
