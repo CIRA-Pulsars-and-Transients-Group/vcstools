@@ -658,6 +658,7 @@ class RTScal(object):
                                 module_list=module_list,
                                 batch_dir=self.batch_dir,
                                 submit=self.submit,
+                                queue='gpuq',
                                 export="NONE")
         jobids.append(jobid)
 

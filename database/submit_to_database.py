@@ -187,21 +187,41 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
 
     #get r_sys and gain
     t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid, obs_metadata=metadata,\
-                                    beg=beg, t_int=t_int)
+                                    beg=beg, end=(t_int + beg - 1))
 
     #estimate S/N
     try:
         prof_dict = prof_utils.auto_gfit(profile,\
                     period = period, plot_name="{0}_{1}_{2}_bins_gaussian_fit.png".format(obsid, pulsar, num_bins))
-    except prof_utils.ProfileLengthError:
+    except (prof_utils.ProfileLengthError, prof_utils.NoFitError) as _:
         prof_dict=None
 
     if not prof_dict:
         logger.info("Profile couldn't be fit. Using old style of profile analysis")
-        sn, u_sn, _, w_equiv_bins, u_w_equiv_bins, w_equiv_ms, u_w_equiv_ms, scattering, u_scattering, scattered =\
-            prof_utils.analyse_pulse_prof(profile, period, verbose=True)
-        w_equiv_ms = period/num_bins * w_equiv_bins
-        u_w_equiv_ms = period/num_bins * u_w_equiv_bins
+        prof_dict = prof_utils.auto_analyse_pulse_prof(profile, period)
+        if prof_dict:
+            sn = prof_dict["sn"]
+            u_sn = prof_dict["sn_e"]
+            w_equiv_bins = prof_dict["w_equiv_bins"]
+            u_w_equiv_bins =  prof_dict["w_equiv_bins_e"]
+            w_equiv_ms = period/num_bins * w_equiv_bins
+            u_w_equiv_ms = period/num_bins * u_w_equiv_bins
+            scattering = prof_dict["scattering"]*period/num_bins/1000 #convert to seconds
+            u_scattering = prof_dict["scattering_e"]*period/num_bins/1000
+            scattered = prof_dict["scattered"]
+        else:
+            logger.warn("Profile could not be analysed using any methods")
+            sn = None
+            u_sn = None
+            w_equiv_bins = None
+            u_w_equiv_bins =  None
+            w_equiv_ms = None
+            u_w_equiv_ms = None
+            scattering = None
+            u_scattering = None
+            scattered = None
+            S_mean = None
+            u_S_mean = None
     else:
         sn = prof_dict["sn"]
         u_sn = prof_dict["sn_e"]
@@ -213,30 +233,31 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
         u_scattering = prof_dict["Wscat_e"]*period/num_bins/1000
         scattered = prof_dict["scattered"]
 
-    logger.info("Profile scattered? {0}".format(scattered))
-    logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
-    logger.debug("Gain {0} K/Jy".format(gain))
-    logger.debug("Equivalent width in bins: {0}".format(w_equiv_bins))
-    logger.debug("T_sys: {0} K".format(t_sys))
-    logger.debug("Bandwidth: {0}".format(bandwidth))
-    logger.debug("Detection time: {0}".format(time_detection))
-    logger.debug("NUmber of bins: {0}".format(num_bins))
+    if prof_dict:
+        logger.info("Profile scattered? {0}".format(scattered))
+        logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
+        logger.debug("Gain {0} K/Jy".format(gain))
+        logger.debug("Equivalent width in bins: {0}".format(w_equiv_bins))
+        logger.debug("T_sys: {0} K".format(t_sys))
+        logger.debug("Bandwidth: {0}".format(bandwidth))
+        logger.debug("Detection time: {0}".format(time_detection))
+        logger.debug("NUmber of bins: {0}".format(num_bins))
 
-    if scattered == False:
-        #final calc of the mean fluxdesnity in mJy
-        S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
-                 math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
-        #constants to make uncertainty calc easier
-        S_mean_cons = t_sys / ( math.sqrt(2. * float(time_detection) * bandwidth)) *\
-                 math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
-        u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
-                              math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
+        if scattered == False:
+            #final calc of the mean fluxdesnity in mJy
+            S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
+                    math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
+            #constants to make uncertainty calc easier
+            S_mean_cons = t_sys / ( math.sqrt(2. * float(time_detection) * bandwidth)) *\
+                    math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
+            u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
+                                math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
 
-        logger.info('Smean {0:.2f} +/- {1:.2f} mJy'.format(S_mean, u_S_mean))
-    else:
-        logger.info("Profile is scattered. Flux cannot be estimated")
-        S_mean = None
-        u_S_mean = None
+            logger.info('Smean {0:.2f} +/- {1:.2f} mJy'.format(S_mean, u_S_mean))
+        else:
+            logger.info("Profile is scattered. Flux cannot be estimated")
+            S_mean = None
+            u_S_mean = None
 
     #calc obstype
     if (maxfreq - minfreq) == 23:
@@ -273,6 +294,16 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
         S_mean = float("{0:.2f}".format(S_mean))
         u_S_mean = float("{0:.2f}".format(u_S_mean))
 
+    #format data for uploading
+    if w_equiv_ms:
+        w_equiv_ms = float("{0:.2f}".format(w_equiv_ms))
+    if u_w_equiv_ms:
+        u_w_equiv_ms = float("{0:.2f}".format(u_w_equiv_ms))
+    if scattering:
+        scattering = float("{0:.5f}".format(scattering))
+    if u_scattering:
+        u_scattering = float("{0:.5f}".format(u_scattering))
+
     try:
         client.detection_create(web_address, auth,
                                observationid = int(obsid),
@@ -284,10 +315,10 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                                startcchan = int(minfreq), stopcchan = int(maxfreq),
                                flux = S_mean,
                                flux_error = u_S_mean,
-                               width = float("{0:.2f}".format(w_equiv_ms)),
-                               width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                               scattering = float("{0:.5f}".format(scattering)),
-                               scattering_error = float("{0:.5f}".format(u_scattering)),
+                               width = w_equiv_ms,
+                               width_error = u_w_equiv_ms,
+                               scattering = scattering,
+                               scattering_error = u_scattering,
                                dm = float(dm))
     except:
         logger.info("Detection already on database so updating the values")
@@ -301,10 +332,10 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                                startcchan = int(minfreq), stopcchan = int(maxfreq),
                                flux = S_mean,
                                flux_error = u_S_mean,
-                               width = float("{0:.2f}".format(w_equiv_ms)),
-                               width_error = float("{0:.2f}".format(u_w_equiv_ms)),
-                               scattering = float("{0:.5f}".format(scattering)),
-                               scattering_error = float("{0:.5f}".format(u_scattering)),
+                               width = w_equiv_ms,
+                               width_error = u_w_equiv_ms,
+                               scattering = scattering,
+                               scattering_error = u_scattering,
                                dm = float(dm))
 
     logger.info("Observation submitted to database")
@@ -484,7 +515,7 @@ if __name__ == "__main__":
     if args.pulsar:
         #Overrule what's in the bestprof if pulsar name is supplied
         pulsar = args.pulsar
-    logger.debug("Pulsar name: {}".format(puslar))
+    logger.debug("Pulsar name: {}".format(pulsar))
 
     if args.pulsar or args.bestprof or args.ascii:
         #Checks to see if the pulsar is already on the database

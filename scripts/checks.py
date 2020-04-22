@@ -155,7 +155,7 @@ def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_siz
     for line in output[1:]:
         if b'dat' in line:
             error = True
-            line = line.strip()
+            line = line.strip().decode()
             logger.error("Deleted {0} due to wrong size.".format(line))
             dat_files = line.replace('_ics.dat','*.dat')
             rm_cmd = "rm -rf {0}".format(dat_files)

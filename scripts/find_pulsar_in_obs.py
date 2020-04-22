@@ -98,7 +98,7 @@ def deg2sex(ra, dec):
     return rajs, decjs
 
 
-def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
+def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False, query=None):
     """
     Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
@@ -113,24 +113,26 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False):
     """
     import psrqpy
 
-    params = ['JNAME', 'RAJ', 'DECJ', 'DM']
-    query = psrqpy.QueryATNF(params=params, psrs=pulsar_list, loadfromdb=ATNF_LOC).pandas
+    #params = ['JNAME', 'RAJ', 'DECJ', 'DM']
+    if query is None:
+        query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'DM'], psrs=pulsar_list, loadfromdb=ATNF_LOC).pandas
 
     pulsar_ra_dec = []
-    for row in query.itertuples():
+    for i, _ in enumerate(query["PSRJ"]):
         # Only record if under the max_dm
-        dm = row.DM
+        dm = query["DM"][i]
         if not math.isnan(dm):
             if float(dm) < max_dm:
                 if include_dm:
-                    pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ, dm])
+                    pulsar_ra_dec.append([query["PSRJ"][i], query["RAJ"][i], query["DECJ"][i], dm])
                 else:
-                    pulsar_ra_dec.append([row.JNAME, row.RAJ, row.DECJ])
+                    pulsar_ra_dec.append([query["PSRJ"][i], query["RAJ"][i], query["DECJ"][i]])
+
 
     return pulsar_ra_dec
 
 
-def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False):
+def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False, query=None):
     """
     Will search different source catalogues and extract all the source names, RAs, Decs and, if requested, DMs
 
@@ -166,7 +168,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
     #Get each source type into the format [[name, ra, dec]]
     name_ra_dec = []
     if source_type == 'Pulsar':
-        name_ra_dec = get_psrcat_ra_dec(pulsar_list=pulsar_list, max_dm=max_dm, include_dm=include_dm)
+        name_ra_dec = get_psrcat_ra_dec(pulsar_list=pulsar_list, max_dm=max_dm, include_dm=include_dm, query=query)
 
     elif source_type == 'FRB':
         import json
@@ -205,15 +207,23 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         rrats_data = urllib.request.urlopen('http://astro.phys.wvu.edu/rratalog/rratalog.txt').read().decode()
         for rrat in rrats_data.split("\n")[1:-1]:
             columns = rrat.strip().replace(" ", '\t').split('\t')
-            temp = []
+            rrat_cat_line = []
             if pulsar_list == None or (columns[0] in pulsar_list):
                 for entry in columns:
                     if entry not in ['', ' ', '\t']:
-                        temp.append(entry.replace('--',''))
+                        rrat_cat_line.append(entry.replace('--',''))
+                #Removing bad formating for the database
+                ra = rrat_cat_line[4]
+                if ra.endswith(":"):
+                    ra = ra[:-1]
+                dec = rrat_cat_line[5]
+                if dec.endswith(":"):
+                    dec = dec[:-1]
+
                 if include_dm:
-                    name_ra_dec.append([temp[0], temp[4], temp[5], temp[3]])
+                    name_ra_dec.append([rrat_cat_line[0], ra, dec, rrat_cat_line[3]])
                 else:
-                    name_ra_dec.append([temp[0], temp[4], temp[5]])
+                    name_ra_dec.append([rrat_cat_line[0], ra, dec])
 
     elif source_type == 'Fermi':
         # read the fermi targets file
@@ -238,11 +248,11 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
 
     #Remove all unwanted sources
     if pulsar_list is not None:
-        temp = []
+        rrat_cat_filtered = []
         for line in name_ra_dec:
             if line[0] in pulsar_list:
-                temp.append(line)
-        name_ra_dec = temp
+                rrat_cat_filtered.append(line)
+        name_ra_dec = rrat_cat_filtered
 
     return name_ra_dec
 
@@ -563,7 +573,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
 def find_sources_in_obs(obsid_list, names_ra_dec,
                         obs_for_source=False, dt_input=100, beam='analytic',
                         min_power=0.3, cal_check=False, all_volt=False,
-                        degrees_check=False):
+                        degrees_check=False, metadata_list=None):
     """
     Either creates text files for each MWA obs ID of each source within it or a text
     file for each source with each MWA obs is that the source is in.
@@ -593,8 +603,11 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
     obsid_meta = []
     obsid_to_remove = []
 
-    for obsid in obsid_list:
-        beam_meta_data, full_meta = get_common_obs_metadata(obsid, return_all = True)
+    for i, obsid in enumerate(obsid_list):
+        if metadata_list:
+            beam_meta_data, full_meta = metadata_list[i]
+        else:
+            beam_meta_data, full_meta = get_common_obs_metadata(obsid, return_all=True)
         #beam_meta_data = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
 
         if dt_input * 4 >  beam_meta_data[3]:
@@ -733,7 +746,13 @@ def write_output_obs_files(output_data, obsid_meta,
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is false.
     """
+
     for on, obsid in enumerate(output_data):
+        if SN_est:
+            psr_list = [el[0] for el in output_data[obsid]]
+            sn_dict = sfe.multi_psr_snfe(psr_list, obsid,\
+                                         min_z_power=min_power, plot_flux=plot_est)
+
         oap = get_obs_array_phase(obsid)
         out_name = "{0}_{1}_beam.txt".format(obsid, beam)
         with open(out_name,"w") as output_file:
@@ -773,8 +792,7 @@ def write_output_obs_files(output_data, obsid_meta,
                 if SN_est:
                     beg = int(obsid) + 7
                     end = beg + int(obsid_meta[on][3])
-                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(pulsar, obsid, beg=beg, end=end,\
-                      obs_metadata=obsid_meta[on], o_enter=enter, o_exit=exit, plot_flux=plot_est)
+                    pulsar_sn, pulsar_sn_err = sn_dict[pulsar]
                     if pulsar_sn is None:
                         output_file.write('   None    None\n')
                     else:
