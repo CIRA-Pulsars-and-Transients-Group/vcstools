@@ -33,8 +33,13 @@ Documentation on how to process MWA VCS data can be found [here](https://wiki.mw
 
 Credit
 ------
+You can reference this repository using: [![DOI](https://zenodo.org/badge/215693072.svg)](https://zenodo.org/badge/latestdoi/215693072)
+
 If you use the MWA beamformer please give credit by citing:
 [Ord et al. (2019)](https://ui.adsabs.harvard.edu/abs/2019PASA...36...30O/abstract)
+
+If you used polarmitery please give credit by citing: 
+[Xue et al. (2019](https://ui.adsabs.harvard.edu/abs/2019PASA...36...25X/abstract)
 
 Status
 ------
