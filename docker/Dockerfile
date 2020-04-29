@@ -39,7 +39,6 @@ RUN git clone https://github.com/demorest/psrfits_utils.git \
 
 ### Build pulsar ###
 WORKDIR /tmp/pulsar-build
-ADD docker/pulsar_src.tar.gz .
 RUN wget https://github.com/CIRA-Pulsars-and-Transients-Group/vcstools/raw/master/docker/pulsar_src.tar.gz && \
     tar -zxvf pulsar_src.tar.gz && \
     cd pulsar_src && \
