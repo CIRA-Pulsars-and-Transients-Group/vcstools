@@ -18,6 +18,7 @@ install:
     - pip install psrqpy
     - pip install skyfield
     - pip install h5py
+    - python -c "from skyfield.api import load;planets = load('de421.bsp')"
 
     - pip install coveralls
     - pip install codacy-coverage
