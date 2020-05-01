@@ -32,7 +32,8 @@ install:
     #install mwa_pb
     - git clone https://github.com/MWATelescope/mwa_pb.git
     - cd mwa_pb
-    - git checkout backup_url#52457e9
+    - git checkout backup_url
+    #52457e9
     - python setup.py build --build-scripts=$HOME/build/
     - cd mwa_pb/data
     #if cerberus is down use the backup server
