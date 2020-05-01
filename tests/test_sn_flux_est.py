@@ -156,7 +156,7 @@ def test_est_pulsar_sn():
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
     test_cases.append(("J2241-5236", obsid, None, None, None, None, md, full_md,\
-                    280.9035270638417, 67.2071570680401))
+                    280.9035270638417, 102.95827699010243))
     #Has 6 fluxes on database
     obsid=1226062160
     md = md_dict[str(obsid)][0]
