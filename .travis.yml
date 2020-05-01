@@ -18,6 +18,7 @@ install:
     - pip install psrqpy
     - pip install skyfield
     - pip install h5py
+    - echo $XDG_CACHE_HOME
     - python -c "from skyfield.api import Loader;skyfield_loader = Loader('/tmp');PLANETS = skyfield_loader('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de421.bsp')"
 
     - pip install coveralls
