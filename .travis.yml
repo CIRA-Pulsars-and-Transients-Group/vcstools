@@ -18,8 +18,8 @@ install:
     - pip install psrqpy
     - pip install skyfield
     - pip install h5py
-    - echo $XDG_CACHE_HOME
-    - python -c "from skyfield.api import Loader;skyfield_loader = Loader('/tmp');PLANETS = skyfield_loader('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de421.bsp')"
+    #- echo $XDG_CACHE_HOME
+    #- python -c "from skyfield.api import Loader;skyfield_loader = Loader('/tmp');PLANETS = skyfield_loader('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/de421.bsp')"
 
     - pip install coveralls
     - pip install codacy-coverage
@@ -32,7 +32,7 @@ install:
     #install mwa_pb
     - git clone https://github.com/MWATelescope/mwa_pb.git
     - cd mwa_pb
-      #- git checkout 52457e9
+    - git checkout backup_url#52457e9
     - python setup.py build --build-scripts=$HOME/build/
     - cd mwa_pb/data
     #if cerberus is down use the backup server
