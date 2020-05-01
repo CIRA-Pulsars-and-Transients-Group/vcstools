@@ -113,6 +113,32 @@ def get_Trec(tab,obsfreq):
 # Removed this function as this will always be calculated from the bestprof
 #def enter_exit_calc(time_detection, time_obs, metadata, start=None, stop=None):
 
+def filename_prefix(obsid, pulsar, bins=None, cal=None):
+    """
+    Creates a filename prefix depending on inputs
+
+    Parameters:
+    -----------
+    obsid: int
+        The observation ID
+    pulsar: str
+        The name of the puslar
+    bins: int
+        The number of bins in the profile
+    cal: int
+        The calibrator ID
+
+    Returns:
+    --------
+    pref: str
+        The filename prefix
+    """
+    pref = "{0}_{1}".format(obsid, pulsar)
+    if cal:
+        pref += "_c{}".format(cal)
+    if bins:
+        pref += "_b{}".format(bins)
+    return pref
 
 def zip_calibration_files(base_dir, cal_obsid, source_file):
     """
@@ -539,9 +565,6 @@ if __name__ == "__main__":
             client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)
 
 
-
-
-
     #get meta data from obsid
     metadata = get_common_obs_metadata(obsid)
     obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = metadata
@@ -638,10 +661,16 @@ if __name__ == "__main__":
             temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))
 
     #Upload analysis files to the database
+    #create filname prefix
+    bins=None
+    if args.bestprof:
+        bins = prof_utils.get_from_bestprof(args.bestprof)[-1]
+    fname_pref = filename_prefix(args.obsid, args.pulsar, bins=bins, cal=args.cal_id)
+
     if args.bestprof:
         logger.info("Uploading bestprof file to database")
-        cp(str(args.bestprof) ,str(obsid) + "_" + str(pulsar) + ".bestprof")
-        d_file_loc = str(obsid) + "_" + str(pulsar) + ".bestprof"
+        cp(str(args.bestprof) ,"{}.bestprof".format(fname_pref))
+        d_file_loc = "{}.bestprof".format(fname_pref)
         client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
                             pulsar = str(pulsar),
@@ -654,13 +683,15 @@ if __name__ == "__main__":
     #Archive files
     if args.archive:
         logger.info("Uploading archive file to database")
+        cp(str(args.archive) ,"{}.ar".format(fname_pref))
+        d_file_loc = "{}.ar".format(fname_pref)
         client.detection_file_upload(web_address, auth,
                                     observationid = str(obsid),
                                     pulsar = str(pulsar),
                                     subband = int(subbands),
                                     coherent = coh,
                                     filetype = 1,
-                                    filepath = str(args.archive))
+                                    filepath = d_file_loc)
 
     if args.single_pulse_series:
         logger.info("Uploading single_pulse_series file to database")
@@ -673,8 +704,8 @@ if __name__ == "__main__":
                                     filepath = str(args.single_pulse_series))
 
     if args.ppps:
-        cp(str(args.ppps) ,str(obsid) + "_" + str(pulsar) + ".prepfold.ps")
-        d_file_loc = str(obsid) + "_" + str(pulsar) + ".prepfold.ps"
+        cp(str(args.ppps) ,"{}.prepfold.ps".format(fname_pref))
+        d_file_loc = "{}.prepfold.ps".format(fname_pref)
         logger.info("Uploading Presto Prepfold PostScript file to database")
         client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
@@ -686,8 +717,8 @@ if __name__ == "__main__":
         os.system("rm " + d_file_loc)
 
     if args.ippd:
-        cp(str(args.ippd),str(obsid) + "_" + str(pulsar) + ".prof.ps")
-        d_file_loc = str(obsid) + "_" + str(pulsar) + ".prof.ps"
+        cp(str(args.ippd), "{}.prof.ps".format(fname_pref))
+        d_file_loc = "{}.prof.ps".format(fname_pref)
         logger.info("Uploading Intergrates Pulse Profile file to database")
         client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
@@ -699,8 +730,8 @@ if __name__ == "__main__":
         os.system("rm " + d_file_loc)
 
     if args.waterfall:
-        cp(str(args.waterfall),str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps")
-        d_file_loc = str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps"
+        cp(str(args.waterfall), "{}.freq.vs.phase.ps".format(fname_pref))
+        d_file_loc = "{}.freq.vs.phase.ps".format(fname_pref)
         logger.info("Uploading waterfall file to database")
         client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
@@ -738,11 +769,6 @@ if __name__ == "__main__":
         os.system("rm " + cal_file_loc)
 
         #result = client.detection_find_calibrator(web_address, auth,detection_obsid = 35)
-
-
-
-
-
 
     if args.u_archive or args.u_single_pulse_series or args.u_ppps or args.u_ippd  or args.u_waterfall:
         if not glob.glob(fits_files_loc):
