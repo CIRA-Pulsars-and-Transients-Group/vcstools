@@ -197,7 +197,7 @@ def find_best_range(I, Q, U, phase_ranges):
 
     return best_phase_range, best_max
 
-def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single=False, plotname=None, phi_range=(-100, 100), phi_res=0.1, plot_range=(-100, 100)):
+def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single=False, plotname=None, phi_range=(-300, 300), phi_res=0.1, plot_range=(-300, 300)):
     """
     Performs RM synthesis on input data
 
@@ -218,7 +218,7 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single
     U_e: list
         Stokes U uncertainties
     phi_range: tuple
-        OPTIONAL - The range of RMs to search over. Default: (-400, 400)
+        OPTIONAL - The range of RMs to search over. Default: (-300, 300)
     phi_res: float
         OPTINAL - The resolution of RMs to search over. Default: 0.1
     phase_range: tuple
@@ -226,7 +226,7 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single
     plotname: string
         OPTIONAL - The name of the plot. If None, will not plot: Default: None
     plot_range: tuple
-        OPTIONAL - The range of phi to plot. Default: (-100, 100)
+        OPTIONAL - The range of phi to plot. Default: (-300, 300)
 
     Returns:
     --------
@@ -415,14 +415,14 @@ if __name__ == '__main__':
     fitting.add_argument("--phase_ranges", type=float, nargs="+", help="The phase range(s) to fit the RM to. If unsupplied, will find the on-pulse and fit that range.\
                          Supports multiple ranges. eg. 0.1 0.15 0.55 0.62 will fit from 0.1 to 0.15 and from 0.55 or 0.62.")
     fitting.add_argument("--phi_res", type=float, default=0.1, help="The resolution of RMs to synthesise.")
-    fitting.add_argument("--phi_range", type=float, default=(-100, 100), nargs="+", help="The range of RMs so synthsize. Giving a smaller window will speed up operations.")
+    fitting.add_argument("--phi_range", type=float, default=(-300, 300), nargs="+", help="The range of RMs so synthsize. Giving a smaller window will speed up operations.")
     fitting.add_argument("--force_single", action="store_true", help="use this tag to force using only a single phase range (if phase_ranges is unsupplied)")
 
     output = parser.add_argument_group("Output Options:")
     output.add_argument("--label", type=str, help="A label for the output.")
     output.add_argument("--write", action="store_true", help="Use this tag to write the results to a labelled file")
     output.add_argument("--plot", action="store_true", help="Use this tag to plot the result.")
-    output.add_argument("--plot_range", type=float, default=(-100, 100), nargs="+", help="The range of phi (RM) for the output plot.")
+    output.add_argument("--plot_range", type=float, default=(-300, 300), nargs="+", help="The range of phi (RM) for the output plot.")
     output.add_argument("--keep_QUV", action="store_true", help="Use this tag to keep the QUVflux.out file from rmfit.")
 
     gfit = parser.add_argument_group("Gaussian Fit Options")
