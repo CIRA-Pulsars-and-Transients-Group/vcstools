@@ -224,7 +224,7 @@ int main(int argc, char **argv)
     int fil_size = ntaps * nchan; // = 12 * 128 = 1536
     double coeffs[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
     ComplexDouble fil[fil_size];
-    double approx_filter_scale = 1.0/120000.0;
+    double approx_filter_scale = 1.0/(117963.875*8.0);
     for (i = 0; i < fil_size; i++)
     {
         fil[i] = CMaked( coeffs[i] * approx_filter_scale, 0.0 );

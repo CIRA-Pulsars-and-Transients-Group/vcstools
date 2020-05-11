@@ -27,7 +27,7 @@
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
         float *data_buffer_vdif, float *gain )
 {
-
+/*
     // Set level occupancy
     float rmean, imean;
     ComplexFloat cmean, stddev;
@@ -67,7 +67,7 @@ void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
             (ComplexFloat *)data_buffer_vdif,
             vf->sizeof_buffer/2.0,
             1.0/(*gain) );
-
+*/
     float *data_buffer_ptr = data_buffer_vdif;
     size_t offset_out_vdif = 0;
 
