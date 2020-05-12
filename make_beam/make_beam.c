@@ -222,9 +222,11 @@ int main(int argc, char **argv)
     // Create structures for the PFB filter coefficients
     int ntaps    = 12;
     int fil_size = ntaps * nchan; // = 12 * 128 = 1536
-    double coeffs[] = FINE_PFB_FILTER_COEFFS; // Hardcoded 1536 numbers
+    //double coeffs[] = MIRROR_FILTER_COEFFS; // Hardcoded 1536 numbers
+    //double approx_filter_scale = 10.0/(117963.875*7.2);
+    double coeffs[] = LSQ12_FILTER_COEFFS;
+    double approx_filter_scale = 10.0/7.2; // = 16384/117963.875
     ComplexDouble fil[fil_size];
-    double approx_filter_scale = 1.0/(117963.875*8.0);
     for (i = 0; i < fil_size; i++)
     {
         fil[i] = CMaked( coeffs[i] * approx_filter_scale, 0.0 );
