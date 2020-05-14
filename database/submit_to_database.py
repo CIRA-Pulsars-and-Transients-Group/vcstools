@@ -32,20 +32,16 @@ import prof_utils
 import logging
 logger = logging.getLogger(__name__)
 
-web_address = 'https://pulsar-cat.icrar.uwa.edu.au/'
-
 class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
         text = _textwrap.dedent(self._whitespace_matcher.sub(' ', text).strip())
         return _textwrap.wrap(text, width)
-
 
 def send_cmd(cmd):
     output = subprocess.Popen(cmd.split(' '), stdin=subprocess.PIPE,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT).communicate()[0].decode()
     return output
-
 
 def get_pulsar_dm_p(pulsar):
     #Gets the ra and dec from the output of PSRCAT
@@ -66,7 +62,6 @@ def get_pulsar_dm_p(pulsar):
             p = columns[1]
     return [dm, p]
 
-
 def sex2deg( ra, dec):
     """
     sex2deg( ra, dec)
@@ -81,7 +76,6 @@ def sex2deg( ra, dec):
 
     # return RA and DEC in degrees in degrees
     return [c.ra.deg, c.dec.deg]
-
 
 def from_power_to_gain(powers,cfreq,n,coh=True):
     from astropy.constants import c,k_B
@@ -98,7 +92,6 @@ def from_power_to_gain(powers,cfreq,n,coh=True):
     SI_to_Jy = 1e-26
     return (powers*coeff)*SI_to_Jy
 
-
 def get_Trec(tab,obsfreq):
     Trec = 0.0
     for r in range(len(tab)-1):
@@ -110,8 +103,79 @@ def get_Trec(tab,obsfreq):
         logger.debug("ERROR getting Trec")
     return Trec
 
-# Removed this function as this will always be calculated from the bestprof
-#def enter_exit_calc(time_detection, time_obs, metadata, start=None, stop=None):
+def get_db_auth_addr():
+    """
+    Checks for MWA database usernames and passwords
+
+    Returns:
+    --------
+    auth: tuple
+        The username and password for the pulsar databse
+    web_address: string
+        The web address of the pulsar database
+    """
+    web_address = 'https://pulsar-cat.icrar.uwa.edu.au/'
+    if 'MWA_PULSAR_DB_USER' in os.environ and 'MWA_PULSAR_DB_PASS' in os.environ:
+        auth = (os.environ['MWA_PULSAR_DB_USER'],os.environ['MWA_PULSAR_DB_PASS'])
+    else:
+        auth = None
+        logging.warning("No MWA Pulsar Database username and password found.")
+        logging.warning('Please add the following to your .bashrc: ')
+        logging.warning('export MWA_PULSAR_DB_USER="<username>"')
+        logging.warning('export MWA_PULSAR_DB_PASS="<password>"')
+        logging.warning('replacing <username> <password> with your MWA Pulsar Database username and password.')
+
+    return auth, web_address
+
+def get_filetypes_from_db(obsid, pulsar, filetype):
+    """
+    Searches the pulsar database and returns the given obsid/pulsar/filetype files
+
+    Parameters:
+    -----------
+    obsid: int
+        Observation ID
+    pulsar: string
+        The name of the puslar
+    filetype: int
+        The type of file to search for. Options are:
+        1: Archive, 2: Timeseries, 3: Diagnostics, 4: Calibration Solution, 5: Bestprof
+
+    Returns:
+    --------
+    myfiles: list
+        A list of filenames fitting the given parameters
+    """
+    def find_obj(search_key, arrdict, search_for): #for searching the various dictionaries in client
+        for mydict in arrdict:
+            if mydict[search_key] == search_for:
+                return mydict
+
+    #Check if any files of the filetype exist
+    auth, web_address = get_db_auth_addr()
+    obs_dets = client.detection_get(web_address, auth, observationid=obsid)
+    if not obs_dets:
+        logger.warn("No detections for this obs ID")
+        return []
+
+    detection       = find_obj("pulsar", obs_dets, pulsar)
+    if not detection:
+        logger.warn("No detections for this pulsar")
+        return []
+
+    allfiles_list   = detection["detection_files"]
+    is_filetype     = bool(find_obj("filetype", allfiles_list, filetype))
+    if not is_filetype:
+        logger.warn("No files of the specified type available for this pulsar & obsid")
+        return []
+
+    #find the files with the filetype
+    myfiles = []
+    for detfile in allfiles_list:
+        if detfile["filetype"] == filetype:
+            myfiles.append(detfile["filename"])
+
+    return myfiles
 
 def filename_prefix(obsid, pulsar, bins=None, cal=None):
     """
@@ -191,7 +255,6 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
     out.close()
 
     return zip_file_location
-
 
 def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
@@ -298,6 +361,9 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
             continue
         if not (channels[b] - channels[b-1]) == 1:
             subbands = subbands + 1
+
+    #get web address and authentication
+    web_address, auth = get_db_auth_addr()
 
     #get cal id
     if coh:
@@ -542,6 +608,9 @@ if __name__ == "__main__":
         #Overrule what's in the bestprof if pulsar name is supplied
         pulsar = args.pulsar
     logger.debug("Pulsar name: {}".format(pulsar))
+
+    #get db web address and authentication
+    web_address, auth = get_db_auth_addr()
 
     if args.pulsar or args.bestprof or args.ascii:
         #Checks to see if the pulsar is already on the database
