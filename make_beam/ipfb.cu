@@ -34,17 +34,43 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 #define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__, true);}
 
 __global__ void filter_kernel( float   *in_real, float   *in_imag,
-                               float *fils_real, float *fils_imag,
+                               float *ft_real, float *ft_imag,
                                int ntaps, int npol, float *out )
+/* This kernel computes the synthesis filter:
+
+              1              K-1
+   xhat[n] = --- SUM f[n-mM] SUM X_k[m] e^(2πjkn/K)
+              K   m          k=0
+
+   The sum over m is nominally over all integers, but in practice only
+   involves a few terms because of the finiteness of the filter, f. To be
+   precise, there are precisely ntaps non-zero values.
+
+   X_k[m] represents the complex-valued inputs, in_real and in_imag.
+   Every possible value of f[n]*e^(2πjkn/K) is provided in ft_real and
+   ft_imag.
+
+   K is the number of channels, and because this is a critically sampled
+   PFB, M = K.
+
+   The polarisations are computed completely independently.
+
+   And, of course, xhat[n] is represented by the out array.
+ */
 {
-    int idx = blockDim.x * blockIdx.x + threadIdx.x;
-
-    // Calculate the number of channels
-    int nchan = blockDim.x / npol;
-
-    // Calculate the first "out" index
+    // First, associate the thread index with the out array
+    int idx    = blockDim.x * blockIdx.x + threadIdx.x;
     int o_real = 2*idx;
     int o_imag = o_real + 1;
+
+    int K = blockDim.x / npol;  // Total number of channels
+    int s = blockIdx.x;         // Sample number
+    int k = threadIdx.x / npol; // Channel number
+
+    /* FROM cu_invert_pfb_ord
+    // Calculate the index for in_real and in_imag;
+    i = npol*nchan*s_in + npol*ch + pol;
+    */
 
     // Calculate the first "in" index for this thread
     int i0 = ((idx + blockDim.x - npol) / blockDim.x) * blockDim.x +
@@ -152,7 +178,7 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
 
     // Call the kernel
     filter_kernel<<<nsamples, nchan*npol>>>( g->d_in_real, g->d_in_imag,
-                                             g->d_fils_real, g->d_fils_imag,
+                                             g->d_ft_real, g->d_ft_imag,
                                              g->ntaps, npol, g->d_out );
     cudaDeviceSynchronize();
 
@@ -163,25 +189,45 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
 
 void cu_load_filter( double *coeffs, ComplexDouble *twiddles, struct gpu_ipfb_arrays *g,
         int nchan )
-/* This function loads the inverse filter coefficients into GPU memory.
-   It assumes that the filter size has already been set in
-     g->fils_size
+/* This function loads the inverse filter coefficients and the twiddle factors
+   into GPU memory. If they were loaded separately (as floats), then the
+   multiplication of the filter coefficients and the twiddle factors will be
+   less precise than if a single array containing every combination of floats
+   and twiddle factors is calculated in doubles, and then demoted to floats.
+   Hence, this pre-calculation is done in this function before cudaMemcpy is
+   called.
+
+   The result is 2x 1D arrays loaded onto the GPU (one for real, one for imag)
+   where the ith element is equal to
+
+   result[i] = f[n] * exp(2πjk/K),
+   n = i % N  (N is the filter size, "fil_size")
+   k = i / N
+   and K is the number of channels (nchan).
+
+   This function assumes that the size of resulting array has already been
+   calculated (in bytes) and set in
+     g->ft_size
+   and that the number of elements in twiddles is
+     nchan
 */
 {
     int ch, f, i;
-    int fil_size = g->fils_size / nchan / sizeof(float);
+    int fil_size = g->ft_size / nchan / sizeof(float);
 
     // Setup filter values:
+    double ft; // pre-calculated filter coeffs times twiddle factor
     for (ch = 0; ch < nchan; ch++)
     for (f = 0; f < fil_size; f++)
     {
         i = fil_size*ch + f;
-        g->fils_real[i] = CReald( fils[ch][f] );
-        g->fils_imag[i] = CImagd( fils[ch][f] );
+        ft = twiddles[ch] * coeffs[f];
+        g->ft_real[i] = CReald( ft );
+        g->ft_imag[i] = CImagd( ft );
     }
 
-    gpuErrchk(cudaMemcpy( g->d_fils_real, g->fils_real, g->fils_size, cudaMemcpyHostToDevice ));
-    gpuErrchk(cudaMemcpy( g->d_fils_imag, g->fils_imag, g->fils_size, cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpy( g->d_ft_real, g->ft_real, g->ft_size, cudaMemcpyHostToDevice ));
+    gpuErrchk(cudaMemcpy( g->d_ft_imag, g->ft_imag, g->ft_size, cudaMemcpyHostToDevice ));
 }
 
 
@@ -194,15 +240,14 @@ void malloc_ipfb( struct gpu_ipfb_arrays *g, int ntaps, int nsamples,
 
     g->ntaps     = ntaps;
     g->in_size   = ((nsamples + ntaps) * nchan * npol) * sizeof(float);
-    g->fil_size  = fil_size * sizeof(float);
-    g->twd_size  = ...
+    g->ft_size   = fil_size * nchan * sizeof(float);
     g->out_size  = nsamples * nchan * npol * 2 * sizeof(float);
 
     // Allocate memory on the device
-    gpuErrchk(cudaMalloc( (void **)&g->d_in_real,   g->in_size ));
-    gpuErrchk(cudaMalloc( (void **)&g->d_in_imag,   g->in_size ));
-    gpuErrchk(cudaMalloc( (void **)&g->d_fils_real, g->fils_size ));
-    gpuErrchk(cudaMalloc( (void **)&g->d_fils_imag, g->fils_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_in_real, g->in_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_in_imag, g->in_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_ft_real, g->ft_size ));
+    gpuErrchk(cudaMalloc( (void **)&g->d_ft_imag, g->ft_size ));
 
     gpuErrchk(cudaMalloc( (void **)&g->d_out, g->out_size ));
 
@@ -220,11 +265,11 @@ void free_ipfb( struct gpu_ipfb_arrays *g )
     // Free memory on host and device
     free( g->in_real );
     free( g->in_imag );
-    free( g->fils_real );
-    free( g->fils_imag );
+    free( g->ft_real );
+    free( g->ft_imag );
     cudaFree( g->d_in_real );
     cudaFree( g->d_in_imag );
-    cudaFree( g->d_fils_real );
-    cudaFree( g->d_fils_imag );
+    cudaFree( g->d_ft_real );
+    cudaFree( g->d_ft_imag );
     cudaFree( g->d_out );
 }

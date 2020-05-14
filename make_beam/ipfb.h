@@ -14,12 +14,12 @@ struct gpu_ipfb_arrays
 {
     int ntaps;
     int in_size;
-    int fils_size;
+    int ft_size;
     int out_size;
-    float *in_real,     *in_imag;
-    float *d_in_real,   *d_in_imag;
-    float *fils_real,   *fils_imag;
-    float *d_fils_real, *d_fils_imag;
+    float *in_real,   *in_imag;
+    float *ft_real,   *ft_imag;
+    float *d_in_real, *d_in_imag;
+    float *d_ft_real, *d_ft_imag;
     float *d_out;
 };
 
