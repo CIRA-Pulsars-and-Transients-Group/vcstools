@@ -225,7 +225,7 @@ int main(int argc, char **argv)
     //double coeffs[] = MIRROR_FILTER_COEFFS; // Hardcoded 1536 numbers
     //double approx_filter_scale = 10.0/(117963.875*7.2);
     double coeffs[] = LSQ12_FILTER_COEFFS;
-    double approx_filter_scale = 10.0/7.2; // = 16384/117963.875
+    double approx_filter_scale = 15.0/7.2; // = 16384/117963.875
     ComplexDouble fil[fil_size];
     for (i = 0; i < fil_size; i++)
     {
