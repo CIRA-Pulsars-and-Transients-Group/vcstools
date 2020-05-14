@@ -33,7 +33,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 // define a macro for accessing gpuAssert
 #define gpuErrchk(ans) {gpuAssert((ans), __FILE__, __LINE__, true);}
 
-__global__ void filter_kernel( float   *in_real, float   *in_imag,
+__global__ void filter_kernel( float *in_real, float *in_imag,
                                float *ft_real, float *ft_imag,
                                int ntaps, int npol, float *out )
 /* This kernel computes the synthesis filter:
@@ -51,63 +51,70 @@ __global__ void filter_kernel( float   *in_real, float   *in_imag,
    ft_imag.
 
    K is the number of channels, and because this is a critically sampled
-   PFB, M = K.
+   PFB, M = K. We will also use P to mean the number of taps in the synthesis
+   filter, and N = KP to mean the size of the filter.
 
    The polarisations are computed completely independently.
 
    And, of course, xhat[n] is represented by the out array.
+
+   Here, we don't perform the 1/K scaling at the very end -- this is left to
+   the caller to do, if desired.
  */
 {
-    // First, associate the thread index with the out array
-    int idx    = blockDim.x * blockIdx.x + threadIdx.x;
+    // First, set a generic variable for this thread
+    int idx = blockDim.x*blockIdx.x + threadIdx.x;
+
+    // The polarisation for this thread is
+    int pol = idx % npol;
+
+    // and the time index of the output (i.e. the index for xhat) is
+    int n = idx / npol;
+
+    // Other constants we'll need are:
+    int K = blockDim.x / npol;  // Total number of channels (should be 128)
+    int M = K;
+    int P = ntaps;
+    int F = P*K;
+
+    // Because we must have 0 <= n-mM < F, the smallest allowed value of m
+    // is:
+    int m0 = (n - F)/M + 1;
+
+    // out[] must also include both polarisations, so its indices are simply
     int o_real = 2*idx;
     int o_imag = o_real + 1;
-
-    int K = blockDim.x / npol;  // Total number of channels
-    int s = blockIdx.x;         // Sample number
-    int k = threadIdx.x / npol; // Channel number
-
-    /* FROM cu_invert_pfb_ord
-    // Calculate the index for in_real and in_imag;
-    i = npol*nchan*s_in + npol*ch + pol;
-    */
-
-    // Calculate the first "in" index for this thread
-    int i0 = ((idx + blockDim.x - npol) / blockDim.x) * blockDim.x +
-             (threadIdx.x % npol);
-
-    // Calculate the "fils" first column index
-    //int f0 = nchan - ((idx/npol + nchan - 1) % nchan) - 1;
-    int f0 = (idx/npol) % nchan;
 
     // Initialise the output sample to zero
     out[o_real] = 0.0;
     out[o_imag] = 0.0;
 
-    // Multiply the filter with the in data and sum
-    int tap, ch;
-    int i, f;
-    for (tap = 0; tap < ntaps; tap++)
+    // Perform the double sum
+    int m, k, f, tw, ft, i;
+    for (m = m0; m < m0 + P; m0++)
     {
-        for (ch = 0; ch < nchan; ch++)
-        {
-            // The "in" index
-            i = i0 + blockDim.x*tap + npol*ch;
+        // With m now known, we can get the index for the filter
+        f = n - m*M;
 
-            // The "fils" index
-            f = f0 + nchan*(ntaps-1-tap) + nchan*ntaps*ch;
+        for (k = 0; k < K; k++)
+        {
+            // The index for the twiddle factor is
+            tw = (k*n) % K;
+
+            // The index into the ft (= filter/twiddle) array is
+            ft = F*tw + f;
+
+            // The "in" index
+            // (See cu_invert_pfb_ord() for how the in[] arrays were packed)
+            i = npol*K*m + npol*k + pol;
 
             // Complex multiplication
-            out[o_real] += in_real[i] * fils_real[f] -
-                           in_imag[i] * fils_imag[f];
-            out[o_imag] += in_real[i] * fils_imag[f] +
-                           in_imag[i] * fils_real[f];
+            out[o_real] += in_real[i] * ft_real[ft] -
+                           in_imag[i] * ft_imag[ft];
+            out[o_imag] += in_real[i] * ft_imag[ft] +
+                           in_imag[i] * ft_real[ft];
         }
     }
-
-    // Normalise
-    out[o_real] /= (float)nchan;
-    out[o_imag] /= (float)nchan;
 
     __syncthreads();
 }
@@ -216,14 +223,18 @@ void cu_load_filter( double *coeffs, ComplexDouble *twiddles, struct gpu_ipfb_ar
     int fil_size = g->ft_size / nchan / sizeof(float);
 
     // Setup filter values:
-    double ft; // pre-calculated filter coeffs times twiddle factor
-    for (ch = 0; ch < nchan; ch++)
+    ComplexDouble ft; // pre-calculated filter coeffs times twiddle factor
+    ComplexDouble cf; // temp variable for complex version of filter coeffs
     for (f = 0; f < fil_size; f++)
     {
-        i = fil_size*ch + f;
-        ft = twiddles[ch] * coeffs[f];
-        g->ft_real[i] = CReald( ft );
-        g->ft_imag[i] = CImagd( ft );
+        cf = CMaked( coeffs[f], 0.0 );
+        for (ch = 0; ch < nchan; ch++)
+        {
+            i = fil_size*ch + f;
+            ft = CMuld( twiddles[ch], cf );
+            g->ft_real[i] = CReald( ft );
+            g->ft_imag[i] = CImagd( ft );
+        }
     }
 
     gpuErrchk(cudaMemcpy( g->d_ft_real, g->ft_real, g->ft_size, cudaMemcpyHostToDevice ));
@@ -252,10 +263,10 @@ void malloc_ipfb( struct gpu_ipfb_arrays *g, int ntaps, int nsamples,
     gpuErrchk(cudaMalloc( (void **)&g->d_out, g->out_size ));
 
     // Allocate memory for host copies of the same
-    g->in_real   = (float *)malloc( g->in_size );
-    g->in_imag   = (float *)malloc( g->in_size );
-    g->fils_real = (float *)malloc( g->fils_size );
-    g->fils_imag = (float *)malloc( g->fils_size );
+    g->in_real = (float *)malloc( g->in_size );
+    g->in_imag = (float *)malloc( g->in_size );
+    g->ft_real = (float *)malloc( g->ft_size );
+    g->ft_imag = (float *)malloc( g->ft_size );
 
 }
 

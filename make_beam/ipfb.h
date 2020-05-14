@@ -27,7 +27,7 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
                         int nsamples, int nchan, int npol,
                         struct gpu_ipfb_arrays *g, float *data_buffer_uvdif );
 
-void cu_load_filter( ComplexDouble **fils, struct gpu_ipfb_arrays *g,
+void cu_load_filter( double *coeffs, ComplexDouble *twiddles, struct gpu_ipfb_arrays *g,
         int nchan );
 
 void malloc_ipfb( struct gpu_ipfb_arrays *g, int ntaps, int nsamples,
