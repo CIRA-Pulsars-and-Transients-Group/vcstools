@@ -223,17 +223,15 @@ int main(int argc, char **argv)
     int ntaps    = 12;
     int fil_size = ntaps * nchan; // = 12 * 128 = 1536
     //double coeffs[] = MIRROR_FILTER_COEFFS; // Hardcoded 1536 numbers
-    //double approx_filter_scale = 10.0/(117963.875*7.2);
     double coeffs[] = LSQ12_FILTER_COEFFS;
-    double approx_filter_scale = 15.0/7.2; // = 16384/117963.875
-    ComplexDouble fil[fil_size];
-    for (i = 0; i < fil_size; i++)
-    {
-        fil[i] = CMaked( coeffs[i] * approx_filter_scale, 0.0 );
-    }
+    ComplexDouble *twiddles = roots_of_unity( nchan );
 
-    // Memory for fil_ramps is allocated here:
-    ComplexDouble **fil_ramps = apply_mult_phase_ramps( fil, fil_size, nchan );
+    // Adjust by the scaling that was introduced by the forward PFB,
+    // along with any other scaling that I, Lord and Master of the inverse
+    // PFB, feels is appropriate.
+    double approx_filter_scale = 15.0/7.2; // 7.2 = 16384/117964.8
+    for (i = 0; i < fil_size; i++)
+        coeffs[i] *= approx_filter_scale;
 
     // Populate the relevant header structs
     populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc,
@@ -284,7 +282,7 @@ int main(int argc, char **argv)
     if (opts.out_uvdif)
     {
         malloc_ipfb( &gi, ntaps, opts.sample_rate, nchan, npol, fil_size );
-        cu_load_filter( fil_ramps, &gi, nchan );
+        cu_load_filter( coeffs, twiddles, &gi, nchan );
     }
 #endif
 
@@ -373,7 +371,7 @@ int main(int argc, char **argv)
                     nchan, npol, &gi, data_buffer_uvdif );
 #else
             invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan,
-                    npol, fil_ramps, fil_size, data_buffer_uvdif );
+                    npol, coeffs, fil_size, data_buffer_uvdif );
 #endif
         }
 
@@ -399,11 +397,8 @@ int main(int argc, char **argv)
     destroy_invJi( invJi, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, 2*opts.sample_rate, nchan );
 
-    for (ch = 0; ch < nchan; ch++)
-    {
-        free( fil_ramps[ch] );
-    }
-    free( fil_ramps );
+    free( coeffs );
+    free( twiddles );
 
     destroy_metafits_info( &mi );
     free( data_buffer_coh   );

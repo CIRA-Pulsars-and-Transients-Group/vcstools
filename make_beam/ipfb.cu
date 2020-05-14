@@ -161,7 +161,7 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
 }
 
 
-void cu_load_filter( ComplexDouble **fils, struct gpu_ipfb_arrays *g,
+void cu_load_filter( double *coeffs, ComplexDouble *twiddles, struct gpu_ipfb_arrays *g,
         int nchan )
 /* This function loads the inverse filter coefficients into GPU memory.
    It assumes that the filter size has already been set in
@@ -194,7 +194,8 @@ void malloc_ipfb( struct gpu_ipfb_arrays *g, int ntaps, int nsamples,
 
     g->ntaps     = ntaps;
     g->in_size   = ((nsamples + ntaps) * nchan * npol) * sizeof(float);
-    g->fils_size = nchan * fil_size * sizeof(float);
+    g->fil_size  = fil_size * sizeof(float);
+    g->twd_size  = ...
     g->out_size  = nsamples * nchan * npol * 2 * sizeof(float);
 
     // Allocate memory on the device
