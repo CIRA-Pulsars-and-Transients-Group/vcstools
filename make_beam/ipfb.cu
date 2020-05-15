@@ -88,14 +88,19 @@ __global__ void filter_kernel( float *in_real, float *in_imag,
     // Initialise the output sample to zero
     out[o_real] = 0.0;
     out[o_imag] = 0.0;
+//if (o_real < 0 || o_real >= blockDim.x*K*npol)  printf("error: idx=%d, n=%d, K=%d, F=%d, m0=%d\n", idx, n, K, F, m0);
+//printf("idx=%d, o_real=%d, o_imag=%d, n=%d, K=%d, F=%d, m0=%d\n", idx, o_real, o_imag, n, K, F, m0);
 
     // Perform the double sum
     int m, k, f, tw, ft, i;
     for (m = m0; m < m0 + P; m0++)
     {
+        printf("m-m0=%d\n", m-m0);
         // With m now known, we can get the index for the filter
         f = n - m*M;
+//if (f < 0 || f >= F)  printf("n=%d, m0=%d, m=%d, f=%d\n", n, m0, m, f);
 
+        //printf("n=%d, m=%d, f=%d\n", n, m, f);
         for (k = 0; k < K; k++)
         {
             // The index for the twiddle factor is
@@ -103,16 +108,22 @@ __global__ void filter_kernel( float *in_real, float *in_imag,
 
             // The index into the ft (= filter/twiddle) array is
             ft = F*tw + f;
+//if (ft < 0 || ft >= F*K)  printf("n=%d, k=%d, tw=%d, f=%d, ft=%d\n", n, k, tw, f, ft);
 
-            // The "in" index
-            // (See cu_invert_pfb_ord() for how the in[] arrays were packed)
-            i = npol*K*m + npol*k + pol;
+            // The "in" index (see cu_invert_pfb_ord() for how the in[] arrays
+            // were packed)
+            // The fine channel time index, m, must be adjusted to ensure that
+            // n=0 corresponds to the first full filter's worth of input samples
+            i = npol*K*(m+P) + npol*k + pol;
+//if (i < 0 || i >= (blockDim.x+P)*K*npol)  printf("n=%d, m=%d, k=%d, i=%d\n", n, m, k, i);
 
+//printf("before writing to out[], idx=%d, o_real=%d, m=%d, m-m0=%d, k=%d\n", idx, o_real, m, m-m0, k);
             // Complex multiplication
             out[o_real] += in_real[i] * ft_real[ft] -
                            in_imag[i] * ft_imag[ft];
             out[o_imag] += in_real[i] * ft_imag[ft] +
                            in_imag[i] * ft_real[ft];
+//printf(" after writing to out[], idx=%d, o_real=%d, m=%d, m-m0=%d, k=%d\n", idx, o_real, m, m-m0, k);
         }
     }
 
@@ -183,11 +194,13 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     gpuErrchk(cudaMemcpy( g->d_in_real, g->in_real, g->in_size, cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( g->d_in_imag, g->in_imag, g->in_size, cudaMemcpyHostToDevice ));
 
+    fprintf(stderr, "About to enter kernel\n" );
     // Call the kernel
     filter_kernel<<<nsamples, nchan*npol>>>( g->d_in_real, g->d_in_imag,
                                              g->d_ft_real, g->d_ft_imag,
                                              g->ntaps, npol, g->d_out );
     cudaDeviceSynchronize();
+    fprintf(stderr, "Exited kernel\n" );
 
     // Copy the result back into host memory
     gpuErrchk(cudaMemcpy( data_buffer_uvdif, g->d_out, g->out_size, cudaMemcpyDeviceToHost ));
