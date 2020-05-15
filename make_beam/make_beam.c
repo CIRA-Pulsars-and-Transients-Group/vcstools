@@ -397,7 +397,6 @@ int main(int argc, char **argv)
     destroy_invJi( invJi, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, 2*opts.sample_rate, nchan );
 
-    free( coeffs );
     free( twiddles );
 
     destroy_metafits_info( &mi );
