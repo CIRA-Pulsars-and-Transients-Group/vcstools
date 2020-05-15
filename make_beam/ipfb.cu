@@ -97,7 +97,8 @@ __global__ void filter_kernel( float *in_real, float *in_imag,
         for (k = 0; k < K; k++)
         {
             // The index for the twiddle factor is
-            tw = (k*n) % K;
+            tw = ((k+K/2)*n) % K;
+            // (the extra K/2 identifies the middle channel as the DC bin)
 
             // The index into the ft (= filter/twiddle) array is
             ft = F*tw + f;
@@ -186,13 +187,11 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     gpuErrchk(cudaMemcpy( g->d_in_real, g->in_real, g->in_size, cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( g->d_in_imag, g->in_imag, g->in_size, cudaMemcpyHostToDevice ));
 
-    fprintf(stderr, "About to enter kernel\n" );
     // Call the kernel
     filter_kernel<<<nsamples, nchan*npol>>>( g->d_in_real, g->d_in_imag,
                                              g->d_ft_real, g->d_ft_imag,
                                              g->ntaps, npol, g->d_out );
     cudaDeviceSynchronize();
-    fprintf(stderr, "Exited kernel\n" );
 
     // Copy the result back into host memory
     gpuErrchk(cudaMemcpy( data_buffer_uvdif, g->d_out, g->out_size, cudaMemcpyDeviceToHost ));

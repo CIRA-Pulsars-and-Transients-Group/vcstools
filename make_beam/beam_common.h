@@ -88,6 +88,7 @@ struct make_beam_opts {
     int                out_uvdif;     // Default = upsampled VDIF       output turned OFF
     int                out_bf;        // Default = beamform over all (non-flagged) antennas
     int                out_ant;       // The antenna number (0-127) to write out if out_bf = 0
+    char              *synth_filter;  // Which synthesis filter to use
 
     struct calibration cal;           // Variables for calibration settings
 };

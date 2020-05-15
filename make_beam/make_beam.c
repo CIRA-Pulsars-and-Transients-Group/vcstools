@@ -83,6 +83,7 @@ int main(int argc, char **argv)
     opts.out_uvdif     = 0;  // Default = upsampled VDIF       output turned OFF
     opts.out_bf        = 1;  // Default = beamform all (non-flagged) antennas
     opts.out_ant       = 0;  // The antenna number (0-127) to write out if out_bf = 0
+    opts.synth_filter  = NULL;
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -220,10 +221,30 @@ int main(int argc, char **argv)
     struct vdifinfo uvf;
 
     // Create structures for the PFB filter coefficients
-    int ntaps    = 12;
-    int fil_size = ntaps * nchan; // = 12 * 128 = 1536
-    //double coeffs[] = MIRROR_FILTER_COEFFS; // Hardcoded 1536 numbers
-    double coeffs[] = LSQ12_FILTER_COEFFS;
+    int ntaps, fil_size;
+    double *coeffs;
+
+    // If no synthesis filter was explicitly chosen, choose the LSQ12 filter
+    if (!opts.synth_filter)  opts.synth_filter = strdup("LSQ12");
+    if (strcmp( opts.synth_filter, "LSQ12" ) == 0)
+    {
+        ntaps = 12;
+        fil_size = ntaps * nchan; // = 12 * 128 = 1536
+        coeffs = (double *)malloc( fil_size * sizeof(double) );
+        double tmp_coeffs[] = LSQ12_FILTER_COEFFS; // I'll have to change the way these coefficients are stored
+                                                   // in order to avoid this cumbersome loading procedure
+        for (i = 0; i < fil_size; i++)
+            coeffs[i] = tmp_coeffs[i];
+    }
+    else if (strcmp( opts.synth_filter, "MIRROR" ) == 0)
+    {
+        ntaps = 12;
+        fil_size = ntaps * nchan; // = 12 * 128 = 1536
+        coeffs = (double *)malloc( fil_size * sizeof(double) );
+        double tmp_coeffs[] = MIRROR_FILTER_COEFFS;
+        for (i = 0; i < fil_size; i++)
+            coeffs[i] = tmp_coeffs[i];
+    }
     ComplexDouble *twiddles = roots_of_unity( nchan );
 
     // Adjust by the scaling that was introduced by the forward PFB,
@@ -398,6 +419,7 @@ int main(int argc, char **argv)
     destroy_detected_beam( detected_beam, 2*opts.sample_rate, nchan );
 
     free( twiddles );
+    free( coeffs );
 
     destroy_metafits_info( &mi );
     free( data_buffer_coh   );
@@ -415,6 +437,7 @@ int main(int argc, char **argv)
     free( opts.rec_channel  );
     free( opts.cal.filename );
     free( opts.custom_flags );
+    free( opts.synth_filter );
 
     if (opts.out_coh)
     {
@@ -610,6 +633,7 @@ void make_beam_parse_cmdline(
                 {"incoh",           no_argument,       0, 'i'},
                 {"psrfits",         no_argument,       0, 'p'},
                 {"vdif",            no_argument,       0, 'v'},
+                {"synth_filter",    required_argument, 0, 'S'},
                 {"antpol",          required_argument, 0, 'A'},
                 {"utc-time",        required_argument, 0, 'z'},
                 {"dec",             required_argument, 0, 'D'},
@@ -633,7 +657,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:D:e:f:F:hiJ:m:n:o:O:pr:R:uvVw:W:z:",
+                             "a:A:b:B:C:d:D:e:f:F:hiJ:m:n:o:O:pr:R:S:uvVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -707,6 +731,9 @@ void make_beam_parse_cmdline(
                     break;
                 case 'R':
                     opts->ra_hhmmss = strdup(optarg);
+                    break;
+                case 'S':
+                    opts->synth_filter = strdup(optarg);
                     break;
                 case 'u':
                     opts->out_uvdif = 1;
