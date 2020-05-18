@@ -36,6 +36,9 @@ class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
         text = _textwrap.dedent(self._whitespace_matcher.sub(' ', text).strip())
         return _textwrap.wrap(text, width)
+class NoAuthError(Exception):
+    """Raise when pulsar database authentication is not found"""
+    pass
 
 def send_cmd(cmd):
     output = subprocess.Popen(cmd.split(' '), stdin=subprocess.PIPE,
@@ -119,11 +122,13 @@ def get_db_auth_addr():
         auth = (os.environ['MWA_PULSAR_DB_USER'],os.environ['MWA_PULSAR_DB_PASS'])
     else:
         auth = None
-        logging.warning("No MWA Pulsar Database username and password found.")
-        logging.warning('Please add the following to your .bashrc: ')
-        logging.warning('export MWA_PULSAR_DB_USER="<username>"')
-        logging.warning('export MWA_PULSAR_DB_PASS="<password>"')
-        logging.warning('replacing <username> <password> with your MWA Pulsar Database username and password.')
+        raise NoAuthError(  """   
+                            No MWA Pulsar Database username/password found
+                            Please add the following to your .bashrc:
+                            'export MWA_PULSAR_DB_USER="<username>"'
+                            'export MWA_PULSAR_DB_PASS="<password>"'
+                            'replacing <username> <password> with your MWA Pulsar Database username and password
+                            """ )
 
     return auth, web_address
 
