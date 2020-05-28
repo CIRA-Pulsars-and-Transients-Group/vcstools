@@ -221,8 +221,8 @@ int main(int argc, char **argv)
     struct vdifinfo uvf;
 
     // Create structures for the PFB filter coefficients
-    int ntaps, fil_size;
-    double *coeffs;
+    int ntaps, fil_size = 0;
+    double *coeffs = NULL;
 
     // If no synthesis filter was explicitly chosen, choose the LSQ12 filter
     if (!opts.synth_filter)  opts.synth_filter = strdup("LSQ12");
@@ -244,6 +244,12 @@ int main(int argc, char **argv)
         double tmp_coeffs[] = MIRROR_FILTER_COEFFS;
         for (i = 0; i < fil_size; i++)
             coeffs[i] = tmp_coeffs[i];
+    }
+    else
+    {
+        fprintf( stderr, "error: unrecognised synthesis filter: %s\n",
+                opts.synth_filter );
+        exit(EXIT_FAILURE);
     }
     ComplexDouble *twiddles = roots_of_unity( nchan );
 

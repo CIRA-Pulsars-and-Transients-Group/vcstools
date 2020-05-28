@@ -40,7 +40,7 @@ struct metafits_info {
     char      **tilenames;
     int         ninput;
     int         chan_width;
-} metafits_info;
+};
 
 struct delays {
     double mean_ra;
