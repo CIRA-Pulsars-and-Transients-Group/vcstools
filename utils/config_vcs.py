@@ -6,12 +6,12 @@ Functions to handle parsing the config file for multiple super computers
 
 #config data
 
-GALAXY_CONFIG = {'base_data_dir' : '/astro/mwaops/vcs/',
-                 'base_product_dir' : '/group/mwaops/vcs/',
+GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
+                 'base_product_dir' : '/group/mwavcs/vcs/',
                  'group_account' : {'cpuq':  '#SBATCH --account=pawsey0348',
-                                    'gpuq':  '#SBATCH --account=mwaops',
-                                    'copyq': '#SBATCH --account=mwaops',
-                                    'zcpuq': '#SBATCH --account=mwaops'},
+                                    'gpuq':  '#SBATCH --account=mwavcs',
+                                    'copyq': '#SBATCH --account=mwavcs',
+                                    'zcpuq': '#SBATCH --account=mwavcs'},
                  'module_dir' : '/group/mwa/software/modulefiles',
                  'presto_module' : 'presto/master',
                  'psrcat_module' : 'psrcat/1.59',

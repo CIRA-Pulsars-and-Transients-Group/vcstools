@@ -22,7 +22,7 @@ import glob
 from job_submit import submit_slurm
 import mwa_metadb_utils as meta
 
-import config
+from config_vcs import load_config_file
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +208,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
                  ics=False, n_untar=2, keep="", vcstools_version="master",
                  nice=0):
     #Load computer dependant config file
-    comp_config = config.load_config_file()
+    comp_config = load_config_file()
 
     logger.info("Downloading files from archive")
     # voltdownload = distutils.spawn.find_executable("voltdownload.py") #Doesn't seem to be working on zeus for some reason
@@ -361,7 +361,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id, hea
                  vcstools_version="master", nice=0):
 
     #Load computer dependant config file
-    comp_config = config.load_config_file()
+    comp_config = load_config_file()
 
     batch_dir = product_dir + '/batch/'
     product_dir = '{0}/cal/{1}'.format(product_dir,cal_obs_id)
@@ -607,7 +607,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     """
 
     #Load computer dependant config file
-    comp_config = config.load_config_file()
+    comp_config = load_config_file()
 
     # If execpath is given, change the make_beam executable command
     # otherwise, it should be on the PATH if vcstools has been installed
@@ -986,7 +986,7 @@ if __name__ == '__main__':
         #    execpath = args.execpath
 
     #Load computer dependant config file
-    comp_config = config.load_config_file()
+    comp_config = load_config_file()
 
     if args.work_dir:
         logger.warning("YOU ARE MESSING WITH THE DEFAULT DIRECTORY STRUCTURE "
