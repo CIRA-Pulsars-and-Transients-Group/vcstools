@@ -173,17 +173,23 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
     elif source_type == 'FRB':
         import json
         import urllib.request
-        frb_data = json.load(urllib.request.urlopen('http://frbcat.org/products?search=&min=0&max=1000&page=1'))
-        for frb in frb_data['products']:
-            name = frb['frb_name']
-            logger.debug('FRB name: {}'.format(name))
-            ra   = frb['rop_raj']
-            dec  = frb['rop_decj']
-            dm   = frb['rmp_dm'].split("&")[0]
-            if include_dm:
-                name_ra_dec.append([name, ra, dec, dm])
-            else:
-                name_ra_dec.append([name, ra, dec])
+        try:
+            frb_data = json.load(urllib.request.urlopen('http://frbcat.org/products?search=&min=0&max=1000&page=1'))
+        except urllib.error.HTTPError:
+            logger.error('http://frbcat.org/ not available. Returning empty list')
+            # putting and FRB at 90 dec which we should never be able to detect
+            name_ra_dec = [['fake', "00:00:00.00", "90:00:00.00", 0.0]]
+        else:
+            for frb in frb_data['products']:
+                name = frb['frb_name']
+                logger.debug('FRB name: {}'.format(name))
+                ra   = frb['rop_raj']
+                dec  = frb['rop_decj']
+                dm   = frb['rmp_dm'].split("&")[0]
+                if include_dm:
+                    name_ra_dec.append([name, ra, dec, dm])
+                else:
+                    name_ra_dec.append([name, ra, dec])
 
     elif source_type == "rFRB":
         info = get_rFRB_info(name=pulsar_list)
@@ -932,6 +938,7 @@ if __name__ == "__main__":
     else:
         dt = 100
 
+    logger.debug("names_ra_dec:{}".format(names_ra_dec))
     logger.info("Getting observation metadata and calculating the tile beam")
     output_data, obsid_meta = find_sources_in_obs(obsid_list, names_ra_dec,
                                 obs_for_source=args.obs_for_source, dt_input=dt,
