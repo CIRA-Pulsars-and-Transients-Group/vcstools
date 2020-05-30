@@ -72,13 +72,13 @@ def get_user_email():
     return email.strip()
 
 
-def find_combined_beg_end(obsid, base_path="/group/mwaops/vcs/", channels=None):
+def find_combined_beg_end(obsid, base_path="/group/mwavcs/vcs/", channels=None):
     """
     looks through the comined files of the input obsid and returns the max and min in gps time
     Input:
         obsid: The MWA observation ID
     Optional Input:
-        base_path: the direct path the base vcs directory. Default: /group/mwaops/vcs/\
+        base_path: the direct path the base vcs directory. Default: /group/mwavcs/vcs/\
         channels: a list of the frequency channel ids. Default None which then gets the
                   from the mwa metadata
     """
@@ -114,6 +114,7 @@ def gps_time_lists(start, stop, chunk):
 
 def ensure_metafits(data_dir, obs_id, metafits_file):
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
+    comp_config = load_config_file()
 
     if not os.path.exists(metafits_file):
         logger.warning("{0} does not exists".format(metafits_file))
@@ -138,7 +139,7 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
     # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
     # in case --work_dir was specified in process_vcs call product_dir and data_dir
     # are the same and thus we will not perform the copy
-    product_dir = data_dir.replace('/astro/mwaops/vcs/', '/group/mwaops/vcs/') # being pedantic
+    product_dir = data_dir.replace(comp_config['base_data_dir'], comp_config['base_product_dir']) # being pedantic
     if os.path.exists(product_dir) and not os.path.exists(metafits_file):
         logger.info("Copying {0} to {1}".format(metafits_file, product_dir))
         from shutil import copy2
@@ -207,8 +208,6 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
                  product_dir, parallel, vcs_database_id,
                  ics=False, n_untar=2, keep="", vcstools_version="master",
                  nice=0):
-    #Load computer dependant config file
-    comp_config = load_config_file()
 
     logger.info("Downloading files from archive")
     # voltdownload = distutils.spawn.find_executable("voltdownload.py") #Doesn't seem to be working on zeus for some reason
@@ -360,17 +359,14 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
 def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id, head=False,
                  vcstools_version="master", nice=0):
 
-    #Load computer dependant config file
-    comp_config = load_config_file()
-
     batch_dir = product_dir + '/batch/'
     product_dir = '{0}/cal/{1}'.format(product_dir,cal_obs_id)
     mdir(product_dir, 'Calibrator product')
     mdir(batch_dir, 'Batch')
     # obsdownload creates the folder cal_obs_id regardless where it runs
     # this deviates from our initially inteded naming conventions of
-    # /astro/mwaopos/vcs/[cal_obs_id]/vis but the renaming and linking is a pain otherwise,
-    # hence we'll link vis agains /astro/mwaopos/vcs/[cal_obs_id]/[cal_obs_id]
+    # /astro/mwavcs/vcs/[cal_obs_id]/vis but the renaming and linking is a pain otherwise,
+    # hence we'll link vis agains /astro/mwavcs/vcs/[cal_obs_id]/[cal_obs_id]
     #target_dir = '{0}'.format(cal_obs_id)
     link = 'vis'
     csvfile = "{0}{1}_dl.csv".format(batch_dir,cal_obs_id)
@@ -403,8 +399,6 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id, hea
         if vcs_database_id is not None:
             commands.append(database_vcs.add_database_function())
         commands.append("csvfile={0}".format(csvfile))
-        # commands.append('source /group/mwaops/PULSAR/psrBash.profile')
-        # commands.append('module load setuptools')
         commands.append('cd {0}'.format(data_dir))
         commands.append('if [[ -z ${MWA_ASVO_API_KEY} ]]')
         commands.append('then')
@@ -893,7 +887,7 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--increment", type=int, default=64, help="Increment in seconds (how much we process at once) ")
     parser.add_argument("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) ")
     parser.add_argument("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default "
-                          "raw data will will be downloaded into /astro/mwaops/vcs/[obsID] and data products will be in /group/mwaops/vcs/[obsID]."
+                          "raw data will will be downloaded into /astro/mwavcs/vcs/[obsID] and data products will be in /group/mwavcs/vcs/[obsID]."
                           " If set, this will create a folder for the Obs. ID if it doesn't exist ")
     parser.add_argument("-c", "--ncoarse_chan", type=int, default=24, help="Coarse channel count (how many to process) ")
     parser.add_argument("-n", "--nfine_chan", type=int, default=128, help="Number of fine channels per coarse channel ")

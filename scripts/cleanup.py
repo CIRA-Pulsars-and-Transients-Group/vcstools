@@ -8,6 +8,8 @@ import re
 import logging
 logger = logging.getLogger(__name__)
 
+from config_vcs import load_config_file
+
 def opt_parser():
     # Dictionary for choosing log-levels
     loglevels = dict(DEBUG=logging.DEBUG,
@@ -42,8 +44,9 @@ def munlink_files(folder, file_type):
 
 
 def remove_raw(obs):
-    raw_folder = "/astro/mwaops/vcs/{0}/raw".format(obs) #This is a terrible thing to do and needs to be replaced with a config file
-    combined_folder = "/astro/mwaops/vcs/{0}/combined".format(obs) #This is a terrible thing to do and needs to be replaced with a config file
+    comp_config = load_config_file()
+    raw_folder = os.path.join(comp_config['base_data_dir'], obs, "raw")
+    combined_folder = os.path.join(comp_config['base_data_dir'], obs, "combined")
     
     raw_files = False
     tar_files = False
@@ -69,8 +72,9 @@ def remove_raw(obs):
     if ics_files:
         munlink_files(combined_folder, "ics")
         
-def remove_beamformed(obs,pointing=None):
-    pointing_folder = "/group/mwaops/vcs/{0}/pointings".format(obs) # TODO: Replace this with proper config file
+def remove_beamformed(obs, pointing=None):
+    comp_config = load_config_file()
+    pointing_folder = os.path.join(comp_config['base_product_dir'], obs, "pointings")
     if not pointing:
         authority = ('No pointing specified, would you like to remove all pointings for this observation?')
         if (authority == "Y") or (authority == "y"):

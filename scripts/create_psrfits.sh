@@ -5,7 +5,7 @@ usage()
 cat <<EOF
 Usage: $0 obsID [base_directory] [lowest channel] [# of channels]
     script will produce psrfits files in folder fits under obsID
-    base_directory is optional, default is /scratch2/mwaops/vcs/obsID
+    base_directory is optional, default is /group/mwavcs/vcs/obsID
     if base_directory is provided script expects the combined folder
     to exist, will create fits folder.
     For picket fence observations you have to supply base_directory,
@@ -24,7 +24,7 @@ if [ $1 == '-h' ];then
 fi
 
 obsID=$1
-basedir=${2:-/group/mwaops/vcs/${obsID}}
+basedir=${2:-/group/mwavcs/vcs/${obsID}}
 lowchan=${3:-0}
 n_chans=${4:-24}
 

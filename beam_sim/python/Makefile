@@ -1,4 +1,4 @@
-INSTALL_DIR = /group/mwaops/PULSAR/bin/
+INSTALL_DIR = /group/mwavcs/PULSAR/bin/
 
 TARGETS = pabeam.py make_pabeam_batch.py
 
