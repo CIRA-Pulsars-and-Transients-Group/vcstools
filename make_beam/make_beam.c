@@ -541,6 +541,11 @@ void usage() {
     fprintf(stderr, "Do not beamform. Instead, only operate on the specified ant\n");
     fprintf(stderr, "\t                           ");
     fprintf(stderr, "stream (0-127)\n" );
+    fprintf(stderr, "\t-S, --synth_filter=filter  ");
+    fprintf(stderr, "Apply the named filter during high-time resolution synthesis.    ");
+    fprintf(stderr, "[default: LSQ12]\n");
+    fprintf(stderr, "\t                           ");
+    fprintf(stderr, "filter can be MIRROR or LSQ12.\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");

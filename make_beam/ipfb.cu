@@ -114,15 +114,11 @@ __global__ void filter_kernel( float *in_real, float *in_imag,
                            in_imag[i] * ft_imag[ft];
             out[o_imag] += in_real[i] * ft_imag[ft] +
                            in_imag[i] * ft_real[ft];
-//            if (pol == 1 && (in_real[i] != 0 || in_imag[i] != 0))
-//                printf("in[m=%d,k=%d,pol=%d]=(%f,%f), out[%d,%d]=(%f,%f)\n", m, k, pol, in_real[i], in_imag[i], o_real, o_imag, out[o_real], out[o_imag]);
         }
     }
 
     out[o_real] /= K;
     out[o_imag] /= K;
-    //if (pol == 1)
-    //    printf("   o_idx=(%d,%d),  out_value=(%f,%f)\n", o_real, o_imag, out[o_real], out[o_imag]);
 
     __syncthreads();
 }
