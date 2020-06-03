@@ -71,7 +71,8 @@ void populate_vdif_header(
         int              nchan, 
         long int         chan_width,
         char            *rec_channel,
-        struct delays   *delay_vals );
+        struct delays   *delay_vals,
+        int              npointing );
 
 ComplexFloat get_std_dev_complex( ComplexFloat *input, int nsamples );
 

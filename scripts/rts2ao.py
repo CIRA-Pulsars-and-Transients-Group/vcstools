@@ -38,14 +38,14 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
     # Get antenna reording from metafits file:
     f = fits.open(metafits)
     d = f[1].data
-    nants = f[1].header[4] // 2 # I THINK this is the number of antennas
+    #nants = f[1].header[4] // 2 # I THINK this is the number of antennas
     ant_map = list(d.field('Antenna'))
     if "TileName" in f[1].header.values():
         tilenames = list(d.field('TileName'))
-        ant_names = tilenames[0:-1:2]
+        #ant_names = tilenames[0:-1:2]
     elif "Tile" in f[1].header.values():
         tilenames = list(d.field('Tile'))
-        ant_names = ["Tile{0:03d}".format(tilenames[i*2]) for i in range(len(tilenames)//2)]
+        #ant_names = ["Tile{0:03d}".format(tilenames[i*2]) for i in range(len(tilenames)//2)]
     else:
         logging.error(("Error: Antenna Name field not found"))
         exit()
@@ -72,7 +72,7 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
         rts_filename = rts_filenames[chan]
         with open(rts_filename, "r") as rts_file:
             # Common factor of all gains is a single number in the first line of the file
-            amp = float(rts_file.readline())
+            #amp = float(rts_file.readline())
 
             # The second line contains the model primary beam Jones matrix (in the direction of the calibrator)
             Jrefline = rts_file.readline()
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--metafits", type=str, default=None, help="Metafits file from which to determine antenna and channel order")
     parser.add_argument("-r", "--rts_glob", type=str, default="DI_JonesMatrices_node[0-9]*.dat", help="Filename globbing pattern for the RTS direction independent solution files")
     parser.add_argument("-o", "--outfile", type=str, default="calibration_solution.bin", help="Name of the file to write")
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                     choices=loglevels.keys(), default="INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     args = parser.parse_args()

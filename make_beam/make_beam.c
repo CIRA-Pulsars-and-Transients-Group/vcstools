@@ -31,26 +31,27 @@
 #include "psrfits.h"
 #include "mycomplex.h"
 #include "form_beam.h"
+#include <omp.h>
 
 #ifdef HAVE_CUDA
 
+#include <cuda_runtime.h>
 #include "ipfb.h"
 #define NOW  ((double)clock()/(double)CLOCKS_PER_SEC)
 
 #else
 
-#include <omp.h>
 #define NOW  (omp_get_wtime())
 
 #endif
 
 int main(int argc, char **argv)
 {
-#ifndef HAVE_CUDA
+    #ifndef HAVE_CUDA
     // Initialise FFTW with OpenMP
     fftw_init_threads();
     fftw_plan_with_nthreads( omp_get_max_threads() );
-#endif
+    #endif
 
     // A place to hold the beamformer settings
     struct make_beam_opts opts;
@@ -62,8 +63,7 @@ int main(int argc, char **argv)
     opts.begin       = 0;    // GPS time -- when to start beamforming
     opts.end         = 0;    // GPS time -- when to stop beamforming
     opts.time_utc    = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
-    opts.dec_ddmmss  = NULL; // "dd:mm:ss"
-    opts.ra_hhmmss   = NULL; // "hh:mm:ss"
+    opts.pointings   = NULL; // list of pointings "dd:mm:ss_hh:mm:ss,dd:mm:ss_hh:mm:ss"
     opts.datadir     = NULL; // The path to where the recombined data live
     opts.metafits    = NULL; // filename of the metafits file
     opts.rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
@@ -80,10 +80,10 @@ int main(int argc, char **argv)
     opts.out_incoh     = 0;  // Default = PSRFITS (incoherent) output turned OFF
     opts.out_coh       = 0;  // Default = PSRFITS (coherent)   output turned OFF
     opts.out_vdif      = 0;  // Default = VDIF                 output turned OFF
-    opts.out_uvdif     = 0;  // Default = upsampled VDIF       output turned OFF
     opts.out_bf        = 1;  // Default = beamform all (non-flagged) antennas
     opts.out_ant       = 0;  // The antenna number (0-127) to write out if out_bf = 0
     opts.synth_filter  = NULL;
+    opts.out_summed    = 0;  // Default = output only Stokes I output turned OFF
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -97,22 +97,19 @@ int main(int argc, char **argv)
     make_beam_parse_cmdline( argc, argv, &opts );
 
     // Create "shorthand" variables for options that are used frequently
-    int nstation           = opts.nstation;
-    int nchan              = opts.nchan;
-    const int npol         = 2;      // (X,Y)
-    const int outpol_coh   = 4;      // (I,Q,U,V)
-    const int outpol_incoh = 1;      // ("I")
+    int nstation             = opts.nstation;
+    int nchan                = opts.nchan;
+    const int npol           = 2;   // (X,Y)
+    int outpol_coh           = 4;  // (I,Q,U,V)
+    if ( opts.out_summed )
+        outpol_coh           = 1;  // (I)
+    const int outpol_incoh   = 1;  // ("I")
 
     float vgain = 1.0; // This is re-calculated every second for the VDIF output
-    float ugain = 1.0; // This is re-calculated every second for the VDIF output
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = NOW;
-#ifdef HAVE_CUDA
-    printf("[%f]  Starting %s with GPU acceleration\n", NOW-begintime, argv[0] );
-#else
-    printf("[%f]  Starting %s with %d possible OpenMP threads\n", NOW-begintime, argv[0], omp_get_max_threads());
-#endif
+    fprintf( stderr, "[%f]  Starting %s with GPU acceleration\n", NOW-begintime, argv[0] );
 
     // Calculate the number of files
     int nfiles = opts.end - opts.begin + 1;
@@ -121,14 +118,85 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    // Parse input pointings
+    int max_npointing = 120; // Could be more
+    char RAs[max_npointing][64];
+    char DECs[max_npointing][64];
+    int npointing = sscanf( opts.pointings, 
+            "%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,],%[^_]_%[^,]," , 
+                            RAs[0],  DECs[0],  RAs[1],  DECs[1],  RAs[2],  DECs[2],
+                            RAs[3],  DECs[3],  RAs[4],  DECs[4],  RAs[5],  DECs[5],
+                            RAs[6],  DECs[6],  RAs[7],  DECs[7],  RAs[8],  DECs[8],
+                            RAs[9],  DECs[9],  RAs[10], DECs[10], RAs[11], DECs[11],
+                            RAs[12], DECs[12], RAs[13], DECs[13], RAs[14], DECs[14],
+                            RAs[15], DECs[15], RAs[16], DECs[16], RAs[17], DECs[17],
+                            RAs[18], DECs[18], RAs[19], DECs[19], RAs[20], DECs[20],
+                            RAs[21], DECs[21], RAs[22], DECs[22], RAs[23], DECs[23],
+                            RAs[24], DECs[24], RAs[25], DECs[25], RAs[26], DECs[26],
+                            RAs[27], DECs[27], RAs[28], DECs[28], RAs[29], DECs[29],
+                            RAs[30], DECs[30], RAs[31], DECs[31], RAs[32], DECs[32],
+                            RAs[33], DECs[33], RAs[34], DECs[34], RAs[35], DECs[35],
+                            RAs[36], DECs[36], RAs[37], DECs[37], RAs[38], DECs[38],
+                            RAs[39], DECs[39], RAs[40], DECs[40], RAs[41], DECs[41],
+                            RAs[42], DECs[42], RAs[43], DECs[43], RAs[44], DECs[44],
+                            RAs[45], DECs[45], RAs[46], DECs[46], RAs[47], DECs[47],
+                            RAs[48], DECs[48], RAs[49], DECs[49], RAs[50], DECs[50],
+                            RAs[51], DECs[51], RAs[52], DECs[52], RAs[53], DECs[53],
+                            RAs[54], DECs[54], RAs[55], DECs[55], RAs[56], DECs[56],
+                            RAs[57], DECs[57], RAs[58], DECs[58], RAs[59], DECs[59],
+                            RAs[60], DECs[60], RAs[61], DECs[61], RAs[62], DECs[62],
+                            RAs[63], DECs[63], RAs[64], DECs[64], RAs[65], DECs[65],
+                            RAs[66], DECs[66], RAs[67], DECs[67], RAs[68], DECs[68],
+                            RAs[69], DECs[69], RAs[70], DECs[70], RAs[71], DECs[71],
+                            RAs[72], DECs[72], RAs[73], DECs[73], RAs[74], DECs[74],
+                            RAs[75], DECs[75], RAs[76], DECs[76], RAs[77], DECs[77],
+                            RAs[78], DECs[78], RAs[79], DECs[79], RAs[80], DECs[80],
+                            RAs[81], DECs[81], RAs[82], DECs[82], RAs[83], DECs[83],
+                            RAs[84], DECs[84], RAs[85], DECs[85], RAs[86], DECs[86],
+                            RAs[87], DECs[87], RAs[88], DECs[88], RAs[89], DECs[89],
+                            RAs[90], DECs[90], RAs[91], DECs[91], RAs[92], DECs[92],
+                            RAs[93], DECs[93], RAs[94], DECs[94], RAs[95], DECs[95],
+                            RAs[96], DECs[96], RAs[97], DECs[97], RAs[98], DECs[98],
+                            RAs[99], DECs[99], RAs[100], DECs[100], RAs[101], DECs[101],
+                            RAs[102], DECs[102], RAs[103], DECs[103], RAs[104], DECs[104],
+                            RAs[105], DECs[105], RAs[106], DECs[106], RAs[107], DECs[107],
+                            RAs[108], DECs[108], RAs[109], DECs[109], RAs[110], DECs[110],
+                            RAs[111], DECs[111], RAs[112], DECs[112], RAs[113], DECs[113],
+                            RAs[114], DECs[114], RAs[115], DECs[115], RAs[116], DECs[116],
+                            RAs[117], DECs[117], RAs[118], DECs[118], RAs[119], DECs[119] );
+
+    if (npointing%2 == 1)
+    {
+        fprintf(stderr, "Number of RAs do not equal the number of Decs given. Exiting\n");
+        fprintf(stderr, "npointings : %d\n", npointing);
+        fprintf(stderr, "RAs[0] : %s\n", RAs[0]);
+        fprintf(stderr, "DECs[0] : %s\n", DECs[0]);
+        exit(0);
+    }
+    else
+        npointing /= 2; // converting from number of RAs and DECs to number of pointings
+
+    char pointing_array[npointing][2][64];
+    int p;
+    for ( p = 0; p < npointing; p++) 
+    {
+       strcpy( pointing_array[p][0], RAs[p] );
+       strcpy( pointing_array[p][1], DECs[p] );
+       fprintf(stderr, "[%f]  Pointing Num: %i  RA: %s  Dec: %s\n", NOW-begintime,
+                             p, pointing_array[p][0], pointing_array[p][1]);
+    }
+
+    // How many chunks to split a second into so there is enough memory on the gpu
+    int nchunk = 2;
+
     // Allocate memory
     char **filenames = create_filenames( &opts );
-    ComplexDouble ***complex_weights_array = create_complex_weights( nstation, nchan, npol ); // [nstation][nchan][npol]
-    ComplexDouble ****invJi = create_invJi( nstation, nchan, npol ); // [nstation][nchan][npol][npol]
-    ComplexDouble ***detected_beam = create_detected_beam( 2*opts.sample_rate, nchan, npol ); // [2*opts.sample_rate][nchan][npol]
+    ComplexDouble  ****complex_weights_array = create_complex_weights( npointing, nstation, nchan, npol );
+    ComplexDouble  ****invJi                 = create_invJi( nstation, nchan, npol );
+    ComplexDouble  ****detected_beam         = create_detected_beam( npointing, 2*opts.sample_rate, nchan, npol );
 
     // Read in info from metafits file
-    printf("[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
+    fprintf( stderr, "[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
     struct metafits_info mi;
     get_metafits_info( opts.metafits, &mi, opts.chan_width );
 
@@ -196,29 +264,31 @@ int main(int argc, char **argv)
     double invw = 1.0/wgt_sum;
 
     // Run get_delays to populate the delay_vals struct
-    printf("[%f]  Setting up output header information\n", NOW-begintime);
-    struct delays delay_vals;
+    fprintf( stderr, "[%f]  Setting up output header information\n", NOW-begintime);
+    struct delays delay_vals[npointing];
     get_delays(
-            opts.dec_ddmmss,    // dec as a string "dd:mm:ss"
-            opts.ra_hhmmss,     // ra  as a string "hh:mm:ss"
+            pointing_array,     // an array of pointings [pointing][ra/dec][characters]
+            npointing,          // number of pointings
             opts.frequency,     // middle of the first frequency channel in Hz
             &opts.cal,          // struct holding info about calibration
             opts.sample_rate,   // = 10000 samples per sec
             opts.time_utc,      // utc time string
             0.0,                // seconds offset from time_utc at which to calculate delays
-            &delay_vals,        // Populate psrfits header info
+            delay_vals,        // Populate psrfits header info
             &mi,                // Struct containing info from metafits file
             NULL,               // complex weights array (ignore this time)
             NULL                // invJi array           (ignore this time)
     );
 
     // Create structures for holding header information
-    struct psrfits  pf;
-    struct psrfits  pf_incoh;
+    struct psrfits  *pf;
+    struct psrfits  *pf_incoh;
+    pf = (struct psrfits *)malloc(npointing * sizeof(struct psrfits));
+    pf_incoh = (struct psrfits *)malloc(1 * sizeof(struct psrfits));
     vdif_header     vhdr;
-    vdif_header     uvhdr;
-    struct vdifinfo vf;
-    struct vdifinfo uvf;
+    struct vdifinfo *vf;
+    vf = (struct vdifinfo *)malloc(npointing * sizeof(struct vdifinfo));
+
 
     // Create structures for the PFB filter coefficients
     int ntaps, fil_size = 0;
@@ -261,77 +331,87 @@ int main(int argc, char **argv)
         coeffs[i] *= approx_filter_scale;
 
     // Populate the relevant header structs
-    populate_psrfits_header( &pf, opts.metafits, opts.obsid, opts.time_utc,
-            opts.sample_rate, opts.frequency, nchan, opts.chan_width,
-            outpol_coh, opts.rec_channel, &delay_vals );
-    populate_psrfits_header( &pf_incoh, opts.metafits, opts.obsid,
+    populate_psrfits_header( pf,       opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, outpol_incoh, opts.rec_channel, &delay_vals );
-
-    // Use the tile pointing instead of the pencil beam pointing
-    // TO DO: Move this to populate_psrfits_header?
-    pf_incoh.hdr.ra2000  = mi.tile_pointing_ra;
-    pf_incoh.hdr.dec2000 = mi.tile_pointing_dec;
-
-    populate_vdif_header( &vf, &vhdr, opts.metafits, opts.obsid,
+            opts.chan_width,outpol_coh, opts.rec_channel, delay_vals,
+            mi, npointing, 1 );
+    populate_psrfits_header( pf_incoh, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, opts.rec_channel, &delay_vals );
-    populate_vdif_header( &uvf, &uvhdr, opts.metafits, opts.obsid,
+            opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals,
+            mi, 1, 0 );
+
+    populate_vdif_header( vf, &vhdr, opts.metafits, opts.obsid,
             opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, opts.rec_channel, &delay_vals );
+            opts.chan_width, opts.rec_channel, delay_vals, npointing );
 
-    sprintf( uvf.basefilename, "%s_%s_ch%03d_u",
-             uvf.exp_name, uvf.scan_name, atoi(opts.rec_channel) );
-
+    // To run asynchronously we require two memory allocations for each data 
+    // set so multiple parts of the memory can be worked on at once.
+    // We control this by changing the pointer to alternate between
+    // the two memory allocations
+    
     // Create array for holding the raw data
     int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
+
+    //cudaMallocHost( (void**)&data, bytes_per_file * sizeof(uint8_t) );
     uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     assert(data);
 
     // Create output buffer arrays
-    float *data_buffer_coh   = NULL;
-    float *data_buffer_incoh = NULL;
-    float *data_buffer_vdif  = NULL;
-    float *data_buffer_uvdif = NULL;
+    float *data_buffer_coh    = NULL;
+    float *data_buffer_incoh  = NULL;
+    float *data_buffer_vdif   = NULL;
 
-    data_buffer_coh   = create_data_buffer_psrfits( nchan * outpol_coh * pf.hdr.nsblk );
-    data_buffer_incoh = create_data_buffer_psrfits( nchan * outpol_incoh * pf_incoh.hdr.nsblk );
-    data_buffer_vdif  = create_data_buffer_vdif( &vf );
-    data_buffer_uvdif = create_data_buffer_vdif( &uvf );
-
+    data_buffer_coh   = create_pinned_data_buffer_psrfits( npointing * nchan *
+                                                           outpol_coh * pf[0].hdr.nsblk );
+    data_buffer_incoh = create_pinned_data_buffer_psrfits( nchan * outpol_incoh *
+                                                           pf_incoh[0].hdr.nsblk );
+    data_buffer_vdif  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
+                                                        npointing );
+    
     /* Allocate host and device memory for the use of the cu_form_beam function */
+    // Declaring pointers to the structs so the memory can be alternated
     struct gpu_formbeam_arrays gf;
     struct gpu_ipfb_arrays gi;
-#ifdef HAVE_CUDA
-    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol,
-            outpol_coh, outpol_incoh );
+    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, nchunk,
+                     outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
-    if (opts.out_uvdif)
+    if (opts.out_vdif)
     {
-        malloc_ipfb( &gi, ntaps, opts.sample_rate, nchan, npol, fil_size );
+        malloc_ipfb( &gi, ntaps, opts.sample_rate, nchan, npol, fil_size, npointing );
         cu_load_filter( coeffs, twiddles, &gi, nchan );
     }
-#endif
 
-    int file_no = 0;
+    // Set up parrel streams
+    cudaStream_t streams[npointing];
+    for ( p = 0; p < npointing; p++ )
+        cudaStreamCreate(&(streams[p])) ;
+
+    fprintf( stderr, "[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
 
     int offset;
     unsigned int s;
     int ch, pol;
 
-    printf("[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
-    for (file_no = 0; file_no < nfiles; file_no++) {
+    // Set up timing for each section
+    long read_time[nfiles], delay_time[nfiles], calc_time[nfiles], write_time[nfiles][npointing];
+    int file_no;
 
+    for (file_no = 0; file_no < nfiles; file_no++)
+    {
         // Read in data from next file
-        printf("[%f]  Reading in data from %s [%d/%d]\n", NOW-begintime,
-                filenames[file_no], file_no+1, nfiles);
+        clock_t start = clock();
+        fprintf( stderr, "[%f] [%d/%d] Reading in data from %s \n", NOW-begintime,
+                file_no+1, nfiles, filenames[file_no]);
         read_data( filenames[file_no], data, bytes_per_file  );
+        read_time[file_no] = clock() - start;
 
         // Get the next second's worth of phases / jones matrices, if needed
-        printf("[%f]  Calculating delays\n", NOW-begintime);
+        start = clock();
+        fprintf( stderr, "[%f] [%d/%d] Calculating delays\n", NOW-begintime,
+                                file_no+1, nfiles );
         get_delays(
-                opts.dec_ddmmss,        // dec as a string "dd:mm:ss"
-                opts.ra_hhmmss,         // ra  as a string "hh:mm:ss"
+                pointing_array,     // an array of pointings [pointing][ra/dec][characters]
+                npointing,          // number of pointings
                 opts.frequency,         // middle of the first frequency channel in Hz
                 &opts.cal,              // struct holding info about calibration
                 opts.sample_rate,       // = 10000 samples per sec
@@ -341,14 +421,13 @@ int main(int argc, char **argv)
                 &mi,                    // Struct containing info from metafits file
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );                // invJi array           (answer will be output here)
+        delay_time[file_no] = clock() - start;
 
-        printf("[%f]  Calculating beam\n", NOW-begintime);
 
-        for (i = 0; i < nchan * outpol_coh * pf.hdr.nsblk; i++)
-            data_buffer_coh[i] = 0.0;
 
-        for (i = 0; i < nchan * outpol_incoh * pf_incoh.hdr.nsblk; i++)
-            data_buffer_incoh[i] = 0.0;
+        fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
+                                file_no+1, nfiles);
+        start = clock();
 
         if (!opts.out_bf) // don't beamform, but only procoess one ant/pol combination
         {
@@ -359,85 +438,130 @@ int main(int argc, char **argv)
             else
                 offset = opts.sample_rate;
 
+            for (p   = 0; p   < npointing;        p++  )
             for (s   = 0; s   < opts.sample_rate; s++  )
             for (ch  = 0; ch  < nchan           ; ch++ )
             for (pol = 0; pol < npol            ; pol++)
             {
-                detected_beam[s+offset][ch][pol] = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,ch,opts.out_ant,pol,nchan)]);
-                detected_beam[s+offset][ch][pol] = CMuld(detected_beam[s+offset][ch][pol], CMaked(128.0, 0.0));
+                detected_beam[p][s+offset][ch][pol] = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,ch,opts.out_ant,pol,nchan)]);
+                detected_beam[p][s+offset][ch][pol] = CMuld(detected_beam[p][s+offset][ch][pol], CMaked(128.0, 0.0));
             }
         }
         else // beamform (the default mode)
         {
-#ifdef HAVE_CUDA
             cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                    nstation, nchan, npol, outpol_coh, invw, &gf,
-                    detected_beam, data_buffer_coh, data_buffer_incoh );
-#else
-            form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                    nstation, nchan, npol, outpol_coh, outpol_incoh, invw,
-                    detected_beam, data_buffer_coh, data_buffer_incoh );
-#endif
+                    npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
+                    detected_beam, data_buffer_coh, data_buffer_incoh,
+                    streams, opts.out_incoh, nchunk );
         }
 
         // Invert the PFB, if requested
         if (opts.out_vdif)
         {
-            printf("[%f]  Inverting the PFB (IFFT)\n", NOW-begintime);
-#ifndef HAVE_CUDA
-            invert_pfb_ifft( detected_beam, file_no, opts.sample_rate, nchan,
-                    npol, data_buffer_vdif );
-#endif
+            fprintf( stderr, "[%f] [%d/%d] Inverting the PFB (full)\n",
+                            NOW-begintime, file_no+1, nfiles);
+            cu_invert_pfb_ord( detected_beam, file_no, npointing,
+                               opts.sample_rate, nchan, npol, vf->sizeof_buffer,
+                               &gi, data_buffer_vdif );
         }
+        calc_time[file_no] = clock() - start;
 
-        if (opts.out_uvdif)
+
+        // Write out for each pointing
+        for ( p = 0; p < npointing; p++)
         {
-            printf("[%f]  Inverting the PFB (full)\n", NOW-begintime);
-#ifdef HAVE_CUDA
-            cu_invert_pfb_ord( detected_beam, file_no, opts.sample_rate,
-                    nchan, npol, &gi, data_buffer_uvdif );
-#else
-            invert_pfb_ord( detected_beam, file_no, opts.sample_rate, nchan,
-                    npol, coeffs, fil_size, data_buffer_uvdif );
-#endif
+            start = clock();
+            fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n",
+                    NOW-begintime, file_no+1, nfiles, p+1, npointing );
+
+            if (opts.out_coh)
+                psrfits_write_second( &pf[p], data_buffer_coh, nchan,
+                                      outpol_coh, p );
+            if (opts.out_incoh && p == 0)
+                psrfits_write_second( &pf_incoh[p], data_buffer_incoh,
+                                      nchan, outpol_incoh, p );
+            if (opts.out_vdif)
+                vdif_write_second( &vf[p], &vhdr,
+                                   data_buffer_vdif + p * vf->sizeof_buffer,
+                                   &vgain );
+            write_time[file_no][p] = clock() - start;
         }
-
-        printf("[%f]  Writing data to file(s)\n", NOW-begintime);
-
-        if (opts.out_coh)
-            psrfits_write_second( &pf, data_buffer_coh, nchan, outpol_coh );
-        if (opts.out_incoh)
-            psrfits_write_second( &pf_incoh, data_buffer_incoh, nchan, outpol_incoh );
-        if (opts.out_vdif)
-            vdif_write_second( &vf, &vhdr, data_buffer_vdif, &vgain );
-        if (opts.out_uvdif)
-            vdif_write_second( &uvf, &uvhdr, data_buffer_uvdif, &ugain );
-
     }
+    
+    // Calculate total processing times
+    float read_sum = 0, delay_sum = 0, calc_sum = 0, write_sum = 0;
+    for (file_no = 0; file_no < nfiles; file_no++)
+    {
+        read_sum  += (float) read_time[file_no];
+        delay_sum += (float) delay_time[file_no];
+        calc_sum  += (float) calc_time[file_no];
+        for ( p = 0; p < npointing; p++)
+            write_sum += (float) write_time[file_no][p];
+    }
+    float read_mean, delay_mean, calc_mean, write_mean;
+    read_mean  = read_sum  / nfiles;
+    delay_mean = delay_sum / nfiles / npointing;
+    calc_mean  = calc_sum  / nfiles / npointing;
+    write_mean = write_sum / nfiles / npointing;
 
-    printf("[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
-    printf("[%f]  Starting clean-up\n", NOW-begintime);
+    // Calculate the standard deviations
+    float read_std = 0, delay_std = 0, calc_std = 0, write_std = 0;
+    for (file_no = 0; file_no < nfiles; file_no++)
+    {
+        read_std  += pow((float)read_time[file_no]  - read_mean,  2);
+        delay_std += pow((float)delay_time[file_no] - delay_mean / npointing, 2);
+        calc_std  += pow((float)calc_time[file_no]  - calc_mean / npointing,  2);
+        for ( p = 0; p < npointing; p++)
+            write_std += pow((float)write_time[file_no][p] - write_mean / npointing, 2);
+    }
+    read_std  = sqrt( read_std  / nfiles );
+    delay_std = sqrt( delay_std / nfiles / npointing );
+    calc_std  = sqrt( calc_std  / nfiles / npointing );
+    write_std = sqrt( write_std / nfiles / npointing );
+
+
+    fprintf( stderr, "[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
+    fprintf( stderr, "[%f]  Total read  processing time: %9.3f s\n", 
+                     NOW-begintime, read_sum / CLOCKS_PER_SEC);
+    fprintf( stderr, "[%f]  Mean  read  processing time: %9.3f +\\- %8.3f s\n", 
+                     NOW-begintime, read_mean / CLOCKS_PER_SEC, read_std / CLOCKS_PER_SEC);
+    fprintf( stderr, "[%f]  Total delay processing time: %9.3f s\n", 
+                     NOW-begintime, delay_sum / CLOCKS_PER_SEC);
+    fprintf( stderr, "[%f]  Mean  delay processing time: %9.3f +\\- %8.3f s\n", 
+                     NOW-begintime, delay_mean / CLOCKS_PER_SEC, delay_std / CLOCKS_PER_SEC);
+    fprintf( stderr, "[%f]  Total calc  processing time: %9.3f s\n", 
+                     NOW-begintime, calc_sum / CLOCKS_PER_SEC);
+    fprintf( stderr, "[%f]  Mean  calc  processing time: %9.3f +\\- %8.3f s\n", 
+                     NOW-begintime, calc_mean / CLOCKS_PER_SEC, calc_std / CLOCKS_PER_SEC);
+    fprintf( stderr, "[%f]  Total write processing time: %9.3f s\n", 
+                     NOW-begintime, write_sum  * npointing / CLOCKS_PER_SEC);
+    fprintf( stderr, "[%f]  Mean  write processing time: %9.3f +\\- %8.3f s\n", 
+                     NOW-begintime, write_mean / CLOCKS_PER_SEC, write_std / CLOCKS_PER_SEC);
+    
+    
+    fprintf( stderr, "[%f]  Starting clean-up\n", NOW-begintime);
 
     // Free up memory
     destroy_filenames( filenames, &opts );
-    destroy_complex_weights( complex_weights_array, nstation, nchan );
+    destroy_complex_weights( complex_weights_array, npointing, nstation, nchan );
     destroy_invJi( invJi, nstation, nchan, npol );
-    destroy_detected_beam( detected_beam, 2*opts.sample_rate, nchan );
+    destroy_detected_beam( detected_beam, npointing, 2*opts.sample_rate, nchan );
 
     free( twiddles );
     free( coeffs );
 
     destroy_metafits_info( &mi );
-    free( data_buffer_coh   );
-    free( data_buffer_incoh );
-    free( data_buffer_vdif  );
-    free( data_buffer_uvdif );
-    free( data );
+    //free( data_buffer_coh    );
+    //free( data_buffer_incoh  );
+    //free( data_buffer_vdif   );
+    cudaFreeHost( data_buffer_coh   );
+    cudaFreeHost( data_buffer_incoh );
+    cudaFreeHost( data_buffer_vdif  );
+    cudaFreeHost( data );
 
     free( opts.obsid        );
     free( opts.time_utc     );
-    free( opts.dec_ddmmss   );
-    free( opts.ra_hhmmss    );
+    free( opts.pointings    );
     free( opts.datadir      );
     free( opts.metafits     );
     free( opts.rec_channel  );
@@ -447,41 +571,48 @@ int main(int argc, char **argv)
 
     if (opts.out_coh)
     {
-        free( pf.sub.data        );
-        free( pf.sub.dat_freqs   );
-        free( pf.sub.dat_weights );
-        free( pf.sub.dat_offsets );
-        free( pf.sub.dat_scales  );
+        for (p = 0; p < npointing; p++)
+        {
+            free( pf[p].sub.data        );
+            free( pf[p].sub.dat_freqs   );
+            free( pf[p].sub.dat_weights );
+            free( pf[p].sub.dat_offsets );
+            free( pf[p].sub.dat_scales  );
+        }
     }
     if (opts.out_incoh)
     {
-        free( pf_incoh.sub.data        );
-        free( pf_incoh.sub.dat_freqs   );
-        free( pf_incoh.sub.dat_weights );
-        free( pf_incoh.sub.dat_offsets );
-        free( pf_incoh.sub.dat_scales  );
+        free( pf_incoh[0].sub.data        );
+        free( pf_incoh[0].sub.dat_freqs   );
+        free( pf_incoh[0].sub.dat_weights );
+        free( pf_incoh[0].sub.dat_offsets );
+        free( pf_incoh[0].sub.dat_scales  );
     }
+    for (p = 0; p < npointing; p++)
+    {
+        if (opts.out_coh)
+        {
+            free( pf[p].sub.data        );
+            free( pf[p].sub.dat_freqs   );
+            free( pf[p].sub.dat_weights );
+            free( pf[p].sub.dat_offsets );
+            free( pf[p].sub.dat_scales  );
+        }
+        if (opts.out_vdif)
+        {
+            free( vf[p].b_scales  );
+            free( vf[p].b_offsets );
+        }
+    }
+    free_formbeam( &gf );
     if (opts.out_vdif)
     {
-        free( vf.b_scales  );
-        free( vf.b_offsets );
-    }
-    if (opts.out_uvdif)
-    {
-        free( uvf.b_scales  );
-        free( uvf.b_offsets );
-    }
-
-#ifdef HAVE_CUDA
-    free_formbeam( &gf );
-    if (opts.out_uvdif)
         free_ipfb( &gi );
-#endif
-
-#ifndef HAVE_CUDA
+    }
+    #ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
     fftw_cleanup_threads();
-#endif
+    #endif
 
     return 0;
 }
@@ -505,10 +636,8 @@ void usage() {
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "option. UTCTIME must have the format: yyyy-mm-ddThh:mm:ss\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "\t-D, --dec=dd:mm:ss.s      ");
-    fprintf(stderr, "Declination of pointing direction\n");
-    fprintf(stderr, "\t-R, --ra=hh:mm:ss.s       ");
-    fprintf(stderr, "Right ascension of pointing direction\n");
+    fprintf(stderr, "\t-P, --pointings=hh:mm:ss.s_dd:mm:ss.s,hh:mm:ss.s_dd:mm:ss.s... ");
+    fprintf(stderr, "Right ascension and declinations of multiple pointings\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-d, --data-location=PATH  ");
     fprintf(stderr, "PATH is the directory containing the recombined data\n");
@@ -524,18 +653,18 @@ void usage() {
     fprintf(stderr, "OUTPUT OPTIONS\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-i, --incoh                ");
-    fprintf(stderr, "Turn on incoherent PSRFITS beam output.                          ");
+    fprintf(stderr, "Turn on incoherent PSRFITS beam output.                             ");
     fprintf(stderr, "[default: OFF]\n");
     fprintf(stderr, "\t-p, --psrfits              ");
     fprintf(stderr, "Turn on coherent PSRFITS output (will be turned on if none of\n");
     fprintf(stderr, "\t                           ");
-    fprintf(stderr, "-i, -p, -u, -v are chosen).                                      ");
-    fprintf(stderr, "[default: OFF]\n");
-    fprintf(stderr, "\t-u, --uvdif                ");
-    fprintf(stderr, "Turn on VDIF output with upsampling                              ");
+    fprintf(stderr, "-i, -p, -u, -v are chosen).                                         ");
     fprintf(stderr, "[default: OFF]\n");
     fprintf(stderr, "\t-v, --vdif                 ");
-    fprintf(stderr, "Turn on VDIF output without upsampling                           ");
+    fprintf(stderr, "Turn on VDIF output with upsampling                                 ");
+    fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-s, --summed               ");
+    fprintf(stderr, "Turn on summed polarisations of the coherent output (only Stokes I) ");
     fprintf(stderr, "[default: OFF]\n");
     fprintf(stderr, "\t-A, --antpol=ant           ");
     fprintf(stderr, "Do not beamform. Instead, only operate on the specified ant\n");
@@ -644,11 +773,11 @@ void make_beam_parse_cmdline(
                 {"incoh",           no_argument,       0, 'i'},
                 {"psrfits",         no_argument,       0, 'p'},
                 {"vdif",            no_argument,       0, 'v'},
+                {"summed",          no_argument,       0, 's'},
                 {"synth_filter",    required_argument, 0, 'S'},
                 {"antpol",          required_argument, 0, 'A'},
                 {"utc-time",        required_argument, 0, 'z'},
-                {"dec",             required_argument, 0, 'D'},
-                {"ra",              required_argument, 0, 'R'},
+                {"pointings",       required_argument, 0, 'P'},
                 {"data-location",   required_argument, 0, 'd'},
                 {"metafits-file",   required_argument, 0, 'm'},
                 {"coarse-chan",     required_argument, 0, 'f'},
@@ -668,7 +797,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:D:e:f:F:hiJ:m:n:o:O:pr:R:S:uvVw:W:z:",
+                             "a:A:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:sS:vVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -694,9 +823,6 @@ void make_beam_parse_cmdline(
                     break;
                 case 'd':
                     opts->datadir = strdup(optarg);
-                    break;
-                case 'D':
-                    opts->dec_ddmmss = strdup(optarg);
                     break;
                 case 'e':
                     opts->end = atol(optarg);
@@ -737,23 +863,23 @@ void make_beam_parse_cmdline(
                 case 'p':
                     opts->out_coh = 1;
                     break;
+                case 'P':
+                    opts->pointings = strdup(optarg);
+                    break;
                 case 'r':
                     opts->sample_rate = atoi(optarg);
-                    break;
-                case 'R':
-                    opts->ra_hhmmss = strdup(optarg);
                     break;
                 case 'S':
                     opts->synth_filter = strdup(optarg);
                     break;
-                case 'u':
-                    opts->out_uvdif = 1;
+                case 's':
+                    opts->out_summed = 1;
                     break;
                 case 'v':
                     opts->out_vdif = 1;
                     break;
                 case 'V':
-                    printf("MWA Beamformer v%s\n", VERSION_BEAMFORMER);
+                    fprintf( stderr, "MWA Beamformer %s\n", VERSION_BEAMFORMER);
                     exit(0);
                     break;
                 case 'w':
@@ -778,31 +904,20 @@ void make_beam_parse_cmdline(
         exit(EXIT_FAILURE);
     }
 
-#ifdef HAVE_CUDA
-    // At the moment, -v is not implemented if CUDA is available
-    if (opts->out_vdif)
-    {
-        fprintf( stderr, "error: -v is not available in the CUDA version. "
-                         "To use -v, please recompile without CUDA.\n" );
-        exit(EXIT_FAILURE);
-    }
-#endif
 
     // Check that all the required options were supplied
     assert( opts->obsid        != NULL );
     assert( opts->begin        != 0    );
     assert( opts->end          != 0    );
     assert( opts->time_utc     != NULL );
-    assert( opts->dec_ddmmss   != NULL );
-    assert( opts->ra_hhmmss    != NULL );
+    assert( opts->pointings    != NULL );
     assert( opts->datadir      != NULL );
     assert( opts->metafits     != NULL );
     assert( opts->rec_channel  != NULL );
     assert( opts->cal.cal_type != NO_CALIBRATION );
 
     // If neither -i, -p, nor -v were chosen, set -p by default
-    if ( !opts->out_incoh && !opts->out_coh &&
-         !opts->out_vdif  && !opts->out_uvdif )
+    if ( !opts->out_incoh && !opts->out_coh && !opts->out_vdif )
     {
         opts->out_coh = 1;
     }
@@ -819,7 +934,6 @@ char **create_filenames( struct make_beam_opts *opts )
                  nfiles, opts->begin, opts->end);
         exit(EXIT_FAILURE);
     }
-
     // Allocate memory for the file name list
     char **filenames = NULL;
     filenames = (char **)malloc( nfiles*sizeof(char *) );
@@ -837,7 +951,6 @@ char **create_filenames( struct make_beam_opts *opts )
     return filenames;
 }
 
-
 void destroy_filenames( char **filenames, struct make_beam_opts *opts )
 {
     int nfiles = opts->end - opts->begin + 1;
@@ -848,47 +961,52 @@ void destroy_filenames( char **filenames, struct make_beam_opts *opts )
 }
 
 
-ComplexDouble ***create_complex_weights( int nstation, int nchan, int npol )
+ComplexDouble ****create_complex_weights( int npointing, int nstation, int nchan, int npol )
 // Allocate memory for complex weights matrices
 {
-    int ant, ch; // Loop variables
-    ComplexDouble ***array;
+    int p, ant, ch; // Loop variables
+    ComplexDouble ****array;
     
-    array = (ComplexDouble ***)malloc( nstation * sizeof(ComplexDouble **) );
-
-    for (ant = 0; ant < nstation; ant++)
+    array = (ComplexDouble ****)malloc( npointing * sizeof(ComplexDouble ***) );
+    
+    for (p = 0; p < npointing; p++)
     {
-        array[ant] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
+        array[p] = (ComplexDouble ***)malloc( nstation * sizeof(ComplexDouble **) );
 
-        for (ch = 0; ch < nchan; ch++)
-            array[ant][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+        for (ant = 0; ant < nstation; ant++)
+        {
+            array[p][ant] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
+
+            for (ch = 0; ch < nchan; ch++)
+                array[p][ant][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+        }
     }
-
     return array;
 }
 
 
-void destroy_complex_weights( ComplexDouble ***array, int nstation, int nchan )
+void destroy_complex_weights( ComplexDouble ****array, int npointing, int nstation, int nchan )
 {
-    int ant, ch;
-    for (ant = 0; ant < nstation; ant++)
+    int p, ant, ch;
+    for (p = 0; p < npointing; p++)
     {
-        for (ch = 0; ch < nchan; ch++)
-            free( array[ant][ch] );
+        for (ant = 0; ant < nstation; ant++)
+        {
+            for (ch = 0; ch < nchan; ch++)
+                free( array[p][ant][ch] );
 
-        free( array[ant] );
+            free( array[p][ant] );
+        }
+        free( array[p] );
     }
-
     free( array );
 }
-
 
 ComplexDouble ****create_invJi( int nstation, int nchan, int npol )
 // Allocate memory for (inverse) Jones matrices
 {
-    int ant, p, ch; // Loop variables
+    int ant, pol, ch; // Loop variables
     ComplexDouble ****invJi;
-
     invJi = (ComplexDouble ****)malloc( nstation * sizeof(ComplexDouble ***) );
 
     for (ant = 0; ant < nstation; ant++)
@@ -899,69 +1017,72 @@ ComplexDouble ****create_invJi( int nstation, int nchan, int npol )
         {
             invJi[ant][ch] = (ComplexDouble **)malloc( npol * sizeof(ComplexDouble *) );
 
-            for (p = 0; p < npol; p++)
-                invJi[ant][ch][p] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+            for (pol = 0; pol < npol; pol++)
+                invJi[ant][ch][pol] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
         }
     }
-
     return invJi;
 }
 
 
 void destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol )
 {
-    int ant, ch, p;
+    int ant, ch, pol;
     for (ant = 0; ant < nstation; ant++)
     {
         for (ch = 0; ch < nchan; ch++)
         {
-            for (p = 0; p < npol; p++)
-                free( array[ant][ch][p] );
+            for (pol = 0; pol < npol; pol++)
+                free( array[ant][ch][pol] );
 
             free( array[ant][ch] );
         }
-
         free( array[ant] );
     }
-
     free( array );
 }
 
 
-ComplexDouble ***create_detected_beam( int nsamples, int nchan, int npol )
+ComplexDouble ****create_detected_beam( int npointing, int nsamples, int nchan, int npol )
 // Allocate memory for complex weights matrices
 {
-    int s, ch; // Loop variables
-    ComplexDouble ***array;
+    int p, s, ch; // Loop variables
+    ComplexDouble ****array;
     
-    array = (ComplexDouble ***)malloc( nsamples * sizeof(ComplexDouble **) );
-
-    for (s = 0; s < nsamples; s++)
+    array = (ComplexDouble ****)malloc( npointing * sizeof(ComplexDouble ***) );
+    for (p = 0; p < npointing; p++) 
     {
-        array[s] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
+        array[p] = (ComplexDouble ***)malloc( nsamples * sizeof(ComplexDouble **) );
 
-        for (ch = 0; ch < nchan; ch++)
-            array[s][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+        for (s = 0; s < nsamples; s++)
+        {
+            array[p][s] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
+
+            for (ch = 0; ch < nchan; ch++)
+                array[p][s][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
+        }
     }
-
     return array;
 }
 
-
-void destroy_detected_beam( ComplexDouble ***array, int nsamples, int nchan )
+void destroy_detected_beam( ComplexDouble ****array, int npointing, int nsamples, int nchan )
 {
-    int s, ch;
-    for (s = 0; s < nsamples; s++)
+    int p, s, ch;
+    for (p = 0; p < npointing; p++)    
     {
-        for (ch = 0; ch < nchan; ch++)
-            free( array[s][ch] );
+        for (s = 0; s < nsamples; s++)
+        {
+            for (ch = 0; ch < nchan; ch++)
+                free( array[p][s][ch] );
 
-        free( array[s] );
+            free( array[p][s] );
+        }
+
+        free( array[p] );
     }
 
     free( array );
 }
-
 
 float *create_data_buffer_psrfits( size_t size )
 {
@@ -970,9 +1091,9 @@ float *create_data_buffer_psrfits( size_t size )
 }
 
 
-float *create_data_buffer_vdif( struct vdifinfo *vf )
+float *create_data_buffer_vdif( size_t size )
 {
-    float *ptr  = (float *)malloc( vf->sizeof_buffer * sizeof(float) );
+    float *ptr  = (float *)malloc( size * sizeof(float) );
     return ptr;
 }
 

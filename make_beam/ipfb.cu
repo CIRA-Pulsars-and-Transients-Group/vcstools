@@ -124,9 +124,10 @@ __global__ void filter_kernel( float *in_real, float *in_imag,
 }
 
 extern "C"
-void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
-                        int nsamples, int nchan, int npol,
-                        struct gpu_ipfb_arrays *g, float *data_buffer_uvdif )
+void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
+                        int npointing, int nsamples, int nchan, int npol,
+                        int sizeof_buffer,
+                        struct gpu_ipfb_arrays *g, float *data_buffer_vdif )
 /* "Invert the PFB" by applying a resynthesis filter, using GPU
  * acceleration.
  *
@@ -155,9 +156,11 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
     // half of detected_beam if the file number is even, and "ntaps" places
     // from the end of the first half of detected_beam if the file number is
     // odd.
+    
     int start_s = (file_no % 2 == 0 ? 2*nsamples - g->ntaps : nsamples - g->ntaps);
 
-    int s_in, s, ch, pol, i;
+    int p, s_in, s, ch, pol, i;
+    for (p = 0; p < npointing; p++)
     for (s_in = 0; s_in < nsamples + g->ntaps; s_in++)
     {
         s = (start_s + s_in) % (2*nsamples);
@@ -166,37 +169,44 @@ void cu_invert_pfb_ord( ComplexDouble ***detected_beam, int file_no,
             for (pol = 0; pol < npol; pol++)
             {
                 // Calculate the index for in_real and in_imag;
-                i = npol*nchan*s_in + npol*ch + pol;
-
+                i = p    * npol * nchan * (nsamples + g->ntaps) +
+                    s_in * npol * nchan +
+                    ch   * npol +
+                    pol;
                 // Copy the data across - taking care of the file_no = 0 case
-                if (file_no == 0 && s_in < g->ntaps)
+                // The s_in%(npol*nchan*nsamples) does this for each pointing
+                if (file_no == 0 && (s_in%(npol*nchan*nsamples)) < g->ntaps)
                 {
                     g->in_real[i] = 0.0;
                     g->in_imag[i] = 0.0;
                 }
                 else
                 {
-                    g->in_real[i] = CReald( detected_beam[s][ch][pol] );
-                    g->in_imag[i] = CImagd( detected_beam[s][ch][pol] );
-//                    if (/*pol == 1 && */(g->in_real[i] != 0 || g->in_imag[i] != 0))
-//                        printf("beam[s_in=%d][ch=%d][pol=%d]=(%f,%f)\n", s_in, ch, pol, g->in_real[i], g->in_imag[i]);
+                    g->in_real[i] = CReald( detected_beam[p][s][ch][pol] );
+                    g->in_imag[i] = CImagd( detected_beam[p][s][ch][pol] );
                 }
             }
         }
     }
-
+    
     // Copy the data to the device
     gpuErrchk(cudaMemcpy( g->d_in_real, g->in_real, g->in_size, cudaMemcpyHostToDevice ));
     gpuErrchk(cudaMemcpy( g->d_in_imag, g->in_imag, g->in_size, cudaMemcpyHostToDevice ));
-
+    
     // Call the kernel
+    if (npointing > 1)
+    {
+        fprintf( stderr, "error: PFB inversion currently only supports a single pointing\n" );
+        exit(EXIT_FAILURE);
+    }
     filter_kernel<<<nsamples, nchan*npol>>>( g->d_in_real, g->d_in_imag,
                                              g->d_ft_real, g->d_ft_imag,
                                              g->ntaps, npol, g->d_out );
+    gpuErrchk( cudaPeekAtLastError() );
     cudaDeviceSynchronize();
 
     // Copy the result back into host memory
-    gpuErrchk(cudaMemcpy( data_buffer_uvdif, g->d_out, g->out_size, cudaMemcpyDeviceToHost ));
+    gpuErrchk(cudaMemcpy( data_buffer_vdif, g->d_out, g->out_size, cudaMemcpyDeviceToHost ));
 }
 
 
@@ -249,16 +259,16 @@ void cu_load_filter( double *coeffs, ComplexDouble *twiddles, struct gpu_ipfb_ar
 
 
 void malloc_ipfb( struct gpu_ipfb_arrays *g, int ntaps, int nsamples,
-        int nchan, int npol, int fil_size )
+        int nchan, int npol, int fil_size, int npointing )
 {
     // Flatten the input array (detected_array) for GPU.
     // We only need one second's worth, plus 12 time samples tacked onto the
     // beginning (from the previous second)
 
     g->ntaps     = ntaps;
-    g->in_size   = ((nsamples + ntaps) * nchan * npol) * sizeof(float);
+    g->in_size   = npointing * ((nsamples + ntaps) * nchan * npol) * sizeof(float);
     g->ft_size   = fil_size * nchan * sizeof(float);
-    g->out_size  = nsamples * nchan * npol * 2 * sizeof(float);
+    g->out_size  = npointing * nsamples * nchan * npol * 2 * sizeof(float);
 
     // Allocate memory on the device
     gpuErrchk(cudaMalloc( (void **)&g->d_in_real, g->in_size ));

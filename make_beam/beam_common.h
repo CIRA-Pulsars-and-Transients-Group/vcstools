@@ -67,8 +67,7 @@ struct make_beam_opts {
     unsigned long int  begin;         // GPS time -- when to start beamforming
     unsigned long int  end;           // GPS time -- when to stop beamforming
     char              *time_utc;      // utc time string "yyyy-mm-ddThh:mm:ss"
-    char              *dec_ddmmss;    // "dd:mm:ss"
-    char              *ra_hhmmss;     // "hh:mm:ss"
+    char              *pointings;    // pointing list"dd:mm:ss_hh:mm:ss, dd:mm:ss_hh:mm:ss"
     char              *datadir;       // The path to where the recombined data live
     char              *metafits;      // filename of the metafits file
     char              *rec_channel;   // 0 - 255 receiver 1.28MHz channel
@@ -89,22 +88,24 @@ struct make_beam_opts {
     int                out_bf;        // Default = beamform over all (non-flagged) antennas
     int                out_ant;       // The antenna number (0-127) to write out if out_bf = 0
     char              *synth_filter;  // Which synthesis filter to use
+    int                out_summed;    // Default = output only Stokes I output turned OFF
 
     struct calibration cal;           // Variables for calibration settings
 };
 
 /* Running get_delays from within make_beam */
 void get_delays(
-        char                  *dec_ddmmss,
-        char                  *ra_hhmmss,
+        // an array of pointings [pointing][ra/dec][characters]
+        char                   pointing_array[][2][64],
+        int                    npointing, // number of pointings 
         long int               frequency,
         struct                 calibration *cal,
         float                  samples_per_sec,
         char                  *time_utc,
         double                 sec_offset,
-        struct delays         *delay_vals,
+        struct delays          delay_vals[],
         struct metafits_info  *mi,
-        ComplexDouble       ***complex_weights_array,  // output
+        ComplexDouble      ****complex_weights_array,  // output
         ComplexDouble      ****invJi                   // output
 );
 

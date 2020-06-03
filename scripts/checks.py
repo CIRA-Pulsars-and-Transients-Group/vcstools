@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 import traceback
 import logging
-from mwa_metadb_utils import getmeta
+from mwa_metadb_utils import getmeta, get_files
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +56,9 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
     # in case we're checking for downloaded tarballs also need to check ics-files.
     if data_type == 'tar_ics':
         logger.info("Now checking ICS files")
-        error, n_ics = check_recombine_ics(directory=directory, 
-                                           startsec=startsec, 
-                                           n_secs=n_secs,#n_files_expected, 
+        error, n_ics = check_recombine_ics(directory=directory,
+                                           startsec=startsec,
+                                           n_secs=n_secs,#n_files_expected,
                                            obsID=obsID)
         n_files_expected *= 2
         files_in_dir += n_ics
@@ -88,8 +88,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
     logger.info(base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range.")
     required_size = required_size
     # we need to get the number of unique seconds from the file names
-    meta = getmeta(service='obs', params={'obs_id':obsID})
-    files = np.array(list(meta['files'].keys()))
+    files = np.array(get_files(obsID))
     mask = np.array(['.dat' in file for file in files])
     if not startsec:
         times = [time[11:21] for time in files[mask]]
@@ -117,7 +116,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
         logger.error("We have {0} files but expected {1}".format(files_in_dir, expected_files))
         error = True
     for line in output[1:]:
-        if 'dat' in line:
+        if b'dat' in line:
             logger.warning("Deleted {0} due to wrong size.".format(line.strip()))
             error = True
     if not error:
@@ -133,8 +132,8 @@ def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_siz
             return True, 0
 
     if not startsec:
-        output = subprocess.Popen(["ls -ltr %s/*ics.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5 \" (expected %s)\"}'" %(directory, required_size, required_size)],
-                                  stdout=subprocess.PIPE, shell=True).communicate()[0]
+        #output = subprocess.Popen(["ls -ltr %s/*ics.dat | awk '($5!=%s){print \"file \" $9 \" has size \" $5 \" (expected %s)\"}'" %(directory, required_size, required_size)],
+        #                          stdout=subprocess.PIPE, shell=True).communicate()[0]
         command = "ls -l %s/*ics.dat | ((tee /dev/fd/5 | wc -l >/dev/fd/4) 5>&1 | " %(directory) + \
             "awk '($5!=%s){print $9}' | tee >> %s/ics_all.txt | xargs rm -rf) 4>&1;" %(required_size, directory) + \
             "cat %s/ics_all.txt; rm -rf %s/ics_all.txt" %(directory, directory)
@@ -154,9 +153,9 @@ def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_siz
         logger.error("We have {0} ics-files but expected {1}".format(files_in_dir, n_secs))
         error = True
     for line in output[1:]:
-        if 'dat' in line:
+        if b'dat' in line:
             error = True
-            line = line.strip()
+            line = line.strip().decode()
             logger.error("Deleted {0} due to wrong size.".format(line))
             dat_files = line.replace('_ics.dat','*.dat')
             rm_cmd = "rm -rf {0}".format(dat_files)
@@ -178,7 +177,9 @@ def get_files_and_sizes(obsID, mode):
         logger.error("Wrong mode supplied. Options are raw, tar_ics, and ics")
         return
     logger.info("Retrieving file info from MWA database for all {0} files...".format(suffix))
-    meta = getmeta(service='obs', params={'obs_id':obsID})
+    meta = getmeta(service='obs', params={'obs_id':obsID, 'nocache':1})
+    # 'nocache' is used above so we get don't use the cached metadata as that could
+    # be out of data so we force it to get up to date values
     files = np.array(list(meta['files'].keys()))
     files_masked = []
     sizes = []
@@ -190,7 +191,7 @@ def get_files_and_sizes(obsID, mode):
     #files = files[mask]
     #sizes=np.array([meta['files'][f]['size'] for f in files])
     logger.info("...Done. Expect all on database to be {0} bytes in size...".format(sizes[0]))
-    
+
     size_check = True
     for s in sizes:
         if not s == sizes[0]:
@@ -239,7 +240,7 @@ def opt_parser(loglevels):
                             "to check the files in. Default is /astro/mwaops/vcs/" + \
                             "[obsID]/[raw,combined]")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                     choices=loglevels.keys(), default="INFO")
     return parser.parse_args()
 
@@ -251,7 +252,7 @@ if __name__ == '__main__':
 
     args = opt_parser(loglevels)
     work_dir_base = '/astro/mwaops/vcs/' + str(args.obsID)
-    
+
     # set up the logger for stand-alone execution
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()

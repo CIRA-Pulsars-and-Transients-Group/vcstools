@@ -2,7 +2,7 @@
 
 """Script for RTS calibration jobs in the VCS Pulsar pipeline.
 
-The class defined in this script attempts to abstract away any of the underlying 
+The class defined in this script attempts to abstract away any of the underlying
 difficulties in creating a RTS configuration file. It can handle both types of VCS observing:
     "contiguous bandwidth" observations (i.e. all 24 coarse channels are adjacent), and
     "picket-fence" observations (i.e. where the 24 coarse channels are arbitrarily distributed
@@ -24,7 +24,6 @@ from time import strptime, strftime
 
 from astropy.time import Time
 from astropy.coordinates import EarthLocation
-from astropy import units as u
 from astropy.io import fits
 
 from job_submit import submit_slurm
@@ -40,7 +39,7 @@ class CalibrationError(Exception):
 
 class BaseRTSconfig(object):
     """A class to hold the base information for a given RTS configuration file.
-    
+
     Parameters
     ----------
     obsid : int
@@ -80,8 +79,8 @@ class BaseRTSconfig(object):
     corr_dump_time : float
         The time scale on which the correlator dumped the visibilities (i.e. the integration time).
     n_corr_dumps_to_average : int
-        The number of correlator dumps to use. 
-        Must be such that `corr_dump_time * n_corr_dumps_to_average` is <= than the total amount of data 
+        The number of correlator dumps to use.
+        Must be such that `corr_dump_time * n_corr_dumps_to_average` is <= than the total amount of data
         available for the calibrator observation.
     n_integration_bins : int
         The number of visbility groups to construct (and then integrate over). 5 seems to be ok - but this will change with configuration.
@@ -106,16 +105,16 @@ class BaseRTSconfig(object):
     output_dir : str
         Path to write RTS configuration and relevant flagging information.
     batch_dir : str
-        Path to where the SLURM scripts and their output are to be written.    
+        Path to where the SLURM scripts and their output are to be written.
     metafits : str
         Path to the original metafits file for the calibrator observation.
-    source_list: str 
+    source_list: str
         Path to the source list created for this calibrator observation (using srclist_by_beam.py).
     useCorrInput : int
         Option value for RTS configuration regarding interpreting correlator streamed data.
         For offline-correlated data, `useCorrInput=1` and `readDirect=0`.
     readDirect : int
-        Option value for RTS configuration regarding reading data files from disk. 
+        Option value for RTS configuration regarding reading data files from disk.
         For online-correlated data, `readDirect=1` and `useCorrInput=0`.
 
     Raises
@@ -142,7 +141,7 @@ class BaseRTSconfig(object):
         self.metafits_RTSform = None  # modified metafits file name for RTS
         self.ArrayPositionLat = -26.70331940  # MWA latitude
         self.ArrayPositionLong = 116.6708152  # MWA longitude
-        self.n_integration_bins = n_int_bins # number of visibility integration groups for RTS 
+        self.n_integration_bins = n_int_bins # number of visibility integration groups for RTS
         self.base_str = None  # base string to be written to file, will be editted by RTScal
 
         # Check to make sure paths and files exist:
@@ -230,7 +229,7 @@ class BaseRTSconfig(object):
 
     def get_info_from_data_header(self):
         """Read information from the FITS file header to figure out calibration configuration.
-        
+
         Raises
         ------
         CalibrationError
@@ -302,7 +301,7 @@ class BaseRTSconfig(object):
 
 
     def construct_base_string(self):
-        """Construct the basic string to be written to the RTS config file. 
+        """Construct the basic string to be written to the RTS config file.
         This string will then be edit with regexp to update the relevant details.
 
         Returns
@@ -337,7 +336,7 @@ class BaseRTSconfig(object):
         # use the same operations as in timeconvert.py for our specific need
         logger.info("Converting times with astropy")
         #mwa_loc = EarthLocation.of_site('Murchison Widefield Array')
-        mwa_loc = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8) 
+        mwa_loc = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8)
         #Astropy formating
         utctime = strptime(self.utctime, '%Y%m%d%H%M%S')
         a_time = strftime('%Y-%m-%dT%H:%M:%S', utctime)
@@ -480,11 +479,11 @@ FieldOfViewDegrees=1""".format(base=self.data_dir,
 
 class RTScal(object):
     """Class to contain calibration information, create and submit RTS calibration jobs.
-    It is able to distinguish picket-fence and "normal" observations, and write the 
+    It is able to distinguish picket-fence and "normal" observations, and write the
     appropriate RTS configuration files and batch scripts for each circumstance.
 
-    The "run()" method ensures that information is gathered in order and that the 
-    correct methods are called at the appropriate time. It should be the only method 
+    The "run()" method ensures that information is gathered in order and that the
+    correct methods are called at the appropriate time. It should be the only method
     call after initialising a RTScal object.
 
 
@@ -583,7 +582,7 @@ class RTScal(object):
 
 
     def is_picket_fence(self):
-        """Check whether the observed channels imply picket-fence or not. 
+        """Check whether the observed channels imply picket-fence or not.
         Set boolean attribute in either case.
         """
         ch_offset = self.channels[-1] - self.channels[0]
@@ -628,7 +627,7 @@ class RTScal(object):
 
 
     def write_cont_scripts(self):
-        """Function to write RTS submission script in the case of a "standard" 
+        """Function to write RTS submission script in the case of a "standard"
         contiguous bandwidth observation. This is relatively simple and just
         requires us to use the standard format RTS configuration file.
 
@@ -646,7 +645,7 @@ class RTScal(object):
         nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
         slurm_kwargs = {"partition": "gpuq",
-                        "workdir": "{0}".format(self.rts_out_dir),
+                        "chdir": "{0}".format(self.rts_out_dir),
                         "time": "2:00:00",
                         "nodes": "{0}".format(nnodes),
                         "gres": "gpu:1",
@@ -654,11 +653,12 @@ class RTScal(object):
         module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
         commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, fname))
-        jobid = submit_slurm(rts_batch, commands, 
+        jobid = submit_slurm(rts_batch, commands,
                                 slurm_kwargs=slurm_kwargs,
                                 module_list=module_list,
                                 batch_dir=self.batch_dir,
                                 submit=self.submit,
+                                queue='gpuq',
                                 export="NONE")
         jobids.append(jobid)
 
@@ -667,7 +667,7 @@ class RTScal(object):
 
     def get_subband_config(self, chan_groups, basepath, chan_type, count):
         """Function to make the appropriate changes to a base copy of the RTS configuration scripts.
-        This will interrogate the channels and decide on the "subbandIDs" and 
+        This will interrogate the channels and decide on the "subbandIDs" and
         "ObservationBaseFrequency" that are appropriate for each subband.
 
         Parameters
@@ -684,9 +684,9 @@ class RTScal(object):
         Returns
         -------
         chan_file_dict : dict
-            Dictionary containing the number of nodes required for each subband and the appropriate filename. 
+            Dictionary containing the number of nodes required for each subband and the appropriate filename.
             Key = filename, value = number of nodes required.
-        
+
         count : int
             Counter variable that keeps track of re-ordering of channels.
 
@@ -725,7 +725,7 @@ class RTScal(object):
                 # find the pattern and select the entire line for replacement
                 string = re.sub("ObservationFrequencyBase=.*\n", "ObservationFrequencyBase={0}\n".format(basefreq),
                                 string)
-                # include the SubBandIDs tag 
+                # include the SubBandIDs tag
                 string = re.sub("StartProcessingAt=0\n", "StartProcessingAt=0\nSubBandIDs={0}\n\n".format(subid),
                                 string)
 
@@ -766,7 +766,7 @@ class RTScal(object):
                 # find the pattern and select the entire line for replacement
                 string = re.sub("ObservationFrequencyBase=.*\n", "ObservationFrequencyBase={0}\n".format(basefreq),
                                 string)
-                # include the SubBandIDs tag 
+                # include the SubBandIDs tag
                 string = re.sub("StartProcessingAt=0\n",
                                 "StartProcessingAt=0\nSubBandIDs={0}\n\n".format(",".join(subids)), string)
 
@@ -795,18 +795,18 @@ class RTScal(object):
 
     def write_picket_fence_scripts(self):
         """Function to write RTS submission scripts in the case of a picket-fence
-        observation. A significant amount of extra information needs to be 
+        observation. A significant amount of extra information needs to be
         determined and placed in the RTS configuration files. There will be:
-            
+
             1 RTS configuration file per set of adjacent single channels (subband)
-        
-        The only exception to that rule is where the 129 boundary is crossed, 
+
+        The only exception to that rule is where the 129 boundary is crossed,
         in which case that subband will be split in two.
 
         Returns
         -------
         jobids : list of ints
-            A list of all the job IDs submitted to the system compute queue. 
+            A list of all the job IDs submitted to the system compute queue.
         """
         logger.info("Sorting picket-fence channels and determining subband info...")
         self.sort_obs_channels()
@@ -828,7 +828,7 @@ class RTScal(object):
             chans = k.split('_')[-1].split(".")[0]
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
             slurm_kwargs = {"partition": "gpuq",
-                            "workdir": "{0}".format(self.rts_out_dir),
+                            "chdir": "{0}".format(self.rts_out_dir),
                             "time": "2:00:00",
                             "nodes": "{0}".format(nnodes),
                             "gres": "gpu:1",
@@ -895,8 +895,8 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--srclist", type=str, help="Path to the desired source list",
                         default=None, required=True)
 
-    parser.add_argument("--gpubox_dir", type=str, 
-                        help="Where the *_gpubox*.fits files are located " 
+    parser.add_argument("--gpubox_dir", type=str,
+                        help="Where the *_gpubox*.fits files are located "
                              "(ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.)", default=None)
 
     parser.add_argument("--rts_output_dir", type=str,
@@ -913,8 +913,8 @@ if __name__ == '__main__':
                         help="Tell the RTS to read calibrator data in the offline correlated data format")
 
     parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue")
-    
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", 
+
+    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                         choices=loglevels.keys(), default="INFO")
 
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")

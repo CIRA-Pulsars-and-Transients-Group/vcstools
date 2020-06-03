@@ -73,7 +73,7 @@ void usage()
     std::cout << "offline_correlator: a light-weight correlator for the MWA. "
               << "Takes a NCHAN of data from stdin and correlates as per the "
               << "parameters of the linked xGPU library" << std::endl;
-    std::cout << "offline_correlator from VCS Tools v" << VERSION_BEAMFORMER
+    std::cout << "offline_correlator from VCS Tools " << VERSION_BEAMFORMER
               << std::endl << std::endl;
     std::cout << "offline_correlator: -o <obsid> -s <time_t> -f nchan"
               << std::endl;
@@ -305,7 +305,7 @@ int main(int argc, char **argv) {
                 starttime = (time_t) atol(optarg);
                 break;
             case 'V':
-                std::cout << "offline_correlator from VCS Tools v"
+                std::cout << "offline_correlator from VCS Tools "
                           << VERSION_BEAMFORMER << std::endl;
                 exit(EXIT_SUCCESS);
                 break;
