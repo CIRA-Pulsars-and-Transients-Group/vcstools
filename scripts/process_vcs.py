@@ -595,7 +595,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
 def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                   metafits_file, nfine_chan, pointing_list,
                   rts_flag_file=None, bf_formats=None, DI_dir=None,
-                  execpath=None, calibration_type='rts',
+                  execpath=None, calibration_type='rts', ipfb_filter="LSQ12",
                   vcstools_version="master", nice=0, channels_to_beamform=None,
                   dpp=False):
     """
@@ -697,8 +697,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         # Do it all at once on Galaxy
         time_chunks = gps_time_lists(start, stop, 10000)
 
-
-
     # set up SLURM requirements
     if len(pointing_list) > max_pointing:
         seconds_to_run = 8 * (stop - start + 1) * max_pointing
@@ -752,15 +750,28 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     module_list = [comp_config['container_module']]
                     commands = []
                     commands.append("cd {0}/{1}".format(P_dir,pointing))
-                    commands.append("srun --export=all -n 1 -c {0} {1} {2} -o {3} -b {4} "
-                                    "-e {5} -a 128 -n 128 -f {6} {7} -d {8}/combined "
-                                    "-R {9} -D {10} -r 10000 -m {11} -z {12} {13} -F {14}".format(
-                                    n_omp_threads, comp_config['container_command'],
-                                    make_beam_cmd, obs_id, start, stop, coarse_chan,
-                                    jones_option, data_dir, ra, dec, metafits_file,
-                                    utctime, bf_formats.replace("v", "u"), rts_flag_file))
-                    commands.append("")
-
+                    runline = "srun --export=all -n 1"
+                    runline += " -c {}".format(n_omp_threads)
+                    runline += " {}".format(comp_config['container_command'])
+                    runline += " {}".format(make_beam_cmd)
+                    runline += " -o {}".format(obs_id)
+                    runline += " -b {}".format(start)
+                    runline += " -e {}".format(stop)
+                    runline += " -a 128"
+                    runline += " -n 128"
+                    runline += " -f {}".format(coarse_chan)
+                    runline += " {}".format(jones_option)
+                    runline += " -d {}/combined".format(data_dir)
+                    runline += " -R {}".format(ra)
+                    runline += " -D {}".format(dev)
+                    runline += " -r 10000"
+                    runline += " -m {}".format(metafits_file)
+                    runline += " -z {}".format(utctime)
+                    runline += " {}".format(bf_formats.replace("v", "u"))
+                    runline += " -F {}".format(rts_flag_file)
+                    runline += " -S {}".format(ipfb_filter)
+                    commands.append(runline)
+        
                     job_id = submit_slurm(make_beam_small_batch, commands,
                                 batch_dir=batch_dir, module_list=module_list,
                                 slurm_kwargs={"time":secs_to_run, "nice":nice},
@@ -879,6 +890,8 @@ if __name__ == '__main__':
     group_beamform.add_argument("--flagged_tiles", type=str, default=None, help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. ")
     group_beamform.add_argument('--cal_type', type=str, help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
     group_beamform.add_argument("-E", "--execpath", type=str, default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
+    group_beamform.add_argument("--ipfb_filter", type=str, choices=['LSQ12','MIRROR'], help="The filter to use when performing the inverse PFB", default='LSQ12')
+   
 
     parser.add_argument("-m", "--mode", type=str, choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, help="Observation ID you want to process [no default]")
@@ -1094,7 +1107,7 @@ if __name__ == '__main__':
                       bf_formats=bf_format, DI_dir=args.DI_dir,
                       calibration_type=args.cal_type,
                       vcstools_version=args.vcstools_version, nice=args.nice,
-                      execpath=args.execpath)
+                      execpath=args.execpath, ipfb_filter=args.ipfb_filter)
     else:
         logger.error("Somehow your non-standard mode snuck through. "
                      "Try again with one of {0}".format(modes))
