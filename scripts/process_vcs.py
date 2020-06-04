@@ -736,10 +736,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
 
             n_omp_threads = 1
-            #if "v" in bf_formats:
-            if "u" in bf_formats:
+            if "v" in bf_formats:
                 for pointing in pointing_list:
-                    ra, dec = pointing.split("_")
                     make_beam_small_batch = "mb_{0}_ch{1}".format(pointing, coarse_chan)
                     module_list = [comp_config['container_module']]
                     commands = []
@@ -756,12 +754,11 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     runline += " -f {}".format(coarse_chan)
                     runline += " {}".format(jones_option)
                     runline += " -d {}/combined".format(data_dir)
-                    runline += " -R {}".format(ra)
-                    runline += " -D {}".format(dev)
+                    runline += " -P {}".format(pointing)
                     runline += " -r 10000"
                     runline += " -m {}".format(metafits_file)
                     runline += " -z {}".format(utctime)
-                    runline += " {}".format(bf_formats.replace("v", "u"))
+                    runline += " {}".format(bf_formats)
                     runline += " -F {}".format(rts_flag_file)
                     runline += " -S {}".format(ipfb_filter)
                     commands.append(runline)
@@ -769,7 +766,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     job_id = submit_slurm(make_beam_small_batch, commands,
                                 batch_dir=batch_dir, module_list=module_list,
                                 slurm_kwargs={"time":secs_to_run, "nice":nice},
-                                queue='gpuq', vcstools_version="origbeam",#forces olf version with vdif
+                                queue='gpuq', vcstools_version=vcstools_version,#forces olf version with vdif
                                 submit=True, export="NONE", gpu_res=1,
                                 cpu_threads=n_omp_threads,
                                 mem=comp_config['gpu_beamform_mem'])
@@ -978,9 +975,7 @@ if __name__ == '__main__':
             bf_format +=" -p"
             logger.info("Writing out PSRFITS.")
         if  (args.bf_out_format == 'vdif' or args.bf_out_format == 'both'):
-            #bf_format += " -v" #this is the option for the multipixel version
-            #that isn't currently used
-            bf_format += " -u"
+            bf_format += " -v"
             logger.info("Writing out upsampled VDIF.")
         if (args.incoh):
             bf_format += " -i"
