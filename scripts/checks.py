@@ -21,7 +21,7 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
         logger.error("Wrong data type given to download check.")
         return True
     if not directory:
-        directory = os.path.join(comp_config['base_data_dir'], obsID, "raw") if data_type == 'raw' else os.path.join(comp_config['base_data_dir'], obsID, "combined")
+        directory = os.path.join(comp_config['base_data_dir'], str(obsID), "raw") if data_type == 'raw' else os.path.join(comp_config['base_data_dir'], str(obsID), "combined")
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
     logger.info(base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range.")
@@ -85,7 +85,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
     '''
     comp_config = load_config_file()
     if not directory:
-        directory = os.path.join(comp_config['base_data_dir'], obsID, "combined")
+        directory = os.path.join(comp_config['base_data_dir'], str(obsID), "combined")
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
     logger.info(base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range.")
@@ -255,7 +255,7 @@ if __name__ == '__main__':
 
     args = opt_parser(loglevels)
     comp_config = load_config_file()
-    work_dir_base = os.path.join(comp_config['base_data_dir'], args.obsID)
+    work_dir_base = os.path.join(comp_config['base_data_dir'], str(args.obsID))
 
     # set up the logger for stand-alone execution
     logger.setLevel(loglevels[args.loglvl])

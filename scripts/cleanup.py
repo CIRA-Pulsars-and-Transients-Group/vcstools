@@ -45,8 +45,8 @@ def munlink_files(folder, file_type):
 
 def remove_raw(obs):
     comp_config = load_config_file()
-    raw_folder = os.path.join(comp_config['base_data_dir'], obs, "raw")
-    combined_folder = os.path.join(comp_config['base_data_dir'], obs, "combined")
+    raw_folder = os.path.join(comp_config['base_data_dir'], str(obs), "raw")
+    combined_folder = os.path.join(comp_config['base_data_dir'], str(obs), "combined")
     
     raw_files = False
     tar_files = False
@@ -74,7 +74,7 @@ def remove_raw(obs):
         
 def remove_beamformed(obs, pointing=None):
     comp_config = load_config_file()
-    pointing_folder = os.path.join(comp_config['base_product_dir'], obs, "pointings")
+    pointing_folder = os.path.join(comp_config['base_product_dir'], str(obs), "pointings")
     if not pointing:
         authority = ('No pointing specified, would you like to remove all pointings for this observation?')
         if (authority == "Y") or (authority == "y"):

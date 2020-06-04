@@ -49,8 +49,8 @@ if __name__ == "__main__":
 
     comp_config = load_config_file()
     if args.base_dir is None:
-        data_dir = os.path.join(comp_config['base_product_dir'], args.obsID, "combined")
-        ics_dir = os.path.join(comp_config['base_product_dir'], args.obsID, "ics")
+        data_dir = os.path.join(comp_config['base_product_dir'], str(args.obsID), "combined")
+        ics_dir = os.path.join(comp_config['base_product_dir'], str(args.obsID), "ics")
     else:
         data_dir = "{base_dir}/{obsid}/combined".format(base_dir=args.base_dir, obsid=args.obsID)
         ics_dir = "{base_dir}/{obsid}/ics".format(base_dir=args.base_dir, obsid=args.obsID)
