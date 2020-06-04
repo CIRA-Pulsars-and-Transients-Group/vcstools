@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def mdir(path, description, gid=30832):
+def mdir(path, description, gid=34858):
     """
     Simple function to create directories with the correct group permissions
 
