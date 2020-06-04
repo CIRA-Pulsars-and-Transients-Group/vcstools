@@ -25,13 +25,13 @@ def sfreq(freqs):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Print the coarse channel sequence as in gpubox/subband order. Make sure you have *_metafits_ppds.fits")
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None, required=True)
-    parser.add_argument("-m", "--mfits", type=str, help="Please provide the path of the *_metafits_ppds.fits if it is not /astro/mwaops/vcs/[OBID]/*_metafits_ppds.fits")
+    parser.add_argument("-m", "--mfits", type=str, help="Please provide the path of the *_metafits_ppds.fits if it is not /astro/mwavcs/vcs/[OBID]/*_metafits_ppds.fits")
     args = parser.parse_args()
 
     if args.mfits:
         metafits = args.mfits
     else:
-        metafits = '/astro/mwaops/vcs/' + str(args.obsid) + '/' + str(args.obsid) + '_metafits_ppds.fits'
+        metafits = '/astro/mwavcs/vcs/' + str(args.obsid) + '/' + str(args.obsid) + '_metafits_ppds.fits'
 
     hdulist    = pyfits.open(metafits)
     freq_str   = hdulist[0].header['CHANNELS']

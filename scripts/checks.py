@@ -7,19 +7,21 @@ import numpy as np
 import traceback
 import logging
 from mwa_metadb_utils import getmeta, get_files
+from config_vcs import load_config_file
 
 logger = logging.getLogger(__name__)
 
 def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type='raw'):
     '''
-    Checks that the number of files in directory (default is /astro/mwaops/vcs/[obsID]/raw/) is the same
+    Checks that the number of files in directory (default is /astro/mwavcs/vcs/[obsID]/raw/) is the same
     as that found on the archive and also checks that all files have the same size (253440000 for raw, 7864340480 for recombined tarballs by default).
     '''
+    comp_config = load_config_file()
     if not data_type in ['raw', 'tar_ics', 'ics']:
         logger.error("Wrong data type given to download check.")
         return True
     if not directory:
-        directory = "/astro/mwaops/vcs/{0}/raw/".format(obsID) if data_type == 'raw' else "/astro/mwaops/vcs/{0}/combined/".format(obsID)
+        directory = os.path.join(comp_config['base_data_dir'], str(obsID), "raw") if data_type == 'raw' else os.path.join(comp_config['base_data_dir'], str(obsID), "combined")
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
     logger.info(base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range.")
@@ -78,11 +80,12 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
 def check_recombine(obsID, directory=None, required_size=327680000, \
                         required_size_ics=30720000, startsec=None, n_secs=None):
     '''
-    Checks that the number of files in directory (/astro/mwaops/vcs/[obsID]/combined/) is ....
+    Checks that the number of files in directory (/astro/mwavcs/vcs/[obsID]/combined/) is ....
     as that found on the archive and also checks that all files have the same size (327680000 by default).
     '''
+    comp_config = load_config_file()
     if not directory:
-        directory = "/astro/mwaops/vcs/{0}/combined/".format(obsID)
+        directory = os.path.join(comp_config['base_data_dir'], str(obsID), "combined")
     base = "\n Checking file size and number of files for obsID {0} in {1} for ".format(obsID, directory)
     n_secs = n_secs if n_secs else 1
     logger.info(base + "gps times {0} to {1}".format(startsec, startsec+n_secs-1) if startsec else base + "the whole time range.")
@@ -206,6 +209,7 @@ def get_files_and_sizes(obsID, mode):
         return
 
 def opt_parser(loglevels):
+    comp_config = load_config_file()
     parser = argparse.ArgumentParser(description="scripts to check sanity of downloads and recombine.")
     parser.add_argument("-m", "--mode", type=str, choices=['download','recombine'],\
                           help="Mode you want to run: download, recombine", dest='mode', default=None)
@@ -236,9 +240,8 @@ def opt_parser(loglevels):
                             "you expect the ics files to have. Default = %(default)s", \
                             dest='size_ics', default=30720000)
     parser.add_argument('-w', '--work_dir', type=str, dest='work_dir',\
-                            help="Directory " + \
-                            "to check the files in. Default is /astro/mwaops/vcs/" + \
-                            "[obsID]/[raw,combined]")
+                            help="Directory to check the files in. " +\
+                                 "Default is {0}[obsID]/[raw,combined]".format(comp_config['base_data_dir']))
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                     choices=loglevels.keys(), default="INFO")
@@ -251,7 +254,8 @@ if __name__ == '__main__':
                      WARNING=logging.WARNING)
 
     args = opt_parser(loglevels)
-    work_dir_base = '/astro/mwaops/vcs/' + str(args.obsID)
+    comp_config = load_config_file()
+    work_dir_base = os.path.join(comp_config['base_data_dir'], str(args.obsID))
 
     # set up the logger for stand-alone execution
     logger.setLevel(loglevels[args.loglvl])

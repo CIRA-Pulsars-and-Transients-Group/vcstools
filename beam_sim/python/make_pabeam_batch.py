@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 pabeam_sbatch_header = """#!/bin/bash -l
 #SBATCH --export=NONE
-#SBATCH --account=mwaops
+#SBATCH --account=mwavcs
 #SBATCH --cluster=galaxy
 #SBATCH --partition=gpuq
 #SBATCH --nodes={nodes}
@@ -71,7 +71,7 @@ fi
 
 showspec_sbatch_header = """#!/bin/bash -l
 #SBATCH --export=NONE
-#SBATCH --account=mwaops
+#SBATCH --account=mwavcs
 #SBATCH --cluster=galaxy
 #SBATCH --partition=gpuq
 #SBATCH --nodes=1

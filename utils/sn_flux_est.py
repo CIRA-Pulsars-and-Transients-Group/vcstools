@@ -717,7 +717,7 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
 
 #---------------------------------------------------------------
 def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
-                    obs_metadata=None, full_meta=None, query=None, min_z_power=0.3, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                    obs_metadata=None, full_meta=None, query=None, min_z_power=0.3, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
     Finds the system temperature and gain for an observation.
@@ -742,7 +742,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     query: object
         OPTIONAL - The return of the psrqpy function for this pulsar
     trcvr: str
-        The location of the MWA receiver temp csv file. Default = '/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv'
+        The location of the MWA receiver temp csv file. Default = '/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv'
 
     Returns:
     --------
@@ -815,7 +815,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
 #---------------------------------------------------------------
 def est_pulsar_sn(pulsar, obsid,\
                  beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, full_meta=None, plot_flux=False,\
-                 query=None, min_z_power=0.3, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                 query=None, min_z_power=0.3, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
 
     """
     Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
@@ -921,7 +921,7 @@ def est_pulsar_sn(pulsar, obsid,\
 
 def multi_psr_snfe(pulsar_list, obsid,\
                    beg=None, end=None, obs_metadata=None, full_meta=None, plot_flux=False,\
-                   query=None, min_z_power=0.3, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                   query=None, min_z_power=0.3, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
 
 
     if obs_metadata is None or full_meta is None:
