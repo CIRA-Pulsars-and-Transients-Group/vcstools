@@ -15,7 +15,7 @@ Option are:\n
 \t\t if run outside mpirun/aprun should at least be 2 to make sure \n
 \t\t script works (script itself counts as job outside mpirun/aprun)\n
 \t -w \t working directory that contains the tarballs \n
-\t\t (default: /astro/mwaops/vcs/\${obsID}/combined)\n
+\t\t (default: /astro/mwavcs/vcs/\${obsID}/combined)\n
 \t -b \t gpstime of first tarball\n
 \t -e \t gpstime of last tarball (by default all tarballs in ${workdir} will be untarred.)\n
 \t -k \t if supplied: tarballs will be kept, else deleted after unpacking\n
@@ -55,7 +55,7 @@ if [[ -z $maxjobs ]];then
     maxjobs=1
 fi
 if [[ -z $workdir ]];then
-    workdir=/astro/mwaops/vcs/${obsid}/combined/
+    workdir=/astro/mwavcs/vcs/${obsid}/combined/
 fi
 if [ ! -d "${workdir}" ];then
     echo "working directory ${workdir} does not exist."

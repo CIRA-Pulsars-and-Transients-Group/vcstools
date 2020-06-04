@@ -13,6 +13,7 @@ from astropy.coordinates import EarthLocation
 from astropy import units as u
 
 from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
+from config_vcs import load_config_file
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ if __name__ == "__main__":
                                                            "In the directory provided, there MUST exist a 'combined' "
                                                            "subfolder. An additional subfolder named 'ics' will be "
                                                            "created as a result of the incoherent sum creation. "
-                                                           "Default is /group/mwaops/vcs/[obsID]", default=None)
+                                                           "Default is /group/mwavcs/vcs/[obsID]", default=None)
     parser.add_argument("-l", "--loglvl", type=str, choices=loglevels.keys(), help="Desired logging verbosity level",
                         default="INFO")
 
@@ -46,9 +47,10 @@ if __name__ == "__main__":
     logger.addHandler(ch)
     logger.propagate = False
 
+    comp_config = load_config_file()
     if args.base_dir is None:
-        data_dir = "/group/mwaops/vcs/{obsid}/combined".format(obsid=args.obsID)
-        ics_dir = "/group/mwaops/vcs/{obsid}/ics".format(obsid=args.obsID)
+        data_dir = os.path.join(comp_config['base_product_dir'], str(args.obsID), "combined")
+        ics_dir = os.path.join(comp_config['base_product_dir'], str(args.obsID), "ics")
     else:
         data_dir = "{base_dir}/{obsid}/combined".format(base_dir=args.base_dir, obsid=args.obsID)
         ics_dir = "{base_dir}/{obsid}/ics".format(base_dir=args.base_dir, obsid=args.obsID)

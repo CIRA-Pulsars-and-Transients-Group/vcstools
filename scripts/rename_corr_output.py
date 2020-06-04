@@ -31,7 +31,7 @@ def get_nsecs(startsec, endsec):
 
 def rename(obsID, times, workdir=None):
     if not workdir:
-        workdir='/scratch2/mwaops/vcs/{0}/vis'.format(obsID)
+        workdir='/astro/mwavcs/vcs/{0}/vis'.format(obsID)
     n_secs = len(times.split())
     cmd="cd {0};k=1;times=({1});for time in \"${{times[@]}}\";do for box in {2}_${{time}}_gpubox*_00.fits; do mv ${{box}} ${{box%00.fits}}$(printf %02d $k).fits;done;let k=$k+1;if [[ $k -gt {3} ]];then break;fi;done".format(workdir, times, obsID, n_secs)
     return os.system(cmd)
@@ -54,7 +54,7 @@ def opt_parser():
                             required=False)
     parser.add_argument('-w', '--workdir', type=str, dest='workdir',\
                             help="Directory " + \
-                            "that contains the output files of the offline Correlator. Default is /scratch2/mwaops/vcs/<obsID/vis.")
+                            "that contains the output files of the offline Correlator. Default is /astro/mwavcs/vcs/<obsID/vis.")
     return parser.parse_args()
 
 if __name__ == '__main__':

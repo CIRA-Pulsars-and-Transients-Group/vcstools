@@ -32,20 +32,19 @@ import prof_utils
 import logging
 logger = logging.getLogger(__name__)
 
-web_address = 'https://pulsar-cat.icrar.uwa.edu.au/'
-
 class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
         text = _textwrap.dedent(self._whitespace_matcher.sub(' ', text).strip())
         return _textwrap.wrap(text, width)
-
+class NoAuthError(Exception):
+    """Raise when pulsar database authentication is not found"""
+    pass
 
 def send_cmd(cmd):
     output = subprocess.Popen(cmd.split(' '), stdin=subprocess.PIPE,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT).communicate()[0].decode()
     return output
-
 
 def get_pulsar_dm_p(pulsar):
     #Gets the ra and dec from the output of PSRCAT
@@ -66,7 +65,6 @@ def get_pulsar_dm_p(pulsar):
             p = columns[1]
     return [dm, p]
 
-
 def sex2deg( ra, dec):
     """
     sex2deg( ra, dec)
@@ -81,7 +79,6 @@ def sex2deg( ra, dec):
 
     # return RA and DEC in degrees in degrees
     return [c.ra.deg, c.dec.deg]
-
 
 def from_power_to_gain(powers,cfreq,n,coh=True):
     from astropy.constants import c,k_B
@@ -98,7 +95,6 @@ def from_power_to_gain(powers,cfreq,n,coh=True):
     SI_to_Jy = 1e-26
     return (powers*coeff)*SI_to_Jy
 
-
 def get_Trec(tab,obsfreq):
     Trec = 0.0
     for r in range(len(tab)-1):
@@ -110,9 +106,108 @@ def get_Trec(tab,obsfreq):
         logger.debug("ERROR getting Trec")
     return Trec
 
-# Removed this function as this will always be calculated from the bestprof
-#def enter_exit_calc(time_detection, time_obs, metadata, start=None, stop=None):
+def get_db_auth_addr():
+    """
+    Checks for MWA database usernames and passwords
 
+    Returns:
+    --------
+    auth: tuple
+        The username and password for the pulsar databse
+    web_address: string
+        The web address of the pulsar database
+    """
+    web_address = 'https://pulsar-cat.icrar.uwa.edu.au/'
+    if 'MWA_PULSAR_DB_USER' in os.environ and 'MWA_PULSAR_DB_PASS' in os.environ:
+        auth = (os.environ['MWA_PULSAR_DB_USER'],os.environ['MWA_PULSAR_DB_PASS'])
+    else:
+        auth = None
+        raise NoAuthError(  """   
+                            No MWA Pulsar Database username/password found
+                            Please add the following to your .bashrc:
+                            'export MWA_PULSAR_DB_USER="<username>"'
+                            'export MWA_PULSAR_DB_PASS="<password>"'
+                            'replacing <username> <password> with your MWA Pulsar Database username and password
+                            """ )
+
+    return auth, web_address
+
+def get_filetypes_from_db(obsid, pulsar, filetype):
+    """
+    Searches the pulsar database and returns the given obsid/pulsar/filetype files
+
+    Parameters:
+    -----------
+    obsid: int
+        Observation ID
+    pulsar: string
+        The name of the puslar
+    filetype: int
+        The type of file to search for. Options are:
+        1: Archive, 2: Timeseries, 3: Diagnostics, 4: Calibration Solution, 5: Bestprof
+
+    Returns:
+    --------
+    myfiles: list
+        A list of filenames fitting the given parameters
+    """
+    def find_obj(search_key, arrdict, search_for): #for searching the various dictionaries in client
+        for mydict in arrdict:
+            if mydict[search_key] == search_for:
+                return mydict
+
+    #Check if any files of the filetype exist
+    auth, web_address = get_db_auth_addr()
+    obs_dets = client.detection_get(web_address, auth, observationid=obsid)
+    if not obs_dets:
+        logger.warn("No detections for this obs ID")
+        return []
+
+    detection       = find_obj("pulsar", obs_dets, pulsar)
+    if not detection:
+        logger.warn("No detections for this pulsar")
+        return []
+
+    allfiles_list   = detection["detection_files"]
+    is_filetype     = bool(find_obj("filetype", allfiles_list, filetype))
+    if not is_filetype:
+        logger.warn("No files of the specified type available for this pulsar & obsid")
+        return []
+
+    #find the files with the filetype
+    myfiles = []
+    for detfile in allfiles_list:
+        if detfile["filetype"] == filetype:
+            myfiles.append(detfile["filename"])
+
+    return myfiles
+
+def filename_prefix(obsid, pulsar, bins=None, cal=None):
+    """
+    Creates a filename prefix depending on inputs
+
+    Parameters:
+    -----------
+    obsid: int
+        The observation ID
+    pulsar: str
+        The name of the puslar
+    bins: int
+        The number of bins in the profile
+    cal: int
+        The calibrator ID
+
+    Returns:
+    --------
+    pref: str
+        The filename prefix
+    """
+    pref = "{0}_{1}".format(obsid, pulsar)
+    if cal:
+        pref += "_c{}".format(cal)
+    if bins:
+        pref += "_b{}".format(bins)
+    return pref
 
 def zip_calibration_files(base_dir, cal_obsid, source_file):
     """
@@ -166,10 +261,9 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
 
     return zip_file_location
 
-
 def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
-                        pulsar=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                        pulsar=None, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
     time_detection: the time in seconds of the dectection from the bestprof file
     time_obs: the time in seconds of the dectection from the metadata
@@ -272,6 +366,9 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
             continue
         if not (channels[b] - channels[b-1]) == 1:
             subbands = subbands + 1
+
+    #get web address and authentication
+    web_address, auth = get_db_auth_addr()
 
     #get cal id
     if coh:
@@ -398,11 +495,11 @@ if __name__ == "__main__":
             help="The start time of the detection in GPS format.")
     calcargs.add_argument('--stop', type=int,
             help="The stop time of the detection in GPS format.")
-    calcargs.add_argument('--trcvr',type=str, default = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv", help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
+    calcargs.add_argument('--trcvr',type=str, default = "/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv", help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
 
     uploadargs = parser.add_argument_group('Upload Options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
-    uploadargs.add_argument('--cal_dir_to_tar',type=str,help='The calibration directory of a calibration solution that you would like to tar and upload to the database (eg. /group/mwaops/vcs/1221832280/cal/1221831856/rts). Must be used with --srclist so the correct source list is uploaded. If the calibration files are in the default positions then they will be tared and uploaded.')
-    uploadargs.add_argument('--srclist',type=str,help='Used with --cal_dir to indicate the source list file location. eg /group/mwaops/vcs/1221832280/cal/1221831856/vis/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_1221831856_patch1000.txt.')
+    uploadargs.add_argument('--cal_dir_to_tar',type=str,help='The calibration directory of a calibration solution that you would like to tar and upload to the database (eg. /group/mwavcs/vcs/1221832280/cal/1221831856/rts). Must be used with --srclist so the correct source list is uploaded. If the calibration files are in the default positions then they will be tared and uploaded.')
+    uploadargs.add_argument('--srclist',type=str,help='Used with --cal_dir to indicate the source list file location. eg /group/mwavcs/vcs/1221832280/cal/1221831856/vis/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_1221831856_patch1000.txt.')
     uploadargs.add_argument('-c','--calibration',type=str,help='The calibration solution file location to be uploaded to the database. Expects a single file so please zip or tar up the bandpass calibrations, the DI Jones matrices, the flagged_channels.txt file, the flagged_tiles.txt file, the rts.in file and the source file.')
     uploadargs.add_argument('-a','--archive',type=str,help="The DSPSR archive file location to be uploaded to the database. Expects a single file that is the output of DSPSR using the pulsar's ephemeris.")
     uploadargs.add_argument('--single_pulse_series',type=str,help='The single pulse series file location to be uploaded to the database. Expects a single file that is the output of DSPSR in single pulse mode (the -s option).')
@@ -411,7 +508,7 @@ if __name__ == "__main__":
     uploadargs.add_argument('-w','--waterfall',type=str,help="The file location of a waterfall plot of pulse phase vs frequency. Expects a single file that is the output of DSPSR's psrplot.")
 
     dspsrargs = parser.add_argument_group('DSPSR Calculation Options', "Requires the --fits_files option. These options are all boolean flags that when used will send off DSPSR jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the DSPS scripts are tested more") #TODO remove when I'm confident with dspsr
-    dspsrargs.add_argument('-f','--fits_files',type=str,help='The fits files location to be used in any Detection Calculation processing. Recommended to end in *.fits and surrounded by quotation marks.', default = "/group/mwaops/vcs/${obsid}/fits/*fits")
+    dspsrargs.add_argument('-f','--fits_files',type=str,help='The fits files location to be used in any Detection Calculation processing. Recommended to end in *.fits and surrounded by quotation marks.', default = "/group/mwavcs/vcs/${obsid}/fits/*fits")
     dspsrargs.add_argument('--u_archive', action='store_true',help='Used to create an archive file using DSPSR.')
     dspsrargs.add_argument('--u_single_pulse_series', action='store_true',help='Used to create a single pulse archive using DSPSR.')
     dspsrargs.add_argument('--u_ppps', action='store_true', help="Used to create a Presto Prepfold PostScript file using PRESTO")
@@ -468,10 +565,10 @@ if __name__ == "__main__":
         fits_files_loc = args.fits_files
     else:
         if args.incoh:
-            fits_files_loc = '/group/mwaops/vcs/{0}/incoh/*.fits'.format(args.obsid)
+            fits_files_loc = '/group/mwavcs/vcs/{0}/incoh/*.fits'.format(args.obsid)
         else:
             #TODO add a pointing for this
-            fits_files_loc = '/group/mwaops/vcs/{0}/pointings/*.fits'.format(args.obsid)
+            fits_files_loc = '/group/mwavcs/vcs/{0}/pointings/*.fits'.format(args.obsid)
 
     #get info from .bestprof file
     if args.bestprof:
@@ -517,6 +614,9 @@ if __name__ == "__main__":
         pulsar = args.pulsar
     logger.debug("Pulsar name: {}".format(pulsar))
 
+    #get db web address and authentication
+    web_address, auth = get_db_auth_addr()
+
     if args.pulsar or args.bestprof or args.ascii:
         #Checks to see if the pulsar is already on the database
         pul_list_dict = client.pulsar_list(web_address, auth)
@@ -537,9 +637,6 @@ if __name__ == "__main__":
 
             #then adds it to the database
             client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)
-
-
-
 
 
     #get meta data from obsid
@@ -638,10 +735,16 @@ if __name__ == "__main__":
             temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))
 
     #Upload analysis files to the database
+    #create filname prefix
+    bins=None
+    if args.bestprof:
+        bins = prof_utils.get_from_bestprof(args.bestprof)[-1]
+    fname_pref = filename_prefix(args.obsid, args.pulsar, bins=bins, cal=args.cal_id)
+
     if args.bestprof:
         logger.info("Uploading bestprof file to database")
-        cp(str(args.bestprof) ,str(obsid) + "_" + str(pulsar) + ".bestprof")
-        d_file_loc = str(obsid) + "_" + str(pulsar) + ".bestprof"
+        cp(str(args.bestprof) ,"{}.bestprof".format(fname_pref))
+        d_file_loc = "{}.bestprof".format(fname_pref)
         client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
                             pulsar = str(pulsar),
@@ -654,13 +757,15 @@ if __name__ == "__main__":
     #Archive files
     if args.archive:
         logger.info("Uploading archive file to database")
+        cp(str(args.archive) ,"{}.ar".format(fname_pref))
+        d_file_loc = "{}.ar".format(fname_pref)
         client.detection_file_upload(web_address, auth,
                                     observationid = str(obsid),
                                     pulsar = str(pulsar),
                                     subband = int(subbands),
                                     coherent = coh,
                                     filetype = 1,
-                                    filepath = str(args.archive))
+                                    filepath = d_file_loc)
 
     if args.single_pulse_series:
         logger.info("Uploading single_pulse_series file to database")
@@ -673,8 +778,8 @@ if __name__ == "__main__":
                                     filepath = str(args.single_pulse_series))
 
     if args.ppps:
-        cp(str(args.ppps) ,str(obsid) + "_" + str(pulsar) + ".prepfold.ps")
-        d_file_loc = str(obsid) + "_" + str(pulsar) + ".prepfold.ps"
+        cp(str(args.ppps) ,"{}.prepfold.ps".format(fname_pref))
+        d_file_loc = "{}.prepfold.ps".format(fname_pref)
         logger.info("Uploading Presto Prepfold PostScript file to database")
         client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
@@ -686,8 +791,8 @@ if __name__ == "__main__":
         os.system("rm " + d_file_loc)
 
     if args.ippd:
-        cp(str(args.ippd),str(obsid) + "_" + str(pulsar) + ".prof.ps")
-        d_file_loc = str(obsid) + "_" + str(pulsar) + ".prof.ps"
+        cp(str(args.ippd), "{}.prof.ps".format(fname_pref))
+        d_file_loc = "{}.prof.ps".format(fname_pref)
         logger.info("Uploading Intergrates Pulse Profile file to database")
         client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
@@ -699,8 +804,8 @@ if __name__ == "__main__":
         os.system("rm " + d_file_loc)
 
     if args.waterfall:
-        cp(str(args.waterfall),str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps")
-        d_file_loc = str(obsid) + "_" + str(pulsar) + ".freq.vs.phase.ps"
+        cp(str(args.waterfall), "{}.freq.vs.phase.ps".format(fname_pref))
+        d_file_loc = "{}.freq.vs.phase.ps".format(fname_pref)
         logger.info("Uploading waterfall file to database")
         client.detection_file_upload(web_address, auth,
                             observationid = str(obsid),
@@ -738,11 +843,6 @@ if __name__ == "__main__":
         os.system("rm " + cal_file_loc)
 
         #result = client.detection_find_calibrator(web_address, auth,detection_obsid = 35)
-
-
-
-
-
 
     if args.u_archive or args.u_single_pulse_series or args.u_ppps or args.u_ippd  or args.u_waterfall:
         if not glob.glob(fits_files_loc):
