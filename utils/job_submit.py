@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import subprocess
-import config
+from config_vcs import load_config_file
 import logging
 import socket
 
@@ -132,7 +132,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
 
     #Work out which partition and cluster to use based on the supercomputer
     #(in config file) and queue required
-    comp_config = config.load_config_file()
+    comp_config = load_config_file()
     if queue == 'cpuq':
         cluster   = comp_config['cpuq_cluster']
         partition = comp_config['cpuq_partition']
@@ -229,7 +229,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
     commands = "\n".join(commands)
 
     # load computer dependant config file
-    comp_config = config.load_config_file()
+    comp_config = load_config_file()
 
     # some little hacks to make jobs work on the shanghai server
     if hostname.startswith('x86') or hostname.startswith('arm'):

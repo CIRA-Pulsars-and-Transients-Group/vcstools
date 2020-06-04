@@ -263,7 +263,7 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
 
 def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
-                        pulsar=None, trcvr="/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv"):
+                        pulsar=None, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
     time_detection: the time in seconds of the dectection from the bestprof file
     time_obs: the time in seconds of the dectection from the metadata
@@ -495,11 +495,11 @@ if __name__ == "__main__":
             help="The start time of the detection in GPS format.")
     calcargs.add_argument('--stop', type=int,
             help="The stop time of the detection in GPS format.")
-    calcargs.add_argument('--trcvr',type=str, default = "/group/mwaops/PULSAR/MWA_Trcvr_tile_56.csv", help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
+    calcargs.add_argument('--trcvr',type=str, default = "/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv", help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
 
     uploadargs = parser.add_argument_group('Upload Options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
-    uploadargs.add_argument('--cal_dir_to_tar',type=str,help='The calibration directory of a calibration solution that you would like to tar and upload to the database (eg. /group/mwaops/vcs/1221832280/cal/1221831856/rts). Must be used with --srclist so the correct source list is uploaded. If the calibration files are in the default positions then they will be tared and uploaded.')
-    uploadargs.add_argument('--srclist',type=str,help='Used with --cal_dir to indicate the source list file location. eg /group/mwaops/vcs/1221832280/cal/1221831856/vis/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_1221831856_patch1000.txt.')
+    uploadargs.add_argument('--cal_dir_to_tar',type=str,help='The calibration directory of a calibration solution that you would like to tar and upload to the database (eg. /group/mwavcs/vcs/1221832280/cal/1221831856/rts). Must be used with --srclist so the correct source list is uploaded. If the calibration files are in the default positions then they will be tared and uploaded.')
+    uploadargs.add_argument('--srclist',type=str,help='Used with --cal_dir to indicate the source list file location. eg /group/mwavcs/vcs/1221832280/cal/1221831856/vis/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_1221831856_patch1000.txt.')
     uploadargs.add_argument('-c','--calibration',type=str,help='The calibration solution file location to be uploaded to the database. Expects a single file so please zip or tar up the bandpass calibrations, the DI Jones matrices, the flagged_channels.txt file, the flagged_tiles.txt file, the rts.in file and the source file.')
     uploadargs.add_argument('-a','--archive',type=str,help="The DSPSR archive file location to be uploaded to the database. Expects a single file that is the output of DSPSR using the pulsar's ephemeris.")
     uploadargs.add_argument('--single_pulse_series',type=str,help='The single pulse series file location to be uploaded to the database. Expects a single file that is the output of DSPSR in single pulse mode (the -s option).')
@@ -508,7 +508,7 @@ if __name__ == "__main__":
     uploadargs.add_argument('-w','--waterfall',type=str,help="The file location of a waterfall plot of pulse phase vs frequency. Expects a single file that is the output of DSPSR's psrplot.")
 
     dspsrargs = parser.add_argument_group('DSPSR Calculation Options', "Requires the --fits_files option. These options are all boolean flags that when used will send off DSPSR jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the DSPS scripts are tested more") #TODO remove when I'm confident with dspsr
-    dspsrargs.add_argument('-f','--fits_files',type=str,help='The fits files location to be used in any Detection Calculation processing. Recommended to end in *.fits and surrounded by quotation marks.', default = "/group/mwaops/vcs/${obsid}/fits/*fits")
+    dspsrargs.add_argument('-f','--fits_files',type=str,help='The fits files location to be used in any Detection Calculation processing. Recommended to end in *.fits and surrounded by quotation marks.', default = "/group/mwavcs/vcs/${obsid}/fits/*fits")
     dspsrargs.add_argument('--u_archive', action='store_true',help='Used to create an archive file using DSPSR.')
     dspsrargs.add_argument('--u_single_pulse_series', action='store_true',help='Used to create a single pulse archive using DSPSR.')
     dspsrargs.add_argument('--u_ppps', action='store_true', help="Used to create a Presto Prepfold PostScript file using PRESTO")
@@ -565,10 +565,10 @@ if __name__ == "__main__":
         fits_files_loc = args.fits_files
     else:
         if args.incoh:
-            fits_files_loc = '/group/mwaops/vcs/{0}/incoh/*.fits'.format(args.obsid)
+            fits_files_loc = '/group/mwavcs/vcs/{0}/incoh/*.fits'.format(args.obsid)
         else:
             #TODO add a pointing for this
-            fits_files_loc = '/group/mwaops/vcs/{0}/pointings/*.fits'.format(args.obsid)
+            fits_files_loc = '/group/mwavcs/vcs/{0}/pointings/*.fits'.format(args.obsid)
 
     #get info from .bestprof file
     if args.bestprof:
