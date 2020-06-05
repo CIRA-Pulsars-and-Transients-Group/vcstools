@@ -29,6 +29,7 @@ from astropy.io import fits
 from job_submit import submit_slurm
 from mdir import mdir
 from mwa_metadb_utils import getmeta
+from config_vcs import load_config_file
 
 logger = logging.getLogger(__name__)
 
@@ -144,11 +145,13 @@ class BaseRTSconfig(object):
         self.n_integration_bins = n_int_bins # number of visibility integration groups for RTS
         self.base_str = None  # base string to be written to file, will be editted by RTScal
 
+        comp_config = load_config_file()
+
         # Check to make sure paths and files exist:
         # First, check that the actual data directory exists
         if datadir is None:
             # use the default data path
-            self.data_dir = "/group/mwaops/vcs/{0}/cal/{1}/vis".format(obsid, cal_obsid)
+            self.data_dir = os.path.join(comp_config['base_product_dir'], str(obsid), "cal", str(cal_obsid), "vis")
             logger.info("Using default calibrator data path: {0}".format(self.data_dir))
             if os.path.exists(os.path.realpath(self.data_dir)) is False:
                 errmsg = "Default data directory ({0}) does not exist. Aborting.".format(self.data_dir)
@@ -166,8 +169,8 @@ class BaseRTSconfig(object):
         if outdir is None:
             # this is the default
             logger.info("Assuming default directory structure...")
-            self.output_dir = "/group/mwaops/vcs/{0}/cal/{1}/rts".format(self.obsid, self.cal_obsid)
-            self.batch_dir = "/group/mwaops/vcs/{0}/batch".format(self.obsid)
+            self.output_dir = os.path.join(comp_config['base_product_dir'], str(self.obsid), "cal", str(self.cal_obsid), "rts")
+            self.batch_dir =os.path.join(comp_config['base_product_dir'], str(self.obsid), "batch")
             logger.debug("RTS output directory is {0}".format(self.output_dir))
             logger.debug("Batch directory is {0}".format(self.batch_dir))
             mdir(self.output_dir, "RTS")

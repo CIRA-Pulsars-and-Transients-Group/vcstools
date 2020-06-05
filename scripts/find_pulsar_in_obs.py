@@ -173,17 +173,23 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
     elif source_type == 'FRB':
         import json
         import urllib.request
-        frb_data = json.load(urllib.request.urlopen('http://frbcat.org/products?search=&min=0&max=1000&page=1'))
-        for frb in frb_data['products']:
-            name = frb['frb_name']
-            logger.debug('FRB name: {}'.format(name))
-            ra   = frb['rop_raj']
-            dec  = frb['rop_decj']
-            dm   = frb['rmp_dm'].split("&")[0]
-            if include_dm:
-                name_ra_dec.append([name, ra, dec, dm])
-            else:
-                name_ra_dec.append([name, ra, dec])
+        try:
+            frb_data = json.load(urllib.request.urlopen('http://frbcat.org/products?search=&min=0&max=1000&page=1'))
+        except urllib.error.HTTPError:
+            logger.error('http://frbcat.org/ not available. Returning empty list')
+            # putting and FRB at 90 dec which we should never be able to detect
+            name_ra_dec = [['fake', "00:00:00.00", "90:00:00.00", 0.0]]
+        else:
+            for frb in frb_data['products']:
+                name = frb['frb_name']
+                logger.debug('FRB name: {}'.format(name))
+                ra   = frb['rop_raj']
+                dec  = frb['rop_decj']
+                dm   = frb['rmp_dm'].split("&")[0]
+                if include_dm:
+                    name_ra_dec.append([name, ra, dec, dm])
+                else:
+                    name_ra_dec.append([name, ra, dec])
 
     elif source_type == "rFRB":
         info = get_rFRB_info(name=pulsar_list)
@@ -832,7 +838,7 @@ if __name__ == "__main__":
 
     #observation options
     obargs = parser.add_argument_group('Observation ID options', 'The different options to control which observation IDs are used. Default is all observation IDs with voltages.')
-    obargs.add_argument('--FITS_dir',type=str,help='Instead of searching all OBS IDs, only searchs for the obsids in the given directory. Does not check if the .fits files are within the directory. Default = /group/mwaops/vcs')
+    obargs.add_argument('--FITS_dir',type=str,help='Instead of searching all OBS IDs, only searchs for the obsids in the given directory. Does not check if the .fits files are within the directory. Default = /group/mwavcs/vcs')
     obargs.add_argument('-o','--obsid',type=int,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
     obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
     obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
@@ -932,6 +938,7 @@ if __name__ == "__main__":
     else:
         dt = 100
 
+    logger.debug("names_ra_dec:{}".format(names_ra_dec))
     logger.info("Getting observation metadata and calculating the tile beam")
     output_data, obsid_meta = find_sources_in_obs(obsid_list, names_ra_dec,
                                 obs_for_source=args.obs_for_source, dt_input=dt,
