@@ -254,7 +254,7 @@ def vcs_download(obsid, start_time, stop_time, increment, head, data_dir,
         else:
             voltdownload_batch = "volt_{0}".format(time_to_get)
             check_batch = "check_volt_{0}".format(time_to_get)
-            volt_secs_to_run = datetime.timedelta(seconds=300*increment)
+            volt_secs_to_run = datetime.timedelta(seconds=500*increment)
             check_secs_to_run = "15:00"
             if data_type == 16:
                 check_secs_to_run = "10:15:00"

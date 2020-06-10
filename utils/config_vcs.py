@@ -95,7 +95,8 @@ def load_config_file():
     """
     #Work out which supercomputer you're using
     hostname = socket.gethostname()
-    if hostname.startswith('galaxy') or hostname.startswith('nid'):
+    # galaxy head node, galaxy and magnus job nodes, zeus job nodes, garrawarla job nodes
+    if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z')or hostname.startswith('mwa'):
         comp_config = GALAXY_CONFIG
     elif hostname.startswith('john') or hostname.startswith('farnarkle'):
         comp_config = OZSTAR_CONFIG
