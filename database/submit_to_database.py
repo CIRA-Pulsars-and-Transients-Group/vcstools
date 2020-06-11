@@ -114,7 +114,7 @@ def get_subbands(metadata):
     ----------
     metadata: list
         The output of mwa_metadb_utils.get_common_obs_metadata()
-    
+
     Returns
     -------
     subbands: int
@@ -145,7 +145,7 @@ def get_db_auth_addr():
         auth = (os.environ['MWA_PULSAR_DB_USER'],os.environ['MWA_PULSAR_DB_PASS'])
     else:
         auth = None
-        raise NoAuthError(  """   
+        raise NoAuthError(  """
                             No MWA Pulsar Database username/password found
                             Please add the following to your .bashrc:
                             'export MWA_PULSAR_DB_USER="<username>"'
@@ -746,7 +746,7 @@ if __name__ == "__main__":
         det_kwargs["calibrator"]            = int(cal_db_id)
         det_kwargs["subband"]               = int(subbands)
         det_kwargs["coherent"]              = coh
-        det_kwargs["startcchan"]            = int(minfreq) 
+        det_kwargs["startcchan"]            = int(minfreq)
         det_kwargs["stopcchan"]             = int(maxfreq)
         det_kwargs["observation_type"]      = int(obstype)
         try:
