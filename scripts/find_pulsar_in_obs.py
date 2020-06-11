@@ -210,26 +210,32 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
 
     elif source_type == 'RRATs':
         import urllib.request
-        rrats_data = urllib.request.urlopen('http://astro.phys.wvu.edu/rratalog/rratalog.txt').read().decode()
-        for rrat in rrats_data.split("\n")[1:-1]:
-            columns = rrat.strip().replace(" ", '\t').split('\t')
-            rrat_cat_line = []
-            if pulsar_list == None or (columns[0] in pulsar_list):
-                for entry in columns:
-                    if entry not in ['', ' ', '\t']:
-                        rrat_cat_line.append(entry.replace('--',''))
-                #Removing bad formating for the database
-                ra = rrat_cat_line[4]
-                if ra.endswith(":"):
-                    ra = ra[:-1]
-                dec = rrat_cat_line[5]
-                if dec.endswith(":"):
-                    dec = dec[:-1]
+        try:
+            rrats_data = urllib.request.urlopen('http://astro.phys.wvu.edu/rratalog/rratalog.txt').read().decode()
+        except urllib.error.URLError:
+            logger.error('http://astro.phys.wvu.edu/rratalog/ not available. Returning empty list')
+            # putting and RRAT at 90 dec which we should never be able to detect
+            name_ra_dec = [['fake', "00:00:00.00", "90:00:00.00", 0.0]]
+        else:
+            for rrat in rrats_data.split("\n")[1:-1]:
+                columns = rrat.strip().replace(" ", '\t').split('\t')
+                rrat_cat_line = []
+                if pulsar_list == None or (columns[0] in pulsar_list):
+                    for entry in columns:
+                        if entry not in ['', ' ', '\t']:
+                            rrat_cat_line.append(entry.replace('--',''))
+                    #Removing bad formating for the database
+                    ra = rrat_cat_line[4]
+                    if ra.endswith(":"):
+                        ra = ra[:-1]
+                    dec = rrat_cat_line[5]
+                    if dec.endswith(":"):
+                        dec = dec[:-1]
 
-                if include_dm:
-                    name_ra_dec.append([rrat_cat_line[0], ra, dec, rrat_cat_line[3]])
-                else:
-                    name_ra_dec.append([rrat_cat_line[0], ra, dec])
+                    if include_dm:
+                        name_ra_dec.append([rrat_cat_line[0], ra, dec, rrat_cat_line[3]])
+                    else:
+                        name_ra_dec.append([rrat_cat_line[0], ra, dec])
 
     elif source_type == 'Fermi':
         # read the fermi targets file
