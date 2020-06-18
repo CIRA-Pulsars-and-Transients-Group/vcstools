@@ -120,7 +120,7 @@ def get_subbands(metadata):
     subbands: int
         The number of subbands in the observation
     """
-    channels = metadata[-2]
+    channels = metadata[-1]
     subbands = 1
     for b, _ in enumerate(channels):
         if b == 0:
@@ -153,7 +153,7 @@ def get_db_auth_addr():
                             'replacing <username> <password> with your MWA Pulsar Database username and password
                             """ )
 
-    return auth, web_address
+    return web_address, auth
 
 def check_db_and_create_det(pulsar):
     """
@@ -215,7 +215,7 @@ def get_filetypes_from_db(obsid, pulsar, filetype):
                 return mydict
 
     #Check if any files of the filetype exist
-    auth, web_address = get_db_auth_addr()
+    web_address, auth = get_db_auth_addr()
     obs_dets = client.detection_get(web_address, auth, observationid=obsid)
     if not obs_dets:
         logger.warn("No detections for this obs ID")
@@ -378,13 +378,14 @@ def upload_file_to_db(obsid, pulsar, filepath, filetype, metadata=None, coh=True
     if not metadata:
         metadata = get_common_obs_metadata(obsid)
     subbands = get_subbands(metadata)
+    web_address, auth = get_db_auth_addr()
     client.detection_file_upload(web_address, auth,
                                     observationid = str(obsid),
                                     pulsar = pulsar,
                                     filetype = int(filetype),
                                     coherent = coh,
                                     subband = subbands,
-                                    filepath = filename)
+                                    filepath = filepath)
 
 def multi_upload_files(obsid, pulsar, files_dict, metadata=None, coh=True):
     """
@@ -403,16 +404,15 @@ def multi_upload_files(obsid, pulsar, files_dict, metadata=None, coh=True):
     coh: boolean
         OPTINOAL - Whether this is a coherent detection or not. Default: True
     """
-    for fileype in files_dict.keys():
+    for filetype in files_dict.keys():
         for filename in files_dict[filetype]:
             logger.info("Uploading file to databse: {}".format(filename))
             upload_file_to_db(obsid, pulsar, filename, int(filetype), metadata=metadata, coh=coh)
 
-def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
+def flux_cal_and_submit(time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
                         pulsar=None, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
-    time_detection: the time in seconds of the dectection from the bestprof file
     time_obs: the time in seconds of the dectection from the metadata
     metadata: list from the function get_obs_metadata
     bestprof_data: list from the function get_from_bestprof
@@ -420,7 +420,7 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     """
     #unpack the bestprof_data
     #[obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
-    obsid, prof_psr, _, period, _, beg, t_int, profile, num_bins = bestprof_data
+    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins = bestprof_data
     if not pulsar:
         pulsar = prof_psr
     period=float(period)
@@ -481,15 +481,15 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
         logger.debug("Equivalent width in bins: {0}".format(w_equiv_bins))
         logger.debug("T_sys: {0} K".format(t_sys))
         logger.debug("Bandwidth: {0}".format(bandwidth))
-        logger.debug("Detection time: {0}".format(time_detection))
+        logger.debug("Detection time: {0}".format(t_int))
         logger.debug("NUmber of bins: {0}".format(num_bins))
 
         if scattered == False:
             #final calc of the mean fluxdesnity in mJy
-            S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
+            S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(t_int) * bandwidth)) *\
                     math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
             #constants to make uncertainty calc easier
-            S_mean_cons = t_sys / ( math.sqrt(2. * float(time_detection) * bandwidth)) *\
+            S_mean_cons = t_sys / ( math.sqrt(2. * float(t_int) * bandwidth)) *\
                     math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
             u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
                                 math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
@@ -691,7 +691,7 @@ if __name__ == "__main__":
 
     #get meta data from obsid
     metadata = get_common_obs_metadata(args.obsid)
-    _, ra_obs, dec_obs, time_obs, delays, centrefreq, channels = metadata
+    _, ra_obs, _, time_obs, delays, centrefreq, channels = metadata
     minfreq = float(min(channels))
     maxfreq = float(max(channels))
     bandwidth = 30720000. #In Hz
@@ -705,7 +705,8 @@ if __name__ == "__main__":
     if args.bestprof or args.ascii:
         #Does the flux calculation and submits the results to the MWA pulsar database
         bestprof_data = prof_utils.get_from_bestprof(args.bestprof)
-        subbands = flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
+        _, pul_ra, pul_dec = fpio.get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
+        subbands = flux_cal_and_submit(time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, coh, auth, pulsar=args.pulsar, trcvr=args.trcvr)
 
     if args.cal_dir_to_tar:
