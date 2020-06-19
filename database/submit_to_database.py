@@ -699,7 +699,7 @@ if __name__ == "__main__":
         bestprof_data = prof_utils.get_from_bestprof(args.bestprof)
     elif args.ascii:
         if not args.stop or not args.start:
-            logger.error("Please suppl both start and stop times of the detection for ascii files")
+            logger.error("Please supply both start and stop times of the detection for ascii files")
             sys.exit(1)
         profile, num_bins = prof_utils.get_from_ascii(args.ascii)
         dm, period = get_pulsar_dm_p(args.pulsar)
