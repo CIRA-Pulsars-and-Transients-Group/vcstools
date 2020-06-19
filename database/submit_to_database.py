@@ -631,12 +631,7 @@ if __name__ == "__main__":
     uploadargs.add_argument('--ppps',type=str,help="The Presto Prepfold PostScript file location to be uploaded to the database. Expects a single file that is the output of PRESTO's prepfold script.")
     uploadargs.add_argument('-i','--ippd',type=str,help="The Intergrated Pulse Profile (sometimes called a pulse profile) file location. Expects a single file that is the output of DSPSR's pav script.")
     uploadargs.add_argument('-w','--waterfall',type=str,help="The file location of a waterfall plot of pulse phase vs frequency. Expects a single file that is the output of DSPSR's psrplot.")
-
-    dspsrargs = parser.add_argument_group('DSPSR Calculation Options', "Requires the --fits_files option. These options are all boolean flags that when used will send off DSPSR jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the DSPS scripts are tested more") #TODO remove when I'm confident with dspsr
-    dspsrargs.add_argument('-f','--fits_files',type=str,help='The fits files location to be used in any Detection Calculation processing. Recommended to end in *.fits and surrounded by quotation marks.', default = "/group/mwaops/vcs/${obsid}/fits/*fits")
-    args=parser.parse_args()
-
-
+    args = parser.parse_args()
     if args.version:
         try:
             import version
@@ -664,20 +659,17 @@ if __name__ == "__main__":
         coh = True
         if not args.cal_id:
             logger.error("Please include --cal_id for coherent observations")
-            quit()
+            sys.exit(1)
         if args.andre:
             calibrator_type = 1
         else:
             calibrator_type = 2
 
-    if args.fits_files:
-        fits_files_loc = args.fits_files
+    if args.incoh:
+        fits_files_loc = '/group/mwavcs/vcs/{0}/incoh/*.fits'.format(args.obsid)
     else:
-        if args.incoh:
-            fits_files_loc = '/group/mwavcs/vcs/{0}/incoh/*.fits'.format(args.obsid)
-        else:
-            #TODO add a pointing for this
-            fits_files_loc = '/group/mwavcs/vcs/{0}/pointings/*.fits'.format(args.obsid)
+        #TODO add a pointing for this
+        fits_files_loc = '/group/mwavcs/vcs/{0}/pointings/*.fits'.format(args.obsid)
 
     if not args.pulsar or not args.obsid:
         logger.error("Please supply both --obsid and --pulsar")
@@ -702,9 +694,20 @@ if __name__ == "__main__":
     else:
         obstype = 2
 
-    if args.bestprof or args.ascii:
+    if args.bestprof:
         #Does the flux calculation and submits the results to the MWA pulsar database
         bestprof_data = prof_utils.get_from_bestprof(args.bestprof)
+    elif args.ascii:
+        if not args.stop or not args.start:
+            logger.error("Please suppl both start and stop times of the detection for ascii files")
+            sys.exit(1)
+        profile, num_bins = prof_utils.get_from_ascii(args.ascii)
+        dm, period = get_pulsar_dm_p(args.pulsar)
+        time_detection = args.stop - args.start
+        bestprof_data = [args.obsid, args.pulsar, dm, period, None, args.start,
+                         time_detection, profile, num_bins]
+
+    if args.bestprof or args.ascii:
         _, pul_ra, pul_dec = fpio.get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
         subbands = flux_cal_and_submit(time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, coh, auth, pulsar=args.pulsar, trcvr=args.trcvr)
