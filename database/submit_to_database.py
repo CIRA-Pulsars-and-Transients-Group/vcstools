@@ -106,6 +106,29 @@ def get_Trec(tab,obsfreq):
         logger.debug("ERROR getting Trec")
     return Trec
 
+def get_subbands(metadata):
+    """
+    Figures out the number of subbands in an observation
+
+    Parameters
+    ----------
+    metadata: list
+        The output of mwa_metadb_utils.get_common_obs_metadata()
+
+    Returns
+    -------
+    subbands: int
+        The number of subbands in the observation
+    """
+    channels = metadata[-1]
+    subbands = 1
+    for b, _ in enumerate(channels):
+        if b == 0:
+            continue
+        if not (channels[b] - channels[b-1]) == 1:
+            subbands = subbands + 1
+    return subbands
+
 def get_db_auth_addr():
     """
     Checks for MWA database usernames and passwords
@@ -122,7 +145,7 @@ def get_db_auth_addr():
         auth = (os.environ['MWA_PULSAR_DB_USER'],os.environ['MWA_PULSAR_DB_PASS'])
     else:
         auth = None
-        raise NoAuthError(  """   
+        raise NoAuthError(  """
                             No MWA Pulsar Database username/password found
                             Please add the following to your .bashrc:
                             'export MWA_PULSAR_DB_USER="<username>"'
@@ -130,7 +153,42 @@ def get_db_auth_addr():
                             'replacing <username> <password> with your MWA Pulsar Database username and password
                             """ )
 
-    return auth, web_address
+    return web_address, auth
+
+def check_db_and_create_det(pulsar):
+    """
+    Checks to see if a pulsar is already on the database. If not, will create a new entry
+
+    Parameters:
+    -----------
+    puslar: str
+        The name of the pulsar
+
+    Returns:
+    --------
+    new_pulsar: boolean
+        If True, this is a new pulsar detection
+    """
+    web_address, auth = get_db_auth_addr()
+    pul_list_dict = client.pulsar_list(web_address, auth)
+    pul_list_str = ''
+    for p in pul_list_dict:
+        pul_list_str = pul_list_str + p[u'name']
+    if pulsar in pul_list_str:
+        logger.info('This pulsar is already on the database')
+        #gets Ra and DEC from PSRCAT
+        pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
+        pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
+        new_pulsar = False
+    else:
+        logger.info('Congratulations you have detected ' + pulsar + ' for the first time with the MWA')
+        #gets Ra and DEC from PSRCAT
+        pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
+        pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
+        #then adds it to the database
+        client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)
+        new_pulsar = True
+    return new_pulsar
 
 def get_filetypes_from_db(obsid, pulsar, filetype):
     """
@@ -157,7 +215,7 @@ def get_filetypes_from_db(obsid, pulsar, filetype):
                 return mydict
 
     #Check if any files of the filetype exist
-    auth, web_address = get_db_auth_addr()
+    web_address, auth = get_db_auth_addr()
     obs_dets = client.detection_get(web_address, auth, observationid=obsid)
     if not obs_dets:
         logger.warn("No detections for this obs ID")
@@ -181,6 +239,43 @@ def get_filetypes_from_db(obsid, pulsar, filetype):
             myfiles.append(detfile["filename"])
 
     return myfiles
+
+def upload_cal_files(obsid, cal_id, cal_dir_to_tar, srclist, caltype=2):
+    """
+    Uploads the calibrator solutions to the MWA pulsar database
+
+    Parameters:
+    -----------
+    obsid: int
+        The observation ID
+    cal_id: int
+        The calibrator ID
+    cal_dir_to_tar: string
+        The location of the calibrator RTS directory
+    srclist: string
+        The path to the sourcelist
+    caltype: int
+        The type of calibrator. Default: 2
+    """
+    auth, web_address = get_db_auth_addr()
+    client_files_dict = client.calibration_file_by_observation_id(web_address, auth, obsid=cal_id)
+    if client_files_dict:
+        logger.info("This calibrator already has solutions on the database. Not uploading")
+    else:
+        zip_loc = zip_calibration_files(cal_dir_to_tar, cal_id, srclist)
+
+        # Check if calibrator has to be made
+        cal_list = client.calibrator_list(web_address, auth)
+        if not cal_id in [c['observationid'] for c in cal_list]:
+            client.calibrator_create(web_address, auth, observationid=str(cal_id))
+
+        # Upload Calibration file
+        try:
+            client.calibrator_file_upload(web_address, auth, observationid=str(cal_id), filepath=str(zip_loc), caltype=2)
+            logger.info("Uploaded calibrator solutions from {} to the database".format(cal_id))
+        except:
+            logger.warn("Failed to upload calibration files")
+        os.remove(zip_loc)
 
 def filename_prefix(obsid, pulsar, bins=None, cal=None):
     """
@@ -261,11 +356,63 @@ def zip_calibration_files(base_dir, cal_obsid, source_file):
 
     return zip_file_location
 
-def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
+def upload_file_to_db(obsid, pulsar, filepath, filetype, metadata=None, coh=True):
+    """
+    Uploads a file to the pulsar database
+
+    Parameters:
+    -----------
+    obsid: str
+        The observation ID
+    pulsar: str
+        The name of the pulsar
+    filepath: str
+        The file path of the file to upload
+    filetype: int
+        The type of file to upload: 1: Archive, 2: Timeseries, 3: Diagnostics, 4: Calibration Solution, 5: Bestprof
+    metadata: list
+        OPTINOAL - The output of mwa_metadb_utils.get_common_obs_metadata(obsid). If None, will generate it.
+    coh: boolean
+        OPTINOAL - Whether this is a coherent detection or not. Default: True
+    """
+    if not metadata:
+        metadata = get_common_obs_metadata(obsid)
+    subbands = get_subbands(metadata)
+    web_address, auth = get_db_auth_addr()
+    client.detection_file_upload(web_address, auth,
+                                    observationid = str(obsid),
+                                    pulsar = pulsar,
+                                    filetype = int(filetype),
+                                    coherent = coh,
+                                    subband = subbands,
+                                    filepath = filepath)
+
+def multi_upload_files(obsid, pulsar, files_dict, metadata=None, coh=True):
+    """
+    Uploads any number of files to the same obsid/pulsar on the database
+
+    Parameters:
+    -----------
+    obsid: str
+        The observation ID
+    pulsar: str
+        The name of the pulsar
+    files_dict: dict
+        A dictionary with keys 1-5 representing filetpes. Each key holds a list containing the files to be uploaded.
+    metadata: list
+        OPTINOAL - The output of mwa_metadb_utils.get_common_obs_metadata(obsid). If None, will generate it.
+    coh: boolean
+        OPTINOAL - Whether this is a coherent detection or not. Default: True
+    """
+    for filetype in files_dict.keys():
+        for filename in files_dict[filetype]:
+            logger.info("Uploading file to databse: {}".format(filename))
+            upload_file_to_db(obsid, pulsar, filename, int(filetype), metadata=metadata, coh=coh)
+
+def flux_cal_and_submit(time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
                         pulsar=None, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
     """
-    time_detection: the time in seconds of the dectection from the bestprof file
     time_obs: the time in seconds of the dectection from the metadata
     metadata: list from the function get_obs_metadata
     bestprof_data: list from the function get_from_bestprof
@@ -273,7 +420,7 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     """
     #unpack the bestprof_data
     #[obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
-    obsid, prof_psr, _, period, _, beg, t_int, profile, num_bins = bestprof_data
+    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins = bestprof_data
     if not pulsar:
         pulsar = prof_psr
     period=float(period)
@@ -334,15 +481,15 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
         logger.debug("Equivalent width in bins: {0}".format(w_equiv_bins))
         logger.debug("T_sys: {0} K".format(t_sys))
         logger.debug("Bandwidth: {0}".format(bandwidth))
-        logger.debug("Detection time: {0}".format(time_detection))
+        logger.debug("Detection time: {0}".format(t_int))
         logger.debug("NUmber of bins: {0}".format(num_bins))
 
         if scattered == False:
             #final calc of the mean fluxdesnity in mJy
-            S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(time_detection) * bandwidth)) *\
+            S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(t_int) * bandwidth)) *\
                     math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
             #constants to make uncertainty calc easier
-            S_mean_cons = t_sys / ( math.sqrt(2. * float(time_detection) * bandwidth)) *\
+            S_mean_cons = t_sys / ( math.sqrt(2. * float(t_int) * bandwidth)) *\
                     math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
             u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
                                 math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
@@ -359,15 +506,7 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     else:
         obstype = 2
 
-    #calc sub-bands
-    subbands = 1
-    for b in range(len(channels)):
-        if b == 0:
-            continue
-        if not (channels[b] - channels[b-1]) == 1:
-            subbands = subbands + 1
-
-    #get web address and authentication
+    subbands = get_subbands(metadata)
     web_address, auth = get_db_auth_addr()
 
     #get cal id
@@ -386,8 +525,7 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
         cal_db_id = None
 
     if S_mean is not None:
-        #prevent TypeError caused by trying to format Nones given to fluxes for
-        #highly scattered pulsars
+        #prevent TypeError caused by trying to format Nones given to fluxes for highly scattered pulsars
         S_mean = float("{0:.2f}".format(S_mean))
         u_S_mean = float("{0:.2f}".format(u_S_mean))
 
@@ -401,42 +539,29 @@ def flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
     if u_scattering:
         u_scattering = float("{0:.5f}".format(u_scattering))
 
+    det_kwargs = {}
+    det_kwargs["observationid"]     = int(obsid)
+    det_kwargs["pulsar"]            = str(pulsar)
+    det_kwargs["subband"]           = int(subbands)
+    det_kwargs["coherent"]          = coh,
+    det_kwargs["observation_type"]  = int(obstype)
+    det_kwargs["calibrator"]        = cal_db_id
+    det_kwargs["startcchan"]        = int(minfreq)
+    det_kwargs["stopcchan"]         = int(maxfreq)
+    det_kwargs["flux"]              = S_mean
+    det_kwargs["flux_error"]        = u_S_mean
+    det_kwargs["width"]             = w_equiv_ms
+    det_kwargs["width_error"]       = u_w_equiv_ms
+    det_kwargs["scattering"]        = scattering
+    det_kwargs["scattering_error"]  = u_scattering
+    det_kwargs["dm"]                = float(dm)
     try:
-        client.detection_create(web_address, auth,
-                               observationid = int(obsid),
-                               pulsar = str(pulsar),
-                               subband = int(subbands),
-                               coherent = coh,
-                               observation_type = int(obstype),
-                               calibrator = cal_db_id,
-                               startcchan = int(minfreq), stopcchan = int(maxfreq),
-                               flux = S_mean,
-                               flux_error = u_S_mean,
-                               width = w_equiv_ms,
-                               width_error = u_w_equiv_ms,
-                               scattering = scattering,
-                               scattering_error = u_scattering,
-                               dm = float(dm))
+        client.detection_create(web_address, auth, **det_kwargs)
     except:
         logger.info("Detection already on database so updating the values")
-        client.detection_update(web_address, auth,
-                               observationid = int(obsid),
-                               pulsar = str(pulsar),
-                               subband = str(subbands),
-                               coherent = coh,
-                               observation_type = int(obstype),
-                               calibrator = cal_db_id,
-                               startcchan = int(minfreq), stopcchan = int(maxfreq),
-                               flux = S_mean,
-                               flux_error = u_S_mean,
-                               width = w_equiv_ms,
-                               width_error = u_w_equiv_ms,
-                               scattering = scattering,
-                               scattering_error = u_scattering,
-                               dm = float(dm))
+        client.detection_update(web_address, auth, **det_kwargs)
 
     logger.info("Observation submitted to database")
-
     return subbands
 
 """
@@ -506,17 +631,7 @@ if __name__ == "__main__":
     uploadargs.add_argument('--ppps',type=str,help="The Presto Prepfold PostScript file location to be uploaded to the database. Expects a single file that is the output of PRESTO's prepfold script.")
     uploadargs.add_argument('-i','--ippd',type=str,help="The Intergrated Pulse Profile (sometimes called a pulse profile) file location. Expects a single file that is the output of DSPSR's pav script.")
     uploadargs.add_argument('-w','--waterfall',type=str,help="The file location of a waterfall plot of pulse phase vs frequency. Expects a single file that is the output of DSPSR's psrplot.")
-
-    dspsrargs = parser.add_argument_group('DSPSR Calculation Options', "Requires the --fits_files option. These options are all boolean flags that when used will send off DSPSR jobs to process the needed files that can be uploaded to the database. The files will be uploaded automatically when the DSPS scripts are tested more") #TODO remove when I'm confident with dspsr
-    dspsrargs.add_argument('-f','--fits_files',type=str,help='The fits files location to be used in any Detection Calculation processing. Recommended to end in *.fits and surrounded by quotation marks.', default = "/group/mwavcs/vcs/${obsid}/fits/*fits")
-    dspsrargs.add_argument('--u_archive', action='store_true',help='Used to create an archive file using DSPSR.')
-    dspsrargs.add_argument('--u_single_pulse_series', action='store_true',help='Used to create a single pulse archive using DSPSR.')
-    dspsrargs.add_argument('--u_ppps', action='store_true', help="Used to create a Presto Prepfold PostScript file using PRESTO")
-    dspsrargs.add_argument('--u_ippd', action='store_true', help="Used to create an Intergrated Pulse Profile (sometimes called a pulse profile) using DSPSR")
-    dspsrargs.add_argument('--u_waterfall', action='store_true', help="Used to create a waterfall plot of pulse phase vs frequency using DSPSR.")
-    args=parser.parse_args()
-
-
+    args = parser.parse_args()
     if args.version:
         try:
             import version
@@ -536,17 +651,6 @@ if __name__ == "__main__":
     logger.addHandler(ch)
     logger.propagate = False
 
-    #Checks for MWA database usernames and passwords
-    if 'MWA_PULSAR_DB_USER' in os.environ and 'MWA_PULSAR_DB_PASS' in os.environ:
-        auth = (os.environ['MWA_PULSAR_DB_USER'],os.environ['MWA_PULSAR_DB_PASS'])
-    else:
-        auth = ('mwapulsar','veovys9OUTY=')
-        logging.warning("No MWA Pulsar Database username and password found so using the defaults.")
-        logging.warning('Please add the following to your .bashrc: ')
-        logging.warning('export MWA_PULSAR_DB_USER="<username>"')
-        logging.warning('export MWA_PULSAR_DB_PASS="<password>"')
-        logging.warning('replacing <username> <password> with your MWA Pulsar Database username and password.')
-
     #defaults for incoh and calibrator type
     if args.incoh:
         coh = False
@@ -555,98 +659,34 @@ if __name__ == "__main__":
         coh = True
         if not args.cal_id:
             logger.error("Please include --cal_id for coherent observations")
-            quit()
+            sys.exit(1)
         if args.andre:
             calibrator_type = 1
         else:
             calibrator_type = 2
 
-    if args.fits_files:
-        fits_files_loc = args.fits_files
+    if args.incoh:
+        fits_files_loc = '/group/mwavcs/vcs/{0}/incoh/*.fits'.format(args.obsid)
     else:
-        if args.incoh:
-            fits_files_loc = '/group/mwavcs/vcs/{0}/incoh/*.fits'.format(args.obsid)
-        else:
-            #TODO add a pointing for this
-            fits_files_loc = '/group/mwavcs/vcs/{0}/pointings/*.fits'.format(args.obsid)
+        #TODO add a pointing for this
+        fits_files_loc = '/group/mwavcs/vcs/{0}/pointings/*.fits'.format(args.obsid)
 
-    #get info from .bestprof file
-    if args.bestprof:
-        bestprof_data = prof_utils.get_from_bestprof(args.bestprof)
-        obsid, pulsar, dm, period, period_uncer, obsstart, time_detection,\
-               profile, num_bins = bestprof_data
-        if obsid is None and args.obsid:
-            obsid = args.obsid
-        elif obsid is None:
-            logger.error("Please use --obsid. Exiting")
-            sys.exit(1)
-    elif args.ascii:
-        profile, num_bins = prof_utils.get_from_ascii(args.ascii)
-        if args.obsid:
-            obsid = args.obsid
-        if args.pulsar:
-            pulsar = args.pulsar
-        dm, period = get_pulsar_dm_p(pulsar)
-        period_uncer = float(period) / 10.**10 #assuming it's miniscule
-        if args.stop and args.start:
-            time_detection = args.stop - args.start
-        else:
-            logger.error("Please use --start and --stop for ascii files. Exiting")
-            sys.exit(1)
-        bestprof_data = [obsid, pulsar, dm, period, period_uncer, args.start,
-                         time_detection, profile, num_bins]
-    elif args.obsid and args.pulsar:
-        num_bins = 128 #used in dspsr calculations
-        obsid = args.obsid
-        pulsar = args.pulsar
-    elif args.obsid and (args.calibration or args.cal_dir_to_tar) and not\
-         (args.archive or args.single_pulse_series or args.ppps or args.ippd\
-          or args.waterfall or args.u_archive or args.u_single_pulse_series\
-          or args.u_ppps or args.u_ippd  or args.u_waterfall):
-        #uploaded calibrator
-        obsid = args.obsid
-    else:
-        logger.error("Please us either (--obsid and --pulsar) or --bestprof")
-        quit()
-
-    if args.pulsar:
-        #Overrule what's in the bestprof if pulsar name is supplied
-        pulsar = args.pulsar
-    logger.debug("Pulsar name: {}".format(pulsar))
+    if not args.pulsar or not args.obsid:
+        logger.error("Please supply both --obsid and --pulsar")
 
     #get db web address and authentication
     web_address, auth = get_db_auth_addr()
 
+    #check if pulsar already on db, if not, create it
     if args.pulsar or args.bestprof or args.ascii:
-        #Checks to see if the pulsar is already on the database
-        pul_list_dict = client.pulsar_list(web_address, auth)
-        pul_list_str = ''
-        for p in pul_list_dict:
-            pul_list_str = pul_list_str + p[u'name']
-        if pulsar in pul_list_str:
-            logger.info('This pulsar is already on the database')
-
-            #gets Ra and DEC from PSRCAT
-            pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
-            pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
-        else:
-            logger.info('Congratulations you have detected ' + pulsar + ' for the first time with the MWA')
-            #gets Ra and DEC from PSRCAT
-            pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
-            pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
-
-            #then adds it to the database
-            client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)
-
+        check_db_and_create_det(args.pulsar)
 
     #get meta data from obsid
-    metadata = get_common_obs_metadata(obsid)
-    obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels = metadata
+    metadata = get_common_obs_metadata(args.obsid)
+    _, ra_obs, _, time_obs, delays, centrefreq, channels = metadata
     minfreq = float(min(channels))
     maxfreq = float(max(channels))
-
     bandwidth = 30720000. #In Hz
-    #bandwidth = 30720000. / 12. #In Hz
 
     #calc obstype
     if (maxfreq - minfreq) == 23:
@@ -654,11 +694,23 @@ if __name__ == "__main__":
     else:
         obstype = 2
 
+    if args.bestprof:
+        #Does the flux calculation and submits the results to the MWA pulsar database
+        bestprof_data = prof_utils.get_from_bestprof(args.bestprof)
+    elif args.ascii:
+        if not args.stop or not args.start:
+            logger.error("Please supply both start and stop times of the detection for ascii files")
+            sys.exit(1)
+        profile, num_bins = prof_utils.get_from_ascii(args.ascii)
+        dm, period = get_pulsar_dm_p(args.pulsar)
+        time_detection = args.stop - args.start
+        bestprof_data = [args.obsid, args.pulsar, dm, period, None, args.start,
+                         time_detection, profile, num_bins]
 
     if args.bestprof or args.ascii:
-        #Does the flux calculation and submits the results to the MWA pulsar database
-        subbands = flux_cal_and_submit(time_detection, time_obs, metadata, bestprof_data,
-                            pul_ra, pul_dec, coh, auth, pulsar=pulsar, trcvr=args.trcvr)
+        _, pul_ra, pul_dec = fpio.get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
+        subbands = flux_cal_and_submit(time_obs, metadata, bestprof_data,
+                            pul_ra, pul_dec, coh, auth, pulsar=args.pulsar, trcvr=args.trcvr)
 
     if args.cal_dir_to_tar:
         if not args.srclist:
@@ -692,47 +744,35 @@ if __name__ == "__main__":
 
         #uploads files to database if there's the no calc option
         #checks if the observation is on the database
+        det_kwargs = {}
+        det_kwargs["observationid"]         = str(args.obsid)
+        det_kwargs["pulsar"]                = args.pulsar
+        det_kwargs["calibrator"]            = int(cal_db_id)
+        det_kwargs["subband"]               = int(subbands)
+        det_kwargs["coherent"]              = coh
+        det_kwargs["startcchan"]            = int(minfreq)
+        det_kwargs["stopcchan"]             = int(maxfreq)
+        det_kwargs["observation_type"]      = int(obstype)
         try:
-            temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))
+            temp_dict = client.detection_get(web_address, auth, observationid = str(args.obsid))
         except:
-            client.detection_create(web_address, auth,
-                                    observationid = str(obsid),
-                                    pulsar = str(pulsar),
-                                    calibrator = int(cal_db_id),
-                                    subband = int(subbands),
-                                    coherent = coh,
-                                    startcchan = int(minfreq), stopcchan = int(maxfreq),
-                                    observation_type = int(obstype))
-            temp_dict = client.detection_get(web_address, auth, observationid =str(obsid))
+            client.detection_create(web_address, auth, **det_kwargs)
+            temp_dict = client.detection_get(web_address, auth, observationid =str(args.obsid))
 
         if not temp_dict:
             #no obsid so creats a blank one and assumes the subbands are continuous
-            client.detection_create(web_address, auth,
-                                    observationid = str(obsid),
-                                    pulsar = str(pulsar),
-                                    calibrator = int(cal_db_id),
-                                    subband = int(subbands),
-                                    coherent = coh,
-                                    startcchan = int(minfreq), stopcchan = int(maxfreq),
-                                    observation_type = int(obstype))
-            temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))
+            client.detection_create(web_address, auth, **det_kwargs)
+            temp_dict = client.detection_get(web_address, auth, observationid = str(args.obsid))
 
         pulsar_dict_check = False
         for t in range(len(temp_dict)):
-            if pulsar == temp_dict[t][u'pulsar']:
+            if args.pulsar == temp_dict[t][u'pulsar']:
                 subbands = temp_dict[t][u'subband']
                 pulsar_dict_check = True
 
         if not pulsar_dict_check:
-            client.detection_create(web_address, auth,
-                                    observationid = str(obsid),
-                                    pulsar = str(pulsar),
-                                    calibrator = int(cal_db_id),
-                                    subband = int(subbands),
-                                    coherent = coh,
-                                    startcchan = int(minfreq), stopcchan = int(maxfreq),
-                                    observation_type = int(obstype))
-            temp_dict = client.detection_get(web_address, auth, observationid = str(obsid))
+            client.detection_create(web_address, auth, **det_kwargs)
+            temp_dict = client.detection_get(web_address, auth, observationid = str(args.obsid))
 
     #Upload analysis files to the database
     #create filname prefix
@@ -740,94 +780,51 @@ if __name__ == "__main__":
     if args.bestprof:
         bins = prof_utils.get_from_bestprof(args.bestprof)[-1]
     fname_pref = filename_prefix(args.obsid, args.pulsar, bins=bins, cal=args.cal_id)
+    upfiles_dict={"1":[], "2":[], "3":[], "4":[], "5":[]}
+    remove_list=[]
 
     if args.bestprof:
-        logger.info("Uploading bestprof file to database")
         cp(str(args.bestprof) ,"{}.bestprof".format(fname_pref))
         d_file_loc = "{}.bestprof".format(fname_pref)
-        client.detection_file_upload(web_address, auth,
-                            observationid = str(obsid),
-                            pulsar = str(pulsar),
-                            subband = int(subbands),
-                            coherent = coh,
-                            filetype = 5,
-                            filepath = str(d_file_loc))
-        os.system("rm " + d_file_loc)
+        upfiles_dict["5"].append(d_file_loc)
+        remove_list.append(d_file_loc)
 
-    #Archive files
     if args.archive:
-        logger.info("Uploading archive file to database")
         cp(str(args.archive) ,"{}.ar".format(fname_pref))
         d_file_loc = "{}.ar".format(fname_pref)
-        client.detection_file_upload(web_address, auth,
-                                    observationid = str(obsid),
-                                    pulsar = str(pulsar),
-                                    subband = int(subbands),
-                                    coherent = coh,
-                                    filetype = 1,
-                                    filepath = d_file_loc)
+        upfiles_dict["1"].append(d_file_loc)
+        remove_list.append(d_file_loc)
 
     if args.single_pulse_series:
         logger.info("Uploading single_pulse_series file to database")
-        client.detection_file_upload(web_address, auth,
-                                    observationid = str(obsid),
-                                    pulsar = str(pulsar),
-                                    subband = int(subbands),
-                                    coherent = coh,
-                                    filetype = 2,
-                                    filepath = str(args.single_pulse_series))
+        upfiles_dict["2"].append(args.single_pulse_series)
 
     if args.ppps:
         cp(str(args.ppps) ,"{}.prepfold.ps".format(fname_pref))
         d_file_loc = "{}.prepfold.ps".format(fname_pref)
-        logger.info("Uploading Presto Prepfold PostScript file to database")
-        client.detection_file_upload(web_address, auth,
-                            observationid = str(obsid),
-                            pulsar = str(pulsar),
-                            subband = int(subbands),
-                            coherent = coh,
-                            filetype = 3,
-                            filepath = str(d_file_loc))
-        os.system("rm " + d_file_loc)
+        upfiles_dict["3"].append(d_file_loc)
+        remove_list.append(d_file_loc)
 
     if args.ippd:
         cp(str(args.ippd), "{}.prof.ps".format(fname_pref))
         d_file_loc = "{}.prof.ps".format(fname_pref)
-        logger.info("Uploading Intergrates Pulse Profile file to database")
-        client.detection_file_upload(web_address, auth,
-                            observationid = str(obsid),
-                            pulsar = str(pulsar),
-                            subband = int(subbands),
-                            coherent = coh,
-                            filetype = 3,
-                            filepath = str(d_file_loc))
-        os.system("rm " + d_file_loc)
+        upfiles_dict["3"].append(d_file_loc)
+        remove_list.append(d_file_loc)
 
     if args.waterfall:
         cp(str(args.waterfall), "{}.freq.vs.phase.ps".format(fname_pref))
         d_file_loc = "{}.freq.vs.phase.ps".format(fname_pref)
-        logger.info("Uploading waterfall file to database")
-        client.detection_file_upload(web_address, auth,
-                            observationid = str(obsid),
-                            pulsar = str(pulsar),
-                            subband = int(subbands),
-                            coherent = coh,
-                            filetype = 3,
-                            filepath = str(d_file_loc))
-        os.system("rm " + d_file_loc)
+        upfiles_dict["3"].append(d_file_loc)
+        remove_list.append(d_file_loc)
 
+    #upload all files and remove copies
+    multi_upload_files(str(args.obsid), args.pulsar, upfiles_dict, metadata=metadata, coh=coh)
+    for filename in remove_list:
+        os.remove(filename)
+
+    #cal upload
     if args.calibration:
-        cal_list = client.calibrator_list(web_address, auth)
-        cal_already_created = False
-        for c in cal_list:
-            if ( c[u'observationid'] == int(args.cal_id) ) and ( c[u'caltype'] == calibrator_type ):
-                cal_already_created = True
-                cal_db_id = c[u'id']
-        if not cal_already_created:
-            cal_db_id = client.calibrator_create(web_address, auth,
-                                                  observationid = str(args.cal_id),
-                                                  caltype = calibrator_type)#[u'id']
-
+        logger.info("Uploading calibration solution to database")
         if args.andre:
             cp(str(args.calibration),str(args.cal_id) + "_andre_calibrator.bin")
             cal_file_loc = str(args.cal_id) + "_andre_calibrator.bin"
@@ -835,57 +832,5 @@ if __name__ == "__main__":
             cp(str(args.calibration),str(args.cal_id) + "_rts_calibrator.tar")
             cal_file_loc = str(args.cal_id) + "_rts_calibrator.tar"
 
-        logger.info("Uploading calibration solution to database")
-        client.calibrator_file_upload(web_address, auth,
-                                       observationid = str(args.cal_id),
-                                       caltype = calibrator_type,
-                                       filepath = str(cal_file_loc))
-        os.system("rm " + cal_file_loc)
-
-        #result = client.detection_find_calibrator(web_address, auth,detection_obsid = 35)
-
-    if args.u_archive or args.u_single_pulse_series or args.u_ppps or args.u_ippd  or args.u_waterfall:
-        if not glob.glob(fits_files_loc):
-            logger.error("No fits files in given location. Use -f to provide file location.")
-            quit()
-
-        #runs all needed jobs to create all files
-        from job_submit import submit_slurm
-        dspsr_batch = "{0}_{1}".format(obsid, pulsar)
-        commands = []
-        n_omp_threads = 20
-        commands.append("ncpus={0}".format(n_omp_threads))
-        commands.append("export OMP_NUM_THREADS={0}".format(n_omp_threads))
-        commands.append("psrcat -e {0} > {0}.par".format(pulsar))
-        commands.append("fits=({0})".format(fits_files_loc))
-        if args.archive:
-            commands.append("ar_loc=" + str(args.archive)[:-3])
-        elif args.single_pulse_series:
-            commands.append("ar_loc=" + str(args.single_pulse_series)[:-3])
-        elif args.u_ippd  or args.u_waterfall or args.u_archive:
-            commands.append("srun -n 1 -c $ncpus dspsr -U 600 -E {0}.par -b {1} -A -cont -O {2}_{0} {3}".format(pulsar, num_bins, obsid, fits_files_loc))
-            commands.append("ar_loc={0}_{1}".format(obsid,pulsar))
-        if args.u_ippd:
-            commands.append("pav -CDFTp -N1,1 -g {0}_{1}.prof.ps/cps ".format(obsid,pulsar) +\
-                                "${ar_loc}.ar")
-        if args.u_waterfall:
-            commands.append('psrplot -pG -jCDTp -j "B {0}" -D {1}_{2}.freq.vs.phase.ps/cps '.\
-                                format(num_bins,obsid,pulsar)+ "${ar_loc}.ar")
-        if args.u_ppps:
-            commands.append("psrcat -e {0} > {0}.eph".format(pulsar))
-            commands.append("srun -n 1 -c $ncpus prepfold -ncpus $ncpus -o {0} -topo -runavg -noclip -par {1}.eph -nsub 256 ".format(obsid, pulsar) + "${fits}")
-            commands.append("rm {0}.eph".format(pulsar))
-        if args.u_single_pulse_series:
-            commands.append("srun -n 1 dspsr -U 600 -E {0}.par -b {1} -cont -s -K ".\
-                                format(pulsar,num_bins) + "${fits}")
-            commands.append('psraddstring="psradd -o {0}_{1}.ts.ar "'.format(obsid,pulsar))
-            commands.append("ts=(pulse*.ar)")
-            commands.append('for ((i=0;i<${#ts[@]};i++)); do psraddstring=${psraddstring}" "${ts[i]} ; done')
-            commands.append("srun -n 1 -c $ncpus $psraddstring")
-            commands.append("rm pulse*.ar")
-        commands.append("rm {0}.par".format(pulsar))
-        job_id = submit_slurm(dspsr_batch, commands,
-                              batch_dir="./",
-                              slurm_kwargs={"time": "6:50:00", "partition": "workq"},
-                              submit=True)
-
+        upload_cal_files(str(args.obsid), str(cal_id), cal_file_loc, args.srclist, caltype=calibrator_type)
+        os.remove(cal_file_loc)
