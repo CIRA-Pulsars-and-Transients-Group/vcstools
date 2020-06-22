@@ -80,8 +80,10 @@ int main(int argc, char **argv)
     opts.out_incoh     = 0;  // Default = PSRFITS (incoherent) output turned OFF
     opts.out_coh       = 0;  // Default = PSRFITS (coherent)   output turned OFF
     opts.out_vdif      = 0;  // Default = VDIF                 output turned OFF
+    opts.out_bf        = 1;  // Default = beamform all (non-flagged) antennas
+    opts.out_ant       = 0;  // The antenna number (0-127) to write out if out_bf = 0
+    opts.synth_filter  = NULL;
     opts.out_summed    = 0;  // Default = output only Stokes I output turned OFF
-
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -289,8 +291,44 @@ int main(int argc, char **argv)
 
 
     // Create structures for the PFB filter coefficients
-    int ntaps    = 12;
-    int fil_size = ntaps * nchan; // = 12 * 128 = 1536
+    int ntaps, fil_size = 0;
+    double *coeffs = NULL;
+
+    // If no synthesis filter was explicitly chosen, choose the LSQ12 filter
+    if (!opts.synth_filter)  opts.synth_filter = strdup("LSQ12");
+    if (strcmp( opts.synth_filter, "LSQ12" ) == 0)
+    {
+        ntaps = 12;
+        fil_size = ntaps * nchan; // = 12 * 128 = 1536
+        coeffs = (double *)malloc( fil_size * sizeof(double) );
+        double tmp_coeffs[] = LSQ12_FILTER_COEFFS; // I'll have to change the way these coefficients are stored
+                                                   // in order to avoid this cumbersome loading procedure
+        for (i = 0; i < fil_size; i++)
+            coeffs[i] = tmp_coeffs[i];
+    }
+    else if (strcmp( opts.synth_filter, "MIRROR" ) == 0)
+    {
+        ntaps = 12;
+        fil_size = ntaps * nchan; // = 12 * 128 = 1536
+        coeffs = (double *)malloc( fil_size * sizeof(double) );
+        double tmp_coeffs[] = MIRROR_FILTER_COEFFS;
+        for (i = 0; i < fil_size; i++)
+            coeffs[i] = tmp_coeffs[i];
+    }
+    else
+    {
+        fprintf( stderr, "error: unrecognised synthesis filter: %s\n",
+                opts.synth_filter );
+        exit(EXIT_FAILURE);
+    }
+    ComplexDouble *twiddles = roots_of_unity( nchan );
+
+    // Adjust by the scaling that was introduced by the forward PFB,
+    // along with any other scaling that I, Lord and Master of the inverse
+    // PFB, feels is appropriate.
+    double approx_filter_scale = 15.0/7.2; // 7.2 = 16384/117964.8
+    for (i = 0; i < fil_size; i++)
+        coeffs[i] *= approx_filter_scale;
 
     // Populate the relevant header structs
     populate_psrfits_header( pf,       opts.metafits, opts.obsid,
@@ -340,6 +378,7 @@ int main(int argc, char **argv)
     if (opts.out_vdif)
     {
         malloc_ipfb( &gi, ntaps, opts.sample_rate, nchan, npol, fil_size, npointing );
+        cu_load_filter( coeffs, twiddles, &gi, nchan );
     }
 
     // Set up parrel streams
@@ -348,6 +387,10 @@ int main(int argc, char **argv)
         cudaStreamCreate(&(streams[p])) ;
 
     fprintf( stderr, "[%f]  **BEGINNING BEAMFORMING**\n", NOW-begintime);
+
+    int offset;
+    unsigned int s;
+    int ch, pol;
 
     // Set up timing for each section
     long read_time[nfiles], delay_time[nfiles], calc_time[nfiles], write_time[nfiles][npointing];
@@ -386,10 +429,31 @@ int main(int argc, char **argv)
                                 file_no+1, nfiles);
         start = clock();
 
-        cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
+        if (!opts.out_bf) // don't beamform, but only procoess one ant/pol combination
+        {
+            // Populate the detected_beam, data_buffer_coh, and data_buffer_incoh arrays
+            // detected_beam = [2*opts.sample_rate][nchan][npol] = [20000][128][2] (ComplexDouble)
+            if (file_no % 2 == 0)
+                offset = 0;
+            else
+                offset = opts.sample_rate;
+
+            for (p   = 0; p   < npointing;        p++  )
+            for (s   = 0; s   < opts.sample_rate; s++  )
+            for (ch  = 0; ch  < nchan           ; ch++ )
+            for (pol = 0; pol < npol            ; pol++)
+            {
+                detected_beam[p][s+offset][ch][pol] = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,ch,opts.out_ant,pol,nchan)]);
+                detected_beam[p][s+offset][ch][pol] = CMuld(detected_beam[p][s+offset][ch][pol], CMaked(128.0, 0.0));
+            }
+        }
+        else // beamform (the default mode)
+        {
+            cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
                     npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
                     detected_beam, data_buffer_coh, data_buffer_incoh,
                     streams, opts.out_incoh, nchunk );
+        }
 
         // Invert the PFB, if requested
         if (opts.out_vdif)
@@ -482,7 +546,10 @@ int main(int argc, char **argv)
     destroy_complex_weights( complex_weights_array, npointing, nstation, nchan );
     destroy_invJi( invJi, nstation, nchan, npol );
     destroy_detected_beam( detected_beam, npointing, 2*opts.sample_rate, nchan );
-    
+
+    free( twiddles );
+    free( coeffs );
+
     destroy_metafits_info( &mi );
     //free( data_buffer_coh    );
     //free( data_buffer_incoh  );
@@ -499,6 +566,20 @@ int main(int argc, char **argv)
     free( opts.metafits     );
     free( opts.rec_channel  );
     free( opts.cal.filename );
+    free( opts.custom_flags );
+    free( opts.synth_filter );
+
+    if (opts.out_coh)
+    {
+        for (p = 0; p < npointing; p++)
+        {
+            free( pf[p].sub.data        );
+            free( pf[p].sub.dat_freqs   );
+            free( pf[p].sub.dat_weights );
+            free( pf[p].sub.dat_offsets );
+            free( pf[p].sub.dat_scales  );
+        }
+    }
     if (opts.out_incoh)
     {
         free( pf_incoh[0].sub.data        );
@@ -585,6 +666,15 @@ void usage() {
     fprintf(stderr, "\t-s, --summed               ");
     fprintf(stderr, "Turn on summed polarisations of the coherent output (only Stokes I) ");
     fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-A, --antpol=ant           ");
+    fprintf(stderr, "Do not beamform. Instead, only operate on the specified ant\n");
+    fprintf(stderr, "\t                           ");
+    fprintf(stderr, "stream (0-127)\n" );
+    fprintf(stderr, "\t-S, --synth_filter=filter  ");
+    fprintf(stderr, "Apply the named filter during high-time resolution synthesis.    ");
+    fprintf(stderr, "[default: LSQ12]\n");
+    fprintf(stderr, "\t                           ");
+    fprintf(stderr, "filter can be MIRROR or LSQ12.\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
@@ -677,35 +767,37 @@ void make_beam_parse_cmdline(
         while (1) {
 
             static struct option long_options[] = {
-                {"obsid",               required_argument, 0, 'o'},
-                {"begin",               required_argument, 0, 'b'},
-                {"end",                 required_argument, 0, 'e'},
-                {"incoh",               no_argument,       0, 'i'},
-                {"psrfits",             no_argument,       0, 'p'},
-                {"vdif",                no_argument,       0, 'v'},
-                {"summed",              no_argument,       0, 's'},
-                {"utc-time",            required_argument, 0, 'z'},
-                {"pointings",           required_argument, 0, 'P'},
-                {"data-location",       required_argument, 0, 'd'},
-                {"metafits-file",       required_argument, 0, 'm'},
-                {"coarse-chan",         required_argument, 0, 'f'},
-                {"antennas",            required_argument, 0, 'a'},
-                {"num-fine-chans",      required_argument, 0, 'n'},
-                {"fine-chan-width",     required_argument, 0, 'w'},
-                {"sample-rate",         required_argument, 0, 'r'},
-                {"custom-flags",        required_argument, 0, 'F'},
-                {"dijones-file",        required_argument, 0, 'J'},
-                {"bandpass-file",       required_argument, 0, 'B'},
-                {"rts-chan-width",      required_argument, 0, 'W'},
-                {"offringa-file",       required_argument, 0, 'O'},
-                {"offringa-chan",       required_argument, 0, 'C'},
-                {"help",                required_argument, 0, 'h'},
-                {"version",             required_argument, 0, 'V'}
+                {"obsid",           required_argument, 0, 'o'},
+                {"begin",           required_argument, 0, 'b'},
+                {"end",             required_argument, 0, 'e'},
+                {"incoh",           no_argument,       0, 'i'},
+                {"psrfits",         no_argument,       0, 'p'},
+                {"vdif",            no_argument,       0, 'v'},
+                {"summed",          no_argument,       0, 's'},
+                {"synth_filter",    required_argument, 0, 'S'},
+                {"antpol",          required_argument, 0, 'A'},
+                {"utc-time",        required_argument, 0, 'z'},
+                {"pointings",       required_argument, 0, 'P'},
+                {"data-location",   required_argument, 0, 'd'},
+                {"metafits-file",   required_argument, 0, 'm'},
+                {"coarse-chan",     required_argument, 0, 'f'},
+                {"antennas",        required_argument, 0, 'a'},
+                {"num-fine-chans",  required_argument, 0, 'n'},
+                {"fine-chan-width", required_argument, 0, 'w'},
+                {"sample-rate",     required_argument, 0, 'r'},
+                {"custom-flags",    required_argument, 0, 'F'},
+                {"dijones-file",    required_argument, 0, 'J'},
+                {"bandpass-file",   required_argument, 0, 'B'},
+                {"rts-chan-width",  required_argument, 0, 'W'},
+                {"offringa-file",   required_argument, 0, 'O'},
+                {"offringa-chan",   required_argument, 0, 'C'},
+                {"help",            required_argument, 0, 'h'},
+                {"version",         required_argument, 0, 'V'}
             };
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:svVw:W:z:",
+                             "a:A:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:sS:vVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -714,6 +806,10 @@ void make_beam_parse_cmdline(
 
                 case 'a':
                     opts->nstation = atoi(optarg);
+                    break;
+                case 'A':
+                    opts->out_bf = 0; // Turn off normal beamforming
+                    opts->out_ant = atoi(optarg); // 0-127
                     break;
                 case 'b':
                     opts->begin = atol(optarg);
@@ -772,6 +868,9 @@ void make_beam_parse_cmdline(
                     break;
                 case 'r':
                     opts->sample_rate = atoi(optarg);
+                    break;
+                case 'S':
+                    opts->synth_filter = strdup(optarg);
                     break;
                 case 's':
                     opts->out_summed = 1;

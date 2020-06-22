@@ -40,7 +40,7 @@ struct metafits_info {
     char      **tilenames;
     int         ninput;
     int         chan_width;
-} metafits_info;
+};
 
 struct delays {
     double mean_ra;
@@ -85,6 +85,9 @@ struct make_beam_opts {
     int                out_coh;       // Default = PSRFITS (coherent)   output turned OFF
     int                out_vdif;      // Default = VDIF                 output turned OFF
     int                out_uvdif;     // Default = upsampled VDIF       output turned OFF
+    int                out_bf;        // Default = beamform over all (non-flagged) antennas
+    int                out_ant;       // The antenna number (0-127) to write out if out_bf = 0
+    char              *synth_filter;  // Which synthesis filter to use
     int                out_summed;    // Default = output only Stokes I output turned OFF
 
     struct calibration cal;           // Variables for calibration settings
