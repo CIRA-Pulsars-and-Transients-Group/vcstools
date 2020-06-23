@@ -27,51 +27,6 @@
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
                         float *data_buffer_vdif, float *gain )
 {
-
-    // Set level occupancy
-    float rmean, imean;
-    ComplexFloat cmean, stddev;
-
-    get_mean_complex(
-            (ComplexFloat *)data_buffer_vdif,
-            vf->sizeof_buffer/2.0,
-            &rmean, &imean, &cmean );
-
-    stddev = get_std_dev_complex(
-            (ComplexFloat *)data_buffer_vdif,
-            vf->sizeof_buffer/2.0 );
-
-    if (fabsf(rmean) > 0.001)
-    {
-        fprintf( stderr, "warning: vdif_write_second: significantly "
-                         "non-zero mean (%f), adjusting data\n", rmean );
-        unsigned int i;
-        for (i = 0; i < vf->sizeof_buffer/2; i++)
-        {
-            data_buffer_vdif[2*i+0] -= CRealf(cmean);
-            data_buffer_vdif[2*i+1] -= CImagf(cmean);
-        }
-    }
-
-    vf->b_scales[0] = CRealf(stddev);
-    vf->b_scales[1] = CRealf(stddev);
-
-    vf->got_scales = 1;
-    set_level_occupancy(
-            (ComplexFloat *)data_buffer_vdif,
-            vf->sizeof_buffer/2.0, gain);
-
-    // Normalise
-    normalise_complex(
-            (ComplexFloat *)data_buffer_vdif,
-            vf->sizeof_buffer/2.0,
-            *gain );
-    
-    //Only using the buffer for the pointing
-    //float *pointing_buffer  = malloc( vf->sizeof_buffer * sizeof(float) );
-    //memcpy(pointing_buffer, data_buffer_ptr + p * vf->sizeof_buffer,
-    //       vf->sizeof_buffer * sizeof(float) );
-
     float *data_buffer_ptr = data_buffer_vdif;
     size_t offset_out_vdif = 0;
 
