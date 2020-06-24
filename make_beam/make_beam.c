@@ -569,17 +569,6 @@ int main(int argc, char **argv)
     free( opts.custom_flags );
     free( opts.synth_filter );
 
-    if (opts.out_coh)
-    {
-        for (p = 0; p < npointing; p++)
-        {
-            free( pf[p].sub.data        );
-            free( pf[p].sub.dat_freqs   );
-            free( pf[p].sub.dat_weights );
-            free( pf[p].sub.dat_offsets );
-            free( pf[p].sub.dat_scales  );
-        }
-    }
     if (opts.out_incoh)
     {
         free( pf_incoh[0].sub.data        );
