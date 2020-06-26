@@ -1,14 +1,9 @@
 FROM ubuntu:18.04
-ENV DEBIAN_FRONTEND noninteractive
-
-# Add aarnet mirror to speed up package update
-RUN perl -p -i.orig -e \
-      's/archive.ubuntu.com/mirror.aarnet.edu.au\/pub\/ubuntu\/archive/' /etc/apt/sources.list \
-      && sed -i '0,/# deb-src/{s/# deb-src/deb-src/}' /etc/apt/sources.list
 
 # Install package dependencies
-RUN apt-get update \
-      && apt-get install -y \
+ARG DEBIAN_FRONTEND noninteractive
+RUN apt-get update && \
+    apt-get install -y \
          autoconf \
          autotools-dev \
          build-essential \
@@ -21,20 +16,34 @@ RUN apt-get update \
          libfftw3-dev \
          libtool \
          wget \
-      && apt-get clean all \
-      && rm -r /var/lib/apt/lists/*
+         python3 && \
+    apt-get clean all && \
+    rm -r /var/lib/apt/lists/*
+
+RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+    python get-pip.py && \
+    pip install future
+
+RUN pip3 install astropy \
+    astroplan \
+    argparse \
+    numpy \
+    matplotlib \
+    scipy \
+    skyfield \
+    h5py
 
 
 ### Build psrfits_utils ###
 ARG PSR_CONFIG_OPTS="--prefix=/usr"
 WORKDIR /tmp/psrfits-build
-RUN git clone https://github.com/demorest/psrfits_utils.git \
-      && cd psrfits_utils \
-      && echo "m4_ifdef([AM_PROG_AR], [AM_PROG_AR])" >> configure.ac \
-      && autoreconf --install --force \
-      && ./configure ${PSR_CONFIG_OPTS} \
-      && make \
-      && make install
+RUN git clone https://github.com/demorest/psrfits_utils.git && \
+    cd psrfits_utils && \
+    echo "m4_ifdef([AM_PROG_AR], [AM_PROG_AR])" >> configure.ac && \
+    autoreconf --install --force && \
+    ./configure ${PSR_CONFIG_OPTS} && \
+    make && \
+    make install
 
 
 ### Build pulsar ###
@@ -57,31 +66,50 @@ RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86
     apt-get -y install cuda
 
 
-
 ### Install xGPU ###
 ARG XGPU_MAKE_OPTS="NSTATION=128 NFREQUENCY=128 NTIME=1000 NTIME_PIPE=100"
 ARG XGPU_PREFIX="/usr"
 WORKDIR /tmp/xgpu-build
-RUN git clone https://github.com/GPU-correlators/xGPU.git \
-      && cd xGPU/src \
-      && make ${XGPU_MAKE_OPTS} \
-      && make install prefix=${XGPU_PREFIX}
+RUN git clone https://github.com/GPU-correlators/xGPU.git && \
+    cd xGPU/src && \
+    make ${XGPU_MAKE_OPTS} && \
+    make install prefix=${XGPU_PREFIX}
 
+
+# Install mwa_pb
+WORKDIR /tmp/mwa_pb
+RUN git clone https://github.com/MWATelescope/mwa_pb.git && \
+    cd mwa_pb && \
+    python setup.py install && \
+    cd mwa_pb/data && \
+    #if cerberus is down use the backup server
+    wget -t 1 http://cerberus.mwa128t.org/mwa_full_embedded_element_pattern.h5; if [ $? == "4" ]; then wget http://orthrus.mwa128t.org/mwa_full_embedded_element_pattern.h5; fi
+
+# Install mwa_client
+WORKDIR /tmp/mwa_client
+RUN git clone --single-branch --branch python3 https://github.com/ICRAR/mwa-voltage  && \
+    cd mwa-voltage/mwa_pulsar_client && \
+    python setup.py install
+
+# Download psrcat database
+WORKDIR /tmp/psrcat
+RUN wget https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/psrcat_pkg.tar.gz  && \
+    gunzip psrcat_pkg.tar.gz && \
+    tar -xvf psrcat_pkg.tar
+ENV PSRCAT_FILE /tmp/psrcat/psrcat_tar/psrcat.db
 
 ### Install vcstools ###
 WORKDIR /tmp/vcstools-build
 COPY . /tmp/vcstools-build
-RUN ls
-RUN mkdir build \
-      && cd build \
-      && cmake -DCMAKE_INSTALL_PREFIX=/usr \
+RUN mkdir build && \
+    cd build && \
+    cmake -DCMAKE_INSTALL_PREFIX=/usr \
       -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
       -DSLALIB_ROOT_DIR=/usr \
       -DCMAKE_BEAMFORMER=1 \
-      .. \
-      && make install
-
-WORKDIR /
-RUN rm -rf /tmp/*
-
+      .. && \
+    make install && \
+    python setup.py install
+ENV CMD_VCS_DB_FILE None
+ENV KNOWN_RFRB_CSV /tmp/vcstools-build/known_repeating_FRBs.csv
 CMD ["/bin/bash"]
