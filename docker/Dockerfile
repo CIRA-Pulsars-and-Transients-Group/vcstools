@@ -88,8 +88,7 @@ RUN git clone https://github.com/MWATelescope/mwa_pb.git && \
 
 # Install mwa_client
 WORKDIR /tmp/mwa_client
-RUN git config --global url."https://91a51a7ba47a9823068bac57b8966b67108ed520:@github.com/".insteadOf "https://github.com/" && \
-    git clone --single-branch --branch python3 https://github.com/ICRAR/mwa-voltage  && \
+RUN git clone --single-branch --branch python3 git@github.com:ICRAR/mwa-voltage.git  && \
     cd mwa-voltage/mwa_pulsar_client && \
     python3 setup.py install
 
