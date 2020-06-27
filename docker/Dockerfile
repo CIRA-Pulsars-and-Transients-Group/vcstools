@@ -1,7 +1,7 @@
 FROM ubuntu:18.04
 
 # Install package dependencies
-ARG DEBIAN_FRONTEND noninteractive
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y \
          autoconf \
@@ -16,22 +16,23 @@ RUN apt-get update && \
          libfftw3-dev \
          libtool \
          wget \
-         python3 && \
+         python3 \
+	 python3-pip \
+	 python3-setuptools \
+	 curl && \
     apt-get clean all && \
     rm -r /var/lib/apt/lists/*
 
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
-    python get-pip.py && \
-    pip install future
 
 RUN pip3 install astropy \
     astroplan \
-    argparse \
-    numpy \
     matplotlib \
+    numpy \
+    psrqpy \
     scipy \
     skyfield \
-    h5py
+    h5py \
+    setuptools
 
 
 ### Build psrfits_utils ###
@@ -80,16 +81,17 @@ RUN git clone https://github.com/GPU-correlators/xGPU.git && \
 WORKDIR /tmp/mwa_pb
 RUN git clone https://github.com/MWATelescope/mwa_pb.git && \
     cd mwa_pb && \
-    python setup.py install && \
+    python3 setup.py install && \
     cd mwa_pb/data && \
     #if cerberus is down use the backup server
     wget -t 1 http://cerberus.mwa128t.org/mwa_full_embedded_element_pattern.h5; if [ $? == "4" ]; then wget http://orthrus.mwa128t.org/mwa_full_embedded_element_pattern.h5; fi
 
 # Install mwa_client
 WORKDIR /tmp/mwa_client
-RUN git clone --single-branch --branch python3 https://github.com/ICRAR/mwa-voltage  && \
+RUN git config --global url."https://91a51a7ba47a9823068bac57b8966b67108ed520:@github.com/".insteadOf "https://github.com/" && \
+    git clone --single-branch --branch python3 https://github.com/ICRAR/mwa-voltage  && \
     cd mwa-voltage/mwa_pulsar_client && \
-    python setup.py install
+    python3 setup.py install
 
 # Download psrcat database
 WORKDIR /tmp/psrcat
@@ -109,7 +111,9 @@ RUN mkdir build && \
       -DCMAKE_BEAMFORMER=1 \
       .. && \
     make install && \
-    python setup.py install
+    cd .. && \
+    python3 setup.py build --build-scripts=/usr/local/bin
+ENV PYTHONPATH="/usr/local/bin"
 ENV CMD_VCS_DB_FILE None
-ENV KNOWN_RFRB_CSV /tmp/vcstools-build/known_repeating_FRBs.csv
+ENV KNOWN_RFRB_CSV /tmp/vcstools-build/database/known_repeating_FRBs.csv
 CMD ["/bin/bash"]
