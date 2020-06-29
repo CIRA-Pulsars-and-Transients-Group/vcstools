@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM nvidia/cuda:11.0-devel-ubuntu18.04-rc
 
 # Install package dependencies
 ARG DEBIAN_FRONTEND=noninteractive
@@ -53,18 +53,6 @@ RUN wget https://github.com/CIRA-Pulsars-and-Transients-Group/vcstools/raw/maste
     tar -zxvf pulsar_src.tar.gz && \
     cd pulsar_src && \
     make INSTALL_DIR=/usr
-
-
-### Install CUDA ###
-ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
-WORKDIR /tmp/cuda-build
-RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-ubuntu1804.pin && \
-    mv cuda-ubuntu1804.pin /etc/apt/preferences.d/cuda-repository-pin-600 && \
-    wget http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda-repo-ubuntu1804-10-2-local-10.2.89-440.33.01_1.0-1_amd64.deb && \
-    dpkg -i cuda-repo-ubuntu1804-10-2-local-10.2.89-440.33.01_1.0-1_amd64.deb && \
-    apt-key add /var/cuda-repo-10-2-local-10.2.89-440.33.01/7fa2af80.pub && \
-    apt-get update && \
-    apt-get -y install cuda
 
 
 ### Install xGPU ###
