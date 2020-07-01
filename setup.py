@@ -29,7 +29,7 @@ def get_git_version():
 
 vcstools_version = get_git_version()
 
-# Since we mostly run this on supercomputers it probably isn't correct to 
+# Since we mostly run this on supercomputers it probably isn't correct to
 # pip install all these modules
 reqs = ['python>=3.6.3',
         'argparse>=1.4.0',
@@ -54,6 +54,7 @@ setup(name="vcstools",
                'scripts/reorder_chans.py', 'scripts/rts2ao.py', 'scripts/untar.sh',
                'scripts/cleanup.py', 'scripts/create_ics_psrfits.py', 'scripts/rm_synthesis.py',
                'scripts/splice.sh', 'scripts/auto_plot.bash', 'scripts/splice_wrapper.py',
+               'scripts/RVM_fit.py',
                'database/submit_to_database.py', 'database/database_vcs.py',
                'database/known_repeating_FRBs.csv', 'database/points_of_interest.csv',
                'utils/zapchan.py', 'utils/calc_ephem.py', 'utils/check_disk_usage.sh',
