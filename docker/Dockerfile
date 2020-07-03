@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.0-devel-ubuntu18.04-rc
+FROM nvidia/cuda:10.2-devel-ubuntu18.04
 
 # Install package dependencies
 ARG DEBIAN_FRONTEND=noninteractive
