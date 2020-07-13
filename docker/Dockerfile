@@ -24,17 +24,6 @@ RUN apt-get update && \
     rm -r /var/lib/apt/lists/*
 
 
-RUN pip3 install astropy \
-    astroplan \
-    matplotlib \
-    numpy \
-    psrqpy \
-    scipy \
-    skyfield \
-    h5py \
-    setuptools
-
-
 ### Build psrfits_utils ###
 ARG PSR_CONFIG_OPTS="--prefix=/usr"
 WORKDIR /tmp/psrfits-build
@@ -65,34 +54,19 @@ RUN git clone https://github.com/GPU-correlators/xGPU.git && \
     make install prefix=${XGPU_PREFIX}
 
 
-# Install mwa_pb
-WORKDIR /tmp/mwa_pb
-RUN git clone https://github.com/MWATelescope/mwa_pb.git && \
-    cd mwa_pb && \
-    python3 setup.py install && \
-    cd mwa_pb/data && \
-    #if cerberus is down use the backup server
-    wget -t 1 http://cerberus.mwa128t.org/mwa_full_embedded_element_pattern.h5; if [ $? == "4" ]; then wget http://orthrus.mwa128t.org/mwa_full_embedded_element_pattern.h5; fi
-
-# Install mwa_client
-WORKDIR /tmp/mwa_client
-RUN git clone https://github.com/ICRAR/mwa-voltage.git && \
-    cd mwa-voltage/mwa_pulsar_client && \
-    python3 setup.py install
-
 ### Install vcstools ###
 WORKDIR /tmp/vcstools-build
 COPY . /tmp/vcstools-build
-RUN mkdir build && \
+RUN pip3 install . && \
+    mkdir build && \
     cd build && \
     cmake -DCMAKE_INSTALL_PREFIX=/usr \
       -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
       -DSLALIB_ROOT_DIR=/usr \
       -DCMAKE_BEAMFORMER=1 \
       .. && \
-    make install && \
-    cd .. && \
-    python3 setup.py build --build-scripts=/usr/local/bin
+    make install
+# Once I make vcstools a proper package this PYTHONPATH addition won't be required
 ENV PYTHONPATH="/usr/local/bin"
 ENV CMD_VCS_DB_FILE None
 CMD ["/bin/bash"]
