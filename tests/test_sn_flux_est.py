@@ -6,16 +6,14 @@ import os
 from numpy.testing import assert_almost_equal
 import mwa_metadb_utils
 import psrqpy
+
+from vcstools import data_load
+
 import sn_flux_est as snfe
 
 import logging
 logger = logging.getLogger(__name__)
 
-try:
-    ATNF_LOC = os.environ['PSRCAT_FILE']
-except KeyError:
-    print("ATNF database could not be found on disk.")
-    ATNF_LOC = None
 
 #Global obsid information to speed things up
 md_dict={}
@@ -88,8 +86,8 @@ def test_find_t_sys_gain():
     md_2 = md_dict[str(obsid_2)][0]
     full_md_2 = md_dict[str(obsid_2)][1]
 
-    q_1 = psrqpy.QueryATNF(psrs=[pulsar_1], loadfromdb=ATNF_LOC)
-    q_2 = psrqpy.QueryATNF(psrs=[pulsar_2], loadfromdb=ATNF_LOC)
+    q_1 = psrqpy.QueryATNF(psrs=[pulsar_1], loadfromdb=data_load.ATNF_LOC)
+    q_2 = psrqpy.QueryATNF(psrs=[pulsar_2], loadfromdb=data_load.ATNF_LOC)
     test_cases = []
     test_cases.append((pulsar_1, obsid_1, 1223042887, q_1, md_1, full_md_1,\
                 325.16928459135534, 6.5034678040055613, 0.1405071004856564, 0.1065230048864121))
@@ -100,7 +98,7 @@ def test_find_t_sys_gain():
     for pulsar, obsid, beg, query, metadata, full_meta,\
         exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err in test_cases:
         t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(pulsar, obsid, beg=beg,\
-                query=query, obs_metadata=metadata, full_meta=full_meta, trcvr='database/MWA_Trcvr_tile_56.csv')
+                query=query, obs_metadata=metadata, full_meta=full_meta)
         assert_almost_equal(exp_t_sys, t_sys, decimal=4)
         assert_almost_equal(exp_t_sys_err, t_sys_err, decimal=4)
         assert_almost_equal(exp_gain, gain, decimal=4)
@@ -171,7 +169,7 @@ def test_est_pulsar_sn():
                     49.80414834502304, 12.304114528369126))
 
     for psr, obsid, beg, end, ra, dec, md, full_md, exp_sn, exp_sn_err in test_cases:
-        sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec, obs_metadata=md, full_meta=full_md, trcvr="database/MWA_Trcvr_tile_56.csv")
+        sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec, obs_metadata=md, full_meta=full_md)
         assert_almost_equal(exp_sn, sn, decimal=2)
         assert_almost_equal(exp_sn_err, sn_err, decimal=2)
 

@@ -23,11 +23,14 @@ import glob
 import textwrap as _textwrap
 
 #MWA software imports
+from vcstools import data_load
+
 from mwa_pulsar_client import client
 from mwa_metadb_utils import get_common_obs_metadata
 import find_pulsar_in_obs as fpio
 import sn_flux_est as snfe
 import prof_utils
+
 
 import logging
 logger = logging.getLogger(__name__)
@@ -411,7 +414,7 @@ def multi_upload_files(obsid, pulsar, files_dict, metadata=None, coh=True):
 
 def flux_cal_and_submit(time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
-                        pulsar=None, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
+                        pulsar=None, trcvr=data_load.TRCVR_FILE):
     """
     time_obs: the time in seconds of the dectection from the metadata
     metadata: list from the function get_obs_metadata
@@ -620,7 +623,7 @@ if __name__ == "__main__":
             help="The start time of the detection in GPS format.")
     calcargs.add_argument('--stop', type=int,
             help="The stop time of the detection in GPS format.")
-    calcargs.add_argument('--trcvr',type=str, default = "/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv", help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
+    calcargs.add_argument('--trcvr',type=str, default=data_load.TRCVR_FILE, help='File location of the receiver temperatures to be used. Only required if you do not want to use the default values located in %(default)s.')
 
     uploadargs = parser.add_argument_group('Upload Options', 'The different options for each file type that can be uploaded to the pulsar database. Will cause an error if the wrong file type is being uploaded.')
     uploadargs.add_argument('--cal_dir_to_tar',type=str,help='The calibration directory of a calibration solution that you would like to tar and upload to the database (eg. /group/mwavcs/vcs/1221832280/cal/1221831856/rts). Must be used with --srclist so the correct source list is uploaded. If the calibration files are in the default positions then they will be tared and uploaded.')

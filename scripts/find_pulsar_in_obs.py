@@ -35,19 +35,17 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 
 #MWA scripts
+from vcstools import data_load
+
 import sn_flux_est as sfe
 from mwa_pb import primary_beam
 from mwa_metadb_utils import mwa_alt_az_za, get_common_obs_metadata,\
                              get_obs_array_phase, find_obsids_meta_pages
 
+
 import logging
 logger = logging.getLogger(__name__)
 
-try:
-    ATNF_LOC = os.environ['PSRCAT_FILE']
-except:
-    logger.warning("ATNF database could not be found on disk.")
-    ATNF_LOC = None
 
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
@@ -115,7 +113,7 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False, query=No
 
     #params = ['JNAME', 'RAJ', 'DECJ', 'DM']
     if query is None:
-        query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'DM'], psrs=pulsar_list, loadfromdb=ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'DM'], psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
 
     pulsar_ra_dec = []
     for i, _ in enumerate(query["PSRJ"]):
@@ -202,7 +200,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
 
     elif source_type == "POI":
         #POI = points of interest
-        db = open(os.environ["POI_CSV"], "r")
+        db = open(data_load.POI_CSV, "r")
         for line in db.readlines():
             if not line.startswith("#"):
                 line = line.split(",")
@@ -281,7 +279,7 @@ def get_rFRB_info(name=None):
         dm and dm error
     """
     output = []
-    db = open(os.environ["KNOWN_RFRB_CSV"], "r")
+    db = open(data_load.KNOWN_RFRB_CSV, "r")
     for line in db.readlines():
         if not line.startswith("#"):
             line = line.split(",")

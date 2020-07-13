@@ -50,9 +50,7 @@ install:
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/
     - export PYTHONPATH=$PYTHONPATH:$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/mwa_pb
-    - export KNOWN_RFRB_CSV=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/known_repeating_FRBs.csv
     - export CMD_VCS_DB_FILE=None
-    - export PSRCAT_FILE=$HOME/build/CIRA-Pulsars-and-Transients-Group/vcstools/psrcat_tar/psrcat.db
 # command to run tests
 script:
     - coverage run setup.py test

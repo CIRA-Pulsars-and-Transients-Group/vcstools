@@ -80,13 +80,6 @@ RUN git clone https://github.com/ICRAR/mwa-voltage.git && \
     cd mwa-voltage/mwa_pulsar_client && \
     python3 setup.py install
 
-# Download psrcat database
-WORKDIR /tmp/psrcat
-RUN wget https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/psrcat_pkg.tar.gz  && \
-    gunzip psrcat_pkg.tar.gz && \
-    tar -xvf psrcat_pkg.tar
-ENV PSRCAT_FILE /tmp/psrcat/psrcat_tar/psrcat.db
-
 ### Install vcstools ###
 WORKDIR /tmp/vcstools-build
 COPY . /tmp/vcstools-build
@@ -102,5 +95,4 @@ RUN mkdir build && \
     python3 setup.py build --build-scripts=/usr/local/bin
 ENV PYTHONPATH="/usr/local/bin"
 ENV CMD_VCS_DB_FILE None
-ENV KNOWN_RFRB_CSV /tmp/vcstools-build/database/known_repeating_FRBs.csv
 CMD ["/bin/bash"]
