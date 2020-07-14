@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 from astropy.table import Table
 
 #vcstools and mwa_search
+from vcstools import data_load
+
 from mwa_pb import primarybeammap_tant as pbtant
 import find_pulsar_in_obs as fpio
 import mwa_metadb_utils
@@ -25,11 +27,6 @@ import process_vcs
 
 logger = logging.getLogger(__name__)
 
-try:
-    ATNF_LOC = os.environ['PSRCAT_FILE']
-except KeyError:
-    logger.warning("ATNF database could not be found on disk.")
-    ATNF_LOC = None
 
 #---------------------------------------------------------------
 def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
@@ -428,7 +425,7 @@ def flux_from_atnf(pulsar, query=None):
         The ucnertainty in spind from ATNF, will be None if not available
     """
     if query is None:
-        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
 
     flux_queries = ["S40", "S50", "S60", "S80", "S100", "S150", "S200",\
                     "S300", "S400", "S600", "S700", "S800", "S900",\
@@ -608,7 +605,7 @@ def find_pulsar_w50(pulsar, query=None):
     if query is None:
         #returns W_50 and error for a pulsar from the ATNF archive IN SECONDS
         logger.debug("Accessing ATNF database")
-        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
 
     W_50 = query["W50"][0]
     W_50_err = query["W50_ERR"][0]
@@ -717,7 +714,7 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
 
 #---------------------------------------------------------------
 def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
-                    obs_metadata=None, full_meta=None, query=None, min_z_power=0.3, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
+                    obs_metadata=None, full_meta=None, query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
     """
     Finds the system temperature and gain for an observation.
@@ -742,7 +739,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     query: object
         OPTIONAL - The return of the psrqpy function for this pulsar
     trcvr: str
-        The location of the MWA receiver temp csv file. Default = '/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv'
+        The location of the MWA receiver temp csv file. Default = <vcstools_data_dir>MWA_Trcvr_tile_56.csv
 
     Returns:
     --------
@@ -759,7 +756,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     #get ra and dec if not supplied
     if p_ra is None or p_dec is None and query is None:
         logger.debug("Obtaining pulsar RA and Dec from ATNF")
-        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
         p_ra = query["RAJ"][0]
         p_dec = query["DECJ"][0]
     elif p_ra is None and p_dec is None and query is not None:
@@ -815,7 +812,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
 #---------------------------------------------------------------
 def est_pulsar_sn(pulsar, obsid,\
                  beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, full_meta=None, plot_flux=False,\
-                 query=None, min_z_power=0.3, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
+                 query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
     """
     Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
@@ -852,7 +849,7 @@ def est_pulsar_sn(pulsar, obsid,\
     # other uncertainties are considered negligible
 
     if query is None:
-        query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC).pandas
 
     if p_ra is None or p_dec is None:
         #Get some basic pulsar and obs info info
@@ -921,7 +918,7 @@ def est_pulsar_sn(pulsar, obsid,\
 
 def multi_psr_snfe(pulsar_list, obsid,\
                    beg=None, end=None, obs_metadata=None, full_meta=None, plot_flux=False,\
-                   query=None, min_z_power=0.3, trcvr="/group/mwavcs/PULSAR/MWA_Trcvr_tile_56.csv"):
+                   query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
 
     if obs_metadata is None or full_meta is None:
@@ -934,7 +931,7 @@ def multi_psr_snfe(pulsar_list, obsid,\
     if end is None:
         end = obs_end
 
-    mega_query = psrqpy.QueryATNF(psrs=pulsar_list, loadfromdb=ATNF_LOC).pandas
+    mega_query = psrqpy.QueryATNF(psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
     sn_dict = {}
     for i, pulsar in enumerate(mega_query["PSRJ"]):
         psr_query = {}
@@ -989,7 +986,7 @@ if __name__ == "__main__":
             logger.error("Obsid and Pulsar name must be supplied. Exiting...")
             sys.exit(1)
         pulsar = args.pulsar[0]
-        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
         #Decide what to use as ra and dec
         if args.pointing is None:
             raj = None
