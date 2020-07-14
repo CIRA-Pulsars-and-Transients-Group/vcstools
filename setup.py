@@ -43,11 +43,11 @@ reqs = ['astropy>=3.2.3',
 with open('version.py', 'a') as the_file:
     the_file.write('__version__ = "{}"\n'.format(vcstools_version))
 
-setup(name="vcstools",
+setup(name="mwa_vcstools",
       version=vcstools_version,
       description="Scripts used to process the Murchison Widefield Array's Voltage Capture System data",
-      url="https://github.com/ICRAR/vcstools",
-      long_description=read('README.md'),
+      url="https://github.com/CIRA-Pulsars-and-Transients-Group/vcstools.git",
+      #long_description=read('README.md'),
       packages=['vcstools'],
       package_data={'vcstools':['data/*.csv']},
       python_requires='>=3.6',
