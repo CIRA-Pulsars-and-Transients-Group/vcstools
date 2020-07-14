@@ -3,11 +3,11 @@ VCStools software tools
 
 Installation
 ------
-The installation is done in two steps. The first involves installing all the python scripts which is done with the command:
+The installation is done in two steps. The first involves installing all the python scripts, which is done with the command:
 ```bash
 pip install vcstools
 ```
-Note we have not put all function in the vcstools package so you may need to add your bin (the directory `which find_pulsar_in_obs.py`) to the PYTHONPATH
+Note we have not put all functions into the vcstools package so you may need to add your bin (the directory `which find_pulsar_in_obs.py`) to the PYTHONPATH
 
 The second step is to compile the beamformer which is much more difficult. All of the beamformer's dependancies must be taken into account as seen in this example cmake command:
 ```bash
@@ -23,7 +23,7 @@ cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_CUDA_COMPILER=$CU
     ..
 ```
 
-For this reason we have created a docker image which is much easier to install and can be found [here](https://cloud.docker.com/u/cirapulsarsandtransients/repository/docker/cirapulsarsandtransients/vcstools)
+For this reason, we have created a docker image which is much easier to install and can be found [here](https://cloud.docker.com/u/cirapulsarsandtransients/repository/docker/cirapulsarsandtransients/vcstools)
 
 You will have to make your own entry in config.py for your supercomputer which we are happy to help with.
 
@@ -36,13 +36,13 @@ Credit
 You can reference this repository using: 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3762792.svg)](https://doi.org/10.5281/zenodo.3762792)
 
-If you use the MWA beamformer please give credit by citing:
+If you use the MWA beamformer, please give credit by citing:
 [Ord et al. (2019)](https://ui.adsabs.harvard.edu/abs/2019PASA...36...30O/abstract)
 
-If you used polarmitery please give credit by citing: 
+If you used polarimetry, please give credit by citing: 
 [Xue et al. (2019)](https://ui.adsabs.harvard.edu/abs/2019PASA...36...25X/abstract)
 
-If you used the inverse PFB plese give credit by citing:
+If you used the inverse PFB, please give credit by citing:
 [McSweeney et al. (2019)](https://ui.adsabs.harvard.edu/abs/2020arXiv200703171M/abstract)
 
 Status
