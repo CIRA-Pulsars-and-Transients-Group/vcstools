@@ -5,9 +5,9 @@ Installation
 ------
 The installation is done in two steps. The first involves installing all the python scripts which is done with the command:
 ```bash
-python setup.py build --build-scripts=<build_location>
+pip install vcstools
 ```
-Replacing <build_location> with where you would like to store the scripts.
+Note we have not put all function in the vcstools package so you may need to add your bin (the directory `which find_pulsar_in_obs.py`) to the PYTHONPATH
 
 The second step is to compile the beamformer which is much more difficult. All of the beamformer's dependancies must be taken into account as seen in this example cmake command:
 ```bash
@@ -40,7 +40,10 @@ If you use the MWA beamformer please give credit by citing:
 [Ord et al. (2019)](https://ui.adsabs.harvard.edu/abs/2019PASA...36...30O/abstract)
 
 If you used polarmitery please give credit by citing: 
-[Xue et al. (2019](https://ui.adsabs.harvard.edu/abs/2019PASA...36...25X/abstract)
+[Xue et al. (2019)](https://ui.adsabs.harvard.edu/abs/2019PASA...36...25X/abstract)
+
+If you used the inverse PFB plese give credit by citing:
+[McSweeney et al. (2019)](https://ui.adsabs.harvard.edu/abs/2020arXiv200703171M/abstract)
 
 Status
 ------
