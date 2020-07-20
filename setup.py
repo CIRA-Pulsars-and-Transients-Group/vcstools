@@ -27,8 +27,6 @@ def get_git_version():
     git_version = check_output('git describe --tags --long --dirty --always'.split()).decode('utf-8').strip()
     return format_version(version=git_version)
 
-vcstools_version = get_git_version()
-
 reqs = ['astropy>=3.2.3',
         'argparse>=1.4.0',
         'h5py>=2.7.1',
@@ -39,9 +37,14 @@ reqs = ['astropy>=3.2.3',
         'mwa-voltage',
         'mwa_pb']
 
-#make a temporary version file to be installed then delete it
-with open('version.py', 'a') as the_file:
-    the_file.write('__version__ = "{}"\n'.format(vcstools_version))
+if os.path.exists('version.py'):
+    with open('version.py', 'r') as the_file:
+        vcstools_version =  the_file.read()
+else:
+    vcstools_version = get_git_version()
+    #make a temporary version file to be installed then delete it
+    with open('version.py', 'a') as the_file:
+        the_file.write('__version__ = "{}"\n'.format(vcstools_version))
 
 setup(name="mwa_vcstools",
       version=vcstools_version,
