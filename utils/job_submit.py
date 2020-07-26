@@ -32,8 +32,6 @@ module load vcstools/{version}
 """
 # NOTE: --gid option removed after discussion in helpdesk ticket GS-9370
 
-comp_config = load_config_file()
-
 
 def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                  module_list=[], vcstools_version="master",
@@ -41,7 +39,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                  submit=True, outfile=None, queue="cpuq", export="NONE",
                  gpu_res=None, mem=1024, cpu_threads=1, temp_mem=None,
                  nice=0, shebag='#!/bin/bash -l',
-                 module_dir=comp_config['module_dir']):
+                 module_dir=None):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
@@ -205,6 +203,9 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
     if temp_mem is not None:
         header.append("#SBATCH --tmp={0}GB".format(temp_mem))
 
+    if module_dir is None:
+        module_dir = comp_config['module_dir']
+
     # now join the header into one string
     header = "\n".join(header)
 
@@ -229,9 +230,6 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
 
     # join the commands into a single string
     commands = "\n".join(commands)
-
-    # load computer dependant config file
-    comp_config = load_config_file()
 
     # some little hacks to make jobs work on the shanghai server
     if hostname.startswith('x86') or hostname.startswith('arm'):
