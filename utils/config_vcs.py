@@ -8,29 +8,25 @@ Functions to handle parsing the config file for multiple super computers
 
 GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'base_product_dir' : '/group/mwavcs/vcs/',
-                 'group_account' : {'cpuq':  '#SBATCH --account=pawsey0348',
+                 'group_account' : {'cpuq':  '#SBATCH --account=mwavcs',
                                     'gpuq':  '#SBATCH --account=mwavcs',
                                     'copyq': '#SBATCH --account=mwavcs',
                                     'zcpuq': '#SBATCH --account=mwavcs'},
                  'module_dir' : '/group/mwa/software/modulefiles',
                  'presto_module' : 'presto/master',
                  'psrcat_module' : 'psrcat/1.59',
-                 #'cpuq_cluster' : 'zeus',
-                 #'cpuq_partition' : 'workq',
-                 #temporarily removed the cpu jobs off zeus because a lot of our software isn't installed on zeus
-                 'cpuq_cluster' : 'magnus',
+                 'cpuq_cluster' : 'garrawarla',
                  'cpuq_partition' : 'workq',
-                 'gpuq_cluster' : 'galaxy',
+                 'gpuq_cluster' : 'garrawarla',
                  'gpuq_partition' : 'gpuq',
-                 'gpu_beamform_mem' : '1024',
+                 'gpu_beamform_mem' : '25600',
                  'zcpuq_cluster' : 'zeus',
                  'zcpuq_partition' : 'workq',
                  'copyq_cluster' : 'zeus',
                  'copyq_partition' : 'copyq',
-                 'container_module' : 'shifter',
-                 #'container_command' : 'shifter run cirapulsarsandtransients/vcstools:cuda-9.2'}
-                 #removed container command as containers do not currently work on Galaxy
-                 'container_command' : ''}
+                 'container_module' : 'singularity',
+                 'container_command' : 'singularity exec --nv /pawsey/mwa/singularity/vcstools_master.sif /bin/bash -c ',
+                 'ssd_dir' : '/nvmetmp'}
 
 OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'base_product_dir' : '/fred/oz125/vcs/',
@@ -54,8 +50,9 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'zcpuq_partition' : 'skylake',
                  'container_module' : 'singularity/latest',
                  #removed since I've now installed it on Ozstar
-                 'container_command' : ''}
-                 #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'}
+                 #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'
+                 'container_command' : '',
+                 'ssd_dir' : '$JOBFS'}
 
 ARM_CONFIG =   {'base_data_dir' : '/o9000/MWA/Pulsar/vcs/',
                 'base_product_dir' : '/o9000/MWA/Pulsar/vcs/',
@@ -70,7 +67,7 @@ ARM_CONFIG =   {'base_data_dir' : '/o9000/MWA/Pulsar/vcs/',
                 'cpuq_partition' : 'arm',
                 'gpuq_cluster' : 'chess',
                 'gpuq_partition' : 'all-gpu',
-                'gpu_beamform_mem' : '4096',
+                'gpu_beamform_mem' : '30720',
                 'copyq_cluster' : 'chess',
                 'copyq_partition' : 'arm', #TODO check if there's a better one
                 'zcpuq_cluster' : 'chess',
@@ -78,7 +75,8 @@ ARM_CONFIG =   {'base_data_dir' : '/o9000/MWA/Pulsar/vcs/',
                 #None currently as we haven't worked out container software
                 'container_module' : '',
                 #'container_command' : 'docker run 192.168.6.123:5000/vcstools'}
-                'container_command' : ''}
+                'container_command' : '',
+                 'ssd_dir' : None}
 
 
 
@@ -96,7 +94,7 @@ def load_config_file():
     #Work out which supercomputer you're using
     hostname = socket.gethostname()
     # galaxy head node, galaxy and magnus job nodes, zeus job nodes, garrawarla job nodes
-    if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z')or hostname.startswith('mwa'):
+    if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z') or hostname.startswith('mwa'):
         comp_config = GALAXY_CONFIG
     elif hostname.startswith('john') or hostname.startswith('farnarkle'):
         comp_config = OZSTAR_CONFIG

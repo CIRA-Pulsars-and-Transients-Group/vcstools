@@ -32,13 +32,16 @@ module load vcstools/{version}
 """
 # NOTE: --gid option removed after discussion in helpdesk ticket GS-9370
 
+comp_config = load_config_file()
+
 
 def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                  module_list=[], vcstools_version="master",
                  batch_dir="batch/", depend=None, depend_type='afterok',
                  submit=True, outfile=None, queue="cpuq", export="NONE",
                  gpu_res=None, mem=1024, cpu_threads=1, temp_mem=None,
-                 nice=0, shebag='#!/bin/bash -l'):
+                 nice=0, shebag='#!/bin/bash -l',
+                 module_dir=comp_config['module_dir']):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
@@ -199,8 +202,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
 
     # add temp SSD memory to combat I/O issues. Only availble on Ozstar
     hostname = socket.gethostname()
-    if temp_mem is not None and \
-        (hostname.startswith('john') or hostname.startswith('farnarkle')):
+    if temp_mem is not None:
         header.append("#SBATCH --tmp={0}GB".format(temp_mem))
 
     # now join the header into one string
@@ -246,7 +248,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                        version=vcstools_version,
                        cluster=cluster, partition=partition,
                        export=export, account=comp_config['group_account'][queue],
-                       module_dir=comp_config['module_dir'],
+                       module_dir=module_dir,
                        threads=cpu_threads, mem=mem, nice=nice)
 
     # write the formatted template to the job file for submission
