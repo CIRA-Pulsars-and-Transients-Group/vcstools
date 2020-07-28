@@ -6,7 +6,7 @@ Functions to handle parsing the config file for multiple super computers
 
 #config data
 
-GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
+PAWSEY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'base_product_dir' : '/group/mwavcs/vcs/',
                  'group_account' : {'cpuq':  '#SBATCH --account=mwavcs',
                                     'gpuq':  '#SBATCH --account=mwavcs',
@@ -95,7 +95,7 @@ def load_config_file():
     hostname = socket.gethostname()
     # galaxy head node, galaxy and magnus job nodes, zeus job nodes, garrawarla job nodes
     if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z') or hostname.startswith('mwa'):
-        comp_config = GALAXY_CONFIG
+        comp_config = PAWSEY_CONFIG
     elif hostname.startswith('john') or hostname.startswith('farnarkle'):
         comp_config = OZSTAR_CONFIG
     elif hostname.startswith('x86')  or hostname.startswith('arm'):
