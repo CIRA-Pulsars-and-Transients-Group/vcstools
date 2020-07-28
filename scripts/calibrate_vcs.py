@@ -653,7 +653,7 @@ class RTScal(object):
                         "nodes": "{0}".format(nnodes),
                         "gres": "gpu:1",
                         "ntasks-per-node": "1"}
-        module_list = ["RTS/chj"]
+        module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
         #commands.append("module use /pawsey/mwa/software/python3/modulefiles")
         #commands.append("module load RTS/master")
@@ -840,7 +840,7 @@ class RTScal(object):
                             "nodes": "{0}".format(nnodes),
                             "gres": "gpu:1",
                             "ntasks-per-node": "1"}
-            module_list= ["RTS/chj"]
+            module_list= ["RTS/master"]
             commands = list(self.script_body)  # make a copy of body to then extend
             commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, k))
             jobid = submit_slurm(rts_batch, commands,
