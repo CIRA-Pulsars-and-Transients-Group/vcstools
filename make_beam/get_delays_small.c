@@ -345,8 +345,8 @@ void get_delays(
                     freq_ch,                              // observing freq of fine channel (Hz)
                     (MWA_LAT*DD2R),                       // observing latitude (radians)
                     mi->tile_pointing_az*DD2R,            // azimuth & zenith angle of tile pointing
-                    (DPIBY2-(mi->tile_pointing_el*DD2R)), // zenith angle to sample
-                    az,                                   // azimuth & zenith angle to sample
+                    (DPIBY2-(mi->tile_pointing_el*DD2R)),
+                    az,                                   // azimuth & zenith angle of pencil beam
                     (DPIBY2-el));
             /* for the tile <not the look direction> */
 
@@ -356,10 +356,10 @@ void get_delays(
                 ant = row / NPOL;
                 pol = row % NPOL;
 
-                mult2x2d(M[ant], invJref, G); // forms the "coarse channel" DI gain
+                mult2x2d(M[ant], invJref, G); // M x J^-1 = G (Forms the "coarse channel" DI gain)
 
                 if (cal->cal_type == RTS_BANDPASS)
-                    mult2x2d(G, Jf[ant][cal_chan], Gf); // forms the "fine channel" DI gain
+                    mult2x2d(G, Jf[ant][cal_chan], Gf); // G x Jf = Gf (Forms the "fine channel" DI gain)
                 else
                     cp2x2(G, Gf); //Set the fine channel DI gain equal to the coarse channel DI gain
 
@@ -465,22 +465,30 @@ int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) v
                const long freq, // observing freq (Hz)
                const float lat, // observing latitude (radians)
                const float az0, // azimuth & zenith angle of tile pointing
-               const float za0, // zenith angle to sample
-               const float az, // azimuth & zenith angle to sample
+               const float za0,
+               const float az, // azimuth & zenith angle of pencil beam
                const float za) {
     
-    const double c = VEL_LIGHT;
-    float sza, cza, saz, caz, sza0, cza0, saz0, caz0;
+    const double c = VLIGHT;                    // speed of light (m/s)
+    float sza, cza, saz, caz;                   // sin & cos of azimuth & zenith angle (pencil beam)
+    float sza0, cza0, saz0, caz0;               // sin & cos of azimuth & zenith angle (tile pointing)
     float ground_plane, ha, dec, beam_ha, beam_dec;
-    float dipl_e, dipl_n, dipl_z, proj_e, proj_n, proj_z, proj0_e, proj0_n,
-    proj0_z;
+
+    float dipl_e,  dipl_n,  dipl_z;  // Location of dipoles relative to
+    float proj_e,  proj_n,  proj_z;  // Components of pencil beam   in local (E,N,Z) coordinates
+    float proj0_e, proj0_n, proj0_z; // Components of tile pointing in local (E,N,Z) coordinates
+
     float rot[2 * N_COPOL];
     ComplexDouble PhaseShift, multiplier;
-    int i, j, n_cols = 4, n_rows = 4, result = 0;
+    int i, j; // For iterating over columns (i; East-West) and rows (j; North-South) of dipoles within tiles
+    int n_cols = 4, n_rows = 4; // Each tile is a 4x4 grid of dipoles
+    int result = 0;
     
-    float lambda = c / freq;
-    float radperm = 2.0 * DPI / lambda;
-    float dpl_sep = 1.10, dpl_hgt = 0.3, n_dipoles = (float) n_cols * n_rows;
+    float lambda = c / freq;                    // 
+    float radperm = 2.0 * DPI / lambda;         // Wavenumber (m^-1}
+    float dpl_sep = 1.10;                       // Separation between dipoles (m)
+    float dpl_hgt = 0.3;                        // Height of dipoles (m)
+    float n_dipoles = (float)(n_cols * n_rows); // 4x4 = 16 dipoles per tile
     
     const int scaling = 1; /* 0 -> no scaling; 1 -> scale to unity toward zenith; 2 -> scale to unity in look-dir */
     
@@ -505,9 +513,6 @@ int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) v
     proj0_e = sza0 * saz0;
     proj0_n = sza0 * caz0;
     proj0_z = cza0;
-    
-    n_cols = 4;
-    n_rows = 4;
     
     multiplier = CMaked( 0.0, R2C_SIGN * radperm );
     
