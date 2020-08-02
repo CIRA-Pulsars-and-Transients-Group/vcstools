@@ -22,6 +22,7 @@
 #define VEL_LIGHT  299792458.0
 #define N_COPOL    2
 #define R2C_SIGN   -1.0
+#define NDELAYS    16
 
 // A structure to read in all the relevant info from the observation metafits
 // file.
@@ -40,6 +41,7 @@ struct metafits_info {
     char      **tilenames;
     int         ninput;
     int         chan_width;
+    int         delays[NDELAYS];
 };
 
 struct delays {

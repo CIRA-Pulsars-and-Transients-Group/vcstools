@@ -139,11 +139,24 @@ void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int c
     // Flags & weights
     float wgt_sum = 0.0;
     fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
-    fits_read_col_int(fptr, colnum, 1, 1, mi->ninput, 0.0, mi->flag_array, &anynull, &status);
+    fits_read_col_int(fptr, colnum, 1, 1, mi->ninput, 0, mi->flag_array, &anynull, &status);
     if (status != 0){
         fprintf(stderr, "Error: Failed to read flags column in metafile\n");
         exit(EXIT_FAILURE);
     }
+
+    // Beamforming delays (this only reads a single set of delays from the first tile,
+    // and assumes that all tiles are the same)
+    fits_get_colnum(fptr, 1, "Delays", &colnum, &status);
+    fits_read_col_int(fptr, colnum, 1, 1, NDELAYS, 0, mi->delays, &anynull, &status);
+    if (status != 0){
+        fprintf(stderr, "Error: Failed to read delays column in metafile\n");
+        exit(EXIT_FAILURE);
+    }
+for (i = 0; i < NDELAYS; i++)
+{
+    fprintf( stderr, "%2d: %d\n", i, mi->delays[i] );
+}
 
     // Invert value (flag off = full weight; flag on = zero weight)
     for (i = 0; i < mi->ninput; i++) {

@@ -341,6 +341,8 @@ void get_delays(
                     exit(EXIT_FAILURE);
                 }
             }
+            // Analytic beam:
+            /*
             calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
                     freq_ch,                              // observing freq of fine channel (Hz)
                     (MWA_LAT*DD2R),                       // observing latitude (radians)
@@ -348,7 +350,9 @@ void get_delays(
                     (DPIBY2-(mi->tile_pointing_el*DD2R)),
                     az,                                   // azimuth & zenith angle of pencil beam
                     (DPIBY2-el));
-            /* for the tile <not the look direction> */
+            */
+            // FEE2016 beam
+            FEEBeam *beam; /* BOOKMARK */
 
             for (row=0; row < (int)(mi->ninput); row++) {
 
