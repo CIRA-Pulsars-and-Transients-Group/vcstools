@@ -41,7 +41,7 @@ struct metafits_info {
     char      **tilenames;
     int         ninput;
     int         chan_width;
-    int         delays[NDELAYS];
+    unsigned int delays[NDELAYS];
     double      amps[NDELAYS];
 };
 

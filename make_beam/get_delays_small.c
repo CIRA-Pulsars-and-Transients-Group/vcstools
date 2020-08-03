@@ -343,7 +343,7 @@ void get_delays(
                     exit(EXIT_FAILURE);
                 }
             }
-            if (strcmp(beam_model, "analytic") {
+            if (strcmp(beam_model, "analytic")) {
                 // Analytic beam:
                 calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
                         freq_ch,                              // observing freq of fine channel (Hz)
@@ -362,7 +362,7 @@ void get_delays(
                     E[n] = CMaked(jones[n*2], jones[n*2+1]);
                 }
                 free_fee_beam( beam );
-                free(jones)
+                free(jones);
             }
 
             for (row=0; row < (int)(mi->ninput); row++) {
