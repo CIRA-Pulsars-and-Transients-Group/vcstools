@@ -34,13 +34,14 @@ find_package(CFITSIO)
 find_package(PSRFITS_UTILS)
 find_package(FFTW3 COMPONENTS single openmp)
 find_package(XGPU)
+find_package(MWA_HYPERBEAM)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
 
 EXECUTE_PROCESS( COMMAND gcc -dumpversion GCC_VERSION )
 if(GCC_VERSION EQUAL 7.30)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
-endif()  
+endif()
 
 # Add the subdirectories for the three target projects
 if (XGPU_FOUND)
