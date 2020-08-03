@@ -153,10 +153,9 @@ void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int c
         fprintf(stderr, "Error: Failed to read delays column in metafile\n");
         exit(EXIT_FAILURE);
     }
-for (i = 0; i < NDELAYS; i++)
-{
-    fprintf( stderr, "%2d: %d\n", i, mi->delays[i] );
-}
+    // The amps should all be '1', except when the corresponding delay = '32'
+    for (i = 0; i < NDELAYS; i++)
+        mi->amps[i] = (mi->delays == 32 ? 0.0 : 1.0);
 
     // Invert value (flag off = full weight; flag on = zero weight)
     for (i = 0; i < mi->ninput; i++) {

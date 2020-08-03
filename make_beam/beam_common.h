@@ -42,6 +42,7 @@ struct metafits_info {
     int         ninput;
     int         chan_width;
     int         delays[NDELAYS];
+    double      amps[NDELAYS];
 };
 
 struct delays {
@@ -74,6 +75,7 @@ struct make_beam_opts {
     char              *metafits;      // filename of the metafits file
     char              *rec_channel;   // 0 - 255 receiver 1.28MHz channel
     long int           frequency;     // = rec_channel expressed in Hz
+    char              *beam_model;    // HDF5 file containing FEE 2016 beam model, or 'analytic'
 
     // Variables for MWA/VCS configuration
     int                nstation;      // The number of antennas
@@ -103,6 +105,7 @@ void get_delays(
         long int               frequency,
         struct                 calibration *cal,
         float                  samples_per_sec,
+        char                  *beam_model,
         char                  *time_utc,
         double                 sec_offset,
         struct delays          delay_vals[],

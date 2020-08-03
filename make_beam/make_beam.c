@@ -68,6 +68,7 @@ int main(int argc, char **argv)
     opts.metafits    = NULL; // filename of the metafits file
     opts.rec_channel = NULL; // 0 - 255 receiver 1.28MHz channel
     opts.frequency   = 0;    // = rec_channel expressed in Hz
+    opts.beam_model  = NULL; // HDF5 file containing FEE 2016 beam model, or 'analytic'
 
     // Variables for MWA/VCS configuration
     opts.nstation      = 128;    // The number of antennas
@@ -272,6 +273,7 @@ int main(int argc, char **argv)
             opts.frequency,     // middle of the first frequency channel in Hz
             &opts.cal,          // struct holding info about calibration
             opts.sample_rate,   // = 10000 samples per sec
+            opts.beam_model,    // name of beam model file
             opts.time_utc,      // utc time string
             0.0,                // seconds offset from time_utc at which to calculate delays
             delay_vals,        // Populate psrfits header info
@@ -415,6 +417,7 @@ int main(int argc, char **argv)
                 opts.frequency,         // middle of the first frequency channel in Hz
                 &opts.cal,              // struct holding info about calibration
                 opts.sample_rate,       // = 10000 samples per sec
+                opts.beam_model,        // name of beam model file
                 opts.time_utc,          // utc time string
                 (double)file_no,        // seconds offset from time_utc at which to calculate delays
                 NULL,                   // Don't update delay_vals
@@ -568,6 +571,7 @@ int main(int argc, char **argv)
     free( opts.cal.filename );
     free( opts.custom_flags );
     free( opts.synth_filter );
+    free( opts.beam_model   );
 
     if (opts.out_incoh)
     {
@@ -625,7 +629,8 @@ void usage() {
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "option. UTCTIME must have the format: yyyy-mm-ddThh:mm:ss\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "\t-P, --pointings=hh:mm:ss.s_dd:mm:ss.s,hh:mm:ss.s_dd:mm:ss.s... ");
+    fprintf(stderr, "\t-P, --pointings=hh:mm:ss.s_dd:mm:ss.s,hh:mm:ss.s_dd:mm:ss.s...\n");
+    fprintf(stderr, "\t                          ");
     fprintf(stderr, "Right ascension and declinations of multiple pointings\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-d, --data-location=PATH  ");
@@ -634,6 +639,13 @@ void usage() {
     fprintf(stderr, "FILE is the metafits file pertaining to the OBSID given by the\n");
     fprintf(stderr, "\t                          ");
     fprintf(stderr,  "-o option\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\t-H, --beam-model=FILE     ");
+    fprintf(stderr, "The hdf5 FILE containing the full_embedded_element_pattern used\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "for calculating the FEE 2016 beam model. If FILE = 'analytic',\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "the original analytic beam is used instead.\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-f, --coarse-chan=N       ");
     fprintf(stderr, "Absolute coarse channel number (0-255)\n");
@@ -764,6 +776,7 @@ void make_beam_parse_cmdline(
                 {"vdif",            no_argument,       0, 'v'},
                 {"summed",          no_argument,       0, 's'},
                 {"synth_filter",    required_argument, 0, 'S'},
+                {"beam-model",      required_argument, 0, 'H'},
                 {"antpol",          required_argument, 0, 'A'},
                 {"utc-time",        required_argument, 0, 'z'},
                 {"pointings",       required_argument, 0, 'P'},
@@ -786,7 +799,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:sS:vVw:W:z:",
+                             "a:A:b:B:C:d:e:f:F:hH:iJ:m:n:o:O:pP:r:sS:vVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -827,6 +840,9 @@ void make_beam_parse_cmdline(
                 case 'h':
                     usage();
                     exit(0);
+                    break;
+                case 'H':
+                    opts->beam_model = strdup(optarg);
                     break;
                 case 'i':
                     opts->out_incoh = 1;

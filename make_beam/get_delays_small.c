@@ -171,6 +171,7 @@ void get_delays(
         long int               frequency,
         struct                 calibration *cal,
         float                  samples_per_sec,
+        char                  *beam_model,
         char                  *time_utc,
         double                 sec_offset,
         struct delays          delay_vals[],
@@ -342,7 +343,6 @@ void get_delays(
                 }
             }
             // Analytic beam:
-            /*
             calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
                     freq_ch,                              // observing freq of fine channel (Hz)
                     (MWA_LAT*DD2R),                       // observing latitude (radians)
@@ -350,9 +350,9 @@ void get_delays(
                     (DPIBY2-(mi->tile_pointing_el*DD2R)),
                     az,                                   // azimuth & zenith angle of pencil beam
                     (DPIBY2-el));
-            */
             // FEE2016 beam
-            FEEBeam *beam; /* BOOKMARK */
+            //FEEBeam *beam = new_fee_beam( beam_model );
+            //free_fee_beam( beam );
 
             for (row=0; row < (int)(mi->ninput); row++) {
 
