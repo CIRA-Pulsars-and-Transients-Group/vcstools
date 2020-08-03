@@ -343,7 +343,7 @@ void get_delays(
                     exit(EXIT_FAILURE);
                 }
             }
-            if (strcmp(beam_model, "analytic")) {
+            if (strcmp(beam_model, "analytic") == 0) {
                 // Analytic beam:
                 calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
                         freq_ch,                              // observing freq of fine channel (Hz)

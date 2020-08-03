@@ -920,6 +920,7 @@ void make_beam_parse_cmdline(
     assert( opts->metafits     != NULL );
     assert( opts->rec_channel  != NULL );
     assert( opts->cal.cal_type != NO_CALIBRATION );
+    assert( opts->beam_model   != NULL );
 
     // If neither -i, -p, nor -v were chosen, set -p by default
     if ( !opts->out_incoh && !opts->out_coh && !opts->out_vdif )
