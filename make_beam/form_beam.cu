@@ -499,14 +499,49 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
                       int nstation, int nchan, int npol, int nchunk, int outpol_coh,
                       int outpol_incoh, int npointing, double time )
 {
+    size_t data_base_size;
+    size_t JD_base_size;
+
     // Calculate array sizes for host and device
-    g->coh_size   = npointing * sample_rate * outpol_coh * nchan * sizeof(float);
-    g->incoh_size = sample_rate * outpol_incoh * nchan * sizeof(float);
-    g->data_size  = sample_rate * nstation * nchan * npol / nchunk * sizeof(uint8_t);
-    g->Bd_size    = npointing * sample_rate * nchan * npol * sizeof(ComplexDouble);
-    g->W_size     = npointing * nstation * nchan * npol * sizeof(ComplexDouble);
-    g->J_size     = nstation * nchan * npol * npol * sizeof(ComplexDouble);
-    g->JD_size    = sample_rate * nstation * nchan / nchunk * sizeof(ComplexDouble);
+    g->coh_size    = npointing * sample_rate * outpol_coh * nchan * sizeof(float);
+    g->incoh_size  = sample_rate * outpol_incoh * nchan * sizeof(float);
+    data_base_size = sample_rate * nstation * nchan * npol * sizeof(uint8_t);
+    //g->data_size  = sample_rate * nstation * nchan * npol / nchunk * sizeof(uint8_t);
+    g->Bd_size     = npointing * sample_rate * nchan * npol * sizeof(ComplexDouble);
+    g->W_size      = npointing * nstation * nchan * npol * sizeof(ComplexDouble);
+    g->J_size      = nstation * nchan * npol * npol * sizeof(ComplexDouble);
+    JD_base_size   = sample_rate * nstation * nchan * sizeof(ComplexDouble);
+    //g->JD_size    = sample_rate * nstation * nchan / nchunk * sizeof(ComplexDouble);
+    
+    // Find total GPU memory
+    struct cudaDeviceProp gpu_properties;
+    cudaGetDeviceProperties( &gpu_properties, 0 );
+    size_t gpu_mem = gpu_properties.totalGlobalMem;
+    float gpu_mem_gb = (float)gpu_mem / (float)(1024*1024*1024);
+
+
+    // Work out how many chunks to split a second into so there is enough memory on the gpu
+    nchunk = 0;
+    size_t gpu_mem_used = 1000000000000;
+    while ( gpu_mem_used > gpu_mem ) 
+    {
+        nchunk += 1;
+        // Make sure the nchunk is divisable by the samples
+        while ( sample_rate%nchunk != 0 )
+        {
+            nchunk += 1;
+        }
+        gpu_mem_used = (g->W_size + g->J_size + g->Bd_size + data_base_size/nchunk +
+                        g->coh_size + g->incoh_size + 3*JD_base_size/nchunk);
+    }
+    float gpu_mem_used_gb = (float)gpu_mem_used / (float)(1024*1024*1024);
+    fprintf( stderr, "[%f]  Splitting each second into %d chunks\n", time, nchunk);
+    fprintf( stderr, "[%f]  %6.3f GB out of the total %6.3f GPU memory allocated\n",
+                     time, gpu_mem_used_gb, gpu_mem_gb );
+
+    g->data_size = data_base_size / nchunk;
+    g->JD_size   = JD_base_size / nchunk;
+
 
     // Allocate host memory
     //g->W  = (ComplexDouble *)malloc( g->W_size );
@@ -519,18 +554,21 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
     cudaMallocHost( &g->Bd, g->Bd_size );
     cudaCheckErrors("cudaMallocHost Bd fail");
 
-    fprintf( stderr, "[%f] coh_size   %d  MB GPU mem\n", time, g->coh_size  /1000000 );
-    fprintf( stderr, "[%f] incoh_size %d  MB GPU mem\n", time, g->incoh_size/1000000 );
-    fprintf( stderr, "[%f] data_size  %d  MB GPU mem\n", time, g->data_size /1000000 );
-    fprintf( stderr, "[%f] Bd_size    %d  MB GPU mem\n", time, g->Bd_size   /1000000 );
-    fprintf( stderr, "[%f] W_size     %d  MB GPU mem\n", time, g->W_size    /1000000 );
-    fprintf( stderr, "[%f] J_size     %d  MB GPU mem\n", time, g->J_size    /1000000 );
-    fprintf( stderr, "[%f] JD_size    %d  MB GPU mem\n", time, g->JD_size*3 /1000000 );
+    fprintf( stderr, "[%f]  coh_size   %9.3f MB GPU mem\n",
+                      time, (float)g->coh_size  / (float)(1024*1024) );
+    fprintf( stderr, "[%f]  incoh_size %9.3f MB GPU mem\n",
+                      time, (float)g->incoh_size/ (float)(1024*1024) );
+    fprintf( stderr, "[%f]  data_size  %9.3f MB GPU mem\n",
+                      time, (float)g->data_size / (float)(1024*1024) );
+    fprintf( stderr, "[%f]  Bd_size    %9.3f MB GPU mem\n",
+                      time, (float)g->Bd_size   / (float)(1024*1024) );
+    fprintf( stderr, "[%f]  W_size     %9.3f MB GPU mem\n",
+                      time, (float)g->W_size    / (float)(1024*1024) );
+    fprintf( stderr, "[%f]  J_size     %9.3f MB GPU mem\n",
+                      time, (float)g->J_size    / (float)(1024*1024) );
+    fprintf( stderr, "[%f]  JD_size    %9.3f MB GPU mem\n",
+                      time, (float)g->JD_size*3 / (float)(1024*1024) );
 
-    int GPU_mem = (g->W_size + g->J_size + g->Bd_size + g->data_size +
-                   g->coh_size + g->incoh_size + 3*g->JD_size) /1000000000;
-
-    fprintf( stderr, "[%f]  %d GB GPU memory allocated\n", time, GPU_mem );
 
     // Allocate device memory
     gpuErrchk(cudaMalloc( (void **)&g->d_W,     g->W_size ));

@@ -32,6 +32,7 @@
 #include "mycomplex.h"
 #include "form_beam.h"
 #include <omp.h>
+#include <cuda_runtime.h>
 
 #ifdef HAVE_CUDA
 
@@ -185,9 +186,6 @@ int main(int argc, char **argv)
        fprintf(stderr, "[%f]  Pointing Num: %i  RA: %s  Dec: %s\n", NOW-begintime,
                              p, pointing_array[p][0], pointing_array[p][1]);
     }
-
-    // How many chunks to split a second into so there is enough memory on the gpu
-    int nchunk = 2;
 
     // Allocate memory
     char **filenames = create_filenames( &opts );
@@ -367,11 +365,12 @@ int main(int argc, char **argv)
                                                            pf_incoh[0].hdr.nsblk );
     data_buffer_vdif  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
                                                         npointing );
-    
+
     /* Allocate host and device memory for the use of the cu_form_beam function */
     // Declaring pointers to the structs so the memory can be alternated
     struct gpu_formbeam_arrays gf;
     struct gpu_ipfb_arrays gi;
+    int nchunk;
     malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, nchunk,
                      outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
