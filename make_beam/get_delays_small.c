@@ -16,6 +16,7 @@
 #include "fitsio.h"
 #include <string.h>
 #include "beam_common.h"
+#include "mwa_hyperbeam.h"
 
 /* make a connection to the MWA database and get the antenna positions.
  * Then: calculate the geometric delay to a source for each antenna
@@ -106,7 +107,7 @@ double parse_ra( char* ra_hhmmss ) {
 
 void ENH2XYZ_local(double E,double N, double H, double lat, double *X, double *Y, double *Z) {
     double sl,cl;
-    
+
     sl = sin(lat);
     cl = cos(lat);
     *X = -N*sl + H*cl;
@@ -116,7 +117,7 @@ void ENH2XYZ_local(double E,double N, double H, double lat, double *X, double *Y
 
 void calcUVW(double ha,double dec,double x,double y,double z,double *u,double *v,double *w) {
     double sh,ch,sd,cd;
-    
+
     sh = sin(ha); sd = sin(dec);
     ch = cos(ha); cd = cos(dec);
     *u  = sh*x + ch*y;
@@ -136,7 +137,7 @@ int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) v
 
 
 void mjd2lst(double mjd, double *lst) {
-    
+
     // Greenwich Mean Sidereal Time to LMST
     // east longitude in hours at the epoch of the MJD
     double arr_lon_rad = MWA_LON * M_PI/180.0;
@@ -146,17 +147,17 @@ void mjd2lst(double mjd, double *lst) {
 }
 
 void utc2mjd(char *utc_str, double *intmjd, double *fracmjd) {
-    
+
     int J=0;
     struct tm *utc;
     utc = calloc(1,sizeof(struct tm));
-    
+
     sscanf(utc_str, "%d-%d-%dT%d:%d:%d",
             &utc->tm_year, &utc->tm_mon, &utc->tm_mday,
             &utc->tm_hour, &utc->tm_min, &utc->tm_sec);
-    
+
     slaCaldj(utc->tm_year, utc->tm_mon, utc->tm_mday, intmjd, &J);
-    
+
     if (J !=0) {
         fprintf(stderr,"Failed to calculate MJD\n");
     }
@@ -179,7 +180,7 @@ void get_delays(
         ComplexDouble       ****complex_weights_array,  // output: cmplx[npointing][ant][ch][pol]
         ComplexDouble       ****invJi )                 // output: invJi[ant][ch][pol][pol]
 {
-    
+
     int row;     // For counting through nstation*npol rows in the metafits file
     int ant;     // Antenna number
     int pol;     // Polarisation number
@@ -188,9 +189,9 @@ void get_delays(
 
     int conjugate = -1;
     int invert = -1;
-    
+
     /* easy -- now the positions from the database */
-    
+
     double phase;
 
     /* Calibration related defines */
@@ -232,19 +233,19 @@ void get_delays(
     double mean_ra, mean_dec, ha;
     double app_ha_rad, app_dec_rad;
     double az,el;
-    
+
     double unit_N;
     double unit_E;
     double unit_H;
     int    n;
 
     int *order = (int *)malloc( NANT*sizeof(int) );
-        
+
     double dec_degs;
     double ra_hours;
     long int freq_ch;
     int cal_chan;
-    
+
     double cable;
 
     double integer_phase;
@@ -294,7 +295,7 @@ void get_delays(
     utc2mjd(time_utc, &intmjd, &fracmjd);
 
     /* get requested Az/El from command line */
-  
+
     mjd = intmjd + fracmjd;
     mjd += (sec_offset+0.5)/86400.0;
     mjd2lst(mjd, &lmst);
@@ -303,28 +304,28 @@ void get_delays(
     {
 
         dec_degs = parse_dec( pointing_array[p][1] );
-        ra_hours = parse_ra( pointing_array[p][0] );  
+        ra_hours = parse_ra( pointing_array[p][0] );
 
         /* for the look direction <not the tile> */
-        
+
         mean_ra = ra_hours * DH2R;
         mean_dec = dec_degs * DD2R;
 
         slaMap(mean_ra, mean_dec, pr, pd, px, rv, eq, mjd, &ra_ap, &dec_ap);
-        
+
         // Lets go mean to apparent precess from J2000.0 to EPOCH of date.
-        
+
         ha = slaRanorm(lmst-ra_ap)*DR2H;
 
         /* now HA/Dec to Az/El */
-        
+
         app_ha_rad = ha * DH2R;
         app_dec_rad = dec_ap;
 
         slaDe2h(app_ha_rad, dec_ap, MWA_LAT*DD2R, &az, &el);
 
         /* now we need the direction cosines */
-        
+
         unit_N = cos(el) * cos(az);
         unit_E = cos(el) * sin(az);
         unit_H = sin(el);
@@ -342,17 +343,27 @@ void get_delays(
                     exit(EXIT_FAILURE);
                 }
             }
-            // Analytic beam:
-            calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
-                    freq_ch,                              // observing freq of fine channel (Hz)
-                    (MWA_LAT*DD2R),                       // observing latitude (radians)
-                    mi->tile_pointing_az*DD2R,            // azimuth & zenith angle of tile pointing
-                    (DPIBY2-(mi->tile_pointing_el*DD2R)),
-                    az,                                   // azimuth & zenith angle of pencil beam
-                    (DPIBY2-el));
-            // FEE2016 beam
-            //FEEBeam *beam = new_fee_beam( beam_model );
-            //free_fee_beam( beam );
+            if (strcmp(beam_model, "analytic") {
+                // Analytic beam:
+                calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
+                        freq_ch,                              // observing freq of fine channel (Hz)
+                        (MWA_LAT*DD2R),                       // observing latitude (radians)
+                        mi->tile_pointing_az*DD2R,            // azimuth & zenith angle of tile pointing
+                        (DPIBY2-(mi->tile_pointing_el*DD2R)),
+                        az,                                   // azimuth & zenith angle of pencil beam
+                        (DPIBY2-el));
+            }
+            else{
+                // FEE2016 beam
+                FEEBeam *beam = new_fee_beam( beam_model );
+                int zenith_norm = 1; // TODO decide on 1 or 0 for zenith norm
+                double *jones = calc_jones(beam, az, DPIBY2-el, freq_ch, mi->delays, mi->amps, zenith_norm);
+                for (n = 0; n<NPOL*NPOL; n++){
+                    E[n] = CMaked(jones[n*2], jones[n*2+1]);
+                }
+                free_fee_beam( beam );
+                free(jones)
+            }
 
             for (row=0; row < (int)(mi->ninput); row++) {
 
@@ -441,7 +452,7 @@ void get_delays(
 
         // Populate a structure with some of the calculated values
         if (delay_vals != NULL) {
-            
+
             delay_vals[p].mean_ra  = mean_ra;
             delay_vals[p].mean_dec = mean_dec;
             delay_vals[p].az       = az;
@@ -452,7 +463,7 @@ void get_delays(
 
         }
     }
-        
+
     // Free up dynamically allocated memory
 
     for (ant = 0; ant < NANT; ant++) {
@@ -472,7 +483,7 @@ int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) v
                const float za0,
                const float az, // azimuth & zenith angle of pencil beam
                const float za) {
-    
+
     const double c = VLIGHT;                    // speed of light (m/s)
     float sza, cza, saz, caz;                   // sin & cos of azimuth & zenith angle (pencil beam)
     float sza0, cza0, saz0, caz0;               // sin & cos of azimuth & zenith angle (tile pointing)
@@ -487,20 +498,20 @@ int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) v
     int i, j; // For iterating over columns (i; East-West) and rows (j; North-South) of dipoles within tiles
     int n_cols = 4, n_rows = 4; // Each tile is a 4x4 grid of dipoles
     int result = 0;
-    
-    float lambda = c / freq;                    // 
+
+    float lambda = c / freq;                    //
     float radperm = 2.0 * DPI / lambda;         // Wavenumber (m^-1}
     float dpl_sep = 1.10;                       // Separation between dipoles (m)
     float dpl_hgt = 0.3;                        // Height of dipoles (m)
     float n_dipoles = (float)(n_cols * n_rows); // 4x4 = 16 dipoles per tile
-    
+
     const int scaling = 1; /* 0 -> no scaling; 1 -> scale to unity toward zenith; 2 -> scale to unity in look-dir */
-    
+
     response[0] = CMaked( 0.0, 0.0 );
     response[1] = CMaked( 0.0, 0.0 );
     response[2] = CMaked( 0.0, 0.0 );
     response[3] = CMaked( 0.0, 0.0 );
-    
+
     sza = sin(za);
     cza = cos(za);
     saz = sin(az);
@@ -509,17 +520,17 @@ int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) v
     cza0 = cos(za0);
     saz0 = sin(az0);
     caz0 = cos(az0);
-    
+
     proj_e = sza * saz;
     proj_n = sza * caz;
     proj_z = cza;
-    
+
     proj0_e = sza0 * saz0;
     proj0_n = sza0 * caz0;
     proj0_z = cza0;
-    
+
     multiplier = CMaked( 0.0, R2C_SIGN * radperm );
-    
+
     /* loop over dipoles */
     for (i = 0; i < n_cols; i++) {
         for (j = 0; j < n_rows; j++) {
@@ -540,35 +551,35 @@ int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) v
     }
     // assuming that the beam centre is normal to the ground plane, the separation should be used instead of the za.
     // ground_plane = 2.0 * sin( 2.0*pi * dpl_hgt/lambda * cos(za) );
-    
+
     //fprintf(stdout,"calib: dpl_hgt %f radperm %f za %f\n",dpl_hgt,radperm,za);
-    
+
     ground_plane = 2.0 * sin(dpl_hgt * radperm * cos(za)) / n_dipoles;
-    
+
     slaH2e(az0, DPIBY2 - za0, lat, &beam_ha, &beam_dec);
-    
+
     // ground_plane = 2.0*sin(2.0*DPI*dpl_hgt/lambda*cos(slaDsep(beam_ha,beam_dec,ha,dec))) / n_dipoles;
-    
+
     if (scaling == 1) {
         ground_plane /= (2.0 * sin(dpl_hgt * radperm));
     }
     else if (scaling == 2) {
         ground_plane /= (2.0 * sin( 2.0*DPI* dpl_hgt/lambda * cos(za) ));
     }
-    
+
     slaH2e(az, DPIBY2 - za, lat, &ha, &dec);
-    
+
     rot[0] = cos(lat) * cos(dec) + sin(lat) * sin(dec) * cos(ha);
     rot[1] = -sin(lat) * sin(ha);
     rot[2] = sin(dec) * sin(ha);
     rot[3] = cos(ha);
-    
+
     //fprintf(stdout,"calib:HA is %f hours \n",ha*DR2H);
     // rot is the Jones matrix, response just contains the phases, so this should be an element-wise multiplication.
     for (i = 0; i < 4; i++)
         response[i] = CScld( response[i], rot[i] * ground_plane );
     //fprintf(stdout,"calib:HA is %f groundplane factor is %f\n",ha*DR2H,ground_plane);
     return (result);
-    
+
 } /* calcEjones */
 
