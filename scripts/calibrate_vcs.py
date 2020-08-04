@@ -151,7 +151,7 @@ class BaseRTSconfig(object):
         # First, check that the actual data directory exists
         if datadir is None:
             # use the default data path
-            self.data_dir = os.path.join(comp_config['base_product_dir'], str(obsid), "cal", str(cal_obsid), "vis")
+            self.data_dir = os.path.join(comp_config['base_data_dir'], str(obsid), "cal", str(cal_obsid), "vis")
             logger.info("Using default calibrator data path: {0}".format(self.data_dir))
             if os.path.exists(os.path.realpath(self.data_dir)) is False:
                 errmsg = "Default data directory ({0}) does not exist. Aborting.".format(self.data_dir)
@@ -169,8 +169,8 @@ class BaseRTSconfig(object):
         if outdir is None:
             # this is the default
             logger.info("Assuming default directory structure...")
-            self.output_dir = os.path.join(comp_config['base_product_dir'], str(self.obsid), "cal", str(self.cal_obsid), "rts")
-            self.batch_dir =os.path.join(comp_config['base_product_dir'], str(self.obsid), "batch")
+            self.output_dir = os.path.join(comp_config['base_data_dir'], str(self.obsid), "cal", str(self.cal_obsid), "rts")
+            self.batch_dir =os.path.join(comp_config['base_data_dir'], str(self.obsid), "batch")
             logger.debug("RTS output directory is {0}".format(self.output_dir))
             logger.debug("Batch directory is {0}".format(self.batch_dir))
             mdir(self.output_dir, "RTS")
@@ -655,6 +655,8 @@ class RTScal(object):
                         "ntasks-per-node": "1"}
         module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
+        #commands.append("module use /pawsey/mwa/software/python3/modulefiles")
+        #commands.append("module load RTS/master")
         commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, fname))
         jobid = submit_slurm(rts_batch, commands,
                                 slurm_kwargs=slurm_kwargs,
@@ -662,7 +664,9 @@ class RTScal(object):
                                 batch_dir=self.batch_dir,
                                 submit=self.submit,
                                 queue='gpuq',
-                                export="NONE")
+                                export="NONE",
+                                module_dir='/pawsey/mwa/software/python3/modulefiles',
+                                mem=10240)
         jobids.append(jobid)
 
         return jobids
@@ -845,7 +849,9 @@ class RTScal(object):
                                     batch_dir=self.batch_dir,
                                     submit=self.submit,
                                     queue='gpuq',
-                                    export="NONE")
+                                    export="NONE",
+                                    module_dir='/pawsey/mwa/software/python3/modulefiles',
+                                    mem=10240)
             jobids.append(jobid)
 
         return jobids

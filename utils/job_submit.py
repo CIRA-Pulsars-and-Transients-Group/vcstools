@@ -38,7 +38,8 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                  batch_dir="batch/", depend=None, depend_type='afterok',
                  submit=True, outfile=None, queue="cpuq", export="NONE",
                  gpu_res=None, mem=1024, cpu_threads=1, temp_mem=None,
-                 nice=0, shebag='#!/bin/bash -l'):
+                 nice=0, shebag='#!/bin/bash -l',
+                 module_dir=None):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
@@ -199,9 +200,11 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
 
     # add temp SSD memory to combat I/O issues. Only availble on Ozstar
     hostname = socket.gethostname()
-    if temp_mem is not None and \
-        (hostname.startswith('john') or hostname.startswith('farnarkle')):
+    if temp_mem is not None:
         header.append("#SBATCH --tmp={0}GB".format(temp_mem))
+
+    if module_dir is None:
+        module_dir = comp_config['module_dir']
 
     # now join the header into one string
     header = "\n".join(header)
@@ -228,9 +231,6 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
     # join the commands into a single string
     commands = "\n".join(commands)
 
-    # load computer dependant config file
-    comp_config = load_config_file()
-
     # some little hacks to make jobs work on the shanghai server
     if hostname.startswith('x86') or hostname.startswith('arm'):
         if vcstools_version == 'master':
@@ -246,7 +246,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                        version=vcstools_version,
                        cluster=cluster, partition=partition,
                        export=export, account=comp_config['group_account'][queue],
-                       module_dir=comp_config['module_dir'],
+                       module_dir=module_dir,
                        threads=cpu_threads, mem=mem, nice=nice)
 
     # write the formatted template to the job file for submission

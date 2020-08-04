@@ -27,7 +27,7 @@ def get_git_version():
     git_version = check_output('git describe --tags --long --dirty --always'.split()).decode('utf-8').strip()
     return format_version(version=git_version)
 
-reqs = ['astropy>=3.2.3',
+reqs = ['astropy>=3.2.1',
         'argparse>=1.4.0',
         'h5py>=2.7.1',
         'numpy>=1.13.3',
