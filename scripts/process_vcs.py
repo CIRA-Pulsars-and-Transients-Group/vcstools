@@ -139,11 +139,11 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
     # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
     # in case --work_dir was specified in process_vcs call product_dir and data_dir
     # are the same and thus we will not perform the copy
-    #product_dir = data_dir.replace(comp_config['base_data_dir'], comp_config['base_product_dir']) # being pedantic
-    if os.path.exists(product_dir) and not os.path.exists(metafits_file):
-        logger.info("Copying {0} to {1}".format(metafits_file, product_dir))
+    #data_dir = data_dir.replace(comp_config['base_data_dir'], comp_config['base_product_dir']) # being pedantic
+    if os.path.exists(data_dir) and not os.path.exists(metafits_file):
+        logger.info("Copying {0} to {1}".format(metafits_file, data_dir))
         from shutil import copy2
-        copy2("{0}".format(metafits_file), "{0}".format(product_dir))
+        copy2("{0}".format(metafits_file), "{0}".format(data_dir))
 
 def create_link(data_dir, target_dir, product_dir, link):
     """

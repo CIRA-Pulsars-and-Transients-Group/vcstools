@@ -665,7 +665,6 @@ class RTScal(object):
                                 submit=self.submit,
                                 queue='gpuq',
                                 export="NONE",
-                                module_dir='/pawsey/mwa/software/python3/modulefiles',
                                 mem=10240)
         jobids.append(jobid)
 
@@ -850,7 +849,6 @@ class RTScal(object):
                                     submit=self.submit,
                                     queue='gpuq',
                                     export="NONE",
-                                    module_dir='/pawsey/mwa/software/python3/modulefiles',
                                     mem=10240)
             jobids.append(jobid)
 

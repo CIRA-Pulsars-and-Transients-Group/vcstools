@@ -89,6 +89,7 @@ struct make_beam_opts {
     int                out_ant;       // The antenna number (0-127) to write out if out_bf = 0
     char              *synth_filter;  // Which synthesis filter to use
     int                out_summed;    // Default = output only Stokes I output turned OFF
+    int                max_sec_per_file;    // Number of seconds per fits files
 
     struct calibration cal;           // Variables for calibration settings
 };

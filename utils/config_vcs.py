@@ -6,13 +6,35 @@ Functions to handle parsing the config file for multiple super computers
 
 #config data
 
-PAWSEY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
+GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
+                 'base_product_dir' : '/group/mwavcs/vcs/',
+                 'group_account' : {'cpuq':  '#SBATCH --account=pawsey0348',
+                                    'gpuq':  '#SBATCH --account=mwavcs',
+                                    'copyq': '#SBATCH --account=mwavcs',
+                                    'zcpuq': '#SBATCH --account=mwavcs'},
+                 'module_dir' : '/group/mwa/software/modulefiles',
+                 'presto_module' : 'presto/master',
+                 'psrcat_module' : 'psrcat/1.59',
+                 'cpuq_cluster' : 'magnus',
+                 'cpuq_partition' : 'workq',
+                 'gpuq_cluster' : 'galaxy',
+                 'gpuq_partition' : 'gpuq',
+                 'gpu_beamform_mem' : '1024',
+                 'zcpuq_cluster' : 'zeus',
+                 'zcpuq_partition' : 'workq',
+                 'copyq_cluster' : 'zeus',
+                 'copyq_partition' : 'copyq',
+                 'container_module' : '',
+                 'container_command' : '',
+                 'ssd_dir' : None}
+
+GARRAWARLA_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'base_product_dir' : '/group/mwavcs/vcs/',
                  'group_account' : {'cpuq':  '#SBATCH --account=mwavcs',
                                     'gpuq':  '#SBATCH --account=mwavcs',
                                     'copyq': '#SBATCH --account=mwavcs',
                                     'zcpuq': '#SBATCH --account=mwavcs'},
-                 'module_dir' : '/group/mwa/software/modulefiles',
+                 'module_dir' : '/pawsey/mwa/software/python3/modulefiles/',
                  'presto_module' : 'presto/master',
                  'psrcat_module' : 'psrcat/1.59',
                  'cpuq_cluster' : 'garrawarla',
@@ -94,8 +116,10 @@ def load_config_file():
     #Work out which supercomputer you're using
     hostname = socket.gethostname()
     # galaxy head node, galaxy and magnus job nodes, zeus job nodes, garrawarla job nodes
-    if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z') or hostname.startswith('mwa'):
-        comp_config = PAWSEY_CONFIG
+    if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z'):
+        comp_config = GALAXY_CONFIG
+    elif hostname.startswith('mwa') or hostname.startswith('garrawarla'):
+        comp_config = GARRAWARLA_CONFIG
     elif hostname.startswith('john') or hostname.startswith('farnarkle'):
         comp_config = OZSTAR_CONFIG
     elif hostname.startswith('x86')  or hostname.startswith('arm'):
