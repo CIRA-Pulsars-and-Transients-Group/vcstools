@@ -18,7 +18,6 @@ void populate_psrfits_header(
         char           *obsid,
         char           *time_utc,
         unsigned int    sample_rate,
-        int             max_sec_per_file,
         long int        frequency,
         int             nchan,
         long int        chan_width,
