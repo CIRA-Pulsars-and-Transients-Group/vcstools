@@ -84,6 +84,7 @@ int main(int argc, char **argv)
     opts.out_ant       = 0;  // The antenna number (0-127) to write out if out_bf = 0
     opts.synth_filter  = NULL;
     opts.out_summed    = 0;  // Default = output only Stokes I output turned OFF
+    opts.max_sec_per_file = 200; // Number of seconds per fits files
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -332,11 +333,11 @@ int main(int argc, char **argv)
 
     // Populate the relevant header structs
     populate_psrfits_header( pf,       opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.time_utc, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
             opts.chan_width,outpol_coh, opts.rec_channel, delay_vals,
             mi, npointing, 1 );
     populate_psrfits_header( pf_incoh, opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.time_utc, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
             opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals,
             mi, 1, 0 );
 
@@ -655,6 +656,9 @@ void usage() {
     fprintf(stderr, "\t-s, --summed               ");
     fprintf(stderr, "Turn on summed polarisations of the coherent output (only Stokes I) ");
     fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-t, --max_t                ");
+    fprintf(stderr, "Maximum number of seconds per output fits file. ");
+    fprintf(stderr, "[default: 200]\n");
     fprintf(stderr, "\t-A, --antpol=ant           ");
     fprintf(stderr, "Do not beamform. Instead, only operate on the specified ant\n");
     fprintf(stderr, "\t                           ");
@@ -763,6 +767,7 @@ void make_beam_parse_cmdline(
                 {"psrfits",         no_argument,       0, 'p'},
                 {"vdif",            no_argument,       0, 'v'},
                 {"summed",          no_argument,       0, 's'},
+                {"max_t",           required_argument, 0, 't'},
                 {"synth_filter",    required_argument, 0, 'S'},
                 {"antpol",          required_argument, 0, 'A'},
                 {"utc-time",        required_argument, 0, 'z'},
@@ -786,7 +791,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:sS:vVw:W:z:",
+                             "a:A:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:sS:t:vVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -863,6 +868,11 @@ void make_beam_parse_cmdline(
                     break;
                 case 's':
                     opts->out_summed = 1;
+                    break;
+                case 't':
+                    fprintf( stderr, "before\n");
+                    opts->max_sec_per_file = atoi(optarg);
+                    fprintf( stderr, "after\n");
                     break;
                 case 'v':
                     opts->out_vdif = 1;
