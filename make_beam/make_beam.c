@@ -355,6 +355,14 @@ int main(int argc, char **argv)
     uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     assert(data);
 
+    /* Allocate host and device memory for the use of the cu_form_beam function */
+    // Declaring pointers to the structs so the memory can be alternated
+    struct gpu_formbeam_arrays gf;
+    struct gpu_ipfb_arrays gi;
+    int nchunk;
+    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, nchunk,
+                     outpol_coh, outpol_incoh, npointing, NOW-begintime );
+
     // Create output buffer arrays
     float *data_buffer_coh    = NULL;
     float *data_buffer_incoh  = NULL;
@@ -366,14 +374,6 @@ int main(int argc, char **argv)
                                                            pf_incoh[0].hdr.nsblk );
     data_buffer_vdif  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
                                                         npointing );
-
-    /* Allocate host and device memory for the use of the cu_form_beam function */
-    // Declaring pointers to the structs so the memory can be alternated
-    struct gpu_formbeam_arrays gf;
-    struct gpu_ipfb_arrays gi;
-    int nchunk;
-    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, nchunk,
-                     outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
     if (opts.out_vdif)
     {
