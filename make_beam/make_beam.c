@@ -32,7 +32,6 @@
 #include "mycomplex.h"
 #include "form_beam.h"
 #include <omp.h>
-#include <cuda_runtime.h>
 
 #ifdef HAVE_CUDA
 
@@ -107,7 +106,7 @@ int main(int argc, char **argv)
         outpol_coh           = 1;  // (I)
     const int outpol_incoh   = 1;  // ("I")
 
-    float vgain = 1.0; // This is re-calculated every second for the VDIF output
+    //float vgain = 1.0; // This is re-calculated every second for the VDIF output
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = NOW;
@@ -355,6 +354,14 @@ int main(int argc, char **argv)
     uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     assert(data);
 
+    /* Allocate host and device memory for the use of the cu_form_beam function */
+    // Declaring pointers to the structs so the memory can be alternated
+    struct gpu_formbeam_arrays gf;
+    struct gpu_ipfb_arrays gi;
+    int nchunk;
+    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, &nchunk,
+                     outpol_coh, outpol_incoh, npointing, NOW-begintime );
+
     // Create output buffer arrays
     float *data_buffer_coh    = NULL;
     float *data_buffer_incoh  = NULL;
@@ -366,14 +373,6 @@ int main(int argc, char **argv)
                                                            pf_incoh[0].hdr.nsblk );
     data_buffer_vdif  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
                                                         npointing );
-
-    /* Allocate host and device memory for the use of the cu_form_beam function */
-    // Declaring pointers to the structs so the memory can be alternated
-    struct gpu_formbeam_arrays gf;
-    struct gpu_ipfb_arrays gi;
-    int nchunk;
-    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, nchunk,
-                     outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
     if (opts.out_vdif)
     {
@@ -482,8 +481,7 @@ int main(int argc, char **argv)
                                       nchan, outpol_incoh, p );
             if (opts.out_vdif)
                 vdif_write_second( &vf[p], &vhdr,
-                                   data_buffer_vdif + p * vf->sizeof_buffer,
-                                   &vgain );
+                                   data_buffer_vdif + p * vf->sizeof_buffer );
             write_time[file_no][p] = clock() - start;
         }
     }
