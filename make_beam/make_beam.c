@@ -32,7 +32,6 @@
 #include "mycomplex.h"
 #include "form_beam.h"
 #include <omp.h>
-#include <cuda_runtime.h>
 
 #ifdef HAVE_CUDA
 
@@ -107,7 +106,7 @@ int main(int argc, char **argv)
         outpol_coh           = 1;  // (I)
     const int outpol_incoh   = 1;  // ("I")
 
-    float vgain = 1.0; // This is re-calculated every second for the VDIF output
+    //float vgain = 1.0; // This is re-calculated every second for the VDIF output
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = NOW;
@@ -360,7 +359,7 @@ int main(int argc, char **argv)
     struct gpu_formbeam_arrays gf;
     struct gpu_ipfb_arrays gi;
     int nchunk;
-    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, nchunk,
+    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, &nchunk,
                      outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
     // Create output buffer arrays
@@ -482,8 +481,7 @@ int main(int argc, char **argv)
                                       nchan, outpol_incoh, p );
             if (opts.out_vdif)
                 vdif_write_second( &vf[p], &vhdr,
-                                   data_buffer_vdif + p * vf->sizeof_buffer,
-                                   &vgain );
+                                   data_buffer_vdif + p * vf->sizeof_buffer );
             write_time[file_no][p] = clock() - start;
         }
     }

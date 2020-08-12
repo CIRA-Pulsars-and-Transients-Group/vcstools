@@ -25,7 +25,7 @@
 #endif
 
 void vdif_write_second( struct vdifinfo *vf, vdif_header *vhdr,
-                        float *data_buffer_vdif, float *gain )
+                        float *data_buffer_vdif )
 {
     float *data_buffer_ptr = data_buffer_vdif;
     size_t offset_out_vdif = 0;
