@@ -228,7 +228,7 @@ int append(char **to_append, void *total, int n){
     // now we have to transpose a bit
     // we need to step through every constituent file for every subint
 
-    int nsub = 1000;
+    int nsub = 5000;
     for (sub = 0; sub < nsub; sub++) { // foreach subint
 
         size_t start_offset = 0;
