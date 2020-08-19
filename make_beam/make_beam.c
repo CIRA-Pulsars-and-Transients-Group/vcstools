@@ -94,6 +94,9 @@ int main(int argc, char **argv)
     opts.cal.cal_type          = NO_CALIBRATION;
     opts.cal.offr_chan_num     = 0;
 
+    // GPU options
+    opts.gpu_mem               = -1.0;
+
     // Parse command line arguments
     make_beam_parse_cmdline( argc, argv, &opts );
 
@@ -359,7 +362,7 @@ int main(int argc, char **argv)
     struct gpu_formbeam_arrays gf;
     struct gpu_ipfb_arrays gi;
     int nchunk;
-    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, &nchunk,
+    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, &nchunk, opts.gpu_mem,
                      outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
     // Create output buffer arrays
@@ -782,13 +785,14 @@ void make_beam_parse_cmdline(
                 {"rts-chan-width",  required_argument, 0, 'W'},
                 {"offringa-file",   required_argument, 0, 'O'},
                 {"offringa-chan",   required_argument, 0, 'C'},
+                {"gpu-mem",         required_argument, 0, 'g'},
                 {"help",            required_argument, 0, 'h'},
                 {"version",         required_argument, 0, 'V'}
             };
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:e:f:F:hiJ:m:n:o:O:pP:r:sS:t:vVw:W:z:",
+                             "a:A:b:B:C:d:e:f:F:g:hiJ:m:n:o:O:pP:r:sS:t:vVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -825,6 +829,9 @@ void make_beam_parse_cmdline(
                     break;
                 case 'F':
                     opts->custom_flags = strdup(optarg);
+                    break;
+                case 'g':
+                    opts->gpu_mem = atof(optarg);
                     break;
                 case 'h':
                     usage();

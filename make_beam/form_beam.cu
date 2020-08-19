@@ -496,7 +496,7 @@ void cu_form_beam( uint8_t *data, struct make_beam_opts *opts,
 }
 
 void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
-                      int nstation, int nchan, int npol, int *nchunk, int outpol_coh,
+                      int nstation, int nchan, int npol, int *nchunk, float gpu_mem_gb, int outpol_coh,
                       int outpol_incoh, int npointing, double time )
 {
     size_t data_base_size;
@@ -513,11 +513,17 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
     JD_base_size   = sample_rate * nstation * nchan * sizeof(ComplexDouble);
     //g->JD_size    = sample_rate * nstation * nchan / nchunk * sizeof(ComplexDouble);
     
-    // Find total GPU memory
-    struct cudaDeviceProp gpu_properties;
-    cudaGetDeviceProperties( &gpu_properties, 0 );
-    size_t gpu_mem = gpu_properties.totalGlobalMem;
-    float gpu_mem_gb = (float)gpu_mem / (float)(1024*1024*1024);
+    size_t gpu_mem;
+    if ( gpu_mem_gb == -1.0f ) {
+        // Find total GPU memory
+        struct cudaDeviceProp gpu_properties;
+        cudaGetDeviceProperties( &gpu_properties, 0 );
+        gpu_mem = gpu_properties.totalGlobalMem;
+        gpu_mem_gb = (float)gpu_mem / (float)(1024*1024*1024);
+    }
+    else {
+        gpu_mem = (size_t)(gpu_mem_gb * (float)(1024*1024*1024));
+    }
 
 
     // Work out how many chunks to split a second into so there is enough memory on the gpu
