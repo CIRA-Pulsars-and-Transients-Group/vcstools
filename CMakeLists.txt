@@ -47,12 +47,21 @@ endif()
 if (XGPU_FOUND)
     add_subdirectory(offline_correlator)
 endif()
+
 if (${CMAKE_BEAMFORMER})
   message("Compiling make_beam")
   add_subdirectory(make_beam)
 else()
   message("Not compiling make_beam")
 endif()
+
+if (${CTESTS})
+  message("Compiling C tests")
+  add_subdirectory(tests)
+else()
+    message("Not compiling C tests")
+endif()
+
 add_subdirectory(make_psrfits)
 add_subdirectory(read_mwac)
 
