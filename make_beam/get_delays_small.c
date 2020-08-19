@@ -127,15 +127,6 @@ void calcUVW(double ha,double dec,double x,double y,double z,double *u,double *v
 
 
 
-int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
-               const long freq, // observing freq (Hz)
-               const float lat, // observing latitude (radians)
-               const float az0, // azimuth & zenith angle of tile pointing
-               const float za0, // zenith angle to sample
-               const float az, // azimuth & zenith angle to sample
-               const float za);
-
-
 void mjd2lst(double mjd, double *lst) {
 
     // Greenwich Mean Sidereal Time to LMST
@@ -345,13 +336,20 @@ void get_delays(
             }
             if (strcmp(beam_model, "analytic") == 0) {
                 // Analytic beam:
-                calcEjones(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
+                calcEjones_analytic(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
                         freq_ch,                              // observing freq of fine channel (Hz)
                         (MWA_LAT*DD2R),                       // observing latitude (radians)
                         mi->tile_pointing_az*DD2R,            // azimuth & zenith angle of tile pointing
                         (DPIBY2-(mi->tile_pointing_el*DD2R)),
                         az,                                   // azimuth & zenith angle of pencil beam
                         (DPIBY2-el));
+                fprintf(stderr, "Arguments to calcEjones_analytic:\n\t%ld\n\t%.12lf\n\t%.12lf\n\t%.12lf\n\t%.12lf\n\t%.12lf\n",
+                        freq_ch, (MWA_LAT*DD2R), mi->tile_pointing_az*DD2R, (DPIBY2-(mi->tile_pointing_el*DD2R)), az, (DPIBY2-el));
+                fprintf(stderr, "Answer:\n\t[ %.12lf%+.12lf  %.12lf%+.12lf ]\n\t[ %.12lf%+.12lf  %.12lf%+.12lf ]\n",
+                        CReald(E[0]), CImagd(E[0]),
+                        CReald(E[1]), CImagd(E[1]),
+                        CReald(E[2]), CImagd(E[2]),
+                        CReald(E[3]), CImagd(E[3]));
             }
             else{
                 // FEE2016 beam
@@ -476,7 +474,7 @@ void get_delays(
     free(M);
 }
 
-int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
+int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
                const long freq, // observing freq (Hz)
                const float lat, // observing latitude (radians)
                const float az0, // azimuth & zenith angle of tile pointing
@@ -580,6 +578,6 @@ int calcEjones(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) v
         response[i] = CScld( response[i], rot[i] * ground_plane );
     //fprintf(stdout,"calib:HA is %f groundplane factor is %f\n",ha*DR2H,ground_plane);
     return (result);
-
-} /* calcEjones */
+    
+} /* calcEjones_analytic */
 

@@ -114,6 +114,16 @@ void get_delays(
         ComplexDouble      ****invJi                   // output
 );
 
+int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
+               const long freq, // observing freq (Hz)
+               const float lat, // observing latitude (radians)
+               const float az0, // azimuth & zenith angle of tile pointing
+               const float za0,
+               const float az, // azimuth & zenith angle to sample
+               const float za);
+
+
+
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width );
 void destroy_metafits_info( struct metafits_info *mi );

@@ -424,7 +424,7 @@ int main(int argc, char **argv)
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );                // invJi array           (answer will be output here)
         delay_time[file_no] = clock() - start;
-
+exit(0);
 
 
         fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
