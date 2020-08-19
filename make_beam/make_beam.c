@@ -372,7 +372,7 @@ int main(int argc, char **argv)
     // Declaring pointers to the structs so the memory can be alternated
     struct gpu_formbeam_arrays gf;
     struct gpu_ipfb_arrays gi;
-    int nchunk;
+    int nchunk = 10;
     malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, nchunk,
                      outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
@@ -424,7 +424,6 @@ int main(int argc, char **argv)
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );                // invJi array           (answer will be output here)
         delay_time[file_no] = clock() - start;
-exit(0);
 
 
         fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
