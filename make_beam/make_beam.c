@@ -744,6 +744,9 @@ void usage() {
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-h, --help                ");
     fprintf(stderr, "Print this help and exit\n");
+    fprintf(stderr, "\t-g, --gpu-mem=N     ");
+    fprintf(stderr, "The maximum amount of GPU memory you want make_beam to use in GB ");
+    fprintf(stderr, "[default: -1]\n");
     fprintf(stderr, "\t-V, --version             ");
     fprintf(stderr, "Print version number and exit\n");
     fprintf(stderr, "\n");
