@@ -37,14 +37,11 @@ reqs = ['astropy>=3.2.1',
         'mwa-voltage',
         'mwa_pb']
 
-if os.path.exists('version.py'):
-    with open('version.py', 'r') as the_file:
-        vcstools_version =  the_file.read()
-else:
-    vcstools_version = get_git_version()
-    #make a temporary version file to be installed then delete it
-    with open('version.py', 'a') as the_file:
-        the_file.write('__version__ = "{}"\n'.format(vcstools_version))
+
+vcstools_version = get_git_version()
+#make a temporary version file to be installed then delete it
+with open('version.py', 'a') as the_file:
+    the_file.write('__version__ = "{}"\n'.format(vcstools_version))
 
 setup(name="mwa_vcstools",
       version=vcstools_version,
