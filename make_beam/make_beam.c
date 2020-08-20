@@ -32,7 +32,6 @@
 #include "mycomplex.h"
 #include "form_beam.h"
 #include <omp.h>
-#include <cuda_runtime.h>
 
 #ifdef HAVE_CUDA
 
@@ -86,6 +85,7 @@ int main(int argc, char **argv)
     opts.out_ant       = 0;  // The antenna number (0-127) to write out if out_bf = 0
     opts.synth_filter  = NULL;
     opts.out_summed    = 0;  // Default = output only Stokes I output turned OFF
+    opts.max_sec_per_file = 200; // Number of seconds per fits files
 
     // Variables for calibration settings
     opts.cal.filename          = NULL;
@@ -94,6 +94,9 @@ int main(int argc, char **argv)
     opts.cal.nchan             = 0;
     opts.cal.cal_type          = NO_CALIBRATION;
     opts.cal.offr_chan_num     = 0;
+
+    // GPU options
+    opts.gpu_mem               = -1.0;
 
     // Parse command line arguments
     make_beam_parse_cmdline( argc, argv, &opts );
@@ -107,7 +110,7 @@ int main(int argc, char **argv)
         outpol_coh           = 1;  // (I)
     const int outpol_incoh   = 1;  // ("I")
 
-    float vgain = 1.0; // This is re-calculated every second for the VDIF output
+    //float vgain = 1.0; // This is re-calculated every second for the VDIF output
 
     // Start counting time from here (i.e. after parsing the command line)
     double begintime = NOW;
@@ -332,11 +335,11 @@ int main(int argc, char **argv)
 
     // Populate the relevant header structs
     populate_psrfits_header( pf,       opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.time_utc, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
             opts.chan_width,outpol_coh, opts.rec_channel, delay_vals,
             mi, npointing, 1 );
     populate_psrfits_header( pf_incoh, opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            opts.time_utc, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
             opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals,
             mi, 1, 0 );
 
@@ -356,6 +359,14 @@ int main(int argc, char **argv)
     uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
     assert(data);
 
+    /* Allocate host and device memory for the use of the cu_form_beam function */
+    // Declaring pointers to the structs so the memory can be alternated
+    struct gpu_formbeam_arrays gf;
+    struct gpu_ipfb_arrays gi;
+    int nchunk;
+    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, &nchunk, opts.gpu_mem,
+                     outpol_coh, outpol_incoh, npointing, NOW-begintime );
+
     // Create output buffer arrays
     float *data_buffer_coh    = NULL;
     float *data_buffer_incoh  = NULL;
@@ -367,14 +378,6 @@ int main(int argc, char **argv)
                                                            pf_incoh[0].hdr.nsblk );
     data_buffer_vdif  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
                                                         npointing );
-
-    /* Allocate host and device memory for the use of the cu_form_beam function */
-    // Declaring pointers to the structs so the memory can be alternated
-    struct gpu_formbeam_arrays gf;
-    struct gpu_ipfb_arrays gi;
-    int nchunk;
-    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, nchunk,
-                     outpol_coh, outpol_incoh, npointing, NOW-begintime );
 
     if (opts.out_vdif)
     {
@@ -483,8 +486,7 @@ int main(int argc, char **argv)
                                       nchan, outpol_incoh, p );
             if (opts.out_vdif)
                 vdif_write_second( &vf[p], &vhdr,
-                                   data_buffer_vdif + p * vf->sizeof_buffer,
-                                   &vgain );
+                                   data_buffer_vdif + p * vf->sizeof_buffer );
             write_time[file_no][p] = clock() - start;
         }
     }
@@ -665,6 +667,9 @@ void usage() {
     fprintf(stderr, "\t-s, --summed               ");
     fprintf(stderr, "Turn on summed polarisations of the coherent output (only Stokes I) ");
     fprintf(stderr, "[default: OFF]\n");
+    fprintf(stderr, "\t-t, --max_t                ");
+    fprintf(stderr, "Maximum number of seconds per output fits file. ");
+    fprintf(stderr, "[default: 200]\n");
     fprintf(stderr, "\t-A, --antpol=ant           ");
     fprintf(stderr, "Do not beamform. Instead, only operate on the specified ant\n");
     fprintf(stderr, "\t                           ");
@@ -773,6 +778,7 @@ void make_beam_parse_cmdline(
                 {"psrfits",         no_argument,       0, 'p'},
                 {"vdif",            no_argument,       0, 'v'},
                 {"summed",          no_argument,       0, 's'},
+                {"max_t",           required_argument, 0, 't'},
                 {"synth_filter",    required_argument, 0, 'S'},
                 {"beam-model",      required_argument, 0, 'H'},
                 {"antpol",          required_argument, 0, 'A'},
@@ -791,13 +797,14 @@ void make_beam_parse_cmdline(
                 {"rts-chan-width",  required_argument, 0, 'W'},
                 {"offringa-file",   required_argument, 0, 'O'},
                 {"offringa-chan",   required_argument, 0, 'C'},
+                {"gpu-mem",         required_argument, 0, 'g'},
                 {"help",            required_argument, 0, 'h'},
                 {"version",         required_argument, 0, 'V'}
             };
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:e:f:F:hH:iJ:m:n:o:O:pP:r:sS:vVw:W:z:",
+                             "a:A:b:B:C:d:e:f:F:g:hH:iJ:m:n:o:O:pP:r:sS:t:vVw:W:z:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -834,6 +841,9 @@ void make_beam_parse_cmdline(
                     break;
                 case 'F':
                     opts->custom_flags = strdup(optarg);
+                    break;
+                case 'g':
+                    opts->gpu_mem = atof(optarg);
                     break;
                 case 'h':
                     usage();
@@ -877,6 +887,9 @@ void make_beam_parse_cmdline(
                     break;
                 case 's':
                     opts->out_summed = 1;
+                    break;
+                case 't':
+                    opts->max_sec_per_file = atoi(optarg);
                     break;
                 case 'v':
                     opts->out_vdif = 1;

@@ -92,6 +92,7 @@ void populate_psrfits_header(
         char           *obsid,
         char           *time_utc,
         unsigned int    sample_rate,
+        int             max_sec_per_file,
         long int        frequency,
         int             nchan,
         long int        chan_width,
@@ -145,7 +146,7 @@ void populate_psrfits_header(
 
         // npols + nbits and whether pols are added
         pf[p].filenum       = 0;       // This is the crucial one to set to initialize things
-        pf[p].rows_per_file = 200;     // I assume this is a max subint issue
+        pf[p].rows_per_file = max_sec_per_file;     // I assume this is a max subint issue
 
         pf[p].hdr.npol         = outpol;
         pf[p].hdr.nchan        = nchan;
