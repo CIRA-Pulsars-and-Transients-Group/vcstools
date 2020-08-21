@@ -365,7 +365,6 @@ void get_delays(
                 free(jones);
             }
 
-            int foo = 0;
             for (row=0; row < (int)(mi->ninput); row++) {
 
                 // Get the antenna and polarisation number from the row

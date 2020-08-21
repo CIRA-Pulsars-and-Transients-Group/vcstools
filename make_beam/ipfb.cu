@@ -206,6 +206,7 @@ void cu_invert_pfb_ord( ComplexDouble ****detected_beam, int file_no,
     cudaDeviceSynchronize();
 
     // Copy the result back into host memory
+fprintf(stderr, "cu_invert_pfb_ord: g->d_out = %p, g->out_size = %d, &data_buffer_vdif = %p\n", g->d_out, g->out_size, data_buffer_vdif );
     gpuErrchk(cudaMemcpy( data_buffer_vdif, g->d_out, g->out_size, cudaMemcpyDeviceToHost ));
 }
 
@@ -277,6 +278,7 @@ void malloc_ipfb( struct gpu_ipfb_arrays *g, int ntaps, int nsamples,
     gpuErrchk(cudaMalloc( (void **)&g->d_ft_imag, g->ft_size ));
 
     gpuErrchk(cudaMalloc( (void **)&g->d_out, g->out_size ));
+fprintf( stderr, "malloc_ipfb: g->d_out = %p, g->out_size = %d\n", g->d_out, g->out_size );
 
     // Allocate memory for host copies of the same
     g->in_real = (float *)malloc( g->in_size );
