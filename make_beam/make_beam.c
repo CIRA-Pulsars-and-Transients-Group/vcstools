@@ -37,7 +37,14 @@
 
 #include <cuda_runtime.h>
 #include "ipfb.h"
-#define NOW  ((double)clock()/(double)CLOCKS_PER_SEC)
+
+double now(){
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME,&t);
+  return (double)t.tv_sec + (double)t.tv_nsec/1000000000L;
+}
+
+#define NOW now()
 
 #else
 
