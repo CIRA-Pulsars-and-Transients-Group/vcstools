@@ -48,17 +48,17 @@ void test_calcEjones_analytic()
     // Test #1
     ntests++;
     calcEjones_analytic(
-            response,      // <-- answer goes here
-            152660000,     // observing frequency of fine channel (Hz)
-            -0.466061,     // observing latitude (radians)
-            0.197395,      // azimuth & zenith angle of tile pointing
-            0.649165,
-            -0.000000,     // azimuth & zenith angle to sample
-            0.602772);
-    answer[0] = CMaked( 0.379149191318, 0.000000000000);
-    answer[1] = CMaked( 0.000000030335, 0.000000000000);
-    answer[2] = CMaked( 0.000000067430, 0.000000000000);
-    answer[3] = CMaked(-0.772163762393, 0.000000000000);
+            response,        // <-- answer goes here
+            152660000,       // observing frequency of fine channel (Hz)
+           -0.466060837760,  // observing latitude (radians)
+            0.197394993071,  // azimuth & zenith angle of tile pointing
+            0.649164743304,
+            0.242235173094,  // azimuth & zenith angle to sample
+            0.618043426835);
+    answer[0] = CMaked( 0.702145873359, 0.000000000000);
+    answer[1] = CMaked(-0.053699555622, 0.000000000000);
+    answer[2] = CMaked(-0.016286015151, 0.000000000000);
+    answer[3] = CMaked( 0.843308339933, 0.000000000000);
 
     passed = 1;
     for (i = 0; i < MAX_POLS; i++)
