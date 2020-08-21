@@ -380,15 +380,6 @@ void get_delays(
 
                 mult2x2d(Gf, E, Ji); // the gain in the desired look direction
 
-                // this automatically spots an RTS flagged tile
-                if (fabs(CImagd(Ji[0])) < 0.0000001) {  // THIS TEST CAN PROBABLY BE IMPROVED
-fprintf(stderr, "spotted an RTS flagged tile %d/%d\n", foo++, (int)(mi->ninput));
-                    Ji[0] = CMaked( 0.0, 0.0 );
-                    Ji[1] = CMaked( 0.0, 0.0 );
-                    Ji[2] = CMaked( 0.0, 0.0 );
-                    Ji[3] = CMaked( 0.0, 0.0 );
-                }
-
                 // Calculate the complex weights array
                 if (complex_weights_array != NULL) {
                     if (mi->weights_array[row] != 0.0) {

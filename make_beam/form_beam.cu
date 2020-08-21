@@ -529,7 +529,7 @@ void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
     // Work out how many chunks to split a second into so there is enough memory on the gpu
     *nchunk = 0;
     size_t gpu_mem_used = 1000000000000;
-    while ( gpu_mem_used > gpu_mem/2 ) 
+    while ( gpu_mem_used > gpu_mem ) 
     {
         *nchunk += 1;
         // Make sure the nchunk is divisable by the samples
