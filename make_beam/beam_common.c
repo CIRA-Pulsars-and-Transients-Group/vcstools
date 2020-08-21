@@ -155,7 +155,7 @@ void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int c
     }
     // The amps should all be '1', except when the corresponding delay = '32'
     for (i = 0; i < NDELAYS; i++)
-        mi->amps[i] = (mi->delays == 32 ? 0.0 : 1.0);
+        mi->amps[i] = (mi->delays[i] == 32 ? 0.0 : 1.0);
 
     // Invert value (flag off = full weight; flag on = zero weight)
     for (i = 0; i < mi->ninput; i++) {

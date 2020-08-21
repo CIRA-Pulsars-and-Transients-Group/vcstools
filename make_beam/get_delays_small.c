@@ -357,7 +357,7 @@ void get_delays(
                 // FEE2016 beam
                 FEEBeam *beam = new_fee_beam( beam_model );
                 int zenith_norm = 1; // TODO decide on 1 or 0 for zenith norm
-                double *jones = calc_jones(beam, az, DPIBY2-el, freq_ch, mi->delays, mi->amps, zenith_norm);
+                double *jones = calc_jones(beam, az, DPIBY2-el, freq_ch, (unsigned int*)mi->delays, mi->amps, zenith_norm);
                 for (n = 0; n<NPOL*NPOL; n++){
                     E[n] = CMaked(jones[n*2], jones[n*2+1]);
                 }
@@ -365,6 +365,7 @@ void get_delays(
                 free(jones);
             }
 
+            int foo = 0;
             for (row=0; row < (int)(mi->ninput); row++) {
 
                 // Get the antenna and polarisation number from the row
@@ -382,6 +383,7 @@ void get_delays(
 
                 // this automatically spots an RTS flagged tile
                 if (fabs(CImagd(Ji[0])) < 0.0000001) {  // THIS TEST CAN PROBABLY BE IMPROVED
+fprintf(stderr, "spotted an RTS flagged tile %d/%d\n", foo++, (int)(mi->ninput));
                     Ji[0] = CMaked( 0.0, 0.0 );
                     Ji[1] = CMaked( 0.0, 0.0 );
                     Ji[2] = CMaked( 0.0, 0.0 );
