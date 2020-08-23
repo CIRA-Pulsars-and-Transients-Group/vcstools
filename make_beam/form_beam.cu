@@ -617,7 +617,6 @@ float *create_pinned_data_buffer_vdif( size_t size )
 {
     float *ptr;
     cudaMallocHost( &ptr, size * sizeof(float) );
-fprintf( stderr, "data_buffer_vdif (%p) allocated %d bytes\n", ptr, size * sizeof(float) );
     //cudaError_t status = cudaHostRegister((void**)&ptr, size * sizeof(float),
     //                                      cudaHostRegisterPortable );
     cudaCheckErrors("cudaMallocHost data_buffer_vdif fail");
