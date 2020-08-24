@@ -630,14 +630,21 @@ void cp2x2(ComplexDouble *Min, ComplexDouble *Mout)
 
 void inv2x2(ComplexDouble *Min, ComplexDouble *Mout)
 {
-    ComplexDouble m1 = CMuld( Min[0], Min[3] );
-    ComplexDouble m2 = CMuld( Min[1], Min[2] );
+    ComplexDouble m00 = Min[0];
+    ComplexDouble m01 = Min[1];
+    ComplexDouble m10 = Min[2];
+    ComplexDouble m11 = Min[3];
+
+    ComplexDouble m1 = CMuld( m00, m11 );
+    ComplexDouble m2 = CMuld( m01, m10 );
+
     ComplexDouble det = CSubd( m1, m2 );
     ComplexDouble inv_det = CRcpd( det );
-    Mout[0] = CMuld(       inv_det,  Min[3] );
-    Mout[1] = CMuld( CNegd(inv_det), Min[1] );
-    Mout[2] = CMuld( CNegd(inv_det), Min[2] );
-    Mout[3] = CMuld(       inv_det,  Min[0] );
+
+    Mout[0] = CMuld(       inv_det,  m11 );
+    Mout[1] = CMuld( CNegd(inv_det), m01 );
+    Mout[2] = CMuld( CNegd(inv_det), m10 );
+    Mout[3] = CMuld(       inv_det,  m00 );
 }
 
 
@@ -672,6 +679,23 @@ void mult2x2d(ComplexDouble *M1, ComplexDouble *M2, ComplexDouble *Mout)
     Mout[3] = CAddd( m21, m33 );
 }
 
+void mult2x2d_RxC(double *M1, ComplexDouble *M2, ComplexDouble *Mout)
+/* Mout = M1 x M2
+ */
+{
+    ComplexDouble m00 = CScld( M2[0], M1[0] );
+    ComplexDouble m12 = CScld( M2[2], M1[1] );
+    ComplexDouble m01 = CScld( M2[1], M1[0] );
+    ComplexDouble m13 = CScld( M2[3], M1[1] );
+    ComplexDouble m20 = CScld( M2[0], M1[2] );
+    ComplexDouble m32 = CScld( M2[2], M1[3] );
+    ComplexDouble m21 = CScld( M2[1], M1[2] );
+    ComplexDouble m33 = CScld( M2[3], M1[3] );
+    Mout[0] = CAddd( m00, m12 );
+    Mout[1] = CAddd( m01, m13 );
+    Mout[2] = CAddd( m20, m32 );
+    Mout[3] = CAddd( m21, m33 );
+}
 
 void conj2x2(ComplexDouble *M, ComplexDouble *Mout)
 /* Calculate the conjugate of a matrix

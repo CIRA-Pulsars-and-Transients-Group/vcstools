@@ -361,7 +361,19 @@ void get_delays(
 
                 // "Convert" the real jones[8] output array into out complex E[4] matrix
                 for (n = 0; n<NPOL*NPOL; n++){
-                    E[n] = CMaked(jones[n*2], jones[n*2+1]);
+                    // For some reason, it is necessary to swap X and Y (perhaps this code implicitly
+                    // defines them differently compared to Hyperbeam). This can be achieved by mapping
+                    // Hyperbeam's output into the Jones matrix thus:
+                    //   [ XX XY ] --> [ XY XX ]
+                    //   [ YX YY ] --> [ YY YX ]
+                    // This is equivalent to mapping the (4-element array) indices thus:
+                    //   0 --> 1
+                    //   1 --> 0
+                    //   2 --> 3
+                    //   3 --> 2
+                    // which is achieved by the following translation (n --> m):
+                    int m = n - n%2 + (n+1)%2;
+                    E[m] = CMaked(jones[n*2], jones[n*2+1]);
                 }
 
                 // Memory clean up required by Hyperbeam
@@ -432,7 +444,6 @@ void get_delays(
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
                         // Apply parallactic angle correction if Hyperbeam was used
                         if (strcmp(beam_model, "analytic") != 0) { // i.e. anything other than analytic
-                            //printf("Applying parallactic beam correction\n");
                             parallactic_angle_correction(
                                     Ji, Ji,             // input, output
                                     (MWA_LAT*DD2R),     // observing latitude (radians)
@@ -612,9 +623,6 @@ void parallactic_angle_correction(
 
     double P[4] = { cp, -sp, sp, cp };
 
-    // Jout = P * J (where * is matrix multiplication)
-    Jout[0] = CAddd( CScld(Jin[0], P[0]), CScld(Jin[2], P[1]) );
-    Jout[1] = CAddd( CScld(Jin[1], P[0]), CScld(Jin[3], P[1]) );
-    Jout[2] = CAddd( CScld(Jin[0], P[2]), CScld(Jin[2], P[3]) );
-    Jout[3] = CAddd( CScld(Jin[1], P[2]), CScld(Jin[3], P[3]) );
+    // Jout = P x J (where 'x' is matrix multiplication)
+    mult2x2d_RxC( P, Jin, Jout );
 }
