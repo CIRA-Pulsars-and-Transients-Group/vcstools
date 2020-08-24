@@ -343,15 +343,6 @@ void get_delays(
                         (DPIBY2-(mi->tile_pointing_el*DD2R)),
                         az,                                   // azimuth & zenith angle of pencil beam
                         (DPIBY2-el));
-                /*
-                fprintf(stderr, "Arguments to calcEjones_analytic:\n\t%ld\n\t%.12lf\n\t%.12lf\n\t%.12lf\n\t%.12lf\n\t%.12lf\n",
-                        freq_ch, (MWA_LAT*DD2R), mi->tile_pointing_az*DD2R, (DPIBY2-(mi->tile_pointing_el*DD2R)), az, (DPIBY2-el));
-                fprintf(stderr, "Answer:\n\t[ %.12lf%+.12lf  %.12lf%+.12lf ]\n\t[ %.12lf%+.12lf  %.12lf%+.12lf ]\n",
-                        CReald(E[0]), CImagd(E[0]),
-                        CReald(E[1]), CImagd(E[1]),
-                        CReald(E[2]), CImagd(E[2]),
-                        CReald(E[3]), CImagd(E[3]));
-                */
             }
             else{
                 // FEE2016 beam Jones matrix calculated using Hyperbeam
