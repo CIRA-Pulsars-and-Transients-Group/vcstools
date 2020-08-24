@@ -354,13 +354,17 @@ void get_delays(
                 */
             }
             else{
-                // FEE2016 beam
+                // FEE2016 beam Jones matrix calculated using Hyperbeam
                 FEEBeam *beam = new_fee_beam( beam_model );
                 int zenith_norm = 1; // TODO decide on 1 or 0 for zenith norm
                 double *jones = calc_jones(beam, az, DPIBY2-el, freq_ch, (unsigned int*)mi->delays, mi->amps, zenith_norm);
+
+                // "Convert" the real jones[8] output array into out complex E[4] matrix
                 for (n = 0; n<NPOL*NPOL; n++){
                     E[n] = CMaked(jones[n*2], jones[n*2+1]);
                 }
+
+                // Memory clean up required by Hyperbeam
                 free_fee_beam( beam );
                 free(jones);
             }
@@ -425,7 +429,16 @@ void get_delays(
 
                 // Now, calculate the inverse Jones matrix
                 if (invJi != NULL) {
-                    if (pol == 0) {
+                    if (pol == 0) { // This is just to avoid doing the same calculation twice
+                        // Apply parallactic angle correction if Hyperbeam was used
+                        if (strcmp(beam_model, "analytic") != 0) { // i.e. anything other than analytic
+                            //printf("Applying parallactic beam correction\n");
+                            parallactic_angle_correction(
+                                    Ji, Ji,             // input, output
+                                    (MWA_LAT*DD2R),     // observing latitude (radians)
+                                    az, (DPIBY2-el));   // azimuth & zenith angle of pencil beam
+                        }
+
                         conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
                         Fnorm = norm2x2( Ji, Ji );
 
@@ -575,3 +588,33 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
     
 } /* calcEjones_analytic */
 
+void parallactic_angle_correction(
+    ComplexDouble *Jin,  // input Jones matrix
+    ComplexDouble *Jout, // output Jones matrix
+    double lat,          // observing latitude (radians)
+    double az,           // azimuth angle (radians)
+    double za)           // zenith angle (radians)
+{
+    double el = DPIBY2 - za;
+
+    double sa = sin(az);
+    double ca = cos(az);
+
+    double se = sin(el);
+    double ce = cos(el);
+
+    double sl = sin(lat);
+    double cl = cos(lat);
+
+    double phi = -atan2( sa*cl, ce*sl - se*cl*ca );
+    double sp = sin(phi);
+    double cp = cos(phi);
+
+    double P[4] = { cp, -sp, sp, cp };
+
+    // Jout = P * J (where * is matrix multiplication)
+    Jout[0] = CAddd( CScld(Jin[0], P[0]), CScld(Jin[2], P[1]) );
+    Jout[1] = CAddd( CScld(Jin[1], P[0]), CScld(Jin[3], P[1]) );
+    Jout[2] = CAddd( CScld(Jin[0], P[2]), CScld(Jin[2], P[3]) );
+    Jout[3] = CAddd( CScld(Jin[1], P[2]), CScld(Jin[3], P[3]) );
+}
