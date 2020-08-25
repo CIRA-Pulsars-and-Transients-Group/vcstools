@@ -555,7 +555,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                   metafits_file, nfine_chan, pointing_list,
                   rts_flag_file=None, bf_formats=None, DI_dir=None,
                   execpath=None, calibration_type='rts', ipfb_filter="LSQ12",
-                  vcstools_version="master", nice=0, channels_to_beamform=None):
+                  vcstools_version="master", nice=0, channels_to_beamform=None,
+                  beam_version="FEE2016"):
     """
     This function runs the new version of the beamformer. It is modelled after
     the old function above and will likely be able to be streamlined after
@@ -716,10 +717,12 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     runline += " {}".format(bf_formats)
                     runline += " -F {}".format(rts_flag_file)
                     runline += " -S {}".format(ipfb_filter)
+                    if beam_version == "ANALYTIC":
+                        runline += " -H"
                     if comp_config['container_command'] !='':
                         runline += "'"
                     commands.append(runline)
-        
+
                     job_id = submit_slurm(make_beam_small_batch, commands,
                                 batch_dir=batch_dir, module_list=module_list,
                                 slurm_kwargs={"time":secs_to_run, "nice":nice},
@@ -757,6 +760,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 runline += " -z {}".format(utctime)
                 runline += " {}".format(bf_formats)
                 runline += " -F {}".format(rts_flag_file)
+                if beam_version == "ANALYTIC":
+                    runline += " -H"
                 if comp_config['container_command'] !='':
                     runline += "'"
                 commands.append(runline)
@@ -805,7 +810,7 @@ if __name__ == '__main__':
                      INFO=logging.INFO,
                      WARNING=logging.WARNING)
 
-    modes=['download', 'download_ics', 'download_cal', 'recombine','correlate', 'beamform']
+    modes=['download', 'download_ics', 'download_cal', 'recombine', 'correlate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08",
@@ -839,7 +844,8 @@ if __name__ == '__main__':
     group_beamform.add_argument('--cal_type', type=str, help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
     group_beamform.add_argument("-E", "--execpath", type=str, default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
     group_beamform.add_argument("--ipfb_filter", type=str, choices=['LSQ12','MIRROR'], help="The filter to use when performing the inverse PFB", default='LSQ12')
-   
+    group_beamform.add_argument("--beam_version", type=str, choices=["ANALYTIC", "FEE2016"], help="The version of the beamformer to use. If FEE2016 is selected but unavailable, analytic will be used", default="FEE2016")
+
 
     parser.add_argument("-m", "--mode", type=str, choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, help="Observation ID you want to process [no default]")
@@ -1051,7 +1057,8 @@ if __name__ == '__main__':
                       bf_formats=bf_format, DI_dir=args.DI_dir,
                       calibration_type=args.cal_type,
                       vcstools_version=args.vcstools_version, nice=args.nice,
-                      execpath=args.execpath, ipfb_filter=args.ipfb_filter)
+                      execpath=args.execpath, ipfb_filter=args.ipfb_filter,
+                      beam_version=args.beam_version)
     else:
         logger.error("Somehow your non-standard mode snuck through. "
                      "Try again with one of {0}".format(modes))
