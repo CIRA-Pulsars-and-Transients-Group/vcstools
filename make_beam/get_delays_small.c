@@ -163,7 +163,7 @@ void get_delays(
         long int               frequency,
         struct                 calibration *cal,
         float                  samples_per_sec,
-        char                  *beam_model,
+        int                    beam_model,
         char                  *time_utc,
         double                 sec_offset,
         struct delays          delay_vals[],
@@ -334,7 +334,7 @@ void get_delays(
                     exit(EXIT_FAILURE);
                 }
             }
-            if (strcmp(beam_model, "analytic") == 0) {
+            if (beam_model == BEAM_ANALYTIC) {
                 // Analytic beam:
                 calcEjones_analytic(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
                         freq_ch,                              // observing freq of fine channel (Hz)
@@ -344,9 +344,9 @@ void get_delays(
                         az,                                   // azimuth & zenith angle of pencil beam
                         (DPIBY2-el));
             }
-            else{
+            else if (beam_model == BEAM_FEE2016) {
                 // FEE2016 beam Jones matrix calculated using Hyperbeam
-                FEEBeam *beam = new_fee_beam( beam_model );
+                FEEBeam *beam = new_fee_beam( "HYPERBEAM_HDF5" );
                 int zenith_norm = 1; // TODO decide on 1 or 0 for zenith norm
                 double *jones = calc_jones(beam, az, DPIBY2-el, freq_ch, (unsigned int*)mi->delays, mi->amps, zenith_norm);
 
@@ -434,7 +434,7 @@ void get_delays(
                 if (invJi != NULL) {
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
                         // Apply parallactic angle correction if Hyperbeam was used
-                        if (strcmp(beam_model, "analytic") != 0) { // i.e. anything other than analytic
+                        if (beam_model == BEAM_ANALYTIC) { // i.e. anything other than analytic
                             parallactic_angle_correction(
                                     Ji, Ji,             // input, output
                                     (MWA_LAT*DD2R),     // observing latitude (radians)
@@ -587,7 +587,7 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
         response[i] = CScld( response[i], rot[i] * ground_plane );
     //fprintf(stdout,"calib:HA is %f groundplane factor is %f\n",ha*DR2H,ground_plane);
     return (result);
-    
+
 } /* calcEjones_analytic */
 
 void parallactic_angle_correction(

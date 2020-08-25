@@ -24,6 +24,9 @@
 #define R2C_SIGN   -1.0
 #define NDELAYS    16
 
+#define BEAM_ANALYTIC 0
+#define BEAM_FEE2016  1
+
 // A structure to read in all the relevant info from the observation metafits
 // file.
 struct metafits_info {
@@ -70,12 +73,12 @@ struct make_beam_opts {
     unsigned long int  begin;         // GPS time -- when to start beamforming
     unsigned long int  end;           // GPS time -- when to stop beamforming
     char              *time_utc;      // utc time string "yyyy-mm-ddThh:mm:ss"
-    char              *pointings;    // pointing list"dd:mm:ss_hh:mm:ss, dd:mm:ss_hh:mm:ss"
+    char              *pointings;     // pointing list"dd:mm:ss_hh:mm:ss, dd:mm:ss_hh:mm:ss"
     char              *datadir;       // The path to where the recombined data live
     char              *metafits;      // filename of the metafits file
     char              *rec_channel;   // 0 - 255 receiver 1.28MHz channel
     long int           frequency;     // = rec_channel expressed in Hz
-    char              *beam_model;    // HDF5 file containing FEE 2016 beam model, or 'analytic'
+    int                beam_model;    // HDF5 file containing FEE 2016 beam model, or 'analytic'
 
     // Variables for MWA/VCS configuration
     int                nstation;      // The number of antennas
@@ -105,11 +108,11 @@ struct make_beam_opts {
 void get_delays(
         // an array of pointings [pointing][ra/dec][characters]
         char                   pointing_array[][2][64],
-        int                    npointing, // number of pointings 
+        int                    npointing, // number of pointings
         long int               frequency,
         struct                 calibration *cal,
         float                  samples_per_sec,
-        char                  *beam_model,
+        int                    beam_model,
         char                  *time_utc,
         double                 sec_offset,
         struct delays          delay_vals[],
