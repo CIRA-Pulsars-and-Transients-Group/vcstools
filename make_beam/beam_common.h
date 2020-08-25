@@ -91,6 +91,9 @@ struct make_beam_opts {
     int                out_summed;    // Default = output only Stokes I output turned OFF
     int                max_sec_per_file;    // Number of seconds per fits files
 
+    // Output options
+    float              gpu_mem  ;     // Default = -1.0. If -1.0 use all GPU mem
+
     struct calibration cal;           // Variables for calibration settings
 };
 

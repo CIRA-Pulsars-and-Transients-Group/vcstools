@@ -44,7 +44,7 @@ struct gpu_formbeam_arrays
 
 
 void malloc_formbeam( struct gpu_formbeam_arrays *g, unsigned int sample_rate,
-                      int nstation, int nchan, int npol, int *nchunk, int outpol_coh,
+                      int nstation, int nchan, int npol, int *nchunk, float gpu_mem_gb, int outpol_coh,
                       int outpol_incoh, int npointing, double time );
 void free_formbeam( struct gpu_formbeam_arrays *g );
 
