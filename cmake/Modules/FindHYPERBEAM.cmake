@@ -6,8 +6,9 @@
 #  HYPERBEAM_INCLUDE_DIR  - the HYPERBEAM include directory (cached)
 #  HYPERBEAM_INCLUDE_DIRS - the HYPERBEAM include directories
 #                         (identical to HYPERBEAM_INCLUDE_DIR)
-#  HYPERBEAM_LIB      - the HYPERBEAM library (cached)
+#  HYPERBEAM_LIB          - the HYPERBEAM library (cached)
 #  HYPERBEAM_LIBRARIES    - the HYPERBEAM libraries
+#  HYPERBEAM_HDF5         - the full embedded element pattern HDF5 file
 
 message("Finding HYPERBEAM")
 
@@ -32,6 +33,11 @@ if(NOT HYPERBEAM_FOUND)
 
 endif(NOT HYPERBEAM_FOUND)
 
-if (HYPERBEAM_FOUND)
-    message (STATUS "Found HYPERBEAM (${HYPERBEAM_LIB})")
-endif (HYPERBEAM_FOUND)
+if(NOT HYPERBEAM_HDF5)
+    find_file(HYPERBEAM_HDF5 mwa_full_embedded_element_pattern.h5
+        HINTS ${HYPERBEAM_HDF5_DIR} ${HYPERBEAM_ROOT} ${HYPERBEAM_INCLUDE_DIR})
+endif(NOT HYPERBEAM_HDF5)
+
+if(NOT HYPERBEAM_HDF5)
+    message (STATUS "Warning HYPERBEAM_HDF5 not set: only analytic beam will be available")
+endif(NOT HYPERBEAM_HDF5)
