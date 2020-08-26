@@ -346,7 +346,7 @@ void get_delays(
             }
             else if (beam_model == BEAM_FEE2016) {
                 // FEE2016 beam Jones matrix calculated using Hyperbeam
-                FEEBeam *beam = new_fee_beam( "HYPERBEAM_HDF5" );
+                FEEBeam *beam = new_fee_beam( HYPERBEAM_HDF5 );
                 int zenith_norm = 1; // TODO decide on 1 or 0 for zenith norm
                 double *jones = calc_jones(beam, az, DPIBY2-el, freq_ch, (unsigned int*)mi->delays, mi->amps, zenith_norm);
 
