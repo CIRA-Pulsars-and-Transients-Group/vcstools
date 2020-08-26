@@ -695,7 +695,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
             if "v" in bf_formats:
                 for pointing in pointing_list:
                     make_beam_small_batch = "mb_{0}_ch{1}".format(pointing, coarse_chan)
-                    module_list = [comp_config['container_module']]
+                    module_list = [comp_config['container_module'], "hyperbeam/v0.1.1"]
                     commands = []
                     commands.append("cd {0}/{1}".format(P_dir,pointing))
                     runline = "srun --export=all -n 1"
@@ -735,7 +735,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
             else:
                 make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(pl, time_now, coarse_chan)
-                module_list = [comp_config['container_module']]
+                module_list = [comp_config['container_module'], "hyperbeam/v0.1.1"]
                 commands = []
                 if comp_config['ssd_dir'] is None:
                     # Write outputs to SSDs if on Ozstar
