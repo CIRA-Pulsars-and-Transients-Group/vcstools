@@ -43,7 +43,7 @@ If you used polarimetry, please give credit by citing:
 [Xue et al. (2019)](https://ui.adsabs.harvard.edu/abs/2019PASA...36...25X/abstract)
 
 If you used the inverse PFB, please give credit by citing:
-[McSweeney et al. (2019)](https://ui.adsabs.harvard.edu/abs/2020arXiv200703171M/abstract)
+[McSweeney et al. (2020)](http://dx.doi.org/10.1017/pasa.2020.24)
 
 Status
 ------
