@@ -700,7 +700,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     commands.append("cd {0}/{1}".format(P_dir,pointing))
                     runline = "srun --export=all -n 1"
                     runline += " -c {}".format(n_omp_threads)
-                    runline += " {} '".format(comp_config['container_command'])
+                    if comp_config['container_command'] !='':
+                        runline += " {} '".format(comp_config['container_command'])
                     runline += " {}".format(make_beam_cmd)
                     runline += " -o {}".format(obs_id)
                     runline += " -b {}".format(start)
@@ -744,7 +745,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
                 runline = "srun --export=all -n 1"
                 runline += " -c {}".format(n_omp_threads)
-                runline += " {} '".format(comp_config['container_command'])
+                if comp_config['container_command'] !='':
+                    runline += " {} '".format(comp_config['container_command'])
                 runline += " {}".format(make_beam_cmd)
                 runline += " -o {}".format(obs_id)
                 runline += " -b {}".format(start)

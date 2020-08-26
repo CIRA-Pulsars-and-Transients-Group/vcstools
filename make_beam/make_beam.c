@@ -37,7 +37,14 @@
 
 #include <cuda_runtime.h>
 #include "ipfb.h"
-#define NOW  ((double)clock()/(double)CLOCKS_PER_SEC)
+
+double now(){
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME,&t);
+  return (double)t.tv_sec + (double)t.tv_nsec/1000000000L;
+}
+
+#define NOW now()
 
 #else
 
@@ -756,6 +763,9 @@ void usage() {
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-h, --help                ");
     fprintf(stderr, "Print this help and exit\n");
+    fprintf(stderr, "\t-g, --gpu-mem=N     ");
+    fprintf(stderr, "The maximum amount of GPU memory you want make_beam to use in GB ");
+    fprintf(stderr, "[default: -1]\n");
     fprintf(stderr, "\t-V, --version             ");
     fprintf(stderr, "Print version number and exit\n");
     fprintf(stderr, "\n");
