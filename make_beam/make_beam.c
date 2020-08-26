@@ -710,7 +710,7 @@ void usage() {
     fprintf(stderr, "[default: none]\n");
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "metafits file given by the -m option.\n");
-    fprintf(stderr, "\t-H, --beam-model          ");
+    fprintf(stderr, "\t-H, --analytic-beam       ");
     fprintf(stderr, "Force use of analytic beam (No change in behaviour if FEE2016 beam\n");
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "is unavailable).\n");
@@ -789,7 +789,7 @@ void make_beam_parse_cmdline(
                 {"psrfits",         no_argument,       0, 'p'},
                 {"vdif",            no_argument,       0, 'v'},
                 {"summed",          no_argument,       0, 's'},
-                {"beam-model",      no_argument,       0, 'H'},
+                {"analytic-beam",   no_argument,       0, 'H'},
                 {"max_t",           required_argument, 0, 't'},
                 {"synth_filter",    required_argument, 0, 'S'},
                 {"antpol",          required_argument, 0, 'A'},
