@@ -208,6 +208,13 @@ int main(int argc, char **argv)
     ComplexDouble  ****invJi                 = create_invJi( nstation, nchan, npol );
     ComplexDouble  ****detected_beam         = create_detected_beam( npointing, 2*opts.sample_rate, nchan, npol );
 
+    // Load the FEE2016 beam, if requested
+    fprintf( stderr, "[%f]  Reading in beam model from %s\n", NOW-begintime, HYPERBEAM_HDF5 );
+    FEEBeam *beam = NULL;
+    if (opts.beam_model == BEAM_FEE2016) {
+        beam = new_fee_beam( HYPERBEAM_HDF5 );
+    }
+
     // Read in info from metafits file
     fprintf( stderr, "[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
     struct metafits_info mi;
@@ -286,6 +293,7 @@ int main(int argc, char **argv)
             &opts.cal,          // struct holding info about calibration
             opts.sample_rate,   // = 10000 samples per sec
             opts.beam_model,    // beam model type
+            beam,               // Hyperbeam struct
             opts.time_utc,      // utc time string
             0.0,                // seconds offset from time_utc at which to calculate delays
             delay_vals,        // Populate psrfits header info
@@ -432,6 +440,7 @@ int main(int argc, char **argv)
                 &opts.cal,              // struct holding info about calibration
                 opts.sample_rate,       // = 10000 samples per sec
                 opts.beam_model,        // beam model type
+                beam,                   // Hyperbeam struct
                 opts.time_utc,          // utc time string
                 (double)file_no,        // seconds offset from time_utc at which to calculate delays
                 NULL,                   // Don't update delay_vals
@@ -613,10 +622,16 @@ int main(int argc, char **argv)
     {
         free_ipfb( &gi );
     }
-    #ifndef HAVE_CUDA
+
+    // Clean up Hyperbeam
+    if (opts.beam_model == BEAM_FEE2016) {
+        free_fee_beam( beam );
+    }
+
+#ifndef HAVE_CUDA
     // Clean up FFTW OpenMP
     fftw_cleanup_threads();
-    #endif
+#endif
 
     return 0;
 }

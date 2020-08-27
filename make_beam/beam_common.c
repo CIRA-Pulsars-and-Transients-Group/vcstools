@@ -10,6 +10,7 @@
 #include "beam_common.h"
 #include "psrfits.h"
 #include "mycomplex.h"
+#include "mwa_hyperbeam.h"
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width ) {
 /* Read in the relevant information from the metafits file.

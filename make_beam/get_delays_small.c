@@ -164,6 +164,7 @@ void get_delays(
         struct                 calibration *cal,
         float                  samples_per_sec,
         int                    beam_model,
+        FEEBeam               *beam,
         char                  *time_utc,
         double                 sec_offset,
         struct delays          delay_vals[],
@@ -292,6 +293,9 @@ void get_delays(
     mjd += (sec_offset+0.5)/86400.0;
     mjd2lst(mjd, &lmst);
 
+    // Prepare the FEE2016 beam model using Hyperbeam (if required)
+    int zenith_norm = 1; // Boolean value: unsure if/how this makes a difference
+
     for ( int p = 0; p < npointing; p++ )
     {
 
@@ -352,10 +356,9 @@ void get_delays(
                         (DPIBY2-el));
             }
             else if (beam_model == BEAM_FEE2016) {
-                // FEE2016 beam Jones matrix calculated using Hyperbeam
-                FEEBeam *beam = new_fee_beam( HYPERBEAM_HDF5 );
-                int zenith_norm = 1; // TODO decide on 1 or 0 for zenith norm
-                double *jones = calc_jones(beam, az, DPIBY2-el, freq_ch, (unsigned int*)mi->delays, mi->amps, zenith_norm);
+                // FEE2016 beam:
+                double *jones = calc_jones( beam, az, DPIBY2-el, freq_ch,
+                        (unsigned int*)mi->delays, mi->amps, zenith_norm );
 
                 // "Convert" the real jones[8] output array into out complex E[4] matrix
                 for (n = 0; n<NPOL*NPOL; n++){
@@ -375,7 +378,6 @@ void get_delays(
                 }
 
                 // Memory clean up required by Hyperbeam
-                free_fee_beam( beam );
                 free(jones);
             }
 
@@ -441,7 +443,7 @@ void get_delays(
                 if (invJi != NULL) {
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
                         // Apply parallactic angle correction if Hyperbeam was used
-                        if (beam_model == BEAM_FEE2016) { // i.e. anything other than analytic
+                        if (beam_model == BEAM_FEE2016) {
                             mult2x2d_RxC( P, Ji, Ji );  // Ji = P x Ji (where 'x' is matrix multiplication)
                         }
 
@@ -612,7 +614,6 @@ void parallactic_angle_correction(
     double cl = cos(lat);
 
     double phi = -atan2( sa*cl, ce*sl - se*cl*ca );
-//fprintf(stderr, "parallactic angle correction: phi = %f degrees\n", phi*DR2D);
     double sp = sin(phi);
     double cp = cos(phi);
 

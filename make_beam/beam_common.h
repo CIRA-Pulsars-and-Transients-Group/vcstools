@@ -9,6 +9,7 @@
 
 #include <inttypes.h>
 #include "mycomplex.h"
+#include "mwa_hyperbeam.h"
 
 // Calibration solution types
 #define NO_CALIBRATION  0
@@ -78,7 +79,7 @@ struct make_beam_opts {
     char              *metafits;      // filename of the metafits file
     char              *rec_channel;   // 0 - 255 receiver 1.28MHz channel
     long int           frequency;     // = rec_channel expressed in Hz
-    int                beam_model;    // HDF5 file containing FEE 2016 beam model, or 'analytic'
+    int                beam_model;    // Either BEAM_FEE2016 or BEAM_ANALYTIC
 
     // Variables for MWA/VCS configuration
     int                nstation;      // The number of antennas
@@ -113,6 +114,7 @@ void get_delays(
         struct                 calibration *cal,
         float                  samples_per_sec,
         int                    beam_model,
+        FEEBeam               *beam,
         char                  *time_utc,
         double                 sec_offset,
         struct delays          delay_vals[],
