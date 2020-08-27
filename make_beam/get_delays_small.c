@@ -198,6 +198,7 @@ void get_delays(
     ComplexDouble G[NPOL*NPOL];               // Coarse channel DI Gain
     ComplexDouble Gf[NPOL*NPOL];              // Fine channel DI Gain
     ComplexDouble Ji[NPOL*NPOL];              // Gain in Desired Direction
+    double        P[NPOL*NPOL];               // Parallactic angle correction rotation matrix
 
     ComplexDouble  **M  = (ComplexDouble ** ) calloc(NANT, sizeof(ComplexDouble * )); // Gain in direction of Calibration
     ComplexDouble ***Jf = (ComplexDouble ***) calloc(NANT, sizeof(ComplexDouble **)); // Fitted bandpass solutions
@@ -320,6 +321,12 @@ void get_delays(
         unit_N = cos(el) * cos(az);
         unit_E = cos(el) * sin(az);
         unit_H = sin(el);
+
+        parallactic_angle_correction(
+                P,                  // output = rotation matrix
+                (MWA_LAT*DD2R),     // observing latitude (radians)
+                az, (DPIBY2-el));   // azimuth & zenith angle of pencil beam
+
         // Everything from this point on is frequency-dependent
         for (ch = 0; ch < NCHAN; ch++) {
 
@@ -434,11 +441,8 @@ void get_delays(
                 if (invJi != NULL) {
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
                         // Apply parallactic angle correction if Hyperbeam was used
-                        if (beam_model == BEAM_ANALYTIC) { // i.e. anything other than analytic
-                            parallactic_angle_correction(
-                                    Ji, Ji,             // input, output
-                                    (MWA_LAT*DD2R),     // observing latitude (radians)
-                                    az, (DPIBY2-el));   // azimuth & zenith angle of pencil beam
+                        if (beam_model == BEAM_FEE2016) { // i.e. anything other than analytic
+                            mult2x2d_RxC( P, Ji, Ji );  // Ji = P x Ji (where 'x' is matrix multiplication)
                         }
 
                         conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
@@ -591,11 +595,10 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
 } /* calcEjones_analytic */
 
 void parallactic_angle_correction(
-    ComplexDouble *Jin,  // input Jones matrix
-    ComplexDouble *Jout, // output Jones matrix
-    double lat,          // observing latitude (radians)
-    double az,           // azimuth angle (radians)
-    double za)           // zenith angle (radians)
+    double *P,    // output rotation matrix
+    double lat,   // observing latitude (radians)
+    double az,    // azimuth angle (radians)
+    double za)    // zenith angle (radians)
 {
     double el = DPIBY2 - za;
 
@@ -609,11 +612,10 @@ void parallactic_angle_correction(
     double cl = cos(lat);
 
     double phi = -atan2( sa*cl, ce*sl - se*cl*ca );
+//fprintf(stderr, "parallactic angle correction: phi = %f degrees\n", phi*DR2D);
     double sp = sin(phi);
     double cp = cos(phi);
 
-    double P[4] = { cp, -sp, sp, cp };
-
-    // Jout = P x J (where 'x' is matrix multiplication)
-    mult2x2d_RxC( P, Jin, Jout );
+    P[0] = cp;  P[1] = -sp;
+    P[2] = sp;  P[3] = cp;
 }

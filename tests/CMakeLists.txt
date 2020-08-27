@@ -17,7 +17,7 @@ set(sources "${PROJECT_SOURCE_DIR}/test_make_beam.c;${PROJECT_SOURCE_DIR}/../mak
 add_executable(test_make_beam ${sources})
 
 if(CUDA_FOUND)
-    set_target_properties(test_make_beam PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DHAVE_CUDA")
+    set_target_properties(test_make_beam PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DHAVE_CUDA -DHYPERBEAM_HDF5=\\\"${HYPERBEAM_HDF5}\\\"")
     include_directories(${FFTW3_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIR} ${CUDA_INCLUDE_DIRS} ${HYPERBEAM_INCLUDE_DIR})
 else ()
     include_directories(${FFTW3_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIR} ${HYPERBEAM_INCLUDE_DIR})

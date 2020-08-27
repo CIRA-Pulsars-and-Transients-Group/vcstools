@@ -131,11 +131,10 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
 
 
 void parallactic_angle_correction(
-    ComplexDouble *Jin,  // input Jones matrix
-    ComplexDouble *Jout, // output Jones matrix
-    double lat,          // observing latitude (radians)
-    double az,           // azimuth angle (radians)
-    double za);          // zenith angle (radians)
+    double *P,    // output rotation matrix
+    double lat,   // observing latitude (radians)
+    double az,    // azimuth angle (radians)
+    double za);   // zenith angle (radians)
 
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width );
