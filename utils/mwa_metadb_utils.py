@@ -62,7 +62,7 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     """
     from astropy.utils import iers
     iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
-    logger.info(iers.IERS_A_URL)
+    logger.debug(iers.IERS_A_URL)
 
     from astropy.time import Time
     from astropy.coordinates import SkyCoord, AltAz, EarthLocation
