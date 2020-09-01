@@ -355,37 +355,38 @@ void get_delays(
                         az,                                   // azimuth & zenith angle of pencil beam
                         (DPIBY2-el));
             }
-            else if (beam_model == BEAM_FEE2016) {
-                // FEE2016 beam:
-                double *jones = calc_jones( beam, az, DPIBY2-el, freq_ch,
-                        (unsigned int*)mi->delays, mi->amps, zenith_norm );
-
-                // "Convert" the real jones[8] output array into out complex E[4] matrix
-                for (n = 0; n<NPOL*NPOL; n++){
-                    // For some reason, it is necessary to swap X and Y (perhaps this code implicitly
-                    // defines them differently compared to Hyperbeam). This can be achieved by mapping
-                    // Hyperbeam's output into the Jones matrix thus:
-                    //   [ XX XY ] --> [ XY XX ]
-                    //   [ YX YY ] --> [ YY YX ]
-                    // This is equivalent to mapping the (4-element array) indices thus:
-                    //   0 --> 1
-                    //   1 --> 0
-                    //   2 --> 3
-                    //   3 --> 2
-                    // which is achieved by the following translation (n --> m):
-                    int m = n - n%2 + (n+1)%2;
-                    E[m] = CMaked(jones[n*2], jones[n*2+1]);
-                }
-
-                // Memory clean up required by Hyperbeam
-                free(jones);
-            }
 
             for (row=0; row < (int)(mi->ninput); row++) {
 
                 // Get the antenna and polarisation number from the row
                 ant = row / NPOL;
                 pol = row % NPOL;
+
+                if (beam_model == BEAM_FEE2016) {
+                    // FEE2016 beam:
+                    double *jones = calc_jones( beam, az, DPIBY2-el, freq_ch,
+                            (unsigned int*)mi->delays[row], mi->amps[row], zenith_norm );
+
+                    // "Convert" the real jones[8] output array into out complex E[4] matrix
+                    for (n = 0; n<NPOL*NPOL; n++){
+                        // For some reason, it is necessary to swap X and Y (perhaps this code implicitly
+                        // defines them differently compared to Hyperbeam). This can be achieved by mapping
+                        // Hyperbeam's output into the Jones matrix thus:
+                        //   [ XX XY ] --> [ XY XX ]
+                        //   [ YX YY ] --> [ YY YX ]
+                        // This is equivalent to mapping the (4-element array) indices thus:
+                        //   0 --> 1
+                        //   1 --> 0
+                        //   2 --> 3
+                        //   3 --> 2
+                        // which is achieved by the following translation (n --> m):
+                        int m = n - n%2 + (n+1)%2;
+                        E[m] = CMaked(jones[n*2], jones[n*2+1]);
+                    }
+
+                    // Memory clean up required by Hyperbeam
+                    free(jones);
+                }
 
                 mult2x2d(M[ant], invJref, G); // M x J^-1 = G (Forms the "coarse channel" DI gain)
 
