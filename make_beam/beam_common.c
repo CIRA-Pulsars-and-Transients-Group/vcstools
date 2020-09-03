@@ -71,7 +71,7 @@ void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int c
     for (i = 0; i < (int)(mi->ninput); i++) {
         mi->tilenames[i] =   (char *)malloc( 32*sizeof(char)        );
         mi->delays[i]    =    (int *)malloc( NDELAYS*sizeof(int)    );
-        mi->tilenames[i] = (double *)malloc( NDELAYS*sizeof(double) );
+        mi->amps[i]      = (double *)malloc( NDELAYS*sizeof(double) );
     }
     char *testval = (char *) malloc(1024);
 
