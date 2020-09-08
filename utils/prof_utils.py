@@ -619,6 +619,10 @@ def est_sn_from_prof(prof_data, period, alpha=3.):
     scattered: boolean
         When true, the profile is highly scattered
     """
+    # Check profile is normalised
+    if max(prof_data) > 1.:
+        prof_data = prof_data / max(prof_data)
+
     #centre the profile around the max
     shift = -int(np.argmax(prof_data))+int(len(prof_data))//2
     prof_data = np.roll(prof_data, shift)
@@ -633,7 +637,8 @@ def est_sn_from_prof(prof_data, period, alpha=3.):
         scattered=True
         sn = sn_e = None
     else:
-        prof_e = 500. #this is an approximation
+        #prof_e = 500. #this is when it's not normalised
+        prof_e = 0.0005 #this is an approximation
         non_pulse_bins = 0
         #work out the above parameters
         for i, _ in enumerate(prof_data):
@@ -643,6 +648,9 @@ def est_sn_from_prof(prof_data, period, alpha=3.):
         #now calc S/N
         sn = max(prof_data)/sigma
         sn_e = sn * np.sqrt(prof_e/max(prof_data)**2 + (sigma_e/sigma)**2)
+        logger.debug("max prof: {} +/- {} ".format(max(prof_data), prof_e ))
+        logger.debug("sigma   : {} +/- {} ".format(sigma, sigma_e ))
+        logger.debug("sn      : {} +/- {} ".format(sn, sn_e ))
 
     return [sn, sn_e, scattered]
 
