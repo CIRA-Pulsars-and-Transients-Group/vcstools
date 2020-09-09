@@ -620,8 +620,7 @@ def est_sn_from_prof(prof_data, period, alpha=3.):
         When true, the profile is highly scattered
     """
     # Check profile is normalised
-    if max(prof_data) > 1.:
-        prof_data = prof_data / max(prof_data)
+    prof_data = prof_data / max(prof_data)
 
     #centre the profile around the max
     shift = -int(np.argmax(prof_data))+int(len(prof_data))//2
