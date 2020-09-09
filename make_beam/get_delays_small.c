@@ -380,14 +380,43 @@ void get_delays(
                         //   2 --> 3
                         //   3 --> 2
                         // which is achieved by the following translation (n --> m):
-                        int m = n - n%2 + (n+1)%2;
+                        // int m = n - n%2 + (n+1)%2;
+                        int m;
+                        /* main diagonal swap
+                        if (n == 0){
+                            m=3;
+                        }
+                        else if (n == 3){
+                            m=0;
+                        }
+                        else{
+                            m=n;
+                        }*/
+                        //Swap top and bottom rows
+                        if (n < 2){
+                            m = n + 2;
+                        }
+                        else{
+                            m = n - 2;
+                        }
+                        /*Transpose
+                        if (n==1){
+                            m=2;
+                        }
+                        else if (n==2){
+                            m=1;
+                        }
+                        else{
+                            m=n;
+                        }
+                        */
                         E[m] = CMaked(jones[n*2], jones[n*2+1]);
                     }
 
                     // Memory clean up required by Hyperbeam
                     free(jones);
                 }
-
+                fprintf(stderr, "APPLYING HORIZONTAL FLIP\n");
                 mult2x2d(M[ant], invJref, G); // M x J^-1 = G (Forms the "coarse channel" DI gain)
 
                 if (cal->cal_type == RTS_BANDPASS)
