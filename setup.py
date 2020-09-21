@@ -27,9 +27,8 @@ def get_git_version():
     git_version = check_output('git describe --tags --long --dirty --always'.split()).decode('utf-8').strip()
     return format_version(version=git_version)
 
-reqs = ['astropy>=3.2.3',
+reqs = ['astropy>=3.2.1',
         'argparse>=1.4.0',
-        'h5py>=2.7.1',
         'numpy>=1.13.3',
         'matplotlib>=2.1.0',
         'psrqpy>=1.0.5',
@@ -37,14 +36,11 @@ reqs = ['astropy>=3.2.3',
         'mwa-voltage',
         'mwa_pb']
 
-if os.path.exists('version.py'):
-    with open('version.py', 'r') as the_file:
-        vcstools_version =  the_file.read()
-else:
-    vcstools_version = get_git_version()
-    #make a temporary version file to be installed then delete it
-    with open('version.py', 'a') as the_file:
-        the_file.write('__version__ = "{}"\n'.format(vcstools_version))
+
+vcstools_version = get_git_version()
+#make a temporary version file to be installed then delete it
+with open('version.py', 'a') as the_file:
+    the_file.write('__version__ = "{}"\n'.format(vcstools_version))
 
 setup(name="mwa_vcstools",
       version=vcstools_version,
@@ -56,7 +52,7 @@ setup(name="mwa_vcstools",
       python_requires='>=3.6',
       install_requires=reqs,
       scripts=['scripts/checks.py', 'scripts/calibrate_vcs.py', 'scripts/create_psrfits.sh',
-               'scripts/find_pulsar_in_obs.py',
+               'scripts/find_pulsar_in_obs.py', 'scripts/plot_BPcal_128T.py',
                'scripts/process_vcs.py', 'scripts/recombine.py', 'scripts/rename_corr_output.py',
                'scripts/reorder_chans.py', 'scripts/rts2ao.py', 'scripts/untar.sh',
                'scripts/cleanup.py', 'scripts/create_ics_psrfits.py', 'scripts/rm_synthesis.py',

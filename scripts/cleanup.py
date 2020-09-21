@@ -74,7 +74,7 @@ def remove_raw(obs):
         
 def remove_beamformed(obs, pointing=None):
     comp_config = load_config_file()
-    pointing_folder = os.path.join(comp_config['base_product_dir'], str(obs), "pointings")
+    pointing_folder = os.path.join(comp_config['base_data_dir'], str(obs), "pointings")
     if not pointing:
         authority = ('No pointing specified, would you like to remove all pointings for this observation?')
         if (authority == "Y") or (authority == "y"):

@@ -5,8 +5,17 @@ Installation
 ------
 The installation is done in two steps. The first involves installing all the python scripts, which is done with the command:
 ```bash
-pip install vcstools
+pip install mwa-vcstools
 ```
+Or git clone into the repo and run
+```bash
+python setup.py install
+```
+or
+```bash
+python3 setup.py install --prefix="<install_dir>" --single-version-externally-managed --record=record.txt
+```
+If you'd like to specify the install directory
 Note we have not put all functions into the vcstools package so you may need to add your bin (the directory `which find_pulsar_in_obs.py`) to the PYTHONPATH
 
 The second step is to compile the beamformer which is much more difficult. All of the beamformer's dependancies must be taken into account as seen in this example cmake command:
