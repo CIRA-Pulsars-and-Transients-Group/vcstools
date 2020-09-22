@@ -298,7 +298,9 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
                                     "nice": nice},
                         vcstools_version=vcstools_version, submit=False,
                         outfile=batch_dir+check_batch+"_0.out",
-                        queue="zcpuq", export="NONE", mem=10240)
+                        queue="zcpuq", export="NONE", mem=10240,
+                        # Manually handing it the module dir as it should only run
+                        module_dir='/group/mwa/software/modulefiles')
 
         # Write out the tar batch file if in mode 15
         #if format == 16:
@@ -339,7 +341,9 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
                                     "nice" : nice},
                         vcstools_version=vcstools_version,
                         outfile=batch_dir+voltdownload_batch+"_1.out",
-                        queue="copyq", export="NONE", mem=5120)
+                        queue="copyq", export="NONE", mem=5120,
+                        # Manually handing it the module dir as it should only run
+                        module_dir='/group/mwa/software/modulefiles')
 
 
 def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id,
@@ -383,7 +387,9 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id,
                     module_list=module_list,
                     slurm_kwargs={"time": secs_to_run, "nice": nice},
                     vcstools_version=vcstools_version, queue="copyq",
-                    export="NONE", mem=4096)
+                    export="NONE", mem=4096,
+                    # Manually handing it the module dir as it should only run
+                    module_dir='/group/mwa/software/modulefiles')
 
 
 def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir,
