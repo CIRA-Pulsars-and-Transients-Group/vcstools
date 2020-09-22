@@ -25,7 +25,6 @@ export OMP_NUM_THREADS={threads}
 
 {switches}
 module use {module_dir}
-module load vcstools/{version}
 {modules}
 
 {script}
@@ -39,7 +38,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                  submit=True, outfile=None, queue="cpuq", export="NONE",
                  gpu_res=None, mem=1024, cpu_threads=1, temp_mem=None,
                  nice=0, shebag='#!/bin/bash -l',
-                 module_dir=None):
+                 module_dir=None, load_vcstools=True):
     """
     Making this function to cleanly submit SLURM jobs using a simple template.
 
@@ -210,7 +209,10 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
     header = "\n".join(header)
 
     # construct the module loads
-    modules = []
+    if load_vcstools:
+        modules = ["module load vcstools/{0}\n".format(vcstools_version)]
+    else:
+        modules = []
     switches = []
     for m in module_list:
         if m == "vcstools":
@@ -243,7 +245,6 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
     # format the template script
     tmpl = tmpl.format(shebag=shebag, script=commands, outfile=outfile, header=header,
                        switches=switches, modules=modules,
-                       version=vcstools_version,
                        cluster=cluster, partition=partition,
                        export=export, account=comp_config['group_account'][queue],
                        module_dir=module_dir,
