@@ -8,7 +8,6 @@ import tempfile
 import atexit
 import datetime
 from time import sleep, strptime, strftime
-import distutils.spawn
 import sqlite3 as lite
 from astropy.io import fits as pyfits
 from astropy.time import Time
@@ -123,7 +122,6 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         logger.warning("At the moment, even through the downloaded file is "
                        "labelled as a ppd file this is not true.")
         logger.warning("This is hopefully a temporary measure.")
-        #obsdownload = distutils.spawn.find_executable("obsdownload.py")
 
         get_metafits = "wget http://ws.mwatelescope.org/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
         try:
@@ -210,7 +208,6 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
                  nice=0):
 
     logger.info("Downloading files from archive")
-    # voltdownload = distutils.spawn.find_executable("voltdownload.py") #Doesn't seem to be working on zeus for some reason
     voltdownload = "voltdownload.py"
     obsinfo = meta.getmeta(service='obs', params={'obs_id':str(obsid)})
     data_format = obsinfo['dataquality']
@@ -255,7 +252,7 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
         if data_type == 16:
             check_secs_to_run = "10:15:00"
 
-        checks = distutils.spawn.find_executable("checks.py")
+        checks = "checks.py"
         # Write out the checks batch file but don't submit it
         commands = []
         if vcs_database_id is not None:
@@ -278,7 +275,7 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
         # if we have tarballs we send the untar jobs to the workq
         if data_type == 16:
             commands.append("else")
-            untar = distutils.spawn.find_executable('untar.sh')
+            untar = 'untar.sh'
             untar_command = "-w {0} -o {1} -b {2} -e {3} -j {4} {5}".format(dl_dir,
                                 obsid, time_to_get, time_to_get+increment-1, n_untar,
                                 keep)
@@ -358,7 +355,7 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id,
     # Downloads the visablities to  /astro/mwavcs/vcs/[cal_obs_id]/vis
     # but creates a link to it here /astro/mwavcs/vcs/[obs_id]/cal/[cal_obs_id]
     csvfile = os.path.join(batch_dir, "{0}_dl.csv".format(cal_obs_id))
-    obsdownload = distutils.spawn.find_executable("obsdownload.py")
+    obsdownload = "obsdownload.py"
     create_link(data_dir, 'vis', product_dir, 'vis')
     obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
     secs_to_run = "03:00:00" # sometimes the staging can take a while...
@@ -403,9 +400,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
     mdir(data_dir + '/' + target_dir, 'Combined')
     create_link(data_dir, target_dir, product_dir, link)
     batch_dir = product_dir+"/batch/"
-    recombine = distutils.spawn.find_executable("recombine.py")
-    checks = distutils.spawn.find_executable("checks.py")
-    recombine_binary = distutils.spawn.find_executable("recombine")
+    recombine = "recombine.py"
+    checks = "checks.py"
+    recombine_binary = "recombine"
     for time_to_get in range(start_time,stop_time,increment):
         process_nsecs = increment if (time_to_get + increment <= stop_time) \
                                   else (stop_time - time_to_get + 1)
