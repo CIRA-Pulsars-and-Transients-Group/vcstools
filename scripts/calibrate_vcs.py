@@ -656,8 +656,7 @@ class RTScal(object):
                         "ntasks-per-node": "1"}
         module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
-        #commands.append("module use /pawsey/mwa/software/python3/modulefiles")
-        #commands.append("module load RTS/master")
+        commands.append("export UCX_MEMTYPE_CACHE=n")
         commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, fname))
         hostname = socket.gethostname()
         if hostname.startswith("galaxy"):
@@ -665,13 +664,14 @@ class RTScal(object):
         else:
             mem = 10240
         jobid = submit_slurm(rts_batch, commands,
-                                slurm_kwargs=slurm_kwargs,
-                                module_list=module_list,
-                                batch_dir=self.batch_dir,
-                                submit=self.submit,
-                                queue='gpuq',
-                                export="NONE",
-                                mem=mem)
+                             slurm_kwargs=slurm_kwargs,
+                             module_list=module_list,
+                             batch_dir=self.batch_dir,
+                             submit=self.submit,
+                             queue='gpuq',
+                             export="NONE",
+                             mem=mem,
+                             load_vcstools=False)
         jobids.append(jobid)
 
         return jobids
@@ -853,15 +853,17 @@ class RTScal(object):
                             "ntasks-per-node": "1"}
             module_list= ["RTS/master"]
             commands = list(self.script_body)  # make a copy of body to then extend
+            commands.append("export UCX_MEMTYPE_CACHE=n")
             commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, k))
             jobid = submit_slurm(rts_batch, commands,
-                                    slurm_kwargs=slurm_kwargs,
-                                    module_list=module_list,
-                                    batch_dir=self.batch_dir,
-                                    submit=self.submit,
-                                    queue='gpuq',
-                                    export="NONE",
-                                    mem=mem)
+                                 slurm_kwargs=slurm_kwargs,
+                                 module_list=module_list,
+                                 batch_dir=self.batch_dir,
+                                 submit=self.submit,
+                                 queue='gpuq',
+                                 export="NONE",
+                                 mem=mem,
+                                 load_vcstools=False)
             jobids.append(jobid)
 
         return jobids
