@@ -411,7 +411,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
         recombine_batch = "recombine_{0}".format(time_to_get)
         check_batch = "check_recombine_{0}".format(time_to_get)
-        module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3", "numpy/1.13.3", "mwa-voltage/master"]
+        #module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3", "numpy/1.13.3", "mwa-voltage/master"]
+        module_list = ["mwa-voltage/master"]
         commands = []
         if vcs_database_id is not None:
             commands.append(database_vcs.add_database_function())
@@ -439,8 +440,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                      outfile=batch_dir+check_batch+"_0.out",
                      queue='gpuq', export="NONE")
 
-        module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3",
-                       "numpy/1.13.3", "mwa-voltage/master", "mpi4py", "cfitsio"]
+        #module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3",
+        #               "numpy/1.13.3", "mwa-voltage/master", "mpi4py", "cfitsio"]
+        module_list = ["mwa-voltage/master", "mpi4py"]
         commands = []
         if vcs_database_id is not None:
             commands.append(database_vcs.add_database_function())
@@ -458,9 +460,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         recombine_command = "-o {0} -s {1} -w {2} -e {3}".format(obsid, time_to_get,
                             data_dir, recombine_binary)
         if vcs_database_id is None:
-            commands.append("srun --export=all python3 {0} {1}".format(recombine, recombine_command))
+            commands.append("srun --export=all {0} {1}".format(recombine, recombine_command))
         else:
-            commands.append('run "srun --export=all python3 {0}" "{1}" "{2}"'.format(recombine,
+            commands.append('run "srun --export=all {0}" "{1}" "{2}"'.format(recombine,
                             recombine_command, vcs_database_id))
 
         submit_slurm(recombine_batch, commands, batch_dir=batch_dir,
