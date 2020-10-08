@@ -15,15 +15,20 @@ endif()
 
 set(sources "${PROJECT_SOURCE_DIR}/test_make_beam.c;${PROJECT_SOURCE_DIR}/../make_beam/get_delays_small.c;${PROJECT_SOURCE_DIR}/../make_beam/beam_common.c")
 add_executable(test_make_beam ${sources})
+set(sources "${PROJECT_SOURCE_DIR}/beam_model_jones_comparison.c;${PROJECT_SOURCE_DIR}/../make_beam/get_delays_small.c;${PROJECT_SOURCE_DIR}/../make_beam/beam_common.c")
+add_executable(beam_model_jones_comparison ${sources})
 
 if(CUDA_FOUND)
     set_target_properties(test_make_beam PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DHAVE_CUDA -DHYPERBEAM_HDF5=\\\"${HYPERBEAM_HDF5}\\\"")
+    set_target_properties(beam_model_jones_comparison PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -DHAVE_CUDA -DHYPERBEAM_HDF5=\\\"${HYPERBEAM_HDF5}\\\"")
     include_directories(${FFTW3_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIR} ${CUDA_INCLUDE_DIRS} ${HYPERBEAM_INCLUDE_DIR})
 else ()
     include_directories(${FFTW3_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_INCLUDE_DIR} ${SLALIB_INCLUDE_DIR} ${HYPERBEAM_INCLUDE_DIR})
 endif(CUDA_FOUND)
 
 target_link_libraries(test_make_beam -fopenmp ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${HYPERBEAM_LIB})
+target_link_libraries(beam_model_jones_comparison -fopenmp ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${HYPERBEAM_LIB})
 
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/test_make_beam DESTINATION bin)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/beam_model_jones_comparison DESTINATION bin)
 
