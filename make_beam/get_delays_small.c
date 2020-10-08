@@ -380,43 +380,14 @@ void get_delays(
                         //   2 --> 3
                         //   3 --> 2
                         // which is achieved by the following translation (n --> m):
-                        // int m = n - n%2 + (n+1)%2;
-                        int m;
-                        /* main diagonal swap
-                        if (n == 0){
-                            m=3;
-                        }
-                        else if (n == 3){
-                            m=0;
-                        }
-                        else{
-                            m=n;
-                        }*/
-                        //Swap top and bottom rows
-                        if (n < 2){
-                            m = n + 2;
-                        }
-                        else{
-                            m = n - 2;
-                        }
-                        /*Transpose
-                        if (n==1){
-                            m=2;
-                        }
-                        else if (n==2){
-                            m=1;
-                        }
-                        else{
-                            m=n;
-                        }
-                        */
+                        int m = n - n%2 + (n+1)%2;
                         E[m] = CMaked(jones[n*2], jones[n*2+1]);
                     }
 
                     // Memory clean up required by Hyperbeam
                     free(jones);
                 }
-                fprintf(stderr, "APPLYING HORIZONTAL FLIP\n");
+                //fprintf(stderr, "APPLYING HORIZONTAL FLIP\n");
                 mult2x2d(M[ant], invJref, G); // M x J^-1 = G (Forms the "coarse channel" DI gain)
 
                 if (cal->cal_type == RTS_BANDPASS)
@@ -473,9 +444,9 @@ void get_delays(
                 if (invJi != NULL) {
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
                         // Apply parallactic angle correction if Hyperbeam was used
-                        if (beam_model == BEAM_FEE2016) {
-                            mult2x2d_RxC( P, Ji, Ji );  // Ji = P x Ji (where 'x' is matrix multiplication)
-                        }
+                        //if (beam_model == BEAM_FEE2016) {
+                        //    mult2x2d_RxC( P, Ji, Ji );  // Ji = P x Ji (where 'x' is matrix multiplication)
+                        //}
 
                         conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
                         Fnorm = norm2x2( Ji, Ji );
@@ -486,13 +457,28 @@ void get_delays(
                             for (p1 = 0; p1 < NPOL;  p1++)
                             for (p2 = 0; p2 < NPOL;  p2++)
                                 invJi[ant][ch][p1][p2] = CMaked( 0.0, 0.0 );
+                            }
                         }
                     }
-                }
 
             } // end loop through antenna/pol (row)
         } // end loop through fine channels (ch)
-
+        /*
+        if (beam_model == BEAM_ANALYTIC)
+        {
+            for (ch = 0; ch < NCHAN; ch++)
+            {
+                for (p1 = 0; p1 < NPOL;  p1++)
+                {
+                    for (p2 = 0; p2 < NPOL;  p2++)
+                    {
+                        fprintf(stderr, "%.18lf %.18lf ", CReald(invJi[5][ch][p1][p2]), CImagd(invJi[5][ch][p1][p2]));
+                    }
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+        */
         // Populate a structure with some of the calculated values
         if (delay_vals != NULL) {
 
