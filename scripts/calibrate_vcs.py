@@ -259,6 +259,8 @@ class BaseRTSconfig(object):
         if self.offline is False:
             # now figure out how much data we have in total by counting the number of data HDUs
             # then open the header to access the frequency spacing and inetgration times
+            #print(first_file)
+            #quit()
             hdulist = fits.open(first_file)
             nfine_chan = int(hdulist[1].header['NAXIS2'])
             inttime = float(hdulist[1].header['INTTIME'])
@@ -323,8 +325,8 @@ class BaseRTSconfig(object):
         obsinfo = getmeta(service='obs', params={'obs_id': str(self.cal_obsid)})
 
         # quick check to make sure what's returned is actually real data
-        if len(obsinfo[u'logs']) == 0:
-            errmsg = "Metadata database error (logs empty). Maybe an invalid obs ID?"
+        if obsinfo[u'metadata'] is None:
+            errmsg = "Metadata database error (metadata empty). Maybe an invalid obs ID?"
             logger.error(errmsg)
             raise CalibrationError(errmsg)
 
