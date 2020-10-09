@@ -259,8 +259,6 @@ class BaseRTSconfig(object):
         if self.offline is False:
             # now figure out how much data we have in total by counting the number of data HDUs
             # then open the header to access the frequency spacing and inetgration times
-            #print(first_file)
-            #quit()
             hdulist = fits.open(first_file)
             nfine_chan = int(hdulist[1].header['NAXIS2'])
             inttime = float(hdulist[1].header['INTTIME'])
