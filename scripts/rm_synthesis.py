@@ -34,7 +34,7 @@ def rmfit_quad(archive, phase_min, phase_max):
     commands.append("-m")
     commands.append("-10,10,20")
     commands.append("-w")
-    commands.append("{0},{1}".format(phase_min, phase_max))
+    commands.append(f"{phase_min},{phase_max}")
     commands.append("-Y")
     commands.append(archive)
     subprocess.run(commands)
@@ -197,7 +197,7 @@ def find_best_range(I, Q, U, phase_ranges):
 
     return best_phase_range, best_max
 
-def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single=False, plotname=None, phi_range=(-300, 300), phi_res=0.1, plot_range=(-300, 300)):
+def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single=False, title=None, plotname=None, phi_range=(-300, 300), phi_steps=10000):
     """
     Performs RM synthesis on input data
 
@@ -219,14 +219,12 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single
         Stokes U uncertainties
     phi_range: tuple
         OPTIONAL - The range of RMs to search over. Default: (-300, 300)
-    phi_res: float
-        OPTINAL - The resolution of RMs to search over. Default: 0.1
+    phi_steps: int
+        OPTINAL - The bumber of RM steps to search over. Default: 10000
     phase_range: tuple
         OPTIONAL - The phase range of the profile used in fitting. Will be displayed on plot. Default: None
     plotname: string
         OPTIONAL - The name of the plot. If None, will not plot: Default: None
-    plot_range: tuple
-        OPTIONAL - The range of phi to plot. Default: (-300, 300)
 
     Returns:
     --------
@@ -236,12 +234,11 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single
         The uncertainty in the rotation measure
     """
     p = rm_synth.PolObservation(freq_hz, (I, Q, U), IQUerr=(I_e, Q_e, U_e))
-    phi_axis = np.arange(*phi_range, phi_res)
+    phi_axis = np.linspace(*phi_range, phi_steps)
     p.rmsynthesis(phi_axis)
     p.rmclean(cutoff=3.)
     p.get_fdf_peak()
     p.print_rmstats()
-
     rm = p.cln_fdf_peak_rm
     rm_e = p.cln_fdf_peak_rm_err
     norm_factor = max(abs(p.fdf))
@@ -249,26 +246,28 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single
     if plotname:
         plt.figure(figsize=(12, 10))
         rm_string='RM: {0:7.3f}+/-{1:6.3f}'.format(p.cln_fdf_peak_rm, p.cln_fdf_peak_rm_err)
-        phi_min = min(plot_range)
-        plt.text(min(plot_range)+0.1*abs(phi_min), 0.9, rm_string, fontsize=14)
+        phi_min = min(phi_range)
+        plt.text(min(phi_range)+0.05*abs(phi_min), 0.95, rm_string, fontsize=12)
         if phase_range:
             phase_string = "Phase range: {0:7.3f} - {1:7.3f}".format(float(phase_range[0]), float(phase_range[1]))
-            plt.text(min(plot_range)+0.1*abs(phi_min), 0.8, phase_string, fontsize=14)
+            plt.text(min(phi_range)+0.05*abs(phi_min), 0.9, phase_string, fontsize=12)
 
         plt.plot(p.rmsf_phi,abs(p.rmsf),'k-', linewidth=0.5)
         plt.plot(p.phi,abs(p.fdf/norm_factor),'r-', linewidth=0.5)
         plt.plot(p.phi,abs(p.rm_cleaned/norm_factor),'b-', linewidth=0.5)
         plt.plot(p.phi,abs(p.rm_comps/norm_factor),'g-', linewidth=0.5)
-        plt.legend(('RMSF','Dirty FDF','Clean FDF','FDF Model Components'), loc='best')
-        plt.xlabel('RM (rad/m2)')
-        plt.ylabel('Amplitude (Arbitrary Units)')
-        plt.xlim(*plot_range)
+        plt.legend(('RMSF','Dirty FDF','Clean FDF','FDF Model Components'), loc='upper right')
+        plt.xlabel('RM (rad/m2)', fontsize=12)
+        plt.ylabel('Amplitude (Arbitrary Units)', fontsize=12)
+        plt.xlim(*phi_range)
         plt.ylim(0, 1)
+        if title:
+            plt.title(title, fontsize=16)
         plt.savefig(plotname, bbox_inches='tight')
 
     return rm, rm_e
 
-def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", phase_ranges=None, keep_QUV=False, force_single=False, kwargs_rms={}, kwargs_gfit={}):
+def rm_synth_pipe(kwargs):
     """
     Performs all the nexessary operations on an archive file to attain a rotation measure through the RM synthesis technique
 
@@ -318,85 +317,100 @@ def rm_synth_pipe(archive, work_dir="./", plot=False, write=False, label="", pha
         The path of the file that was written to. None if not written
     """
     randomgen = random.getrandbits(64)
-    if not label:
-        label = randomgen
-    logger.info("Applying label: {}".format(label))
+    if not kwargs["label"]:
+        kwargs["label"] = randomgen
+    logger.info(f"Applying label: {kwargs['label']}")
 
     #Move to directory and make temporary working dir
-    os.chdir(work_dir)
+    os.chdir(kwargs["work_dir"])
     os.mkdir("{}".format(randomgen))
     os.chdir("{}".format(randomgen))
-    archive = os.path.join("..", archive)
+    archive = os.path.join("..", kwargs["archive"])
 
     #Write the .ar file to text archive
-    ascii_archive = "{}_archive.txt".format(label)
+    ascii_archive = f"{kwargs['label']}_archive.txt"
     prof_utils.subprocess_pdv(archive, ascii_archive)
     I, Q, U, V, _ = prof_utils.get_stokes_from_ascii(ascii_archive)
     os.remove(ascii_archive) #remove the archive file, we don't need it anymore
 
     #find the phase range(s) to fit:
-    if not phase_ranges:
-        phase_ranges = find_on_pulse_ranges(I, **kwargs_gfit)
-        if force_single:
-            phase_ranges, _ = find_best_range(I, Q, U, phase_ranges)
-    logger.info("Using phase ranges: {}".format(phase_ranges))
+    if not kwargs["phase_ranges"]:
+        kwargs["phase_ranges"] = find_on_pulse_ranges(I, cliptype=kwargs["cliptype"])
+        if kwargs["force_single"]:
+            logger.info("Forcing use of a single phase range")
+            kwargs["phase_ranges"], _ = find_best_range(I, Q, U, kwargs["phase_ranges"])
+    logger.info(f"Using phase ranges: {kwargs['phase_ranges']}")
 
     #run rmfit with -w option
     rm_dict = {}
-    for i, phase_min, phase_max in zip(range(len(phase_ranges)//2), phase_ranges[0::2], phase_ranges[1::2]):
-        logger.info("Performing RM synthesis on phase range: {0} - {1}".format(phase_min, phase_max))
-        rm_dict[str(i)] = {}
+    for i, phase_min, phase_max in zip(range(len(kwargs["phase_ranges"])//2), kwargs["phase_ranges"][0::2], kwargs["phase_ranges"][1::2]):
+        logger.info(f"Performing RM synthesis on phase range: {phase_min} - {phase_max}")
         rmfit_quad(archive, phase_min, phase_max)
         #read the QUVflux.out file
         QUVflux = "QUVflux.out"
         rmfreq, rmI, rmI_e, rmQ, rmQ_e, rmU, rmU_e, = read_rmfit_QUVflux(QUVflux)
 
         #make plot name if needed
-        if plot:
-            plotname = "{}_".format(label)
-            if len(phase_ranges)>2:
-                plotname += "{0}_".format(i)
+        if kwargs["plot"]:
+            plotname = f"{kwargs['label']}_"
+            if len(kwargs["phase_ranges"])>2:
+                plotname += f"{i}_"
             plotname += "RMsynthesis.png"
-            kwargs_rms["plotname"] = plotname
+            kwargs["plotname"] = plotname
         else:
             plotname = None
-        kwargs_rms["phase_range"] = (phase_min, phase_max)
+        kwargs["phase_range"] = (phase_min, phase_max)
+        kwargs["title"] = ""
+        if kwargs["label"]:
+            kwargs["title"] = f"{kwargs['label']} "
+        kwargs["title"] += "RM Synthesis"
 
         #perform RM synthesis
-        rm, rm_e = IQU_rm_synth(rmfreq, rmI, rmQ, rmU, rmI_e, rmQ_e, rmU_e, **kwargs_rms)
+        rm, rm_e = IQU_rm_synth(rmfreq, rmI, rmQ, rmU, rmI_e, rmQ_e, rmU_e,
+                   phase_range=kwargs["phase_range"], force_single=kwargs["force_single"], title=kwargs["title"],
+                   plotname=kwargs["plotname"], phi_range=kwargs["phi_range"], phi_steps=kwargs["phi_steps"])
+        rm_dict[str(i)] = {}
         rm_dict[str(i)]["rm"]           = rm
         rm_dict[str(i)]["rm_e"]         = rm_e
-        rm_dict[str(i)]["phase_range"]  = (phase_min, phase_max)
+        rm_dict[str(i)]["phase_range"]  = kwargs["phase_range"]
         rm_dict[str(i)]["plotname"]     = plotname
-        rm_dict[str(i)]["label"]        = label
+        rm_dict[str(i)]["label"]        = kwargs["label"]
 
         #move plot out of working dir
         if plotname:
-            os.rename(plotname, "../{}".format(plotname))
+            os.rename(plotname, f"../{plotname}")
 
         #keep quvflux if needed
-        if keep_QUV:
+        if kwargs["keep_QUV"]:
             quvflux_name = label
             if len(phase_ranges)>2:
-                quvflux_name += "_{}".format(i)
+                quvflux_name += f"_{i}"
             quvflux_name += "_QUVflux.out"
-            os.rename("QUVflux.out", "../{}".format(quvflux_name))
+            os.rename("QUVflux.out", f"../{quvflux_name}")
 
-    if write:
-        filename = "{}_".format(label)
+    if kwargs["write"]:
+        filename = f"{kwargs['label']}_"
         filename += "RMsynthesis.txt"
         write_rm_to_file(filename, rm_dict)
-        os.rename(filename, "../{}".format(filename))
+        os.rename(filename, f"../{filename}")
     else:
         filename = None
 
     os.chdir("../")
-    allfiles = glob.glob("{}/*".format(randomgen))
+    allfiles = glob.glob(f"{randomgen}/*")
     for afile in allfiles:
         os.remove(afile)
-    os.rmdir("{}".format(randomgen))
+    os.rmdir(f"{randomgen}")
 
     return rm_dict, filename
+
+
+def rm_synth_main(kwargs):
+    rm_dict, _ = rm_synth_pipe(kwargs)
+    for i in rm_dict.keys():
+        logger.info("For phase range: {0} - {1}".format(*rm_dict[i]["phase_range"]))
+        logger.info("RM: {0:7.3f} +/- {1:6.3f}".format(rm_dict[i]["rm"], rm_dict[i]["rm_e"]))
+
 
 if __name__ == '__main__':
 
@@ -414,7 +428,7 @@ if __name__ == '__main__':
     fitting = parser.add_argument_group("Fitting Options:")
     fitting.add_argument("--phase_ranges", type=float, nargs="+", help="The phase range(s) to fit the RM to. If unsupplied, will find the on-pulse and fit that range.\
                          Supports multiple ranges. eg. 0.1 0.15 0.55 0.62 will fit from 0.1 to 0.15 and from 0.55 or 0.62.")
-    fitting.add_argument("--phi_res", type=float, default=0.1, help="The resolution of RMs to synthesise.")
+    fitting.add_argument("--phi_steps", type=int, default=10000, help="The number of rm steps to use for synthesis.")
     fitting.add_argument("--phi_range", type=float, default=(-300, 300), nargs="+", help="The range of RMs so synthsize. Giving a smaller window will speed up operations.")
     fitting.add_argument("--force_single", action="store_true", help="use this tag to force using only a single phase range (if phase_ranges is unsupplied)")
 
@@ -422,7 +436,6 @@ if __name__ == '__main__':
     output.add_argument("--label", type=str, help="A label for the output.")
     output.add_argument("--write", action="store_true", help="Use this tag to write the results to a labelled file")
     output.add_argument("--plot", action="store_true", help="Use this tag to plot the result.")
-    output.add_argument("--plot_range", type=float, default=(-300, 300), nargs="+", help="The range of phi (RM) for the output plot.")
     output.add_argument("--keep_QUV", action="store_true", help="Use this tag to keep the QUVflux.out file from rmfit.")
 
     gfit = parser.add_argument_group("Gaussian Fit Options")
@@ -440,18 +453,5 @@ if __name__ == '__main__':
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     logger.propagate = False
-
-    kwargs_rms                  = {}
-    kwargs_rms["phi_range"]     = args.phi_range
-    kwargs_rms["plot_range"]    = args.plot_range
-    kwargs_rms["phi_res"]       = args.phi_res
-    kwargs_gfit                 = {}
-    kwargs_gfit["cliptype"]     = args.cliptype
-    rm_dict, _ = rm_synth_pipe(args.archive, work_dir=args.work_dir, plot=args.plot, label=args.label, write=args.write,\
-                 phase_ranges=args.phase_ranges, keep_QUV=args.keep_QUV, force_single=args.force_single, kwargs_rms=kwargs_rms, kwargs_gfit=kwargs_gfit)
-    for i in rm_dict.keys():
-        rm          = rm_dict[i]["rm"]
-        rm_e        = rm_dict[i]["rm_e"]
-        phase_range = rm_dict[i]["phase_range"]
-        logger.info("For phase range: {0} - {1}".format(*phase_range))
-        logger.info("RM: {0:7.3f} +/- {1:6.3f}".format(rm, rm_e))
+    kwargs = vars(args)
+    rm_synth_main(kwargs)
