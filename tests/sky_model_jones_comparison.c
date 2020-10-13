@@ -4,7 +4,6 @@
  *                                                      *
  ********************************************************/
 
-// TODO: Remove superfluous #includes
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -13,26 +12,14 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <string.h>
-#include <errno.h>
-#include <time.h>
-#include "slalib.h"
-#include "slamac.h"
-#include "../make_beam/ascii_header.h"
-#include "../make_beam/mwa_header.h"
-#include <glob.h>
-#include <fcntl.h>
 #include <assert.h>
 #include "../make_beam/beam_common.h"
-#include "../make_beam/beam_psrfits.h"
-#include "../make_beam/beam_vdif.h"
-#include "../make_beam/make_beam.h"
-#include "../make_beam/vdifio.h"
-#include "../make_beam/filter.h"
-#include "psrfits.h"
-#include "../make_beam/mycomplex.h"
-#include "../make_beam/form_beam.h"
-#include <omp.h>
+#include "mwa_hyperbeam.h"
+#include "complex.h"
 
+#define MWA_LAT -26.703319             /* Array latitude. degrees North */
+#define DD2R      1.74532925199433e-02 /* = PI/180 */
+#define DPIBY2    1.570796326794897    /* = PI/2   */
 
 int main(int argc, char **argv)
 {
@@ -59,94 +46,86 @@ int main(int argc, char **argv)
     int nstation             = opts.nstation;
     int nchan                = opts.nchan;
 
-    // YET TO DO: Prepare pointings file for reading
-
-
     // Read in info from metafits file
     struct metafits_info mi;
     get_metafits_info( opts.metafits, &mi, opts.chan_width );
 
-    int j, file_no, ant, ch, xpol, ypol;
-    int beam_model;
+    // Always use the first tile/pol's set of delays and assume no dead
+    // dipoles
+    unsigned int *delays = (unsigned int *)mi->delays[0];
+    double *amps = { 0.0, 0.0, 0.0, 0.0,
+                     0.0, 0.0, 0.0, 0.0,
+                     0.0, 0.0, 0.0, 0.0,
+                     0.0, 0.0, 0.0, 0.0 };
+
+    // Load the FEE2016 beam model
     FEEBeam *beam = new_fee_beam( HYPERBEAM_HDF5 );
-    char comp_fname[1024];
-    FILE *fF = fopen("sky_model_comparison_FEE2016.dat", "w");
-    FILE *fA = fopen("sky_model_comparison_ANALYTIC.dat", "w");
+
+    // Open files for reading and writing
+    FILE *fP = fopen( opts.pointings, "r" );
+    FILE *fF = fopen( "sky_model_comparison_FEE2016.dat", "w" );
+    FILE *fA = fopen( "sky_model_comparison_ANALYTIC.dat", "w" );
+
     if (fF == NULL || fA == NULL)
     {
         fprintf( stderr, "Unable to open file(s) for writing\n" );
         exit(EXIT_FAILURE);
     }
 
-        // Load the FEE2016 beam, if requested
-        if (opts.beam_model == BEAM_FEE2016) {
-        }
-        for (file_no = 0; file_no < nfiles; file_no++)
+    complex double  JA[4]; // Beam model Jones -- ANALYTIC
+    double         *JF;    // Beam model Jones -- FEE2016
+
+    double az, za; // (az)imuth & (z)enith (a)ngle in radians
+
+    int i; // Generic loop counter
+
+    while (fscanf( fP, "%lf %lf", &az, &za ) != EOF)
+    {
+        // Calculate jones matrix for the ANALYTIC beam
+        calcEjones_analytic( JA,                      // pointer to 4-element (2x2) voltage gain Jones matrix
+                opts.frequency,                       // observing freq of fine channel (Hz)
+                (MWA_LAT*DD2R),                       // observing latitude (radians)
+                mi.tile_pointing_az*DD2R,             // azimuth & zenith angle of tile pointing
+                (DPIBY2-(mi.tile_pointing_el*DD2R)),
+                az, za );                             // azimuth & zenith angle of pencil beam
+
+        // Calculate jones matrix for the ANALYTIC beam
+        JF = calc_jones( beam, az, za, opts.frequency, delays, amps, zenith_norm );
+
+        // Write out the matrices to the respective files
+        // First the ANALYTIC...
+        for (i = 0; i < 4; i++)
         {
-            // Read in data from next file
-            // Get the next second's worth of phases / jones matrices, if needed
-            get_delays(
-                    pointing_array,         // an array of pointings [pointing][ra/dec][characters]
-                    npointing,              // number of pointings
-                    opts.frequency,         // middle of the first frequency channel in Hz
-                    &opts.cal,              // struct holding info about calibration
-                    opts.sample_rate,       // = 10000 samples per sec
-                    beam_model,             // beam model type
-                    beam,                   // Hyperbeam struct
-                    opts.time_utc,          // utc time string
-                    (double)file_no,        // seconds offset from time_utc at which to calculate delays
-                    NULL,                   // Don't update delay_vals
-                    &mi,                    // Struct containing info from metafits file
-                    complex_weights_array,  // complex weights array (answer will be output here)
-                    invJi );                // invJi array           (answer will be output here)
-
-
-
-            for (ant = 0; ant < nstation; ant++)
-            {
-                fprintf(f, "# File number %d Antenna %d\n", file_no, ant);
-                for (ch = 0; ch < nchan; ch++)
-                {
-                    for (xpol = 0; xpol < npol; xpol++)
-                    {
-                        for (ypol = 0; ypol < npol; ypol++)
-                        {
-                            fprintf(f, "%lf %lf ", CReald(invJi[ant][ch][xpol][ypol]), CImagd(invJi[ant][ch][xpol][ypol]));
-                        }
-                    }
-                    fprintf(f, "\n");
-                }
-                fprintf(f, "\n\n");
-            }
-
+            fprintf( fA, "%lf %lf ", creal( JA[i] ), cimag( JA[i] ) );
         }
-        fclose(f);
+        fprintf( fA, "\n" );
+
+        // .. and then the FEE2016
+        for (i = 0; i < 8; i++)
+        {
+            fprintf( fF, "%lf ", JF[i] );
+        }
+        fprintf( fF, "\n" );
+
+        // calc_jones allocates memory, so need to clean up with every loop
+        free( JF );
     }
+
+    // Close files for writing
+    fclose(fF);
+    fclose(fA);
+
     // Free up memory
     destroy_complex_weights( complex_weights_array, npointing, nstation, nchan );
     destroy_invJi( invJi, nstation, nchan, npol );
 
     destroy_metafits_info( &mi );
 
-    free( opts.obsid        );
-    free( opts.time_utc     );
     free( opts.pointings    );
-    free( opts.datadir      );
     free( opts.metafits     );
-    free( opts.rec_channel  );
-    free( opts.cal.filename );
-    free( opts.custom_flags );
-    free( opts.synth_filter );
 
     // Clean up Hyperbeam
-    if (opts.beam_model == BEAM_FEE2016) {
-        free_fee_beam( beam );
-    }
-
-#ifndef HAVE_CUDA
-    // Clean up FFTW OpenMP
-    fftw_cleanup_threads();
-#endif
+    free_fee_beam( beam );
 
     return 0;
 }
@@ -241,9 +220,6 @@ void make_beam_parse_cmdline(
                 case 'p':
                     opts->pointings = strdup(optarg);
                     break;
-                case 'S':
-                    opts->synth_filter = strdup(optarg);
-                    break;
                 case 'V':
                     fprintf( stderr, "MWA Beamformer %s\n", VERSION_BEAMFORMER);
                     exit(0);
@@ -270,133 +246,5 @@ void make_beam_parse_cmdline(
     assert( opts->metafits     != NULL );
     assert( opts->frequency    != 0 );
 
-    // If neither -i, -p, nor -v were chosen, set -p by default
-    if ( !opts->out_incoh && !opts->out_coh && !opts->out_vdif )
-    {
-        opts->out_coh = 1;
-    }
 }
 
-
-ComplexDouble ****create_complex_weights( int npointing, int nstation, int nchan, int npol )
-// Allocate memory for complex weights matrices
-{
-    int p, ant, ch; // Loop variables
-    ComplexDouble ****array;
-
-    array = (ComplexDouble ****)malloc( npointing * sizeof(ComplexDouble ***) );
-
-    for (p = 0; p < npointing; p++)
-    {
-        array[p] = (ComplexDouble ***)malloc( nstation * sizeof(ComplexDouble **) );
-
-        for (ant = 0; ant < nstation; ant++)
-        {
-            array[p][ant] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
-
-            for (ch = 0; ch < nchan; ch++)
-                array[p][ant][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
-        }
-    }
-    return array;
-}
-
-
-void destroy_complex_weights( ComplexDouble ****array, int npointing, int nstation, int nchan )
-{
-    int p, ant, ch;
-    for (p = 0; p < npointing; p++)
-    {
-        for (ant = 0; ant < nstation; ant++)
-        {
-            for (ch = 0; ch < nchan; ch++)
-                free( array[p][ant][ch] );
-
-            free( array[p][ant] );
-        }
-        free( array[p] );
-    }
-    free( array );
-}
-
-ComplexDouble ****create_invJi( int nstation, int nchan, int npol )
-// Allocate memory for (inverse) Jones matrices
-{
-    int ant, pol, ch; // Loop variables
-    ComplexDouble ****invJi;
-    invJi = (ComplexDouble ****)malloc( nstation * sizeof(ComplexDouble ***) );
-
-    for (ant = 0; ant < nstation; ant++)
-    {
-        invJi[ant] =(ComplexDouble ***)malloc( nchan * sizeof(ComplexDouble **) );
-
-        for (ch = 0; ch < nchan; ch++)
-        {
-            invJi[ant][ch] = (ComplexDouble **)malloc( npol * sizeof(ComplexDouble *) );
-
-            for (pol = 0; pol < npol; pol++)
-                invJi[ant][ch][pol] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
-        }
-    }
-    return invJi;
-}
-
-
-void destroy_invJi( ComplexDouble ****array, int nstation, int nchan, int npol )
-{
-    int ant, ch, pol;
-    for (ant = 0; ant < nstation; ant++)
-    {
-        for (ch = 0; ch < nchan; ch++)
-        {
-            for (pol = 0; pol < npol; pol++)
-                free( array[ant][ch][pol] );
-
-            free( array[ant][ch] );
-        }
-        free( array[ant] );
-    }
-    free( array );
-}
-
-
-ComplexDouble ****create_detected_beam( int npointing, int nsamples, int nchan, int npol )
-// Allocate memory for complex weights matrices
-{
-    int p, s, ch; // Loop variables
-    ComplexDouble ****array;
-
-    array = (ComplexDouble ****)malloc( npointing * sizeof(ComplexDouble ***) );
-    for (p = 0; p < npointing; p++)
-    {
-        array[p] = (ComplexDouble ***)malloc( nsamples * sizeof(ComplexDouble **) );
-
-        for (s = 0; s < nsamples; s++)
-        {
-            array[p][s] = (ComplexDouble **)malloc( nchan * sizeof(ComplexDouble *) );
-
-            for (ch = 0; ch < nchan; ch++)
-                array[p][s][ch] = (ComplexDouble *)malloc( npol * sizeof(ComplexDouble) );
-        }
-    }
-    return array;
-}
-
-void destroy_detected_beam( ComplexDouble ****array, int npointing, int nsamples, int nchan )
-{
-    int p, s, ch;
-    for (p = 0; p < npointing; p++)
-    {
-        for (s = 0; s < nsamples; s++)
-        {
-            for (ch = 0; ch < nchan; ch++)
-                free( array[p][s][ch] );
-
-            free( array[p][s] );
-        }
-
-        free( array[p] );
-    }
-
-    free( array );
-}
