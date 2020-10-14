@@ -22,36 +22,46 @@
 #define DPIBY2    1.570796326794897    /* = PI/2   */
 #define NDELAYS  16
 
-void sky_model_parse_cmdline( int , char **, struct make_beam_opts *, int *,
-        char **, char **);
+typedef struct sky_opts_t
+{
+    char     *pointings;       // File containing az_za pointings
+    char     *metafits;        // Filename of the metafits file
+    long int  frequency;       // Observing frequency (in Hz)
+    char     *analytic_output; // Name of analytic output file
+    char     *fee2016_output;  // Name of fee2016 output file
+    int       print_header;    // boolean: print header in output files?
+    int       swap_columns;    // boolean: swap the columns of the FEE2016 Jones matrix
+} sky_opts;
+
+void sky_model_parse_cmdline( int , char **, sky_opts * );
 void fprint_header( int, char **, FILE *, unsigned int *, double *,
-        struct make_beam_opts *, struct metafits_info *, int );
+        sky_opts *, struct metafits_info *, int );
 
 int main(int argc, char **argv)
 {
     // A place to hold the beamformer settings
-    struct make_beam_opts opts;
+    sky_opts opts;
 
     /* Set default beamformer settings */
 
     // Variables for required options
-    opts.pointings   = NULL; // File containing az_za pointings
-    opts.metafits    = NULL; // filename of the metafits file
-    opts.frequency   = 0;    // = rec_channel expressed in Hz
-    char *analytic_output = NULL; // name of analytic output file
-    char *fee2016_output  = NULL; // name of fee2016 output file
-    int print_header = 0;    // boolean: print header in output files?
+    opts.pointings       = NULL; // File containing az_za pointings
+    opts.metafits        = NULL; // Filename of the metafits file
+    opts.frequency       = 0;    // Observing frequency (in Hz)
+    opts.analytic_output = NULL; // Name of analytic output file
+    opts.fee2016_output  = NULL; // Name of fee2016 output file
+    opts.print_header    = 0;    // boolean: print header in output files?
+    opts.swap_columns    = 0;    // boolean: swap the columns of the FEE2016 Jones matrix
 
     // Variables for MWA/VCS configuration
-    opts.chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
+    int chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
 
     // Parse command line arguments
-    sky_model_parse_cmdline( argc, argv, &opts, &print_header,
-            &analytic_output, &fee2016_output );
+    sky_model_parse_cmdline( argc, argv, &opts );
 
     // Read in info from metafits file
     struct metafits_info mi;
-    get_metafits_info( opts.metafits, &mi, opts.chan_width );
+    get_metafits_info( opts.metafits, &mi, chan_width );
 
     // Always use the first tile/pol's set of delays and assume no dead
     // dipoles
@@ -65,15 +75,15 @@ int main(int argc, char **argv)
     FEEBeam *beam = new_fee_beam( HYPERBEAM_HDF5 );
 
     // Open files for reading and writing
-    FILE *fP = fopen( opts.pointings, "r" );
-    FILE *fF = fopen( fee2016_output, "w" );
-    FILE *fA = fopen( analytic_output, "w" );
+    FILE *fP = fopen( opts.pointings,       "r" );
+    FILE *fF = fopen( opts.fee2016_output,  "w" );
+    FILE *fA = fopen( opts.analytic_output, "w" );
 
     if (fF == NULL || fA == NULL)
     {
         fprintf( stderr, "Unable to open file(s) for writing: "
                 "analytic = \"%s\", fee2016 = \"%s\"\n",
-                analytic_output, fee2016_output );
+                opts.analytic_output, opts.fee2016_output );
         exit(EXIT_FAILURE);
     }
 
@@ -83,13 +93,13 @@ int main(int argc, char **argv)
     double az, za; // (az)imuth & (z)enith (a)ngle in radians
     int zenith_norm = 1; // Normalise FEE2016 beam to zenith
 
-    if (print_header)
+    if (opts.print_header)
     {
         fprint_header( argc, argv, fA, delays, amps, &opts, &mi, zenith_norm );
         fprint_header( argc, argv, fF, delays, amps, &opts, &mi, zenith_norm );
     }
 
-    int i; // Generic loop counter
+    int i, j; // Generic loop counters
 
     while (fscanf( fP, "%lf %lf", &az, &za ) != EOF)
     {
@@ -119,7 +129,15 @@ int main(int argc, char **argv)
         // .. and then the FEE2016
         for (i = 0; i < 8; i++)
         {
-            fprintf( fF, "%lf ", JF[i] );
+            if (opts.swap_columns)
+                j = ((i % 4) < 2 ? i+2 : i-2); /* 0 <--> 2
+                                                  1 <--> 3
+                                                  4 <--> 6
+                                                  5 <--> 7 */
+            else
+                j = i;
+
+            fprintf( fF, "%lf ", JF[j] );
         }
         fprintf( fF, "\n" );
 
@@ -148,8 +166,8 @@ int main(int argc, char **argv)
     free( opts.pointings    );
     free( opts.metafits     );
 
-    free( analytic_output );
-    free( fee2016_output );
+    free( opts.analytic_output );
+    free( opts.fee2016_output );
 
     // Clean up Hyperbeam
     free_fee_beam( beam );
@@ -195,6 +213,8 @@ void usage() {
     fprintf(stderr, "Include header in output files (default: no header)\n");
     fprintf(stderr, "\t-h, --help                ");
     fprintf(stderr, "Print this help and exit\n");
+    fprintf(stderr, "\t-s, --swap_columns        ");
+    fprintf(stderr, "Swap the columns of the FEE2016 Jones matrix\n");
     fprintf(stderr, "\t-V, --version             ");
     fprintf(stderr, "Print version number and exit\n");
     fprintf(stderr, "\n");
@@ -202,9 +222,7 @@ void usage() {
 
 
 
-void sky_model_parse_cmdline(
-        int argc, char **argv, struct make_beam_opts *opts, int *print_header,
-        char **analytic_output, char **fee2016_output )
+void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
 {
     if (argc > 1) {
 
@@ -219,38 +237,42 @@ void sky_model_parse_cmdline(
                 {"header",          no_argument,       0, 'H'},
                 {"metafits-file",   required_argument, 0, 'm'},
                 {"pointings_file",  required_argument, 0, 'p'},
+                {"swap_columns",    no_argument,       0, 's'},
                 {"version",         no_argument,       0, 'V'}
             };
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "A:f:F:hHm:p:V",
+                             "A:f:F:hHm:p:sV",
                              long_options, &option_index);
             if (c == -1)
                 break;
 
             switch(c) {
                 case 'A':
-                    *analytic_output = strdup(optarg);
+                    opts->analytic_output = strdup(optarg);
                     break;
                 case 'f':
                     opts->frequency = atoi(optarg);
                     break;
                 case 'F':
-                    *fee2016_output = strdup(optarg);
+                    opts->fee2016_output = strdup(optarg);
                     break;
                 case 'h':
                     usage();
                     exit(0);
                     break;
                 case 'H':
-                    *print_header = 1;
+                    opts->print_header = 1;
                     break;
                 case 'm':
                     opts->metafits = strdup(optarg);
                     break;
                 case 'p':
                     opts->pointings = strdup(optarg);
+                    break;
+                case 's':
+                    opts->swap_columns = 1;
                     break;
                 case 'V':
                     fprintf( stderr, "MWA Beamformer %s\n", VERSION_BEAMFORMER);
@@ -276,17 +298,15 @@ void sky_model_parse_cmdline(
     assert( opts->frequency    != 0 );
 
     // Set other defaults
-    if (*analytic_output == NULL)
-    {
-        *analytic_output = strdup( "sky_model_comparison_ANALYTIC.dat" );
-    }
-    if (*fee2016_output == NULL)
-        *fee2016_output = strdup( "sky_model_comparison_FEE2016.dat" );
+    if (opts->analytic_output == NULL)
+        opts->analytic_output = strdup( "sky_model_comparison_ANALYTIC.dat" );
+    if (opts->fee2016_output == NULL)
+        opts->fee2016_output = strdup( "sky_model_comparison_FEE2016.dat" );
 }
 
 
 void fprint_header( int argc, char **argv, FILE *f, unsigned int *delays,
-        double *amps, struct make_beam_opts *opts, struct metafits_info *mi,
+        double *amps, sky_opts *opts, struct metafits_info *mi,
         int zenith_norm )
 {
     int i;
