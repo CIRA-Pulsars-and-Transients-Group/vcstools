@@ -47,7 +47,7 @@ GARRAWARLA_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'copyq_cluster' : 'zeus',
                  'copyq_partition' : 'copyq',
                  'container_module' : 'singularity',
-                 'container_command' : 'singularity exec --nv /pawsey/mwa/singularity/vcstools_master.sif /bin/bash -c ',
+                 'container_command' : 'singularity exec --nv /pawsey/mwa/singularity/vcstools/vcstools_master.sif /bin/bash -c ',
                  'ssd_dir' : '/nvmetmp'}
 
 OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
