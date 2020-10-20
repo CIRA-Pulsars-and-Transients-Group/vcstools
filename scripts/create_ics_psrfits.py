@@ -35,7 +35,7 @@ if __name__ == "__main__":
                                                            "Default is /group/mwavcs/vcs/[obsID]", default=None)
     parser.add_argument("-l", "--loglvl", type=str, choices=loglevels.keys(), help="Desired logging verbosity level",
                         default="INFO")
-
+    parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     args = parser.parse_args()
 
     # set up the logger for stand-alone execution
@@ -46,6 +46,16 @@ if __name__ == "__main__":
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     logger.propagate = False
+
+    if args.version:
+        try:
+            import version
+            logger.info(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            logger.error("Couldn't import version.py - have you installed vcstools?")
+            logger.error("ImportError: {0}".format(ie))
+            sys.exit(0)
 
     comp_config = load_config_file()
     if args.base_dir is None:
