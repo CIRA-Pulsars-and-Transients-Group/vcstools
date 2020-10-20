@@ -125,7 +125,7 @@ def test_est_pulsar_flux():
     print("est_pulsar_flux")
 
     test_cases = []
-    test_cases.append(("J2330-2005", 1226062160, 0.15964747164099558, 0.02807867696250783))
+    test_cases.append(("J2330-2005", 1226062160, 0.13693009478998122, 0.02425180108093204))
 
     for psr, obsid, exp_flux, exp_flux_err in test_cases:
         flux, flux_err = snfe.est_pulsar_flux(psr, obsid)
@@ -160,7 +160,7 @@ def test_est_pulsar_sn():
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
     test_cases.append(("J2330-2005", obsid, None, None, "23:00:00", "-20:00:00", md, full_md,\
-                    165.5646295495845, 52.721215442160016))
+                    142.0052581169168, 45.315968765282484))
     #adding a test that gave a none type error for alpha_bound, c_bound
     obsid=1117643248
     md = md_dict[str(obsid)][0]

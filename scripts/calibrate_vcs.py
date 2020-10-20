@@ -125,7 +125,7 @@ class BaseRTSconfig(object):
         When there is a problem with some of the observation information and/or its manipulation.
     """
 
-    def __init__(self, obsid, cal_obsid, metafits, srclist, n_int_bins=6, datadir=None, outdir=None, offline=False):
+    def __init__(self, obsid, cal_obsid, metafits, srclist, n_int_bins=6, datadir=None, outdir=None, offline=False, beam_model="FEE2016"):
         self.obsid = obsid  # target observation ID
         self.cal_obsid = cal_obsid  # calibrator observation ID
         self.offline = offline  # switch to decide if offline correlated data or not
@@ -145,6 +145,8 @@ class BaseRTSconfig(object):
         self.ArrayPositionLong = 116.6708152  # MWA longitude
         self.n_integration_bins = n_int_bins # number of visibility integration groups for RTS
         self.base_str = None  # base string to be written to file, will be editted by RTScal
+        self.beam_model = beam_model # The beam model to use for the calibration solutions. Either 'ANALYTIC' or 'FEE2016'
+        self.beam_model_bool = None
 
         comp_config = load_config_file()
 
@@ -212,6 +214,16 @@ class BaseRTSconfig(object):
         else:
             logger.info("Checking source list file exists... Ok")
             self.source_list = os.path.realpath(srclist)
+
+        # Check the 'beam_model' is one of the correct choices
+        choices = ("FEE2016", "ANALYTIC")
+        if self.beam_model not in choices:
+            errmsg = "Given beam model: {0} not an available choice: {1}".format(self.beam_model, choices)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+        else:
+            logger.info("Using {0} beam model for calibration solution".format(self.beam_model))
+            self.beam_model_bool=int(bool(self.beam_model == "ANALYTIC")) #produces 1 for ANALYTIC, 0 for FEE2016
 
         # set some RTS flags based on if we have offline correlated data or not
         logger.info("Setting RTS data input flags...")
@@ -388,7 +400,7 @@ DoCalibration=
 doMWArxCorrections=1
 doRawDataCorrections=1
 doRFIflagging=0
-useFastPrimaryBeamModels=1
+useFastPrimaryBeamModels={beam_model_bool}
 generateDIjones=1
 applyDIcalibration=1
 UsePacketInput=0
@@ -424,6 +436,7 @@ FieldOfViewDegrees=1""".format(base=self.data_dir,
                                read_direct=self.readDirect,
                                use_corr_input=self.useCorrInput,
                                metafits_file=self.metafits_RTSform,
+                               beam_model_bool=self.beam_model_bool,
                                max_freq=self.max_frequency,
                                base_freq=self.freq_base,
                                base_time=self.JD,
@@ -903,7 +916,8 @@ if __name__ == '__main__':
     # Option parsing
     parser = argparse.ArgumentParser(
         description="Script for creating RTS configuration files and submitting relevant jobs in the "
-                    "VCS pulsar pipeline")
+                    "VCS pulsar pipeline",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None, required=True)
 
@@ -924,6 +938,9 @@ if __name__ == '__main__':
     parser.add_argument("--rts_output_dir", type=str,
                         help="Parent directory where you want the /rts directory and /batch directory to be created "
                              "(ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.)", default=None)
+
+    parser.add_argument("--beam_model", type=str, choices=["ANALYTIC", "FEE2016"], default="FEE2016",
+                        help="Which beam model to use to create the calibration solution")    
 
     parser.add_argument("--n_vis_grp", type=int,
                         help="The number of visbility groups for the RTS to construct. "
@@ -966,7 +983,8 @@ if __name__ == '__main__':
     try:
         baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist,
                                         datadir=args.gpubox_dir, outdir=args.rts_output_dir,
-                                        offline=args.offline, n_int_bins=args.n_vis_grp)
+                                        offline=args.offline, n_int_bins=args.n_vis_grp,
+                                        beam_model=args.beam_model)
         baseRTSconfig.run()
     except CalibrationError as e:
         logger.critical("Caught CalibrationError: {0}".format(e))
