@@ -26,7 +26,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Print the coarse channel sequence as in gpubox/subband order. Make sure you have *_metafits_ppds.fits")
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None, required=True)
     parser.add_argument("-m", "--mfits", type=str, help="Please provide the path of the *_metafits_ppds.fits if it is not /astro/mwavcs/vcs/[OBID]/*_metafits_ppds.fits")
+    parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     args = parser.parse_args()
+
+    if args.version:
+        import sys
+        try:
+            import version
+            print(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            print("Couldn't import version.py - have you installed vcstools?")
+            print("ImportError: {0}".format(ie))
+            sys.exit(0)
 
     if args.mfits:
         metafits = args.mfits
