@@ -176,16 +176,16 @@ class BaseRTSconfig(object):
             self.batch_dir =os.path.join(comp_config['base_data_dir'], str(self.obsid), "batch")
             logger.debug("RTS output directory is {0}".format(self.output_dir))
             logger.debug("Batch directory is {0}".format(self.batch_dir))
-            mdir(self.output_dir, "RTS")
-            mdir(self.batch_dir, "Batch")
+            mdir(self.output_dir, "RTS", gid=comp_config['gid'])
+            mdir(self.batch_dir, "Batch", gid=comp_config['gid'])
         else:
             # mdir handles if the directory already exists
             self.output_dir = os.path.realpath(outdir + "/rts")
             self.batch_dir = os.path.realpath(outdir + "/batch")
             logger.warning("Non-standard RTS output path: {0}".format(self.output_dir))
             logger.warning("Non-standard batch directory path: {0}".format(self.batch_dir))
-            mdir(self.output_dir, "RTS")
-            mdir(self.batch_dir, "Batch")
+            mdir(self.output_dir, "RTS", gid=comp_config['gid'])
+            mdir(self.batch_dir, "Batch", gid=comp_config['gid'])
 
         # Then check that the metafits file exists
         if os.path.isfile(metafits) is False:
