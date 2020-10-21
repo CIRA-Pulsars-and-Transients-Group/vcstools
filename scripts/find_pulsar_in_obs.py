@@ -46,6 +46,10 @@ from mwa_metadb_utils import mwa_alt_az_za, get_common_obs_metadata,\
 import logging
 logger = logging.getLogger(__name__)
 
+class NoSourcesError(Exception):
+    """Raise when no sources are found for any reason"""
+    pass
+
 
 def yes_no(answer):
     yes = set(['Y','yes','y', 'ye', ''])
@@ -96,7 +100,7 @@ def deg2sex(ra, dec):
     return rajs, decjs
 
 
-def get_psrcat_ra_dec(pulsar_list=None, max_dm=1000., include_dm=False, query=None):
+def get_psrcat_ra_dec(pulsar_list=None, max_dm=250., include_dm=False, query=None):
     """
     Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
@@ -902,6 +906,11 @@ if __name__ == "__main__":
         names_ra_dec = grab_source_alog(source_type=args.source_type,
                                         pulsar_list=args.pulsar,
                                         max_dm=args.max_dm)
+        if len(names_ra_dec) == 0:
+            raise NoSourcesError(f"""No sources found in catalogue with:
+                                    source type:    {args.source_type}
+                                    pulsars:        {args.pulsar}
+                                    max dm:         {args.max_dm}""")
 
     #format ra and dec
     if not degrees_check:
