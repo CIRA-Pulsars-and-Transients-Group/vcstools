@@ -58,6 +58,10 @@ class BaseRTSconfig(object):
         Path to write RTS configuration and relevant flagging information.
     offline : str, optional
         Whether the visibility data were produced with the offline correlator. Default is False.
+    beam_model: str, optional
+        Which beam model to use for calibrating. Can be either 'FEE2016' (default) or 'ANALYTIC'
+    vcstools_version: str, optional
+        Which version of vcstools to load - only used when correlating offline. Default is 'master'
 
 
     Attributes
@@ -125,7 +129,7 @@ class BaseRTSconfig(object):
         When there is a problem with some of the observation information and/or its manipulation.
     """
 
-    def __init__(self, obsid, cal_obsid, metafits, srclist, n_int_bins=6, datadir=None, outdir=None, offline=False, beam_model="FEE2016"):
+    def __init__(self, obsid, cal_obsid, metafits, srclist, n_int_bins=6, datadir=None, outdir=None, offline=False, beam_model="FEE2016", vcstools_version="master"):
         self.obsid = obsid  # target observation ID
         self.cal_obsid = cal_obsid  # calibrator observation ID
         self.offline = offline  # switch to decide if offline correlated data or not
@@ -147,6 +151,7 @@ class BaseRTSconfig(object):
         self.base_str = None  # base string to be written to file, will be editted by RTScal
         self.beam_model = beam_model # The beam model to use for the calibration solutions. Either 'ANALYTIC' or 'FEE2016'
         self.beam_model_bool = None
+        self.vcstools_version = vcstools_version
 
         comp_config = load_config_file()
 
@@ -568,6 +573,10 @@ class RTScal(object):
         # boolean to control batch job submission. True = submit to queue, False = just write the files
         self.submit = submit
 
+        # vcstools version to use for offline correlation
+        self.offline = rts_base.offline
+        self.vcstools_version = rts_base.vcstools_version
+
 
     def summary(self):
         """Print a nice looking summary of relevant attributes."""
@@ -684,7 +693,8 @@ class RTScal(object):
                              queue='gpuq',
                              export="NONE",
                              mem=mem,
-                             load_vcstools=False)
+                             load_vcstools=self.offline, #load if offline
+                             vcstools_version = self.vcstools_version)
         jobids.append(jobid)
 
         return jobids
@@ -940,7 +950,7 @@ if __name__ == '__main__':
                              "(ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.)", default=None)
 
     parser.add_argument("--beam_model", type=str, choices=["ANALYTIC", "FEE2016"], default="FEE2016",
-                        help="Which beam model to use to create the calibration solution")    
+                        help="Which beam model to use to create the calibration solution")
 
     parser.add_argument("--n_vis_grp", type=int,
                         help="The number of visbility groups for the RTS to construct. "
@@ -950,6 +960,9 @@ if __name__ == '__main__':
 
     parser.add_argument("--offline", action='store_true',
                         help="Tell the RTS to read calibrator data in the offline correlated data format")
+
+    parser.add_argument("--vcstools_version", type=str, default="master",
+                        help="The version of vcstools to use. Only relevant for offline correlation")
 
     parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue")
 
@@ -984,7 +997,7 @@ if __name__ == '__main__':
         baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist,
                                         datadir=args.gpubox_dir, outdir=args.rts_output_dir,
                                         offline=args.offline, n_int_bins=args.n_vis_grp,
-                                        beam_model=args.beam_model)
+                                        beam_model=args.beam_model, vcstools_version=args.vcstools_version)
         baseRTSconfig.run()
     except CalibrationError as e:
         logger.critical("Caught CalibrationError: {0}".format(e))
