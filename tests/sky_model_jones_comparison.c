@@ -52,6 +52,7 @@ int main(int argc, char **argv)
     opts.fee2016_output  = NULL; // Name of fee2016 output file
     opts.print_header    = 0;    // boolean: print header in output files?
     opts.swap_columns    = 0;    // boolean: swap the columns of the FEE2016 Jones matrix
+    opts.conjugate       = 0;    // boolean: conjugate the FEE2016 Jones matrix
 
     // Variables for MWA/VCS configuration
     int chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
@@ -207,7 +208,9 @@ void usage() {
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-A, --analytic_output     ");
     fprintf(stderr, "Name of analytic output file (default: sky_model_comparison_ANALYTIC.dat\n");
-    fprintf(stderr, "\t-F, --fee2016_output     ");
+    fprintf(stderr, "\t-c, -- conjugate          ");
+    fprintf(stderr, "Conjugate the elements of the FEE2016 Jones matrix\n");
+    fprintf(stderr, "\t-F, --fee2016_output      ");
     fprintf(stderr, "Name of fee2016 output file (default: sky_model_comparison_FEE2016.dat\n");
     fprintf(stderr, "\t-H, --header              ");
     fprintf(stderr, "Include header in output files (default: no header)\n");
@@ -231,6 +234,7 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
 
             static struct option long_options[] = {
                 {"analytic_output", required_argument, 0, 'A'},
+                {"conjugate"        no_argument,       0, 'c'},
                 {"frequency",       required_argument, 0, 'f'},
                 {"fee2016_output",  required_argument, 0, 'F'},
                 {"help",            no_argument,       0, 'h'},
@@ -243,7 +247,7 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "A:f:F:hHm:p:sV",
+                             "A:c:f:F:hHm:p:sV",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -251,6 +255,9 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
             switch(c) {
                 case 'A':
                     opts->analytic_output = strdup(optarg);
+                    break;
+                case 'c':
+                    opts->conjugate = 1;
                     break;
                 case 'f':
                     opts->frequency = atoi(optarg);
