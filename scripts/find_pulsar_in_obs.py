@@ -629,7 +629,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         logger.debug("obsid: {0}, time_obs {1} s, dt {2} s".format(obsid, beam_meta_data[3], dt))
 
         #check for raw volatge files
-        filedata = full_meta[u'files']
+        filedata = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1})
         keys = filedata.keys()
         check = False
         for k in keys:
