@@ -633,6 +633,8 @@ void parallactic_angle_correction(
     double sp = sin(phi);
     double cp = cos(phi);
 
-    P[0] = cp;  P[1] = -sp;
-    P[2] = sp;  P[3] = cp;
+    P[0] = cp*cp - sp*sp;
+    P[1] = 2*cp*sp;
+    P[2] = -P[1];
+    P[3] = P[0];
 }
