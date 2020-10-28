@@ -31,6 +31,7 @@ typedef struct sky_opts_t
     char     *fee2016_output;  // Name of fee2016 output file
     int       print_header;    // boolean: print header in output files?
     int       swap_columns;    // boolean: swap the columns of the FEE2016 Jones matrix
+    int       conjugate;       // boolean: conjugate each element of FEE2016 Jones matrix
 } sky_opts;
 
 void sky_model_parse_cmdline( int , char **, sky_opts * );
@@ -234,7 +235,7 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
 
             static struct option long_options[] = {
                 {"analytic_output", required_argument, 0, 'A'},
-                {"conjugate"        no_argument,       0, 'c'},
+                {"conjugate",       no_argument,       0, 'c'},
                 {"frequency",       required_argument, 0, 'f'},
                 {"fee2016_output",  required_argument, 0, 'F'},
                 {"help",            no_argument,       0, 'h'},
