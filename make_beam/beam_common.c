@@ -731,6 +731,24 @@ void mult2x2d_RxC(double *M1, ComplexDouble *M2, ComplexDouble *Mout)
     Mout[3] = CAddd( m21, m33 );
 }
 
+void mult2x2d_CxR(ComplexDouble *M1, double *M2, ComplexDouble *Mout)
+/* Mout = M1 x M2
+ */
+{
+    ComplexDouble m00 = CScld( M1[0], M2[0] );
+    ComplexDouble m21 = CScld( M1[2], M2[1] );
+    ComplexDouble m01 = CScld( M1[0], M2[1] );
+    ComplexDouble m13 = CScld( M1[1], M2[3] );
+    ComplexDouble m20 = CScld( M1[2], M2[0] );
+    ComplexDouble m32 = CScld( M1[3], M2[2] );
+    ComplexDouble m12 = CScld( M1[1], M2[2] );
+    ComplexDouble m33 = CScld( M1[3], M2[3] );
+    Mout[0] = CAddd( m00, m12 );
+    Mout[1] = CAddd( m01, m13 );
+    Mout[2] = CAddd( m20, m32 );
+    Mout[3] = CAddd( m21, m33 );
+}
+
 void conj2x2(ComplexDouble *M, ComplexDouble *Mout)
 /* Calculate the conjugate of a matrix
  * It is safe for M and Mout to point to the same matrix
