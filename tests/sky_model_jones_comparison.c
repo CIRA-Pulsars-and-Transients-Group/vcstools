@@ -143,8 +143,6 @@ int main(int argc, char **argv)
         if (opts.conjugate)
             conjugate( JF, JF );
 
-
-
         // Write out the matrices to the respective files
         // First the ANALYTIC...
         fprint_jones( fA, JA );
@@ -251,7 +249,7 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "A:c:f:F:hHm:p:PsV",
+                             "A:cf:F:hHm:p:PsV",
                              long_options, &option_index);
             if (c == -1)
                 break;
