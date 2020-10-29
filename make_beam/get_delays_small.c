@@ -613,7 +613,7 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
 } /* calcEjones_analytic */
 
 void parallactic_angle_correction(
-    double *P,    // output rotation matrix
+    double *P_2,    // output rotation matrix
     double lat,   // observing latitude (radians)
     double az,    // azimuth angle (radians)
     double za)    // zenith angle (radians)
@@ -629,7 +629,8 @@ void parallactic_angle_correction(
     double sl = sin(lat);
     double cl = cos(lat);
 
-    double phi = atan2( sa*cl, ce*sl - se*cl*ca );
+    double P[2 * N_COPOL];
+    /*double phi = -atan2( sa*cl, ce*sl - se*cl*ca );
     double sp = sin(phi);
     double cp = cos(phi);
 
@@ -637,4 +638,15 @@ void parallactic_angle_correction(
     P[1] = 2*cp*sp;
     P[2] = -P[1];
     P[3] = P[0];
+    */
+
+    double ha, dec;
+    slaH2e(az, DPIBY2 - za, lat, &ha, &dec);
+
+
+    P[0] = cos(lat) * cos(dec) + sin(lat) * sin(dec) * cos(ha);
+    P[1] = -sin(lat) * sin(ha);
+    P[2] = sin(dec) * sin(ha);
+    P[3] = cos(ha);
+    inv2x2d(P, P_2);
 }
