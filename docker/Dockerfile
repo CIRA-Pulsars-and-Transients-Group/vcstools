@@ -62,7 +62,7 @@ RUN curl https://sh.rustup.rs -sSf |  bash -s -- -y
 
 
 ### Install hyperbeam
-ENV LD_LIBRARY_PATH="/tmp/hyperbeam/mwa_hyperbeam/include:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/tmp/hyperbeam/mwa_hyperbeam/include:/tmp/hyperbeam/mwa_hyperbeam/lib:${LD_LIBRARY_PATH}"
 ENV HYPERBEAM_ROOT="/tmp/hyperbeam/mwa_hyperbeam/"
 ENV HYPERBEAM_INCLUDE_DIR="/tmp/hyperbeam/mwa_hyperbeam/include"
 ENV HYPERBEAM_LIB="/tmp/hyperbeam/mwa_hyperbeam/lib"
