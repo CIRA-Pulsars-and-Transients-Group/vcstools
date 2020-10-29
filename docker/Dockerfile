@@ -14,12 +14,13 @@ RUN apt-get update && \
          libcfitsio-bin \
          libcfitsio-dev \
          libfftw3-dev \
+         libhdf5-dev \
          libtool \
          wget \
          python3 \
-	 python3-pip \
-	 python3-setuptools \
-	 curl && \
+         python3-pip \
+         python3-setuptools \
+         curl && \
     apt-get clean all && \
     rm -r /var/lib/apt/lists/*
 
@@ -54,16 +55,39 @@ RUN git clone https://github.com/GPU-correlators/xGPU.git && \
     make install prefix=${XGPU_PREFIX}
 
 
+### Install rust and cargo
+ENV PATH="/root/.cargo/bin:${PATH}"
+ENV HDF5_INCLUDE_PATH = "/usr/include/hdf5/serial/"
+RUN curl https://sh.rustup.rs -sSf |  bash -s -- -y
+
+
+### Install hyperbeam
+ENV LD_LIBRARY_PATH="/tmp/hyperbeam/mwa_hyperbeam/include:${LD_LIBRARY_PATH}"
+ENV HYPERBEAM_ROOT="/tmp/hyperbeam/mwa_hyperbeam/"
+ENV HYPERBEAM_INCLUDE_DIR="/tmp/hyperbeam/mwa_hyperbeam/include"
+ENV HYPERBEAM_LIB="/tmp/hyperbeam/mwa_hyperbeam/lib"
+WORKDIR /tmp/hyperbeam
+RUN git clone https://github.com/MWATelescope/mwa_hyperbeam.git && \
+    cd mwa_hyperbeam && \
+    wget http://ws.mwatelescope.org/static/mwa_full_embedded_element_pattern.h5 && \
+    cargo test && \
+    cargo build --release && \
+    mkdir -p lib && \
+    cp target/release/libmwa_hyperbeam.so target/release/libmwa_hyperbeam.a lib/
+
 ### Install vcstools ###
 WORKDIR /tmp/vcstools-build
 COPY . /tmp/vcstools-build
 RUN pip3 install . && \
-    mkdir build && \
+    mkdir -p build && \
     cd build && \
     cmake -DCMAKE_INSTALL_PREFIX=/usr \
       -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
       -DSLALIB_ROOT_DIR=/usr \
       -DCMAKE_BEAMFORMER=1 \
+      -DHYPERBEAM_ROOT=${HYPERBEAM_ROOT} \
+      -DHYPERBEAM_HDF5_DIR=/tmp/hyperbeam/mwa_hyperbeam/ \
+      -DCTESTS=1 \
       .. && \
     make install
 # Once I make vcstools a proper package this PYTHONPATH addition won't be required
