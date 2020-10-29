@@ -326,7 +326,7 @@ void get_delays(
         unit_E = cos(el) * sin(az);
         unit_H = sin(el);
 
-        parallactic_angle_correction(
+        parallactic_angle_correction_fee2016(
                 P,                  // output = rotation matrix
                 (MWA_LAT*DD2R),     // observing latitude (radians)
                 az, (DPIBY2-el));   // azimuth & zenith angle of pencil beam
@@ -516,13 +516,13 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
     const double c = VLIGHT;                    // speed of light (m/s)
     float sza, cza, saz, caz;                   // sin & cos of azimuth & zenith angle (pencil beam)
     float sza0, cza0, saz0, caz0;               // sin & cos of azimuth & zenith angle (tile pointing)
-    float ground_plane, ha, dec, beam_ha, beam_dec;
+    float ground_plane, beam_ha, beam_dec;
 
     float dipl_e,  dipl_n,  dipl_z;  // Location of dipoles relative to
     float proj_e,  proj_n,  proj_z;  // Components of pencil beam   in local (E,N,Z) coordinates
     float proj0_e, proj0_n, proj0_z; // Components of tile pointing in local (E,N,Z) coordinates
 
-    float rot[2 * N_COPOL];
+    double rot[2 * N_COPOL];
     ComplexDouble PhaseShift, multiplier;
     int i, j; // For iterating over columns (i; East-West) and rows (j; North-South) of dipoles within tiles
     int n_cols = 4, n_rows = 4; // Each tile is a 4x4 grid of dipoles
@@ -596,12 +596,7 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
         ground_plane /= (2.0 * sin( 2.0*DPI* dpl_hgt/lambda * cos(za) ));
     }
 
-    slaH2e(az, DPIBY2 - za, lat, &ha, &dec);
-
-    rot[0] = cos(lat) * cos(dec) + sin(lat) * sin(dec) * cos(ha);
-    rot[1] = -sin(lat) * sin(ha);
-    rot[2] = sin(dec) * sin(ha);
-    rot[3] = cos(ha);
+    parallactic_angle_correction_analytic( rot, lat, az, za );
 
     //fprintf(stdout,"calib:HA is %f hours \n",ha*DR2H);
     // rot is the Jones matrix, response just contains the phases, so this should be an element-wise multiplication.
@@ -612,7 +607,7 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
 
 } /* calcEjones_analytic */
 
-void parallactic_angle_correction(
+void parallactic_angle_correction_analytic(
     double *P,    // output rotation matrix
     double lat,   // observing latitude (radians)
     double az,    // azimuth angle (radians)
@@ -620,33 +615,68 @@ void parallactic_angle_correction(
 {
     double el = DPIBY2 - za;
 
-    double sa = sin(az);
-    double ca = cos(az);
-
-    double se = sin(el);
-    double ce = cos(el);
+    float ha, dec;
+    slaH2e(az, el, lat, &ha, &dec);
 
     double sl = sin(lat);
     double cl = cos(lat);
 
-    //double P[2 * N_COPOL];
-    /*double phi = -atan2( sa*cl, ce*sl - se*cl*ca );
-    double sp = sin(phi);
-    double cp = cos(phi);
+    double sh = sin(ha);
+    double ch = cos(ha);
 
-    P[0] = cp*cp - sp*sp;
-    P[1] = 2*cp*sp;
-    P[2] = -P[1];
-    P[3] = P[0];
-    */
+    double sd = sin(dec);
+    double cd = cos(dec);
+
+    P[0] = cl*cd + sl*sd*ch;
+    P[1] = -sl*sh;
+    P[2] = sd*sh;
+    P[3] = ch;
+}
+
+void parallactic_angle_correction_fee2016(
+    double *P,    // output rotation matrix
+    double lat,   // observing latitude (radians)
+    double az,    // azimuth angle (radians)
+    double za)    // zenith angle (radians)
+{
+/*
+    double el = DPIBY2 - za;
 
     float ha, dec;
-    slaH2e(az, DPIBY2 - za, lat, &ha, &dec);
+    slaH2e(az, el, lat, &ha, &dec);
 
+    double sl = sin(lat);
+    double cl = cos(lat);
 
-    P[0] = cos(lat) * cos(dec) + sin(lat) * sin(dec) * cos(ha);
-    P[1] = -sin(lat) * sin(ha);
-    P[2] = sin(dec) * sin(ha);
-    P[3] = cos(ha);
-    //inv2x2d(P, P_2);
+    double sh = sin(ha);
+    double ch = cos(ha);
+
+    double sd = sin(dec);
+    double cd = cos(dec);
+
+    double PA = atan2( cl*sh, cd*sl - cl*sd*ch );
+
+    double sPA = sin(PA);
+    double cPA = cos(PA);
+
+    P[0] =  cPA;
+    P[1] =  sPA;
+    P[2] = -sPA;
+    P[3] =  cPA;
+*/
+
+    double R[4], E2[4];
+    double cz = cos(za);
+    double sz = sin(za);
+    E2[0] = cz*cz - sz*sz;
+    E2[1] = 2*cz*sz;
+    E2[2] = E2[1];
+    E2[3] = -E2[0];
+
+    parallactic_angle_correction_analytic(R, lat, az, za);
+    P[0] = E2[0]*R[0] + E2[1]*R[2];
+    P[1] = E2[0]*R[1] + E2[1]*R[3];
+    P[2] = E2[2]*R[0] + E2[3]*R[2];
+    P[3] = E2[2]*R[1] + E2[3]*R[3];
 }
+

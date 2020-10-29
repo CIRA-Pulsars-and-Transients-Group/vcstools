@@ -132,7 +132,13 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
                const float za);
 
 
-void parallactic_angle_correction(
+void parallactic_angle_correction_analytic(
+    double *P,    // output rotation matrix
+    double lat,   // observing latitude (radians)
+    double az,    // azimuth angle (radians)
+    double za);   // zenith angle (radians)
+
+void parallactic_angle_correction_fee2016(
     double *P,    // output rotation matrix
     double lat,   // observing latitude (radians)
     double az,    // azimuth angle (radians)

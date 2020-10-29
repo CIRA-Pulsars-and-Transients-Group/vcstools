@@ -130,7 +130,7 @@ int main(int argc, char **argv)
         // Make alterations to FEE beam as requested
         if (opts.parallactic)
         {
-            parallactic_angle_correction(
+            parallactic_angle_correction_fee2016(
                     P,                  // output = rotation matrix
                     (MWA_LAT*DD2R),     // observing latitude (radians)
                     az, za );
