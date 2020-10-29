@@ -28,7 +28,7 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
 
     # put files in
     try:
-        files, suffix, required_size = get_files_and_sizes(obsID, data_type)
+        files, suffix, required_size = get_files_and_sizes(obsID, data_type, mintime=startsec, maxtime=startsec + n_secs)
     except:
         return True
 
@@ -129,7 +129,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
 def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_size=None, obsID=None):
     if not required_size:
         try:
-            files, suffix, required_size = get_files_and_sizes(obsID, 'ics')
+            files, suffix, required_size = get_files_and_sizes(obsID, 'ics', mintime=startsec, maxtime=startsec + n_secs)
         except:
             traceback.print_exc()
             return True, 0
@@ -169,7 +169,28 @@ def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_siz
     return error, files_in_dir
 
 
-def get_files_and_sizes(obsID, mode):
+def get_files_and_sizes(obsID, mode, mintime=0, maxtime=2000000000):
+    """
+    Get files and sizes from the MWA metadata server and check that they're all the same size
+
+    Parameters:
+    -----------
+    obsID: int
+        The MWA observation ID
+    mode: str
+        The typ of file from 'raw', 'tar_ics' and 'ics'
+    mintime: int
+        The minimum GPS time of observations to check (inclusive, >=)  Default: 0
+    maxtime: int
+        The maximum GPS time of observations to check (exculsive, <)  Default: 2000000000
+
+    Returns:
+    --------
+    files_masked, suffix, sizes[0]: list
+        files_masked: list of the files with the input mode/suffix
+        suffix:       '.dat', '.tar' or '_ics.dat' depnding on the input mode
+        sizes[0]:     size of files in bytes
+    """
     if mode == 'raw':
         suffix = '.dat'
     elif mode == 'tar_ics':
@@ -180,26 +201,22 @@ def get_files_and_sizes(obsID, mode):
         logger.error("Wrong mode supplied. Options are raw, tar_ics, and ics")
         return
     logger.info("Retrieving file info from MWA database for all {0} files...".format(suffix))
-    meta = getmeta(service='obs', params={'obs_id':obsID, 'nocache':1})
+    files_meta = getmeta(service='data_files', params={'obs_id':obsID, 'nocache':1, 'mintime':mintime, 'maxtime':maxtime})
     # 'nocache' is used above so we get don't use the cached metadata as that could
     # be out of data so we force it to get up to date values
-    files = np.array(list(meta['files'].keys()))
+    files = np.array(list(files_meta.keys()))
     files_masked = []
     sizes = []
     for f in files:
         if suffix in f:
-            sizes.append(meta['files'][f]['size'])
+            sizes.append(files_meta[f]['size'])
             files_masked.append(f)
-    #mask = np.array([suffix in file for file in files])
-    #files = files[mask]
-    #sizes=np.array([meta['files'][f]['size'] for f in files])
     logger.info("...Done. Expect all on database to be {0} bytes in size...".format(sizes[0]))
 
     size_check = True
     for s in sizes:
         if not s == sizes[0]:
             size_check = False
-    #if np.all(sizes == sizes[0]): #this stopped working for some reason
     if size_check:
         logger.info("...yep they are. Now checking on disk.")
         return files_masked, suffix, sizes[0]

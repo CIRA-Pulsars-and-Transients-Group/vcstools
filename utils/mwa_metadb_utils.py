@@ -142,7 +142,7 @@ def getmeta(servicetype='metadata', service='obs', params=None):
     return result
 
 
-def get_files(obsid, meta=None):
+def get_files(obsid, files_meta=None):
     """
     Queries the metadata to find all the file names
     Parameters:
@@ -159,10 +159,8 @@ def get_files(obsid, meta=None):
     files: list
         A list of all the file names
     """
-    if meta is None:
+    if files_meta is None:
         files_meta = getmeta(servicetype='metadata', service='data_files', params={'obs_id':str(obsid)})
-    else:
-        files_meta = meta['files']
 
     return list(files_meta.keys())
 
@@ -229,7 +227,7 @@ def obs_max_min(obsid, meta=None):
     """
 
     # Make a list of gps times excluding non-numbers from list
-    times = [f[11:21] for f in get_files(obsid, meta=meta) if is_number(f[11:21])]
+    times = [f[11:21] for f in get_files(obsid) if is_number(f[11:21])]
     obs_start = int(min(times))
     obs_end = int(max(times))
     return obs_start, obs_end
@@ -308,7 +306,8 @@ def get_best_cal_obs(obsid):
 
         #check there are a factor of 24 files (no gpu boxes are down)
         gpubox_files = []
-        for f in cal_meta['files'].keys():
+        cal_files_meta = getmeta(service='data_files', params={'obs_id':obsID})
+        for f in cal_files_meta.keys():
             if 'gpubox' in f:
                 gpubox_files.append(f)
         if len(gpubox_files)%24 != 0 :

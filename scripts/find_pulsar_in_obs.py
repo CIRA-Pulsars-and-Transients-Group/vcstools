@@ -40,7 +40,8 @@ from vcstools import data_load
 import sn_flux_est as sfe
 from mwa_pb import primary_beam
 from mwa_metadb_utils import mwa_alt_az_za, get_common_obs_metadata,\
-                             get_obs_array_phase, find_obsids_meta_pages
+                             get_obs_array_phase, find_obsids_meta_pages,\
+                             getmeta
 
 
 import logging
@@ -633,7 +634,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         logger.debug("obsid: {0}, time_obs {1} s, dt {2} s".format(obsid, beam_meta_data[3], dt))
 
         #check for raw volatge files
-        filedata = full_meta[u'files']
+        filedata = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1})
         keys = filedata.keys()
         check = False
         for k in keys:
