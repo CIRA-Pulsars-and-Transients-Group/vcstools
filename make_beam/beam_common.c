@@ -662,6 +662,25 @@ void inv2x2(ComplexDouble *Min, ComplexDouble *Mout)
     Mout[3] = CMuld(       inv_det,  m00 );
 }
 
+void inv2x2d(double *Min, double *Mout)
+{
+    double m00 = Min[0];
+    double m01 = Min[1];
+    double m10 = Min[2];
+    double m11 = Min[3];
+
+    double m1 = m00 * m11;
+    double m2 = m01 * m10;
+
+    double det = m1 - m2;
+    double inv_det = 1/det;
+
+    Mout[0] =  inv_det * m11;
+    Mout[1] = -inv_det * m01;
+    Mout[2] = -inv_det * m10;
+    Mout[3] =  inv_det * m00;
+}
+
 
 void inv2x2S(ComplexDouble *Min, ComplexDouble **Mout)
 // Same as inv2x2(), but the output is a 2x2 2D array, instead of a 4-element
