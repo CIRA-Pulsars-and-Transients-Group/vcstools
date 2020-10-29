@@ -629,7 +629,7 @@ void parallactic_angle_correction(
     double sl = sin(lat);
     double cl = cos(lat);
 
-    double phi = -atan2( sa*cl, ce*sl - se*cl*ca );
+    double phi = atan2( sa*cl, ce*sl - se*cl*ca );
     double sp = sin(phi);
     double cp = cos(phi);
 

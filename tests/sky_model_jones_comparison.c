@@ -110,8 +110,6 @@ int main(int argc, char **argv)
         fprint_header( argc, argv, fF, delays, amps, &opts, &mi, zenith_norm );
     }
 
-    int i; // Generic loop counters
-
     while (fscanf( fP, "%lf %lf", &az, &za ) != EOF)
     {
         // Calculate jones matrix for the ANALYTIC beam
