@@ -9,6 +9,7 @@
 
 #include <inttypes.h>
 #include "mycomplex.h"
+#include "mwa_hyperbeam.h"
 
 // Calibration solution types
 #define NO_CALIBRATION  0
@@ -22,6 +23,10 @@
 #define VEL_LIGHT  299792458.0
 #define N_COPOL    2
 #define R2C_SIGN   -1.0
+#define NDELAYS    16
+
+#define BEAM_ANALYTIC 0
+#define BEAM_FEE2016  1
 
 // A structure to read in all the relevant info from the observation metafits
 // file.
@@ -40,6 +45,8 @@ struct metafits_info {
     char      **tilenames;
     int         ninput;
     int         chan_width;
+    int       **delays;
+    double    **amps;
 };
 
 struct delays {
@@ -67,11 +74,12 @@ struct make_beam_opts {
     unsigned long int  begin;         // GPS time -- when to start beamforming
     unsigned long int  end;           // GPS time -- when to stop beamforming
     char              *time_utc;      // utc time string "yyyy-mm-ddThh:mm:ss"
-    char              *pointings;    // pointing list"dd:mm:ss_hh:mm:ss, dd:mm:ss_hh:mm:ss"
+    char              *pointings;     // pointing list"dd:mm:ss_hh:mm:ss, dd:mm:ss_hh:mm:ss"
     char              *datadir;       // The path to where the recombined data live
     char              *metafits;      // filename of the metafits file
     char              *rec_channel;   // 0 - 255 receiver 1.28MHz channel
     long int           frequency;     // = rec_channel expressed in Hz
+    int                beam_model;    // Either BEAM_FEE2016 or BEAM_ANALYTIC
 
     // Variables for MWA/VCS configuration
     int                nstation;      // The number of antennas
@@ -101,10 +109,12 @@ struct make_beam_opts {
 void get_delays(
         // an array of pointings [pointing][ra/dec][characters]
         char                   pointing_array[][2][64],
-        int                    npointing, // number of pointings 
+        int                    npointing, // number of pointings
         long int               frequency,
         struct                 calibration *cal,
         float                  samples_per_sec,
+        int                    beam_model,
+        FEEBeam               *beam,
         char                  *time_utc,
         double                 sec_offset,
         struct delays          delay_vals[],
@@ -112,6 +122,21 @@ void get_delays(
         ComplexDouble      ****complex_weights_array,  // output
         ComplexDouble      ****invJi                   // output
 );
+
+int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
+               const long freq, // observing freq (Hz)
+               const float lat, // observing latitude (radians)
+               const float az0, // azimuth & zenith angle of tile pointing
+               const float za0,
+               const float az, // azimuth & zenith angle to sample
+               const float za);
+
+
+void parallactic_angle_correction(
+    double *P,    // output rotation matrix
+    double lat,   // observing latitude (radians)
+    double az,    // azimuth angle (radians)
+    double za);   // zenith angle (radians)
 
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width );
@@ -144,6 +169,7 @@ void cp2x2(ComplexDouble *Min, ComplexDouble *Mout);
 void inv2x2(ComplexDouble *Min, ComplexDouble *Mout);
 void inv2x2S(ComplexDouble *Min, ComplexDouble **Mout);
 void mult2x2d(ComplexDouble *M1, ComplexDouble *M2, ComplexDouble *Mout);
+void mult2x2d_RxC(double *M1, ComplexDouble *M2, ComplexDouble *Mout);
 void conj2x2(ComplexDouble *M, ComplexDouble *Mout);
 double norm2x2(ComplexDouble *M, ComplexDouble *Mout);
 

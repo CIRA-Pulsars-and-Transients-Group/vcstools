@@ -17,40 +17,22 @@
 #include <time.h>
 #include "slalib.h"
 #include "slamac.h"
-#include "ascii_header.h"
-#include "mwa_header.h"
+#include "../make_beam/ascii_header.h"
+#include "../make_beam/mwa_header.h"
 #include <glob.h>
 #include <fcntl.h>
 #include <assert.h>
-#include "beam_common.h"
-#include "beam_psrfits.h"
-#include "beam_vdif.h"
-#include "make_beam.h"
-#include "vdifio.h"
-#include "filter.h"
+#include "../make_beam/beam_common.h"
+#include "../make_beam/beam_psrfits.h"
+#include "../make_beam/beam_vdif.h"
+#include "../make_beam/make_beam.h"
+#include "../make_beam/vdifio.h"
+#include "../make_beam/filter.h"
 #include "psrfits.h"
-#include "mycomplex.h"
-#include "form_beam.h"
+#include "../make_beam/mycomplex.h"
+#include "../make_beam/form_beam.h"
 #include <omp.h>
 
-#ifdef HAVE_CUDA
-
-#include <cuda_runtime.h>
-#include "ipfb.h"
-
-double now(){
-  struct timespec t;
-  clock_gettime(CLOCK_REALTIME,&t);
-  return (double)t.tv_sec + (double)t.tv_nsec/1000000000L;
-}
-
-#define NOW now()
-
-#else
-
-#define NOW  (omp_get_wtime())
-
-#endif
 
 int main(int argc, char **argv)
 {
@@ -116,16 +98,9 @@ int main(int argc, char **argv)
     int nstation             = opts.nstation;
     int nchan                = opts.nchan;
     const int npol           = 2;   // (X,Y)
-    int outpol_coh           = 4;  // (I,Q,U,V)
-    if ( opts.out_summed )
-        outpol_coh           = 1;  // (I)
-    const int outpol_incoh   = 1;  // ("I")
 
     //float vgain = 1.0; // This is re-calculated every second for the VDIF output
 
-    // Start counting time from here (i.e. after parsing the command line)
-    double begintime = NOW;
-    fprintf( stderr, "[%f]  Starting %s with GPU acceleration\n", NOW-begintime, argv[0] );
 
     // Calculate the number of files
     int nfiles = opts.end - opts.begin + 1;
@@ -198,25 +173,13 @@ int main(int argc, char **argv)
     {
        strcpy( pointing_array[p][0], RAs[p] );
        strcpy( pointing_array[p][1], DECs[p] );
-       fprintf(stderr, "[%f]  Pointing Num: %i  RA: %s  Dec: %s\n", NOW-begintime,
-                             p, pointing_array[p][0], pointing_array[p][1]);
     }
 
     // Allocate memory
-    char **filenames = create_filenames( &opts );
     ComplexDouble  ****complex_weights_array = create_complex_weights( npointing, nstation, nchan, npol );
     ComplexDouble  ****invJi                 = create_invJi( nstation, nchan, npol );
-    ComplexDouble  ****detected_beam         = create_detected_beam( npointing, 2*opts.sample_rate, nchan, npol );
-
-    // Load the FEE2016 beam, if requested
-    fprintf( stderr, "[%f]  Reading in beam model from %s\n", NOW-begintime, HYPERBEAM_HDF5 );
-    FEEBeam *beam = NULL;
-    if (opts.beam_model == BEAM_FEE2016) {
-        beam = new_fee_beam( HYPERBEAM_HDF5 );
-    }
 
     // Read in info from metafits file
-    fprintf( stderr, "[%f]  Reading in metafits file information from %s\n", NOW-begintime, opts.metafits);
     struct metafits_info mi;
     get_metafits_info( opts.metafits, &mi, opts.chan_width );
 
@@ -278,310 +241,74 @@ int main(int argc, char **argv)
         }
     }
 
-    double wgt_sum = 0;
-    for (i = 0; i < nstation*npol; i++)
-        wgt_sum += mi.weights_array[i];
-    double invw = 1.0/wgt_sum;
-
-    // Run get_delays to populate the delay_vals struct
-    fprintf( stderr, "[%f]  Setting up output header information\n", NOW-begintime);
-    struct delays delay_vals[npointing];
-    get_delays(
-            pointing_array,     // an array of pointings [pointing][ra/dec][characters]
-            npointing,          // number of pointings
-            opts.frequency,     // middle of the first frequency channel in Hz
-            &opts.cal,          // struct holding info about calibration
-            opts.sample_rate,   // = 10000 samples per sec
-            opts.beam_model,    // beam model type
-            beam,               // Hyperbeam struct
-            opts.time_utc,      // utc time string
-            0.0,                // seconds offset from time_utc at which to calculate delays
-            delay_vals,        // Populate psrfits header info
-            &mi,                // Struct containing info from metafits file
-            NULL,               // complex weights array (ignore this time)
-            NULL                // invJi array           (ignore this time)
-    );
-
-    // Create structures for holding header information
-    struct psrfits  *pf;
-    struct psrfits  *pf_incoh;
-    pf = (struct psrfits *)malloc(npointing * sizeof(struct psrfits));
-    pf_incoh = (struct psrfits *)malloc(1 * sizeof(struct psrfits));
-    vdif_header     vhdr;
-    struct vdifinfo *vf;
-    vf = (struct vdifinfo *)malloc(npointing * sizeof(struct vdifinfo));
-
-
-    // Create structures for the PFB filter coefficients
-    int ntaps, fil_size = 0;
-    double *coeffs = NULL;
-
-    // If no synthesis filter was explicitly chosen, choose the LSQ12 filter
-    if (!opts.synth_filter)  opts.synth_filter = strdup("LSQ12");
-    if (strcmp( opts.synth_filter, "LSQ12" ) == 0)
+    int j, file_no, ant, ch, xpol, ypol;
+    FEEBeam *beam = NULL;
+    char comp_fname[1024];
+    for (j=0; j<2; j++)
     {
-        ntaps = 12;
-        fil_size = ntaps * nchan; // = 12 * 128 = 1536
-        coeffs = (double *)malloc( fil_size * sizeof(double) );
-        double tmp_coeffs[] = LSQ12_FILTER_COEFFS; // I'll have to change the way these coefficients are stored
-                                                   // in order to avoid this cumbersome loading procedure
-        for (i = 0; i < fil_size; i++)
-            coeffs[i] = tmp_coeffs[i];
-    }
-    else if (strcmp( opts.synth_filter, "MIRROR" ) == 0)
-    {
-        ntaps = 12;
-        fil_size = ntaps * nchan; // = 12 * 128 = 1536
-        coeffs = (double *)malloc( fil_size * sizeof(double) );
-        double tmp_coeffs[] = MIRROR_FILTER_COEFFS;
-        for (i = 0; i < fil_size; i++)
-            coeffs[i] = tmp_coeffs[i];
-    }
-    else
-    {
-        fprintf( stderr, "error: unrecognised synthesis filter: %s\n",
-                opts.synth_filter );
-        exit(EXIT_FAILURE);
-    }
-    ComplexDouble *twiddles = roots_of_unity( nchan );
-
-    // Adjust by the scaling that was introduced by the forward PFB,
-    // along with any other scaling that I, Lord and Master of the inverse
-    // PFB, feels is appropriate.
-    double approx_filter_scale = 15.0/7.2; // 7.2 = 16384/117964.8
-    for (i = 0; i < fil_size; i++)
-        coeffs[i] *= approx_filter_scale;
-
-    // Populate the relevant header structs
-    populate_psrfits_header( pf,       opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
-            opts.chan_width,outpol_coh, opts.rec_channel, delay_vals,
-            mi, npointing, 1 );
-    populate_psrfits_header( pf_incoh, opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
-            opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals,
-            mi, 1, 0 );
-
-    populate_vdif_header( vf, &vhdr, opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
-            opts.chan_width, opts.rec_channel, delay_vals, npointing );
-
-    // To run asynchronously we require two memory allocations for each data
-    // set so multiple parts of the memory can be worked on at once.
-    // We control this by changing the pointer to alternate between
-    // the two memory allocations
-
-    // Create array for holding the raw data
-    int bytes_per_file = opts.sample_rate * nstation * npol * nchan;
-
-    //cudaMallocHost( (void**)&data, bytes_per_file * sizeof(uint8_t) );
-    uint8_t *data = (uint8_t *)malloc( bytes_per_file * sizeof(uint8_t) );
-    assert(data);
-
-    /* Allocate host and device memory for the use of the cu_form_beam function */
-    // Declaring pointers to the structs so the memory can be alternated
-    struct gpu_formbeam_arrays gf;
-    struct gpu_ipfb_arrays gi;
-    int nchunk;
-    malloc_formbeam( &gf, opts.sample_rate, nstation, nchan, npol, &nchunk, opts.gpu_mem,
-                     outpol_coh, outpol_incoh, npointing, NOW-begintime );
-
-    // Create output buffer arrays
-    float *data_buffer_coh    = NULL;
-    float *data_buffer_incoh  = NULL;
-    float *data_buffer_vdif   = NULL;
-
-    data_buffer_coh   = create_pinned_data_buffer_psrfits( npointing * nchan *
-                                                           outpol_coh * pf[0].hdr.nsblk );
-    data_buffer_incoh = create_pinned_data_buffer_psrfits( nchan * outpol_incoh *
-                                                           pf_incoh[0].hdr.nsblk );
-    data_buffer_vdif  = create_pinned_data_buffer_vdif( vf->sizeof_buffer *
-                                                        npointing );
-
-    if (opts.out_vdif)
-    {
-        malloc_ipfb( &gi, ntaps, opts.sample_rate, nchan, npol, fil_size, npointing );
-        cu_load_filter( coeffs, twiddles, &gi, nchan );
-    }
-
-    // Set up parrel streams
-    cudaStream_t streams[npointing];
-    for ( p = 0; p < npointing; p++ )
-        cudaStreamCreate(&(streams[p])) ;
-
-    fprintf( stderr, "[%f]  **BEGINNING BEAMFORMING WITH %s BEAM MODEL**\n", NOW-begintime,
-        (opts.beam_model == BEAM_ANALYTIC ? "ANALYTIC" : "FEE2016") );
-
-    int offset;
-    unsigned int s;
-    int ch, pol;
-
-    // Set up timing for each section
-    long read_time[nfiles], delay_time[nfiles], calc_time[nfiles], write_time[nfiles][npointing];
-    int file_no;
-
-    for (file_no = 0; file_no < nfiles; file_no++)
-    {
-        // Read in data from next file
-        clock_t start = clock();
-        fprintf( stderr, "[%f] [%d/%d] Reading in data from %s \n", NOW-begintime,
-                file_no+1, nfiles, filenames[file_no]);
-        read_data( filenames[file_no], data, bytes_per_file  );
-        read_time[file_no] = clock() - start;
-
-        // Get the next second's worth of phases / jones matrices, if needed
-        start = clock();
-        fprintf( stderr, "[%f] [%d/%d] Calculating delays\n", NOW-begintime,
-                                file_no+1, nfiles );
-        get_delays(
-                pointing_array,     // an array of pointings [pointing][ra/dec][characters]
-                npointing,          // number of pointings
-                opts.frequency,         // middle of the first frequency channel in Hz
-                &opts.cal,              // struct holding info about calibration
-                opts.sample_rate,       // = 10000 samples per sec
-                opts.beam_model,        // beam model type
-                beam,                   // Hyperbeam struct
-                opts.time_utc,          // utc time string
-                (double)file_no,        // seconds offset from time_utc at which to calculate delays
-                NULL,                   // Don't update delay_vals
-                &mi,                    // Struct containing info from metafits file
-                complex_weights_array,  // complex weights array (answer will be output here)
-                invJi );                // invJi array           (answer will be output here)
-        delay_time[file_no] = clock() - start;
-
-
-        fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
-                                file_no+1, nfiles);
-        start = clock();
-
-        if (!opts.out_bf) // don't beamform, but only procoess one ant/pol combination
+        int beam_model;
+        if (j==0)
         {
-            // Populate the detected_beam, data_buffer_coh, and data_buffer_incoh arrays
-            // detected_beam = [2*opts.sample_rate][nchan][npol] = [20000][128][2] (ComplexDouble)
-            if (file_no % 2 == 0)
-                offset = 0;
-            else
-                offset = opts.sample_rate;
+            beam_model=BEAM_FEE2016;
+            sprintf(comp_fname, "beam_model_comparison_FEE2016.dat");
+        }
+        else
+        {
+            beam_model=BEAM_ANALYTIC;
+            sprintf(comp_fname, "beam_model_comparison_ANALYTIC.dat");
+        }
 
-            for (p   = 0; p   < npointing;        p++  )
-            for (s   = 0; s   < opts.sample_rate; s++  )
-            for (ch  = 0; ch  < nchan           ; ch++ )
-            for (pol = 0; pol < npol            ; pol++)
+        // Load the FEE2016 beam, if requested
+        if (opts.beam_model == BEAM_FEE2016) {
+            beam = new_fee_beam( HYPERBEAM_HDF5 );
+        }
+        FILE *f = fopen(comp_fname, "w");
+        for (file_no = 0; file_no < nfiles; file_no++)
+        {
+            // Read in data from next file
+            // Get the next second's worth of phases / jones matrices, if needed
+            get_delays(
+                    pointing_array,         // an array of pointings [pointing][ra/dec][characters]
+                    npointing,              // number of pointings
+                    opts.frequency,         // middle of the first frequency channel in Hz
+                    &opts.cal,              // struct holding info about calibration
+                    opts.sample_rate,       // = 10000 samples per sec
+                    beam_model,             // beam model type
+                    beam,                   // Hyperbeam struct
+                    opts.time_utc,          // utc time string
+                    (double)file_no,        // seconds offset from time_utc at which to calculate delays
+                    NULL,                   // Don't update delay_vals
+                    &mi,                    // Struct containing info from metafits file
+                    complex_weights_array,  // complex weights array (answer will be output here)
+                    invJi );                // invJi array           (answer will be output here)
+
+
+
+            for (ant = 0; ant < nstation; ant++)
             {
-                detected_beam[p][s+offset][ch][pol] = UCMPLX4_TO_CMPLX_FLT(data[D_IDX(s,ch,opts.out_ant,pol,nchan)]);
-                detected_beam[p][s+offset][ch][pol] = CMuld(detected_beam[p][s+offset][ch][pol], CMaked(128.0, 0.0));
+                fprintf(f, "# File number %d Antenna %d\n", file_no, ant);
+                for (ch = 0; ch < nchan; ch++)
+                {
+                    for (xpol = 0; xpol < npol; xpol++)
+                    {
+                        for (ypol = 0; ypol < npol; ypol++)
+                        {
+                            fprintf(f, "%lf %lf ", CReald(invJi[ant][ch][xpol][ypol]), CImagd(invJi[ant][ch][xpol][ypol]));
+                        }
+                    }
+                    fprintf(f, "\n");
+                }
+                fprintf(f, "\n\n");
             }
-        }
-        else // beamform (the default mode)
-        {
-            cu_form_beam( data, &opts, complex_weights_array, invJi, file_no,
-                    npointing, nstation, nchan, npol, outpol_coh, invw, &gf,
-                    detected_beam, data_buffer_coh, data_buffer_incoh,
-                    streams, opts.out_incoh, nchunk );
-        }
 
-        // Invert the PFB, if requested
-        if (opts.out_vdif)
-        {
-            fprintf( stderr, "[%f] [%d/%d] Inverting the PFB (full)\n",
-                            NOW-begintime, file_no+1, nfiles);
-            cu_invert_pfb_ord( detected_beam, file_no, npointing,
-                               opts.sample_rate, nchan, npol, vf->sizeof_buffer,
-                               &gi, data_buffer_vdif );
         }
-        calc_time[file_no] = clock() - start;
-
-
-        // Write out for each pointing
-        for ( p = 0; p < npointing; p++)
-        {
-            start = clock();
-            fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n",
-                    NOW-begintime, file_no+1, nfiles, p+1, npointing );
-
-            if (opts.out_coh)
-                psrfits_write_second( &pf[p], data_buffer_coh, nchan,
-                                      outpol_coh, p );
-            if (opts.out_incoh && p == 0)
-                psrfits_write_second( &pf_incoh[p], data_buffer_incoh,
-                                      nchan, outpol_incoh, p );
-            if (opts.out_vdif)
-                vdif_write_second( &vf[p], &vhdr,
-                                   data_buffer_vdif + p * vf->sizeof_buffer );
-            write_time[file_no][p] = clock() - start;
-        }
+        fclose(f);
     }
-
-    // Calculate total processing times
-    float read_sum = 0, delay_sum = 0, calc_sum = 0, write_sum = 0;
-    for (file_no = 0; file_no < nfiles; file_no++)
-    {
-        read_sum  += (float) read_time[file_no];
-        delay_sum += (float) delay_time[file_no];
-        calc_sum  += (float) calc_time[file_no];
-        for ( p = 0; p < npointing; p++)
-            write_sum += (float) write_time[file_no][p];
-    }
-    float read_mean, delay_mean, calc_mean, write_mean;
-    read_mean  = read_sum  / nfiles;
-    delay_mean = delay_sum / nfiles / npointing;
-    calc_mean  = calc_sum  / nfiles / npointing;
-    write_mean = write_sum / nfiles / npointing;
-
-    // Calculate the standard deviations
-    float read_std = 0, delay_std = 0, calc_std = 0, write_std = 0;
-    for (file_no = 0; file_no < nfiles; file_no++)
-    {
-        read_std  += pow((float)read_time[file_no]  - read_mean,  2);
-        delay_std += pow((float)delay_time[file_no] - delay_mean / npointing, 2);
-        calc_std  += pow((float)calc_time[file_no]  - calc_mean / npointing,  2);
-        for ( p = 0; p < npointing; p++)
-            write_std += pow((float)write_time[file_no][p] - write_mean / npointing, 2);
-    }
-    read_std  = sqrt( read_std  / nfiles );
-    delay_std = sqrt( delay_std / nfiles / npointing );
-    calc_std  = sqrt( calc_std  / nfiles / npointing );
-    write_std = sqrt( write_std / nfiles / npointing );
-
-
-    fprintf( stderr, "[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
-    fprintf( stderr, "[%f]  Total read  processing time: %9.3f s\n",
-                     NOW-begintime, read_sum / CLOCKS_PER_SEC);
-    fprintf( stderr, "[%f]  Mean  read  processing time: %9.3f +\\- %8.3f s\n",
-                     NOW-begintime, read_mean / CLOCKS_PER_SEC, read_std / CLOCKS_PER_SEC);
-    fprintf( stderr, "[%f]  Total delay processing time: %9.3f s\n",
-                     NOW-begintime, delay_sum / CLOCKS_PER_SEC);
-    fprintf( stderr, "[%f]  Mean  delay processing time: %9.3f +\\- %8.3f s\n",
-                     NOW-begintime, delay_mean / CLOCKS_PER_SEC, delay_std / CLOCKS_PER_SEC);
-    fprintf( stderr, "[%f]  Total calc  processing time: %9.3f s\n",
-                     NOW-begintime, calc_sum / CLOCKS_PER_SEC);
-    fprintf( stderr, "[%f]  Mean  calc  processing time: %9.3f +\\- %8.3f s\n",
-                     NOW-begintime, calc_mean / CLOCKS_PER_SEC, calc_std / CLOCKS_PER_SEC);
-    fprintf( stderr, "[%f]  Total write processing time: %9.3f s\n",
-                     NOW-begintime, write_sum  * npointing / CLOCKS_PER_SEC);
-    fprintf( stderr, "[%f]  Mean  write processing time: %9.3f +\\- %8.3f s\n",
-                     NOW-begintime, write_mean / CLOCKS_PER_SEC, write_std / CLOCKS_PER_SEC);
-
-
-    fprintf( stderr, "[%f]  Starting clean-up\n", NOW-begintime);
-
     // Free up memory
-    destroy_filenames( filenames, &opts );
     destroy_complex_weights( complex_weights_array, npointing, nstation, nchan );
     destroy_invJi( invJi, nstation, nchan, npol );
-    destroy_detected_beam( detected_beam, npointing, 2*opts.sample_rate, nchan );
-
-    free( twiddles );
-    free( coeffs );
 
     destroy_metafits_info( &mi );
-    //free( data_buffer_coh    );
-    //free( data_buffer_incoh  );
-    //free( data_buffer_vdif   );
-    cudaFreeHost( data_buffer_coh   );
-    cudaFreeHost( data_buffer_incoh );
-    cudaFreeHost( data_buffer_vdif  );
-    cudaFreeHost( data );
 
     free( opts.obsid        );
     free( opts.time_utc     );
@@ -592,36 +319,6 @@ int main(int argc, char **argv)
     free( opts.cal.filename );
     free( opts.custom_flags );
     free( opts.synth_filter );
-
-    if (opts.out_incoh)
-    {
-        free( pf_incoh[0].sub.data        );
-        free( pf_incoh[0].sub.dat_freqs   );
-        free( pf_incoh[0].sub.dat_weights );
-        free( pf_incoh[0].sub.dat_offsets );
-        free( pf_incoh[0].sub.dat_scales  );
-    }
-    for (p = 0; p < npointing; p++)
-    {
-        if (opts.out_coh)
-        {
-            free( pf[p].sub.data        );
-            free( pf[p].sub.dat_freqs   );
-            free( pf[p].sub.dat_weights );
-            free( pf[p].sub.dat_offsets );
-            free( pf[p].sub.dat_scales  );
-        }
-        if (opts.out_vdif)
-        {
-            free( vf[p].b_scales  );
-            free( vf[p].b_offsets );
-        }
-    }
-    free_formbeam( &gf );
-    if (opts.out_vdif)
-    {
-        free_ipfb( &gi );
-    }
 
     // Clean up Hyperbeam
     if (opts.beam_model == BEAM_FEE2016) {
@@ -659,8 +356,6 @@ void usage() {
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "Right ascension and declinations of multiple pointings\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "\t-d, --data-location=PATH  ");
-    fprintf(stderr, "PATH is the directory containing the recombined data\n");
     fprintf(stderr, "\t-m, --metafits-file=FILE  ");
     fprintf(stderr, "FILE is the metafits file pertaining to the OBSID given by the\n");
     fprintf(stderr, "\t                          ");
@@ -668,36 +363,6 @@ void usage() {
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-f, --coarse-chan=N       ");
     fprintf(stderr, "Absolute coarse channel number (0-255)\n");
-
-    fprintf(stderr, "\n");
-    fprintf(stderr, "OUTPUT OPTIONS\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "\t-i, --incoh                ");
-    fprintf(stderr, "Turn on incoherent PSRFITS beam output.                             ");
-    fprintf(stderr, "[default: OFF]\n");
-    fprintf(stderr, "\t-p, --psrfits              ");
-    fprintf(stderr, "Turn on coherent PSRFITS output (will be turned on if none of\n");
-    fprintf(stderr, "\t                           ");
-    fprintf(stderr, "-i, -p, -u, -v are chosen).                                         ");
-    fprintf(stderr, "[default: OFF]\n");
-    fprintf(stderr, "\t-v, --vdif                 ");
-    fprintf(stderr, "Turn on VDIF output with upsampling                                 ");
-    fprintf(stderr, "[default: OFF]\n");
-    fprintf(stderr, "\t-s, --summed               ");
-    fprintf(stderr, "Turn on summed polarisations of the coherent output (only Stokes I) ");
-    fprintf(stderr, "[default: OFF]\n");
-    fprintf(stderr, "\t-t, --max_t                ");
-    fprintf(stderr, "Maximum number of seconds per output fits file. ");
-    fprintf(stderr, "[default: 200]\n");
-    fprintf(stderr, "\t-A, --antpol=ant           ");
-    fprintf(stderr, "Do not beamform. Instead, only operate on the specified ant\n");
-    fprintf(stderr, "\t                           ");
-    fprintf(stderr, "stream (0-127)\n" );
-    fprintf(stderr, "\t-S, --synth_filter=filter  ");
-    fprintf(stderr, "Apply the named filter during high-time resolution synthesis.    ");
-    fprintf(stderr, "[default: LSQ12]\n");
-    fprintf(stderr, "\t                           ");
-    fprintf(stderr, "filter can be MIRROR or LSQ12.\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "MWA/VCS CONFIGURATION OPTIONS\n");
@@ -725,10 +390,6 @@ void usage() {
     fprintf(stderr, "[default: none]\n");
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "metafits file given by the -m option.\n");
-    fprintf(stderr, "\t-H, --analytic-beam       ");
-    fprintf(stderr, "Force use of analytic beam (No change in behaviour if FEE2016 beam\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "is unavailable).\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "CALIBRATION OPTIONS (RTS)\n");
@@ -800,17 +461,8 @@ void make_beam_parse_cmdline(
                 {"obsid",           required_argument, 0, 'o'},
                 {"begin",           required_argument, 0, 'b'},
                 {"end",             required_argument, 0, 'e'},
-                {"incoh",           no_argument,       0, 'i'},
-                {"psrfits",         no_argument,       0, 'p'},
-                {"vdif",            no_argument,       0, 'v'},
-                {"summed",          no_argument,       0, 's'},
-                {"analytic-beam",   no_argument,       0, 'H'},
-                {"max_t",           required_argument, 0, 't'},
-                {"synth_filter",    required_argument, 0, 'S'},
-                {"antpol",          required_argument, 0, 'A'},
                 {"utc-time",        required_argument, 0, 'z'},
                 {"pointings",       required_argument, 0, 'P'},
-                {"data-location",   required_argument, 0, 'd'},
                 {"metafits-file",   required_argument, 0, 'm'},
                 {"coarse-chan",     required_argument, 0, 'f'},
                 {"antennas",        required_argument, 0, 'a'},
@@ -823,7 +475,6 @@ void make_beam_parse_cmdline(
                 {"rts-chan-width",  required_argument, 0, 'W'},
                 {"offringa-file",   required_argument, 0, 'O'},
                 {"offringa-chan",   required_argument, 0, 'C'},
-                {"gpu-mem",         required_argument, 0, 'g'},
                 {"help",            required_argument, 0, 'h'},
                 {"version",         required_argument, 0, 'V'}
             };
@@ -874,9 +525,6 @@ void make_beam_parse_cmdline(
                 case 'h':
                     usage();
                     exit(0);
-                    break;
-                case 'H':
-                    opts->beam_model = BEAM_ANALYTIC;
                     break;
                 case 'i':
                     opts->out_incoh = 1;
@@ -963,43 +611,6 @@ void make_beam_parse_cmdline(
     {
         opts->out_coh = 1;
     }
-}
-
-
-
-char **create_filenames( struct make_beam_opts *opts )
-{
-    // Calculate the number of files
-    int nfiles = opts->end - opts->begin + 1;
-    if (nfiles <= 0) {
-        fprintf( stderr, "Cannot beamform on %d files (between %lu and %lu)\n",
-                 nfiles, opts->begin, opts->end);
-        exit(EXIT_FAILURE);
-    }
-    // Allocate memory for the file name list
-    char **filenames = NULL;
-    filenames = (char **)malloc( nfiles*sizeof(char *) );
-
-    // Allocate memory and write filenames
-    int second;
-    unsigned long int timestamp;
-    for (second = 0; second < nfiles; second++) {
-        timestamp = second + opts->begin;
-        filenames[second] = (char *)malloc( MAX_COMMAND_LENGTH*sizeof(char) );
-        sprintf( filenames[second], "%s/%s_%ld_ch%s.dat",
-                 opts->datadir, opts->obsid, timestamp, opts->rec_channel );
-    }
-
-    return filenames;
-}
-
-void destroy_filenames( char **filenames, struct make_beam_opts *opts )
-{
-    int nfiles = opts->end - opts->begin + 1;
-    int second;
-    for (second = 0; second < nfiles; second++)
-        free( filenames[second] );
-    free( filenames );
 }
 
 
@@ -1125,17 +736,3 @@ void destroy_detected_beam( ComplexDouble ****array, int npointing, int nsamples
 
     free( array );
 }
-
-float *create_data_buffer_psrfits( size_t size )
-{
-    float *ptr = (float *)malloc( size * sizeof(float) );
-    return ptr;
-}
-
-
-float *create_data_buffer_vdif( size_t size )
-{
-    float *ptr  = (float *)malloc( size * sizeof(float) );
-    return ptr;
-}
-

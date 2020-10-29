@@ -10,6 +10,7 @@
 #include "beam_common.h"
 #include "psrfits.h"
 #include "mycomplex.h"
+#include "mwa_hyperbeam.h"
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width ) {
 /* Read in the relevant information from the metafits file.
@@ -64,9 +65,13 @@ void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int c
     mi->weights_array   =    (double *)malloc( mi->ninput*sizeof(double)   );
     mi->antenna_num     = (short int *)malloc( mi->ninput*sizeof(short int));
     mi->tilenames       =     (char **)malloc( mi->ninput*sizeof(char *)   );
+    mi->delays          =      (int **)malloc( mi->ninput*sizeof(int*)     );
+    mi->amps            =   (double **)malloc( mi->ninput*sizeof(double*)  );
     int i;
     for (i = 0; i < (int)(mi->ninput); i++) {
-        mi->tilenames[i] = (char *)malloc( 32*sizeof(char) );
+        mi->tilenames[i] =   (char *)malloc( 32*sizeof(char)        );
+        mi->delays[i]    =    (int *)malloc( NDELAYS*sizeof(int)    );
+        mi->amps[i]      = (double *)malloc( NDELAYS*sizeof(double) );
     }
     char *testval = (char *) malloc(1024);
 
@@ -139,12 +144,29 @@ void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int c
     // Flags & weights
     float wgt_sum = 0.0;
     fits_get_colnum(fptr, 1, "Flag", &colnum, &status);
-    fits_read_col_int(fptr, colnum, 1, 1, mi->ninput, 0.0, mi->flag_array, &anynull, &status);
+    fits_read_col_int(fptr, colnum, 1, 1, mi->ninput, 0, mi->flag_array, &anynull, &status);
     if (status != 0){
         fprintf(stderr, "Error: Failed to read flags column in metafile\n");
         exit(EXIT_FAILURE);
     }
 
+    // Beamforming delays (this only reads a single set of delays from the first tile,
+    // and assumes that all tiles are the same)
+    fits_get_colnum(fptr, 1, "Delays", &colnum, &status);
+    for (i=0; i<mi->ninput; i++){
+        fits_read_col_int(fptr, colnum, i+1, 1, NDELAYS, 0, mi->delays[i], &anynull, &status);
+        if (status != 0){
+            fprintf(stderr, "Error: Failed to read delays column in metafile\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // The amps should all be '1', except when the corresponding delay = '32'
+        for (int j = 0; j < NDELAYS; j++){
+            fprintf(stderr, "%d ", mi->delays[i][j]);
+            mi->amps[i][j] = (mi->delays[i][j] == 32 ? 0.0 : 1.0);
+        }
+        fprintf(stderr, "\n");
+    }
     // Invert value (flag off = full weight; flag on = zero weight)
     for (i = 0; i < mi->ninput; i++) {
         mi->weights_array[i] = 1.0 - (double)mi->flag_array[i];
@@ -176,9 +198,14 @@ void destroy_metafits_info( struct metafits_info *mi ) {
     free( mi->weights_array );
     free( mi->antenna_num   );
     int i;
-    for (i = 0; i < mi->ninput; i++)
+    for (i = 0; i < mi->ninput; i++){
         free( mi->tilenames[i] );
+        free( mi->delays[i]    );
+        free( mi->amps[i]      );
+    }
     free( mi->tilenames     );
+    free( mi->delays        );
+    free( mi->amps          );
 }
 
 
@@ -199,7 +226,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data)
 
     float *data_ptr = (float *) data;
     float **band;
- 
+
 
     band = (float **) calloc (npol, sizeof(float *));
     for (i=0;i<npol;i++) {
@@ -244,7 +271,7 @@ void flatten_bandpass(int nstep, int nchan, int npol, void *data)
     }
     free(band);
 }
- 
+
 void read_data( char *filename, uint8_t *data, int nbytes ) {
 
     // Open the file for reading
@@ -618,14 +645,21 @@ void cp2x2(ComplexDouble *Min, ComplexDouble *Mout)
 
 void inv2x2(ComplexDouble *Min, ComplexDouble *Mout)
 {
-    ComplexDouble m1 = CMuld( Min[0], Min[3] );
-    ComplexDouble m2 = CMuld( Min[1], Min[2] );
+    ComplexDouble m00 = Min[0];
+    ComplexDouble m01 = Min[1];
+    ComplexDouble m10 = Min[2];
+    ComplexDouble m11 = Min[3];
+
+    ComplexDouble m1 = CMuld( m00, m11 );
+    ComplexDouble m2 = CMuld( m01, m10 );
+
     ComplexDouble det = CSubd( m1, m2 );
     ComplexDouble inv_det = CRcpd( det );
-    Mout[0] = CMuld(       inv_det,  Min[3] );
-    Mout[1] = CMuld( CNegd(inv_det), Min[1] );
-    Mout[2] = CMuld( CNegd(inv_det), Min[2] );
-    Mout[3] = CMuld(       inv_det,  Min[0] );
+
+    Mout[0] = CMuld(       inv_det,  m11 );
+    Mout[1] = CMuld( CNegd(inv_det), m01 );
+    Mout[2] = CMuld( CNegd(inv_det), m10 );
+    Mout[3] = CMuld(       inv_det,  m00 );
 }
 
 
@@ -660,6 +694,23 @@ void mult2x2d(ComplexDouble *M1, ComplexDouble *M2, ComplexDouble *Mout)
     Mout[3] = CAddd( m21, m33 );
 }
 
+void mult2x2d_RxC(double *M1, ComplexDouble *M2, ComplexDouble *Mout)
+/* Mout = M1 x M2
+ */
+{
+    ComplexDouble m00 = CScld( M2[0], M1[0] );
+    ComplexDouble m12 = CScld( M2[2], M1[1] );
+    ComplexDouble m01 = CScld( M2[1], M1[0] );
+    ComplexDouble m13 = CScld( M2[3], M1[1] );
+    ComplexDouble m20 = CScld( M2[0], M1[2] );
+    ComplexDouble m32 = CScld( M2[2], M1[3] );
+    ComplexDouble m21 = CScld( M2[1], M1[2] );
+    ComplexDouble m33 = CScld( M2[3], M1[3] );
+    Mout[0] = CAddd( m00, m12 );
+    Mout[1] = CAddd( m01, m13 );
+    Mout[2] = CAddd( m20, m32 );
+    Mout[3] = CAddd( m21, m33 );
+}
 
 void conj2x2(ComplexDouble *M, ComplexDouble *Mout)
 /* Calculate the conjugate of a matrix
@@ -736,7 +787,7 @@ void dec2hms( char *out, double in, int sflag )
         *ptr='-';
         ptr++;
     }
-    // Limiting the output's pointings' smallest significant figure to 
+    // Limiting the output's pointings' smallest significant figure to
     // 0.01 arc seconds
     sprintf( ptr, "%2.2d:%2.2d:%05.2f", h, m, s );
 }
