@@ -128,12 +128,6 @@ int main(int argc, char **argv)
         JF[3] = JFtmp[6] + JFtmp[7]*I;
 
         // Make alterations to FEE beam as requested
-        if (opts.swap_columns)
-            swap_columns( JF, JF );
-
-        if (opts.conjugate)
-            conjugate( JF, JF );
-
         if (opts.parallactic)
         {
             parallactic_angle_correction(
@@ -142,6 +136,14 @@ int main(int argc, char **argv)
                     az, za );
             mult2x2d_RxC( P, JF, JF );
         }
+
+        if (opts.swap_columns)
+            swap_columns( JF, JF );
+
+        if (opts.conjugate)
+            conjugate( JF, JF );
+
+
 
         // Write out the matrices to the respective files
         // First the ANALYTIC...
@@ -339,7 +341,7 @@ void fprint_header( int argc, char **argv, FILE *f, unsigned int *delays,
     for (i = 0; i < NDELAYS; i++)
         fprintf( f, "%5.1lf", amps[i] );
     fprintf( f, "\n" );
-    fprintf( f, "# Tile pointing (az, za) (deg): %lf, %lf\n", 
+    fprintf( f, "# Tile pointing (az, za) (deg): %lf, %lf\n",
             mi->tile_pointing_az,
             90.0 - mi->tile_pointing_el );
     fprintf( f, "# FEE2016 beam zenith normalised? %s\n",
