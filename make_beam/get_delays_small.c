@@ -639,51 +639,16 @@ void parallactic_angle_correction_fee2016(
     double az,    // azimuth angle (radians)
     double za)    // zenith angle (radians)
 {
-/*
-    double el = DPIBY2 - za;
+    double R[4], S[4];
 
-    float ha, dec;
-    slaH2e(az, el, lat, &ha, &dec);
+    // I'm not sure why this works, but apparently it does...
+    parallactic_angle_correction_analytic( R, lat,    az, za );
+    parallactic_angle_correction_analytic( S ,DPIBY2, az, za );
 
-    double sl = sin(lat);
-    double cl = cos(lat);
-
-    double sh = sin(ha);
-    double ch = cos(ha);
-
-    double sd = sin(dec);
-    double cd = cos(dec);
-
-    double PA = atan2( cl*sh, cd*sl - cl*sd*ch );
-
-    double sPA = sin(PA);
-    double cPA = cos(PA);
-
-    P[0] =  cPA;
-    P[1] =  sPA;
-    P[2] = -sPA;
-    P[3] =  cPA;
-*/
-
-    double R[4], E2[4];
-    //double ca = cos(az);
-    //double sa = sin(az);
-    //E2[0] = 1;// (ca*ca - sa*sa);
-    //E2[1] = 0;// 2*ca*sa;
-    //E2[2] = 0;// 2*ca*sa;
-    //E2[3] = 1;//-(ca*ca - sa*sa);
-
-    parallactic_angle_correction_analytic(R, lat, az, za);
-    parallactic_angle_correction_analytic(E2,DPIBY2,az,za);
-    // E2 x R
-    //P[0] = E2[0]*R[0] + E2[1]*R[2];
-    //P[1] = E2[0]*R[1] + E2[1]*R[3];
-    //P[2] = E2[2]*R[0] + E2[3]*R[2];
-    //P[3] = E2[2]*R[1] + E2[3]*R[3];
-    // R x E2
-    P[0] = R[0]*E2[0] + R[1]*E2[2];
-    P[1] = R[0]*E2[1] + R[1]*E2[3];
-    P[2] = R[2]*E2[0] + R[3]*E2[2];
-    P[3] = R[2]*E2[1] + R[3]*E2[3];
+    // R x S
+    P[0] = R[0]*S[0] + R[1]*S[2];
+    P[1] = R[0]*S[1] + R[1]*S[3];
+    P[2] = R[2]*S[0] + R[3]*S[2];
+    P[3] = R[2]*S[1] + R[3]*S[3];
 }
 
