@@ -93,7 +93,7 @@ void test_parallactic_angle_correction()
     // Test #1
     ntests++;
 
-    parallactic_angle_correction(
+    parallactic_angle_correction_analytic(
         output,                // output Jones matrix
         -0.4537856055185257,   // observing latitude (radians)
         0.5235987755982988,    // azimuth angle (radians)
@@ -117,7 +117,7 @@ void test_parallactic_angle_correction()
     // Test #2
     ntests++;
 
-    parallactic_angle_correction(
+    parallactic_angle_correction_analytic(
         output,                // output rotation matrix
         -0.8726646259971648,   // observing latitude (radians)
         4.468042885105484,     // azimuth angle (radians)
@@ -134,11 +134,11 @@ void test_parallactic_angle_correction()
         npassed++;
     else
     {
-        printf( "test_parallactic_angle_correction (test %d) failed:\n", ntests );
+        printf( "test_parallactic_angle_correction_analytic (test %d) failed:\n", ntests );
         print_2x2double_compare( output, answer );
     }
 
-    printf( "test_parallactic_angle_correction() passed %d/%d tests\n", npassed, ntests );
+    printf( "test_parallactic_angle_correction_analytic() passed %d/%d tests\n", npassed, ntests );
 }
 
 int compare_2x2cmplx( ComplexDouble *M1, ComplexDouble *M2, double tol )

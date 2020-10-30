@@ -369,25 +369,23 @@ void get_delays(
 
                     // "Convert" the real jones[8] output array into out complex E[4] matrix
                     for (n = 0; n<NPOL*NPOL; n++){
-                        // For some reason, it is necessary to swap X and Y (perhaps this code implicitly
-                        // defines them differently compared to Hyperbeam). This can be achieved by mapping
-                        // Hyperbeam's output into the Jones matrix thus:
-                        //   [ XX XY ] --> [ XY XX ]
-                        //   [ YX YY ] --> [ YY YX ]
-                        // This is equivalent to mapping the (4-element array) indices thus:
-                        //   0 --> 1
-                        //   1 --> 0
-                        //   2 --> 3
-                        //   3 --> 2
-                        // which is achieved by the following translation (n --> m):
-                        int m = n - n%2 + (n+1)%2;
-                        E[m] = CMaked(jones[n*2], jones[n*2+1]);
+                        E[n] = CMaked(jones[n*2], jones[n*2+1]);
                     }
 
                     // Memory clean up required by Hyperbeam
                     free(jones);
+
+                    // Apply parallactic angle correction if Hyperbeam was used
+                    mult2x2d_RxC( P, E, E );  // Ji = P x Ji (where 'x' is matrix multiplication)
+
+                    // For some reason, it is necessary to swap X and Y (perhaps this code implicitly
+                    // defines them differently compared to Hyperbeam). This can be achieved by mapping
+                    // Hyperbeam's output into the Jones matrix thus:
+                    //   [ XX XY ] --> [ XY XX ]
+                    //   [ YX YY ] --> [ YY YX ]
+                    swap_columns( E, E );
                 }
-                //fprintf(stderr, "APPLYING HORIZONTAL FLIP\n");
+
                 mult2x2d(M[ant], invJref, G); // M x J^-1 = G (Forms the "coarse channel" DI gain)
 
                 if (cal->cal_type == RTS_BANDPASS)
@@ -443,10 +441,6 @@ void get_delays(
                 // Now, calculate the inverse Jones matrix
                 if (invJi != NULL) {
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
-                        // Apply parallactic angle correction if Hyperbeam was used
-                        //if (beam_model == BEAM_FEE2016) {
-                        //    mult2x2d_RxC( P, Ji, Ji );  // Ji = P x Ji (where 'x' is matrix multiplication)
-                        //}
 
                         conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
                         Fnorm = norm2x2( Ji, Ji );
