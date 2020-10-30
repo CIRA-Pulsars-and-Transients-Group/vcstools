@@ -828,3 +828,20 @@ void dec2hms( char *out, double in, int sflag )
     // 0.01 arc seconds
     sprintf( ptr, "%2.2d:%2.2d:%05.2f", h, m, s );
 }
+
+
+void swap_columns( ComplexDouble *in, ComplexDouble *out )
+{
+    // Put it in a temporary array so that this function still behaves as
+    // expected when in == out
+    ComplexDouble tmp[4];
+    tmp[0] = CScld( in[1], 1.0 );
+    tmp[1] = CScld( in[0], 1.0 );
+    tmp[2] = CScld( in[3], 1.0 );
+    tmp[3] = CScld( in[2], 1.0 );
+
+    int i;
+    for (i = 0; i < 4; i++)
+        out[i] = CScld( tmp[i], 1.0 );
+}
+

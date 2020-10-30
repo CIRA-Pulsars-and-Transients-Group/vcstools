@@ -180,5 +180,6 @@ void mult2x2d_RxC(double *M1, ComplexDouble *M2, ComplexDouble *Mout);
 void mult2x2d_CxR(ComplexDouble *M1, double *M2, ComplexDouble *Mout);
 void conj2x2(ComplexDouble *M, ComplexDouble *Mout);
 double norm2x2(ComplexDouble *M, ComplexDouble *Mout);
+void swap_columns( ComplexDouble *in, ComplexDouble *out );
 
 #endif

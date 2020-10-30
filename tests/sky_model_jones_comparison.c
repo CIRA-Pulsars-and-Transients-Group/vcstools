@@ -15,7 +15,7 @@
 #include <assert.h>
 #include "../make_beam/beam_common.h"
 #include "mwa_hyperbeam.h"
-#include "complex.h"
+#include "../make_beam/mycomplex.h"
 
 #define MWA_LAT -26.703319             /* Array latitude. degrees North */
 #define DD2R      1.74532925199433e-02 /* = PI/180 */
@@ -38,9 +38,9 @@ typedef struct sky_opts_t
 void sky_model_parse_cmdline( int , char **, sky_opts * );
 void fprint_header( int, char **, FILE *, unsigned int *, double *,
         sky_opts *, struct metafits_info *, int );
-void fprint_jones( FILE *, complex double * );
-void swap_columns( complex double *, complex double *);
-void conjugate( complex double *, complex double *);
+void fprint_jones( FILE *, ComplexDouble * );
+void swap_columns( ComplexDouble *, ComplexDouble *);
+void conjugate( ComplexDouble *, ComplexDouble *);
 
 int main(int argc, char **argv)
 {
@@ -56,9 +56,9 @@ int main(int argc, char **argv)
     opts.analytic_output = NULL; // Name of analytic output file
     opts.fee2016_output  = NULL; // Name of fee2016 output file
     opts.print_header    = 0;    // boolean: print header in output files?
-    opts.swap_columns    = 0;    // boolean: swap the columns of the FEE2016 Jones matrix
+    opts.swap_columns    = 1;    // boolean: swap the columns of the FEE2016 Jones matrix
     opts.conjugate       = 0;    // boolean: conjugate the FEE2016 Jones matrix
-    opts.parallactic     = 0;    // boolean: apply parallactic angle correction to the FEE2016 Jones matrix
+    opts.parallactic     = 1;    // boolean: apply parallactic angle correction to the FEE2016 Jones matrix
 
     // Variables for MWA/VCS configuration
     int chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
@@ -94,9 +94,9 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    complex double  JA[4]; // Beam model Jones -- ANALYTIC
+    ComplexDouble  JA[4]; // Beam model Jones -- ANALYTIC
     double         *JFtmp;
-    complex double  JF[4];    // Beam model Jones -- FEE2016
+    ComplexDouble  JF[4];    // Beam model Jones -- FEE2016
 
     // Parallactic angle correction matrix, if needed
     double P[4];
@@ -141,7 +141,7 @@ int main(int argc, char **argv)
             swap_columns( JF, JF );
 
         if (opts.conjugate)
-            conjugate( JF, JF );
+            conj2x2( JF, JF );
 
         // Write out the matrices to the respective files
         // First the ANALYTIC...
@@ -207,7 +207,7 @@ void usage() {
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-A, --analytic_output     ");
     fprintf(stderr, "Name of analytic output file (default: sky_model_comparison_ANALYTIC.dat\n");
-    fprintf(stderr, "\t-c, -- conjugate          ");
+    fprintf(stderr, "\t-c, --conjugate          ");
     fprintf(stderr, "Conjugate the elements of the FEE2016 Jones matrix\n");
     fprintf(stderr, "\t-F, --fee2016_output      ");
     fprintf(stderr, "Name of fee2016 output file (default: sky_model_comparison_FEE2016.dat\n");
@@ -215,10 +215,10 @@ void usage() {
     fprintf(stderr, "Include header in output files (default: no header)\n");
     fprintf(stderr, "\t-h, --help                ");
     fprintf(stderr, "Print this help and exit\n");
-    fprintf(stderr, "\t-P, --parallactic         ");
-    fprintf(stderr, "Apply the parallactic angle correction to the FEE2016 beam\n");
-    fprintf(stderr, "\t-s, --swap_columns        ");
-    fprintf(stderr, "Swap the columns of the FEE2016 Jones matrix\n");
+    fprintf(stderr, "\t-P, --no_parallactic      ");
+    fprintf(stderr, "Turn OFF the parallactic angle correction for the FEE2016 beam\n");
+    fprintf(stderr, "\t-s, --no_swap_columns     ");
+    fprintf(stderr, "Turn OFF column swap for the FEE2016 Jones matrix\n");
     fprintf(stderr, "\t-V, --version             ");
     fprintf(stderr, "Print version number and exit\n");
     fprintf(stderr, "\n");
@@ -242,8 +242,8 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
                 {"header",          no_argument,       0, 'H'},
                 {"metafits-file",   required_argument, 0, 'm'},
                 {"pointings_file",  required_argument, 0, 'p'},
-                {"parallactic",     no_argument,       0, 'P'},
-                {"swap_columns",    no_argument,       0, 's'},
+                {"no_parallactic",  no_argument,       0, 'P'},
+                {"no_swap_columns", no_argument,       0, 's'},
                 {"version",         no_argument,       0, 'V'}
             };
 
@@ -281,10 +281,10 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
                     opts->pointings = strdup(optarg);
                     break;
                 case 'P':
-                    opts->parallactic = 1;
+                    opts->parallactic = 0;
                     break;
                 case 's':
-                    opts->swap_columns = 1;
+                    opts->swap_columns = 0;
                     break;
                 case 'V':
                     fprintf( stderr, "MWA Beamformer %s\n", VERSION_BEAMFORMER);
@@ -351,31 +351,9 @@ void fprint_header( int argc, char **argv, FILE *f, unsigned int *delays,
     fprintf( f, "#\n" );
 }
 
-void fprint_jones( FILE *f, complex double *J )
+void fprint_jones( FILE *f, ComplexDouble *J )
 {
     int i;
     for (i = 0; i < 4; i++)
-        fprintf( f, "%lf %lf ", creal( J[i] ), cimag( J[i] ) );
-}
-
-void swap_columns( complex double *in, complex double *out )
-{
-    // Put it in a temporary array so that this function still behaves as
-    // expected when in == out
-    complex double tmp[4];
-    tmp[0] = in[1];
-    tmp[1] = in[0];
-    tmp[2] = in[3];
-    tmp[3] = in[2];
-
-    int i;
-    for (i = 0; i < 4; i++)
-        out[i] = tmp[i];
-}
-
-void conjugate( complex double *in, complex double *out)
-{
-    int i;
-    for (i = 0; i < 4; i++)
-        out[i] = conj( in[i] );
+        fprintf( f, "%lf %lf ", CReald( J[i] ), CImagd( J[i] ) );
 }
