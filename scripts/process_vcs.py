@@ -8,7 +8,6 @@ import tempfile
 import atexit
 import datetime
 from time import sleep, strptime, strftime
-import distutils.spawn
 import sqlite3 as lite
 from astropy.io import fits as pyfits
 from astropy.time import Time
@@ -123,7 +122,6 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         logger.warning("At the moment, even through the downloaded file is "
                        "labelled as a ppd file this is not true.")
         logger.warning("This is hopefully a temporary measure.")
-        #obsdownload = distutils.spawn.find_executable("obsdownload.py")
 
         get_metafits = "wget http://ws.mwatelescope.org/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
         try:
@@ -209,8 +207,10 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
                  ics=False, n_untar=2, keep="", vcstools_version="master",
                  nice=0):
 
+    #Load computer dependant config file
+    comp_config = load_config_file()
+
     logger.info("Downloading files from archive")
-    # voltdownload = distutils.spawn.find_executable("voltdownload.py") #Doesn't seem to be working on zeus for some reason
     voltdownload = "voltdownload.py"
     obsinfo = meta.getmeta(service='obs', params={'obs_id':str(obsid)})
     data_format = obsinfo['dataquality']
@@ -234,7 +234,7 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
     else:
         logger.error("Unable to determine data format from archive. Exiting")
         sys.exit(0)
-    mdir(dl_dir, dir_description)
+    mdir(dl_dir, dir_description, gid=comp_config['gid'])
     create_link(data_dir, target_dir, product_dir, link)
     batch_dir = product_dir+"/batch/"
 
@@ -255,7 +255,7 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
         if data_type == 16:
             check_secs_to_run = "10:15:00"
 
-        checks = distutils.spawn.find_executable("checks.py")
+        checks = "checks.py"
         # Write out the checks batch file but don't submit it
         commands = []
         if vcs_database_id is not None:
@@ -278,7 +278,7 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
         # if we have tarballs we send the untar jobs to the workq
         if data_type == 16:
             commands.append("else")
-            untar = distutils.spawn.find_executable('untar.sh')
+            untar = 'untar.sh'
             untar_command = "-w {0} -o {1} -b {2} -e {3} -j {4} {5}".format(dl_dir,
                                 obsid, time_to_get, time_to_get+increment-1, n_untar,
                                 keep)
@@ -298,7 +298,9 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
                                     "nice": nice},
                         vcstools_version=vcstools_version, submit=False,
                         outfile=batch_dir+check_batch+"_0.out",
-                        queue="zcpuq", export="NONE", mem=10240)
+                        queue="zcpuq", export="NONE", mem=10240,
+                        # Manually handing it the module dir as it should only run
+                        module_dir='/group/mwa/software/modulefiles')
 
         # Write out the tar batch file if in mode 15
         #if format == 16:
@@ -339,22 +341,27 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
                                     "nice" : nice},
                         vcstools_version=vcstools_version,
                         outfile=batch_dir+voltdownload_batch+"_1.out",
-                        queue="copyq", export="NONE", mem=5120)
+                        queue="copyq", export="NONE", mem=5120,
+                        # Manually handing it the module dir as it should only run
+                        module_dir='/group/mwa/software/modulefiles')
 
 
 def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id,
                  vcstools_version="master", nice=0):
 
+    #Load computer dependant config file
+    comp_config = load_config_file()
+
     batch_dir = os.path.join(product_dir, 'batch')
     product_dir = os.path.join(product_dir, 'cal', str(cal_obs_id))
     vis_dir = os.path.join(data_dir, 'vis')
-    mdir(vis_dir, 'Calibrator vis')
-    mdir(product_dir, 'Calibrator product')
-    mdir(batch_dir, 'Batch')
+    mdir(vis_dir, 'Calibrator vis', gid=comp_config['gid'])
+    mdir(product_dir, 'Calibrator product', gid=comp_config['gid'])
+    mdir(batch_dir, 'Batch', gid=comp_config['gid'])
     # Downloads the visablities to  /astro/mwavcs/vcs/[cal_obs_id]/vis
     # but creates a link to it here /astro/mwavcs/vcs/[obs_id]/cal/[cal_obs_id]
     csvfile = os.path.join(batch_dir, "{0}_dl.csv".format(cal_obs_id))
-    obsdownload = distutils.spawn.find_executable("obsdownload.py")
+    obsdownload = "obsdownload.py"
     create_link(data_dir, 'vis', product_dir, 'vis')
     obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
     secs_to_run = "03:00:00" # sometimes the staging can take a while...
@@ -383,23 +390,26 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id,
                     module_list=module_list,
                     slurm_kwargs={"time": secs_to_run, "nice": nice},
                     vcstools_version=vcstools_version, queue="copyq",
-                    export="NONE", mem=4096)
+                    export="NONE", mem=4096,
+                    # Manually handing it the module dir as it should only run
+                    module_dir='/group/mwa/software/modulefiles')
 
 
 def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir,
                   vcs_database_id, vcstools_version="master", nice=0):
 
     #Load computer dependant config file
+    comp_config = load_config_file()
 
     logger.info("Running recombine on files")
     jobs_per_node = 8
     target_dir = link = 'combined'
-    mdir(data_dir + '/' + target_dir, 'Combined')
+    mdir(data_dir + '/' + target_dir, 'Combined', gid=comp_config['gid'])
     create_link(data_dir, target_dir, product_dir, link)
     batch_dir = product_dir+"/batch/"
-    recombine = distutils.spawn.find_executable("recombine.py")
-    checks = distutils.spawn.find_executable("checks.py")
-    recombine_binary = distutils.spawn.find_executable("recombine")
+    recombine = "recombine.py"
+    checks = "checks.py"
+    recombine_binary = "recombine"
     for time_to_get in range(start_time,stop_time,increment):
         process_nsecs = increment if (time_to_get + increment <= stop_time) \
                                   else (stop_time - time_to_get + 1)
@@ -408,7 +418,8 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         nodes = (increment+(-increment%jobs_per_node))//jobs_per_node + 1 # Integer division with ceiling result plus 1 for master node
         recombine_batch = "recombine_{0}".format(time_to_get)
         check_batch = "check_recombine_{0}".format(time_to_get)
-        module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3", "numpy/1.13.3", "mwa-voltage/master"]
+        #module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3", "numpy/1.13.3", "mwa-voltage/master"]
+        module_list = ["mwa-voltage/master"]
         commands = []
         if vcs_database_id is not None:
             commands.append(database_vcs.add_database_function())
@@ -436,8 +447,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                      outfile=batch_dir+check_batch+"_0.out",
                      queue='gpuq', export="NONE")
 
-        module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3",
-                       "numpy/1.13.3", "mwa-voltage/master", "mpi4py", "cfitsio"]
+        #module_list = ["module switch PrgEnv-cray PrgEnv-gnu", "python/3.6.3",
+        #               "numpy/1.13.3", "mwa-voltage/master", "mpi4py", "cfitsio"]
+        module_list = ["mwa-voltage/master", "mpi4py"]
         commands = []
         if vcs_database_id is not None:
             commands.append(database_vcs.add_database_function())
@@ -455,9 +467,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
         recombine_command = "-o {0} -s {1} -w {2} -e {3}".format(obsid, time_to_get,
                             data_dir, recombine_binary)
         if vcs_database_id is None:
-            commands.append("srun --export=all python3 {0} {1}".format(recombine, recombine_command))
+            commands.append("srun --export=all {0} {1}".format(recombine, recombine_command))
         else:
-            commands.append('run "srun --export=all python3 {0}" "{1}" "{2}"'.format(recombine,
+            commands.append('run "srun --export=all {0}" "{1}" "{2}"'.format(recombine,
                             recombine_command, vcs_database_id))
 
         submit_slurm(recombine_batch, commands, batch_dir=batch_dir,
@@ -475,6 +487,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
                   vcs_database_id, metafits, vcstools_version="master", nice=0):
 
+    #Load computer dependant config file
+    comp_config = load_config_file()
+
     logger.info("Correlating files at {0} kHz and {1} milliseconds".\
                 format(ft_res[0], ft_res[1]))
 
@@ -486,8 +501,8 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
     else:
         corr_dir = "{0}/{1}".format(data_dir, target_dir)
         product_dir = "{0}/cal/{1}/".format(product_dir, obsid)
-        mdir(product_dir, "Correlator")
-    mdir(corr_dir, "Correlator Product")
+        mdir(product_dir, "Correlator", gid=comp_config['gid'])
+    mdir(corr_dir, "Correlator Product", gid=comp_config['gid'])
     create_link(data_dir, target_dir, product_dir, link)
 
     chan_list = get_frequencies(metafits_file, resort=True)
@@ -626,7 +641,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     utctime = gps_to_utc(start)
 
     P_dir = os.path.join(product_dir, "pointings")
-    mdir(P_dir, "Pointings")
+    mdir(P_dir, "Pointings", gid=comp_config['gid'])
     # startjobs = True
 
     # Set up supercomputer dependant parameters
@@ -689,7 +704,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
             # Making pointing directories
             for pointing in pointing_list:
-                mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
+                mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing), gid=comp_config['gid'])
 
             n_omp_threads = 1
             if "v" in bf_formats:
@@ -964,9 +979,9 @@ if __name__ == '__main__':
         data_dir = '{0}{1}'.format(comp_config['base_data_dir'],args.obs)
         product_dir = '{0}{1}'.format(comp_config['base_data_dir'],args.obs)
     batch_dir = "{0}/batch".format(product_dir)
-    mdir(data_dir, "Data")
-    mdir(product_dir, "Products")
-    mdir(batch_dir, "Batch")
+    mdir(data_dir, "Data", gid=comp_config['gid'])
+    mdir(product_dir, "Products", gid=comp_config['gid'])
+    mdir(batch_dir, "Batch", gid=comp_config['gid'])
     metafits_file = "{0}/{1}_metafits_ppds.fits".format(data_dir, args.obs)
     # TODO: modify metafits downloader to not just do a trivial wget
 
@@ -1016,7 +1031,7 @@ if __name__ == '__main__':
                           "VCS data on the archive.")
             sys.exit(0)
         data_dir = data_dir.replace(str(args.obs), str(args.cal_obs))
-        mdir(data_dir, "Calibrator Data")
+        mdir(data_dir, "Calibrator Data", gid=comp_config['gid'])
         download_cal(args.obs, args.cal_obs, data_dir, product_dir, vcs_database_id,
                      vcstools_version=args.vcstools_version,
                      nice=args.nice)

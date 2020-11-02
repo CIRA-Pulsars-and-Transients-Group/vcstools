@@ -21,6 +21,7 @@ from operator import itemgetter
 import glob
 import logging
 from time import strptime, strftime
+import socket
 
 from astropy.time import Time
 from astropy.coordinates import EarthLocation
@@ -57,6 +58,10 @@ class BaseRTSconfig(object):
         Path to write RTS configuration and relevant flagging information.
     offline : str, optional
         Whether the visibility data were produced with the offline correlator. Default is False.
+    beam_model: str, optional
+        Which beam model to use for calibrating. Can be either 'FEE2016' (default) or 'ANALYTIC'
+    vcstools_version: str, optional
+        Which version of vcstools to load - only used when correlating offline. Default is 'master'
 
 
     Attributes
@@ -124,7 +129,7 @@ class BaseRTSconfig(object):
         When there is a problem with some of the observation information and/or its manipulation.
     """
 
-    def __init__(self, obsid, cal_obsid, metafits, srclist, n_int_bins=6, datadir=None, outdir=None, offline=False):
+    def __init__(self, obsid, cal_obsid, metafits, srclist, n_int_bins=6, datadir=None, outdir=None, offline=False, beam_model="FEE2016", vcstools_version="master"):
         self.obsid = obsid  # target observation ID
         self.cal_obsid = cal_obsid  # calibrator observation ID
         self.offline = offline  # switch to decide if offline correlated data or not
@@ -144,6 +149,9 @@ class BaseRTSconfig(object):
         self.ArrayPositionLong = 116.6708152  # MWA longitude
         self.n_integration_bins = n_int_bins # number of visibility integration groups for RTS
         self.base_str = None  # base string to be written to file, will be editted by RTScal
+        self.beam_model = beam_model # The beam model to use for the calibration solutions. Either 'ANALYTIC' or 'FEE2016'
+        self.beam_model_bool = None
+        self.vcstools_version = vcstools_version
 
         comp_config = load_config_file()
 
@@ -173,16 +181,16 @@ class BaseRTSconfig(object):
             self.batch_dir =os.path.join(comp_config['base_data_dir'], str(self.obsid), "batch")
             logger.debug("RTS output directory is {0}".format(self.output_dir))
             logger.debug("Batch directory is {0}".format(self.batch_dir))
-            mdir(self.output_dir, "RTS")
-            mdir(self.batch_dir, "Batch")
+            mdir(self.output_dir, "RTS", gid=comp_config['gid'])
+            mdir(self.batch_dir, "Batch", gid=comp_config['gid'])
         else:
             # mdir handles if the directory already exists
             self.output_dir = os.path.realpath(outdir + "/rts")
             self.batch_dir = os.path.realpath(outdir + "/batch")
             logger.warning("Non-standard RTS output path: {0}".format(self.output_dir))
             logger.warning("Non-standard batch directory path: {0}".format(self.batch_dir))
-            mdir(self.output_dir, "RTS")
-            mdir(self.batch_dir, "Batch")
+            mdir(self.output_dir, "RTS", gid=comp_config['gid'])
+            mdir(self.batch_dir, "Batch", gid=comp_config['gid'])
 
         # Then check that the metafits file exists
         if os.path.isfile(metafits) is False:
@@ -211,6 +219,16 @@ class BaseRTSconfig(object):
         else:
             logger.info("Checking source list file exists... Ok")
             self.source_list = os.path.realpath(srclist)
+
+        # Check the 'beam_model' is one of the correct choices
+        choices = ("FEE2016", "ANALYTIC")
+        if self.beam_model not in choices:
+            errmsg = "Given beam model: {0} not an available choice: {1}".format(self.beam_model, choices)
+            logger.error(errmsg)
+            raise CalibrationError(errmsg)
+        else:
+            logger.info("Using {0} beam model for calibration solution".format(self.beam_model))
+            self.beam_model_bool=int(bool(self.beam_model == "ANALYTIC")) #produces 1 for ANALYTIC, 0 for FEE2016
 
         # set some RTS flags based on if we have offline correlated data or not
         logger.info("Setting RTS data input flags...")
@@ -322,8 +340,8 @@ class BaseRTSconfig(object):
         obsinfo = getmeta(service='obs', params={'obs_id': str(self.cal_obsid)})
 
         # quick check to make sure what's returned is actually real data
-        if len(obsinfo[u'logs']) == 0:
-            errmsg = "Metadata database error (logs empty). Maybe an invalid obs ID?"
+        if obsinfo[u'metadata'] is None:
+            errmsg = "Metadata database error (metadata empty). Maybe an invalid obs ID?"
             logger.error(errmsg)
             raise CalibrationError(errmsg)
 
@@ -387,7 +405,7 @@ DoCalibration=
 doMWArxCorrections=1
 doRawDataCorrections=1
 doRFIflagging=0
-useFastPrimaryBeamModels=1
+useFastPrimaryBeamModels={beam_model_bool}
 generateDIjones=1
 applyDIcalibration=1
 UsePacketInput=0
@@ -423,6 +441,7 @@ FieldOfViewDegrees=1""".format(base=self.data_dir,
                                read_direct=self.readDirect,
                                use_corr_input=self.useCorrInput,
                                metafits_file=self.metafits_RTSform,
+                               beam_model_bool=self.beam_model_bool,
                                max_freq=self.max_frequency,
                                base_freq=self.freq_base,
                                base_time=self.JD,
@@ -554,6 +573,10 @@ class RTScal(object):
         # boolean to control batch job submission. True = submit to queue, False = just write the files
         self.submit = submit
 
+        # vcstools version to use for offline correlation
+        self.offline = rts_base.offline
+        self.vcstools_version = rts_base.vcstools_version
+
 
     def summary(self):
         """Print a nice looking summary of relevant attributes."""
@@ -655,17 +678,23 @@ class RTScal(object):
                         "ntasks-per-node": "1"}
         module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
-        #commands.append("module use /pawsey/mwa/software/python3/modulefiles")
-        #commands.append("module load RTS/master")
+        commands.append("export UCX_MEMTYPE_CACHE=n")
         commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, fname))
+        hostname = socket.gethostname()
+        if hostname.startswith("galaxy"):
+            mem = 1024
+        else:
+            mem = 10240
         jobid = submit_slurm(rts_batch, commands,
-                                slurm_kwargs=slurm_kwargs,
-                                module_list=module_list,
-                                batch_dir=self.batch_dir,
-                                submit=self.submit,
-                                queue='gpuq',
-                                export="NONE",
-                                mem=10240)
+                             slurm_kwargs=slurm_kwargs,
+                             module_list=module_list,
+                             batch_dir=self.batch_dir,
+                             submit=self.submit,
+                             queue='gpuq',
+                             export="NONE",
+                             mem=mem,
+                             load_vcstools=self.offline, #load if offline
+                             vcstools_version = self.vcstools_version)
         jobids.append(jobid)
 
         return jobids
@@ -828,6 +857,12 @@ class RTScal(object):
         # Now submit the RTS jobs
         logger.info("Writing individual subband RTS configuration scripts")
 
+        hostname = socket.gethostname()
+        if hostname.startswith("galaxy"):
+            mem = 1024
+        else:
+            mem = 10240
+
         jobids = []
         for k, v in chan_file_dict.items():
             nnodes = v + 1
@@ -841,15 +876,17 @@ class RTScal(object):
                             "ntasks-per-node": "1"}
             module_list= ["RTS/master"]
             commands = list(self.script_body)  # make a copy of body to then extend
+            commands.append("export UCX_MEMTYPE_CACHE=n")
             commands.append("srun --export=all -N {0} -n {0} rts_gpu {1}".format(nnodes, k))
             jobid = submit_slurm(rts_batch, commands,
-                                    slurm_kwargs=slurm_kwargs,
-                                    module_list=module_list,
-                                    batch_dir=self.batch_dir,
-                                    submit=self.submit,
-                                    queue='gpuq',
-                                    export="NONE",
-                                    mem=10240)
+                                 slurm_kwargs=slurm_kwargs,
+                                 module_list=module_list,
+                                 batch_dir=self.batch_dir,
+                                 submit=self.submit,
+                                 queue='gpuq',
+                                 export="NONE",
+                                 mem=mem,
+                                 load_vcstools=False)
             jobids.append(jobid)
 
         return jobids
@@ -889,7 +926,8 @@ if __name__ == '__main__':
     # Option parsing
     parser = argparse.ArgumentParser(
         description="Script for creating RTS configuration files and submitting relevant jobs in the "
-                    "VCS pulsar pipeline")
+                    "VCS pulsar pipeline",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None, required=True)
 
@@ -911,6 +949,9 @@ if __name__ == '__main__':
                         help="Parent directory where you want the /rts directory and /batch directory to be created "
                              "(ONLY USE IF YOU WANT THE NON-STANDARD LOCATIONS.)", default=None)
 
+    parser.add_argument("--beam_model", type=str, choices=["ANALYTIC", "FEE2016"], default="FEE2016",
+                        help="Which beam model to use to create the calibration solution")
+
     parser.add_argument("--n_vis_grp", type=int,
                         help="The number of visbility groups for the RTS to construct. "
                         "This changes with the MWA configuration "
@@ -919,6 +960,9 @@ if __name__ == '__main__':
 
     parser.add_argument("--offline", action='store_true',
                         help="Tell the RTS to read calibrator data in the offline correlated data format")
+
+    parser.add_argument("--vcstools_version", type=str, default="master",
+                        help="The version of vcstools to use. Only relevant for offline correlation")
 
     parser.add_argument("--nosubmit", action='store_false', help="Write jobs scripts but DO NOT submit to the queue")
 
@@ -952,7 +996,8 @@ if __name__ == '__main__':
     try:
         baseRTSconfig = BaseRTSconfig(args.obsid, args.cal_obsid, args.metafits, args.srclist,
                                         datadir=args.gpubox_dir, outdir=args.rts_output_dir,
-                                        offline=args.offline, n_int_bins=args.n_vis_grp)
+                                        offline=args.offline, n_int_bins=args.n_vis_grp,
+                                        beam_model=args.beam_model, vcstools_version=args.vcstools_version)
         baseRTSconfig.run()
     except CalibrationError as e:
         logger.critical("Caught CalibrationError: {0}".format(e))
