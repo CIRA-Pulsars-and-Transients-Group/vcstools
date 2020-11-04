@@ -37,7 +37,7 @@ include_directories(${FFTW3_INCLUDE_DIR} ${PSRFITS_UTILS_INCLUDE_DIR} ${CFITSIO_
 target_link_libraries(test_make_beam -fopenmp ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${HYPERBEAM_LIB})
 target_link_libraries(beam_model_jones_comparison -fopenmp ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${HYPERBEAM_LIB})
 target_link_libraries(sky_model_jones_comparison -fopenmp ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${HYPERBEAM_LIB})
-target_link_libraries(azza_track ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY})
+target_link_libraries(azza_track ${PSRFITS_UTILS_LIBRARY} ${CFITSIO_LIBRARY} ${SLALIB_LIBRARY} ${M_LIBRARY} ${HYPERBEAM_LIB})
 
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/test_make_beam DESTINATION bin)
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/beam_model_jones_comparison DESTINATION bin)

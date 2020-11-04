@@ -26,11 +26,12 @@ typedef struct azza_opts_t
     char   *output;       // Name of the output file
     int     print_header; // boolean: print header in output files?
     int     skip_seconds; // Interval between outputs (in seconds)
-    double  RA;           // Right ascension in radians
-    double  Dec;          // Declination in radians
-}
+    double  ra;           // Right ascension in radians
+    double  dec;          // Declination in radians
+} azza_opts;
 
 void fprint_header( int, char **, FILE * );
+void azza_parse_cmdline( int, char **, azza_opts * );
 
 int main(int argc, char **argv)
 {
@@ -40,9 +41,9 @@ int main(int argc, char **argv)
     opts.metafits     = NULL; // Filename of the metafits file
     opts.output       = NULL; // Name of the output file
     opts.print_header = 0;    // boolean: print header in output files?
-    skip_seconds      = 1;    // Interval between outputs (in seconds)
-    opts.RA           = nan;  // Right ascension in radians
-    opts.Dec          = nan;  // Declination in radians
+    opts.skip_seconds = 1;    // Interval between outputs (in seconds)
+    opts.ra           = NAN;  // Right ascension in radians
+    opts.dec          = NAN;  // Declination in radians
 
     // Parse command line arguments
     azza_parse_cmdline( argc, argv, &opts );
@@ -67,7 +68,7 @@ int main(int argc, char **argv)
     // Prepare other needed variables for calculation
     double lst; // LST
     double ha;  // Hour angle
-    double eq;
+    double eq = 2000.0;
     double ra_ap, dec_ap;
     double app_ha_rad;
     double az, za, el;
@@ -79,15 +80,14 @@ int main(int argc, char **argv)
     }
 
     int s; // seconds offset from beginning of observation
-    for (s = 0; s < mi.exposure; s += skip_seconds)
+    for (s = 0; s < mi.exposure; s += opts.skip_seconds)
     {
         // Get the MJD and LST of this second
         mjd = date_obs_mjd + (s + 0.5)/86400.0;
         mjd2lst( mjd, &lst );
 
         // Convert to hour angle
-        eq = 2000.0;
-        slaMap(opts.ra, opts.dec, 0, 0, 0, 0, 2000, mjd, &ra_ap, &dec_ap);
+        slaMap(opts.ra, opts.dec, 0, 0, 0, 0, eq, mjd, &ra_ap, &dec_ap);
         ha = slaRanorm( lst - ra_ap )*DR2H;
         app_ha_rad = ha * DH2R;
 
@@ -119,7 +119,7 @@ void usage()
     fprintf(stderr, "DESCRIPTION\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\tOutputs the azimuth (az) and zenith angle (za) "
-                      "pointings for a given observation.\n"
+                      "pointings for a given observation.\n" );
 
     fprintf(stderr, "\n");
     fprintf(stderr, "REQUIRED OPTIONS\n");
@@ -150,8 +150,7 @@ void usage()
 
 
 
-void azza_parse_cmdline(
-        int argc, char **argv, struct make_beam_opts *opts )
+void azza_parse_cmdline( int argc, char **argv, azza_opts *opts )
 {
     if (argc > 1) {
 
