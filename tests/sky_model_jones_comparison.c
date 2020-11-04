@@ -17,7 +17,6 @@
 #include "mwa_hyperbeam.h"
 #include "../make_beam/mycomplex.h"
 
-#define MWA_LAT -26.703319             /* Array latitude. degrees North */
 #define DD2R      1.74532925199433e-02 /* = PI/180 */
 #define DPIBY2    1.570796326794897    /* = PI/2   */
 #define NDELAYS  16

@@ -28,6 +28,10 @@
 #define BEAM_ANALYTIC 0
 #define BEAM_FEE2016  1
 
+#define MWA_LAT -26.703319        /* Array latitude. degrees North */
+#define MWA_LON 116.67081         /* Array longitude. degrees East */
+#define MWA_HGT 377               /* Array altitude. meters above sea level */
+
 // A structure to read in all the relevant info from the observation metafits
 // file.
 struct metafits_info {
@@ -47,6 +51,8 @@ struct metafits_info {
     int         chan_width;
     int       **delays;
     double    **amps;
+    char       *date_obs;
+    int         exposure;
 };
 
 struct delays {
@@ -168,6 +174,11 @@ int read_offringa_gains_file( ComplexDouble **antenna_gain, int nant,
 
 
 void dec2hms( char *out, double in, int sflag );
+void utc2mjd( char *, double *, double * ); // "2000-01-01T00:00:00" --> MJD_int + MJD_fraction
+void mjd2lst( double, double * );
+
+double parse_dec( char* ); // "01:23:45.67" --> Dec in degrees
+double parse_ra( char* );  // "01:23:45.67" --> RA  in degrees
 
 /**** MATRIX OPERATIONS ****/
 

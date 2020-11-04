@@ -29,9 +29,6 @@
 /* This now also reads in RTS calibration files and generates calibration matrices
  */
 
-#define MWA_LAT -26.703319        // Array latitude. degrees North
-#define MWA_LON 116.67081         // Array longitude. degrees East
-#define MWA_HGT 377               // Array altitude. meters above sea level
 #define MAXREQUEST 3000000
 #define NCHAN   128
 #define NANT    128
