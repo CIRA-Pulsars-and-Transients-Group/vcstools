@@ -138,7 +138,7 @@ void usage()
     fprintf(stderr, "Print this help and exit\n");
     fprintf(stderr, "\t-H, --header              ");
     fprintf(stderr, "Include header in output files (default: no header)\n");
-    fprintf(stderr, "\t-m, --output-file=FILE    ");
+    fprintf(stderr, "\t-o, --output-file=FILE    ");
     fprintf(stderr, "FILE is the metafits file (if not supplied, output "
                     "will be written to stdout).\n");
     fprintf(stderr, "\t-s, --skip-seconds        ");
@@ -170,7 +170,7 @@ void azza_parse_cmdline( int argc, char **argv, azza_opts *opts )
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "D:hHm:o:R:V",
+                             "D:hHm:o:R:s:V",
                              long_options, &option_index);
             if (c == -1)
                 break;
