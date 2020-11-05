@@ -7,6 +7,7 @@ import glob
 from reorder_chans import *
 import argparse
 import logging
+import sys
 logger = logging.getLogger(__name__)
 
 def real2cmplx2x2mat(riririri):
@@ -21,6 +22,8 @@ def real2cmplx2x2mat(riririri):
 
     """
     result = np.empty((2, 2,),dtype=np.complex128)
+    logger.debug("Result: {}".format(result))
+    logger.debug("riririri: {}".format(riririri))
     for i in range(4):
         result[i//2][i%2] = riririri[2*i] + riririri[2*i+1]*1j
     return result
@@ -64,6 +67,11 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
 
     # Get file names
     rts_filenames = sorted(glob.glob(rts_filename_pattern)) # <-- Assumes file names are appropriately ordered by channel
+
+    # If there are no files raise an exception
+    logger.debug("rts_filenames: {}".format(rts_filenames))
+    if len(rts_filenames) == 0:
+        raise FileNotFoundError('No RTS files in {}'.format(rts_filename_pattern))
     #rts_filenames.reverse()
     nchannels = len(rts_filenames)
 
@@ -72,10 +80,11 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
         rts_filename = rts_filenames[chan]
         with open(rts_filename, "r") as rts_file:
             # Common factor of all gains is a single number in the first line of the file
-            #amp = float(rts_file.readline())
+            amp = float(rts_file.readline())
 
             # The second line contains the model primary beam Jones matrix (in the direction of the calibrator)
             Jrefline = rts_file.readline()
+            logger.debug("Jrefline: {}".format(Jrefline))
             Jref = real2cmplx2x2mat([float(i) for i in Jrefline.split(",")])
             invJref = np.linalg.inv(Jref)
 
@@ -154,5 +163,9 @@ if __name__ == "__main__":
         logging.error("Metafits file required. [-m]")
         quit()
 
-    ao = rtsfile(args.metafits, args.dir + '/' + args.rts_glob)
+    try:
+        ao = rtsfile(args.metafits, args.dir + '/' + args.rts_glob)
+    except FileNotFoundError as fe:
+        logger.error("FileNotFoundError: {}".format(fe))
+        sys.exit(1)
     ao.tofile(args.outfile)
