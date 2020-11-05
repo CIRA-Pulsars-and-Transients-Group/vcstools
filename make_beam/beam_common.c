@@ -30,10 +30,13 @@ void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int c
     }
 
     // Read in the tile pointing information (and channel width)
+    mi->date_obs = (char *)malloc( 32*sizeof(char) );
     fits_read_key(fptr, TDOUBLE, "RA",       &(mi->tile_pointing_ra),  NULL, &status);
     fits_read_key(fptr, TDOUBLE, "DEC",      &(mi->tile_pointing_dec), NULL, &status);
     fits_read_key(fptr, TDOUBLE, "AZIMUTH",  &(mi->tile_pointing_az),  NULL, &status);
     fits_read_key(fptr, TDOUBLE, "ALTITUDE", &(mi->tile_pointing_el),  NULL, &status);
+    fits_read_key(fptr, TINT,    "EXPOSURE", &(mi->exposure),          NULL, &status);
+    fits_read_key(fptr, TSTRING, "DATE-OBS", mi->date_obs,             NULL, &status);
     mi->chan_width = chan_width;
 
     if (status != 0) {
@@ -206,6 +209,7 @@ void destroy_metafits_info( struct metafits_info *mi ) {
     free( mi->tilenames     );
     free( mi->delays        );
     free( mi->amps          );
+    free( mi->date_obs      );
 }
 
 

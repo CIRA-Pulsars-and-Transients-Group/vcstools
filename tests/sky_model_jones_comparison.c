@@ -17,7 +17,6 @@
 #include "mwa_hyperbeam.h"
 #include "../make_beam/mycomplex.h"
 
-#define MWA_LAT -26.703319             /* Array latitude. degrees North */
 #define DD2R      1.74532925199433e-02 /* = PI/180 */
 #define DPIBY2    1.570796326794897    /* = PI/2   */
 #define NDELAYS  16
@@ -33,10 +32,11 @@ typedef struct sky_opts_t
     int       swap_columns;    // boolean: swap the columns of the FEE2016 Jones matrix
     int       conjugate;       // boolean: conjugate each element of FEE2016 Jones matrix
     int       parallactic;     // boolean: apply parallactic angle correction to the FEE2016 Jones matrix
+    double    amps[NDELAYS];   // 0.0 or 1.0 for each dipole
 } sky_opts;
 
 void sky_model_parse_cmdline( int , char **, sky_opts * );
-void fprint_header( int, char **, FILE *, unsigned int *, double *,
+void fprint_header( int, char **, FILE *, unsigned int *,
         sky_opts *, struct metafits_info *, int );
 void fprint_jones( FILE *, ComplexDouble * );
 void swap_columns( ComplexDouble *, ComplexDouble *);
@@ -44,12 +44,12 @@ void conjugate( ComplexDouble *, ComplexDouble *);
 
 int main(int argc, char **argv)
 {
-    // A place to hold the beamformer settings
+    int n; // Generic loop iterator
+
+    // Make struct for command line options
     sky_opts opts;
 
-    /* Set default beamformer settings */
-
-    // Variables for required options
+    // Defaults for options
     opts.pointings       = NULL; // File containing az_za pointings
     opts.metafits        = NULL; // Filename of the metafits file
     opts.frequency       = 0;    // Observing frequency (in Hz)
@@ -59,6 +59,8 @@ int main(int argc, char **argv)
     opts.swap_columns    = 1;    // boolean: swap the columns of the FEE2016 Jones matrix
     opts.conjugate       = 0;    // boolean: conjugate the FEE2016 Jones matrix
     opts.parallactic     = 1;    // boolean: apply parallactic angle correction to the FEE2016 Jones matrix
+    for (n = 0; n < NDELAYS; n++)
+        opts.amps[n] = 1.0;
 
     // Variables for MWA/VCS configuration
     int chan_width    = 10000;  // The bandwidth of an individual fine chanel (Hz)
@@ -73,10 +75,6 @@ int main(int argc, char **argv)
     // Always use the first tile/pol's set of delays and assume no dead
     // dipoles
     unsigned int *delays = (unsigned int *)mi.delays[0];
-    double amps[] = { 1.0, 1.0, 1.0, 1.0,
-                      1.0, 1.0, 1.0, 1.0,
-                      1.0, 1.0, 1.0, 1.0,
-                      1.0, 1.0, 1.0, 1.0 };
 
     // Load the FEE2016 beam model
     FEEBeam *beam = new_fee_beam( HYPERBEAM_HDF5 );
@@ -106,8 +104,8 @@ int main(int argc, char **argv)
 
     if (opts.print_header)
     {
-        fprint_header( argc, argv, fA, delays, amps, &opts, &mi, zenith_norm );
-        fprint_header( argc, argv, fF, delays, amps, &opts, &mi, zenith_norm );
+        fprint_header( argc, argv, fA, delays, &opts, &mi, zenith_norm );
+        fprint_header( argc, argv, fF, delays, &opts, &mi, zenith_norm );
     }
 
     while (fscanf( fP, "%lf %lf", &az, &za ) != EOF)
@@ -121,7 +119,7 @@ int main(int argc, char **argv)
                 az, za );                             // azimuth & zenith angle of pencil beam
 
         // Calculate jones matrix for the ANALYTIC beam
-        JFtmp = calc_jones( beam, az, za, opts.frequency, delays, amps, zenith_norm );
+        JFtmp = calc_jones( beam, az, za, opts.frequency, delays, opts.amps, zenith_norm );
         JF[0] = JFtmp[0] + JFtmp[1]*I;
         JF[1] = JFtmp[2] + JFtmp[3]*I;
         JF[2] = JFtmp[4] + JFtmp[5]*I;
@@ -209,6 +207,8 @@ void usage() {
     fprintf(stderr, "Name of analytic output file (default: sky_model_comparison_ANALYTIC.dat\n");
     fprintf(stderr, "\t-c, --conjugate          ");
     fprintf(stderr, "Conjugate the elements of the FEE2016 Jones matrix\n");
+    fprintf(stderr, "\t-d, --dead_dipole=D      ");
+    fprintf(stderr, "Flag dipole D (0-15) as dead. Use multiple times for flagging multiple dipoles\n");
     fprintf(stderr, "\t-F, --fee2016_output      ");
     fprintf(stderr, "Name of fee2016 output file (default: sky_model_comparison_FEE2016.dat\n");
     fprintf(stderr, "\t-H, --header              ");
@@ -228,6 +228,7 @@ void usage() {
 
 void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
 {
+    int dipole;
     if (argc > 1) {
 
         int c;
@@ -236,6 +237,7 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
             static struct option long_options[] = {
                 {"analytic_output", required_argument, 0, 'A'},
                 {"conjugate",       no_argument,       0, 'c'},
+                {"dead_dipole",     required_argument, 0, 'd'},
                 {"frequency",       required_argument, 0, 'f'},
                 {"fee2016_output",  required_argument, 0, 'F'},
                 {"help",            no_argument,       0, 'h'},
@@ -249,7 +251,7 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "A:cf:F:hHm:p:PsV",
+                             "A:cd:f:F:hHm:p:PsV",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -260,6 +262,16 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
                     break;
                 case 'c':
                     opts->conjugate = 1;
+                    break;
+                case 'd':
+                    dipole = atoi(optarg);
+                    if (dipole < 0 || dipole >= NDELAYS)
+                    {
+                        fprintf( stderr, "error: -d argument must be between "
+                                "0 and %d\n", NDELAYS );
+                        exit(EXIT_FAILURE);
+                    }
+                    opts->amps[dipole] = 0.0;
                     break;
                 case 'f':
                     opts->frequency = atoi(optarg);
@@ -318,8 +330,7 @@ void sky_model_parse_cmdline( int argc, char **argv, sky_opts *opts )
 
 
 void fprint_header( int argc, char **argv, FILE *f, unsigned int *delays,
-        double *amps, sky_opts *opts, struct metafits_info *mi,
-        int zenith_norm )
+        sky_opts *opts, struct metafits_info *mi, int zenith_norm )
 {
     int i;
     fprintf( f, "# VCSTOOLS version %s\n", VERSION_BEAMFORMER );
@@ -337,7 +348,7 @@ void fprint_header( int argc, char **argv, FILE *f, unsigned int *delays,
     fprintf( f, "\n" );
     fprintf( f, "# Amps:  " );
     for (i = 0; i < NDELAYS; i++)
-        fprintf( f, "%5.1lf", amps[i] );
+        fprintf( f, "%5.1lf", opts->amps[i] );
     fprintf( f, "\n" );
     fprintf( f, "# Tile pointing (az, za) (deg): %lf, %lf\n",
             mi->tile_pointing_az,

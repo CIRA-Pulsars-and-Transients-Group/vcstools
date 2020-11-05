@@ -37,12 +37,12 @@ void print_2x2double( double *M );
 void print_2x2double_compare( double *M1, double *M2 );
 
 void test_calcEjones_analytic();
-void test_parallactic_angle_correction();
+void test_parallactic_angle_correction_analytic();
 
 int main()
 {
     test_calcEjones_analytic();
-    test_parallactic_angle_correction();
+    test_parallactic_angle_correction_analytic();
     return EXIT_SUCCESS;
 }
 
@@ -64,10 +64,10 @@ void test_calcEjones_analytic()
             0.649164743304,
             0.242235173094,  // azimuth & zenith angle to sample
             0.618043426835);
-    answer[0] = CMaked( 0.702145873359, 0.000000000000);
-    answer[1] = CMaked(-0.053699555622, 0.000000000000);
-    answer[2] = CMaked(-0.016286015151, 0.000000000000);
-    answer[3] = CMaked( 0.843308339933, 0.000000000000);
+    answer[0] = CMaked( 0.702145882549, 0.000000000000);
+    answer[1] = CMaked(-0.053699558267, 0.000000000000);
+    answer[2] = CMaked(-0.016286014351, 0.000000000000);
+    answer[3] = CMaked( 0.843308318024, 0.000000000000);
 
     tol = 1e-8;
 
@@ -82,7 +82,7 @@ void test_calcEjones_analytic()
     printf( "test_calcEJones_analytic() passed %d/%d tests\n", npassed, ntests );
 }
 
-void test_parallactic_angle_correction()
+void test_parallactic_angle_correction_analytic()
 {
     int npassed = 0;
     int ntests = 0;
@@ -99,10 +99,10 @@ void test_parallactic_angle_correction()
         0.5235987755982988,    // azimuth angle (radians)
         0.17453292519943295);  // zenith angle (radians)
 
-    answer[0] = -0.882365947476;
-    answer[1] =  0.470563847671;
-    answer[2] = -0.470563847671;
-    answer[3] = -0.882365947476;
+    answer[0] =  0.987824063287;
+    answer[1] = -0.039853883499;
+    answer[2] =  0.026960165942;
+    answer[3] =  0.995858787079;
 
     tol = 1e-8;
 
@@ -110,7 +110,7 @@ void test_parallactic_angle_correction()
         npassed++;
     else
     {
-        printf( "test_parallactic_angle_correction (test %d) failed:\n", ntests );
+        printf( "test_parallactic_angle_correction_analytic (test %d) failed:\n", ntests );
         print_2x2double_compare( output, answer );
     }
 
@@ -123,10 +123,10 @@ void test_parallactic_angle_correction()
         4.468042885105484,     // azimuth angle (radians)
         0.7853981633974483);   // zenith angle (radians)
 
-    answer[0] = -0.569146527853;
-    answer[1] = -0.822236115622;
-    answer[2] =  0.822236115622;
-    answer[3] = -0.569146527853;
+    answer[0] =  0.700451329194;
+    answer[1] =  0.692895966269;
+    answer[2] = -0.589409906706,
+    answer[3] =  0.426449347113;
 
     tol = 1e-8;
 
