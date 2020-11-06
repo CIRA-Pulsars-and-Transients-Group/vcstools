@@ -8,7 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "pal.h"
+#include "star/pal.h"
+#include "star/palmac.h"
 #include "psrfits.h"
 #include "beam_common.h"
 #include "beam_psrfits.h"
@@ -218,8 +219,8 @@ void populate_psrfits_header(
 
             if (is_coherent) 
             {
-                pf[p].hdr.ra2000  = delay_vals[p].mean_ra  * DR2D;
-                pf[p].hdr.dec2000 = delay_vals[p].mean_dec * DR2D;
+                pf[p].hdr.ra2000  = delay_vals[p].mean_ra  * PAL__DR2D;
+                pf[p].hdr.dec2000 = delay_vals[p].mean_dec * PAL__DR2D;
             } 
             else
             {
@@ -231,8 +232,8 @@ void populate_psrfits_header(
             dec2hms(pf[p].hdr.ra_str,  pf[p].hdr.ra2000/15.0, 0);
             dec2hms(pf[p].hdr.dec_str, pf[p].hdr.dec2000,     1);
 
-            pf[p].hdr.azimuth    = delay_vals[p].az*DR2D;
-            pf[p].hdr.zenith_ang = 90.0 - (delay_vals[p].el*DR2D);
+            pf[p].hdr.azimuth    = delay_vals[p].az*PAL__DR2D;
+            pf[p].hdr.zenith_ang = 90.0 - (delay_vals[p].el*PAL__DR2D);
 
             pf[p].hdr.beam_FWHM = 0.25;
             pf[p].hdr.start_lst = delay_vals[p].lmst * 60.0 * 60.0;        // Local Apparent Sidereal Time in seconds
@@ -244,10 +245,10 @@ void populate_psrfits_header(
             pf[p].sub.lst      = pf[p].hdr.start_lst;
             pf[p].sub.ra       = pf[p].hdr.ra2000;
             pf[p].sub.dec      = pf[p].hdr.dec2000;
-            palEqgal(pf[p].hdr.ra2000*DD2R, pf[p].hdr.dec2000*DD2R,
+            palEqgal(pf[p].hdr.ra2000*PAL__DD2R, pf[p].hdr.dec2000*PAL__DD2R,
                      &pf[p].sub.glon, &pf[p].sub.glat);
-            pf[p].sub.glon    *= DR2D;
-            pf[p].sub.glat    *= DR2D;
+            pf[p].sub.glon    *= PAL__DR2D;
+            pf[p].sub.glat    *= PAL__DR2D;
             pf[p].sub.tel_az   = pf[p].hdr.azimuth;
             pf[p].sub.tel_zen  = pf[p].hdr.zenith_ang;
 

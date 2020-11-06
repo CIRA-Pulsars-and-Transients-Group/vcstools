@@ -10,8 +10,6 @@
 #include <time.h>
 #include <math.h>
 #include "../make_beam/mycomplex.h"
-#include "slalib.h"
-#include "slamac.h"
 #include "psrfits.h"
 #include "fitsio.h"
 #include <string.h>

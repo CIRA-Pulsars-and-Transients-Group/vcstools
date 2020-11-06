@@ -29,7 +29,7 @@ if(NOT PAL_FOUND)
 #  mark_as_advanced(PAL_INCLUDE_DIR PAL_LIBRARY NO_SYSTEM_ENVIRONMENT_PATH)
 
   set(PAL_INCLUDE_DIR ${PAL_ROOT_DIR}/include)
-  set(PAL_LIBRARY ${PAL_ROOT_DIR}/lib/libpal.a)
+  set(PAL_LIBRARY ${PAL_ROOT_DIR}/lib/libpal.so)
 
   include(FindPackageHandleStandardArgs)
   find_package_handle_standard_args(PAL DEFAULT_MSG

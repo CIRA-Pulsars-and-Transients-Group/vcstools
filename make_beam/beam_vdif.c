@@ -11,7 +11,8 @@
 #include <fftw3.h>
 #include "vdifio.h"
 #include "psrfits.h"
-#include "pal.h"
+#include "star/pal.h"
+#include "star/palmac.h"
 #include "beam_common.h"
 #include "beam_vdif.h"
 #include "mwa_header.h"
@@ -159,8 +160,8 @@ void populate_vdif_header(
         strncpy( vf[p].obs_mode,  "PSR", 8);
 
         // Determine the RA and Dec strings
-        double ra2000  = delay_vals[p].mean_ra  * DR2D;
-        double dec2000 = delay_vals[p].mean_dec * DR2D;
+        double ra2000  = delay_vals[p].mean_ra  * PAL__DR2D;
+        double dec2000 = delay_vals[p].mean_dec * PAL__DR2D;
 
         dec2hms(vf[p].ra_str,  ra2000/15.0, 0); // 0 = no '+' sign
         dec2hms(vf[p].dec_str, dec2000,     1); // 1 = with '+' sign
