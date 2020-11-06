@@ -468,10 +468,16 @@ void get_delays(
                     // The point of this is to save recalculating the jones matrix, which is
                     // computationally expensive.
                     config_idx = hash_dipole_config( mi->amps[row] );
-                    if (jones[config_idx] == NULL)
+                    if (jones[config_idx] == NULL && ch == 0)
                     {
-                        // The Jones matrix for this configuration has not yet been calculated, so do it now
-                        jones[config_idx] = calc_jones( beam, az, DPIBY2-el, freq_ch,
+                        // The Jones matrix for this configuration has not yet been calculated, so do it now.
+                        // The FEE beam only needs to be calculated once per coarse channel, because it will
+                        // not produce unique answers for different fine channels within a coarse channel anyway
+                        // (it only calculates the jones matrix for the nearest coarse channel centre)
+                        // Strictly speaking, the condition (ch == 0) above is redundant, as the dipole configuration
+                        // array takes care of that implicitly, but I'll leave it here so that the above argument
+                        // is "explicit" in the code.
+                        jones[config_idx] = calc_jones( beam, az, DPIBY2-el, frequency + mi->chan_width/2,
                                 (unsigned int*)mi->delays[row], mi->amps[row], zenith_norm );
                     }
 
