@@ -57,11 +57,12 @@ int hash_dipole_config( double *amps )
  * recalculate the Jones matrix with minimal entropy. In this case, this
  * function returns -1. The other remaining cases are:
  *
- *   0 dead dipoles = 1   configuration
- *   1 dead dipole  = 16  configurations
- *   2 dead dipoles = 120 configurations
+ *   0  dead dipoles = 1   configuration
+ *   1  dead dipole  = 16  configurations
+ *   2  dead dipoles = 120 configurations
+ *   16 dead dipoles = 1   configuration
  *
- * for a grand total of 137 indices. They are ordered as follows:
+ * for a grand total of 138 indices. They are ordered as follows:
  *
  *  idx  configuration (0=dead, 1=live)
  *   0   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
@@ -78,7 +79,9 @@ int hash_dipole_config( double *amps )
  *   32  [1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
  *   32  [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
  *   ...
+ *   136 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0]
  *   136 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
+ *   137 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
  *
  *   This function defines "dead" as amps=0.0, "live" otherwise.
  */
@@ -130,6 +133,9 @@ int hash_dipole_config( double *amps )
             // The hash function for two dead dipoles
             // (The "2-dead-dipole" configs start at idx 17
             idx = 16*d1 - ((d1 + 2)*(d1 + 1))/2 + d2 + 17;
+            break;
+        case 16:
+            idx = 137;
             break;
         default: // any configuration with >2 dead dipoles
             idx = -1;
@@ -339,7 +345,7 @@ void get_delays(
     double X,Y,Z,u,v,w;
     double geometry, delay_time, delay_samples, cycles_per_sample;
 
-    int nconfigs = 137;
+    int nconfigs = 138;
     int config_idx;
     double *jones[nconfigs]; // (see hash_dipole_configs() for explanation of this array)
     for (n = 0; n < nconfigs; n++)
@@ -468,7 +474,7 @@ void get_delays(
                     // The point of this is to save recalculating the jones matrix, which is
                     // computationally expensive.
                     config_idx = hash_dipole_config( mi->amps[row] );
-                    if (jones[config_idx] == NULL && ch == 0)
+                    if ((config_idx == -1 || jones[config_idx] == NULL) && ch == 0)
                     {
                         // The Jones matrix for this configuration has not yet been calculated, so do it now.
                         // The FEE beam only needs to be calculated once per coarse channel, because it will

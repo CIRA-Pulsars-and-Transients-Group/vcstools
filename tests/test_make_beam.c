@@ -54,7 +54,7 @@ int main()
 void test_hash_dipole_config()
 {
     int npassed = 0;
-    int ntests = 4;
+    int ntests = 5;
     double amps1[] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
                        1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
     double amps2[] = { 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0,
@@ -63,16 +63,20 @@ void test_hash_dipole_config()
                        1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
     double amps4[] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
                        1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0 };
+    double amps5[] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                       0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
     double *amps[ntests];
     amps[0] = amps1;
     amps[1] = amps2;
     amps[2] = amps3;
     amps[3] = amps4;
+    amps[4] = amps5;
     int idx[ntests], ans[ntests];
     ans[0] = 0;
     ans[1] = 4;
     ans[2] = 23;
     ans[3] = 131;
+    ans[4] = 137;
 
     // Test #1 -- all dipoles active
     int t;
@@ -85,10 +89,10 @@ void test_hash_dipole_config()
     if (npassed != ntests)
     {
         printf( "test_hash_dipole_config failed:\n" );
-        printf( "\tresults: %3d, %3d, %3d, %3d\n",
-                idx[0], idx[1], idx[2], idx[3] );
-        printf( "\tanswers: %3d, %3d, %3d, %3d\n",
-                ans[0], ans[1], ans[2], ans[3] );
+        printf( "\tresults: %3d, %3d, %3d, %3d, %3d\n",
+                idx[0], idx[1], idx[2], idx[3], idx[4] );
+        printf( "\tanswers: %3d, %3d, %3d, %3d, %3d\n",
+                ans[0], ans[1], ans[2], ans[3], ans[4] );
         status = EXIT_FAILURE;
     }
     printf( "test_hash_dipole_config passed %d/%d tests\n", npassed, ntests );
