@@ -55,10 +55,31 @@ def opt_parser():
     parser.add_argument('-w', '--workdir', type=str, dest='workdir',\
                             help="Directory " + \
                             "that contains the output files of the offline Correlator. Default is /astro/mwavcs/vcs/<obsID/vis.")
+    parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = opt_parser()
+
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    logger.propagate = False
+
+    if args.version:
+        import sys
+        try:
+            import version
+            logger.info(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            logger.error("Couldn't import version.py - have you installed vcstools?")
+            logger.error("ImportError: {0}".format(ie))
+            sys.exit(0)
+
     if args.end:
         n_secs = get_nsecs(args.begin, args.end)
     else:

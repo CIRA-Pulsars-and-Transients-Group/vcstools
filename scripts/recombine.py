@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument("-w", "--data_dir", type=str, help="Directory containing the raw data")
     parser.add_argument("-e", "--recombine", type=str, help="filename of the recombine function")
     parser.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO", help="Logger verbosity level. Default: INFO")
+    parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     args = parser.parse_args()
 
     logger.setLevel(loglevels[args.loglvl])
@@ -45,6 +46,15 @@ if __name__ == '__main__':
     logger.addHandler(ch)
     logger.propagate = False
 
+    if args.version:
+        try:
+            import version
+            logger.info(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            logger.error("Couldn't import version.py - have you installed vcstools?")
+            logger.error("ImportError: {0}".format(ie))
+            sys.exit(0)
 
     #Setting the_options to the arg inputs
     the_options["obsid"] = args.obsid

@@ -26,7 +26,8 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'copyq_partition' : 'copyq',
                  'container_module' : '',
                  'container_command' : '',
-                 'ssd_dir' : None}
+                 'ssd_dir' : None,
+                 'gid' : 34858} # mwavcs
 
 GARRAWARLA_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'base_product_dir' : '/group/mwavcs/vcs/',
@@ -46,9 +47,10 @@ GARRAWARLA_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'zcpuq_partition' : 'workq',
                  'copyq_cluster' : 'zeus',
                  'copyq_partition' : 'copyq',
-                 'container_module' : 'singularity',
-                 'container_command' : 'singularity exec --nv /pawsey/mwa/singularity/vcstools_master.sif /bin/bash -c ',
-                 'ssd_dir' : '/nvmetmp'}
+                 'container_module' : '', #'singularity',
+                 'container_command' : '', #'singularity exec --nv /pawsey/mwa/singularity/vcstools_master.sif /bin/bash -c ',
+                 'ssd_dir' : '/nvmetmp',
+                 'gid' : 34858} # mwavcs
 
 OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'base_product_dir' : '/fred/oz125/vcs/',
@@ -74,10 +76,11 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  #removed since I've now installed it on Ozstar
                  #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'
                  'container_command' : '',
-                 'ssd_dir' : '$JOBFS'}
+                 'ssd_dir' : '$JOBFS',
+                 'gid' : 10169} # oz125
 
-ARM_CONFIG =   {'base_data_dir' : '/o9000/MWA/Pulsar/vcs/',
-                'base_product_dir' : '/o9000/MWA/Pulsar/vcs/',
+ARM_CONFIG =   {'base_data_dir' : '/ibo9000/Pulsar/vcs/',
+                'base_product_dir' : '/ibo9000/Pulsar/vcs/',
                 'group_account' : {'cpuq':  '',
                                    'gpuq':  '',
                                    'copyq': '',
@@ -98,7 +101,8 @@ ARM_CONFIG =   {'base_data_dir' : '/o9000/MWA/Pulsar/vcs/',
                 'container_module' : '',
                 #'container_command' : 'docker run 192.168.6.123:5000/vcstools'}
                 'container_command' : '',
-                 'ssd_dir' : None}
+                'ssd_dir' : None,
+                'gid' : 10002} # pulsar
 
 
 

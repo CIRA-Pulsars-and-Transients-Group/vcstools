@@ -207,6 +207,9 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
                  ics=False, n_untar=2, keep="", vcstools_version="master",
                  nice=0):
 
+    #Load computer dependant config file
+    comp_config = load_config_file()
+
     logger.info("Downloading files from archive")
     voltdownload = "voltdownload.py"
     obsinfo = meta.getmeta(service='obs', params={'obs_id':str(obsid)})
@@ -231,7 +234,7 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
     else:
         logger.error("Unable to determine data format from archive. Exiting")
         sys.exit(0)
-    mdir(dl_dir, dir_description)
+    mdir(dl_dir, dir_description, gid=comp_config['gid'])
     create_link(data_dir, target_dir, product_dir, link)
     batch_dir = product_dir+"/batch/"
 
@@ -346,12 +349,15 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
 def download_cal(obs_id, cal_obs_id, data_dir, product_dir, vcs_database_id,
                  vcstools_version="master", nice=0):
 
+    #Load computer dependant config file
+    comp_config = load_config_file()
+
     batch_dir = os.path.join(product_dir, 'batch')
     product_dir = os.path.join(product_dir, 'cal', str(cal_obs_id))
     vis_dir = os.path.join(data_dir, 'vis')
-    mdir(vis_dir, 'Calibrator vis')
-    mdir(product_dir, 'Calibrator product')
-    mdir(batch_dir, 'Batch')
+    mdir(vis_dir, 'Calibrator vis', gid=comp_config['gid'])
+    mdir(product_dir, 'Calibrator product', gid=comp_config['gid'])
+    mdir(batch_dir, 'Batch', gid=comp_config['gid'])
     # Downloads the visablities to  /astro/mwavcs/vcs/[cal_obs_id]/vis
     # but creates a link to it here /astro/mwavcs/vcs/[obs_id]/cal/[cal_obs_id]
     csvfile = os.path.join(batch_dir, "{0}_dl.csv".format(cal_obs_id))
@@ -393,11 +399,12 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
                   vcs_database_id, vcstools_version="master", nice=0):
 
     #Load computer dependant config file
+    comp_config = load_config_file()
 
     logger.info("Running recombine on files")
     jobs_per_node = 8
     target_dir = link = 'combined'
-    mdir(data_dir + '/' + target_dir, 'Combined')
+    mdir(data_dir + '/' + target_dir, 'Combined', gid=comp_config['gid'])
     create_link(data_dir, target_dir, product_dir, link)
     batch_dir = product_dir+"/batch/"
     recombine = "recombine.py"
@@ -480,6 +487,9 @@ def vcs_recombine(obsid, start_time, stop_time, increment, data_dir, product_dir
 def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
                   vcs_database_id, metafits, vcstools_version="master", nice=0):
 
+    #Load computer dependant config file
+    comp_config = load_config_file()
+
     logger.info("Correlating files at {0} kHz and {1} milliseconds".\
                 format(ft_res[0], ft_res[1]))
 
@@ -491,8 +501,8 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
     else:
         corr_dir = "{0}/{1}".format(data_dir, target_dir)
         product_dir = "{0}/cal/{1}/".format(product_dir, obsid)
-        mdir(product_dir, "Correlator")
-    mdir(corr_dir, "Correlator Product")
+        mdir(product_dir, "Correlator", gid=comp_config['gid'])
+    mdir(corr_dir, "Correlator Product", gid=comp_config['gid'])
     create_link(data_dir, target_dir, product_dir, link)
 
     chan_list = get_frequencies(metafits_file, resort=True)
@@ -560,7 +570,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                   metafits_file, nfine_chan, pointing_list,
                   rts_flag_file=None, bf_formats=None, DI_dir=None,
                   execpath=None, calibration_type='rts', ipfb_filter="LSQ12",
-                  vcstools_version="master", nice=0, channels_to_beamform=None):
+                  vcstools_version="master", nice=0, channels_to_beamform=None,
+                  beam_version="FEE2016"):
     """
     This function runs the new version of the beamformer. It is modelled after
     the old function above and will likely be able to be streamlined after
@@ -630,7 +641,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
     utctime = gps_to_utc(start)
 
     P_dir = os.path.join(product_dir, "pointings")
-    mdir(P_dir, "Pointings")
+    mdir(P_dir, "Pointings", gid=comp_config['gid'])
     # startjobs = True
 
     # Set up supercomputer dependant parameters
@@ -693,13 +704,13 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
             # Making pointing directories
             for pointing in pointing_list:
-                mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing))
+                mdir("{0}/{1}".format(P_dir, pointing), "Pointing {0}".format(pointing), gid=comp_config['gid'])
 
             n_omp_threads = 1
             if "v" in bf_formats:
                 for pointing in pointing_list:
                     make_beam_small_batch = "mb_{0}_ch{1}".format(pointing, coarse_chan)
-                    module_list = [comp_config['container_module']]
+                    module_list = [comp_config['container_module'], "hyperbeam/v0.1.1"]
                     commands = []
                     commands.append("cd {0}/{1}".format(P_dir,pointing))
                     runline = "srun --export=all -n 1"
@@ -722,10 +733,12 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     runline += " {}".format(bf_formats)
                     runline += " -F {}".format(rts_flag_file)
                     runline += " -S {}".format(ipfb_filter)
+                    if beam_version == "ANALYTIC":
+                        runline += " -H"
                     if comp_config['container_command'] !='':
                         runline += "'"
                     commands.append(runline)
-        
+
                     job_id = submit_slurm(make_beam_small_batch, commands,
                                 batch_dir=batch_dir, module_list=module_list,
                                 slurm_kwargs={"time":secs_to_run, "nice":nice},
@@ -737,7 +750,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
             else:
                 make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(pl, time_now, coarse_chan)
-                module_list = [comp_config['container_module']]
+                module_list = [comp_config['container_module'], "hyperbeam/v0.1.1"]
                 commands = []
                 if comp_config['ssd_dir'] is None:
                     # Write outputs to SSDs if on Ozstar
@@ -764,6 +777,8 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 runline += " -z {}".format(utctime)
                 runline += " {}".format(bf_formats)
                 runline += " -F {}".format(rts_flag_file)
+                if beam_version == "ANALYTIC":
+                    runline += " -H"
                 if comp_config['container_command'] !='':
                     runline += "'"
                 commands.append(runline)
@@ -812,7 +827,7 @@ if __name__ == '__main__':
                      INFO=logging.INFO,
                      WARNING=logging.WARNING)
 
-    modes=['download', 'download_ics', 'download_cal', 'recombine','correlate', 'beamform']
+    modes=['download', 'download_ics', 'download_cal', 'recombine', 'correlate', 'beamform']
     bf_out_modes=['psrfits', 'vdif', 'both']
     jobs_per_node = 8
     chan_list_full=["ch01","ch02","ch03","ch04","ch05","ch06","ch07","ch08",
@@ -846,7 +861,8 @@ if __name__ == '__main__':
     group_beamform.add_argument('--cal_type', type=str, help="Use either RTS (\"rts\") solutions or Andre-Offringa-style (\"offringa\") solutions. Default is \"rts\". If using Offringa's tools, the filename of calibration solution must be \"calibration_solution.bin\".", default="rts")
     group_beamform.add_argument("-E", "--execpath", type=str, default=None, help="Supply a path into this option if you explicitly want to run files from a different location for testing. Default is None (i.e. whatever is on your PATH).")
     group_beamform.add_argument("--ipfb_filter", type=str, choices=['LSQ12','MIRROR'], help="The filter to use when performing the inverse PFB", default='LSQ12')
-   
+    group_beamform.add_argument("--beam_version", type=str, choices=["ANALYTIC", "FEE2016"], help="The version of the beamformer to use. If FEE2016 is selected but unavailable, analytic will be used", default="FEE2016")
+
 
     parser.add_argument("-m", "--mode", type=str, choices=['download','download_ics', 'download_cal', 'recombine','correlate', 'beamform'], help="Mode you want to run. {0}".format(modes))
     parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, help="Observation ID you want to process [no default]")
@@ -963,9 +979,9 @@ if __name__ == '__main__':
         data_dir = '{0}{1}'.format(comp_config['base_data_dir'],args.obs)
         product_dir = '{0}{1}'.format(comp_config['base_data_dir'],args.obs)
     batch_dir = "{0}/batch".format(product_dir)
-    mdir(data_dir, "Data")
-    mdir(product_dir, "Products")
-    mdir(batch_dir, "Batch")
+    mdir(data_dir, "Data", gid=comp_config['gid'])
+    mdir(product_dir, "Products", gid=comp_config['gid'])
+    mdir(batch_dir, "Batch", gid=comp_config['gid'])
     metafits_file = "{0}/{1}_metafits_ppds.fits".format(data_dir, args.obs)
     # TODO: modify metafits downloader to not just do a trivial wget
 
@@ -1015,7 +1031,7 @@ if __name__ == '__main__':
                           "VCS data on the archive.")
             sys.exit(0)
         data_dir = data_dir.replace(str(args.obs), str(args.cal_obs))
-        mdir(data_dir, "Calibrator Data")
+        mdir(data_dir, "Calibrator Data", gid=comp_config['gid'])
         download_cal(args.obs, args.cal_obs, data_dir, product_dir, vcs_database_id,
                      vcstools_version=args.vcstools_version,
                      nice=args.nice)
@@ -1058,7 +1074,8 @@ if __name__ == '__main__':
                       bf_formats=bf_format, DI_dir=args.DI_dir,
                       calibration_type=args.cal_type,
                       vcstools_version=args.vcstools_version, nice=args.nice,
-                      execpath=args.execpath, ipfb_filter=args.ipfb_filter)
+                      execpath=args.execpath, ipfb_filter=args.ipfb_filter,
+                      beam_version=args.beam_version)
     else:
         logger.error("Somehow your non-standard mode snuck through. "
                      "Try again with one of {0}".format(modes))

@@ -34,24 +34,34 @@ find_package(CFITSIO)
 find_package(PSRFITS_UTILS)
 find_package(FFTW3 COMPONENTS single openmp)
 find_package(XGPU)
+find_package(HYPERBEAM)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -fPIC -Wall -Wextra ${OpenMP_C_FLAGS}")
 
 EXECUTE_PROCESS( COMMAND gcc -dumpversion GCC_VERSION )
 if(GCC_VERSION EQUAL 7.30)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
-endif()  
+endif()
 
 # Add the subdirectories for the three target projects
 if (XGPU_FOUND)
     add_subdirectory(offline_correlator)
 endif()
+
 if (${CMAKE_BEAMFORMER})
   message("Compiling make_beam")
   add_subdirectory(make_beam)
 else()
   message("Not compiling make_beam")
 endif()
+
+if (${CTESTS})
+  message("Compiling C tests")
+  add_subdirectory(tests)
+else()
+    message("Not compiling C tests")
+endif()
+
 add_subdirectory(make_psrfits)
 add_subdirectory(read_mwac)
 
