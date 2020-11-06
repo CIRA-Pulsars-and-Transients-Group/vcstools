@@ -10,8 +10,7 @@
 #include <time.h>
 #include <math.h>
 #include "mycomplex.h"
-#include "slalib.h"
-#include "slamac.h"
+#include "pal.h"
 #include "psrfits.h"
 #include "fitsio.h"
 #include <string.h>
@@ -64,7 +63,7 @@ double parse_dec( char* dec_ddmmss ) {
     }
     sscanf(dec_ddmmss, "%d:%d:%lf", &id, &im, &fs);
     id = id*sign;
-    slaDaf2r(id, im, fs, &dec_rad, &J);
+    palDaf2r(id, im, fs, &dec_rad, &J);
 
     if (J != 0) {
         fprintf(stderr,"Error parsing %s as dd:mm:ss - got %d:%d:%f -- error code %d\n",dec_ddmmss,id,im,fs,J);
@@ -84,10 +83,10 @@ double parse_ra( char* ra_hhmmss ) {
 
     sscanf(ra_hhmmss, "%d:%d:%lf", &ih, &im, &fs);
 
-    slaCtf2r(ih, im, fs, &ra_rad, &J);
+    palCtf2r(ih, im, fs, &ra_rad, &J);
 
-    if (J != 0) { // slalib returned an error
-        fprintf(stderr,"Error parsing %s as hhmmss\nslalib error code: j=%d\n",ra_hhmmss,J);
+    if (J != 0) { // pal returned an error
+        fprintf(stderr,"Error parsing %s as hhmmss\npal error code: j=%d\n",ra_hhmmss,J);
         fprintf(stderr,"ih = %d, im = %d, fs = %lf\n", ih, im, fs);
         exit(EXIT_FAILURE);
     }
@@ -132,7 +131,7 @@ void mjd2lst(double mjd, double *lst) {
     // Greenwich Mean Sidereal Time to LMST
     // east longitude in hours at the epoch of the MJD
     double arr_lon_rad = MWA_LON * M_PI/180.0;
-    double lmst = slaRanorm(slaGmst(mjd) + arr_lon_rad);
+    double lmst = palRanorm(palGmst(mjd) + arr_lon_rad);
 
     *lst = lmst;
 }
@@ -147,7 +146,7 @@ void utc2mjd(char *utc_str, double *intmjd, double *fracmjd) {
             &utc->tm_year, &utc->tm_mon, &utc->tm_mday,
             &utc->tm_hour, &utc->tm_min, &utc->tm_sec);
 
-    slaCaldj(utc->tm_year, utc->tm_mon, utc->tm_mday, intmjd, &J);
+    palCaldj(utc->tm_year, utc->tm_mon, utc->tm_mday, intmjd, &J);
 
     if (J !=0) {
         fprintf(stderr,"Failed to calculate MJD\n");
@@ -307,18 +306,18 @@ void get_delays(
         mean_ra = ra_hours * DH2R;
         mean_dec = dec_degs * DD2R;
 
-        slaMap(mean_ra, mean_dec, pr, pd, px, rv, eq, mjd, &ra_ap, &dec_ap);
+        palMap(mean_ra, mean_dec, pr, pd, px, rv, eq, mjd, &ra_ap, &dec_ap);
 
         // Lets go mean to apparent precess from J2000.0 to EPOCH of date.
 
-        ha = slaRanorm(lmst-ra_ap)*DR2H;
+        ha = palRanorm(lmst-ra_ap)*DR2H;
 
         /* now HA/Dec to Az/El */
 
         app_ha_rad = ha * DH2R;
         app_dec_rad = dec_ap;
 
-        slaDe2h(app_ha_rad, dec_ap, MWA_LAT*DD2R, &az, &el);
+        palDe2h(app_ha_rad, dec_ap, MWA_LAT*DD2R, &az, &el);
 
         /* now we need the direction cosines */
 
@@ -570,9 +569,9 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
 
     ground_plane = 2.0 * sin(dpl_hgt * radperm * cos(za)) / n_dipoles;
 
-    slaH2e(az0, DPIBY2 - za0, lat, &beam_ha, &beam_dec);
+    palH2e(az0, DPIBY2 - za0, lat, &beam_ha, &beam_dec);
 
-    // ground_plane = 2.0*sin(2.0*DPI*dpl_hgt/lambda*cos(slaDsep(beam_ha,beam_dec,ha,dec))) / n_dipoles;
+    // ground_plane = 2.0*sin(2.0*DPI*dpl_hgt/lambda*cos(palDsep(beam_ha,beam_dec,ha,dec))) / n_dipoles;
 
     if (scaling == 1) {
         ground_plane /= (2.0 * sin(dpl_hgt * radperm));
@@ -581,7 +580,7 @@ int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-elemen
         ground_plane /= (2.0 * sin( 2.0*DPI* dpl_hgt/lambda * cos(za) ));
     }
 
-    slaH2e(az, DPIBY2 - za, lat, &ha, &dec);
+    palH2e(az, DPIBY2 - za, lat, &ha, &dec);
 
     rot[0] = cos(lat) * cos(dec) + sin(lat) * sin(dec) * cos(ha);
     rot[1] = -sin(lat) * sin(ha);

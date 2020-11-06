@@ -8,8 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "slalib.h"
-#include "slamac.h"
+#include "pal.h"
 #include "psrfits.h"
 #include "beam_common.h"
 #include "beam_psrfits.h"
@@ -245,7 +244,7 @@ void populate_psrfits_header(
             pf[p].sub.lst      = pf[p].hdr.start_lst;
             pf[p].sub.ra       = pf[p].hdr.ra2000;
             pf[p].sub.dec      = pf[p].hdr.dec2000;
-            slaEqgal(pf[p].hdr.ra2000*DD2R, pf[p].hdr.dec2000*DD2R,
+            palEqgal(pf[p].hdr.ra2000*DD2R, pf[p].hdr.dec2000*DD2R,
                      &pf[p].sub.glon, &pf[p].sub.glat);
             pf[p].sub.glon    *= DR2D;
             pf[p].sub.glat    *= DR2D;

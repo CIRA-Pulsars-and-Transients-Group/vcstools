@@ -11,7 +11,7 @@
 #include <fftw3.h>
 #include "vdifio.h"
 #include "psrfits.h"
-#include "slamac.h"
+#include "pal.h"
 #include "beam_common.h"
 #include "beam_vdif.h"
 #include "mwa_header.h"

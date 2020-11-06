@@ -15,8 +15,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
-#include "slalib.h"
-#include "slamac.h"
+#include "pal.h"
 #include "ascii_header.h"
 #include "mwa_header.h"
 #include <glob.h>
