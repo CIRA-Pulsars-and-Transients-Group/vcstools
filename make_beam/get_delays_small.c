@@ -348,8 +348,6 @@ void get_delays(
     int nconfigs = 138;
     int config_idx;
     double *jones[nconfigs]; // (see hash_dipole_configs() for explanation of this array)
-    for (n = 0; n < nconfigs; n++)
-        jones[n] = NULL; // i.e. no Jones matrices have been calculated for any configurations so far
 
     double Fnorm;
     // Read in the Jones matrices for this (coarse) channel, if requested
@@ -404,6 +402,10 @@ void get_delays(
 
     for ( int p = 0; p < npointing; p++ )
     {
+
+        // Reset the Jones matrices (for the FEE beam)
+        for (n = 0; n < nconfigs; n++)
+            jones[n] = NULL; // i.e. no Jones matrices have been calculated for any configurations so far
 
         dec_degs = parse_dec( pointing_array[p][1] );
         ra_hours = parse_ra( pointing_array[p][0] );
@@ -593,7 +595,14 @@ void get_delays(
             delay_vals[p].intmjd   = intmjd;
 
         }
-    }
+
+        // Free Jones matrices from hyperbeam -- in prep for reclaculating the next pointing
+        for (n = 0; n < nconfigs; n++)
+        {
+            if (jones[n] != NULL)
+                free( jones[n] );
+        }
+    } // end loop through pointings (p)
 
     // Free up dynamically allocated memory
 
@@ -606,12 +615,6 @@ void get_delays(
     free(Jf);
     free(M);
 
-    // Free Jones matrices from hyperbeam
-    for (n = 0; n < nconfigs; n++)
-    {
-        if (jones[n] != NULL)
-            free( jones[n] );
-    }
 }
 
 int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix
