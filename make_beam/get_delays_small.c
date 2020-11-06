@@ -485,7 +485,7 @@ void get_delays(
                         // Strictly speaking, the condition (ch == 0) above is redundant, as the dipole configuration
                         // array takes care of that implicitly, but I'll leave it here so that the above argument
                         // is "explicit" in the code.
-                        jones[config_idx] = calc_jones( beam, az, DPIBY2-el, frequency + mi->chan_width/2,
+                        jones[config_idx] = calc_jones( beam, az, PAL__DPIBY2-el, frequency + mi->chan_width/2,
                                 (unsigned int*)mi->delays[row], mi->amps[row], zenith_norm );
                     }
 
