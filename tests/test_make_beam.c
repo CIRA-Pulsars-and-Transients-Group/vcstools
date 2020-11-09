@@ -38,12 +38,64 @@ void print_2x2double_compare( double *M1, double *M2 );
 
 void test_calcEjones_analytic();
 void test_parallactic_angle_correction_analytic();
+void test_hash_dipole_config();
+
+int status;
 
 int main()
 {
+    status = EXIT_SUCCESS;
     test_calcEjones_analytic();
     test_parallactic_angle_correction_analytic();
-    return EXIT_SUCCESS;
+    test_hash_dipole_config();
+    return status;
+}
+
+void test_hash_dipole_config()
+{
+    int npassed = 0;
+    int ntests = 5;
+    double amps1[] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
+    double amps2[] = { 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+                       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
+    double amps3[] = { 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0,
+                       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
+    double amps4[] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                       1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0 };
+    double amps5[] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                       0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+    double *amps[ntests];
+    amps[0] = amps1;
+    amps[1] = amps2;
+    amps[2] = amps3;
+    amps[3] = amps4;
+    amps[4] = amps5;
+    int idx[ntests], ans[ntests];
+    ans[0] = 0;
+    ans[1] = 4;
+    ans[2] = 23;
+    ans[3] = 131;
+    ans[4] = 137;
+
+    // Test #1 -- all dipoles active
+    int t;
+    for (t = 0; t < ntests; t++)
+    {
+        idx[t] = hash_dipole_config( amps[t] );
+        npassed += (idx[t] == ans[t]);
+    }
+
+    if (npassed != ntests)
+    {
+        printf( "test_hash_dipole_config failed:\n" );
+        printf( "\tresults: %3d, %3d, %3d, %3d, %3d\n",
+                idx[0], idx[1], idx[2], idx[3], idx[4] );
+        printf( "\tanswers: %3d, %3d, %3d, %3d, %3d\n",
+                ans[0], ans[1], ans[2], ans[3], ans[4] );
+        status = EXIT_FAILURE;
+    }
+    printf( "test_hash_dipole_config passed %d/%d tests\n", npassed, ntests );
 }
 
 void test_calcEjones_analytic()
@@ -77,6 +129,7 @@ void test_calcEjones_analytic()
     {
         printf( "test_calcEjones_analytic (test %d) failed:\n", ntests );
         print_2x2cmplx_compare( response, answer );
+        status = EXIT_FAILURE;
     }
 
     printf( "test_calcEJones_analytic() passed %d/%d tests\n", npassed, ntests );
@@ -112,6 +165,7 @@ void test_parallactic_angle_correction_analytic()
     {
         printf( "test_parallactic_angle_correction_analytic (test %d) failed:\n", ntests );
         print_2x2double_compare( output, answer );
+        status = EXIT_FAILURE;
     }
 
     // Test #2
@@ -136,6 +190,7 @@ void test_parallactic_angle_correction_analytic()
     {
         printf( "test_parallactic_angle_correction_analytic (test %d) failed:\n", ntests );
         print_2x2double_compare( output, answer );
+        status = EXIT_FAILURE;
     }
 
     printf( "test_parallactic_angle_correction_analytic() passed %d/%d tests\n", npassed, ntests );

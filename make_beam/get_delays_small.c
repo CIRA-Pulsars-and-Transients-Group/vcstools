@@ -42,6 +42,106 @@ int npol;
 int nstation;
 //=====================//
 
+int hash_dipole_config( double *amps )
+/* In order to avoid recalculating the FEE beam for repeated dipole
+ * configurations, we have to keep track of which configurations have already
+ * been calculated. We do this through a boolean array, and this function
+ * converts dipole configurations into indices of this array. In other words,
+ * this function _assigns meaning_ to the array.
+ *
+ * Since dead dipoles are relatively rare, we only consider configurations
+ * in which up to two dipoles are dead. Any more than that and the we can
+ * recalculate the Jones matrix with minimal entropy. In this case, this
+ * function returns -1. The other remaining cases are:
+ *
+ *   0  dead dipoles = 1   configuration
+ *   1  dead dipole  = 16  configurations
+ *   2  dead dipoles = 120 configurations
+ *   16 dead dipoles = 1   configuration
+ *
+ * for a grand total of 138 indices. They are ordered as follows:
+ *
+ *  idx  configuration (0=dead, 1=live)
+ *   0   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ *   1   [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ *   2   [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ *   3   [1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ *   ...
+ *   16  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]
+ *   17  [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ *   18  [0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ *   19  [0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ *   ...
+ *   31  [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]
+ *   32  [1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ *   32  [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ *   ...
+ *   136 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0]
+ *   136 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
+ *   137 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+ *
+ *   This function defines "dead" as amps=0.0, "live" otherwise.
+ */
+{
+    // The return value = the "hashed" array index
+    int idx;
+    int d1 = 0, d2 = 0; // The "locations" of the (up to) two dead dipoles
+
+    // Count the number of dead dipoles
+    int ndead = 0;
+    int ndipoles = 16;
+    int i;
+    for (i = 0; i < ndipoles; i++)
+        ndead += (amps[i] == 0.0);
+
+    // Convert configuration into an array index (the "hash" function)
+    switch (ndead)
+    {
+        case 0:
+            idx = 0;
+            break;
+        case 1:
+            for (i = 0; i < ndipoles; i++)
+            {
+                if (amps[i] == 0.0)
+                {
+                    d1 = i;
+                    break;
+                }
+            }
+            idx = d1 + 1; // The "1-dead-dipole" configs start at idx 1
+            break;
+        case 2:
+            // Find the locations of the two dead dipoles
+            d1 = -1;
+            for (i = 0; i < ndipoles; i++)
+            {
+                if (amps[i] == 0.0)
+                {
+                    if (d1 == -1)
+                        d1 = i;
+                    else
+                    {
+                        d2 = i;
+                        break;
+                    }
+                }
+            }
+            // The hash function for two dead dipoles
+            // (The "2-dead-dipole" configs start at idx 17
+            idx = 16*d1 - ((d1 + 2)*(d1 + 1))/2 + d2 + 17;
+            break;
+        case 16:
+            idx = 137;
+            break;
+        default: // any configuration with >2 dead dipoles
+            idx = -1;
+            break;
+    }
+
+    return idx;
+}
+
 double parse_dec( char* dec_ddmmss ) {
 /* Parse a string containing a declination in dd:mm:ss format into
  * a double in units of degrees
@@ -242,6 +342,10 @@ void get_delays(
     double X,Y,Z,u,v,w;
     double geometry, delay_time, delay_samples, cycles_per_sample;
 
+    int nconfigs = 138;
+    int config_idx;
+    double *jones[nconfigs]; // (see hash_dipole_configs() for explanation of this array)
+
     double Fnorm;
     // Read in the Jones matrices for this (coarse) channel, if requested
     ComplexDouble invJref[4];
@@ -296,6 +400,10 @@ void get_delays(
     for ( int p = 0; p < npointing; p++ )
     {
 
+        // Reset the Jones matrices (for the FEE beam)
+        for (n = 0; n < nconfigs; n++)
+            jones[n] = NULL; // i.e. no Jones matrices have been calculated for any configurations so far
+
         dec_degs = parse_dec( pointing_array[p][1] );
         ra_hours = parse_ra( pointing_array[p][0] );
 
@@ -344,7 +452,7 @@ void get_delays(
             }
             if (beam_model == BEAM_ANALYTIC) {
                 // Analytic beam:
-                calcEjones_analytic(E,                                 // pointer to 4-element (2x2) voltage gain Jones matrix
+                calcEjones_analytic(E,                        // pointer to 4-element (2x2) voltage gain Jones matrix
                         freq_ch,                              // observing freq of fine channel (Hz)
                         (MWA_LAT*DD2R),                       // observing latitude (radians)
                         mi->tile_pointing_az*DD2R,            // azimuth & zenith angle of tile pointing
@@ -361,12 +469,26 @@ void get_delays(
 
                 if (beam_model == BEAM_FEE2016) {
                     // FEE2016 beam:
-                    double *jones = calc_jones( beam, az, DPIBY2-el, freq_ch,
-                            (unsigned int*)mi->delays[row], mi->amps[row], zenith_norm );
+                    // Check to see whether or not this configuration has already been calculated.
+                    // The point of this is to save recalculating the jones matrix, which is
+                    // computationally expensive.
+                    config_idx = hash_dipole_config( mi->amps[row] );
+                    if ((config_idx == -1 || jones[config_idx] == NULL) && ch == 0)
+                    {
+                        // The Jones matrix for this configuration has not yet been calculated, so do it now.
+                        // The FEE beam only needs to be calculated once per coarse channel, because it will
+                        // not produce unique answers for different fine channels within a coarse channel anyway
+                        // (it only calculates the jones matrix for the nearest coarse channel centre)
+                        // Strictly speaking, the condition (ch == 0) above is redundant, as the dipole configuration
+                        // array takes care of that implicitly, but I'll leave it here so that the above argument
+                        // is "explicit" in the code.
+                        jones[config_idx] = calc_jones( beam, az, DPIBY2-el, frequency + mi->chan_width/2,
+                                (unsigned int*)mi->delays[row], mi->amps[row], zenith_norm );
+                    }
 
                     // "Convert" the real jones[8] output array into out complex E[4] matrix
                     for (n = 0; n<NPOL*NPOL; n++){
-                        E[n] = CMaked(jones[n*2], jones[n*2+1]);
+                        E[n] = CMaked(jones[config_idx][n*2], jones[config_idx][n*2+1]);
                     }
 
                     // Memory clean up required by Hyperbeam
@@ -467,7 +589,14 @@ void get_delays(
             delay_vals[p].intmjd   = intmjd;
 
         }
-    }
+
+        // Free Jones matrices from hyperbeam -- in prep for reclaculating the next pointing
+        for (n = 0; n < nconfigs; n++)
+        {
+            if (jones[n] != NULL)
+                free( jones[n] );
+        }
+    } // end loop through pointings (p)
 
     // Free up dynamically allocated memory
 
@@ -479,6 +608,7 @@ void get_delays(
     }
     free(Jf);
     free(M);
+
 }
 
 int calcEjones_analytic(ComplexDouble response[MAX_POLS], // pointer to 4-element (2x2) voltage gain Jones matrix

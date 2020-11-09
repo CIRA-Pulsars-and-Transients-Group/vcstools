@@ -150,6 +150,7 @@ void parallactic_angle_correction_fee2016(
     double az,    // azimuth angle (radians)
     double za);   // zenith angle (radians)
 
+int hash_dipole_config( double * );
 
 void get_metafits_info( char *metafits, struct metafits_info *mi, unsigned int chan_width );
 void destroy_metafits_info( struct metafits_info *mi );
