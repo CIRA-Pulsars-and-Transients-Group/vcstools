@@ -73,7 +73,8 @@ RUN git clone https://github.com/MWATelescope/mwa_hyperbeam.git && \
     cargo test && \
     cargo build --release && \
     mkdir -p lib && \
-    cp target/release/libmwa_hyperbeam.so target/release/libmwa_hyperbeam.a lib/
+    cp target/release/libmwa_hyperbeam.so target/release/libmwa_hyperbeam.a lib/ && \
+    echo "/tmp/hyperbeam/mwa_hyperbeam/lib" >/etc/ld.so.conf.d/mwa.conf && ldconfig
 
 ### Install vcstools ###
 WORKDIR /tmp/vcstools-build
