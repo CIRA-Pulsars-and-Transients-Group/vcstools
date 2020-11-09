@@ -68,20 +68,6 @@ def get_pulsar_dm_p(pulsar):
             p = columns[1]
     return [dm, p]
 
-def sex2deg( ra, dec):
-    """
-    sex2deg( ra, dec)
-    ra - the right ascension in HH:MM:SS
-    dec - the declination in DD:MM:SS
-
-    Convert sexagesimal coordinates to degrees.
-    """
-    from astropy.coordinates import SkyCoord
-    from astropy import units as u
-    c = SkyCoord( ra, dec, frame='icrs', unit=(u.hourangle,u.deg))
-
-    # return RA and DEC in degrees in degrees
-    return [c.ra.deg, c.dec.deg]
 
 def from_power_to_gain(powers,cfreq,n,coh=True):
     from astropy.constants import c,k_B
