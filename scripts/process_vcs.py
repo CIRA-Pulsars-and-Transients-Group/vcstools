@@ -20,6 +20,7 @@ import glob
 #vcstools functions
 from job_submit import submit_slurm
 import mwa_metadb_utils as meta
+from find_pulsar_in_obs import format_ra_dec
 
 from config_vcs import load_config_file
 
@@ -710,7 +711,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
             if "v" in bf_formats:
                 for pointing in pointing_list:
                     make_beam_small_batch = "mb_{0}_ch{1}".format(pointing, coarse_chan)
-                    module_list = [comp_config['container_module'], "hyperbeam/v0.1.1"]
+                    module_list = [comp_config['container_module']]
                     commands = []
                     commands.append("cd {0}/{1}".format(P_dir,pointing))
                     runline = "srun --export=all -n 1"
@@ -750,7 +751,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
             else:
                 make_beam_small_batch = "mb_{0}_{1}_ch{2}".format(pl, time_now, coarse_chan)
-                module_list = [comp_config['container_module'], "hyperbeam/v0.1.1"]
+                module_list = [comp_config['container_module']]
                 commands = []
                 if comp_config['ssd_dir'] is None:
                     # Write outputs to SSDs if on Ozstar
@@ -1065,7 +1066,14 @@ if __name__ == '__main__':
             logger.error("Please use either --pointing, --pointing_list or "
                          "--pointing_file when beamforming. Exiting here.")
             sys.exit(0)
-        logger.debug(pointing_list)
+        logger.debug("Input pointing list: {}".format(pointing_list))
+
+        # Format input pointing list
+        ra_dec_list = [i.split("_") for i in pointing_list]
+        formatted_ra_dec_list = format_ra_dec(ra_dec_list)
+        pointing_list = ["_".join(i) for i in formatted_ra_dec_list]
+
+        logger.debug("Formatted pointing list: {}".format(pointing_list))
 
         coherent_beam(args.obs, args.begin, args.end,
                       data_dir, product_dir, batch_dir,
