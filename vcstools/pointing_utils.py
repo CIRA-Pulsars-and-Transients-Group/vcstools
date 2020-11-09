@@ -1,4 +1,5 @@
 from astropy.coordinates import SkyCoord
+from astropy import units as u
 
 def sex2deg(ra, dec):
     """
