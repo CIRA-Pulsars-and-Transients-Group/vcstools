@@ -491,9 +491,6 @@ void get_delays(
                         E[n] = CMaked(jones[config_idx][n*2], jones[config_idx][n*2+1]);
                     }
 
-                    // Memory clean up required by Hyperbeam
-                    free(jones);
-
                     // Apply parallactic angle correction if Hyperbeam was used
                     mult2x2d_RxC( P, E, E );  // Ji = P x Ji (where 'x' is matrix multiplication)
 
