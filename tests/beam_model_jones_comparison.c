@@ -250,12 +250,12 @@ int main(int argc, char **argv)
         if (j==0)
         {
             beam_model=BEAM_FEE2016;
-            sprintf(comp_fname, "beam_model_comparison_FEE2016.dat");
+            sprintf(comp_fname, "beam_model_comparison_FEE2016_%ld.dat", opts.frequency);
         }
         else
         {
             beam_model=BEAM_ANALYTIC;
-            sprintf(comp_fname, "beam_model_comparison_ANALYTIC.dat");
+            sprintf(comp_fname, "beam_model_comparison_ANALYTIC_%ld.dat", opts.frequency);
         }
 
         // Load the FEE2016 beam, if requested
