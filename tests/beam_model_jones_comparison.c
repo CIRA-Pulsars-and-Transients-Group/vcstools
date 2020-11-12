@@ -284,16 +284,24 @@ int main(int argc, char **argv)
 
 
 
+            ComplexDouble J[npol][npol];
+            ComplexDouble Jinvrow[npol*npol];
             for (ant = 0; ant < nstation; ant++)
             {
                 fprintf(f, "# File number %d Antenna %d\n", file_no, ant);
                 for (ch = 0; ch < nchan; ch++)
                 {
                     for (xpol = 0; xpol < npol; xpol++)
+                        for (ypol = 0; ypol < npol; ypol++)
+                            Jinvrow[xpol*npol+ypol] = CMaked(CReald(invJi[ant][ch][xpol][ypol]), CImagd(invJi[ant][ch][xpol][ypol]));
+
+                    inv2x2S( Jinvrow, J );
+
+                    for (xpol = 0; xpol < npol; xpol++)
                     {
                         for (ypol = 0; ypol < npol; ypol++)
                         {
-                            fprintf(f, "%lf %lf ", CReald(invJi[ant][ch][xpol][ypol]), CImagd(invJi[ant][ch][xpol][ypol]));
+                            fprintf(f, "%lf %lf ", CReald(J[xpol][ypol]), CImagd(J[xpol][ypol]));
                         }
                     }
                     fprintf(f, "\n");
@@ -514,7 +522,7 @@ void make_beam_parse_cmdline(
                 case 'f':
                     opts->rec_channel = strdup(optarg);
                     // The base frequency of the coarse channel in Hz
-                    opts->frequency = atoi(optarg) * 1.28e6 - 640e3;
+                    opts->frequency = atoi(optarg) * 1.28e6 + 640e3;
                     break;
                 case 'F':
                     opts->custom_flags = strdup(optarg);
