@@ -284,24 +284,16 @@ int main(int argc, char **argv)
 
 
 
-            ComplexDouble J[npol][npol];
-            ComplexDouble Jinvrow[npol*npol];
             for (ant = 0; ant < nstation; ant++)
             {
                 fprintf(f, "# File number %d Antenna %d\n", file_no, ant);
                 for (ch = 0; ch < nchan; ch++)
                 {
                     for (xpol = 0; xpol < npol; xpol++)
-                        for (ypol = 0; ypol < npol; ypol++)
-                            Jinvrow[xpol*npol+ypol] = CMaked(CReald(invJi[ant][ch][xpol][ypol]), CImagd(invJi[ant][ch][xpol][ypol]));
-
-                    inv2x2S( Jinvrow, J );
-
-                    for (xpol = 0; xpol < npol; xpol++)
                     {
                         for (ypol = 0; ypol < npol; ypol++)
                         {
-                            fprintf(f, "%lf %lf ", CReald(J[xpol][ypol]), CImagd(J[xpol][ypol]));
+                            fprintf(f, "%lf %lf ", CReald(invJi[ant][ch][xpol][ypol]), CImagd(invJi[ant][ch][xpol][ypol]));
                         }
                     }
                     fprintf(f, "\n");
