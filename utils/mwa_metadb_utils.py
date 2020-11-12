@@ -306,7 +306,7 @@ def get_best_cal_obs(obsid):
 
         #check there are a factor of 24 files (no gpu boxes are down)
         gpubox_files = []
-        cal_files_meta = getmeta(service='data_files', params={'obs_id':obsID})
+        cal_files_meta = getmeta(service='data_files', params={'obs_id':obsid})
         for f in cal_files_meta.keys():
             if 'gpubox' in f:
                 gpubox_files.append(f)
