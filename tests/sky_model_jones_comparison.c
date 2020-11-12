@@ -205,11 +205,11 @@ void usage() {
     fprintf(stderr, "OTHER OPTIONS\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "\t-A, --analytic_output     ");
-    fprintf(stderr, "Name of analytic output file (default: sky_model_comparison_ANALYTIC.dat\n");
-    fprintf(stderr, "\t-c, --conjugate          ");
+    fprintf(stderr, "Name of analytic output file (default: sky_model_comparison_ANALYTIC.dat)\n");
+    fprintf(stderr, "\t-c, --conjugate           ");
     fprintf(stderr, "Conjugate the elements of the FEE2016 Jones matrix\n");
     fprintf(stderr, "\t-F, --fee2016_output      ");
-    fprintf(stderr, "Name of fee2016 output file (default: sky_model_comparison_FEE2016.dat\n");
+    fprintf(stderr, "Name of fee2016 output file (default: sky_model_comparison_FEE2016.dat)\n");
     fprintf(stderr, "\t-H, --header              ");
     fprintf(stderr, "Include header in output files (default: no header)\n");
     fprintf(stderr, "\t-h, --help                ");
