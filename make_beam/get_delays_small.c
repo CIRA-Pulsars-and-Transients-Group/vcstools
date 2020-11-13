@@ -386,7 +386,7 @@ void get_delays(
 
     /* get mjd */
 /* DEBUG
-fprintf( stderr, "before utc2mjd(): time_utc = %s\n", mi->date_obs );
+fprintf( stderr, "before utc2mjd(): time_utc = %s, sec_offset = %lf\n", mi->date_obs, sec_offset );
 DEBUG END */
     utc2mjd(mi->date_obs, &intmjd, &fracmjd);
 
@@ -522,7 +522,7 @@ DEBUG END */
                     //   [ XX XY ] --> [ XY XX ]
                     //   [ YX YY ] --> [ YY YX ]
                     swap_columns( E, E );
-/* DEBUG
+///* DEBUG
 if (ch == 64 && config_idx == 0) {
     fprintf( stderr, "%lf %lf %lf %lf %lf %lf %lf %lf\n",
             CReald(E[0]), CImagd(E[0]),
@@ -530,7 +530,7 @@ if (ch == 64 && config_idx == 0) {
             CReald(E[2]), CImagd(E[2]),
             CReald(E[3]), CImagd(E[3]) );
 }
-DEBUG END */
+//DEBUG END */
                 }
 
                 mult2x2d(M[ant], invJref, G); // M x J^-1 = G (Forms the "coarse channel" DI gain)
