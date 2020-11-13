@@ -853,7 +853,7 @@ void make_beam_parse_cmdline(
                 case 'f':
                     opts->rec_channel = strdup(optarg);
                     // The base frequency of the coarse channel in Hz
-                    opts->frequency = atoi(optarg) * 1.28e6 + 640e3;
+                    opts->frequency = atoi(optarg) * 1.28e6 - 640e3;
                     break;
                 case 'F':
                     opts->custom_flags = strdup(optarg);
