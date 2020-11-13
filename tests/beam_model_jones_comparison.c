@@ -51,7 +51,6 @@ int main(int argc, char **argv)
     opts.obsid       = NULL; // The observation ID
     opts.begin       = 0;    // GPS time -- when to start beamforming
     opts.end         = 0;    // GPS time -- when to stop beamforming
-    opts.time_utc    = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
     opts.pointings   = NULL; // list of pointings "dd:mm:ss_hh:mm:ss,dd:mm:ss_hh:mm:ss"
     opts.datadir     = NULL; // The path to where the recombined data live
     opts.metafits    = NULL; // filename of the metafits file
@@ -275,8 +274,7 @@ int main(int argc, char **argv)
                     opts.sample_rate,       // = 10000 samples per sec
                     beam_model,             // beam model type
                     beam,                   // Hyperbeam struct
-                    opts.time_utc,          // utc time string
-                    (double)file_no,        // seconds offset from time_utc at which to calculate delays
+                    (double)(file_no + opts.begin - atoi(opts.obsid)),        // seconds offset from the beginning of the observation at which to calculate delays
                     NULL,                   // Don't update delay_vals
                     &mi,                    // Struct containing info from metafits file
                     complex_weights_array,  // complex weights array (answer will be output here)
@@ -311,7 +309,6 @@ int main(int argc, char **argv)
     destroy_metafits_info( &mi );
 
     free( opts.obsid        );
-    free( opts.time_utc     );
     free( opts.pointings    );
     free( opts.datadir      );
     free( opts.metafits     );
@@ -347,11 +344,6 @@ void usage() {
     fprintf(stderr, "Begin time of observation, in GPS seconds\n");
     fprintf(stderr, "\t-e, --end=GPSTIME         ");
     fprintf(stderr, "End time of observation, in GPS seconds\n");
-    fprintf(stderr, "\t-z, --utc-time=UTCTIME    ");
-    fprintf(stderr, "The UTC time that corresponds to the GPS time given by the -b\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "option. UTCTIME must have the format: yyyy-mm-ddThh:mm:ss\n");
-    fprintf(stderr, "\n");
     fprintf(stderr, "\t-P, --pointings=hh:mm:ss.s_dd:mm:ss.s,hh:mm:ss.s_dd:mm:ss.s...\n");
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "Right ascension and declinations of multiple pointings\n");
@@ -481,7 +473,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:e:f:F:g:hHiJ:m:n:o:O:pP:r:sS:t:vVw:W:z:",
+                             "a:A:b:B:C:d:e:f:F:g:hHiJ:m:n:o:O:pP:r:sS:t:vVw:W:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -578,9 +570,6 @@ void make_beam_parse_cmdline(
                 case 'W':
                     opts->cal.chan_width = atoi(optarg);
                     break;
-                case 'z':
-                    opts->time_utc = strdup(optarg);
-                    break;
                 default:
                     fprintf(stderr, "error: make_beam_parse_cmdline: "
                                     "unrecognised option '%s'\n", optarg);
@@ -599,7 +588,6 @@ void make_beam_parse_cmdline(
     assert( opts->obsid        != NULL );
     assert( opts->begin        != 0    );
     assert( opts->end          != 0    );
-    assert( opts->time_utc     != NULL );
     assert( opts->pointings    != NULL );
     assert( opts->datadir      != NULL );
     assert( opts->metafits     != NULL );

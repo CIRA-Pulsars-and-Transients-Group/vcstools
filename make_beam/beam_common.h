@@ -79,7 +79,6 @@ struct make_beam_opts {
     char              *obsid;         // The observation ID
     unsigned long int  begin;         // GPS time -- when to start beamforming
     unsigned long int  end;           // GPS time -- when to stop beamforming
-    char              *time_utc;      // utc time string "yyyy-mm-ddThh:mm:ss"
     char              *pointings;     // pointing list"dd:mm:ss_hh:mm:ss, dd:mm:ss_hh:mm:ss"
     char              *datadir;       // The path to where the recombined data live
     char              *metafits;      // filename of the metafits file
@@ -121,7 +120,6 @@ void get_delays(
         float                  samples_per_sec,
         int                    beam_model,
         FEEBeam               *beam,
-        char                  *time_utc,
         double                 sec_offset,
         struct delays          delay_vals[],
         struct metafits_info  *mi,

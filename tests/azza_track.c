@@ -62,6 +62,9 @@ int main(int argc, char **argv)
 
     // Convert the date obs to mjd
     double intmjd, fracmjd, date_obs_mjd, mjd;
+/* DEBUG
+fprintf( stderr, "before utc2mjd(): time_utc = %s\n", mi.date_obs );
+DEBUG END */
     utc2mjd( mi.date_obs, &intmjd, &fracmjd );
     date_obs_mjd = intmjd + fracmjd;
 
@@ -87,10 +90,19 @@ int main(int argc, char **argv)
         mjd2lst( mjd, &lst );
 
         // Convert to hour angle
+/* DEBUG
+fprintf( stderr, "before slaMap(): options = (%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf)\n", opts.ra, opts.dec, 0.0, 0.0, 0.0, 0.0, eq, mjd );
+DEBUG END */
         slaMap(opts.ra, opts.dec, 0, 0, 0, 0, eq, mjd, &ra_ap, &dec_ap);
+/* DEBUG
+fprintf( stderr, "before slaRnorm(): lst = %lf, ra_ap = %lf, DR2H = %lf\n", lst, ra_ap, DR2H );
+DEBUG END */
         ha = slaRanorm( lst - ra_ap )*DR2H;
         app_ha_rad = ha * DH2R;
 
+/* DEBUG
+fprintf( stderr, "before slaDe2h(): app_ha_rad = %lf  dec_ap = %lf  lat=%lf\n", app_ha_rad, dec_ap, MWA_LAT*DD2R );
+DEBUG END */
         slaDe2h(app_ha_rad, dec_ap, MWA_LAT*DD2R, &az, &el);
         za = DPIBY2 - el;
 

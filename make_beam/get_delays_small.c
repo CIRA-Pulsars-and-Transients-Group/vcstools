@@ -262,7 +262,6 @@ void get_delays(
         float                  samples_per_sec,
         int                    beam_model,
         FEEBeam               *beam,
-        char                  *time_utc,
         double                 sec_offset,
         struct delays          delay_vals[],
         struct metafits_info  *mi,
@@ -386,7 +385,10 @@ void get_delays(
     }
 
     /* get mjd */
-    utc2mjd(time_utc, &intmjd, &fracmjd);
+/* DEBUG
+fprintf( stderr, "before utc2mjd(): time_utc = %s\n", mi->date_obs );
+DEBUG END */
+    utc2mjd(mi->date_obs, &intmjd, &fracmjd);
 
     /* get requested Az/El from command line */
 
@@ -412,10 +414,16 @@ void get_delays(
         mean_ra = ra_hours * DH2R;
         mean_dec = dec_degs * DD2R;
 
+/* DEBUG
+fprintf( stderr, "before slaMap(): options = (%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf)\n", mean_ra, mean_dec, pr, pd, px, rv, eq, mjd );
+DEBUG END */
         slaMap(mean_ra, mean_dec, pr, pd, px, rv, eq, mjd, &ra_ap, &dec_ap);
 
         // Lets go mean to apparent precess from J2000.0 to EPOCH of date.
 
+/* DEBUG
+fprintf( stderr, "before slaRnorm(): lst = %lf, ra_ap = %lf, DR2H = %lf\n", lmst, ra_ap, DR2H );
+DEBUG END */
         ha = slaRanorm(lmst-ra_ap)*DR2H;
 
         /* now HA/Dec to Az/El */
@@ -423,6 +431,9 @@ void get_delays(
         app_ha_rad = ha * DH2R;
         app_dec_rad = dec_ap;
 
+/* DEBUG
+fprintf( stderr, "before slaDe2h(): app_ha_rad = %lf  dec_ap = %lf  lat=%lf\n", app_ha_rad, dec_ap, MWA_LAT*DD2R );
+DEBUG END */
         slaDe2h(app_ha_rad, dec_ap, MWA_LAT*DD2R, &az, &el);
 
         /* now we need the direction cosines */
@@ -473,7 +484,13 @@ void get_delays(
                     // The point of this is to save recalculating the jones matrix, which is
                     // computationally expensive.
                     config_idx = hash_dipole_config( mi->amps[row] );
-                    if ((config_idx == -1 || jones[config_idx] == NULL) && ch == 0)
+                    if (config_idx == -1)
+                    {
+                        fprintf( stderr, "error: get_delays: dipole configuration not recognised\n" );
+                        exit(EXIT_FAILURE);
+                    }
+
+                    if (ch == 0 && jones[config_idx] == NULL)
                     {
                         // The Jones matrix for this configuration has not yet been calculated, so do it now.
                         // The FEE beam only needs to be calculated once per coarse channel, because it will
@@ -482,6 +499,11 @@ void get_delays(
                         // Strictly speaking, the condition (ch == 0) above is redundant, as the dipole configuration
                         // array takes care of that implicitly, but I'll leave it here so that the above argument
                         // is "explicit" in the code.
+/* DEBUG
+if (config_idx == 0) {
+    fprintf( stderr, "before calc_jones(): az = %lf  za = %lf  freq=%ld\n", az, DPIBY2-el, frequency + mi->chan_width/2 );
+}
+DEBUG END */
                         jones[config_idx] = calc_jones( beam, az, DPIBY2-el, frequency + mi->chan_width/2,
                                 (unsigned int*)mi->delays[row], mi->amps[row], zenith_norm );
                     }
@@ -500,6 +522,15 @@ void get_delays(
                     //   [ XX XY ] --> [ XY XX ]
                     //   [ YX YY ] --> [ YY YX ]
                     swap_columns( E, E );
+/* DEBUG
+if (ch == 64 && config_idx == 0) {
+    fprintf( stderr, "%lf %lf %lf %lf %lf %lf %lf %lf\n",
+            CReald(E[0]), CImagd(E[0]),
+            CReald(E[1]), CImagd(E[1]),
+            CReald(E[2]), CImagd(E[2]),
+            CReald(E[3]), CImagd(E[3]) );
+}
+DEBUG END */
                 }
 
                 mult2x2d(M[ant], invJref, G); // M x J^-1 = G (Forms the "coarse channel" DI gain)
@@ -508,18 +539,6 @@ void get_delays(
                     mult2x2d(G, Jf[ant][cal_chan], Gf); // G x Jf = Gf (Forms the "fine channel" DI gain)
                 else
                     cp2x2(G, Gf); //Set the fine channel DI gain equal to the coarse channel DI gain
-/* DEBUG
-if (beam_model == BEAM_FEE2016 && ch == 64) {
-    fprintf( stderr, "E(ant=%d,pol=%d) = \n"
-            "  [ %10lf%+10lfi, %10lf%+10lfi ]\n"
-            "  [ %10lf%+10lfi, %10lf%+10lfi ]\n",
-            ant, pol,
-            CReald(CDivd(E[0],E[0])), CImagd(CDivd(E[0],E[0])),
-            CReald(CDivd(E[1],E[0])), CImagd(CDivd(E[1],E[0])),
-            CReald(CDivd(E[2],E[0])), CImagd(CDivd(E[2],E[0])),
-            CReald(CDivd(E[3],E[0])), CImagd(CDivd(E[3],E[0])) );
-}
-DEBUG END */
                 mult2x2d(Gf, E, Ji); // the gain in the desired look direction
 
                 // Calculate the complex weights array

@@ -50,22 +50,6 @@ def is_number(s):
         return False
 
 
-def gps_to_utc(gps):
-    # GPS time as is done in timeconvert.py
-    from astropy.utils import iers
-    iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
-    logger.info(iers.IERS_A_URL)
-    utctime = Time(gps, format='gps', scale='utc').fits
-    # remove (UTC) that some astropy versions leave on the end
-    if utctime.endswith('(UTC)'):
-        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000(UTC)')
-        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
-    else:
-        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000')
-        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
-    return utctime
-
-
 def get_user_email():
     command="echo `ldapsearch -x \"uid=$USER\" mail |grep \"^mail\"|cut -f2 -d' '`"
     email = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True).communicate()[0]
@@ -638,9 +622,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
         sys.exit(0)
     DI_dir = os.path.abspath(DI_dir)
 
-    # make_beam_small requires the start time in UTC, get it from the start
-    utctime = gps_to_utc(start)
-
     P_dir = os.path.join(product_dir, "pointings")
     mdir(P_dir, "Pointings", gid=comp_config['gid'])
     # startjobs = True
@@ -730,7 +711,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     runline += " -P {}".format(pointing)
                     runline += " -r 10000"
                     runline += " -m {}".format(metafits_file)
-                    runline += " -z {}".format(utctime)
                     runline += " {}".format(bf_formats)
                     runline += " -F {}".format(rts_flag_file)
                     runline += " -S {}".format(ipfb_filter)
@@ -775,7 +755,6 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 runline += " -P {}".format(pointing_str)
                 runline += " -r 10000"
                 runline += " -m {}".format(metafits_file)
-                runline += " -z {}".format(utctime)
                 runline += " {}".format(bf_formats)
                 runline += " -F {}".format(rts_flag_file)
                 if beam_version == "ANALYTIC":

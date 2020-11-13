@@ -69,7 +69,6 @@ int main(int argc, char **argv)
     opts.obsid       = NULL; // The observation ID
     opts.begin       = 0;    // GPS time -- when to start beamforming
     opts.end         = 0;    // GPS time -- when to stop beamforming
-    opts.time_utc    = NULL; // utc time string "yyyy-mm-ddThh:mm:ss"
     opts.pointings   = NULL; // list of pointings "dd:mm:ss_hh:mm:ss,dd:mm:ss_hh:mm:ss"
     opts.datadir     = NULL; // The path to where the recombined data live
     opts.metafits    = NULL; // filename of the metafits file
@@ -294,8 +293,7 @@ int main(int argc, char **argv)
             opts.sample_rate,   // = 10000 samples per sec
             opts.beam_model,    // beam model type
             beam,               // Hyperbeam struct
-            opts.time_utc,      // utc time string
-            0.0,                // seconds offset from time_utc at which to calculate delays
+            0.0,                // seconds offset from the beginning of the observation at which to calculate delays
             delay_vals,        // Populate psrfits header info
             &mi,                // Struct containing info from metafits file
             NULL,               // complex weights array (ignore this time)
@@ -354,16 +352,16 @@ int main(int argc, char **argv)
 
     // Populate the relevant header structs
     populate_psrfits_header( pf,       opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
+            mi.date_obs, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
             opts.chan_width,outpol_coh, opts.rec_channel, delay_vals,
             mi, npointing, 1 );
     populate_psrfits_header( pf_incoh, opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
+            mi.date_obs, opts.sample_rate, opts.max_sec_per_file, opts.frequency, nchan,
             opts.chan_width, outpol_incoh, opts.rec_channel, delay_vals,
             mi, 1, 0 );
 
     populate_vdif_header( vf, &vhdr, opts.metafits, opts.obsid,
-            opts.time_utc, opts.sample_rate, opts.frequency, nchan,
+            mi.date_obs, opts.sample_rate, opts.frequency, nchan,
             opts.chan_width, opts.rec_channel, delay_vals, npointing );
 
     // To run asynchronously we require two memory allocations for each data
@@ -441,8 +439,7 @@ int main(int argc, char **argv)
                 opts.sample_rate,       // = 10000 samples per sec
                 opts.beam_model,        // beam model type
                 beam,                   // Hyperbeam struct
-                opts.time_utc,          // utc time string
-                (double)file_no,        // seconds offset from time_utc at which to calculate delays
+                (double)(file_no + opts.begin - atoi(opts.obsid)),        // seconds offset from the beginning of the obseration at which to calculate delays
                 NULL,                   // Don't update delay_vals
                 &mi,                    // Struct containing info from metafits file
                 complex_weights_array,  // complex weights array (answer will be output here)
@@ -584,7 +581,6 @@ int main(int argc, char **argv)
     cudaFreeHost( data );
 
     free( opts.obsid        );
-    free( opts.time_utc     );
     free( opts.pointings    );
     free( opts.datadir      );
     free( opts.metafits     );
@@ -650,11 +646,6 @@ void usage() {
     fprintf(stderr, "Begin time of observation, in GPS seconds\n");
     fprintf(stderr, "\t-e, --end=GPSTIME         ");
     fprintf(stderr, "End time of observation, in GPS seconds\n");
-    fprintf(stderr, "\t-z, --utc-time=UTCTIME    ");
-    fprintf(stderr, "The UTC time that corresponds to the GPS time given by the -b\n");
-    fprintf(stderr, "\t                          ");
-    fprintf(stderr, "option. UTCTIME must have the format: yyyy-mm-ddThh:mm:ss\n");
-    fprintf(stderr, "\n");
     fprintf(stderr, "\t-P, --pointings=hh:mm:ss.s_dd:mm:ss.s,hh:mm:ss.s_dd:mm:ss.s...\n");
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "Right ascension and declinations of multiple pointings\n");
@@ -808,7 +799,6 @@ void make_beam_parse_cmdline(
                 {"max_t",           required_argument, 0, 't'},
                 {"synth_filter",    required_argument, 0, 'S'},
                 {"antpol",          required_argument, 0, 'A'},
-                {"utc-time",        required_argument, 0, 'z'},
                 {"pointings",       required_argument, 0, 'P'},
                 {"data-location",   required_argument, 0, 'd'},
                 {"metafits-file",   required_argument, 0, 'm'},
@@ -830,7 +820,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:e:f:F:g:hHiJ:m:n:o:O:pP:r:sS:t:vVw:W:z:",
+                             "a:A:b:B:C:d:e:f:F:g:hHiJ:m:n:o:O:pP:r:sS:t:vVw:W:",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -930,9 +920,6 @@ void make_beam_parse_cmdline(
                 case 'W':
                     opts->cal.chan_width = atoi(optarg);
                     break;
-                case 'z':
-                    opts->time_utc = strdup(optarg);
-                    break;
                 default:
                     fprintf(stderr, "error: make_beam_parse_cmdline: "
                                     "unrecognised option '%s'\n", optarg);
@@ -951,7 +938,6 @@ void make_beam_parse_cmdline(
     assert( opts->obsid        != NULL );
     assert( opts->begin        != 0    );
     assert( opts->end          != 0    );
-    assert( opts->time_utc     != NULL );
     assert( opts->pointings    != NULL );
     assert( opts->datadir      != NULL );
     assert( opts->metafits     != NULL );
