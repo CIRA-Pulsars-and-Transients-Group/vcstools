@@ -508,7 +508,18 @@ void get_delays(
                     mult2x2d(G, Jf[ant][cal_chan], Gf); // G x Jf = Gf (Forms the "fine channel" DI gain)
                 else
                     cp2x2(G, Gf); //Set the fine channel DI gain equal to the coarse channel DI gain
-
+/* DEBUG
+if (beam_model == BEAM_FEE2016 && ch == 64) {
+    fprintf( stderr, "E(ant=%d,pol=%d) = \n"
+            "  [ %10lf%+10lfi, %10lf%+10lfi ]\n"
+            "  [ %10lf%+10lfi, %10lf%+10lfi ]\n",
+            ant, pol,
+            CReald(CDivd(E[0],E[0])), CImagd(CDivd(E[0],E[0])),
+            CReald(CDivd(E[1],E[0])), CImagd(CDivd(E[1],E[0])),
+            CReald(CDivd(E[2],E[0])), CImagd(CDivd(E[2],E[0])),
+            CReald(CDivd(E[3],E[0])), CImagd(CDivd(E[3],E[0])) );
+}
+DEBUG END */
                 mult2x2d(Gf, E, Ji); // the gain in the desired look direction
 
                 // Calculate the complex weights array
@@ -558,7 +569,7 @@ void get_delays(
                 if (invJi != NULL) {
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
 
-                        conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
+                        //conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
                         Fnorm = norm2x2( Ji, Ji );
 
                         if (Fnorm != 0.0)
