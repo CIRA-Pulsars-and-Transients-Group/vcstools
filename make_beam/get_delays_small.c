@@ -384,10 +384,27 @@ void get_delays(
         inv2x2(Jref, invJref);
     }
 
+    /****** EXPERIMENTAL ******/
+    // In order to mitigate errors introduced by the calibration scheme, the calibration
+    // solution Jones matrix for each antenna is altered in the following way.
+    ComplexDouble XX0norm, YY0norm;
+    double XXscale = 1.0/CAbsd( M[0][0] ); // = 1/|XX|
+    double YYscale = 1.0/CAbsd( M[0][3] ); // = 1/|YY|
+
+    XX0norm = CScld( M[0][0], XXscale ); // = XX/|XX|
+    YY0norm = CScld( M[0][3], YYscale ); // = YY/|YY|
+
+    for (ant = 0; ant < NANT; ant++)
+    {
+        M[ant][0] = CDivd( M[ant][0], XX0norm );
+        M[ant][1] = CMaked( 0.0, 0.0 );
+        M[ant][2] = CMaked( 0.0, 0.0 );
+        M[ant][3] = CDivd( M[ant][3], YY0norm );
+    }
+
+    /****** END EXPERIMENTAL ******/
+
     /* get mjd */
-/* DEBUG
-fprintf( stderr, "before utc2mjd(): time_utc = %s, sec_offset = %lf\n", mi->date_obs, sec_offset );
-DEBUG END */
     utc2mjd(mi->date_obs, &intmjd, &fracmjd);
 
     /* get requested Az/El from command line */
@@ -414,16 +431,10 @@ DEBUG END */
         mean_ra = ra_hours * DH2R;
         mean_dec = dec_degs * DD2R;
 
-/* DEBUG
-fprintf( stderr, "before slaMap(): options = (%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf)\n", mean_ra, mean_dec, pr, pd, px, rv, eq, mjd );
-DEBUG END */
         slaMap(mean_ra, mean_dec, pr, pd, px, rv, eq, mjd, &ra_ap, &dec_ap);
 
         // Lets go mean to apparent precess from J2000.0 to EPOCH of date.
 
-/* DEBUG
-fprintf( stderr, "before slaRnorm(): lst = %lf, ra_ap = %lf, DR2H = %lf\n", lmst, ra_ap, DR2H );
-DEBUG END */
         ha = slaRanorm(lmst-ra_ap)*DR2H;
 
         /* now HA/Dec to Az/El */
@@ -431,9 +442,6 @@ DEBUG END */
         app_ha_rad = ha * DH2R;
         app_dec_rad = dec_ap;
 
-/* DEBUG
-fprintf( stderr, "before slaDe2h(): app_ha_rad = %lf  dec_ap = %lf  lat=%lf\n", app_ha_rad, dec_ap, MWA_LAT*DD2R );
-DEBUG END */
         slaDe2h(app_ha_rad, dec_ap, MWA_LAT*DD2R, &az, &el);
 
         /* now we need the direction cosines */
@@ -539,6 +547,15 @@ DEBUG END */
                     mult2x2d(G, Jf[ant][cal_chan], Gf); // G x Jf = Gf (Forms the "fine channel" DI gain)
                 else
                     cp2x2(G, Gf); //Set the fine channel DI gain equal to the coarse channel DI gain
+
+                // Ord's original comment for the following line is:
+                // "The RTS conjugates the sky so beware"
+                // Assume this means that this is the correct place to apply the conjugation (i.e.
+                // before the beam is applied. This depends on whether E is calculated in the
+                // "conjugation" way or not, which is unknown. The original location of this line of
+                // code is just before "Fnorm = norm2x2( Ji, Ji );" below.
+                conj2x2( Gf, Gf ); // 
+
                 mult2x2d(Gf, E, Ji); // the gain in the desired look direction
 
                 // Calculate the complex weights array
@@ -588,7 +605,6 @@ DEBUG END */
                 if (invJi != NULL) {
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
 
-                        conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
                         Fnorm = norm2x2( Ji, Ji );
 
                         if (Fnorm != 0.0)
