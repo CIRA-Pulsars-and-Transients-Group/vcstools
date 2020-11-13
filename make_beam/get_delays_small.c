@@ -588,7 +588,7 @@ DEBUG END */
                 if (invJi != NULL) {
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
 
-                        //conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
+                        conj2x2( Ji, Ji ); // The RTS conjugates the sky so beware
                         Fnorm = norm2x2( Ji, Ji );
 
                         if (Fnorm != 0.0)
