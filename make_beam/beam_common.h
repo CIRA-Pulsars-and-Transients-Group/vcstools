@@ -72,6 +72,8 @@ struct calibration {
     int   nchan;              // The number of channels in the RTS bandpass solutions
     int   cal_type;           // Either RTS or OFFRINGA
     int   offr_chan_num;      // The channel number in the Offringa calibration solution file
+    int   ref_ant;            // Reference antenna for calibration phases
+    int   cross_terms;        // Include XY and YX of calibration Jones matrices
 };
 
 struct make_beam_opts {
@@ -100,11 +102,11 @@ struct make_beam_opts {
     int                out_uvdif;     // Default = upsampled VDIF       output turned OFF
     int                out_bf;        // Default = beamform over all (non-flagged) antennas
     int                out_ant;       // The antenna number (0-127) to write out if out_bf = 0
+
+    // Other options
     char              *synth_filter;  // Which synthesis filter to use
     int                out_summed;    // Default = output only Stokes I output turned OFF
     int                max_sec_per_file;    // Number of seconds per fits files
-
-    // Output options
     float              gpu_mem  ;     // Default = -1.0. If -1.0 use all GPU mem
 
     struct calibration cal;           // Variables for calibration settings

@@ -104,6 +104,8 @@ int main(int argc, char **argv)
     opts.cal.nchan             = 0;
     opts.cal.cal_type          = NO_CALIBRATION;
     opts.cal.offr_chan_num     = 0;
+    opts.cal.ref_ant           = 0;
+    opts.cal.cross_terms       = 0;
 
     // GPU options
     opts.gpu_mem               = -1.0;
@@ -742,6 +744,16 @@ void usage() {
     fprintf(stderr, "fine channel. If -J is supplied but -B is not, then the coarse\n");
     fprintf(stderr, "\t                          ");
     fprintf(stderr, "channel solution will be applied to ALL fine channels\n");
+    fprintf(stderr, "\t-R, --ref-ant=ANT         ");
+    fprintf(stderr, "Rotate the phases of the XX and YY elements of the calibration\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "Jones matrices so that the phases of tile ANT align. If ANT is\n");
+    fprintf(stderr, "\t                          ");
+    fprintf(stderr, "outside the range 0-127, no phase rotation is done               ");
+    fprintf(stderr, "[default: 0]\n");
+    fprintf(stderr, "\t-X, --cross-terms         ");
+    fprintf(stderr, "Retain the XY and YX terms of the calibration solution           ");
+    fprintf(stderr, "[default: off]\n");
     fprintf(stderr, "\t-W, --rts-chan-width      ");
     fprintf(stderr, "RTS calibration channel bandwidth (Hz)                           ");
     fprintf(stderr, "[default: 40000]\n");
@@ -810,6 +822,8 @@ void make_beam_parse_cmdline(
                 {"custom-flags",    required_argument, 0, 'F'},
                 {"dijones-file",    required_argument, 0, 'J'},
                 {"bandpass-file",   required_argument, 0, 'B'},
+                {"ref-ant",         required_argument, 0, 'R'},
+                {"cross-terms",     no_argument,       0, 'X'},
                 {"rts-chan-width",  required_argument, 0, 'W'},
                 {"offringa-file",   required_argument, 0, 'O'},
                 {"offringa-chan",   required_argument, 0, 'C'},
@@ -820,7 +834,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:e:f:F:g:hHiJ:m:n:o:O:pP:r:sS:t:vVw:W:",
+                             "a:A:b:B:C:d:e:f:F:g:hHiJ:m:n:o:O:pP:r:R:sS:t:vVw:W:X",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -898,6 +912,9 @@ void make_beam_parse_cmdline(
                 case 'r':
                     opts->sample_rate = atoi(optarg);
                     break;
+                case 'R':
+                    opts->cal.ref_ant = atoi(optarg);
+                    break;
                 case 'S':
                     opts->synth_filter = strdup(optarg);
                     break;
@@ -919,6 +936,9 @@ void make_beam_parse_cmdline(
                     break;
                 case 'W':
                     opts->cal.chan_width = atoi(optarg);
+                    break;
+                case 'X':
+                    opts->cal.cross_terms = 1;
                     break;
                 default:
                     fprintf(stderr, "error: make_beam_parse_cmdline: "
@@ -948,6 +968,17 @@ void make_beam_parse_cmdline(
     if ( !opts->out_incoh && !opts->out_coh && !opts->out_vdif )
     {
         opts->out_coh = 1;
+    }
+
+    // If the reference antenna is outside the range of antennas, issue
+    // a warning and turn off phase rotation.
+    if (opts->cal.ref_ant < 0 || opts->cal.ref_ant >= opts->nstation)
+    {
+        fprintf( stderr, "warning: tile %d outside of range 0-%d. "
+                "Calibration phase rotation turned off.\n",
+                opts->cal.ref_ant, opts->nstation-1 );
+        opts->cal.ref_ant = -1; // This defines the meaning of -1
+                                // = don't do phase rotation
     }
 }
 

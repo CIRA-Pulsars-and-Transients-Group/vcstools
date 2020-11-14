@@ -253,6 +253,38 @@ void utc2mjd(char *utc_str, double *intmjd, double *fracmjd) {
     free(utc);
 }
 
+void zero_XY_and_YX( ComplexDouble **M )
+/* For M = [ XX, XY ], set XY and YX to 0 for all antennas
+ *         [ YX, YY ]
+ */
+{
+    int ant;
+    for (ant = 0; ant < NANT; ant++)
+    {
+        M[ant][1] = CMaked( 0.0, 0.0 );
+        M[ant][2] = CMaked( 0.0, 0.0 );
+    }
+}
+
+void remove_reference_phase( ComplexDouble **M, int ref_ant )
+{
+    ComplexDouble XX0norm, YY0norm;
+    double XXscale = 1.0/CAbsd( M[ref_ant][0] ); // = 1/|XX|
+    double YYscale = 1.0/CAbsd( M[ref_ant][3] ); // = 1/|YY|
+
+    XX0norm = CScld( M[ref_ant][0], XXscale ); // = XX/|XX|
+    YY0norm = CScld( M[ref_ant][3], YYscale ); // = YY/|YY|
+
+    int ant;
+    for (ant = 0; ant < NANT; ant++)
+    {
+        M[ant][0] = CDivd( M[ant][0], XX0norm ); // Essentially phase rotations
+        M[ant][1] = CDivd( M[ant][1], XX0norm );
+        M[ant][2] = CDivd( M[ant][2], YY0norm );
+        M[ant][3] = CDivd( M[ant][3], YY0norm );
+    }
+}
+
 void get_delays(
         // an array of pointings [pointing][ra/dec][characters]
         char                   pointing_array[][2][64],
@@ -384,32 +416,21 @@ void get_delays(
         inv2x2(Jref, invJref);
     }
 
-    /****** EXPERIMENTAL ******/
     // In order to mitigate errors introduced by the calibration scheme, the calibration
-    // solution Jones matrix for each antenna is altered in the following way.
-    ComplexDouble XX0norm, YY0norm;
-    double XXscale = 1.0/CAbsd( M[0][0] ); // = 1/|XX|
-    double YYscale = 1.0/CAbsd( M[0][3] ); // = 1/|YY|
+    // solution Jones matrix for each antenna may be altered in the following ways:
+    //
+    //   1) The XX and YY terms are phase-rotated so that those of the supplied
+    //      reference antennas are aligned.
 
-    XX0norm = CScld( M[0][0], XXscale ); // = XX/|XX|
-    YY0norm = CScld( M[0][3], YYscale ); // = YY/|YY|
+    if (cal->ref_ant != -1) // -1 = don't do any phase rotation
+        remove_reference_phase( M, cal->ref_ant );
 
-    for (ant = 0; ant < NANT; ant++)
-    {
-        M[ant][0] = CDivd( M[ant][0], XX0norm );
-        M[ant][1] = CMaked( 0.0, 0.0 );
-        M[ant][2] = CMaked( 0.0, 0.0 );
-        M[ant][3] = CDivd( M[ant][3], YY0norm );
+    //   2) The XY and YX terms are set to zero.
 
-        // There is, in my mind, a question about whether zero-ing out the off-diagonal
-        // terms is the best thing to do. For now, it appears to produce good results,
-        // so we'll leave it at that. However, there are other possibilities to be
-        // explored, including the one below, currently commented out.
-        //M[ant][1] = CDivd( M[ant][1], XX0norm );
-        //M[ant][2] = CDivd( M[ant][2], YY0norm );
-    }
+    if (cal->cross_terms == 0)
+        zero_XY_and_YX( M );
 
-    /****** END EXPERIMENTAL ******/
+    // Calculate the LST
 
     /* get mjd */
     utc2mjd(mi->date_obs, &intmjd, &fracmjd);
@@ -420,7 +441,7 @@ void get_delays(
     mjd += (sec_offset+0.5)/86400.0;
     mjd2lst(mjd, &lmst);
 
-    // Prepare the FEE2016 beam model using Hyperbeam (if required)
+    // Set settings for the FEE2016 beam model using Hyperbeam
     int zenith_norm = 1; // Boolean value: unsure if/how this makes a difference
 
     for ( int p = 0; p < npointing; p++ )
