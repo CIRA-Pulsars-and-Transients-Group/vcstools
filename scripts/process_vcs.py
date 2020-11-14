@@ -556,7 +556,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                   rts_flag_file=None, bf_formats=None, DI_dir=None,
                   execpath=None, calibration_type='rts', ipfb_filter="LSQ12",
                   vcstools_version="master", nice=0, channels_to_beamform=None,
-                  beam_version="FEE2016", UV_phase=(0.0,0.0)):
+                  beam_version="FEE2016", UV_phase=[0.0,0.0]):
     """
     This function runs the new version of the beamformer. It is modelled after
     the old function above and will likely be able to be streamlined after
@@ -1057,7 +1057,7 @@ if __name__ == '__main__':
 
         logger.debug("Formatted pointing list: {}".format(pointing_list))
 
-        UV_phase = float(args.UV_phase.split(','))
+        UV_phase = [float(i) for i in args.UV_phase.split(',')]
         coherent_beam(args.obs, args.begin, args.end,
                       data_dir, product_dir, batch_dir,
                       metafits_file, args.nfine_chan, pointing_list,
