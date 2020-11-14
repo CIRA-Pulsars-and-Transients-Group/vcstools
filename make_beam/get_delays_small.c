@@ -514,11 +514,6 @@ void get_delays(
                         // Strictly speaking, the condition (ch == 0) above is redundant, as the dipole configuration
                         // array takes care of that implicitly, but I'll leave it here so that the above argument
                         // is "explicit" in the code.
-/* DEBUG
-if (config_idx == 0) {
-    fprintf( stderr, "before calc_jones(): az = %lf  za = %lf  freq=%ld\n", az, DPIBY2-el, frequency + mi->chan_width/2 );
-}
-DEBUG END */
                         jones[config_idx] = calc_jones( beam, az, DPIBY2-el, frequency + mi->chan_width/2,
                                 (unsigned int*)mi->delays[row], mi->amps[row], zenith_norm );
                     }
@@ -537,15 +532,6 @@ DEBUG END */
                     //   [ XX XY ] --> [ XY XX ]
                     //   [ YX YY ] --> [ YY YX ]
                     swap_columns( E, E );
-/* DEBUG
-if (ch == 64 && config_idx == 0) {
-    fprintf( stderr, "%lf %lf %lf %lf %lf %lf %lf %lf\n",
-            CReald(E[0]), CImagd(E[0]),
-            CReald(E[1]), CImagd(E[1]),
-            CReald(E[2]), CImagd(E[2]),
-            CReald(E[3]), CImagd(E[3]) );
-}
-DEBUG END */
                 }
 
                 mult2x2d(M[ant], invJref, G); // M x J^-1 = G (Forms the "coarse channel" DI gain)
