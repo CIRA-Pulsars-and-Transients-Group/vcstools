@@ -400,6 +400,13 @@ void get_delays(
         M[ant][1] = CMaked( 0.0, 0.0 );
         M[ant][2] = CMaked( 0.0, 0.0 );
         M[ant][3] = CDivd( M[ant][3], YY0norm );
+
+        // There is, in my mind, a question about whether zero-ing out the off-diagonal
+        // terms is the best thing to do. For now, it appears to produce good results,
+        // so we'll leave it at that. However, there are other possibilities to be
+        // explored, including the one below, currently commented out.
+        //M[ant][1] = CDivd( M[ant][1], XX0norm );
+        //M[ant][2] = CDivd( M[ant][2], YY0norm );
     }
 
     /****** END EXPERIMENTAL ******/
@@ -548,14 +555,6 @@ DEBUG END */
                 else
                     cp2x2(G, Gf); //Set the fine channel DI gain equal to the coarse channel DI gain
 
-                // Ord's original comment for the following line is:
-                // "The RTS conjugates the sky so beware"
-                // Assume this means that this is the correct place to apply the conjugation (i.e.
-                // before the beam is applied. This depends on whether E is calculated in the
-                // "conjugation" way or not, which is unknown. The original location of this line of
-                // code is just before "Fnorm = norm2x2( Ji, Ji );" below.
-                conj2x2( Gf, Gf ); // 
-
                 mult2x2d(Gf, E, Ji); // the gain in the desired look direction
 
                 // Calculate the complex weights array
@@ -604,6 +603,10 @@ DEBUG END */
                 // Now, calculate the inverse Jones matrix
                 if (invJi != NULL) {
                     if (pol == 0) { // This is just to avoid doing the same calculation twice
+
+                        // Ord's original comment for the following line is:
+                        // "The RTS conjugates the sky so beware"
+                        conj2x2( Ji, Ji );
 
                         Fnorm = norm2x2( Ji, Ji );
 
