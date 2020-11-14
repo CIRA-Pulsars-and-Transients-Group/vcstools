@@ -377,6 +377,8 @@ void get_delays(
     int config_idx;
     double *jones[nconfigs]; // (see hash_dipole_configs() for explanation of this array)
 
+    ComplexDouble uv_phase; // For the UV phase correction
+
     double Fnorm;
     // Read in the Jones matrices for this (coarse) channel, if requested
     ComplexDouble invJref[4];
@@ -497,6 +499,10 @@ void get_delays(
                     exit(EXIT_FAILURE);
                 }
             }
+
+            // Calculate the UV phase correction for this channel
+            uv_phase = CExpd( CMaked( 0.0, cal->phase_slope*freq_ch + cal->phase_offset ) );
+
             if (beam_model == BEAM_ANALYTIC) {
                 // Analytic beam:
                 calcEjones_analytic(E,                        // pointer to 4-element (2x2) voltage gain Jones matrix
@@ -563,6 +569,10 @@ void get_delays(
                     cp2x2(G, Gf); //Set the fine channel DI gain equal to the coarse channel DI gain
 
                 mult2x2d(Gf, E, Ji); // the gain in the desired look direction
+
+                // Apply the UV phase correction (to the bottom row of the Jones matrix)
+                Ji[2] = CMuld( Ji[2], uv_phase );
+                Ji[3] = CMuld( Ji[3], uv_phase );
 
                 // Calculate the complex weights array
                 if (complex_weights_array != NULL) {

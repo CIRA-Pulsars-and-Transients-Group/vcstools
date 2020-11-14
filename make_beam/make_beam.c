@@ -106,6 +106,8 @@ int main(int argc, char **argv)
     opts.cal.offr_chan_num     = 0;
     opts.cal.ref_ant           = 0;
     opts.cal.cross_terms       = 0;
+    opts.cal.phase_offset      = 0.0;
+    opts.cal.phase_slope       = 0.0;
 
     // GPU options
     opts.gpu_mem               = -1.0;
@@ -754,6 +756,9 @@ void usage() {
     fprintf(stderr, "\t-X, --cross-terms         ");
     fprintf(stderr, "Retain the XY and YX terms of the calibration solution           ");
     fprintf(stderr, "[default: off]\n");
+    fprintf(stderr, "\t-U, --UV-phase=M,C        ");
+    fprintf(stderr, "Rotate the Y pol by M*f+C, where M is in rad/Hz and C is in rad  ");
+    fprintf(stderr, "[default: 0.0,0.0]\n");
     fprintf(stderr, "\t-W, --rts-chan-width      ");
     fprintf(stderr, "RTS calibration channel bandwidth (Hz)                           ");
     fprintf(stderr, "[default: 40000]\n");
@@ -824,6 +829,7 @@ void make_beam_parse_cmdline(
                 {"bandpass-file",   required_argument, 0, 'B'},
                 {"ref-ant",         required_argument, 0, 'R'},
                 {"cross-terms",     no_argument,       0, 'X'},
+                {"UV-phase",        required_argument, 0, 'U'},
                 {"rts-chan-width",  required_argument, 0, 'W'},
                 {"offringa-file",   required_argument, 0, 'O'},
                 {"offringa-chan",   required_argument, 0, 'C'},
@@ -834,7 +840,7 @@ void make_beam_parse_cmdline(
 
             int option_index = 0;
             c = getopt_long( argc, argv,
-                             "a:A:b:B:C:d:e:f:F:g:hHiJ:m:n:o:O:pP:r:R:sS:t:vVw:W:X",
+                             "a:A:b:B:C:d:e:f:F:g:hHiJ:m:n:o:O:pP:r:R:sS:t:U:vVw:W:X",
                              long_options, &option_index);
             if (c == -1)
                 break;
@@ -923,6 +929,15 @@ void make_beam_parse_cmdline(
                     break;
                 case 't':
                     opts->max_sec_per_file = atoi(optarg);
+                    break;
+                case 'U':
+                    if (sscanf( optarg, "%lf,%lf", &(opts->cal.phase_slope),
+                                &(opts->cal.phase_offset) ) != 2)
+                    {
+                        fprintf( stderr, "error: badly formed argument to -Y "
+                                "('%s')\n", optarg );
+                        exit(EXIT_FAILURE);
+                    }
                     break;
                 case 'v':
                     opts->out_vdif = 1;

@@ -66,14 +66,17 @@ struct delays {
 };
 
 struct calibration {
-    char *filename;           // The file that houses the calibration solution
-    char *bandpass_filename;  // The file that houses the RTS bandpass information
-    int   chan_width;         // Channel width used in RTS bandpass solutions (in Hz)
-    int   nchan;              // The number of channels in the RTS bandpass solutions
-    int   cal_type;           // Either RTS or OFFRINGA
-    int   offr_chan_num;      // The channel number in the Offringa calibration solution file
-    int   ref_ant;            // Reference antenna for calibration phases
-    int   cross_terms;        // Include XY and YX of calibration Jones matrices
+    char  *filename;           // The file that houses the calibration solution
+    char  *bandpass_filename;  // The file that houses the RTS bandpass information
+    int    chan_width;         // Channel width used in RTS bandpass solutions (in Hz)
+    int    nchan;              // The number of channels in the RTS bandpass solutions
+    int    cal_type;           // Either RTS or OFFRINGA
+    int    offr_chan_num;      // The channel number in the Offringa calibration solution file
+    int    ref_ant;            // Reference antenna for calibration phases
+    int    cross_terms;        // Include XY and YX of calibration Jones matrices
+    double phase_offset;       // Rotate the phase of Y by m*freq + c, where
+    double phase_slope;        //   m = phase_slope (rad/Hz)
+                               //   c = phase_offset (rad)
 };
 
 struct make_beam_opts {
