@@ -556,7 +556,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                   rts_flag_file=None, bf_formats=None, DI_dir=None,
                   execpath=None, calibration_type='rts', ipfb_filter="LSQ12",
                   vcstools_version="master", nice=0, channels_to_beamform=None,
-                  beam_version="FEE2016"):
+                  beam_version="FEE2016", UV_phase=(0.0,0.0)):
     """
     This function runs the new version of the beamformer. It is modelled after
     the old function above and will likely be able to be streamlined after
@@ -709,6 +709,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                     runline += " {}".format(jones_option)
                     runline += " -d {}/combined".format(data_dir)
                     runline += " -P {}".format(pointing)
+                    runline += " -U {},{}".format(*UV_phase)
                     runline += " -r 10000"
                     runline += " -m {}".format(metafits_file)
                     runline += " {}".format(bf_formats)
@@ -753,6 +754,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                 runline += " {}".format(jones_option)
                 runline += " -d {}/combined".format(data_dir)
                 runline += " -P {}".format(pointing_str)
+                runline += " -U {},{}".format(*UV_phase)
                 runline += " -r 10000"
                 runline += " -m {}".format(metafits_file)
                 runline += " {}".format(bf_formats)
@@ -861,6 +863,7 @@ if __name__ == '__main__':
                           " If set, this will create a folder for the Obs. ID if it doesn't exist ")
     parser.add_argument("-c", "--ncoarse_chan", type=int, default=24, help="Coarse channel count (how many to process) ")
     parser.add_argument("-n", "--nfine_chan", type=int, default=128, help="Number of fine channels per coarse channel ")
+    parser.add_argument("-U", "--UV_phase", type=str, default="0.0,0.0", help="M,C: Rotate U-V polarisation by M*f+C, where M is in rad/Hz and C is in rad")
     parser.add_argument("--mail",action="store_true", default=False, help="Enables e-mail notification about start, end, and fail of jobs. Currently only implemented for beamformer mode.")
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                         default="INFO")
@@ -1054,6 +1057,7 @@ if __name__ == '__main__':
 
         logger.debug("Formatted pointing list: {}".format(pointing_list))
 
+        UV_phase = float(args.UV_phase.split(','))
         coherent_beam(args.obs, args.begin, args.end,
                       data_dir, product_dir, batch_dir,
                       metafits_file, args.nfine_chan, pointing_list,
@@ -1062,7 +1066,8 @@ if __name__ == '__main__':
                       calibration_type=args.cal_type,
                       vcstools_version=args.vcstools_version, nice=args.nice,
                       execpath=args.execpath, ipfb_filter=args.ipfb_filter,
-                      beam_version=args.beam_version)
+                      beam_version=args.beam_version,
+                      UV_phase=UV_phase)
     else:
         logger.error("Somehow your non-standard mode snuck through. "
                      "Try again with one of {0}".format(modes))
