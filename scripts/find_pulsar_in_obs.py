@@ -544,6 +544,10 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
 
         #check for raw volatge files
         filedata = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1})
+        if filedata is None:
+            logger.warning("No file data for obsid {}. Skipping".format(obsid))
+            obsid_to_remove.append(obsid)
+            continue
         keys = filedata.keys()
         check = False
         for k in keys:
