@@ -266,29 +266,42 @@ def get_rFRB_info(name=None):
 
 
 
-def singles_source_search(ra, dec):
+def singles_source_search(ra, dec=None, box_size=45.):
     """
-    Used to creates a 30 degree box around the source to make searching for obs_ids more efficient
+    Used to find all obsids within a box around the source to make searching through obs_ids more efficient.
 
-    singles_source_search(ra, dec)
-    Args:
-        ra: ra of source in degrees
-        dec: dec of source in degrees
+    singles_source_search(ra, dec=None, box_size=45.)
+    Parameters:
+    ----------
+    ra: float
+        Right Acension of the source in degrees
+    dec: float
+        Declination of the source in degrees. By default will use the enitre declination range to account for grating lobes
+    box_size: float
+        Radius of the search box. Default: 45
+
+    Returns:
+    --------
+    obsid_metadata: list
+        List of of the metadata for each obsid. The metadata is in the same format as getmeta's output
     """
     ra = float(ra)
-    dec = float(dec)
-    box_size = 30.
     m_o_p = False # moved over (north or south) pole
 
-    dec_top = dec + box_size
-    if dec_top > 90.:
+    if dec is None:
         dec_top = 90.
-        m_o_p = True
+        dec_bot = -90.
+    else:
+        dec = float(dec)
+        dec_top = dec + box_size
+        if dec_top > 90.:
+            dec_top = 90.
+            m_o_p = True
 
-    dec_bot = dec - box_size
-    if dec_top < -90.:
-        dec_top = -90.
-        m_o_p = True
+        dec_bot = dec - box_size
+        if dec_top < -90.:
+            dec_top = -90.
+            m_o_p = True
 
     if m_o_p:
         obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
@@ -544,6 +557,10 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
 
         #check for raw volatge files
         filedata = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1})
+        if filedata is None:
+            logger.warning("No file data for obsid {}. Skipping".format(obsid))
+            obsid_to_remove.append(obsid)
+            continue
         keys = filedata.keys()
         check = False
         for k in keys:
@@ -850,7 +867,7 @@ if __name__ == "__main__":
             ob_dec = names_ra_dec[0][2]
         else:
             ob_ra, ob_dec = sex2deg(names_ra_dec[0][1], names_ra_dec[0][2])
-        obsid_list = singles_source_search(ob_ra, ob_dec)
+        obsid_list = singles_source_search(ob_ra)
     else:
         #use all obsids
         obsid_list = find_obsids_meta_pages({'mode':'VOLTAGE_START'})
