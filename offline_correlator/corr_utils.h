@@ -1,17 +1,30 @@
 #ifndef __CORR_UTILS_H
 #define __CORR_UTILS_H
 
-#include "ringbuffer.h"
-#include <math.h>
+#include<cstdio>
+#include<cstdlib>
+#include<cmath>
+#include<complex.h>
+#include<assert.h>
+#include<syslog.h>
+#include<string.h>
+#include<cstdint>
+#include<strings.h> //what is strings.h
+#include<cstring> //added this as I think strings.h is a typo
 #include <complex.h>
+
+// include the local ringbuffer implementation
+#include "ringbuffer.h"
+// what is the xgpu library?
 #include "xgpu.h"
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct management {
-        
+
         int data_line[8];
         int data_line_count;
         ringbuf_t *ring;
@@ -34,7 +47,7 @@ typedef struct management {
         int coarse_chan;
         int dumps_per_sec;
 	int infile;
-    
+
 } manager_t;
 
 void printerror(int);
