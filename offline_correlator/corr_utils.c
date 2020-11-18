@@ -1,57 +1,46 @@
-
-#include<stdio.h>
-#include<stdlib.h>
-#include<math.h>
-#include<complex.h>
-#include<assert.h>
-#include<syslog.h>
-#include<string.h>
-#include<stdint.h>
-#include<strings.h>
-
 #include "fitsio.h"
 #include "corr_utils.h"
 
-#include "xgpu.h"
+//PJE removed common includes to header 
 
 void printerror( int status)
 {
     /*****************************************************/
     /* Print out cfitsio error messages and exit program */
     /*****************************************************/
-    
+
     char status_str[FLEN_STATUS], errmsg[FLEN_ERRMSG];
-    
+
     if (status)
         fprintf(stderr, "\n*** Error occurred during program execution ***\n");
-    
+
     fits_get_errstatus(status, status_str);   /* get the error description */
     fprintf(stderr, "\nstatus = %d: %s\n", status, status_str);
-    
+
     /* get first message; null if stack is empty */
     if ( fits_read_errmsg(errmsg) )
     {
         fprintf(stderr, "\nError message stack:\n");
         fprintf(stderr, " %s\n", errmsg);
-        
+
         while ( fits_read_errmsg(errmsg) )  /* get remaining messages */
             fprintf(stderr, " %s\n", errmsg);
     }
-    
+
     exit( status );       /* terminate the program, returning error status */
 }
 
 inline void integrate(char * output,uint8_t *input, int factor, int nint,int nfreq) {
-    
+
     /*      integrates by adding samples together -- assumes single pol
      * 	for multiple pol it dependes whether we are packing the pols together - so this would affect both the input and output strides
      */
-    
+
     int integration = 0;
     uint16_t *output_samp = (uint16_t *) output;
-    
+
     for (integration=0;integration<nint;integration++) {
-        
+
         for (int chan=0;chan<nfreq;chan++){
             uint8_t *inp_ptr = input + (integration*factor*nfreq);
             for (int sample=0;sample<factor;sample++) {
@@ -64,7 +53,7 @@ inline void integrate(char * output,uint8_t *input, int factor, int nint,int nfr
             }
         }
     }
-    
+
 }
 
 
@@ -90,7 +79,7 @@ void buildFITSBuffer( XGPUInfo xgpu_info,
 
 {
     int chans_to_aver = manager->chan_to_aver;
-   
+
     int marker = manager->marker;
 
 	fitsfile *fptr;       /* pointer to the FITS file, defined in fitsio.h */
@@ -105,8 +94,8 @@ void buildFITSBuffer( XGPUInfo xgpu_info,
 	int num_baselines = xgpu_info.nbaseline*4; // num baselines x npol x npol
 	int num_floats_per_chan = num_baselines * 2; // complex
 	void *memblock = NULL;
-    
-    
+
+
 	/* we need to define a block of memory that is big enough to hold the whole FITS file + headers and padding
 	 * this also has to be precisely the size of the memory block we hand over the NGASS so it knows where and how to trim
 	 *
@@ -127,7 +116,7 @@ void buildFITSBuffer( XGPUInfo xgpu_info,
 	sprintf(extname,"%ld",current_time_t);
 
 
-	int bitpix = LONG_IMG;  
+	int bitpix = LONG_IMG;
 	long naxis = 2; // 2 dimensions
 	long naxes[2];
 
@@ -141,14 +130,14 @@ void buildFITSBuffer( XGPUInfo xgpu_info,
 		exit(EXIT_FAILURE);
 	}
 
-	
+
 
     while (dump < dumps_per_second) {
-        
-        
-        
+
+
+
         status = 0;
-        
+
         /* append a new empty FITS IMAGE onto the FITS file */
         if (fits_create_img( fptr, bitpix, naxis, naxes,
                             &status) ) {
@@ -161,100 +150,100 @@ void buildFITSBuffer( XGPUInfo xgpu_info,
          */
         // wacky packed tile order to packed triangular
         Complex *ptr = full_matrix_h + (dump * xgpu_info.matLength);
-        
-        
+
+
         xgpuReorderMatrix((Complex *) ptr);
-        
+
         float *buff = (float *) ptr;
-        
+
         long nelements=0,fpixel[2];
-        
-        
+
+
         nelements = naxes[0]*naxes[1];
-        
+
         fpixel[0] = 1;
         fpixel[1] = 1;
-        
+
         int f=0;
         int index=0;
-        
+
         do {
-            
+
             for (f=0;f<chans_to_aver;f++) {
-                
+
                 for (index=0;index<num_floats_per_chan;index++) {
-                    
+
                     average[index] = average[index] + (*buff);
                     buff++;
-                    
+
                 }
-                
+
             }
-            
+
             float *tofits = (float *) average;
             status = 0;
             nelements = num_floats_per_chan;
-            
+
             if (fits_write_pix(fptr,TFLOAT,fpixel,nelements,tofits,&status)) {
                 printerror(status);
                 syslog(LOG_CRIT,"Failure to write FITS image\n");
                 exit(EXIT_FAILURE);
-                
+
             }
-            
+
             fpixel[1]++; // next channel (I hope)
-            
+
             bzero((void *)average,num_floats_per_chan*sizeof(float));
-            
+
         } while (fpixel[1] <= naxes[1]);
-        
-        
+
+
         status = 0;
         if (fits_update_key(fptr,TLONG,(char *) "TIME",&current_time_t,(char *) "Unix time (seconds)",&status)) {
             printerror(status);
             syslog(LOG_CRIT,"Failed to add time_t to the primary fits header\n");
             exit(EXIT_FAILURE);
         }
-        
-        
+
+
         int_time = 1.0/dumps_per_second;
         milli_time = dump*frac_time;
-        
-        
+
+
         if (fits_update_key(fptr,TINT,(char *) "MILLITIM",&milli_time,(char *) "Milliseconds since TIME",&status)) {
             printerror(status);
             syslog(LOG_CRIT,"Failed to add milliseconds to the primary fits header\n");
             exit(EXIT_FAILURE);
         }
-        
-        
+
+
         if (fits_update_key(fptr,TFLOAT,(char *) "INTTIME",&int_time,(char *) "Integration time (s)",&status)) {
             printerror(status);
             syslog(LOG_CRIT,"Failed to add integer seconds to the primary fits header\n");
             exit(EXIT_FAILURE);
         }
-        
+
         if (fits_update_key(fptr,TINT,(char *) "MARKER",&marker,(char *) "Data offset marker (all channels should match)",&status)) {
             printerror(status);
             syslog(LOG_CRIT,"Failed to add alignment marker to fits header\n");
             exit(EXIT_FAILURE);
         }
-        
+
         if (manager->coarse_chan >=0)
             if (fits_update_key(fptr,TINT,(char *) "COARSE_CHAN",&manager->coarse_chan,(char *) "Receiver Coarse Channel Number (only used in offline mode)",&status)) {
                 printerror(status);
                 syslog(LOG_CRIT,"Failed to add coarse channel number to header\n");
                 exit(EXIT_FAILURE);
             }
-        
+
         float bscale_parameter = 1.0/(chans_to_aver*int_time);
-        
+
         if (fits_update_key(fptr,TFLOAT,(char *) "BSCALE",&bscale_parameter,(char *) "Incorporates channel and time averaging",&status)) {
             printerror(status);
             syslog(LOG_CRIT,"Failed to add time_t to the primary fits header\n");
             exit(EXIT_FAILURE);
         }
-        
+
         dump++;
     }
 	status = 0;
@@ -280,4 +269,3 @@ void buildFITSBuffer( XGPUInfo xgpu_info,
 	/* done */
 
 }
-
