@@ -98,10 +98,14 @@ void mark_buffer_empty(ringbuf_t * bufs);
 int free_buffers(ringbuf_t * bufs);
 // get buffer status
 void get_buffer_status(ringbuf_t *);
-// ?
+// returns 1 and resets the buffer
 int reset_ring_buffers(ringbuf_t *);
-// ?
+// returns the end of the day flag (along with other checks)
 int buffer_EOD(ringbuf_t *);
+// just return the EOD value
+int get_EOD(ringbuf_t *);
+// just return the overrun value
+int get_overrun(ringbuf_t *);
 
 #ifdef __cplusplus
 }
