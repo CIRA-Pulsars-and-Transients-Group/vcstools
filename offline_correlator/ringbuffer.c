@@ -32,6 +32,24 @@ int buffer_EOD(ringbuf_t *bufs) {
 	return eod;
 }
 
+//apply lock and return EOD
+int get_EOD(ringbuf_t *bufs) {
+	int eod;
+	ringbuf_pthread_lock(bufs);
+	eod = bufs->EOD;
+	ringbuf_pthread_unlock(bufs);
+	return eod;
+}
+
+//apply lock and return EOD
+int get_overrun(ringbuf_t *bufs) {
+	ringbuf_pthread_lock(bufs);
+	auto overrun = bufs->overrun;
+	ringbuf_pthread_unlock(bufs);
+	return overrun;
+}
+
+
 //apply lock and then get status of ring buffer
 void get_buffer_status(ringbuf_t *bufs) {
 	ringbuf_pthread_lock(bufs);
@@ -303,6 +321,7 @@ char * get_latest_buffer (ringbuf_t * bufs) {
 	return buf;
 
 }
+
 void mark_buffer_filled (ringbuf_t * bufs) {
 	ringbuf_pthread_lock(bufs);
 	/* increment the filled count */
@@ -315,6 +334,7 @@ void mark_buffer_filled (ringbuf_t * bufs) {
 	}
 	ringbuf_pthread_unlock(bufs);
 }
+
 void mark_buffer_empty (ringbuf_t * bufs) {
 	ringbuf_pthread_lock(bufs);
 	/* decrement the filled count */

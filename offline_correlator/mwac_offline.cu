@@ -69,9 +69,6 @@ return XGPU_CUDA_ERROR;                                           \
 
 ringbuf_t ring;
 
-
-
-
 /*--------------------------------------------------------------------------*/
 
 void CheckForError(bool iflag, string errormsg, int errorflag=EXIT_FAILURE)
@@ -97,6 +94,7 @@ struct Options{
         edge = 0;
         nbit = 4;
         coarse_chan = -1; // only set in the header if this is >= 0
+        nfrequency = 128;
     };
 }
 
@@ -374,8 +372,8 @@ int main(int argc, char **argv) {
 
     char file_time[128];
     char dump_filename[128];
-    unsigned int npol = 2, nstation = 128, nfrequency = 128, ntime = 10000;
 
+    unsigned int npol = 2, nstation = 128, ntime = 10000;
     // int dumps_per_second = 1; //correlator output dumps per second;
     // int chan_to_aver = 1; // number of channels to combine on output
     // int dumps_to_aver = 1; // number of correlator dumps to combine on output
@@ -449,6 +447,10 @@ int main(int argc, char **argv) {
 
     manager_t the_manager; // dropped the volatile
 
+    /// PJE: I'm quite confused as to why there is the nstation
+    /// variable when manager_t instance does not use the variable
+    /// and this variable is just set to 128. What's it's purpose?
+    /// that also applies to npol, ndim,
     the_manager.shutdown=0;
     the_manager.offline = opt.offline;
     the_manager.integrate = opt.dumps_to_aver;
@@ -488,15 +490,15 @@ int main(int argc, char **argv) {
     CheckForError((nstation != xgpu_info.nstation),
         string("fatal missmatch between XGPU library and requested nstation XGPU: ")
         +to_string(xgpu_info.nstation)+string(", REQUESTED: ")+to_string(nstation));
-    CheckForError((nfrequency != xgpu_info.nfrequency),
+    CheckForError((opt.nfrequency != xgpu_info.nfrequency),
         string("fatal missmatch between XGPU library and requested channels XGPU: ")
-        +to_string(xgpu_info.nfrequency)+string(", REQUESTED: ") +to_string(nfrequency));
+        +to_string(xgpu_info.nfrequency)+string(", REQUESTED: ") +to_string(opt.nfrequency));
     ntime = xgpu_info.ntime;
 
     the_manager.ntime = ntime;
-    size_t full_matLength = nfrequency * nstation * nstation * npol * npol;
-    size_t full_size = dumps_per_second * full_matLength * sizeof(Complex);
-    size_t baseLength = nfrequency;
+    size_t full_matLength = opt.nfrequency * nstation * nstation * npol * npol;
+    size_t full_size = opt.dumps_per_second * full_matLength * sizeof(Complex);
+    size_t baseLength = opt.nfrequency;
 
     size_t ring_bufsz = xgpu_info.vecLength * sizeof(ComplexInput);
 
@@ -534,6 +536,7 @@ int main(int argc, char **argv) {
 
      */
 #ifdef RUN_BEAMER
+    //PJE: would it not be easier to define a beamer class?
     uint8_t *beam_h = NULL;
     uint8_t *beam_d = NULL;
     int8_t *data_d = NULL;
@@ -561,17 +564,20 @@ int main(int argc, char **argv) {
 #endif
 
     full_matrix_h = (Complex *) malloc(full_size);
-
     baseline_h = (Complex *) malloc(baseLength * sizeof(Complex));
 
     the_manager.ring = &ring;
-
-    the_manager.nfrequency = nfrequency;
+    the_manager.nfrequency = opt.nfrequency;
     the_manager.nstation = nstation;
     the_manager.npol = npol;
 
     // create some threads calling the manager function,
     // passing manager_t instance (see corr_utils.h for struct)
+    ///PJE: This pthread usage is odd since there is a pthread_create
+    ///but the main program does not contain pthread_exit(NULL)
+    ///so that it waits till all the threads it has created terminate
+    ///There is also no pthread_join nor does the code
+    ///try to explicitly set pthread attributes. why?
     CheckForError((pthread_create(&buffer_handler, NULL, manager,
         (void *) &the_manager)),
         string("could not launch manager thread"));
@@ -596,7 +602,7 @@ int main(int argc, char **argv) {
     assert(!(blockSize%2880));
 
     std::cout << "Correlating " << nstation << " stations, with " << npol
-              << " signals, with " << nfrequency << " channels" << std::endl;
+              << " signals, with " << opt.nfrequency << " channels" << std::endl;
 
     // allocate the GPU X-engine memory
     XGPUContext context;
@@ -639,7 +645,9 @@ int main(int argc, char **argv) {
             current_time_t = start_time_t;
             incremented_time_t = current_time_t;
         }
-        int x_done = 0; // how much of the second have we done
+
+        // how much of the second have we done
+        int x_done = 0;
         // we only pass on a full second to the FITs builder. There are dumps_per_second correlator integrations
         // however there is nothing stopping the internal integration time of the correlator being much less than that
         // We are now capturing this with the integrate flag.
@@ -656,15 +664,19 @@ int main(int argc, char **argv) {
                 // the only way this returns is if there is a full buffer to read/or EOD/or overrun
                 // it sleeps till those conditions are met
                 buf = wait_for_buffer(&ring);
-                //PJE: why don't we lock in checking ring.EOD?
-                if (ring.EOD) // this can be set and still there can be data in the ring
+                //PJE: why don't we lock in checking ring.EOD? note that other checks
+                //use locks (buffer_EOD applies lock)
+                // if (ring.EOD) // this can be set and still there can be data in the ring
+                // replace with mutex locking EOD check
+                if (get_EOD(ring))
                 {
                     std::cout << "NOTICE: EOD on input buffer" << std::endl;
-                    if (buffer_EOD(&ring)== 0) {
+                    if (buffer_EOD(&ring) == 0) {
                         std::cout << "NOTICE:: EOD on input buffer - but ring not yet empty : no reset yet" << std::endl;
                         count++;
                         //PJE: why are we sleeping at all?
                         sleep(1);
+                        ///PJE: why is 5 seconds a speical case?
                         if (count > 5) {
                             std::cerr << "warning: waited > 5s for buffer to drain -- forcing reset" << std::endl;
                             reset_ring_buffers(&ring);
@@ -788,7 +800,6 @@ int main(int argc, char **argv) {
             // Launch the beamformer
 
 #ifdef RUN_BEAMER
-
             int time_step = 0;
             int steps = 10000;
             int8_t *data = NULL;
@@ -880,12 +891,9 @@ int main(int argc, char **argv) {
 
         }
         else {
-
             std::cerr << "error: failed to open dump file " << strerror(errno)
                       << std::endl;
-
         }
-
         free(outbuffer);
 
 
@@ -906,8 +914,8 @@ int main(int argc, char **argv) {
 
 
     }
-// I cannot think of a reason to use a go to
-// replacing with a function call
+    // I cannot think of a reason to use a go to
+    // replacing with a function call
     return Shutdown(RING_NBUFS,
         cuda_buffers,
         context,
