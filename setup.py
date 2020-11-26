@@ -64,6 +64,7 @@ setup(name="mwa_vcstools",
                'utils/job_submit.py', 'utils/plotFlatTileBeam.py', 'utils/plotPolarTileBeam.py',
                'utils/plotTiedArrayBeam.py', 'utils/aocal.py', "utils/stickel.py",
                'utils/config_vcs.py', 'utils/sn_flux_est.py', 'utils/prof_utils.py', 'utils/rm.py',
+               'utils/progress_bar.py',
                'version.py'],
       setup_requires=['pytest-runner'],
       tests_require=['pytest']
