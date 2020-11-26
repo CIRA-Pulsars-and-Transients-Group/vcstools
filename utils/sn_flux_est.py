@@ -932,7 +932,7 @@ def multi_psr_snfe(pulsar_list, obsid,\
 
     mega_query = psrqpy.QueryATNF(psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
     sn_dict = {}
-    for i, pulsar in progress_bar(enumerate(mega_query["PSRJ"], "Calculating pulsar SN: ")):
+    for i, pulsar in enumerate(progress_bar(mega_query["PSRJ"], "Calculating pulsar SN: ")):
         psr_query = {}
         for key in mega_query.keys():
             psr_query[key] = [mega_query[key][i]]
