@@ -18,7 +18,7 @@ from astropy.table import Table
 
 #vcstools
 from vcstools import data_load
-from progress_bar import progress_bar
+from vcstools.progress_bar import progress_bar
 from mwa_pb import primarybeammap_tant as pbtant
 import find_pulsar_in_obs as fpio
 import mwa_metadb_utils
