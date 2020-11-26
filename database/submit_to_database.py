@@ -434,6 +434,8 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
             u_sn = prof_dict["sn_e"]
             w_equiv_bins = prof_dict["w_equiv_bins"]
             u_w_equiv_bins =  prof_dict["w_equiv_bins_e"]
+            w_equiv_phase = w_equiv_bins / bins
+            u_w_equiv_phase =  u_w_equiv_bins / bins
             w_equiv_ms = period/num_bins * w_equiv_bins
             u_w_equiv_ms = period/num_bins * u_w_equiv_bins
             scattering = prof_dict["scattering"]*period/num_bins/1000 #convert to seconds
@@ -455,19 +457,21 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
     else:
         sn = prof_dict["sn"]
         u_sn = prof_dict["sn_e"]
-        w_equiv_bins = prof_dict["Weq"]
-        u_w_equiv_bins =  prof_dict["Weq_e"]
-        w_equiv_ms = period/num_bins * w_equiv_bins
-        u_w_equiv_ms = period/num_bins * u_w_equiv_bins
-        scattering = prof_dict["Wscat"]*period/num_bins/1000 #convert to seconds
-        u_scattering = prof_dict["Wscat_e"]*period/num_bins/1000
+        w_equiv_phase = prof_dict["Weq"]
+        u_w_equiv_phase =  prof_dict["Weq_e"]
+        w_equiv_bins = w_equiv_phase * bins
+        u_w_equiv_bins = w_equiv_phase * bins
+        w_equiv_ms = period * w_equiv_phase
+        u_w_equiv_ms = period * u_w_equiv_phase
+        scattering = prof_dict["Wscat"]*period/1000 #convert to seconds
+        u_scattering = prof_dict["Wscat_e"]*period/1000
         scattered = prof_dict["scattered"]
 
     if prof_dict:
         logger.info("Profile scattered? {0}".format(scattered))
         logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
         logger.debug("Gain {0} K/Jy".format(gain))
-        logger.debug("Equivalent width in bins: {0}".format(w_equiv_bins))
+        logger.debug("Equivalent width in ms: {0}".format(w_equiv_ms))
         logger.debug("T_sys: {0} K".format(t_sys))
         logger.debug("Bandwidth: {0}".format(bandwidth))
         logger.debug("Detection time: {0}".format(t_int))
