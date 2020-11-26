@@ -45,7 +45,7 @@ def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
     outfile: string
         OPTIONAL - The name of the text file to write the output to. Default: outfile
     pdvops: string
-        OPTIONAL - Additional options for the pdv. Default: -FTt        
+        OPTIONAL - Additional options for the pdv. Default: -FTt
     """
     myoutput = open(outfile,'w+')
     commands=["pdv"]
@@ -1133,19 +1133,19 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, p
     fit_dict: dictionary
         contains the following keys:
         W10: float
-            The W10 width of the profile measured in number of bins
+            The W10 width of the profile measured in phase
         W10_e: float
             The uncertainty in the W10
         W50: float
-            The W50 width of the profile measured in number of bins
+            The W50 width of the profile measured in phase
         W50_e: float
             The uncertainty in the W50
         Weq: float
-            The equivalent width of the profile measured in number of bins
+            The equivalent width of the profile measured in phase
         Weq_e: float
             The uncertainty in the equivalent width
         Wscat: float
-            The scattering width of the profile measured in number of bins
+            The scattering width of the profile measured in phase
         Wscat_e: float
             The uncertainty in the scattering width
         maxima: list
@@ -1197,6 +1197,7 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, p
 
     y = y - np.nanmean(clipped)
     y = y/max(y)
+    proflen = len(y)
 
     #fit gaussians
     fit, chisq, bic, popt, pcov, comp_dict, comp_idx = fit_gaussian(y, max_N=max_N, min_comp_len=min_comp_len, alpha=alpha)
@@ -1206,6 +1207,15 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, p
 
     #Find widths + error
     W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e = find_widths(y, popt, pcov, alpha=alpha)
+    #Convert from bins to phase
+    W10 = W10/proflen
+    W50 = W50/proflen
+    Weq = Weq/proflen
+    Wscat = Wscat/proflen
+    W10_e = W10_e/proflen
+    W50_e = W50_e/proflen
+    Weq_e = Weq_e/proflen
+    Wscat_e = Wscat_e/proflen
 
     #find max, min, error
     for i, val in enumerate(clipped):
@@ -1282,7 +1292,7 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         alphas = np.linspace(1, 5, 33)
     else:
         raise ValueError("cliptype not recognised. Options are: 'regular', 'noisy' or 'verbose'.")
-        
+
     attempts_dict = {}
 
     loglvl = logger.level
