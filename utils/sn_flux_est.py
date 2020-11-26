@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 #Astropy
 from astropy.table import Table
 
-#vcstools and mwa_search
+#vcstools
 from vcstools import data_load
-
+from progress_bar import progress_bar
 from mwa_pb import primarybeammap_tant as pbtant
 import find_pulsar_in_obs as fpio
 import mwa_metadb_utils
@@ -917,6 +917,8 @@ def multi_psr_snfe(pulsar_list, obsid,\
                    beg=None, end=None, obs_metadata=None, full_meta=None, plot_flux=False,\
                    query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
+    logger.info("""This script may use estimations where data is missing.
+    For full verbosity, use the DEBUG logger (ie. -L DEBUG)""")
 
     if obs_metadata is None or full_meta is None:
         logger.debug("Obtaining obs metadata")
@@ -930,7 +932,7 @@ def multi_psr_snfe(pulsar_list, obsid,\
 
     mega_query = psrqpy.QueryATNF(psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
     sn_dict = {}
-    for i, pulsar in enumerate(mega_query["PSRJ"]):
+    for i, pulsar in progress_bar(enumerate(mega_query["PSRJ"], "Calculating pulsar SN: ")):
         psr_query = {}
         for key in mega_query.keys():
             psr_query[key] = [mega_query[key][i]]
