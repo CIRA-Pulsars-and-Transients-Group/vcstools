@@ -126,7 +126,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
 def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_size=None, obsID=None):
     if not required_size:
         try:
-            _, suffix, required_size = get_files_and_sizes(obsID, 'ics', mintime=startsec, maxtime=startsec + n_secs)
+            _, _, required_size = get_files_and_sizes(obsID, 'ics', mintime=startsec, maxtime=startsec + n_secs)
         except:
             traceback.print_exc()
             return True, 0

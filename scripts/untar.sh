@@ -67,8 +67,8 @@ if [[ -z $start ]];then
 	# to that end we extract the gpstimes of the first
 	# and last files
 	cd "${workdir}"
-	first_file=$(ls ${obsid}_*_combined.tar | head -1)
-	last_file=$(ls ${obsid}_*_combined.tar | tail -1)
+	first_file=$(ls "${obsid}"_*_combined.tar | head -1)
+	last_file=$(ls "${obsid}"_*_combined.tar | tail -1)
 	start=${first_file:11:10}
 	stop=${last_file:11:10}
     else

@@ -44,9 +44,9 @@ for j in $(seq -f "%04g" 1 1 "$NSETS");do
 
     for i in $(seq -f "%03g" $LO 1 $HI);do 
         if [ "$POINTING" == None ]; then
-            echo "${PROJECT}_${OBSID}_ch${i}_${j}.fits" >> $sname
+            echo "${PROJECT}_${OBSID}_ch${i}_${j}.fits" >> "$sname"
         else
-            echo "${PROJECT}_${OBSID}_${POINTING}_ch${i}_${j}.fits" >> $sname
+            echo "${PROJECT}_${OBSID}_${POINTING}_ch${i}_${j}.fits" >> "$sname"
         fi
     done
 

@@ -50,7 +50,7 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
     #elif "Tile" in f[1].header.values():
     #    tilenames = list(d.field('Tile'))
     #else:
-    if "TileName" not in f[1].header.values() and "Tile" not in f[1].header.values()
+    if "TileName" not in f[1].header.values() and "Tile" not in f[1].header.values():
         logging.error(("Error: Antenna Name field not found"))
         exit()
     ao_order  = [0 for i in range(len(ant_map)//2)]

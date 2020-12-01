@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
 
-    obsid, _, dec, duration, delays, centrefreq, channels = obsid_data
+    obsid, _, _, duration, delays, centrefreq, channels = obsid_data
 
     # Figure out GPS times to evaluate the beam in order to map the drift scan
     midtimes = np.array([float(obsid) + 0.5 * duration]) # although only includes one element, could in future be extended

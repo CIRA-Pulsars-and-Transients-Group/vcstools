@@ -28,8 +28,8 @@ from vcstools.pointing_utils import sex2deg, format_ra_dec
 import vcstools.sn_flux_est as sfe
 from vcstools.metadb_utils import get_obs_array_phase, singles_source_search,\
                                   find_obsids_meta_pages
-from vcstools.catalogue_utils import grab_source_alog, get_rFRB_info
-from vcstools.beam_calc import get_beam_power_over_time, find_sources_in_obs
+from vcstools.catalogue_utils import grab_source_alog
+from vcstools.beam_calc import find_sources_in_obs
 
 
 import logging

@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 """Tests the mwa_metadb_utils.py script"""
 from vcstools.metadb_utils import mwa_alt_az_za, get_obs_array_phase, get_common_obs_metadata,\
-                                  get_files, calc_ta_fwhm, get_channel, obs_max_min
+                                  get_files, calc_ta_fwhm, get_channels, obs_max_min
 from numpy.testing import assert_almost_equal
 
 # Can't test singles_source_search or find_obsids_meta_pages because it's time consuming and always updating
