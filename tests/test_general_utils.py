@@ -2,7 +2,15 @@
 """
 Tests the find_pulsar_in_obs.py script
 """
-from vcstools.general_utils import gps_to_utc
+from vcstools.general_utils import gps_to_utc, is_number
+
+def test_is_number():
+    """test the is_number function"""
+    tests = [(1111111111, True), ('abc', False)]
+    for input_test, expect in tests:
+        ans = is_number(input_test)
+        if ans != expect:
+            raise AssertionError
 
 def test_gps_to_utc():
     """test the gps_to_utc function"""

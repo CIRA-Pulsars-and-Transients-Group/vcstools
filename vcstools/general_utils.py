@@ -9,6 +9,15 @@ from astropy.utils import iers
 
 logger = logging.getLogger(__name__)
 
+
+def is_number(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+
 def gps_to_utc(gps):
     # GPS time as is done in timeconvert.py
     iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'

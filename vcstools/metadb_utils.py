@@ -1,3 +1,4 @@
+from vcstools.general_utils import is_number
 import logging
 
 logger = logging.getLogger(__name__)
@@ -280,14 +281,6 @@ def get_channels(obsid, channels=None):
         beam_meta_data = getmeta(service='obs', params={'obs_id':obsid})
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
     return channels
-
-
-def is_number(s):
-    try:
-        int(s)
-        return True
-    except ValueError:
-        return False
 
 
 def obs_max_min(obsid, meta=None):
