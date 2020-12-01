@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 #Astropy
 from astropy.table import Table
 
-#vcstools and mwa_search
+#vcstools
 from vcstools import data_load
-
+from vcstools.progress_bar import progress_bar
 from mwa_pb import primarybeammap_tant as pbtant
 import find_pulsar_in_obs as fpio
 import mwa_metadb_utils
@@ -192,7 +192,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
         files_beg, files_end = process_vcs.find_combined_beg_end(obsid)
         files_duration = files_end - files_beg + 1
     elif beg is None and end is None:
-        logger.warning("ondisk==False so beg and end can not be None. Returning Nones")
+        logger.debug("ondisk==False so beg and end can not be None. Returning Nones")
         return None, None
     else:
         #uses manually input beginning and end times to find beam coverage
@@ -223,7 +223,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
     if exit_files>1.:
         exit_files=1.
     if enter_files>1. or exit_files<0.:
-        logger.warning("source {0} is not in the beam for the files on disk".format(pulsar))
+        logger.debug("source {0} is not in the beam for the files on disk".format(pulsar))
         enter_files = None
         exit_files = None
 
@@ -442,16 +442,16 @@ def flux_from_atnf(pulsar, query=None):
             try:
                 flux_err = query[flux_query+"_ERR"][0]
                 if flux_err == 0.0:
-                    logger.warning("{0} flux error for query: {1}, is zero. Assuming 20% uncertainty"\
+                    logger.debug("{0} flux error for query: {1}, is zero. Assuming 20% uncertainty"\
                             .format(pulsar, flux_query))
                     flux_err = flux*0.2
             except KeyError:
-                logger.warning("{0} flux error value {1}, not available. assuming 20% uncertainty"\
+                logger.debug("{0} flux error value {1}, not available. assuming 20% uncertainty"\
                             .format(pulsar, flux_query))
                 flux_err = flux*0.2
 
             if np.isnan(flux_err):
-                logger.warning("{0} flux error value for {1} not available. assuming 20% uncertainty"\
+                logger.debug("{0} flux error value for {1} not available. assuming 20% uncertainty"\
                             .format(pulsar, flux_query))
                 flux_err = flux*0.2
 
@@ -498,28 +498,28 @@ def find_spind(pulsar, freq_all, flux_all, flux_err_all):
     spind_err = None
     #Attempt to estimate flux
     if len(flux_all) > 1:
-        logger.info("{0} calculating power law".format(pulsar))
+        logger.debug("{0} calculating power law".format(pulsar))
         for i, _ in enumerate(flux_all):
             flux_all[i] = flux_all[i]
             flux_err_all[i] = flux_err_all[i]
 
         #Find params from least squares fit
         spind, K, covar_mat = least_squares_fit_plaw(freq_all, flux_all, flux_err_all)
-        logger.info("{0} derived spectral index: {1} +/- {2}".format(pulsar, spind, np.sqrt(abs(covar_mat.item(3)))))
+        logger.debug("{0} derived spectral index: {1} +/- {2}".format(pulsar, spind, np.sqrt(abs(covar_mat.item(3)))))
 
     #Do something different if there is only one flux value in archive
     elif len(flux_all) == 1:
-        logger.info("{} Only a single flux value available".format(pulsar))
+        logger.debug("{} Only a single flux value available".format(pulsar))
         if spind and not spind_err:
-            logger.info("{} spectral index error not available. Assuming 20% error".format(pulsar))
+            logger.debug("{} spectral index error not available. Assuming 20% error".format(pulsar))
             spind_err = spind*0.2
         if not spind:
-            logger.warning("{} insufficient data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013".format(pulsar))
+            logger.debug("{} insufficient data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013".format(pulsar))
             spind = -1.4
             spind_err = 1.
 
     elif len(flux_all) < 1:
-        logger.warning("{} no flux values. Cannot estimate flux. Will return Nones".format(pulsar))
+        logger.debug("{} no flux values. Cannot estimate flux. Will return Nones".format(pulsar))
 
     return spind, spind_err, K, covar_mat
 
@@ -559,7 +559,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
     logger.debug("Freqs: {0}".format(freq_all))
     logger.debug("Fluxes: {0}".format(flux_all))
     logger.debug("Flux Errors: {0}".format(flux_err_all))
-    logger.info("{0} there are {1} flux values available on the ATNF database"\
+    logger.debug("{0} there are {1} flux values available on the ATNF database"\
                 .format(pulsar, len(flux_all)))
 
     if not spind or spind_err:
@@ -571,16 +571,13 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
         flux_est, flux_est_err = flux_from_spind(f_mean, freq_all[0], flux_all[0], flux_err_all[0],\
                                                 spind, spind_err)
     else:
-        logger.warning("{} no flux values on archive. Cannot estimate flux. Will return Nones".format(pulsar))
+        logger.debug("{} no flux values on archive. Cannot estimate flux. Will return Nones".format(pulsar))
         return None, None
 
     if plot_flux==True:
             plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
                                 my_nu=f_mean, my_S=flux_est, my_S_e=flux_est_err, obsid=obsid,
                                 a_err=spind_err,  K=K, covar_mat=covar_mat)
-
-    logger.info("{0} flux estimate at {1} MHz: {2} +/- {3} Jy"\
-                .format(pulsar, f_mean/1e6, flux_est, flux_est_err))
 
     return flux_est, flux_est_err
 
@@ -617,14 +614,14 @@ def find_pulsar_w50(pulsar, query=None):
         W_50 = W_50/1000.
 
     if np.isnan(W_50_err) and not np.isnan(W_50):
-        logger.warning("{} W_50 error not on archive. returning standard 5% error".format(pulsar))
+        logger.debug("{} W_50 error not on archive. returning standard 5% error".format(pulsar))
         W_50_err = W_50*0.05
     else:
         #convert to seconds
         W_50_err = W_50_err/1000.
 
     if np.isnan(W_50):
-        logger.warning("{} applying estimated W_50. Uncertainty will be inflated".format(pulsar))
+        logger.debug("{} applying estimated W_50. Uncertainty will be inflated".format(pulsar))
         #Rankin1993 - W = x*P^0.5 where x=4.8+/-0.5 degrees of rotation at 1GHz
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
         coeff = 4.8
@@ -683,7 +680,7 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
 
     t_int=None
     if beg is None or end is None:
-        logger.info("Using duration for entire observation")
+        logger.debug("Using duration for entire observation")
         beg = obs_beg
         end = obs_end
         dur = end - beg + 1
@@ -705,7 +702,7 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
             exit_time = beg + exit_norm * dur
             t_int = dur*(exit_norm-enter_norm)
         else:
-            logger.warn("Integration time calculation failed")
+            logger.debug("Integration time calculation failed")
             enter_time = 0
             exit_time = 0
             t_int=0
@@ -905,14 +902,14 @@ def est_pulsar_sn(pulsar, obsid,\
                 .format(var_s_mean, var_gain, var_W_50, var_t_sys))
     SN_err = np.sqrt(var_s_mean + var_gain + var_W_50 + var_t_sys)
 
-    logger.debug("S_mean: {0} +/- {1}".format(s_mean, s_mean_err))
     logger.debug("Gain: {0} +/- {1}".format(gain, gain_err))
     logger.debug("t_int: {0}".format(t_int))
     logger.debug("df: {0}".format(df))
     logger.debug("period: {0}".format(period))
     logger.debug("W_50: {0} +/- {1}".format(W_50, W_50_err))
     logger.debug("t_sys: {0} +/- {1}".format(t_sys, t_sys_err))
-    logger.info("Pulsar S/N: {0} +/- {1}".format(SN, SN_err))
+    logger.info("{0} Flux: {1} +/- {2} Jy".format(pulsar, s_mean, s_mean_err))
+    logger.info("{0} S/N: {1} +/- {2}".format(pulsar, SN, SN_err))
 
     return SN, SN_err
 
@@ -920,6 +917,8 @@ def multi_psr_snfe(pulsar_list, obsid,\
                    beg=None, end=None, obs_metadata=None, full_meta=None, plot_flux=False,\
                    query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
+    logger.info("""This script may use estimations where data is missing.
+    For full verbosity, use the DEBUG logger (ie. -L DEBUG)""")
 
     if obs_metadata is None or full_meta is None:
         logger.debug("Obtaining obs metadata")
@@ -933,7 +932,7 @@ def multi_psr_snfe(pulsar_list, obsid,\
 
     mega_query = psrqpy.QueryATNF(psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
     sn_dict = {}
-    for i, pulsar in enumerate(mega_query["PSRJ"]):
+    for i, pulsar in enumerate(progress_bar(mega_query["PSRJ"], "Calculating pulsar SN: ")):
         psr_query = {}
         for key in mega_query.keys():
             psr_query[key] = [mega_query[key][i]]
