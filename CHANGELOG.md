@@ -51,7 +51,7 @@ Upgraded all scripts to python 3
 
 *   Added support for full PFB inversion
 *   Added options for toggling output formats:
-  * **-i** incoherently summed PSRFITS
-  * **-p** coherently summed PSRFITS
-  * **-v** PFB inverted (IFFT method) VDIF
-  * **-u** PFB inverted (full, 'Ord' method) VDIF
+    * **-i** incoherently summed PSRFITS
+    * **-p** coherently summed PSRFITS
+    * **-v** PFB inverted (IFFT method) VDIF
+    * **-u** PFB inverted (full, 'Ord' method) VDIF

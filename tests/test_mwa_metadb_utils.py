@@ -1,5 +1,5 @@
 #! /usr/bin/env python3
-"""Tests the mwa_metadb_utils.py script"""
+"""Tests the mwa_metadb_utils.py script."""
 from vcstools.metadb_utils import mwa_alt_az_za, get_obs_array_phase, get_common_obs_metadata,\
                                   get_files, calc_ta_fwhm, get_channels, obs_max_min
 from numpy.testing import assert_almost_equal
@@ -43,12 +43,12 @@ def test_get_common_obs_metadata():
         raise AssertionError
 
 def test_get_files():
-    """Test the get_files function"""
+    """Test the get_files function."""
     if get_files(1266823286) != ['1266823286_metafits_ppds.fits']:
         raise AssertionError
 
 def test_calc_ta_fwhm():
-    """Test the calc_ta_fwhm function"""
+    """Test the calc_ta_fwhm function."""
     tests = [(1133775752, 4.208367616629838e-08),
              (1164110416, 4.098704979920858e-08),
              (1194350120, 3.9949300287565104e-08)]
@@ -58,7 +58,7 @@ def test_calc_ta_fwhm():
         assert_almost_equal(ans, expect_fwhm, decimal=10)
 
 def test_get_channels():
-    """Test the get_channels function"""
+    """Test the get_channels function."""
     if get_channels(1133775752) != [133, 134, 135, 136, 137, 138,
                                     139, 140, 141, 142, 143, 144,
                                     145, 146, 147, 148, 149, 150,
@@ -66,7 +66,7 @@ def test_get_channels():
         raise AssertionError
 
 def test_obs_max_min():
-    """Test the obs_max_min function"""
+    """Test the obs_max_min function."""
     if obs_max_min(1133775752) != (1133775759, 1133780672):
         raise AssertionError
 

@@ -37,6 +37,7 @@ class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
         text = _textwrap.dedent(self._whitespace_matcher.sub(' ', text).strip())
         return _textwrap.wrap(text, width)
+
 class NoAuthError(Exception):
 
     """Raise when pulsar database authentication is not found"""
@@ -139,7 +140,7 @@ def check_db_and_create_det(pulsar):
         logger.info('This pulsar is already on the database')
         #gets Ra and DEC from PSRCAT
         pulsar_ra_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])
-        pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
+        _, pul_ra, pul_dec = pulsar_ra_dec[0]
         new_pulsar = False
     else:
         logger.info('Congratulations you have detected ' + pulsar + ' for the first time with the MWA')
