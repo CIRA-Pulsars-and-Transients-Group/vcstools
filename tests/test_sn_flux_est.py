@@ -9,7 +9,7 @@ import psrqpy
 
 from vcstools import data_load
 
-import sn_flux_est as snfe
+import vcstools.sn_flux_est as snfe
 
 import logging
 logger = logging.getLogger(__name__)

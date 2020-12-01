@@ -28,7 +28,7 @@ from mwa_pulsar_client import client
 from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata
 import find_pulsar_in_obs as fpio
-import sn_flux_est as snfe
+import vcstools.sn_flux_est as snfe
 from vcstools import prof_utils
 
 
