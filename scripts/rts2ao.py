@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from aocal import AOCal
 from astropy.io import fits
 import glob
 from reorder_chans import *
 import argparse
 import logging
 import sys
+
+from vcstools.aocal import AOCal
+
 logger = logging.getLogger(__name__)
 
 def real2cmplx2x2mat(riririri):
