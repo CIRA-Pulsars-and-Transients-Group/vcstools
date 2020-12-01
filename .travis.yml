@@ -6,9 +6,6 @@ install:
     # Install vcstools
     - pip install .
 
-    # Force environment variable
-    - export CMD_VCS_DB_FILE=None
-
     # Install codacy
     - pip install coveralls
     - pip install codacy-coverage
