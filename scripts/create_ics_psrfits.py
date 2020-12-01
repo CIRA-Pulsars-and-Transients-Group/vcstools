@@ -13,7 +13,7 @@ from astropy.coordinates import EarthLocation
 from astropy import units as u
 
 from vcstools.metadb_utils import get_common_obs_metadata, mwa_alt_az_za
-from config_vcs import load_config_file
+from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)
 

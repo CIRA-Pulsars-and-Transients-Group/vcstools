@@ -7,7 +7,7 @@ import numpy as np
 import traceback
 import logging
 from vcstools.metadb_utils import getmeta, get_files
-from config_vcs import load_config_file
+from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)
 

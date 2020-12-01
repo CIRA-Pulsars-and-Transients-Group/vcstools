@@ -22,7 +22,7 @@ from vcstools.job_submit import submit_slurm
 import vcstools.metadb_utils as meta
 from find_pulsar_in_obs import format_ra_dec
 
-from config_vcs import load_config_file
+from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)
 
