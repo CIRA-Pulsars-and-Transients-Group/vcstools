@@ -27,6 +27,33 @@ def get_git_version():
     git_version = check_output('git describe --tags --long --dirty --always'.split()).decode('utf-8').strip()
     return format_version(version=git_version)
 
+def download_ANTF_pulsar_database_file(datadir):
+    # Hard code the path of the ATNF psrcat database file
+    ATNF_LOC = os.path.join(datadir, 'psrcat.db')
+    # Check if the file exists, if not download the latest zersion
+    if not os.path.exists(ATNF_LOC):
+        # Importing download functions here to avoid unnessiary imports when the file is available
+        import urllib.request
+        import gzip
+        import shutil
+        import tarfile
+        print("The ANTF psrcat database file does not exist. Downloading it from www.atnf.csiro.au")
+        # Download the file
+        psrcat_zip_dir = urllib.request.urlretrieve('https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/psrcat_pkg.tar.gz')[0]
+        # Unzip it
+        with gzip.open(psrcat_zip_dir,  'rb') as f_in:
+            with open('psrcat_pkg.tar', 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        # Untar the file we require
+        psrcat_tar = tarfile.open(psrcat_zip_dir)
+        # Do some python magic to no download the file within it's subdirectory from
+        # https://stackoverflow.com/questions/8405843/python-extract-using-tarfile-but-ignoring-directories
+        member = psrcat_tar.getmember('psrcat_tar/psrcat.db')
+        member.name = os.path.basename(member.name)
+        psrcat_tar.extract(member, path=datadir)
+        print("Download complete")
+        os.remove("psrcat_pkg.tar")
+
 reqs = ['astropy>=3.2.1',
         'argparse>=1.4.0',
         'numpy>=1.13.3',
@@ -35,6 +62,10 @@ reqs = ['astropy>=3.2.1',
         #mwa software
         'mwa-voltage',
         'mwa_pb']
+
+# Download the ANTF_pulsar_database_file file if it doesn't exist
+datadir = os.path.join(os.path.dirname(__file__), 'vcstools', 'data')
+download_ANTF_pulsar_database_file(datadir)
 
 
 vcstools_version = get_git_version()
@@ -48,7 +79,7 @@ setup(name="mwa_vcstools",
       url="https://github.com/CIRA-Pulsars-and-Transients-Group/vcstools.git",
       #long_description=read('README.md'),
       packages=['vcstools'],
-      package_data={'vcstools':['data/*.csv']},
+      package_data={'vcstools':['data/*.csv', 'data/*.db']},
       python_requires='>=3.6',
       install_requires=reqs,
       scripts=[# bash
@@ -71,6 +102,7 @@ setup(name="mwa_vcstools",
       tests_require=['pytest']
 )
 
+# remove files
 os.remove('version.py')
 if os.path.isfile('record.txt'):
     os.remove('record.txt')
