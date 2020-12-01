@@ -26,7 +26,7 @@ import textwrap as _textwrap
 from vcstools import data_load
 
 from mwa_pulsar_client import client
-from mwa_metadb_utils import get_common_obs_metadata
+from vcstools.metadb_utils import get_common_obs_metadata
 import find_pulsar_in_obs as fpio
 import sn_flux_est as snfe
 import prof_utils

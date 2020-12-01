@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 from mwa_pb import primary_beam as pb
-from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
+from vcstools.metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 
 import sys
 import argparse

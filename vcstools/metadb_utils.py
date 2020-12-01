@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
 import logging
-import argparse
 
 logger = logging.getLogger(__name__)
 

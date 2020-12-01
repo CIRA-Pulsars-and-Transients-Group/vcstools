@@ -4,7 +4,7 @@ Tests the sn_flux_est.py script
 """
 import os
 from numpy.testing import assert_almost_equal
-import mwa_metadb_utils
+import vcstools.metadb_utils
 import psrqpy
 
 from vcstools import data_load

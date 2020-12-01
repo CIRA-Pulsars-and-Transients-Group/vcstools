@@ -8,7 +8,7 @@ from astropy.time import Time
 import matplotlib.pyplot as plt
 
 from mwa_pb import primary_beam as pb
-from mwa_metadb_utils import getmeta, mwa_alt_az_za
+from vcstools.metadb_utils import getmeta, mwa_alt_az_za
 
 import argparse
 

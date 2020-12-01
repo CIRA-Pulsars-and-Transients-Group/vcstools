@@ -19,7 +19,7 @@ import glob
 
 #vcstools functions
 from vcstools.job_submit import submit_slurm
-import mwa_metadb_utils as meta
+import vcstools.metadb_utils as meta
 from find_pulsar_in_obs import format_ra_dec
 
 from config_vcs import load_config_file

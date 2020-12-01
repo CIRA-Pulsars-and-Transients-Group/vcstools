@@ -17,7 +17,7 @@ import matplotlib.path as mpath
 import matplotlib.patches as mpatches
 
 from mwa_pb import primary_beam
-from mwa_metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata
+from vcstools.metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata
 from find_pulsar_in_obs import get_beam_power_over_time
 
 import logging

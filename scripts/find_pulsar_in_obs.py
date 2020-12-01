@@ -40,7 +40,7 @@ from vcstools.pointing_utils import sex2deg, deg2sex, format_ra_dec
 
 import sn_flux_est as sfe
 from mwa_pb import primary_beam
-from mwa_metadb_utils import mwa_alt_az_za, get_common_obs_metadata,\
+from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata,\
                              get_obs_array_phase, find_obsids_meta_pages,\
                              getmeta
 

@@ -21,7 +21,7 @@ from vcstools import data_load
 
 from mwa_pb import primarybeammap_tant as pbtant
 import find_pulsar_in_obs as fpio
-import mwa_metadb_utils
+import vcstools.metadb_utils
 import submit_to_database
 import process_vcs
 

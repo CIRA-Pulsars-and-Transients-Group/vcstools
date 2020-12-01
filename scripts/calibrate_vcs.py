@@ -29,7 +29,7 @@ from astropy.io import fits
 
 from vcstools.job_submit import submit_slurm
 from mdir import mdir
-from mwa_metadb_utils import getmeta
+from vcstools.metadb_utils import getmeta
 from config_vcs import load_config_file
 
 logger = logging.getLogger(__name__)

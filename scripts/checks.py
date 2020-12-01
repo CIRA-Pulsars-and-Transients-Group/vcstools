@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 import traceback
 import logging
-from mwa_metadb_utils import getmeta, get_files
+from vcstools.metadb_utils import getmeta, get_files
 from config_vcs import load_config_file
 
 logger = logging.getLogger(__name__)
@@ -298,7 +298,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     if args.all:
-        from mwa_metadb_utils import obs_max_min
+        from vcstools.metadb_utils import obs_max_min
         args.begin, args.end = obs_max_min(args.obsID)
     if args.end:
         if not args.begin:

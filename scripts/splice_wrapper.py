@@ -4,7 +4,7 @@ import subprocess
 import os
 import argparse
 import time
-import mwa_metadb_utils as meta
+import vcstools.metadb_utils as meta
 import glob
 from shutil import copy
 from itertools import groupby, count

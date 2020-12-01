@@ -8,7 +8,7 @@ from astropy.coordinates import SkyCoord,EarthLocation,AltAz
 from astropy.time import Time
 import astropy.units as u
 import argparse
-from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
+from vcstools.metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 
 import logging
 logger = logging.getLogger(__name__)
