@@ -3,8 +3,25 @@
 import os
 import sys
 import logging
+from astropy.time import Time
+from time import strptime, strftime
+from astropy.utils import iers
 
 logger = logging.getLogger(__name__)
+
+def gps_to_utc(gps):
+    # GPS time as is done in timeconvert.py
+    iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
+    logger.info(iers.IERS_A_URL)
+    utctime = Time(gps, format='gps', scale='utc').fits
+    # remove (UTC) that some astropy versions leave on the end
+    if utctime.endswith('(UTC)'):
+        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000(UTC)')
+        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
+    else:
+        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000')
+        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
+    return utctime
 
 
 def mdir(path, description, gid=34858):

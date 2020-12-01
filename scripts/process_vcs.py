@@ -6,7 +6,7 @@ import sys
 import tempfile
 import atexit
 import datetime
-from time import sleep, strptime, strftime
+from time import sleep
 import sqlite3 as lite
 from astropy.io import fits as pyfits
 from astropy.time import Time
@@ -18,7 +18,7 @@ import glob
 #vcstools functions
 from vcstools.job_submit import submit_slurm
 import vcstools.metadb_utils as meta
-from vcstools.general_utils import mdir
+from vcstools.general_utils import mdir, gps_to_utc
 from vcstools.pointing_utils import format_ra_dec
 from vcstools.config import load_config_file
 
@@ -37,22 +37,6 @@ def is_number(s):
         return True
     except ValueError:
         return False
-
-
-def gps_to_utc(gps):
-    # GPS time as is done in timeconvert.py
-    from astropy.utils import iers
-    iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
-    logger.info(iers.IERS_A_URL)
-    utctime = Time(gps, format='gps', scale='utc').fits
-    # remove (UTC) that some astropy versions leave on the end
-    if utctime.endswith('(UTC)'):
-        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000(UTC)')
-        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
-    else:
-        utctime = strptime(utctime, '%Y-%m-%dT%H:%M:%S.000')
-        utctime = strftime('%Y-%m-%dT%H:%M:%S', utctime)
-    return utctime
 
 
 def get_user_email():
