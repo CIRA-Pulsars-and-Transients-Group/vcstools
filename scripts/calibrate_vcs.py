@@ -27,7 +27,7 @@ from astropy.time import Time
 from astropy.coordinates import EarthLocation
 from astropy.io import fits
 
-from job_submit import submit_slurm
+from vcstools.job_submit import submit_slurm
 from mdir import mdir
 from mwa_metadb_utils import getmeta
 from config_vcs import load_config_file

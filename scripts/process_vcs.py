@@ -18,7 +18,7 @@ import logging
 import glob
 
 #vcstools functions
-from job_submit import submit_slurm
+from vcstools.job_submit import submit_slurm
 import mwa_metadb_utils as meta
 from find_pulsar_in_obs import format_ra_dec
 
