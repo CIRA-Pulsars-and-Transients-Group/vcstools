@@ -3,6 +3,77 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+
+def singles_source_search(ra, dec=None, box_size=45.):
+    """
+    Used to find all obsids within a box around the source to make searching through obs_ids more efficient.
+
+    singles_source_search(ra, dec=None, box_size=45.)
+    Parameters:
+    ----------
+    ra: float
+        Right Acension of the source in degrees
+    dec: float
+        Declination of the source in degrees. By default will use the enitre declination range to account for grating lobes
+    box_size: float
+        Radius of the search box. Default: 45
+
+    Returns:
+    --------
+    obsid_metadata: list
+        List of of the metadata for each obsid. The metadata is in the same format as getmeta's output
+    """
+    ra = float(ra)
+    m_o_p = False # moved over (north or south) pole
+
+    if dec is None:
+        dec_top = 90.
+        dec_bot = -90.
+    else:
+        dec = float(dec)
+        dec_top = dec + box_size
+        if dec_top > 90.:
+            dec_top = 90.
+            m_o_p = True
+
+        dec_bot = dec - box_size
+        if dec_top < -90.:
+            dec_top = -90.
+            m_o_p = True
+
+    if m_o_p:
+        obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                    'minra':0., 'maxra':360.,
+                                                    'mindec':dec_bot,'maxdec':dec_top})
+    else:
+        ra_low = ra - 30. - box_size #30 is the how far an obs would drift in 2 hours(used as a max)
+        ra_high = ra + box_size
+        if ra_low < 0.:
+            ra_new = 360 + ra_low
+            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                        'minra':ra_new, 'maxra':360.,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
+            temp_obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                             'minra':0.,'maxra':ra_high,
+                                                             'mindec':dec_bot,'maxdec':dec_top})
+            for row in temp_obsid_list:
+                obsid_list.append(row)
+        elif ra_high > 360:
+            ra_new = ra_high - 360
+            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                        'minra':ra_low, 'maxra':360.,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
+            temp_obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                             'minra':0., 'maxra':ra_new,
+                                                             'mindec':dec_bot,'maxdec':dec_top})
+            for row in temp_obsid_list:
+                obsid_list.append(row)
+        else:
+            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                        'minra':ra_low, 'maxra':ra_high,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
+    return obsid_list
+
 def find_obsids_meta_pages(params=None):
     """
     Loops over pages for each page for MWA metadata calls

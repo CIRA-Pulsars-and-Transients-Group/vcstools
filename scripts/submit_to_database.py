@@ -27,7 +27,7 @@ from mwa_pulsar_client import client
 
 from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata
-import find_pulsar_in_obs as fpio
+from vcstools.catalogue_utils import get_psrcat_ra_dec
 import vcstools.sn_flux_est as snfe
 from vcstools import prof_utils
 
@@ -166,13 +166,13 @@ def check_db_and_create_det(pulsar):
     if pulsar in pul_list_str:
         logger.info('This pulsar is already on the database')
         #gets Ra and DEC from PSRCAT
-        pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
+        pulsar_ra_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])
         pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
         new_pulsar = False
     else:
         logger.info('Congratulations you have detected ' + pulsar + ' for the first time with the MWA')
         #gets Ra and DEC from PSRCAT
-        pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
+        pulsar_ra_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])
         pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
         #then adds it to the database
         client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)
@@ -701,7 +701,7 @@ if __name__ == "__main__":
                          time_detection, profile, num_bins]
 
     if args.bestprof or args.ascii:
-        _, pul_ra, pul_dec = fpio.get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
+        _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
         subbands = flux_cal_and_submit(time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, coh, auth, pulsar=args.pulsar, trcvr=args.trcvr)
 
