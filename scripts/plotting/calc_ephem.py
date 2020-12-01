@@ -48,7 +48,7 @@ elev_limits_dict = dict(MWA=10, PKS=30, GBT=5,
 
 class Observatory(object):
 
-    """ Class to hold information regarding the observatory and the ephemeris it observes for the given target."""
+    """Class to hold information regarding the observatory and the ephemeris it observes for the given target."""
 
     def __init__(self, name, latitude=None, longitude=None, elevation=None):
         # check if the requested telescope is in the known site dictionary
@@ -123,7 +123,7 @@ class Observatory(object):
 
 
 def plot_ephem(ax, times, obs, plot_sun=False, draw_peaks=False):
-    """ Given an axis object, the times (x) and observed ephemeris (y), plot the source track."""
+    """Given an axis object, the times (x) and observed ephemeris (y), plot the source track."""
     # plot the ephemeris over 24 hours
     eph = ax.plot_date(times, obs.alt, xdate=True, ls="-", lw=2, marker='', alpha=0.5, label="{0}".format(obs.name))
 
@@ -141,7 +141,7 @@ def plot_ephem(ax, times, obs, plot_sun=False, draw_peaks=False):
     # if request, plot the Sun's ephemeris for the site
     if plot_sun:
         ax.plot_date(times[::30], obs.sun.alt, xdate=True, ls=":", lw=2, marker='', alpha=0.4, color=eph[0].get_color())
-    
+
     return "{0}: {1} UTC{2}".format(obs.name, obs.maxtimeLocalStr, obs.utcoffsetStr)
     
 

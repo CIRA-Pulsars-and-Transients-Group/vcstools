@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 Functions to handle parsing the config file for multiple super computers
 """

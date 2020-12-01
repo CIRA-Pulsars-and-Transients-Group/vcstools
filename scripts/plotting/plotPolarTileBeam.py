@@ -34,7 +34,7 @@ def compute_target_position(ra, dec, time):
 
 
 def log_normalise(data, vmin, vmax):
-    """This is almost directly copied from matplotlib's color.py."""
+    """Log normalise a list. This is almost directly copied from matplotlib's color.py."""
     result = np.ma.masked_less_equal(data, 0, copy=False)
     if vmin > vmax:
         raise ValueError("minvalue must be less than or equal to maxvalue")

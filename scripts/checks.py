@@ -6,10 +6,9 @@ import sys
 import argparse
 import logging
 
-from vcstools.metadb_utils import getmeta, get_files
+from vcstools.metadb_utils import get_files
 from vcstools.config import load_config_file
-from vcstools.check_files import check_download, check_recombine,\
-                                 check_recombine_ics, get_files_and_sizes
+from vcstools.check_files import check_download, check_recombine
 
 logger = logging.getLogger(__name__)
 

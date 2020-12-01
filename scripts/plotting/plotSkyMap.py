@@ -204,7 +204,6 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         centrefreq = 1.28e6 * (minfreq + (maxfreq-minfreq)/2) #in MHz
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
 
-        metadata = [obsid, ra, dec, duration, delays, centrefreq, channels]
         beam_meta_data = get_common_obs_metadata(obsid)
 
         # Create a meshgrid over which to iterate

@@ -5,7 +5,7 @@ import os
 import logging
 import argparse
 
-from vcstools.prof_utils import get_from_bestprof, get_from_ascii, auto_gfit, prof_eval_gfit
+from vcstools.prof_utils import get_from_bestprof, get_from_ascii, auto_gfit, prof_eval_gfit, subprocess_pdv
 
 logger = logging.getLogger(__name__)
 

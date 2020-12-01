@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import subprocess
 from vcstools.config import load_config_file
 import logging

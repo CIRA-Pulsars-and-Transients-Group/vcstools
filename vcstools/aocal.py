@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
-
-# AOCal variables
 import numpy as np
 import struct, os, logging
 from collections import namedtuple
+
+# AOCal variables
 HEADER_FORMAT = b"8s6I2d"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 HEADER_INTRO = b"MWAOCAL\0"
@@ -45,7 +44,7 @@ class AOCal(np.ndarray):
         obj.time_end = float(time_end)
         # Finally, we must return the newly created object:
         return obj
-    
+
     def __array_finalize__(self, obj):
         if obj is None:
             return

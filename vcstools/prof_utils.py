@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
-
 import numpy as np
 import re
-import sys
-import os
 import subprocess
 import logging
 from scipy.interpolate import UnivariateSpline
@@ -1302,7 +1298,7 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         try:
             prof_dict = prof_eval_gfit(profile, max_N=6, ignore_threshold=ignore_threshold, min_comp_len=min_comp_len, alpha=alpha, period=period)
             attempts_dict[alpha] = prof_dict
-        except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError) as e:
+        except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError):
             logger.setLevel(loglvl)
             logger.info("Skipping alpha value: {}".format(alpha))
             logger.setLevel(logging.WARNING) #squelch logging for the loop

@@ -3,7 +3,7 @@
 Tests the find_pulsar_in_obs.py script
 """
 from vcstools.catalogue_utils import get_psrcat_ra_dec, grab_source_alog, get_rFRB_info
-from numpy.testing import assert_approx_equal, assert_almost_equal
+from numpy.testing import assert_almost_equal
 
 def test_get_psrcat_ra_dec():
     """Test the psrqpy query and the max DM of get_psrcat_ra_dec"""
@@ -14,7 +14,6 @@ def test_get_psrcat_ra_dec():
 
 def test_get_source_alog():
     """Test get_source_alog"""
-    
     #source_type, pulsar_list, include_dm, answer
     tests = [['Pulsar','J2313+4253'   , False, [['J2313+4253', '23:13:08.6209', '+42:53:13.043']]],
              ['Pulsar','J2313+4253'   , True,  [['J2313+4253', '23:13:08.6209', '+42:53:13.043', 17.27693]]],
@@ -37,7 +36,6 @@ def test_get_source_alog():
 
 def test_get_rFRB_info():
     """Test get_rFRB_info"""
-
     expected_all = [['FRB171019', '22:17:30', '-08:40', '460.8', '1.1\n'],
                     ['FRB121102', '05:32:09', '33:05:13', '557', '2\n'],
                     ['FRB180814.J1554+74', '15:54', '+74:01', '238.32', '0.01\n'],

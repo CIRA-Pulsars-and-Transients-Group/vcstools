@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 import logging
@@ -55,7 +53,7 @@ def mdir(path, description, gid=34858):
     The default group ID is 'mwavcs' which is 30832 in numerical.
     Here, we try and make sure all directories created by process_vcs
     end up belonging to the user and the group 'mwavcs'.
-    We also try to give rwx (read, write, execute) permissions and 
+    We also try to give rwx (read, write, execute) permissions and
     set the sticky bit for both user and group.
     """
     try:

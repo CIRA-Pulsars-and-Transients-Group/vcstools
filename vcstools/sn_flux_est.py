@@ -1,5 +1,3 @@
-#! /usr/bin/env python3
-
 #other
 import logging
 import argparse
@@ -7,6 +5,7 @@ import os
 import sys
 import numpy as np
 import psrqpy
+import glob
 
 #matplotlib
 import matplotlib
@@ -21,7 +20,8 @@ from vcstools import data_load
 from vcstools.catalogue_utils import grab_source_alog
 from vcstools.beam_calc import get_beam_power_over_time, find_sources_in_obs,\
                                from_power_to_gain, get_Trec
-from vcstools.metadb_utils import get_common_obs_metadata, obs_max_min, mwa_alt_az_za
+from vcstools.metadb_utils import get_common_obs_metadata, obs_max_min,\
+                                  mwa_alt_az_za, get_channels
 from vcstools.progress_bar import progress_bar
 
 from mwa_pb import primarybeammap_tant as pbtant
@@ -42,7 +42,7 @@ def find_combined_beg_end(obsid, base_path="/group/mwavcs/vcs/", channels=None):
     if glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid)):
         combined_files = glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid))
     else:
-        channels = meta.get_channels(obsid, channels)
+        channels = get_channels(obsid, channels)
         combined_files = glob.glob("{0}/{1}/combined/{1}*_ch{2}.dat".\
                                    format(base_path, obsid, channels[-1]))
     if len(combined_files) > 0:

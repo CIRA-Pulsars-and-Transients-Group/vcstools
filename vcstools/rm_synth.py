@@ -1,6 +1,5 @@
-"""RM module that implements 1-D RM Synthesis/RMCLEAN."""
+"""RM module that implements 1-D RM Synthesis/RMCLEAN.
 
-"""
 MIT License
 
 Copyright (c) 2017 George Heald
@@ -35,6 +34,7 @@ from pylab import figure, plot, legend, xlabel, ylabel, savefig, show, errorbar
 from scipy.optimize import curve_fit
 
 class PolObservation:
+	
 	"""Class to describe an observation & perform polarimetry operations"""
 
 	def __init__(self,freq,IQU,IQUerr=None,verbose=True):
@@ -61,7 +61,6 @@ class PolObservation:
 		When initialised, a powerlaw will be fit to Stokes I
 		for possible later use.
 		"""
-
 		self.freq = freq
 		self.i = IQU[0]
 		self.q = IQU[1]
@@ -401,7 +400,7 @@ class PolObservation:
 	def print_rmstats(self):
 		"""
 		Print some stats about the results
-		
+
 		Some basic statistics will be reported to the terminal:
 			mean of RM clean components,
 		        dispersion of RM clean components

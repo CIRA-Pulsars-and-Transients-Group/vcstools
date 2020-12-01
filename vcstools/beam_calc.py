@@ -60,8 +60,8 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
         powers_freq_min.append(float(min(p) - min_power))
 
     if min(powers_freq_min) > 0.:
-        enter = 0.
-        exit = 1.
+        enter_beam = 0.
+        exit_beam = 1.
     else:
         powers_freq_min = np.array(powers_freq_min)
         logger.debug("time_steps: {}".format(time_steps))
@@ -71,21 +71,21 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
         except:
             return None, None
         if len(spline.roots()) == 2:
-            enter, exit = spline.roots()
-            enter /= duration
-            exit /= duration
+            enter_beam, exit_beam = spline.roots()
+            enter_beam /= duration
+            exit_beam /= duration
         elif len(spline.roots()) == 1:
             if powers_freq_min[0] > powers_freq_min[-1]:
                 #power declines so starts in beem then exits
-                enter = 0.
-                exit = spline.roots()[0]/duration
+                enter_beam = 0.
+                exit_beam = spline.roots()[0]/duration
             else:
-                enter = spline.roots()[0]/duration
-                exit = 1.
+                enter_beam = spline.roots()[0]/duration
+                exit_beam = 1.
         else:
-            enter = 0.
-            exit = 1.
-    return enter, exit
+            enter_beam = 0.
+            exit_beam = 1.
+    return enter_beam, exit_beam
 
 
 def get_beam_power_over_time(beam_meta_data, names_ra_dec,
@@ -219,9 +219,9 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
 
     for i, obsid in enumerate(obsid_list):
         if metadata_list:
-            beam_meta_data, full_meta = metadata_list[i]
+            beam_meta_data, _ = metadata_list[i]
         else:
-            beam_meta_data, full_meta = get_common_obs_metadata(obsid, return_all=True)
+            beam_meta_data = get_common_obs_metadata(obsid)
         #beam_meta_data = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
 
         if dt_input * 4 >  beam_meta_data[3]:
@@ -267,10 +267,10 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                     channels = obsid_meta[on][6]
                     bandwidth = (channels[-1] - channels[0] + 1.)*1.28 #MHz
                     logger.debug("Running beam_enter_exit on obsid: {}".format(obsid))
-                    enter, exit = beam_enter_exit(source_ob_power,duration,
+                    enter_beam, exit_beam = beam_enter_exit(source_ob_power,duration,
                                                   dt=dt, min_power=min_power)
-                    if enter is not None:
-                        source_data.append([obsid, duration, enter, exit,
+                    if enter_beam is not None:
+                        source_data.append([obsid, duration, enter_beam, exit_beam,
                                             max(source_ob_power)[0],
                                             centre_freq, bandwidth])
             # For each source make a dictionary key that contains a list of
@@ -285,9 +285,9 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
             for sn, source in enumerate(names_ra_dec):
                 source_ob_power = powers[on][sn]
                 if max(source_ob_power) > min_power:
-                    enter, exit = beam_enter_exit(source_ob_power, duration,
+                    enter_beam, exit_beam = beam_enter_exit(source_ob_power, duration,
                                                   dt=dt, min_power=min_power)
-                    obsid_data.append([source[0], enter, exit, max(source_ob_power)[0]])
+                    obsid_data.append([source[0], enter_beam, exit_beam, max(source_ob_power)[0]])
             # For each obsid make a dictionary key that contains a list of
             # lists of the data for each source/pulsar
             output_data[obsid] = obsid_data
