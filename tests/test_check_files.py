@@ -2,7 +2,7 @@
 """
 Tests the find_pulsar_in_obs.py script
 """
-import checks
+from vcstools.check_files import get_files_and_sizes
 
 import pickle
 from numpy.testing import assert_approx_equal, assert_almost_equal
@@ -21,7 +21,7 @@ def test_get_files_and_sizes():
             file_list = pickle.load(file_read)
         #sort the file lists to prevent change in their ordering causing errors
         expected_ans = (sorted(file_list), suffix, number)
-        ans = checks.get_files_and_sizes(obsid, mode)
+        ans = get_files_and_sizes(obsid, mode)
         ans = (sorted(ans[0]), ans[1], ans[2])
         if ans != expected_ans:
             raise AssertionError()
