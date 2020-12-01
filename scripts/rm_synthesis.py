@@ -11,7 +11,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import random
 
-import rm as rm_synth
+from vcstools import rm_synth
 
 import prof_utils
 

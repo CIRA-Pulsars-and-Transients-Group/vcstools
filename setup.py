@@ -64,7 +64,7 @@ setup(name="mwa_vcstools",
                'database/submit_to_database.py', 'database/database_vcs.py',
                'utils/zapchan.py', 'utils/calc_ephem.py', 'utils/check_disk_usage.sh',
                'utils/check_quota.sh', 'utils/mdir.py', 'utils/aocal.py', "utils/stickel.py",
-               'utils/config_vcs.py', 'utils/sn_flux_est.py', 'utils/prof_utils.py', 'utils/rm.py',
+               'utils/config_vcs.py', 'utils/sn_flux_est.py', 'utils/prof_utils.py',
                'version.py'],
       setup_requires=['pytest-runner'],
       tests_require=['pytest']
