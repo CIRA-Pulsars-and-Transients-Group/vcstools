@@ -9,7 +9,6 @@ from astropy.io import fits as pyfits
 from astropy.time import Time
 import numpy as np
 import logging
-import glob
 
 #vcstools functions
 from vcstools.job_submit import submit_slurm

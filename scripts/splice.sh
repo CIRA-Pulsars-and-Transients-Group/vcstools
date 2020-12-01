@@ -15,7 +15,7 @@ LO=${lochan:-133}
 HI=${hichan:-156}
 
 ## If no observation ID is given, abort the process.
-if [ -z $OBSID ]; then
+if [ -z "$OBSID" ]; then
     echo "No observation ID provided. Aborting!"
     exit 1
 fi
@@ -38,20 +38,20 @@ done
 ## For each 200-second chunk, loop over all channels and
 ## write a temporary metafile containing all of the files
 ## to be combined.
-for j in $(seq -f "%04g" 1 1 $NSETS);do
+for j in $(seq -f "%04g" 1 1 "$NSETS");do
 
     sname=splice_${j}
 
     for i in $(seq -f "%03g" $LO 1 $HI);do 
-        if [ $POINTING == None ]; then
-            echo ${PROJECT}_${OBSID}_ch${i}_${j}.fits >> $sname
+        if [ "$POINTING" == None ]; then
+            echo "${PROJECT}_${OBSID}_ch${i}_${j}.fits" >> $sname
         else
-            echo ${PROJECT}_${OBSID}_${POINTING}_ch${i}_${j}.fits >> $sname
+            echo "${PROJECT}_${OBSID}_${POINTING}_ch${i}_${j}.fits" >> $sname
         fi
     done
 
     ## Combine the channels for each individual 200-second 
     ## chunk, then rename it to something more sensible.
-    splice_psrfits $(cat $sname) ${OBSID}_tmp
-    mv ${OBSID}_tmp_0001.fits ${OBSID}_ch${LO}-${HI}_${j}.fits
+    splice_psrfits $(cat "$sname") "${OBSID}_tmp"
+    mv "${OBSID}_tmp_0001.fits" "${OBSID}_ch${LO}-${HI}_${j}.fits"
 done

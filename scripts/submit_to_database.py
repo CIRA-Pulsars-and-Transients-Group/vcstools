@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-
 """
 Author: Nicholas Swainston
 Creation Date: /05/2016
@@ -14,7 +13,6 @@ __date__ = '2016-05-12'
 
 import os
 import argparse
-import numpy as np
 import subprocess
 import sys
 from shutil import copyfile as cp
@@ -30,7 +28,6 @@ from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata
 from vcstools.catalogue_utils import get_psrcat_ra_dec
 from vcstools import prof_utils
-from vcstools.beam_calc import from_power_to_gain, get_Trec
 
 
 import logging
@@ -41,6 +38,7 @@ class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
         text = _textwrap.dedent(self._whitespace_matcher.sub(' ', text).strip())
         return _textwrap.wrap(text, width)
 class NoAuthError(Exception):
+
     """Raise when pulsar database authentication is not found"""
     pass
 
@@ -147,7 +145,7 @@ def check_db_and_create_det(pulsar):
         logger.info('Congratulations you have detected ' + pulsar + ' for the first time with the MWA')
         #gets Ra and DEC from PSRCAT
         pulsar_ra_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])
-        pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
+        _, pul_ra, pul_dec = pulsar_ra_dec[0]
         #then adds it to the database
         client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)
         new_pulsar = True
@@ -397,7 +395,7 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
     try:
         prof_dict = prof_utils.auto_gfit(profile,\
                     period = period, plot_name="{0}_{1}_{2}_bins_gaussian_fit.png".format(obsid, pulsar, num_bins))
-    except (prof_utils.ProfileLengthError, prof_utils.NoFitError) as _:
+    except (prof_utils.ProfileLengthError, prof_utils.NoFitError):
         prof_dict=None
 
     if not prof_dict:
@@ -799,5 +797,5 @@ if __name__ == "__main__":
             cp(str(args.calibration),str(args.cal_id) + "_rts_calibrator.tar")
             cal_file_loc = str(args.cal_id) + "_rts_calibrator.tar"
 
-        upload_cal_files(str(args.obsid), str(cal_id), cal_file_loc, args.srclist, caltype=calibrator_type)
+        upload_cal_files(str(args.obsid), str(args.cal_id), cal_file_loc, args.srclist, caltype=calibrator_type)
         os.remove(cal_file_loc)

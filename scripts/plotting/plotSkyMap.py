@@ -17,7 +17,7 @@ import matplotlib.path as mpath
 import matplotlib.patches as mpatches
 
 from mwa_pb import primary_beam
-from vcstools.metadb_utils import mwa_alt_az_za, getmeta, get_common_obs_metadata
+from vcstools.metadb_utils import getmeta, get_common_obs_metadata
 from find_pulsar_in_obs import get_beam_power_over_time
 
 import logging
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
 
-    obsid, ra, dec, duration, delays, centrefreq, channels = obsid_data
+    obsid, _, dec, duration, delays, centrefreq, channels = obsid_data
 
     # Figure out GPS times to evaluate the beam in order to map the drift scan
     midtimes = np.array([float(obsid) + 0.5 * duration]) # although only includes one element, could in future be extended
@@ -96,11 +96,11 @@ def get_beam_power(obsid_data, sources, beam_model="analytic", centeronly=True):
     return Powers
 
 
-def read_data(fname, delim=",", format="csv", coords=True):
+def read_data(fname, delim=",", read_format="csv", coords=True):
     #print "reading from", fname
     logger.info("reading from {0}".format(fname))
     # Read the data file as an Astropy Table
-    tab = Table.read(fname, delimiter=delim, format=format)
+    tab = Table.read(fname, delimiter=delim, format=read_format)
 
     if coords:
         # If we just want the coordinates, create a list of SkyCoords and return it
@@ -205,7 +205,7 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
 
         metadata = [obsid, ra, dec, duration, delays, centrefreq, channels]
-        beam_meta_data, full_meta = get_common_obs_metadata(obsid, return_all = True)
+        beam_meta_data = get_common_obs_metadata(obsid)
 
         # Create a meshgrid over which to iterate
         Dec = [] ; RA = []

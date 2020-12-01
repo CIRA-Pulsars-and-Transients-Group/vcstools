@@ -27,9 +27,10 @@ SOFTWARE.
 # Written by George Heald
 # v1.0, 14 November 2017
 
-from numpy import mean, std, sqrt, exp, diff,\
+from numpy import mean, median, std, sqrt, exp, diff,\
 				  inf, pi, zeros, ones, logical_and, where,\
-				  linespace, polyfit, polyval
+				  linspace, polyfit, polyval, arctan2,\
+				  real, log10, roll, arange, convolve
 from pylab import figure, plot, legend, xlabel, ylabel, savefig, show, errorbar
 from scipy.optimize import curve_fit
 
@@ -290,7 +291,7 @@ class PolObservation:
 		Values that are calculated and reported are:
 			Absolute value at peak, PA at peak, peak RM value
 		This is done for the dirty FDF.
-		If RMCLEAN has been performed then this is also done for the 
+		If RMCLEAN has been performed then this is also done for the
 		deconvolved Faraday spectrum.
 
 		Parameters
@@ -334,7 +335,7 @@ class PolObservation:
 				self.cln_pa = (cln_pa*180./pi)%360.
 			if verbose: print('Cleaned FDF peaks at an amplitude %f, at RM=%f +/- %f rad/m2'%(self.cln_fdf_peak,self.cln_fdf_peak_rm,self.cln_fdf_peak_rm_err))
 			if verbose: print('RM-corrected PA of cleaned FDF peak is %f degrees'%(self.cln_pa))
-			
+
 	def rmclean(self,niter=1000,gain=0.1,cutoff=2.,mask=False,verbose=True):
 		"""
 		Perform RMCLEAN

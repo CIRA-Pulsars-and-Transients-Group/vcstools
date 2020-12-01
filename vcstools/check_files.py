@@ -126,7 +126,7 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
 def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_size=None, obsID=None):
     if not required_size:
         try:
-            files, suffix, required_size = get_files_and_sizes(obsID, 'ics', mintime=startsec, maxtime=startsec + n_secs)
+            _, suffix, required_size = get_files_and_sizes(obsID, 'ics', mintime=startsec, maxtime=startsec + n_secs)
         except:
             traceback.print_exc()
             return True, 0
@@ -160,7 +160,7 @@ def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_siz
             dat_files = line.replace('_ics.dat','*.dat')
             rm_cmd = "rm -rf {0}".format(dat_files)
             logger.warning("Also running {0} to make sure ics files are rebuilt.".format(rm_cmd))
-            rm = subprocess.Popen(rm_cmd, stdout=subprocess.PIPE, shell=True)
+            subprocess.Popen(rm_cmd, stdout=subprocess.PIPE, shell=True)
     if error == False:
         logger.info("We have all {0} ICS files as expected.".format(files_in_dir))
     return error, files_in_dir

@@ -9,7 +9,7 @@
 
 import matplotlib
 matplotlib.use('Agg')
-import sys, getopt, re
+import sys, getopt
 from pylab import zeros, argsort, array, figure, pi, rc, plt, fabs, MaxNLocator, FormatStrFormatter, savefig, show
 
 #----------------------------------------------------------------------------------------------------------------------#

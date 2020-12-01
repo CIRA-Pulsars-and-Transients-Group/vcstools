@@ -146,10 +146,9 @@ def find_best_range(I, Q, U, phase_ranges):
     """
     lin_pol = np.sqrt(np.array(Q)**2 + np.array(U)**2)
     I_pol_ratio = list(lin_pol / np.array(I))
-    int_ranges = []
 
     best_max = 0
-    for i, phase_min, phase_max in zip(range(len(phase_ranges)//2), phase_ranges[0::2], phase_ranges[1::2]):
+    for _, phase_min, phase_max in zip(range(len(phase_ranges)//2), phase_ranges[0::2], phase_ranges[1::2]):
         int_min = int(len(I)*phase_min)
         int_max = int(len(I)*phase_max)
         print(max(I_pol_ratio[int_min:int_max]))
@@ -292,7 +291,7 @@ def rm_synth_pipe(kwargs):
     #Write the .ar file to text archive
     ascii_archive = f"{kwargs['label']}_archive.txt"
     prof_utils.subprocess_pdv(archive, ascii_archive)
-    I, Q, U, V, _ = prof_utils.get_stokes_from_ascii(ascii_archive)
+    I, Q, U, _, _ = prof_utils.get_stokes_from_ascii(ascii_archive)
     os.remove(ascii_archive) #remove the archive file, we don't need it anymore
 
     #find the phase range(s) to fit:
@@ -344,8 +343,8 @@ def rm_synth_pipe(kwargs):
 
         #keep quvflux if needed
         if kwargs["keep_QUV"]:
-            quvflux_name = label
-            if len(phase_ranges)>2:
+            quvflux_name = kwargs["label"]
+            if len(kwargs["phase_ranges"])>2:
                 quvflux_name += f"_{i}"
             quvflux_name += "_QUVflux.out"
             os.rename("QUVflux.out", f"../{quvflux_name}")

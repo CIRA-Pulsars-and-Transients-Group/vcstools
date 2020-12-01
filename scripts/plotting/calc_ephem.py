@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-
 """
 This script will accept a source position and a UTC day in which to calculate the ephemerides for 24 hours.
-This can be done for multiple observatories simultaneously. 
+This can be done for multiple observatories simultaneously.
 
 Date: 2018/02/13
 Author: Bradley Meyers
@@ -48,6 +47,7 @@ elev_limits_dict = dict(MWA=10, PKS=30, GBT=5,
 
 
 class Observatory(object):
+
     """ Class to hold information regarding the observatory and the ephemeris it observes for the given target."""
 
     def __init__(self, name, latitude=None, longitude=None, elevation=None):
@@ -72,7 +72,7 @@ class Observatory(object):
                 self.name = name
                 self.latitude = latitude
                 self.longitude = longitude
-                self.elevation = elevation    
+                self.elevation = elevation
 
         # determine the location of the site for later use
         self.location = EarthLocation(lat=self.latitude * u.deg,
@@ -88,7 +88,7 @@ class Observatory(object):
         self.tz = None
         self.maxtimeUTC = None
         self.maxtimeLST = None
-        self.maxtimeLocalStr = None 
+        self.maxtimeLocalStr = None
         self.utcoffsetStr = None
         self.sun = None
 
@@ -120,11 +120,10 @@ class Observatory(object):
         # compute the Sun's sky position over time
         sun_position = get_body('sun', times, self.location)
         self.sun = sun_position.transform_to(AltAz(obstime=times, location=self.location))
-        
+
 
 def plot_ephem(ax, times, obs, plot_sun=False, draw_peaks=False):
     """ Given an axis object, the times (x) and observed ephemeris (y), plot the source track."""
-
     # plot the ephemeris over 24 hours
     eph = ax.plot_date(times, obs.alt, xdate=True, ls="-", lw=2, marker='', alpha=0.5, label="{0}".format(obs.name))
 
@@ -148,7 +147,6 @@ def plot_ephem(ax, times, obs, plot_sun=False, draw_peaks=False):
 
 def calculate_ephem(ra, dec, date, tzoffset=0, site=["MWA"], show_sun=False, draw_peaks=False):
     """Compute the ephemeris for a target on a given day at a target position."""
-
     # first, let's set up the times we want to evaluate the source position for
     year, month, day = date.split("/")
     hours = np.arange(0, 24, 0.01)

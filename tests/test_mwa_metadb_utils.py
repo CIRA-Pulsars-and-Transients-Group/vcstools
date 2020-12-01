@@ -1,14 +1,13 @@
 #! /usr/bin/env python3
-"""
-Tests the mwa_metadb_utils.py script
-"""
-from vcstools.metadb_utils import mwa_alt_az_za, getmeta, get_obs_array_phase
+"""Tests the mwa_metadb_utils.py script"""
+from vcstools.metadb_utils import mwa_alt_az_za, get_obs_array_phase, get_common_obs_metadata,\
+                                  get_files, calc_ta_fwhm, get_channel, obs_max_min
 from numpy.testing import assert_almost_equal
 
 # Can't test singles_source_search or find_obsids_meta_pages because it's time consuming and always updating
 
 def test_get_obs_array_phase():
-    """Test FWHM calculation"""
+    """Test FWHM calculation."""
     for obsid, expect_ans in [(1117101752, 'P1'),
                               (1252177744, 'P2C'),
                               (1247832024, 'P2E'),
@@ -19,7 +18,7 @@ def test_get_obs_array_phase():
 
 
 def test_mwa_alt_az_za():
-    """Test the mwa_alt_az_za function"""
+    """Test the mwa_alt_az_za function."""
     # obsid, alt, az, za
     tests = [(1117101752, -71.10724927808731, 145.74310748819693, 161.1072492780873),
              (1252177744, -14.709910184536241, 264.22976419794514, 104.70991018453624),
@@ -33,8 +32,7 @@ def test_mwa_alt_az_za():
         assert_almost_equal(za,  exp_za,  decimal=3)
 
 def test_get_common_obs_metadata():
-    """Test the get_common_obs_metadata function"""
-
+    """Test the get_common_obs_metadata function."""
     expect = [1117101752, 141.662872328864, 10.6540169083522, 4800,
               [[21, 19, 17, 15, 16, 14, 12, 10, 11, 9, 7, 5, 6, 4, 2, 0],
                [21, 19, 17, 15, 16, 14, 12, 10, 11, 9, 7, 5, 6, 4, 2, 0]],
@@ -46,13 +44,11 @@ def test_get_common_obs_metadata():
 
 def test_get_files():
     """Test the get_files function"""
-
     if get_files(1266823286) != ['1266823286_metafits_ppds.fits']:
         raise AssertionError
 
 def test_calc_ta_fwhm():
     """Test the calc_ta_fwhm function"""
-
     tests = [(1133775752, 4.208367616629838e-08),
              (1164110416, 4.098704979920858e-08),
              (1194350120, 3.9949300287565104e-08)]
@@ -63,7 +59,6 @@ def test_calc_ta_fwhm():
 
 def test_get_channels():
     """Test the get_channels function"""
-
     if get_channels(1133775752) != [133, 134, 135, 136, 137, 138,
                                     139, 140, 141, 142, 143, 144,
                                     145, 146, 147, 148, 149, 150,
@@ -72,7 +67,6 @@ def test_get_channels():
 
 def test_obs_max_min():
     """Test the obs_max_min function"""
-
     if obs_max_min(1133775752) != (1133775759, 1133780672):
         raise AssertionError
 

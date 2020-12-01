@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-
 """
 Author: Nicholas Swainston
 Creation Date: /03/2016
@@ -25,21 +24,19 @@ import argparse
 import numpy as np
 import csv
 
-from vcstools import data_load
 from vcstools.pointing_utils import sex2deg, format_ra_dec
 import vcstools.sn_flux_est as sfe
 from vcstools.metadb_utils import get_obs_array_phase, singles_source_search,\
                                   find_obsids_meta_pages
-from vcstools.catalogue_utils import get_psrcat_ra_dec, grab_source_alog,\
-                                     get_rFRB_info
-from vcstools.beam_calc import beam_enter_exit, get_beam_power_over_time,\
-                               find_sources_in_obs
+from vcstools.catalogue_utils import grab_source_alog, get_rFRB_info
+from vcstools.beam_calc import get_beam_power_over_time, find_sources_in_obs
 
 
 import logging
 logger = logging.getLogger(__name__)
 
 class NoSourcesError(Exception):
+
     """Raise when no sources are found for any reason"""
     pass
 
@@ -194,9 +191,9 @@ def write_output_obs_files(output_data, obsid_meta,
                 output_file.write('\n')
 
             for data in output_data[obsid]:
-                pulsar, enter, exit, max_power = data
+                pulsar, enter_beam, exit_beam, max_power = data
                 output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} '.format(pulsar,
-                                  enter, exit, max_power))
+                                  enter_beam, exit_beam, max_power))
                 if SN_est:
                     beg = int(obsid) + 7
                     end = beg + int(obsid_meta[on][3])

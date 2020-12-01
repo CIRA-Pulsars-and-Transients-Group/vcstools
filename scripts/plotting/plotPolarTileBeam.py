@@ -14,7 +14,6 @@ from matplotlib.colors import LogNorm
 from mwa_pb import primary_beam as pb
 from vcstools.metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 
-import sys
 import argparse
 
 import logging
@@ -28,14 +27,14 @@ def compute_target_position(ra, dec, time):
     MWA_LOCATION = EarthLocation(lat=MWA_LAT * u.deg,
                                  lon=MWA_LON * u.deg,
                                  height=MWA_ELEV * u.m)
-    
+
     coords = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
     
     return coords.transform_to(AltAz(obstime=time, location=MWA_LOCATION))
 
 
 def log_normalise(data, vmin, vmax):
-    """ This is almost directly copied from matplotlib's color.py """
+    """This is almost directly copied from matplotlib's color.py."""
     result = np.ma.masked_less_equal(data, 0, copy=False)
     if vmin > vmax:
         raise ValueError("minvalue must be less than or equal to maxvalue")
@@ -72,7 +71,7 @@ def plot_beam(obs, target, cal, freq):
     az, za = np.meshgrid(np.radians(phi), np.radians(theta))
         
     # compute beam and plot
-    delays = metadata[4] #x and y delays 
+    delays = metadata[4] #x and y delays
     logger.debug("delays: {0}".format(delays))
     logger.debug("freq*1e6: {0}".format(freq*1e6))
     logger.debug("za: {0}".format(za))
@@ -121,10 +120,10 @@ def plot_beam(obs, target, cal, freq):
     cbarCC.add_lines(cs)
 
     # plot the pointing centre of the tile beam
-    pointing_EL, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
+    _, pointing_AZ, pointing_ZA = mwa_alt_az_za(obs)
     ax.plot(np.radians(pointing_AZ), np.radians(pointing_ZA), ls="", marker="+", ms=8, color='C3', zorder=1002, label="pointing centre")
 
-    if target is not None:   
+    if target is not None:
         # color map for tracking target positions
         target_colors = cm.viridis(np.linspace(0, 1, len(target.obstime.gps)))
         logger.info("obs time length: {0} seconds".format(len(target.obstime.gps)))
@@ -212,7 +211,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     
-    #set log levels    
+    #set log levels
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
     ch.setLevel(loglevels[args.loglvl])
@@ -223,14 +222,14 @@ if __name__ == "__main__":
         time = Time(args.gps, scale="utc", format="gps")
     elif args.utc and not args.gps:
         time = Time(args.utc, scale="utc", format="isot")
-    elif args.gps and arg.utc:
+    elif args.gps and args.utc:
         logger.warn("You supplied GPS and UTC times: only using GPS time")
         time = Time(args.gps, scale="utc", format="gps")
     else:
         time = None
 
     if args.ra and args.dec and time:
-        target = compute_target_position(args.ra, args.dec, time) 
+        target = compute_target_position(args.ra, args.dec, time)
     else:
         logger.warn("No target RA, Dec or Time given. Not plotting target position.")
         target = None

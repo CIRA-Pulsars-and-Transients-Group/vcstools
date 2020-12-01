@@ -22,7 +22,6 @@ from vcstools.catalogue_utils import grab_source_alog
 from vcstools.beam_calc import get_beam_power_over_time, find_sources_in_obs
 from vcstools.metadb_utils import get_common_obs_metadata, obs_max_min, mwa_alt_az_za
 from vcstools.beam_calc import from_power_to_gain, get_Trec
-import process_vcs
 
 from mwa_pb import primarybeammap_tant as pbtant
 

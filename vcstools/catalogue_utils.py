@@ -5,6 +5,9 @@ import csv
 from vcstools import data_load
 from vcstools.pointing_utils import deg2sex
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def get_psrcat_ra_dec(pulsar_list=None, max_dm=250., include_dm=False, query=None):
     """

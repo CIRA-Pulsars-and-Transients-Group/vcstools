@@ -3,12 +3,12 @@
 import numpy as np
 from astropy.io import fits
 import glob
-from reorder_chans import *
 import argparse
 import logging
 import sys
 
 from vcstools.aocal import AOCal
+from vcstools.general_utils import sfreq
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +45,12 @@ def rtsfile(metafits, rts_filename_pattern="DI_JonesMatrices_node[0-9]*.dat"):
     d = f[1].data
     #nants = f[1].header[4] // 2 # I THINK this is the number of antennas
     ant_map = list(d.field('Antenna'))
-    if "TileName" in f[1].header.values():
-        tilenames = list(d.field('TileName'))
-        #ant_names = tilenames[0:-1:2]
-    elif "Tile" in f[1].header.values():
-        tilenames = list(d.field('Tile'))
-        #ant_names = ["Tile{0:03d}".format(tilenames[i*2]) for i in range(len(tilenames)//2)]
-    else:
+    #if "TileName" in f[1].header.values():
+    #    tilenames = list(d.field('TileName'))
+    #elif "Tile" in f[1].header.values():
+    #    tilenames = list(d.field('Tile'))
+    #else:
+    if "TileName" not in f[1].header.values() and "Tile" not in f[1].header.values()
         logging.error(("Error: Antenna Name field not found"))
         exit()
     ao_order  = [0 for i in range(len(ant_map)//2)]
@@ -147,9 +146,9 @@ if __name__ == "__main__":
             import version
             logger.info(version.__version__)
             sys.exit(0)
-        except ImportError as ie:
+        except ImportError as IE:
             logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(ie))
+            logger.error("ImportError: {0}".format(IE))
             sys.exit(0)
 
     # set up the logger for stand-alone execution

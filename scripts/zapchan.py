@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """
 Script to work out flagging of channels in PRESTO and PSRCHIVE formats.
 
@@ -37,7 +36,7 @@ def write_paz_file(ctf, fname):
 
 def zap(r, p, chans, zapedges=False, nzap=20, zapmid=False, zaps=None):
     """
-    Main function to take in the user's requested masking information and create a 
+    Main function to take in the user's requested masking information and create a
     usable string and/or file containing the channels that need to be flagged.
     """
 
@@ -92,7 +91,7 @@ def zap(r, p, chans, zapedges=False, nzap=20, zapmid=False, zaps=None):
         # the only other option is you asked for no edge of center channels to flagged,
         # so chans_to_flag should be empty
 
-    # For the paz file: need to just flatten everything out into one list 
+    # For the paz file: need to just flatten everything out into one list
     cchan_flags = []
     if chans_to_flag:
         for c in range(coarse):
@@ -113,7 +112,7 @@ def zap(r, p, chans, zapedges=False, nzap=20, zapmid=False, zaps=None):
     # regardless of if we added something, remove the None values and convert to a sorted list
     # NOTE: filter(None, p_ctf) doesn't work here because it also removes 0's
     p_ctf = sorted([x for x in p_ctf if x is not None])
-    
+
     # For the rfifind string: trickier formatting, so we need to account for the user-defined channel zaps first
     # We should now start from the p_ctf list, because that has ALL required channels, and we can re-split based
     # on whether the channels are consecutive or not
@@ -158,14 +157,14 @@ if __name__ == '__main__':
                      INFO=logging.INFO,
                      WARNING=logging.WARNING)
 
-    parser = argparse.ArgumentParser(description="""Output the correctly formated MWA band edge channels and 
+    parser = argparse.ArgumentParser(description="""Output the correctly formated MWA band edge channels and
                                     user-defined channels to remove for aliasing/RFI excision.
                                     If no options are given, returns an empty string.""",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # there should be two options for the channels, either:
     # give me the total number of fine channels (and I'll assume there's 128 fine channels per coarse channel)
-    # OR 
+    # OR
     # give me the number of coarse channels and the number of fine channels and I'll use that information to then
     # calculate the intervals appropriate.
     parser.add_argument("-N", "--nchans", type=int, metavar='Nchan',
@@ -226,7 +225,7 @@ if __name__ == '__main__':
     logger.addHandler(ch)
     logger.propagate = False
 
-    # check to make sure that the channels variable is formatted correctly, 
+    # check to make sure that the channels variable is formatted correctly,
     # no matter the input (should be a tuple/iterable)
     if args.nchans and not args.n_coarse_fine:
         channels = (args.nchans, None)
@@ -243,7 +242,7 @@ if __name__ == '__main__':
                            "Please use either the -N or -C options")
         sys.exit(0)
 
-    # check to make sure that if nzap is given but user has not elected 
+    # check to make sure that if nzap is given but user has not elected
     # to zap edges, we zap 0 edge channels
     if args.nzap and not args.zapedges:
         args.nzap = 0
