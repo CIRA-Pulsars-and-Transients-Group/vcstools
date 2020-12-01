@@ -12,7 +12,6 @@ import sqlite3 as lite
 from astropy.io import fits as pyfits
 from astropy.time import Time
 from reorder_chans import *
-from mdir import mdir
 import numpy as np
 import logging
 import glob
@@ -20,8 +19,8 @@ import glob
 #vcstools functions
 from vcstools.job_submit import submit_slurm
 import vcstools.metadb_utils as meta
-from find_pulsar_in_obs import format_ra_dec
-
+from vcstools.general_utils import mdir
+from vcstools.pointing_utils import format_ra_dec
 from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)

@@ -28,7 +28,7 @@ from astropy.coordinates import EarthLocation
 from astropy.io import fits
 
 from vcstools.job_submit import submit_slurm
-from mdir import mdir
+from vcstools.general_utils import mdir
 from vcstools.metadb_utils import getmeta
 from vcstools.config import load_config_file
 

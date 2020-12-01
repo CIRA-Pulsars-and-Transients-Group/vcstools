@@ -12,8 +12,7 @@ import matplotlib.pyplot as plt
 import random
 
 from vcstools import rm_synth
-
-import prof_utils
+from vcstools import prof_utils
 
 logger = logging.getLogger(__name__)
 
