@@ -29,7 +29,7 @@ endif()
 message("Finding OpenMP")
 include(FindOpenMP)
 
-find_package(SLALIB)
+find_package(PAL)
 find_package(CFITSIO)
 find_package(PSRFITS_UTILS)
 find_package(FFTW3 COMPONENTS single openmp)

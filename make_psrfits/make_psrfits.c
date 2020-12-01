@@ -9,14 +9,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include "psrfits.h"
-#include "slalib.h"
+#include "star/pal.h"
+#include "star/palmac.h"
 
-#ifndef DEGTORAD
-#define DEGTORAD 0.017453292519943295769236907684886127134428718885417
-#endif
-#ifndef RADTODEG
-#define RADTODEG 57.29577951308232087679815481410517033240547246656
-#endif
 size_t readn( int inSock, void *outBuf, size_t inLen ) {
     size_t  nleft;
     int nread;
@@ -609,10 +604,10 @@ int main() {
     pf.sub.lst = pf.hdr.start_lst;
     pf.sub.ra = pf.hdr.ra2000;
     pf.sub.dec = pf.hdr.dec2000;
-    slaEqgal(pf.hdr.ra2000*DEGTORAD, pf.hdr.dec2000*DEGTORAD, 
+    palEqgal(pf.hdr.ra2000*PAL__DD2R, pf.hdr.dec2000*PAL__DD2R, 
              &pf.sub.glon, &pf.sub.glat);
-    pf.sub.glon *= RADTODEG;
-    pf.sub.glat *= RADTODEG;
+    pf.sub.glon *= PAL__DR2D;
+    pf.sub.glat *= PAL__DR2D;
     pf.sub.feed_ang = 0.0;
     pf.sub.pos_ang = 0.0;
     pf.sub.par_ang = 0.0;
