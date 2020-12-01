@@ -6,21 +6,7 @@ any of the channels are above 128.
 """
 from astropy.io import fits as pyfits
 import argparse
-
-def sfreq(freqs):
-
-    if len(freqs) != 24:
-        print("There are not 24 coarse chans defined for this obs. Got: %s" % freqs)
-        return
-
-    #freqs.sort()   # It should already be sorted, but just in case...[SET] Commenting this out because sort() is ironically putting 2-digit channels out of order
-    lowchans = [f for f in freqs if f <= 128]
-    highchans = [f for f in freqs if f > 128]
-
-    highchans.reverse()
-    freqs = lowchans + highchans
-
-    return freqs
+from vcstools.general_utils import sfreq
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Print the coarse channel sequence as in gpubox/subband order. Make sure you have *_metafits_ppds.fits")

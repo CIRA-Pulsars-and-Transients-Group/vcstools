@@ -27,8 +27,10 @@ SOFTWARE.
 # Written by George Heald
 # v1.0, 14 November 2017
 
-from numpy import *
-from pylab import *
+from numpy import mean, std, sqrt, exp, diff,\
+				  inf, pi, zeros, ones, logical_and, where,\
+				  linespace, polyfit, polyval
+from pylab import figure, plot, legend, xlabel, ylabel, savefig, show, errorbar
 from scipy.optimize import curve_fit
 
 class PolObservation:
@@ -67,12 +69,12 @@ class PolObservation:
 			self.ierr = None
 			self.qerr = None
 			self.uerr = None
-			p,pcov = curve_fit(lambda f,s,a: s*(f/mean(f))**a, freq, self.i, p0=(mean(self.i),-0.7))
+			p, _ = curve_fit(lambda f,s,a: s*(f/mean(f))**a, freq, self.i, p0=(mean(self.i),-0.7))
 		else:
 			self.ierr = IQUerr[0]
 			self.qerr = IQUerr[1]
 			self.uerr = IQUerr[2]
-			p,pcov = curve_fit(lambda f,s,a: s*(f/mean(f))**a, freq, self.i, p0=(mean(self.i),-0.7), sigma=self.ierr)
+			p, _ = curve_fit(lambda f,s,a: s*(f/mean(f))**a, freq, self.i, p0=(mean(self.i),-0.7), sigma=self.ierr)
 		self.i_model = p[0]*(freq/mean(freq))**p[1]
 		if verbose: print('Fitted spectral index is %f'%p[1])
 		self.model_s = p[0]
@@ -255,7 +257,7 @@ class PolObservation:
 	def plot_stokesi(self,display=True,save=None):
 		"""
 		Plot Stokes I
-	
+
 		The plot will show the Stokes I values (and errors if available).
 
 		Parameters
@@ -290,7 +292,7 @@ class PolObservation:
 		This is done for the dirty FDF.
 		If RMCLEAN has been performed then this is also done for the 
 		deconvolved Faraday spectrum.
-		
+
 		Parameters
 		----------
 		verbose : boolean, optional (default True)
@@ -406,9 +408,6 @@ class PolObservation:
 		"""
 
 		if self.rmclean_done:
-			cp = where(abs(self.rm_comps)>0.)
-			#cabs = abs(self.rm_comps[cp])
-			#crm = self.phi[cp]
 			cabs = abs(self.rm_comps)
 			crm = self.phi.copy()
 			mcrm = sum(cabs*crm)/sum(cabs)

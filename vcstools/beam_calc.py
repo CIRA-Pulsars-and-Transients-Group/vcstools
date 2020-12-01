@@ -11,6 +11,35 @@ from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata, getmet
 import logging
 logger = logging.getLogger(__name__)
 
+
+def from_power_to_gain(powers, cfreq, n, coh=True):
+    from astropy.constants import c,k_B
+    from math import sqrt
+
+    obswl = c.value/cfreq
+    #for coherent
+    if coh:
+        coeff = obswl**2*16*n/(4*np.pi*k_B.value)
+    else:
+        coeff = obswl**2*16*sqrt(n)/(4*np.pi*k_B.value)
+    logger.debug("Wavelength {} m".format(obswl))
+    logger.debug("Gain coefficient: {}".format(coeff))
+    SI_to_Jy = 1e-26
+    return (powers*coeff)*SI_to_Jy
+
+
+def get_Trec(tab, obsfreq):
+    Trec = 0.0
+    for r in range(len(tab)-1):
+        if tab[r][0]==obsfreq:
+            Trec = tab[r][1]
+        elif tab[r][0] < obsfreq < tab[r+1][0]:
+            Trec = ((tab[r][1] + tab[r+1][1])/2)
+    if Trec == 0.0:
+        logger.debug("ERROR getting Trec")
+    return Trec
+
+
 def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
     """
     Calculates when the source enters and exits the beam

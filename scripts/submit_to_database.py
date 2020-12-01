@@ -25,11 +25,12 @@ import textwrap as _textwrap
 #MWA software imports
 from mwa_pulsar_client import client
 
+import vcstools.sn_flux_est as snfe
 from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata
 from vcstools.catalogue_utils import get_psrcat_ra_dec
-import vcstools.sn_flux_est as snfe
 from vcstools import prof_utils
+from vcstools.beam_calc import from_power_to_gain, get_Trec
 
 
 import logging
@@ -67,33 +68,6 @@ def get_pulsar_dm_p(pulsar):
         if len(columns) > 1:
             p = columns[1]
     return [dm, p]
-
-
-def from_power_to_gain(powers,cfreq,n,coh=True):
-    from astropy.constants import c,k_B
-    from math import sqrt
-
-    obswl = c.value/cfreq
-    #for coherent
-    if coh:
-        coeff = obswl**2*16*n/(4*np.pi*k_B.value)
-    else:
-        coeff = obswl**2*16*sqrt(n)/(4*np.pi*k_B.value)
-    logger.debug("Wavelength {} m".format(obswl))
-    logger.debug("Gain coefficient: {}".format(coeff))
-    SI_to_Jy = 1e-26
-    return (powers*coeff)*SI_to_Jy
-
-def get_Trec(tab,obsfreq):
-    Trec = 0.0
-    for r in range(len(tab)-1):
-        if tab[r][0]==obsfreq:
-            Trec = tab[r][1]
-        elif tab[r][0] < obsfreq < tab[r+1][0]:
-            Trec = ((tab[r][1] + tab[r+1][1])/2)
-    if Trec == 0.0:
-        logger.debug("ERROR getting Trec")
-    return Trec
 
 def get_subbands(metadata):
     """

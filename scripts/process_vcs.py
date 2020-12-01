@@ -3,14 +3,10 @@
 import subprocess
 import os
 import sys
-import tempfile
-import atexit
 import datetime
 from time import sleep
-import sqlite3 as lite
 from astropy.io import fits as pyfits
 from astropy.time import Time
-from reorder_chans import *
 import numpy as np
 import logging
 import glob
@@ -21,6 +17,7 @@ import vcstools.metadb_utils as meta
 from vcstools.general_utils import mdir, gps_to_utc
 from vcstools.pointing_utils import format_ra_dec
 from vcstools.config import load_config_file
+from vcstools.general_utils import sfreq
 
 logger = logging.getLogger(__name__)
 
@@ -37,37 +34,6 @@ def get_user_email():
     return email.strip()
 
 
-def find_combined_beg_end(obsid, base_path="/group/mwavcs/vcs/", channels=None):
-    """
-    looks through the comined files of the input obsid and returns the max and min in gps time
-    Input:
-        obsid: The MWA observation ID
-    Optional Input:
-        base_path: the direct path the base vcs directory. Default: /group/mwavcs/vcs/\
-        channels: a list of the frequency channel ids. Default None which then gets the
-                  from the mwa metadata
-    """
-    #TODO have some sort of check to look for gaps
-    if glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid)):
-        combined_files = glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid))
-    else:
-        channels = meta.get_channels(obsid, channels)
-        combined_files = glob.glob("{0}/{1}/combined/{1}*_ch{2}.dat".\
-                                   format(base_path, obsid, channels[-1]))
-    if len(combined_files) > 0:
-        comb_times = []
-        for comb in combined_files:
-            comb_times.append(int(comb.split("_")[1]))
-        beg = min(comb_times)
-        end = max(comb_times)
-    else:
-        logger.warn("No combined files on disk for {0}".format(obsid))
-        beg = None
-        end = None
-
-    return beg, end
-
-
 def gps_time_lists(start, stop, chunk):
     time_chunks = []
     while (start + chunk) < stop:
@@ -79,7 +45,6 @@ def gps_time_lists(start, stop, chunk):
 
 def ensure_metafits(data_dir, obs_id, metafits_file):
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
-    comp_config = load_config_file()
 
     if not os.path.exists(metafits_file):
         logger.warning("{0} does not exists".format(metafits_file))
@@ -207,12 +172,8 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
     for time_to_get in range(start_time,stop_time,increment):
         if time_to_get + increment > stop_time:
             increment = stop_time - time_to_get + 1
-        get_data = "{0} --obs={1} --type={2} --from={3} --duration={4} --parallel={5} --dir={6}".\
-                   format(voltdownload, obsid, data_type, time_to_get,
-                          (increment-1), parallel, dl_dir)
         #need to subtract 1 from increment since voltdownload wants how many
         #seconds PAST the first one
-
 
         voltdownload_batch = "volt_{0}".format(time_to_get)
         check_batch = "check_volt_{0}".format(time_to_get)
@@ -312,7 +273,6 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir,
     # Downloads the visablities to  /astro/mwavcs/vcs/[cal_obs_id]/vis
     # but creates a link to it here /astro/mwavcs/vcs/[obs_id]/cal/[cal_obs_id]
     csvfile = os.path.join(batch_dir, "{0}_dl.csv".format(cal_obs_id))
-    obsdownload = "obsdownload.py"
     create_link(data_dir, 'vis', product_dir, 'vis')
     obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
     secs_to_run = "03:00:00" # sometimes the staging can take a while...
@@ -818,9 +778,9 @@ if __name__ == '__main__':
             import version
             logger.info(version.__version__)
             sys.exit(0)
-        except ImportError as ie:
+        except ImportError as IE:
             logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(ie))
+            logger.error("ImportError: {0}".format(IE))
             sys.exit(0)
 
     #Option parsing
