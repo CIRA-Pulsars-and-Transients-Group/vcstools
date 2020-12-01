@@ -41,8 +41,9 @@ def test_get_common_obs_metadata():
               184.96, [133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144,
                        145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156]]
     ans = get_common_obs_metadata(1117101752)
-        if ans != expect:
-            raise AssertionError
+    if ans != expect:
+        raise AssertionError
+
 def test_get_files():
     """Test the get_files function"""
 
