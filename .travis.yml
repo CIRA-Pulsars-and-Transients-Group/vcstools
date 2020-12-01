@@ -10,7 +10,6 @@ install:
     - pip install coveralls
     - pip install codacy-coverage
     - export CODACY_PROJECT_TOKEN=727d068b9ee14da98bbd90c04eb3e91d
-    - export PYTHONPATH="/home/travis/virtualenv/python3.7.1/bin/:/home/travis/virtualenv/python3.6.7/bin/:$PYTHONPATH"
 # command to run tests
 script:
     - coverage run setup.py test
