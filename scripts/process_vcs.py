@@ -42,37 +42,6 @@ def gps_time_lists(start, stop, chunk):
     return time_chunks
 
 
-def ensure_metafits(data_dir, obs_id, metafits_file):
-    # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
-
-    if not os.path.exists(metafits_file):
-        logger.warning("{0} does not exists".format(metafits_file))
-        logger.warning("Will download it from the archive. This can take a "
-                      "while so please do not ctrl-C.")
-        logger.warning("At the moment, even through the downloaded file is "
-                       "labelled as a ppd file this is not true.")
-        logger.warning("This is hopefully a temporary measure.")
-
-        get_metafits = "wget http://ws.mwatelescope.org/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
-        try:
-            subprocess.call(get_metafits,shell=True)
-        except:
-            logger.error("Couldn't download {0}. Aborting.".\
-                          format(os.basename(metafits_file)))
-            sys.exit(0)
-        # clean up
-        #os.remove('obscrt.crt')
-        #os.remove('obskey.key')
-    # make a copy of the file in the product_dir if that directory exists
-    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
-    # in case --work_dir was specified in process_vcs call product_dir and data_dir
-    # are the same and thus we will not perform the copy
-    #data_dir = data_dir.replace(comp_config['base_data_dir'], comp_config['base_product_dir']) # being pedantic
-    if os.path.exists(data_dir) and not os.path.exists(metafits_file):
-        logger.info("Copying {0} to {1}".format(metafits_file, data_dir))
-        from shutil import copy2
-        copy2("{0}".format(metafits_file), "{0}".format(data_dir))
-
 def create_link(data_dir, target_dir, product_dir, link):
     """
     Creates a symbolic link product_dir/link that points to data_dir/target_dir
@@ -875,13 +844,13 @@ if __name__ == '__main__':
                      vcstools_version=args.vcstools_version, nice=args.nice)
     elif args.mode == 'recombine':
         logger.info("Mode: {0}".format(args.mode))
-        ensure_metafits(data_dir, args.obs, metafits_file)
+        meta.ensure_metafits(data_dir, args.obs, metafits_file)
         vcs_recombine(args.obs, args.begin, args.end, args.increment, data_dir,
                       product_dir,
                       vcstools_version=args.vcstools_version, nice=args.nice)
     elif args.mode == 'correlate':
         logger.info("Mode: {0}".format(args.mode))
-        ensure_metafits(data_dir, args.obs, metafits_file)
+        meta.ensure_metafits(data_dir, args.obs, metafits_file)
         vcs_correlate(args.obs, args.begin, args.end, args.increment, data_dir,
                       product_dir, args.ft_res, metafits_file,
                       vcstools_version=args.vcstools_version, nice=args.nice)
@@ -920,7 +889,7 @@ if __name__ == '__main__':
                             "Using it by default".format(args.DI_dir))
             else:
                 flagged_tiles_file = None
-        ensure_metafits(data_dir, args.obs, metafits_file)
+        meta.ensure_metafits(data_dir, args.obs, metafits_file)
         #Turn the pointings into a list
         if args.pointings:
             pointing_list = args.pointings

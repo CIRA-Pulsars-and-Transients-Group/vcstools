@@ -4,6 +4,37 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def ensure_metafits(data_dir, obs_id, metafits_file):
+    # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
+
+    if not os.path.exists(metafits_file):
+        logger.warning("{0} does not exists".format(metafits_file))
+        logger.warning("Will download it from the archive. This can take a "
+                      "while so please do not ctrl-C.")
+        logger.warning("At the moment, even through the downloaded file is "
+                       "labelled as a ppd file this is not true.")
+        logger.warning("This is hopefully a temporary measure.")
+
+        get_metafits = "wget http://ws.mwatelescope.org/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
+        try:
+            subprocess.call(get_metafits,shell=True)
+        except:
+            logger.error("Couldn't download {0}. Aborting.".\
+                          format(os.basename(metafits_file)))
+            sys.exit(0)
+        # clean up
+        #os.remove('obscrt.crt')
+        #os.remove('obskey.key')
+    # make a copy of the file in the product_dir if that directory exists
+    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
+    # in case --work_dir was specified in process_vcs call product_dir and data_dir
+    # are the same and thus we will not perform the copy
+    #data_dir = data_dir.replace(comp_config['base_data_dir'], comp_config['base_product_dir']) # being pedantic
+    if os.path.exists(data_dir) and not os.path.exists(metafits_file):
+        logger.info("Copying {0} to {1}".format(metafits_file, data_dir))
+        from shutil import copy2
+        copy2("{0}".format(metafits_file), "{0}".format(data_dir))
+
 
 def singles_source_search(ra, dec=None, box_size=45.):
     """
