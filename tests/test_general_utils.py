@@ -3,7 +3,7 @@
 from vcstools.general_utils import gps_to_utc, is_number
 
 def test_is_number():
-    """test the is_number function."""
+    """Test the is_number function."""
     tests = [(1111111111, True), ('abc', False)]
     for input_test, expect in tests:
         ans = is_number(input_test)
@@ -11,7 +11,7 @@ def test_is_number():
             raise AssertionError
 
 def test_gps_to_utc():
-    """test the gps_to_utc function."""
+    """Test the gps_to_utc function."""
     tests = [(1111111111, '2015-03-23T01:58:15'), (1222222222, '2018-09-29T02:10:04')]
     for obs, exp_utc in tests:
         utc = gps_to_utc(obs)

@@ -6,7 +6,6 @@ import sys
 import argparse
 import logging
 
-from vcstools.metadb_utils import get_files
 from vcstools.config import load_config_file
 from vcstools.check_files import check_download, check_recombine
 

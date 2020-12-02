@@ -1,3 +1,4 @@
+
 """RM module that implements 1-D RM Synthesis/RMCLEAN.
 
 MIT License
@@ -34,7 +35,7 @@ from pylab import figure, plot, legend, xlabel, ylabel, savefig, show, errorbar
 from scipy.optimize import curve_fit
 
 class PolObservation:
-	
+
 	"""Class to describe an observation & perform polarimetry operations"""
 
 	def __init__(self,freq,IQU,IQUerr=None,verbose=True):
