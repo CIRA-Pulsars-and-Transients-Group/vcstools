@@ -1,5 +1,7 @@
 from vcstools.general_utils import is_number
 import logging
+import os
+import subprocess
 
 logger = logging.getLogger(__name__)
 
