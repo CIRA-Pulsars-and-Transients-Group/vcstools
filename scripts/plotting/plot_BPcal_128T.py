@@ -9,8 +9,8 @@
 
 import matplotlib
 matplotlib.use('Agg')
-import sys, getopt, string, re
-from pylab import *
+import sys, getopt
+from pylab import zeros, argsort, array, figure, pi, rc, plt, fabs, MaxNLocator, FormatStrFormatter, savefig, show
 
 #----------------------------------------------------------------------------------------------------------------------#
 # check for command-line options
@@ -161,12 +161,10 @@ print("plotting Jones matrices for %d frequency channels and %d antennas" % (N_c
 fig1 = figure(figsize=(12,8))
 
 if sel_offset == 1:
-
-    figure(1); fig1.canvas.set_window_title('Amp. of the Jones matrices fits') 
+    figure(1); fig1.canvas.set_window_title('Amp. of the Jones matrices fits')
 
 elif sel_offset == 2:
-
-    figure(1); fig1.canvas.set_window_title('Phase of the Jones matrices fits') 
+    figure(1); fig1.canvas.set_window_title('Phase of the Jones matrices fits')
 
     # unwrap 2pi phase jumps
     for ant in range(0, N_ant):

@@ -66,9 +66,9 @@ if [[ -z $start ]];then
 	# as no times were supplied we'll untar all tarballs
 	# to that end we extract the gpstimes of the first
 	# and last files
-	cd ${workdir}
-	first_file=`ls ${obsid}_*_combined.tar | head -1`
-	last_file=`ls ${obsid}_*_combined.tar | tail -1`
+	cd "${workdir}"
+	first_file=$(ls "${obsid}"_*_combined.tar | head -1)
+	last_file=$(ls "${obsid}"_*_combined.tar | tail -1)
 	start=${first_file:11:10}
 	stop=${last_file:11:10}
     else
@@ -94,18 +94,18 @@ fi
 
 # okay, we should have all the info we need from here
 # and can just loop through all times
-cd $workdir
-for gpstime in `seq $start $stop`;do
+cd "$workdir"
+for gpstime in $(seq "$start" "$stop");do
     file=${obsid}_${gpstime}_combined.tar
-    if [ ! -f ${file} ];then
+    if [ ! -f "${file}" ];then
 	echo "${file} does not exist."
 	continue
     fi
     if [[ $keep -eq 0 ]];then
-        (tar xvf ${file} && rm -rfv ${file}) &
+        (tar xvf "${file}" && rm -rfv "${file}") &
         pwait $maxjobs
     else
-        tar xvf $file &
+        tar xvf "$file" &
         pwait $maxjobs
     fi
 done

@@ -4,10 +4,11 @@ from scipy.optimize import curve_fit
 import numpy
 import argparse
 import logging
-import prof_utils
 import os
 import numpy as np
 import json
+
+from vcstools import prof_utils
 
 logger = logging.getLogger(__name__)
 

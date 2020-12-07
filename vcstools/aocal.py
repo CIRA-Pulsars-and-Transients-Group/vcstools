@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
-
-# AOCal variables
 import numpy as np
 import struct, os, logging
 from collections import namedtuple
+
+# AOCal variables
 HEADER_FORMAT = b"8s6I2d"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 HEADER_INTRO = b"MWAOCAL\0"
@@ -15,6 +14,7 @@ Header.__new__.__defaults__ = (HEADER_INTRO, 0, 0, 0, 0, 0, 0, 0.0, 0.0)
 Collection of database related utilities that are used throughout the VCS processing pipeline
 """
 class AOCal(np.ndarray):
+
     """
     AOCAl stored as a numpy array (with start and stop time stored as floats)
 
@@ -33,7 +33,7 @@ class AOCal(np.ndarray):
     aocal.n_chan
     aocal.n_pol
     """
-    
+
     def __new__(cls, input_array, time_start=0.0, time_end=0.0):
         """
         See http://docs.scipy.org/doc/numpy-1.10.1/user/basics.subclassing.html
@@ -44,7 +44,7 @@ class AOCal(np.ndarray):
         obj.time_end = float(time_end)
         # Finally, we must return the newly created object:
         return obj
-    
+
     def __array_finalize__(self, obj):
         if obj is None:
             return
@@ -92,12 +92,10 @@ class AOCal(np.ndarray):
     def fit(self, pols=(0, 3), mode='model', amp_order=5):
         if not (np.iscomplexobj(self) and self.itemsize == 16 and len(self.shape) == 4):
             raise TypeError("array must have 4 dimensions and be of type complex128")
-        fit_array = np.zeros(self.shape, dtype=np.complex128)
-        for interval in xrange(self.shape[0]):
-            for antenna in xrange(self.shape[1]):
+        for interval in range(self.shape[0]):
+            for antenna in range(self.shape[1]):
                 logging.debug("fitting antenna %d" % antenna)
                 for pol in pols:
-                    v = self[interval, antenna, :, pol]
                     if sum(~np.isnan(self[interval, antenna, :, pol])) > 0:
                         self[interval, antenna, :, pol] = fit_complex_gains(self[interval, antenna, :, pol])
 

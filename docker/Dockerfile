@@ -93,5 +93,4 @@ RUN pip3 install . && \
     make install
 # Once I make vcstools a proper package this PYTHONPATH addition won't be required
 ENV PYTHONPATH="/usr/local/bin"
-ENV CMD_VCS_DB_FILE None
 CMD ["/bin/bash"]

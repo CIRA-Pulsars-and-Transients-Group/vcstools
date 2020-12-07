@@ -1,5 +1,3 @@
-#! /usr/bin/env python3
-
 #other
 import logging
 import argparse
@@ -7,6 +5,7 @@ import os
 import sys
 import numpy as np
 import psrqpy
+import glob
 
 #matplotlib
 import matplotlib
@@ -16,16 +15,48 @@ import matplotlib.pyplot as plt
 #Astropy
 from astropy.table import Table
 
-#vcstools and mwa_search
+#vcstools
 from vcstools import data_load
+from vcstools.catalogue_utils import grab_source_alog
+from vcstools.beam_calc import get_beam_power_over_time, find_sources_in_obs,\
+                               from_power_to_gain, get_Trec
+from vcstools.metadb_utils import get_common_obs_metadata, obs_max_min,\
+                                  mwa_alt_az_za, get_channels
+from vcstools.progress_bar import progress_bar
 
 from mwa_pb import primarybeammap_tant as pbtant
-import find_pulsar_in_obs as fpio
-import mwa_metadb_utils
-import submit_to_database
-import process_vcs
 
 logger = logging.getLogger(__name__)
+
+def find_combined_beg_end(obsid, base_path="/group/mwavcs/vcs/", channels=None):
+    """
+    looks through the comined files of the input obsid and returns the max and min in gps time
+    Input:
+        obsid: The MWA observation ID
+    Optional Input:
+        base_path: the direct path the base vcs directory. Default: /group/mwavcs/vcs/\
+        channels: a list of the frequency channel ids. Default None which then gets the
+                  from the mwa metadata
+    """
+    #TODO have some sort of check to look for gaps
+    if glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid)):
+        combined_files = glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid))
+    else:
+        channels = get_channels(obsid, channels)
+        combined_files = glob.glob("{0}/{1}/combined/{1}*_ch{2}.dat".\
+                                   format(base_path, obsid, channels[-1]))
+    if len(combined_files) > 0:
+        comb_times = []
+        for comb in combined_files:
+            comb_times.append(int(comb.split("_")[1]))
+        beg = min(comb_times)
+        end = max(comb_times)
+    else:
+        logger.warn("No combined files on disk for {0}".format(obsid))
+        beg = None
+        end = None
+
+    return beg, end
 
 
 #---------------------------------------------------------------
@@ -180,19 +211,19 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
          a float between 0 and 1 that describes the normalised time that the pulsar exits the beam
     """
     if not metadata or not full_meta:
-        metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
+        metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     #Find the beginning and end of obs
-    obs_beg, obs_end = files_beg, files_end = mwa_metadb_utils.obs_max_min(obsid, meta=full_meta)
+    obs_beg, obs_end = files_beg, files_end = obs_max_min(obsid, meta=full_meta)
     obs_dur = obs_end-obs_beg + 1
 
     #Logic loop:
     if ondisk==True:
         #find the beginning and end time of the observation FILES you have on disk
-        files_beg, files_end = process_vcs.find_combined_beg_end(obsid)
+        files_beg, files_end = find_combined_beg_end(obsid)
         files_duration = files_end - files_beg + 1
     elif beg is None and end is None:
-        logger.warning("ondisk==False so beg and end can not be None. Returning Nones")
+        logger.debug("ondisk==False so beg and end can not be None. Returning Nones")
         return None, None
     else:
         #uses manually input beginning and end times to find beam coverage
@@ -201,8 +232,8 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
         files_duration = files_end - files_beg + 1
 
     #find the enter and exit times of pulsar normalized with the observing time
-    names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar], query=query)
-    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec, min_power=min_z_power, metadata_list=[[metadata, full_meta]])
+    names_ra_dec = grab_source_alog(pulsar_list=[pulsar], query=query)
+    beam_source_data, _ = find_sources_in_obs([obsid], names_ra_dec, min_power=min_z_power, metadata_list=[[metadata, full_meta]])
     if beam_source_data[obsid]:
         enter_obs_norm = beam_source_data[obsid][0][1]
         exit_obs_norm = beam_source_data[obsid][0][2]
@@ -223,7 +254,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
     if exit_files>1.:
         exit_files=1.
     if enter_files>1. or exit_files<0.:
-        logger.warning("source {0} is not in the beam for the files on disk".format(pulsar))
+        logger.debug("source {0} is not in the beam for the files on disk".format(pulsar))
         enter_files = None
         exit_files = None
 
@@ -442,16 +473,16 @@ def flux_from_atnf(pulsar, query=None):
             try:
                 flux_err = query[flux_query+"_ERR"][0]
                 if flux_err == 0.0:
-                    logger.warning("{0} flux error for query: {1}, is zero. Assuming 20% uncertainty"\
+                    logger.debug("{0} flux error for query: {1}, is zero. Assuming 20% uncertainty"\
                             .format(pulsar, flux_query))
                     flux_err = flux*0.2
             except KeyError:
-                logger.warning("{0} flux error value {1}, not available. assuming 20% uncertainty"\
+                logger.debug("{0} flux error value {1}, not available. assuming 20% uncertainty"\
                             .format(pulsar, flux_query))
                 flux_err = flux*0.2
 
             if np.isnan(flux_err):
-                logger.warning("{0} flux error value for {1} not available. assuming 20% uncertainty"\
+                logger.debug("{0} flux error value for {1} not available. assuming 20% uncertainty"\
                             .format(pulsar, flux_query))
                 flux_err = flux*0.2
 
@@ -498,28 +529,28 @@ def find_spind(pulsar, freq_all, flux_all, flux_err_all):
     spind_err = None
     #Attempt to estimate flux
     if len(flux_all) > 1:
-        logger.info("{0} calculating power law".format(pulsar))
+        logger.debug("{0} calculating power law".format(pulsar))
         for i, _ in enumerate(flux_all):
             flux_all[i] = flux_all[i]
             flux_err_all[i] = flux_err_all[i]
 
         #Find params from least squares fit
         spind, K, covar_mat = least_squares_fit_plaw(freq_all, flux_all, flux_err_all)
-        logger.info("{0} derived spectral index: {1} +/- {2}".format(pulsar, spind, np.sqrt(abs(covar_mat.item(3)))))
+        logger.debug("{0} derived spectral index: {1} +/- {2}".format(pulsar, spind, np.sqrt(abs(covar_mat.item(3)))))
 
     #Do something different if there is only one flux value in archive
     elif len(flux_all) == 1:
-        logger.info("{} Only a single flux value available".format(pulsar))
+        logger.debug("{} Only a single flux value available".format(pulsar))
         if spind and not spind_err:
-            logger.info("{} spectral index error not available. Assuming 20% error".format(pulsar))
+            logger.debug("{} spectral index error not available. Assuming 20% error".format(pulsar))
             spind_err = spind*0.2
         if not spind:
-            logger.warning("{} insufficient data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013".format(pulsar))
+            logger.debug("{} insufficient data to estimate spectral index. Using alpha=-1.4 +/- 1.0 as per Bates2013".format(pulsar))
             spind = -1.4
             spind_err = 1.
 
     elif len(flux_all) < 1:
-        logger.warning("{} no flux values. Cannot estimate flux. Will return Nones".format(pulsar))
+        logger.debug("{} no flux values. Cannot estimate flux. Will return Nones".format(pulsar))
 
     return spind, spind_err, K, covar_mat
 
@@ -551,7 +582,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
 
     if metadata is None:
         logger.debug("obtaining mean freq from obs metadata")
-        metadata = mwa_metadb_utils.get_common_obs_metadata(obsid)
+        metadata = get_common_obs_metadata(obsid)
     f_mean = metadata[5]*1e6
 
     freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar, query=query)
@@ -559,7 +590,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
     logger.debug("Freqs: {0}".format(freq_all))
     logger.debug("Fluxes: {0}".format(flux_all))
     logger.debug("Flux Errors: {0}".format(flux_err_all))
-    logger.info("{0} there are {1} flux values available on the ATNF database"\
+    logger.debug("{0} there are {1} flux values available on the ATNF database"\
                 .format(pulsar, len(flux_all)))
 
     if not spind or spind_err:
@@ -571,16 +602,13 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
         flux_est, flux_est_err = flux_from_spind(f_mean, freq_all[0], flux_all[0], flux_err_all[0],\
                                                 spind, spind_err)
     else:
-        logger.warning("{} no flux values on archive. Cannot estimate flux. Will return Nones".format(pulsar))
+        logger.debug("{} no flux values on archive. Cannot estimate flux. Will return Nones".format(pulsar))
         return None, None
 
     if plot_flux==True:
             plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
                                 my_nu=f_mean, my_S=flux_est, my_S_e=flux_est_err, obsid=obsid,
                                 a_err=spind_err,  K=K, covar_mat=covar_mat)
-
-    logger.info("{0} flux estimate at {1} MHz: {2} +/- {3} Jy"\
-                .format(pulsar, f_mean/1e6, flux_est, flux_est_err))
 
     return flux_est, flux_est_err
 
@@ -617,14 +645,14 @@ def find_pulsar_w50(pulsar, query=None):
         W_50 = W_50/1000.
 
     if np.isnan(W_50_err) and not np.isnan(W_50):
-        logger.warning("{} W_50 error not on archive. returning standard 5% error".format(pulsar))
+        logger.debug("{} W_50 error not on archive. returning standard 5% error".format(pulsar))
         W_50_err = W_50*0.05
     else:
         #convert to seconds
         W_50_err = W_50_err/1000.
 
     if np.isnan(W_50):
-        logger.warning("{} applying estimated W_50. Uncertainty will be inflated".format(pulsar))
+        logger.debug("{} applying estimated W_50. Uncertainty will be inflated".format(pulsar))
         #Rankin1993 - W = x*P^0.5 where x=4.8+/-0.5 degrees of rotation at 1GHz
         #We will nflate this error due to differing frequencies and pulsar behaviour. W_50_err=1. degrees
         coeff = 4.8
@@ -678,12 +706,12 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
     obsid = int(obsid)
 
     if not metadata or not full_meta:
-        metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
-    obs_beg, obs_end = mwa_metadb_utils.obs_max_min(obsid, meta=full_meta)
+        metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
+    obs_beg, obs_end = obs_max_min(obsid, meta=full_meta)
 
     t_int=None
     if beg is None or end is None:
-        logger.info("Using duration for entire observation")
+        logger.debug("Using duration for entire observation")
         beg = obs_beg
         end = obs_end
         dur = end - beg + 1
@@ -705,7 +733,7 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
             exit_time = beg + exit_norm * dur
             t_int = dur*(exit_norm-enter_norm)
         else:
-            logger.warn("Integration time calculation failed")
+            logger.debug("Integration time calculation failed")
             enter_time = 0
             exit_time = 0
             t_int=0
@@ -735,7 +763,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     p_dec: str
         OPTIONAL - the target's declination
     obs_metadata: list
-        OPTIONAL - the array generated from mwa_metadb_utils.get_common_obs_metadata(obsid)
+        OPTIONAL - the array generated from get_common_obs_metadata(obsid)
     query: object
         OPTIONAL - The return of the psrqpy function for this pulsar
     trcvr: str
@@ -766,7 +794,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     #get metadata if not supplied
     if not obs_metadata or not full_meta:
         logger.debug("Obtaining obs metadata")
-        obs_metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
+        obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     obsid, obs_ra, obs_dec, _, delays, centrefreq, channels = obs_metadata
 
@@ -774,17 +802,16 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     logger.debug("Calculating beginning time for pulsar coverage")
     enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
 
-    #obs_start, _ = mwa_metadb_utils.obs_max_min(obsid)
     start_time =  enter-int(obsid)
 
     #Get important info
     trec_table = Table.read(trcvr,format="csv")
     ntiles = 128 #TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
 
-    beam_power = fpio.get_beam_power_over_time([obsid, obs_ra, obs_dec, t_int, delays,\
-                                                centrefreq, channels],\
-                                                np.array([[pulsar, p_ra, p_dec]]),\
-                                                dt=100, start_time=start_time)
+    beam_power = get_beam_power_over_time([obsid, obs_ra, obs_dec, t_int, delays,\
+                                           centrefreq, channels],\
+                                           np.array([[pulsar, p_ra, p_dec]]),\
+                                           dt=100, start_time=start_time)
     beam_power = np.mean(beam_power)
 
     # Usa a primary beam function to convolve the sky temperature with the primary beam
@@ -796,14 +823,14 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     #TODO can be inaccurate for coherent but is too difficult to simulate
     t_sky = (Tsky_XX + Tsky_YY) / 2.
     # Get T_sys by adding Trec and Tsky (other temperatures are assumed to be negligible
-    t_sys_table = t_sky + submit_to_database.get_Trec(trec_table, centrefreq)
+    t_sys_table = t_sky + get_Trec(trec_table, centrefreq)
     t_sys = np.mean(t_sys_table)
     t_sys_err = t_sys*0.02 #TODO: figure out what t_sys error is
 
     logger.debug("pul_ra: {} pul_dec: {}".format(p_ra, p_dec))
-    _, _, zas = mwa_metadb_utils.mwa_alt_az_za(obsid, ra=p_ra, dec=p_dec)
+    _, _, zas = mwa_alt_az_za(obsid, ra=p_ra, dec=p_dec)
     theta = np.radians(zas)
-    gain = submit_to_database.from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
+    gain = from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
     logger.debug("beam_power: {} theta: {} pi: {}".format(beam_power, theta, np.pi))
     gain_err = gain * ((1. - beam_power)*0.12 + 2.*(theta/(0.5*np.pi))**2. + 0.1)
 
@@ -834,7 +861,7 @@ def est_pulsar_sn(pulsar, obsid,\
     p_dec: str
         OPTIONAL - the target's declination
     obs_metadata: list
-        OPTIONAL - the array generated from mwa_metadb_utils.get_common_obs_metadata(obsid)
+        OPTIONAL - the array generated from get_common_obs_metadata(obsid)
     plot_flux: boolean
         OPTIONAL - whether or not to produce a plot of the flux estimation. Default = False
 
@@ -859,7 +886,7 @@ def est_pulsar_sn(pulsar, obsid,\
     #get metadata if not supplied
     if not obs_metadata or not full_meta:
         logger.debug("Obtaining obs metadata")
-        obs_metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
+        obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     n_p = 2 #constant
     df = 30.72e6 #(24*1.28e6)
@@ -905,14 +932,14 @@ def est_pulsar_sn(pulsar, obsid,\
                 .format(var_s_mean, var_gain, var_W_50, var_t_sys))
     SN_err = np.sqrt(var_s_mean + var_gain + var_W_50 + var_t_sys)
 
-    logger.debug("S_mean: {0} +/- {1}".format(s_mean, s_mean_err))
     logger.debug("Gain: {0} +/- {1}".format(gain, gain_err))
     logger.debug("t_int: {0}".format(t_int))
     logger.debug("df: {0}".format(df))
     logger.debug("period: {0}".format(period))
     logger.debug("W_50: {0} +/- {1}".format(W_50, W_50_err))
     logger.debug("t_sys: {0} +/- {1}".format(t_sys, t_sys_err))
-    logger.info("Pulsar S/N: {0} +/- {1}".format(SN, SN_err))
+    logger.info("{0} Flux: {1} +/- {2} Jy".format(pulsar, s_mean, s_mean_err))
+    logger.info("{0} S/N: {1} +/- {2}".format(pulsar, SN, SN_err))
 
     return SN, SN_err
 
@@ -920,12 +947,14 @@ def multi_psr_snfe(pulsar_list, obsid,\
                    beg=None, end=None, obs_metadata=None, full_meta=None, plot_flux=False,\
                    query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
+    logger.info("""This script may use estimations where data is missing.
+    For full verbosity, use the DEBUG logger (ie. -L DEBUG)""")
 
     if obs_metadata is None or full_meta is None:
         logger.debug("Obtaining obs metadata")
-        obs_metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
+        obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
-    obs_beg, obs_end = mwa_metadb_utils.obs_max_min(obsid, meta=full_meta)
+    obs_beg, obs_end = obs_max_min(obsid, meta=full_meta)
     if beg is None:
         beg = obs_beg
     if end is None:
@@ -933,7 +962,7 @@ def multi_psr_snfe(pulsar_list, obsid,\
 
     mega_query = psrqpy.QueryATNF(psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
     sn_dict = {}
-    for i, pulsar in enumerate(mega_query["PSRJ"]):
+    for i, pulsar in enumerate(progress_bar(mega_query["PSRJ"], "Calculating pulsar SN: ")):
         psr_query = {}
         for key in mega_query.keys():
             psr_query[key] = [mega_query[key][i]]
