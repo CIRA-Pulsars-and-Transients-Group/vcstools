@@ -27,7 +27,7 @@ RUN apt-get update && \
 
 ### Build psrfits_utils ###
 ARG PSR_CONFIG_OPTS="--prefix=/usr"
-WORKDIR /tmp/psrfits-build
+WORKDIR /code/psrfits-build
 RUN git clone https://github.com/demorest/psrfits_utils.git && \
     cd psrfits_utils && \
     echo "m4_ifdef([AM_PROG_AR], [AM_PROG_AR])" >> configure.ac && \
@@ -37,18 +37,10 @@ RUN git clone https://github.com/demorest/psrfits_utils.git && \
     make install
 
 
-### Build pulsar ###
-WORKDIR /tmp/pulsar-build
-RUN wget https://github.com/CIRA-Pulsars-and-Transients-Group/vcstools/raw/master/docker/pulsar_src.tar.gz && \
-    tar -zxvf pulsar_src.tar.gz && \
-    cd pulsar_src && \
-    make INSTALL_DIR=/usr
-
-
 ### Install xGPU ###
 ARG XGPU_MAKE_OPTS="NSTATION=128 NFREQUENCY=128 NTIME=1000 NTIME_PIPE=100"
 ARG XGPU_PREFIX="/usr"
-WORKDIR /tmp/xgpu-build
+WORKDIR /code/xgpu-build
 RUN git clone https://github.com/GPU-correlators/xGPU.git && \
     cd xGPU/src && \
     make ${XGPU_MAKE_OPTS} && \
@@ -62,34 +54,57 @@ RUN curl https://sh.rustup.rs -sSf |  bash -s -- -y
 
 
 ### Install hyperbeam
-ENV LD_LIBRARY_PATH="/tmp/hyperbeam/mwa_hyperbeam/include:/tmp/hyperbeam/mwa_hyperbeam/lib:${LD_LIBRARY_PATH}"
-ENV HYPERBEAM_ROOT="/tmp/hyperbeam/mwa_hyperbeam/"
-ENV HYPERBEAM_INCLUDE_DIR="/tmp/hyperbeam/mwa_hyperbeam/include"
-ENV HYPERBEAM_LIB="/tmp/hyperbeam/mwa_hyperbeam/lib"
-WORKDIR /tmp/hyperbeam
+ENV LD_LIBRARY_PATH="/code/hyperbeam/mwa_hyperbeam/include:/code/hyperbeam/mwa_hyperbeam/lib:${LD_LIBRARY_PATH}"
+ENV HYPERBEAM_ROOT="/code/hyperbeam/mwa_hyperbeam/"
+ENV HYPERBEAM_INCLUDE_DIR="/code/hyperbeam/mwa_hyperbeam/include"
+ENV HYPERBEAM_LIB="/code/hyperbeam/mwa_hyperbeam/lib"
+WORKDIR /code/hyperbeam
 RUN git clone https://github.com/MWATelescope/mwa_hyperbeam.git && \
     cd mwa_hyperbeam && \
     wget http://ws.mwatelescope.org/static/mwa_full_embedded_element_pattern.h5 && \
     cargo test && \
     cargo build --release && \
     mkdir -p lib && \
-    cp target/release/libmwa_hyperbeam.so target/release/libmwa_hyperbeam.a lib/
+    cp target/release/libmwa_hyperbeam.so target/release/libmwa_hyperbeam.a lib/ && \
+    echo "/code/hyperbeam/mwa_hyperbeam/lib" >/etc/ld.so.conf.d/mwa.conf && ldconfig
+
+
+### Install ERFA v1.7.0
+WORKDIR /code/erfa
+ENV ERFA_ROOT /code/erfa/1.7.0
+RUN wget https://github.com/liberfa/erfa/releases/download/v1.7.0/erfa-1.7.0.tar.gz && \
+    tar -xf erfa-1.7.0.tar.gz && \
+    cd erfa-1.7.0 && \
+    ./configure --prefix="${ERFA_ROOT}" && \
+    make && \
+    make check && \
+    make install
+
+
+### Install PAL v0.9.8
+WORKDIR /code/pal
+ENV PAL_ROOT /code/pal/1.7.0
+RUN wget https://github.com/Starlink/pal/releases/download/v0.9.8/pal-0.9.8.tar.gz && \
+    tar -xf pal-0.9.8.tar.gz && \
+    cd pal-0.9.8 && \
+    ./configure --prefix="${PAL_ROOT}" --without-starlink --with-erfa="${ERFA_ROOT}" && \
+    make && \
+    make install
+
 
 ### Install vcstools ###
-WORKDIR /tmp/vcstools-build
-COPY . /tmp/vcstools-build
+WORKDIR /code/vcstools-build
+COPY . /code/vcstools-build
 RUN pip3 install . && \
     mkdir -p build && \
     cd build && \
     cmake -DCMAKE_INSTALL_PREFIX=/usr \
       -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
-      -DSLALIB_ROOT_DIR=/usr \
+      -DPAL_ROOT_DIR=${PAL_ROOT} \
       -DCMAKE_BEAMFORMER=1 \
       -DHYPERBEAM_ROOT=${HYPERBEAM_ROOT} \
-      -DHYPERBEAM_HDF5_DIR=/tmp/hyperbeam/mwa_hyperbeam/ \
+      -DHYPERBEAM_HDF5_DIR=/code/hyperbeam/mwa_hyperbeam/ \
       -DCTESTS=1 \
       .. && \
     make install
-# Once I make vcstools a proper package this PYTHONPATH addition won't be required
-ENV PYTHONPATH="/usr/local/bin"
 CMD ["/bin/bash"]
