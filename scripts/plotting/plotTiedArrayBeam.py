@@ -8,7 +8,7 @@ from astropy.time import Time
 import matplotlib.pyplot as plt
 
 from mwa_pb import primary_beam as pb
-from mwa_metadb_utils import getmeta, mwa_alt_az_za
+from vcstools.metadb_utils import getmeta, mwa_alt_az_za
 
 import argparse
 
@@ -47,7 +47,7 @@ def compute_target_position(ra, dec, time):
 
 
 def log_normalise(data, vmin, vmax):
-    """ This is almost directly copied from matplotlib's color.py """
+    """This is almost directly copied from matplotlib's color.py """
     result = np.ma.masked_less_equal(data, 0, copy=False)
     if vmin > vmax:
         raise ValueError("minvalue must be less than or equal to maxvalue")

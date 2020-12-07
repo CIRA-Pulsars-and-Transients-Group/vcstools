@@ -1,6 +1,6 @@
-"""RM module that implements 1-D RM Synthesis/RMCLEAN."""
 
-"""
+"""RM module that implements 1-D RM Synthesis/RMCLEAN.
+
 MIT License
 
 Copyright (c) 2017 George Heald
@@ -27,11 +27,15 @@ SOFTWARE.
 # Written by George Heald
 # v1.0, 14 November 2017
 
-from numpy import *
-from pylab import *
+from numpy import mean, median, std, sqrt, exp, diff,\
+				  inf, pi, zeros, ones, logical_and, where,\
+				  linspace, polyfit, polyval, arctan2,\
+				  real, log10, roll, arange, convolve
+from pylab import figure, plot, legend, xlabel, ylabel, savefig, show, errorbar
 from scipy.optimize import curve_fit
 
 class PolObservation:
+
 	"""Class to describe an observation & perform polarimetry operations"""
 
 	def __init__(self,freq,IQU,IQUerr=None,verbose=True):
@@ -58,7 +62,6 @@ class PolObservation:
 		When initialised, a powerlaw will be fit to Stokes I
 		for possible later use.
 		"""
-
 		self.freq = freq
 		self.i = IQU[0]
 		self.q = IQU[1]
@@ -67,12 +70,12 @@ class PolObservation:
 			self.ierr = None
 			self.qerr = None
 			self.uerr = None
-			p,pcov = curve_fit(lambda f,s,a: s*(f/mean(f))**a, freq, self.i, p0=(mean(self.i),-0.7))
+			p, _ = curve_fit(lambda f,s,a: s*(f/mean(f))**a, freq, self.i, p0=(mean(self.i),-0.7))
 		else:
 			self.ierr = IQUerr[0]
 			self.qerr = IQUerr[1]
 			self.uerr = IQUerr[2]
-			p,pcov = curve_fit(lambda f,s,a: s*(f/mean(f))**a, freq, self.i, p0=(mean(self.i),-0.7), sigma=self.ierr)
+			p, _ = curve_fit(lambda f,s,a: s*(f/mean(f))**a, freq, self.i, p0=(mean(self.i),-0.7), sigma=self.ierr)
 		self.i_model = p[0]*(freq/mean(freq))**p[1]
 		if verbose: print('Fitted spectral index is %f'%p[1])
 		self.model_s = p[0]
@@ -255,7 +258,7 @@ class PolObservation:
 	def plot_stokesi(self,display=True,save=None):
 		"""
 		Plot Stokes I
-	
+
 		The plot will show the Stokes I values (and errors if available).
 
 		Parameters
@@ -288,9 +291,9 @@ class PolObservation:
 		Values that are calculated and reported are:
 			Absolute value at peak, PA at peak, peak RM value
 		This is done for the dirty FDF.
-		If RMCLEAN has been performed then this is also done for the 
+		If RMCLEAN has been performed then this is also done for the
 		deconvolved Faraday spectrum.
-		
+
 		Parameters
 		----------
 		verbose : boolean, optional (default True)
@@ -332,7 +335,7 @@ class PolObservation:
 				self.cln_pa = (cln_pa*180./pi)%360.
 			if verbose: print('Cleaned FDF peaks at an amplitude %f, at RM=%f +/- %f rad/m2'%(self.cln_fdf_peak,self.cln_fdf_peak_rm,self.cln_fdf_peak_rm_err))
 			if verbose: print('RM-corrected PA of cleaned FDF peak is %f degrees'%(self.cln_pa))
-			
+
 	def rmclean(self,niter=1000,gain=0.1,cutoff=2.,mask=False,verbose=True):
 		"""
 		Perform RMCLEAN
@@ -398,7 +401,7 @@ class PolObservation:
 	def print_rmstats(self):
 		"""
 		Print some stats about the results
-		
+
 		Some basic statistics will be reported to the terminal:
 			mean of RM clean components,
 		        dispersion of RM clean components
@@ -406,13 +409,9 @@ class PolObservation:
 		"""
 
 		if self.rmclean_done:
-			cp = where(abs(self.rm_comps)>0.)
-			#cabs = abs(self.rm_comps[cp])
-			#crm = self.phi[cp]
 			cabs = abs(self.rm_comps)
 			crm = self.phi.copy()
 			mcrm = sum(cabs*crm)/sum(cabs)
 			crmdisp = sqrt(sum(cabs*(crm-mcrm)**2)/sum(cabs))
 			print('Weighted mean RM of clean components is %f'%mcrm)
 			print('Weighted RM dispersion of clean components is %f'%crmdisp)
-

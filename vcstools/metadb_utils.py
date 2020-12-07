@@ -1,9 +1,112 @@
-#!/usr/bin/env python3
+from vcstools.general_utils import is_number
 import logging
-import argparse
+import os
+import subprocess
 
 logger = logging.getLogger(__name__)
 
+
+def ensure_metafits(data_dir, obs_id, metafits_file):
+    # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
+
+    if not os.path.exists(metafits_file):
+        logger.warning("{0} does not exists".format(metafits_file))
+        logger.warning("Will download it from the archive. This can take a "
+                      "while so please do not ctrl-C.")
+        logger.warning("At the moment, even through the downloaded file is "
+                       "labelled as a ppd file this is not true.")
+        logger.warning("This is hopefully a temporary measure.")
+
+        get_metafits = "wget http://ws.mwatelescope.org/metadata/fits?obs_id={0} -O {1}".format(obs_id, metafits_file)
+        try:
+            subprocess.call(get_metafits,shell=True)
+        except:
+            logger.error("Couldn't download {0}. Aborting.".\
+                          format(os.basename(metafits_file)))
+            sys.exit(0)
+        # clean up
+        #os.remove('obscrt.crt')
+        #os.remove('obskey.key')
+    # make a copy of the file in the product_dir if that directory exists
+    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
+    # in case --work_dir was specified in process_vcs call product_dir and data_dir
+    # are the same and thus we will not perform the copy
+    #data_dir = data_dir.replace(comp_config['base_data_dir'], comp_config['base_product_dir']) # being pedantic
+    if os.path.exists(data_dir) and not os.path.exists(metafits_file):
+        logger.info("Copying {0} to {1}".format(metafits_file, data_dir))
+        from shutil import copy2
+        copy2("{0}".format(metafits_file), "{0}".format(data_dir))
+
+
+def singles_source_search(ra, dec=None, box_size=45.):
+    """
+    Used to find all obsids within a box around the source to make searching through obs_ids more efficient.
+
+    singles_source_search(ra, dec=None, box_size=45.)
+    Parameters:
+    ----------
+    ra: float
+        Right Acension of the source in degrees
+    dec: float
+        Declination of the source in degrees. By default will use the enitre declination range to account for grating lobes
+    box_size: float
+        Radius of the search box. Default: 45
+
+    Returns:
+    --------
+    obsid_metadata: list
+        List of of the metadata for each obsid. The metadata is in the same format as getmeta's output
+    """
+    ra = float(ra)
+    m_o_p = False # moved over (north or south) pole
+
+    if dec is None:
+        dec_top = 90.
+        dec_bot = -90.
+    else:
+        dec = float(dec)
+        dec_top = dec + box_size
+        if dec_top > 90.:
+            dec_top = 90.
+            m_o_p = True
+
+        dec_bot = dec - box_size
+        if dec_top < -90.:
+            dec_top = -90.
+            m_o_p = True
+
+    if m_o_p:
+        obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                    'minra':0., 'maxra':360.,
+                                                    'mindec':dec_bot,'maxdec':dec_top})
+    else:
+        ra_low = ra - 30. - box_size #30 is the how far an obs would drift in 2 hours(used as a max)
+        ra_high = ra + box_size
+        if ra_low < 0.:
+            ra_new = 360 + ra_low
+            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                        'minra':ra_new, 'maxra':360.,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
+            temp_obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                             'minra':0.,'maxra':ra_high,
+                                                             'mindec':dec_bot,'maxdec':dec_top})
+            for row in temp_obsid_list:
+                obsid_list.append(row)
+        elif ra_high > 360:
+            ra_new = ra_high - 360
+            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                        'minra':ra_low, 'maxra':360.,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
+            temp_obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                             'minra':0., 'maxra':ra_new,
+                                                             'mindec':dec_bot,'maxdec':dec_top})
+            for row in temp_obsid_list:
+                obsid_list.append(row)
+        else:
+            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
+                                                        'minra':ra_low, 'maxra':ra_high,
+                                                        'mindec':dec_bot,'maxdec':dec_top})
+    return obsid_list
 
 def find_obsids_meta_pages(params=None):
     """
@@ -213,14 +316,6 @@ def get_channels(obsid, channels=None):
     return channels
 
 
-def is_number(s):
-    try:
-        int(s)
-        return True
-    except ValueError:
-        return False
-
-
 def obs_max_min(obsid, meta=None):
     """
     Small function to query the database and return the times of the first and last file
@@ -320,44 +415,3 @@ def get_best_cal_obs(obsid):
     cal_info = sorted(cal_info, key=itemgetter(1))
 
     return cal_info
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="""Returns information on an input Obs ID""")
-    parser.add_argument("obsid", type=int, help="Input Observation ID")
-    parser.add_argument("-w", "--write", action="store_true", help="OPTIONAL - Use to write results to file.")
-    parser.add_argument("-c", "--cal_best", action="store_true", help="If this option is used it will list "
-                        "calibration observations within 2 days that have the same observing channels and "
-                        "list them from closest in time to furthest.")
-    args = parser.parse_args()
-
-    if args.write:
-        write_obs_info(args.obsid)
-    else:
-        data_dict = getmeta(params={"obsid":args.obsid, 'nocache':1})
-        channels = data_dict["rfstreams"]["0"]["frequencies"]
-        centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
-        array_phase = get_obs_array_phase(args.obsid)
-        start, stop = obs_max_min(args.obsid, meta=data_dict)
-
-        print("-------------------------    Obs Info    --------------------------")
-        print("Obs Name:           {}".format(data_dict["obsname"]))
-        print("Creator:            {}".format(data_dict["rfstreams"]["0"]["creator"]))
-        print("Array phase:        {}".format(array_phase))
-        if array_phase != 'OTH':
-            print("~FWHM (arcminute)   {:4.2f}".format(calc_ta_fwhm(centre_freq,
-                                                       array_phase=array_phase)*60.))
-        print("Start time:         {}".format(start))
-        print("Stop time:          {}".format(stop))
-        print("Duration (s):       {}".format(stop-start))
-        print("RA Pointing (deg):  {}".format(data_dict["metadata"]["ra_pointing"]))
-        print("DEC Pointing (deg): {}".format(data_dict["metadata"]["dec_pointing"]))
-        print("Channels:           {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
-        print("Centrefreq (MHz):   {}".format(centre_freq))
-
-    if args.cal_best:
-        all_cals = get_best_cal_obs(args.obsid)
-        print()
-        print("{:14}|{:8}|{}".format("Calibration ID", "Hrs away", "Cal Target"))
-        for cal in all_cals:
-            print("{:14}|{:8.2f}|{}".format(cal[0], cal[1]/60., cal[2]))

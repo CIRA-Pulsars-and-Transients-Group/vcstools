@@ -1,5 +1,3 @@
-#! /usr/bin/env python3
-
 #other
 import logging
 import argparse
@@ -7,6 +5,7 @@ import os
 import sys
 import numpy as np
 import psrqpy
+import glob
 
 #matplotlib
 import matplotlib
@@ -18,14 +17,46 @@ from astropy.table import Table
 
 #vcstools
 from vcstools import data_load
+from vcstools.catalogue_utils import grab_source_alog
+from vcstools.beam_calc import get_beam_power_over_time, find_sources_in_obs,\
+                               from_power_to_gain, get_Trec
+from vcstools.metadb_utils import get_common_obs_metadata, obs_max_min,\
+                                  mwa_alt_az_za, get_channels
 from vcstools.progress_bar import progress_bar
+
 from mwa_pb import primarybeammap_tant as pbtant
-import find_pulsar_in_obs as fpio
-import mwa_metadb_utils
-import submit_to_database
-import process_vcs
 
 logger = logging.getLogger(__name__)
+
+def find_combined_beg_end(obsid, base_path="/group/mwavcs/vcs/", channels=None):
+    """
+    looks through the comined files of the input obsid and returns the max and min in gps time
+    Input:
+        obsid: The MWA observation ID
+    Optional Input:
+        base_path: the direct path the base vcs directory. Default: /group/mwavcs/vcs/\
+        channels: a list of the frequency channel ids. Default None which then gets the
+                  from the mwa metadata
+    """
+    #TODO have some sort of check to look for gaps
+    if glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid)):
+        combined_files = glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid))
+    else:
+        channels = get_channels(obsid, channels)
+        combined_files = glob.glob("{0}/{1}/combined/{1}*_ch{2}.dat".\
+                                   format(base_path, obsid, channels[-1]))
+    if len(combined_files) > 0:
+        comb_times = []
+        for comb in combined_files:
+            comb_times.append(int(comb.split("_")[1]))
+        beg = min(comb_times)
+        end = max(comb_times)
+    else:
+        logger.warn("No combined files on disk for {0}".format(obsid))
+        beg = None
+        end = None
+
+    return beg, end
 
 
 #---------------------------------------------------------------
@@ -180,16 +211,16 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
          a float between 0 and 1 that describes the normalised time that the pulsar exits the beam
     """
     if not metadata or not full_meta:
-        metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
+        metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     #Find the beginning and end of obs
-    obs_beg, obs_end = files_beg, files_end = mwa_metadb_utils.obs_max_min(obsid, meta=full_meta)
+    obs_beg, obs_end = files_beg, files_end = obs_max_min(obsid, meta=full_meta)
     obs_dur = obs_end-obs_beg + 1
 
     #Logic loop:
     if ondisk==True:
         #find the beginning and end time of the observation FILES you have on disk
-        files_beg, files_end = process_vcs.find_combined_beg_end(obsid)
+        files_beg, files_end = find_combined_beg_end(obsid)
         files_duration = files_end - files_beg + 1
     elif beg is None and end is None:
         logger.debug("ondisk==False so beg and end can not be None. Returning Nones")
@@ -201,8 +232,8 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
         files_duration = files_end - files_beg + 1
 
     #find the enter and exit times of pulsar normalized with the observing time
-    names_ra_dec = fpio.grab_source_alog(pulsar_list=[pulsar], query=query)
-    beam_source_data, _ = fpio.find_sources_in_obs([obsid], names_ra_dec, min_power=min_z_power, metadata_list=[[metadata, full_meta]])
+    names_ra_dec = grab_source_alog(pulsar_list=[pulsar], query=query)
+    beam_source_data, _ = find_sources_in_obs([obsid], names_ra_dec, min_power=min_z_power, metadata_list=[[metadata, full_meta]])
     if beam_source_data[obsid]:
         enter_obs_norm = beam_source_data[obsid][0][1]
         exit_obs_norm = beam_source_data[obsid][0][2]
@@ -551,7 +582,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
 
     if metadata is None:
         logger.debug("obtaining mean freq from obs metadata")
-        metadata = mwa_metadb_utils.get_common_obs_metadata(obsid)
+        metadata = get_common_obs_metadata(obsid)
     f_mean = metadata[5]*1e6
 
     freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar, query=query)
@@ -675,8 +706,8 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
     obsid = int(obsid)
 
     if not metadata or not full_meta:
-        metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
-    obs_beg, obs_end = mwa_metadb_utils.obs_max_min(obsid, meta=full_meta)
+        metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
+    obs_beg, obs_end = obs_max_min(obsid, meta=full_meta)
 
     t_int=None
     if beg is None or end is None:
@@ -732,7 +763,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     p_dec: str
         OPTIONAL - the target's declination
     obs_metadata: list
-        OPTIONAL - the array generated from mwa_metadb_utils.get_common_obs_metadata(obsid)
+        OPTIONAL - the array generated from get_common_obs_metadata(obsid)
     query: object
         OPTIONAL - The return of the psrqpy function for this pulsar
     trcvr: str
@@ -763,7 +794,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     #get metadata if not supplied
     if not obs_metadata or not full_meta:
         logger.debug("Obtaining obs metadata")
-        obs_metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
+        obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     obsid, obs_ra, obs_dec, _, delays, centrefreq, channels = obs_metadata
 
@@ -771,17 +802,16 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     logger.debug("Calculating beginning time for pulsar coverage")
     enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
 
-    #obs_start, _ = mwa_metadb_utils.obs_max_min(obsid)
     start_time =  enter-int(obsid)
 
     #Get important info
     trec_table = Table.read(trcvr,format="csv")
     ntiles = 128 #TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
 
-    beam_power = fpio.get_beam_power_over_time([obsid, obs_ra, obs_dec, t_int, delays,\
-                                                centrefreq, channels],\
-                                                np.array([[pulsar, p_ra, p_dec]]),\
-                                                dt=100, start_time=start_time)
+    beam_power = get_beam_power_over_time([obsid, obs_ra, obs_dec, t_int, delays,\
+                                           centrefreq, channels],\
+                                           np.array([[pulsar, p_ra, p_dec]]),\
+                                           dt=100, start_time=start_time)
     beam_power = np.mean(beam_power)
 
     # Usa a primary beam function to convolve the sky temperature with the primary beam
@@ -793,14 +823,14 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     #TODO can be inaccurate for coherent but is too difficult to simulate
     t_sky = (Tsky_XX + Tsky_YY) / 2.
     # Get T_sys by adding Trec and Tsky (other temperatures are assumed to be negligible
-    t_sys_table = t_sky + submit_to_database.get_Trec(trec_table, centrefreq)
+    t_sys_table = t_sky + get_Trec(trec_table, centrefreq)
     t_sys = np.mean(t_sys_table)
     t_sys_err = t_sys*0.02 #TODO: figure out what t_sys error is
 
     logger.debug("pul_ra: {} pul_dec: {}".format(p_ra, p_dec))
-    _, _, zas = mwa_metadb_utils.mwa_alt_az_za(obsid, ra=p_ra, dec=p_dec)
+    _, _, zas = mwa_alt_az_za(obsid, ra=p_ra, dec=p_dec)
     theta = np.radians(zas)
-    gain = submit_to_database.from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
+    gain = from_power_to_gain(beam_power, centrefreq*1e6, ntiles, coh=True)
     logger.debug("beam_power: {} theta: {} pi: {}".format(beam_power, theta, np.pi))
     gain_err = gain * ((1. - beam_power)*0.12 + 2.*(theta/(0.5*np.pi))**2. + 0.1)
 
@@ -831,7 +861,7 @@ def est_pulsar_sn(pulsar, obsid,\
     p_dec: str
         OPTIONAL - the target's declination
     obs_metadata: list
-        OPTIONAL - the array generated from mwa_metadb_utils.get_common_obs_metadata(obsid)
+        OPTIONAL - the array generated from get_common_obs_metadata(obsid)
     plot_flux: boolean
         OPTIONAL - whether or not to produce a plot of the flux estimation. Default = False
 
@@ -856,7 +886,7 @@ def est_pulsar_sn(pulsar, obsid,\
     #get metadata if not supplied
     if not obs_metadata or not full_meta:
         logger.debug("Obtaining obs metadata")
-        obs_metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
+        obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     n_p = 2 #constant
     df = 30.72e6 #(24*1.28e6)
@@ -922,9 +952,9 @@ def multi_psr_snfe(pulsar_list, obsid,\
 
     if obs_metadata is None or full_meta is None:
         logger.debug("Obtaining obs metadata")
-        obs_metadata, full_meta = mwa_metadb_utils.get_common_obs_metadata(obsid, return_all=True)
+        obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
-    obs_beg, obs_end = mwa_metadb_utils.obs_max_min(obsid, meta=full_meta)
+    obs_beg, obs_end = obs_max_min(obsid, meta=full_meta)
     if beg is None:
         beg = obs_beg
     if end is None:

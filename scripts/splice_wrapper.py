@@ -4,10 +4,11 @@ import subprocess
 import os
 import argparse
 import time
-import mwa_metadb_utils as meta
 import glob
 from shutil import copy
 from itertools import groupby, count
+
+import vcstools.metadb_utils as meta
 
 parser = argparse.ArgumentParser(description="""
 Wraps the splice_psrfits.sh script to automate it. Should be run from the foulder containing the files.
