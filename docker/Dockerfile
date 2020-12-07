@@ -74,10 +74,11 @@ WORKDIR /code/erfa
 ENV ERFA_ROOT /code/erfa/1.7.0
 RUN wget https://github.com/liberfa/erfa/releases/download/v1.7.0/erfa-1.7.0.tar.gz && \
     tar -xf erfa-1.7.0.tar.gz && \
+    cd erfa-1.7.0 && \
     ./configure --prefix="${ERFA_ROOT}" && \
     make && \
     make check && \
-    make install && \
+    make install
 
 
 ### Install PAL v0.9.8
@@ -85,9 +86,10 @@ WORKDIR /code/pal
 ENV PAL_ROOT /code/pal/1.7.0
 RUN wget https://github.com/Starlink/pal/releases/download/v0.9.8/pal-0.9.8.tar.gz && \
     tar -xf pal-0.9.8.tar.gz && \
+    cd pal-0.9.8 && \
     ./configure --prefix="${PAL_ROOT}" --without-starlink --with-erfa="${ERFA_ROOT}" && \
     make && \
-    make install && \
+    make install
 
 
 ### Install vcstools ###
