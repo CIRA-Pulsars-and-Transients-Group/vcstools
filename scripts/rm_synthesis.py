@@ -13,6 +13,7 @@ import yaml
 
 from vcstools import rm_synth
 from vcstools import prof_utils
+from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,8 @@ def rmfit_quad(archive, phase_min, phase_max):
     phase_max: float
         The maximum phase to use to fit, should be a float between 0 and 1
     """
-    commands = ["/pawsey/mwa/singularity/dspsr/dspsr.sif"]
+    comp_config = load_config_file()
+    commands = [comp_config["prschive_container"]]
     commands.append("rmfit")
     commands.append("-m")
     commands.append("-10,10,20")

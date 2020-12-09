@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from astropy.time import Time
 from scipy.optimize import curve_fit
 
+from vcstools.config import load_config_file
+
 logger = logging.getLogger(__name__)
 
 #---------------------------------------------------------------
@@ -42,8 +44,9 @@ def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
     pdvops: string
         OPTIONAL - Additional options for the pdv. Default: -FTt
     """
+    comp_config = load_config_file()
     with open(outfile,'w+') as f:
-        commands = ["/pawsey/mwa/singularity/dspsr/dspsr.sif"]
+        commands = [comp_config["prschive_container"]]
         commands.append("pdv")
         commands.append(pdvops)
         commands.append(archive)
