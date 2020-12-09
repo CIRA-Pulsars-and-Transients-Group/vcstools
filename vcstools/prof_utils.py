@@ -42,12 +42,12 @@ def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
     pdvops: string
         OPTIONAL - Additional options for the pdv. Default: -FTt
     """
-    myoutput = open(outfile,'w+')
-    commands=["pdv"]
-    commands.append(pdvops)
-    commands.append(archive)
-    subprocess.run(commands, stdout=myoutput)
-    myoutput.close()
+    with open(outfile,'w+') as f:
+        commands = ["/pawsey/mwa/singularity/dspsr/dspsr.sif"]
+        commands.append("pdv")
+        commands.append(pdvops)
+        commands.append(archive)
+        subprocess.run(commands, stdout=f)
 
 #---------------------------------------------------------------
 def get_from_bestprof(file_loc):
