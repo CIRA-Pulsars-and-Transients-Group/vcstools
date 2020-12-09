@@ -306,9 +306,9 @@ def rm_synth_pipe(kwargs):
         try:
             kwargs["phase_ranges"] = find_on_pulse_ranges(I, clip_type=kwargs["cliptype"], plot_name=gaussian_name)
         except prof_utils.NoFitError as e:
-            logger.error("No profiles could be fit. Please supply on-pulse range")
             os.chdir("../")
             remove_allfiles(randomgen)
+            raise(prof_utils.NoFitError("No profiles could be fit. Please supply on-pulse range"))
         if kwargs["plot_gfit"]: # Move this out of the working dir
             os.rename(gaussian_name, f"../{gaussian_name}")
         if kwargs["force_single"]:
@@ -377,9 +377,10 @@ def rm_synth_pipe(kwargs):
 
 def rm_synth_main(kwargs):
     rm_dict, _ = rm_synth_pipe(kwargs)
-    for i in rm_dict.keys():
-        logger.info("For phase range: {0} - {1}".format(*rm_dict[i]["phase_range"]))
-        logger.info("RM: {0:7.3f} +/- {1:6.3f}".format(rm_dict[i]["rm"], rm_dict[i]["rm_e"]))
+    if rm_dict:
+        for i in rm_dict.keys():
+            logger.info("For phase range: {0} - {1}".format(*rm_dict[i]["phase_range"]))
+            logger.info("RM: {0:7.3f} +/- {1:6.3f}".format(rm_dict[i]["rm"], rm_dict[i]["rm_e"]))
 
 
 if __name__ == '__main__':
