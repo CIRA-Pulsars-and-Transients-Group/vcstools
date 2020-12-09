@@ -30,7 +30,7 @@ SOFTWARE.
 from numpy import mean, median, std, sqrt, exp, diff,\
 				  inf, pi, zeros, ones, logical_and, where,\
 				  linspace, polyfit, polyval, arctan2,\
-				  real, log10, roll, arange, convolve
+				  real, imag, log10, roll, arange, convolve
 from pylab import figure, plot, legend, xlabel, ylabel, savefig, show, errorbar
 from scipy.optimize import curve_fit
 
