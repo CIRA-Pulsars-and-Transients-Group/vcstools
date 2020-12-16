@@ -543,7 +543,7 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
                     t = Time(int(gpstime), format='gps', scale='utc')
                     unix_time = int(t.unix)
 
-                    offline_correlator_command = "-o {0} -s {1} -r {2} -i {3} -f 128 -n {4} "\
+                    offline_correlator_command = "-o {0} -s {1} -r {2} -i {3} -n {4} "\
                                                  "-c {5:0>2} -d {6}".format(obsid,
                                                  unix_time, num_frames, integrations,
                                                  int(ft_res[0]/10), gpubox_label, file)
