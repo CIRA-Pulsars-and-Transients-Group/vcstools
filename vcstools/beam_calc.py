@@ -65,7 +65,7 @@ def field_of_view(obsid,
     else:
         dt = 100
         # Change the dur to the inpur dur
-        obsid, ra, dec, time, delays, centrefreq, channels = beam_meta_data
+        obsid, ra, dec, _, delays, centrefreq, channels = beam_meta_data
         beam_meta_data = [obsid, ra, dec, dur, delays, centrefreq, channels]
 
     # Make a pixel for each degree on the sky
@@ -76,7 +76,7 @@ def field_of_view(obsid,
 
     # Get tile beam power for all pixels
     sky_powers = get_beam_power_over_time(beam_meta_data, names_ra_dec,
-                                          degrees=True)
+                                          degrees=True, dt=dt)
 
     # Find the maximum power over all time
     max_sky_powers = []

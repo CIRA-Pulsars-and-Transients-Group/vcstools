@@ -2,7 +2,7 @@
 import logging
 import argparse
 
-from vcstools.metadb_utils import getmeta, write_obs_info, get_obs_array_phase, obs_max_min, calc_ta_fwhm, get_best_cal_obs, get_common_obs_metadata
+from vcstools.metadb_utils import write_obs_info, get_obs_array_phase, obs_max_min, calc_ta_fwhm, get_best_cal_obs, get_common_obs_metadata
 from vcstools.beam_calc import field_of_view
 
 logger = logging.getLogger(__name__)
