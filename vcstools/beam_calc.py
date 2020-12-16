@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy as np
+import math
 
 #MWA scripts
 from mwa_pb import primary_beam
@@ -10,6 +11,92 @@ from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata, getmet
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def pixel_area(ra_min, ra_max, dec_min, dec_max):
+    """
+    Calculate the area of a pixel on the sky from the pixel borders
+
+    Parameters:
+    -----------
+    ra_min: float
+        The Right Acension minimum in degrees
+    ra_max: float
+        The Right Acension maximum in degrees
+    dec_min: float
+        The Declination minimum in degrees
+    dec_max: float
+        The Declination maximum in degrees
+
+    Returns:
+    --------
+    area: float
+        Area of the pixel in square degrees
+    """
+    return (180./math.pi) * (ra_max - ra_min) * (math.sin(math.radians(dec_max)) - math.sin(math.radians(dec_min)))
+
+
+def field_of_view(obsid,
+                  beam_meta_data=None, dur=None):
+    """
+    Will find the field-of-view of the observation (including the drift) in square degrees.
+
+    Parameters:
+    -----------
+    obsid: int
+        The observation ID
+    beam_meta_data: list
+        OPTIONAL - the list of common metadata from vcstools.metadb_utils.get_common_obs_metadata.
+        By default will download the metadata for you
+    dur: int
+        OPTIONAL - Duration of observation to calculate for in seconds
+        By default will use the entire observation duration
+
+    Returns:
+    --------
+    area: float
+        The field-of-view of the observation in square degrees
+    """
+    if beam_meta_data is None:
+        beam_meta_data = get_common_obs_metadata(obsid)
+
+    if dur is None:
+        dt = 296
+    else:
+        dt = 100
+        # Change the dur to the inpur dur
+        obsid, ra, dec, time, delays, centrefreq, channels = beam_meta_data
+        beam_meta_data = [obsid, ra, dec, dur, delays, centrefreq, channels]
+
+    # Make a pixel for each degree on the sky
+    names_ra_dec = []
+    for ra in range(0,360):
+        for dec in range(-90,90):
+            names_ra_dec.append(["sky_pos", ra+0.5, dec+0.5])
+
+    # Get tile beam power for all pixels
+    sky_powers = get_beam_power_over_time(beam_meta_data, names_ra_dec,
+                                          degrees=True)
+
+    # Find the maximum power over all time
+    max_sky_powers = []
+    for pixel_power in sky_powers:
+        temp_power = 0.
+        for time_power in pixel_power:
+            if time_power[0] > temp_power:
+                temp_power = time_power[0]
+        max_sky_powers.append(temp_power)
+
+    # Find all pixels greater than the half power point and sum their area
+    half_power_point = max(max_sky_powers) / 2
+    i = 0
+    area_sum = 0
+    for ra in range(0,360):
+        for dec in range(-90,90):
+            if max_sky_powers[i] > half_power_point:
+                area_sum = area_sum + pixel_area(ra, ra+1, dec, dec+1)
+            i = i + 1
+    return area_sum
 
 
 def from_power_to_gain(powers, cfreq, n, coh=True):
