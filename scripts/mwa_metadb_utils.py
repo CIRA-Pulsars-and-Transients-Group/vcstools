@@ -2,7 +2,8 @@
 import logging
 import argparse
 
-from vcstools.metadb_utils import getmeta, write_obs_info, get_obs_array_phase, obs_max_min, calc_ta_fwhm, get_best_cal_obs
+from vcstools.metadb_utils import write_obs_info, get_obs_array_phase, obs_max_min, calc_ta_fwhm, get_best_cal_obs, get_common_obs_metadata
+from vcstools.beam_calc import field_of_view
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +19,12 @@ if __name__ == '__main__':
     if args.write:
         write_obs_info(args.obsid)
     else:
-        data_dict = getmeta(params={"obsid":args.obsid, 'nocache':1})
+        beam_common_data, data_dict = get_common_obs_metadata(args.obsid, return_all=True)
         channels = data_dict["rfstreams"]["0"]["frequencies"]
         centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
         array_phase = get_obs_array_phase(args.obsid)
         start, stop = obs_max_min(args.obsid, meta=data_dict)
+        fov = field_of_view(args.obsid, beam_meta_data=beam_common_data)
 
         print("-------------------------    Obs Info    --------------------------")
         print("Obs Name:           {}".format(data_dict["obsname"]))
@@ -38,6 +40,7 @@ if __name__ == '__main__':
         print("DEC Pointing (deg): {}".format(data_dict["metadata"]["dec_pointing"]))
         print("Channels:           {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
         print("Centrefreq (MHz):   {}".format(centre_freq))
+        print("FoV (square deg):   {:5.1f}".format(fov))
 
     if args.cal_best:
         all_cals = get_best_cal_obs(args.obsid)
