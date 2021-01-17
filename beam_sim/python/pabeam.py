@@ -28,9 +28,11 @@ import logging
 #from mwapy import ephem_utils,metadata
 from vcstools.metadb_utils import getmeta
 from mwa_pb import primary_beam as pb
+from mwa_pb import config
+import mwa_hyperbeam
+beam = mwa_hyperbeam.FEEBeam(config.h5file)
 
 logger = logging.getLogger(__name__)
-
 
 def get_delay_steps(obs):
     beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
@@ -47,7 +49,7 @@ def get_delay_steps(obs):
     return  obs, ra, dec, duration, xdelays, centrefreq, channels
 
 
-def getTileLocations(obsid, flags=[], fdir="."):
+def getTileLocations(obsid, flags=[], metafits=None):
     """
     Function grab the MWA tile locations for any given observation ID. Downloads the relevant metafits file from the database, saves it as <obdID>_metafits_ppds.fits.
 
@@ -62,7 +64,7 @@ def getTileLocations(obsid, flags=[], fdir="."):
         list[2] = a list of tile heights about sea-level
     """
 
-    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(fdir, obsid))
+    f = fits.open(metafits)
 
     east = f[1].data['East'][::2]
     north = f[1].data['North'][::2]
@@ -80,7 +82,7 @@ def getTileLocations(obsid, flags=[], fdir="."):
     return east, north, height
 
 
-def get_obstime_duration(obsid, fdir="."):
+def get_obstime_duration(obsid, metafits):
     """
     Funciton to grab the recorded start-time and duration of the observation
 
@@ -94,7 +96,7 @@ def get_obstime_duration(obsid, fdir="."):
     """
 
     # metafits file will already have been downloaded
-    f = fits.open('{0}/{1}_metafits_ppds.fits'.format(obsid, fdir))
+    f = fits.open(metafits)
 
     return [f[0].header['DATE-OBS'], f[0].header['EXPOSURE']]
 
@@ -229,7 +231,7 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
     results = []
 
     # is this the last process?
-    rank = size - 1
+    #rank = size - 1
 
     # we will also calculate the beam area contribution of this part of the sky
     omega_A = 0
@@ -287,13 +289,15 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                 f.write("#Request Name: FarField\n#Frequency: {0}\n".format(obsfreq))
                 f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}\n".format(ntheta, nphi))
                 f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
-                f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
+                #f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
+                f.write('#"Theta"\t"Phi"\t"Gain(Total)"\n')
 
             for res in results:
                 # write each line of the data
                 # we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
                 # values are calculated using that convetion, so we need to represent that here
-                f.write("{0}\t{1}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0], res[1], res[2]))
+                #f.write("{0:.5f}\t{1:.5f}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0], res[1], res[2]))
+                f.write("{0:.5f}\t{1:.5f}\t{2}\n".format(res[0], res[1], res[2]))
 
     else:
         logger.warn("worker {0} not writing".format(rank))
@@ -351,6 +355,8 @@ def parse_options(comm):
                 help="""Write the beam pattern to disk when done calculating.
                     If this option is not passed, you will just get a '.stats' files containing basic information about simulation parameters and the calculated gain.""")
 
+    parser.add_argument("--metafits", type=str, help="Metafits file location")
+
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbositylevel. Default: INFO", choices=loglevels.keys(), default="INFO")
 
     args = None
@@ -382,16 +388,17 @@ ch.setLevel(loglevels[args.loglvl])
 formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
+logger.propagate = False
 
 
 
-logger.warn("WARNING: CURRENTLY USING ANALYTIC BEAM MODEL. FOR GREATER ACCURACY, PLEASE USE THE PYTHON 2 VERSION OF THIS SCRIPT.")
+#logger.warning("WARNING: CURRENTLY USING ANALYTIC BEAM MODEL. FOR GREATER ACCURACY, PLEASE USE THE PYTHON 2 VERSION OF THIS SCRIPT.")
 
 # small calculations and data gathering from arguments is fine and won't run into trouble by having multiple processes do it simultaneously
 ra = str(args.target[0]).replace('"', '').replace("'", "")
 dec = args.target[1].replace('"', '').replace("'", "")
 tres, pres = args.grid_res
-ntheta, nphi = 90 / tres, 360 / pres
+ntheta, nphi = 90 // tres, 360 // pres
 
 if args.flagged_tiles is None:
     flags = []
@@ -403,8 +410,8 @@ else:
 # if the observation ID metafits file doesn't exist, get the master node to download it
 if rank == 0:
     logger.info("will use {0} processes".format(size))
-    logger.info("gathering required data")
-    os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir, args.obsid))
+    #logger.info("gathering required data")
+    #os.system('wget -O {0}/{1}_metafits_ppds.fits mwa-metadata01.pawsey.org.au/metadata/fits?obs_id={1}'.format(args.out_dir, args.obsid))
 
     # for delays, which requires reading the metafits file, only let master node do it and then broadcast to workers
     logger.info("getting delay steps from database")
@@ -416,7 +423,7 @@ if rank == 0:
     # same for obs time, master reads and then distributes
     logger.info("getting times")
     if args.time is None:
-        time = Time(get_obstime_duration(args.obsid)[0], format='gps', fdir=args.out_dir)
+        time = Time(get_obstime_duration(args.obsid, args.metafits)[0], format='gps', fdir=args.out_dir)
     else:
         time = Time(args.time, format='gps')
 
@@ -430,7 +437,7 @@ if rank == 0:
 
     # get the tile locations from the metafits
     logger.info("getting tile locations from metafits file")
-    xpos, ypos, zpos = getTileLocations(args.obsid, flags, fdir=args.out_dir)
+    xpos, ypos, zpos = getTileLocations(args.obsid, flags, metafits=args.metafits)
     if args.coplanar:
         zpos = np.zeros_like(xpos)
 
@@ -445,7 +452,9 @@ assert totalZAevals >= size, "Total number of ZA evalutions must be >= the numbe
 
 if rank == 0:
     # split the sky into ZA chunks based on the number of available processes
-    za_array = np.array_split(np.radians(np.linspace(0, 90, ntheta + 1)), size)
+    logger.debug(0, 90, int(ntheta) + 1)
+    logger.debug(np.linspace(0, 90, int(ntheta) + 1))
+    za_array = np.array_split(np.radians(np.linspace(0, 90, int(ntheta) + 1)), size)
 
     # create the object that contains all the data from master
     data = {'delays':delays,
@@ -488,7 +497,7 @@ else:
 comm.barrier()
 
 # set the base output file name (will be editted based on the worker rank)
-oname = "{0}/{1}_{2}_{3:.2f}MHz_{4}_{5}.dat".format(args.out_dir, args.obsid, time.gps, args.freq / 1e6, ra, dec)
+oname = "{0}/{1}_{2}_{3:.2f}MHz_tres{4}_pres{5}_{6}_{7}.dat".format(args.out_dir, args.obsid, time.gps, args.freq / 1e6, args.grid_res[0], args.grid_res[1], ra, dec)
 
 
 # create array factor for given ZA band and write to file

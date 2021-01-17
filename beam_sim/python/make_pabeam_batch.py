@@ -7,43 +7,12 @@ import sys
 import os
 import logging
 
+from vcstools.metadb_utils import obs_max_min, get_common_obs_metadata, ensure_metafits
+from vcstools.job_submit import submit_slurm
+from vcstools.general_utils import mdir
+from vcstools.config import load_config_file
+
 logger = logging.getLogger(__name__)
-
-pabeam_sbatch_header = """#!/bin/bash -l
-#SBATCH --export=NONE
-#SBATCH --account=mwavcs
-#SBATCH --cluster=galaxy
-#SBATCH --partition=gpuq
-#SBATCH --nodes={nodes}
-#SBATCH --ntasks-per-node={nprocesses}
-#SBATCH --cpus-per-task=1
-#SBATCH --time=12:00:00
-#SBATCH --output=make_pabeam_{obsid}_{time}_{freq:.2f}MHz_%j.out
-
-module load python/3.6.3
-module load argparse
-module load numpy/1.13.3
-module load astropy
-module load mpi4py
-module use /group/mwa/software/modulefiles
-module load vcstools/master
-"""
-
-pabeam_params = """nprocesses={nprocesses}
-obsid={obsid}
-freq={freq}
-eff={eff}
-ra='"{ra}"'
-dec='"{dec}"'
-flags="{flags}"
-tres={tres}
-pres={pres}
-obstime={time}
-odir="{odir}"
-pabeam=/group/mwa/software/vcstools/vcstools/beam_sim/python/pabeam.py
-"""
-
-pabeam_base_cmd = """srun --export=all -u -n ${nprocesses} python3 ${pabeam} -o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir}"""
 
 pabeam_concat_cmd= """BASENAME={0} # base name of the output files (everything before the .[rank].dat)
 FNAME={1} # name of output file
@@ -67,7 +36,6 @@ else
     done
 fi
 """
-
 
 showspec_sbatch_header = """#!/bin/bash -l
 #SBATCH --export=NONE
@@ -113,49 +81,86 @@ srun --export=all -u $showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b 
 
 
 
+def write_batch_files(obsid, begin, end,
+                      ra, dec, freq, flaggedtiles,
+                      step=500, thetares=0.05, phires=0.05,
+                      nnodes=1, eff=1,
+                      maploc="$PWD", odir=None,
+                      write=True, write_showspec=False,
+                      vcstools_version='master', metafits_loc=None):
 
-def write_batch_files(tmin, tmax, step, thetares, phires, nnodes, ra, dec, obsid, freq, eff, flaggedtiles, maploc, write, odir):
+    comp_config = load_config_file()
 
-    times = np.arange(tmin, tmax, step=step)
-    times = np.append(times, tmax)
+    times = np.arange(begin, end, step=step)
+    times = np.append(times, end)
 
-    nprocesses = 8 * nnodes
+    nprocesses = 32 * nnodes
     flags = " ".join(flaggedtiles)
 
-    if write:
-        pabeam_run_cmd = pabeam_base_cmd + " --write"
+    if odir is None:
+        # Make default directories
+        product_dir = os.path.join(comp_config['base_data_dir'], obsid, 'pabeam', '{}_{}'.format(ra, dec))
+        batch_dir   = os.path.join(comp_config['base_data_dir'], obsid, 'batch')
     else:
-        pabeam_run_cmd = pabeam_base_cmd
-
+        product_dir = batch_dir = odir
+    mdir(product_dir, 'Product Dir', gid=comp_config['gid'])
+    mdir(batch_dir,   'Batch Dir',   gid=comp_config['gid'])
 
     # Loop over all times
     for i in range(len(times)):
-        fname = "make_pabeam_{0}_{1:.2f}MHz.batch".format(times[i], freq/1e6)
-        onamebase = "{0}_{1}_{2:.2f}MHz_{3}_{4}".format(obsid, float(times[i]), freq/1e6, ra, dec)
+        fname = "make_pabeam_{0}_{1}_{2}_{3:.2f}MHz".format(ra, dec, times[i], freq/1e6)
+        onamebase = "{0}_{1}_{2:.2f}MHz_tres{3}_pres{4}_{5}_{6}".format(obsid, float(times[i]), freq/1e6, thetares, phires, ra, dec)
 
-        header_str = pabeam_sbatch_header.format(nodes=nnodes, nprocesses=nprocesses, obsid=obsid, time=float(times[i]), freq=freq/1e6)
-        params_str = pabeam_params.format(nprocesses=nprocesses, obsid=obsid, freq=freq, eff=eff, ra=ra, dec=dec, flags=flags, tres=thetares, pres=phires, time=times[i], odir=odir)
+        commands = []
+        # Write out params
+        commands.append("nprocesses={}".format(nprocesses))
+        commands.append("obsid={}".format(obsid))
+        commands.append("""ra='"{}"'""".format(ra))
+        commands.append("""dec='"{}"'""".format(dec))
+        commands.append("freq={}".format(freq))
+        commands.append("eff={}".format(eff))
+        commands.append('flags="{}"'.format(flags))
+        commands.append("tres={}".format(thetares))
+        commands.append("pres={}".format(phires))
+        commands.append("obstime={}".format(times[i]))
+        commands.append("odir={}".format(product_dir))
+        commands.append("metafits_loc={}".format(metafits_loc))
+        # TODO remove this once hyperbeam is installed with python
+        commands.append("export PYTHONPATH=$PYTHONPATH:/pawsey/mwa/software/python3/hyperbeam/v0.3.0/lib/python3.8/site-packages")
 
-        with open(fname,'w') as f:
-            f.write(header_str)
-            f.write("\n\n")
-            f.write(params_str)
-            f.write("\n")
-            f.write("echo {0}\n".format(pabeam_run_cmd))
-            f.write("{0}\n\n".format(pabeam_run_cmd))
+        # Main command
+        pabeam_command = "srun --export=all -u -n ${nprocesses} pabeam.py " +\
+                         "-o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --metafits ${metafits_loc} " +\
+                         "--flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} "
+        if write:
+            pabeam_command = pabeam_command + " --write"
 
-            # Write the concatenation bash commands
-            f.write(pabeam_concat_cmd.format(onamebase, onamebase + ".dat"))
-            
-            # Remove the partial beam pattern files written by processes
-            f.write("rm {0}\n".format(onamebase + ".*.dat"))
+        commands.append('cd {}'.format(product_dir))
+        commands.append('echo "{}"'.format(pabeam_command))
+        commands.append(pabeam_command)
 
-        # Now write the showspec batch for this time
-        write_showspec_batch(times[i], obsid, ra, dec, freq, (90/thetares)+1, 360/phires, onamebase+".dat", maploc)
+        # Combine the output files into one
+        commands.append(pabeam_concat_cmd.format(onamebase, onamebase + ".dat"))
+
+        # Remove the partial beam pattern files written by processes
+        commands.append("rm {0}\n".format(onamebase + ".*.dat"))
+        module_list = ['mpi4py', 'hyperbeam/v0.3.0']
+        submit_slurm(fname, commands, batch_dir=batch_dir,
+                     module_list=module_list,
+                     slurm_kwargs={"time": "12:00:00",
+                                   "nodes": nnodes,
+                                   "ntasks-per-node" : nprocesses},
+                     vcstools_version=vcstools_version,
+                     queue='cpuq')
+
+        if write_showspec:
+            # Now write the showspec batch for this time
+            write_showspec_batch(times[i], obsid, ra, dec, freq, (90/thetares)+1, 360/phires, onamebase+".dat", maploc)
 
 
 
 def write_showspec_batch(time, obsid, ra, dec, freq, ntheta, nphi, infile, maploc):
+    # Nick: I'm not sure what this is or what it's for so I'm not going to touch it
     fname = "showspec_{0}_{1:.2f}MHz.batch".format(time, freq/1e6)
     oname = fname.replace(".batch", ".out")
     
@@ -196,27 +201,34 @@ if __name__ == "__main__":
     # Argument parsing
     parser = argparse.ArgumentParser(description="Simple script to help write the batch scripts required for running the tied-array beam simulations over multiple epochs")
 
-    parser.add_argument("--tmin", type=int, help="GPS time for first evaluation")
-    parser.add_argument("--tmax", type=int, help="GPS time for last evaluation")
-    parser.add_argument("--step", type=int, help="Time step between each evaluation (in seconds) [default: 500]", default=500)
-    parser.add_argument("--thetares", type=float, help="Resolution of theta (zenith angle) grid, in degrees [default: 0.05]", default=0.05)
-    parser.add_argument("--phires", type=float, help="Resolution of phi (azimuth) grid, in degrees [default: 0.05]", default=0.05)
-    parser.add_argument("--nodes", type=int, help="Number of nodes to use per run (more than 10 is overkill and will actually be slower...) [default: 1]", default=1)
-    parser.add_argument("--obsid", type=int, help="Observation ID")
-    parser.add_argument("--freq", type=float, help="Observing frequency in Hz")
-    parser.add_argument("--eff", type=float, help="Radiation efficiency [default: 1.0]", default=1.0)
-    parser.add_argument("--flagged", nargs='+', help="Flagged tiles (as in RTS flagged_tiles.txt)")
+    required_options = parser.add_argument_group('Required Options')
+    required_options.add_argument("-o", "--obsid", type=int, help="Observation ID")
+    required_options.add_argument("-b", "--begin", type=int, help="GPS time for first evaluation")
+    required_options.add_argument("-e", "--end", type=int, help="GPS time for last evaluation")
+    required_options.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. ")
+    required_options.add_argument("--ra", type=str, help="RAJ2000 of target in hh:mm:ss.ss (use = to assign option)")
+    required_options.add_argument("--dec", type=str, help="DECJ2000 of target in dd:mm:ss.ss (use = to assign option)") # only because argparse can't handle negative arguments...
 
-    parser.add_argument("--ra", type=str, help="RAJ2000 of target in hh:mm:ss.ss (use = to assign option)")
-    parser.add_argument("--dec", type=str, help="DECJ2000 of target in dd:mm:ss.ss (use = to assign option)") # only because argparse can't handle negative arguments...
-
-    parser.add_argument("--maploc", type=str, help="Path to directory where skymaps/ exists (or is to be created). The GSM temperature maps exist there or will be created.", default="$PWD")
-
-    parser.add_argument("--write", action='store_true', help="Write output files to disk")
-    parser.add_argument("--odir", type=str, help="Output directory")
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", choices=loglevels.keys(), default="INFO")
-
-
+    optional_options = parser.add_argument_group('Optional Options')
+    optional_options.add_argument('-O', '--cal_obs', type=int, default=None,
+                                  help="Observation ID of calibrator you want to process. "
+                                       "Only required in to work out the default location of flagged_tiles. [no default]")
+    optional_options.add_argument("--freq", type=float, help="Observing frequency in Hz [default: The observations centre frequency]", default=None)
+    optional_options.add_argument("--flagged_tiles", type=str, default=None,
+                                  help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. ")
+    optional_options.add_argument("--flagged", nargs='+', help="Flagged tiles (as in RTS flagged_tiles.txt)")
+    optional_options.add_argument("--step", type=int, help="Time step between each evaluation (in seconds) [default: 500]", default=500)
+    optional_options.add_argument("--thetares", type=float, help="Resolution of theta (zenith angle) grid, in degrees [default: 0.05]", default=0.05)
+    optional_options.add_argument("--phires", type=float, help="Resolution of phi (azimuth) grid, in degrees [default: 0.05]", default=0.05)
+    optional_options.add_argument("--nodes", type=int, help="Number of nodes to use per run (more than 10 is overkill and will actually be slower...) [default: 1]", default=1)
+    optional_options.add_argument("--eff", type=float, help="Radiation efficiency [default: 1.0]", default=1.0)
+    optional_options.add_argument("--maploc", type=str, default="$PWD",
+                                  help="Path to directory where skymaps/ exists (or is to be created). The GSM temperature maps exist there or will be created.")
+    optional_options.add_argument("--dont_write", action='store_true', help="Don't write output files to disk")
+    optional_options.add_argument("--write_showspec", action='store_true', help="Write out the showspec batch script")
+    optional_options.add_argument("--odir", type=str, default=None, help="Output directory")
+    optional_options.add_argument("--vcstools_version", type=str, default="master", help="VCSTools version to load in jobs (i.e. on the queues) ")
+    optional_options.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", choices=loglevels.keys(), default="INFO")
 
     args = parser.parse_args()
 
@@ -226,9 +238,65 @@ if __name__ == "__main__":
     formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
-    
-    logger.warn("FULL_EE BEAM MODEL NOT AVAILABLE IN PYTHON 3 YET. ANALYTIC BEAM MODEL WILL BE USED. FOR GREATER ACCURACY PLEASE USE PYTHON 2 VRESION.")
 
-    write_batch_files(args.tmin, args.tmax, args.step, args.thetares, args.phires, 
-                      args.nodes, args.ra, args.dec, args.obsid, args.freq, args.eff, args.flagged,
-                      args.maploc, args.write, args.odir)
+    # Option parsing
+    if not args.obsid:
+        logger.error("Observation ID required, please put in with -o or --obsid")
+        sys.exit(0)
+    if args.all and (args.begin or args.end):
+        logger.error("Please specify EITHER (-b,-e) OR -a")
+        sys.exit(0)
+    elif args.all:
+        args.begin, args.end = obs_max_min(args.obsid)
+    if args.begin and args.end:
+        if args.begin > args.end:
+            logger.error("Starting time is after end time")
+            sys.exit(0)
+
+    # Default parsing
+    if args.freq is None:
+        args.freq = get_common_obs_metadata(args.obsid)[5] * 1e6 #Hz
+        logger.info("Using the observations centre frequency: {} MHz".format(args.freq / 1e6))
+
+    # Flagged tile parsing
+    comp_config = load_config_file()
+    if args.flagged_tiles:
+        flagged_tiles_file = os.path.abspath(args.flagged_tiles)
+        if not os.path.isfile(args.flagged_tiles):
+            logger.error("Your are not pointing at a file with your input "
+                            "to --flagged_tiles. Aborting here as the "
+                            "beamformer will not run...")
+            sys.exit(0)
+    elif args.cal_obs:
+        DI_dir = os.path.join(comp_config['base_data_dir'], str(args.obsid), 'cal', str(args.cal_obs), 'rts')
+        if os.path.isfile("{0}/flagged_tiles.txt".format(DI_dir)):
+            flagged_tiles_file = "{0}/flagged_tiles.txt".format(DI_dir)
+            logger.info("Found tiles flags in {0}/flagged_tiles.txt. "
+                        "Using it by default".format(DI_dir))
+        else:
+            logger.error("No file in {0}/flagged_tiles.txt. Use --flagged_tiles")
+            sys.exit(0)
+    else:
+        logger.error("Please either use --cal_id to work out the default location or "
+                     "--flagged_tiles for non-standard locations")
+        sys.exit(0)
+    # Converting the file into a list
+    with open(flagged_tiles_file) as f:
+        flagged_tiles= f.readlines()
+    flagged_tiles = [x.strip() for x in flagged_tiles]
+
+    # Ensure metafits file
+    metafits_file = "{0}_metafits_ppds.fits".format(args.obsid)
+    data_dir = os.path.join(comp_config['base_data_dir'], str(args.obsid))
+    metafits_file_loc = os.path.join(data_dir, metafits_file)
+    ensure_metafits(data_dir, args.obsid, metafits_file)
+
+    logger.warning("FULL_EE BEAM MODEL NOT AVAILABLE IN PYTHON 3 YET. ANALYTIC BEAM MODEL WILL BE USED. FOR GREATER ACCURACY PLEASE USE PYTHON 2 VRESION.")
+
+    write_batch_files(str(args.obsid), args.begin, args.end,
+                      args.ra, args.dec, args.freq, flagged_tiles,
+                      step=args.step, thetares=args.thetares, phires=args.phires,
+                      nnodes=args.nodes, eff=args.eff,
+                      maploc=args.maploc, odir=args.odir,
+                      write=(not args.dont_write), write_showspec=args.write_showspec,
+                      vcstools_version=args.vcstools_version, metafits_loc=metafits_file_loc)
