@@ -85,7 +85,7 @@ def write_batch_files(obsid, begin, end,
                       ra, dec, freq, flaggedtiles,
                       step=500, thetares=0.05, phires=0.05,
                       nnodes=1, eff=1, beam_model='hyperbeam',
-                      maploc="$PWD", odir=None,
+                      maploc="$PWD", odir=None, delays=[0] * 16,
                       write=True, write_showspec=False,
                       vcstools_version='master', metafits_loc=None):
 
@@ -120,6 +120,7 @@ def write_batch_files(obsid, begin, end,
         commands.append("freq={}".format(freq))
         commands.append("eff={}".format(eff))
         commands.append('flags="{}"'.format(flags))
+        commands.append('delays="{}"'.format(delays))
         commands.append("tres={}".format(thetares))
         commands.append("pres={}".format(phires))
         commands.append("obstime={}".format(times[i]))
@@ -132,7 +133,7 @@ def write_batch_files(obsid, begin, end,
         # Main command
         pabeam_command = "srun --export=all -u -n ${nprocesses} pabeam.py " +\
                          "-o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --metafits ${metafits_loc} " +\
-                         "--flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --beam_model ${beam}"
+                         "--flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --beam_model ${beam} --delays ${delays}"
         if write:
             pabeam_command = pabeam_command + " --write"
 
@@ -242,6 +243,9 @@ if __name__ == "__main__":
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
+    # get metadata
+    common_metadata = get_common_obs_metadata(args.obsid)
+
     # Option parsing
     if not args.obsid:
         logger.error("Observation ID required, please put in with -o or --obsid")
@@ -261,7 +265,7 @@ if __name__ == "__main__":
 
     # Default parsing
     if args.freq is None:
-        args.freq = get_common_obs_metadata(args.obsid)[5] * 1e6 #Hz
+        args.freq = common_metadata[5] * 1e6 #Hz
         logger.info("Using the observations centre frequency: {} MHz".format(args.freq / 1e6))
 
     # Flagged tile parsing
@@ -301,6 +305,6 @@ if __name__ == "__main__":
                       args.ra, args.dec, args.freq, flagged_tiles,
                       step=args.step, thetares=args.thetares, phires=args.phires,
                       nnodes=args.nodes, eff=args.eff, beam_model=args.beam_model,
-                      maploc=args.maploc, odir=args.odir,
+                      maploc=args.maploc, odir=args.odir, delays=common_metadata[4][0],
                       write=(not args.dont_write), write_showspec=args.write_showspec,
                       vcstools_version=args.vcstools_version, metafits_loc=metafits_file_loc)
