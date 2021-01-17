@@ -199,7 +199,7 @@ def genAZZA(start, stop, step, end=False):
 
 def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                       obsid, delays, time, obsfreq, eff, flagged_tiles,
-                      theta_res, phi_res,
+                      theta_res, phi_res, beam_model,
                       coplanar, zenith, za_chunk, write):
     """
     Primary function to calculate the array factor with the given information.
@@ -262,8 +262,26 @@ def createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                 array_factor_max = array_factor_power
 
             # calculate the tile beam at the given Az,ZA pixel
-            #tile_xpol,tile_ypol = pb.MWA_Tile_analytic([[za]],[[az]],freq=obsfreq,delays=[delays,delays],power=True,zenithnorm=True,interp=False)
-            tile_xpol, tile_ypol = pb.MWA_Tile_analytic(za, az, freq=obsfreq, delays=delays, power=True, zenithnorm=True)
+            if beam_model == 'hyperbeam':
+                jones = beam.calc_jones_array([az], [za], obsfreq, delays, [1.0] * 16, True)
+                jones = jones.reshape(1, 1, 2, 2)
+                vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
+                tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
+            elif option == 'analytic':
+                tile_xpol, tile_ypol = primary_beam.MWA_Tile_analytic(za, az,
+                                                     freq=obsfreq, delays=delays,
+                                                     zenithnorm=True,
+                                                     power=True)
+            elif option == 'advanced':
+                tile_xpol, tile_ypol = primary_beam.MWA_Tile_advanced(za, az,
+                                                     freq=obsfreq, delays=delays,
+                                                     zenithnorm=True,
+                                                     power=True)
+            elif option == 'full_EE':
+                tile_xpol, tile_ypol = primary_beam.MWA_Tile_full_EE(za, az,
+                                                     freq=obsfreq, delays=delays,
+                                                     zenithnorm=True,
+                                                     power=True)
             tile_pattern = (tile_xpol + tile_ypol) / 2.0
 
             # calculate the phased array power pattern
@@ -318,6 +336,7 @@ def parse_options(comm):
     #####################
     ##  OPTION PARSING ##
     #####################
+    beam_models = ['analytic', 'advanced', 'full_EE', 'hyperbeam']
     parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA.
                             This is an MPI-based simulation code and will use all available processes when run
                             (i.e. there is no user choice in how many to use)""",\
@@ -356,6 +375,8 @@ def parse_options(comm):
                     If this option is not passed, you will just get a '.stats' files containing basic information about simulation parameters and the calculated gain.""")
 
     parser.add_argument("--metafits", type=str, help="Metafits file location")
+
+    parser.add_argument("--beam_model", type=str, default='hyperbeam', help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
 
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbositylevel. Default: INFO", choices=loglevels.keys(), default="INFO")
 
@@ -503,7 +524,7 @@ oname = "{0}/{1}_{2}_{3:.2f}MHz_tres{4}_pres{5}_{6}_{7}.dat".format(args.out_dir
 # create array factor for given ZA band and write to file
 beam_area = createArrayFactor(targetAZ, targetZA, targetAZdeg, targetZAdeg,
                               args.obsid, delays, time, args.freq, args.efficiency, flags,
-                              tres, pres,
+                              tres, pres, args.beam_model,
                               args.coplanar, args.zenith, za_chunk, args.write)
 
 # collect results for the beam area calculation

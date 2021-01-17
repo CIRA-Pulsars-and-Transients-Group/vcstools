@@ -84,7 +84,7 @@ srun --export=all -u $showspec ni_list -s ${{ux}} -i 0 -f ${{gps}}.spec -c 0 -b 
 def write_batch_files(obsid, begin, end,
                       ra, dec, freq, flaggedtiles,
                       step=500, thetares=0.05, phires=0.05,
-                      nnodes=1, eff=1,
+                      nnodes=1, eff=1, beam_model='hyperbeam',
                       maploc="$PWD", odir=None,
                       write=True, write_showspec=False,
                       vcstools_version='master', metafits_loc=None):
@@ -125,13 +125,14 @@ def write_batch_files(obsid, begin, end,
         commands.append("obstime={}".format(times[i]))
         commands.append("odir={}".format(product_dir))
         commands.append("metafits_loc={}".format(metafits_loc))
+        commands.append('beam="{}"'.format(beam_model))
         # TODO remove this once hyperbeam is installed with python
         commands.append("export PYTHONPATH=$PYTHONPATH:/pawsey/mwa/software/python3/hyperbeam/v0.3.0/lib/python3.8/site-packages")
 
         # Main command
         pabeam_command = "srun --export=all -u -n ${nprocesses} pabeam.py " +\
                          "-o ${obsid} -f ${freq} -t ${obstime} -e ${eff} -p ${ra} ${dec} --metafits ${metafits_loc} " +\
-                         "--flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} "
+                         "--flagged_tiles ${flags} --grid_res ${tres} ${pres} --out_dir ${odir} --beam_model ${beam}"
         if write:
             pabeam_command = pabeam_command + " --write"
 
@@ -197,6 +198,7 @@ if __name__ == "__main__":
                     WARNING=logging.WARNING,
                     ERROR = logging.ERROR)
 
+    beam_models = ['analytic', 'advanced', 'full_EE', 'hyperbeam']
 
     # Argument parsing
     parser = argparse.ArgumentParser(description="Simple script to help write the batch scripts required for running the tied-array beam simulations over multiple epochs")
@@ -216,7 +218,8 @@ if __name__ == "__main__":
     optional_options.add_argument("--freq", type=float, help="Observing frequency in Hz [default: The observations centre frequency]", default=None)
     optional_options.add_argument("--flagged_tiles", type=str, default=None,
                                   help="Path (including file name) to file containing the flagged tiles as used in the RTS, will be used by get_delays. ")
-    optional_options.add_argument("--flagged", nargs='+', help="Flagged tiles (as in RTS flagged_tiles.txt)")
+    optional_options.add_argument("--beam_model", type=str, default='hyperbeam',
+                                  help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
     optional_options.add_argument("--step", type=int, help="Time step between each evaluation (in seconds) [default: 500]", default=500)
     optional_options.add_argument("--thetares", type=float, help="Resolution of theta (zenith angle) grid, in degrees [default: 0.05]", default=0.05)
     optional_options.add_argument("--phires", type=float, help="Resolution of phi (azimuth) grid, in degrees [default: 0.05]", default=0.05)
@@ -252,6 +255,9 @@ if __name__ == "__main__":
         if args.begin > args.end:
             logger.error("Starting time is after end time")
             sys.exit(0)
+    if args.beam_model not in beam_models:
+        logger.error("Unknown beam model. Please use one of {0}. Exiting.".format(beam_models))
+        quit()
 
     # Default parsing
     if args.freq is None:
@@ -291,12 +297,10 @@ if __name__ == "__main__":
     metafits_file_loc = os.path.join(data_dir, metafits_file)
     ensure_metafits(data_dir, args.obsid, metafits_file)
 
-    logger.warning("FULL_EE BEAM MODEL NOT AVAILABLE IN PYTHON 3 YET. ANALYTIC BEAM MODEL WILL BE USED. FOR GREATER ACCURACY PLEASE USE PYTHON 2 VRESION.")
-
     write_batch_files(str(args.obsid), args.begin, args.end,
                       args.ra, args.dec, args.freq, flagged_tiles,
                       step=args.step, thetares=args.thetares, phires=args.phires,
-                      nnodes=args.nodes, eff=args.eff,
+                      nnodes=args.nodes, eff=args.eff, beam_model=args.beam_model,
                       maploc=args.maploc, odir=args.odir,
                       write=(not args.dont_write), write_showspec=args.write_showspec,
                       vcstools_version=args.vcstools_version, metafits_loc=metafits_file_loc)
