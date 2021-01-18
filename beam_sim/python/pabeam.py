@@ -18,6 +18,9 @@ import astropy.units as u
 from astropy.constants import c, k_B
 # use updated astropy ephemerides
 
+import gc
+gc.enable()
+
 #utility and processing modules
 import os
 from mpi4py import MPI
@@ -175,7 +178,8 @@ def createArrayFactor(data, rank):
     phi_res = data['pres']
     eff = data['eff']
     beam_model = data['beam']
-    za_chunk = data['za_arr'][rank]
+    za = data['za_arr'][rank]
+    az = data['az_arr'][rank]
     oname = data['oname']
     write = data['write']
 
@@ -185,64 +189,74 @@ def createArrayFactor(data, rank):
     omega_A = 0
     array_factor_max = -1
 
-    # TODO: this is the important bit, and I'm sure we are doing this the dumb, slow way...
-    # for each ZA "pixel", 90deg inclusive
-    for za in za_chunk:
-        # for each Az "pixel", 360deg not included
-        for az in genAZZA(0, 2 * np.pi, np.radians(phi_res)):
 
-            # calculate the relevent wavenumber for (theta,phi)
-            kx, ky, kz = calcWaveNumbers(obswl, (np.pi / 2) - az, za)
-            array_factor = 0 + 0.j
+    # calculate the relevent wavenumber for (theta,phi)
+    kx, ky, kz = calcWaveNumbers(obswl, (np.pi / 2) - az, za)
+    logger.debug("rank {:2d} Wavenumbers shapes: {} {} {}".format(rank, kx.shape, ky.shape, kz.shape))
+    #array_factor = 0 + 0.j
+    array_factor = np.zeros(za.shape, dtype=np.complex_)
 
-            # determine the interference pattern seen for each tile
-            for x, y, z in zip(xpos, ypos, zpos):
-                ph = kx * x + ky * y + kz * z
-                ph_target = target_kx * x + target_ky * y + target_kz * z
-                array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
+    # determine the interference pattern seen for each tile
+    for x, y, z in zip(xpos, ypos, zpos):
+        #ph = kx * x + ky * y + kz * z
+        ph = np.add(np.multiply(kx, x), np.multiply(ky, y), np.multiply(kz, z))
+        ph_target = target_kx * x + target_ky * y + target_kz * z
+        #array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
+        array_factor = np.add(array_factor, np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target))
+    # With garbage collection (gc) enabeled this should clear the memory
+    kx = ky = kz = ph = ph_target = None
+    logger.debug("rank {:2d} array_factor shapes: {}".format(rank, array_factor.shape))
 
-            # normalise to unity at pointing position
-            array_factor /= len(xpos)
-            array_factor_power = np.abs(array_factor)**2
+    # normalise to unity at pointing position
+    array_factor /= len(xpos)
+    array_factor_power = np.abs(array_factor)**2
 
-            # keep track of maximum value calculated
-            if (array_factor_power > array_factor_max):
-                array_factor_max = array_factor_power
+    array_factor_max = np.amax(array_factor_power)
 
-            # calculate the tile beam at the given Az,ZA pixel
-            if beam_model == 'hyperbeam':
-                jones = beam.calc_jones_array([az], [za], obsfreq, delays, [1.0] * 16, True)
-                jones = jones.reshape(1, 1, 2, 2)
-                vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
-                tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
-            elif option == 'analytic':
-                tile_xpol, tile_ypol = primary_beam.MWA_Tile_analytic(za, az,
-                                                     freq=obsfreq, delays=delays,
-                                                     zenithnorm=True,
-                                                     power=True)
-            elif option == 'advanced':
-                tile_xpol, tile_ypol = primary_beam.MWA_Tile_advanced(za, az,
-                                                     freq=obsfreq, delays=delays,
-                                                     zenithnorm=True,
-                                                     power=True)
-            elif option == 'full_EE':
-                tile_xpol, tile_ypol = primary_beam.MWA_Tile_full_EE(za, az,
-                                                     freq=obsfreq, delays=delays,
-                                                     zenithnorm=True,
-                                                     power=True)
-            tile_pattern = (tile_xpol + tile_ypol) / 2.0
+    logger.info("rank {:2d} array factor maximum = {}".format(rank, array_factor_max))
 
-            # calculate the phased array power pattern
-            phased_array_pattern = tile_pattern * array_factor_power
-            #phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
+    # calculate the tile beam at the given Az,ZA pixel
+    if beam_model == 'hyperbeam':
+        logger.debug("rank {:2d} begin hyperbeam".format(rank))
+        jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
+        logger.debug("rank {:2d} end hyperbeam".format(rank))
+        jones = jones.reshape(za.shape[0], 1, 2, 2)
+        vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
+        tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
+    elif option == 'analytic':
+        tile_xpol, tile_ypol = primary_beam.MWA_Tile_analytic(za, az,
+                                                freq=obsfreq, delays=delays,
+                                                zenithnorm=True,
+                                                power=True)
+    elif option == 'advanced':
+        tile_xpol, tile_ypol = primary_beam.MWA_Tile_advanced(za, az,
+                                                freq=obsfreq, delays=delays,
+                                                zenithnorm=True,
+                                                power=True)
+    elif option == 'full_EE':
+        tile_xpol, tile_ypol = primary_beam.MWA_Tile_full_EE(za, az,
+                                                freq=obsfreq, delays=delays,
+                                                zenithnorm=True,
+                                                power=True)
+    logger.debug("rank {:2d} primary beam done".format(rank))
+    tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0)
+    tile_pattern = tile_pattern.flatten()
+    logger.debug("rank {:2d} tile_pattern done".format(rank))
 
-            # append results to a reference list for later
-            results.append([np.degrees(za), np.degrees(az), phased_array_pattern])
-
-            # add this contribution to the beam solid angle
-            omega_A += np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
-
-    logger.info("worker {0}, array factor maximum = {1}".format(rank, array_factor_max))
+    # calculate the phased array power pattern
+    logger.debug("rank {:2d} tile_pattern.shape {} array_factor_power.shape {}".format(rank, tile_pattern.shape, array_factor_power.shape))
+    logger.debug("rank {:2d} tile_pattern {}".format(rank, tile_pattern))
+    logger.debug("rank {:2d} array_factor_power {}".format(rank, array_factor_power))
+    phased_array_pattern = np.multiply(tile_pattern, array_factor_power)
+    #phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
+    logger.debug("rank {:2d} phased_array_pattern done".format(rank))
+    # add this contribution to the beam solid angle
+    #omega_A_array = np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
+    omega_A_array = np.sin(za)
+    for A in [array_factor_power, np.radians(theta_res), np.radians(phi_res)]:
+        omega_A_array = np.multiply(omega_A_array, A)
+    logger.debug("rank {:2d} omega_A_array shapes: {}".format(rank, omega_A_array.shape))
+    omega_A = np.sum(omega_A_array)
 
     # write a file based on rank of the process being used
     if write:
@@ -258,12 +272,13 @@ def createArrayFactor(data, rank):
                 #f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
                 f.write('#"Theta"\t"Phi"\t"Gain(Total)"\n')
 
-            for res in results:
+            #for res in results:
+            for zad, azd, pap in zip(np.degrees(za), np.degrees(az), phased_array_pattern):
                 # write each line of the data
                 # we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
                 # values are calculated using that convetion, so we need to represent that here
                 #f.write("{0:.5f}\t{1:.5f}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0], res[1], res[2]))
-                f.write("{0:.5f}\t{1:.5f}\t{2}\n".format(res[0], res[1], res[2][0][0]))
+                f.write("{0:.5f}\t{1:.5f}\t{2}\n".format(zad, azd, pap))
 
     else:
         logger.warn("worker {0} not writing".format(rank))
@@ -337,29 +352,30 @@ def parse_options():#comm):
 
     return args
 
+###############
+## Setup MPI ##
+###############
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
 if __name__ == "__main__":
-    ###############
-    ## Setup MPI ##
-    ###############
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    size = comm.Get_size()
+    #dictionary for choosing log-levels
+    loglevels = dict(DEBUG=logging.DEBUG,
+                    INFO=logging.INFO,
+                    WARNING=logging.WARNING,
+                    ERROR = logging.ERROR)
+    args = parse_options()#comm)
+
+    logger.setLevel(loglevels[args.loglvl])
+    ch = logging.StreamHandler()
+    ch.setLevel(loglevels[args.loglvl])
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    logger.propagate = False
     if rank == 0:
         logger.info("will use {0} processes".format(size))
-        #dictionary for choosing log-levels
-        loglevels = dict(DEBUG=logging.DEBUG,
-                        INFO=logging.INFO,
-                        WARNING=logging.WARNING,
-                        ERROR = logging.ERROR)
-        args = parse_options()#comm)
-
-        logger.setLevel(loglevels[args.loglvl])
-        ch = logging.StreamHandler()
-        ch.setLevel(loglevels[args.loglvl])
-        formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
-        logger.propagate = False
 
         # small calculations and data gathering from arguments is fine and won't run into trouble by having multiple processes do it simultaneously
         ra = str(args.target[0]).replace('"', '').replace("'", "")
@@ -412,11 +428,16 @@ if __name__ == "__main__":
         totalZAevals = ((np.pi / 2) / np.radians(tres)) + 1 # total number of ZA evaluations required
         assert totalZAevals >= size, "Total number of ZA evalutions must be >= the number of processors available"
 
-
+        za = np.radians(np.linspace(0, 90, int(ntheta) + 1))
+        az = np.radians(np.linspace(0, 360, int(ntheta) + 1))
+        azv, zav = np.meshgrid(az, za)
+        azv = azv.flatten()
+        zav = zav.flatten()
         # split the sky into ZA chunks based on the number of available processes
-        logger.debug(0, 90, int(ntheta) + 1)
-        logger.debug(np.linspace(0, 90, int(ntheta) + 1))
-        za_array = np.array_split(np.radians(np.linspace(0, 90, int(ntheta) + 1)), size)
+        za_array = np.array_split(zav, size)
+        az_array = np.array_split(azv, size)
+
+
 
         # create the object that contains all the data from master
         data = {'obsid' : args.obsid,
@@ -436,6 +457,7 @@ if __name__ == "__main__":
                 'eff':args.efficiency,
                 'beam':args.beam_model,
                 'za_arr':za_array,
+                'az_arr':az_array,
                 'oname':oname,
                 'write':args.write,
                 }
@@ -457,6 +479,7 @@ if __name__ == "__main__":
 
     # create array factor for given ZA band and write to file
     beam_area = createArrayFactor(data, rank)
+    logger.debug("rank {:2d} beam_area: {}".format(rank, beam_area))
 
     # collect results for the beam area calculation
     if rank != 0:

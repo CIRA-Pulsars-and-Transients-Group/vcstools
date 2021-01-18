@@ -94,7 +94,8 @@ def write_batch_files(obsid, begin, end,
     times = np.arange(begin, end, step=step)
     times = np.append(times, end)
 
-    nprocesses = 32 * nnodes
+    #nprocesses = 32 * nnodes
+    nprocesses = 1 * nnodes
     flags = " ".join(flaggedtiles)
 
     if odir is None:
@@ -153,7 +154,7 @@ def write_batch_files(obsid, begin, end,
                                    "nodes": nnodes,
                                    "ntasks-per-node" : nprocesses},
                      vcstools_version=vcstools_version,
-                     queue='cpuq')
+                     queue='cpuq', mem=10240)
 
         if write_showspec:
             # Now write the showspec batch for this time
