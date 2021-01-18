@@ -183,15 +183,9 @@ def createArrayFactor(data, rank):
     oname = data['oname']
     write = data['write']
 
-    results = []
-
-    # we will also calculate the beam area contribution of this part of the sky
-    omega_A = 0
-    array_factor_max = -1
-
-
     # calculate the relevent wavenumber for (theta,phi)
     kx, ky, kz = calcWaveNumbers(obswl, (np.pi / 2) - az, za)
+    logger.debug("kx {} ky {} kz {}".format(kx[0], ky[0], kz[0]))
     logger.debug("rank {:2d} Wavenumbers shapes: {} {} {}".format(rank, kx.shape, ky.shape, kz.shape))
     #array_factor = 0 + 0.j
     array_factor = np.zeros(za.shape, dtype=np.complex_)
@@ -199,10 +193,16 @@ def createArrayFactor(data, rank):
     # determine the interference pattern seen for each tile
     for x, y, z in zip(xpos, ypos, zpos):
         #ph = kx * x + ky * y + kz * z
-        ph = np.add(np.multiply(kx, x), np.multiply(ky, y), np.multiply(kz, z))
+        #logger.debug("kz {} z {} kz * z {}".format(kz[0], z, np.multiply(kz, z)[0]))
+        ph = np.add(np.multiply(kx, x), np.multiply(ky, y))
+        ph = np.add(ph, np.multiply(kz, z))
         ph_target = target_kx * x + target_ky * y + target_kz * z
         #array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
+        #logger.debug("ph {} ph_target {}".format(ph[0], ph_target))
+        temp = np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
+        #logger.debug("temp {}".format(temp[0]))
         array_factor = np.add(array_factor, np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target))
+    logger.debug("array_factor {}".format(array_factor[0]))
     # With garbage collection (gc) enabeled this should clear the memory
     kx = ky = kz = ph = ph_target = None
     logger.debug("rank {:2d} array_factor shapes: {}".format(rank, array_factor.shape))
@@ -210,6 +210,7 @@ def createArrayFactor(data, rank):
     # normalise to unity at pointing position
     array_factor /= len(xpos)
     array_factor_power = np.abs(array_factor)**2
+    logger.debug("array_factor_power {}".format(array_factor_power[0]))
 
     array_factor_max = np.amax(array_factor_power)
 
@@ -223,40 +224,44 @@ def createArrayFactor(data, rank):
         jones = jones.reshape(za.shape[0], 1, 2, 2)
         vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
         tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
-    elif option == 'analytic':
-        tile_xpol, tile_ypol = primary_beam.MWA_Tile_analytic(za, az,
+    elif beam_model == 'analytic':
+        tile_xpol, tile_ypol = pb.MWA_Tile_analytic(za, az,
                                                 freq=obsfreq, delays=delays,
                                                 zenithnorm=True,
                                                 power=True)
-    elif option == 'advanced':
-        tile_xpol, tile_ypol = primary_beam.MWA_Tile_advanced(za, az,
+    elif beam_model == 'advanced':
+        tile_xpol, tile_ypol = pb.MWA_Tile_advanced(za, az,
                                                 freq=obsfreq, delays=delays,
                                                 zenithnorm=True,
                                                 power=True)
-    elif option == 'full_EE':
-        tile_xpol, tile_ypol = primary_beam.MWA_Tile_full_EE(za, az,
+    elif beam_model == 'full_EE':
+        tile_xpol, tile_ypol = pb.MWA_Tile_full_EE(za, az,
                                                 freq=obsfreq, delays=delays,
                                                 zenithnorm=True,
                                                 power=True)
     logger.debug("rank {:2d} primary beam done".format(rank))
     tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0)
     tile_pattern = tile_pattern.flatten()
+    logger.debug("tile_pattern {}".format(tile_pattern[0]))
     logger.debug("rank {:2d} tile_pattern done".format(rank))
 
     # calculate the phased array power pattern
     logger.debug("rank {:2d} tile_pattern.shape {} array_factor_power.shape {}".format(rank, tile_pattern.shape, array_factor_power.shape))
-    logger.debug("rank {:2d} tile_pattern {}".format(rank, tile_pattern))
-    logger.debug("rank {:2d} array_factor_power {}".format(rank, array_factor_power))
+    logger.debug("rank {:2d} tile_pattern {}".format(rank, tile_pattern[0]))
+    logger.debug("rank {:2d} array_factor_power {}".format(rank, array_factor_power[0]))
     phased_array_pattern = np.multiply(tile_pattern, array_factor_power)
     #phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
     logger.debug("rank {:2d} phased_array_pattern done".format(rank))
     # add this contribution to the beam solid angle
     #omega_A_array = np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
     omega_A_array = np.sin(za)
+
     for A in [array_factor_power, np.radians(theta_res), np.radians(phi_res)]:
         omega_A_array = np.multiply(omega_A_array, A)
     logger.debug("rank {:2d} omega_A_array shapes: {}".format(rank, omega_A_array.shape))
     omega_A = np.sum(omega_A_array)
+    logger.debug("omega_A 1 vals: za {}, array_factor_power {}, theta_res {}, phi_res {}".format(za[1], array_factor_power[1], theta_res, phi_res))
+    logger.debug("omega_A 1 {}".format(omega_A_array[1]))
 
     # write a file based on rank of the process being used
     if write:
@@ -429,10 +434,15 @@ if __name__ == "__main__":
         assert totalZAevals >= size, "Total number of ZA evalutions must be >= the number of processors available"
 
         za = np.radians(np.linspace(0, 90, int(ntheta) + 1))
-        az = np.radians(np.linspace(0, 360, int(ntheta) + 1))
-        azv, zav = np.meshgrid(az, za)
+        az = np.radians(np.linspace(0, 360, int(nphi) + 1))
+        logger.debug("za.shape {} az.shape {}".format(za.shape, az.shape))
+        #azv, zav = np.meshgrid(az, za)
+        zav, azv = np.meshgrid(za, az)
+        logger.debug("zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
         azv = azv.flatten()
         zav = zav.flatten()
+        logger.debug("flattened zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
+        logger.debug("zav[0] {} zav[-1] {} azv[0] {} azv[-1] {}".format(zav[0], zav[-1], azv[0], azv[-1]))
         # split the sky into ZA chunks based on the number of available processes
         za_array = np.array_split(zav, size)
         az_array = np.array_split(azv, size)

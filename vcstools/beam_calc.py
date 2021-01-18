@@ -242,7 +242,7 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     if not len(RAs)==len(Decs):
         sys.stderr.write('Must supply equal numbers of RAs and Decs\n')
         return None
-    qif verbose is False:
+    if verbose is False:
         #Supress print statements of the primary beam model functions
         sys.stdout = open(os.devnull, 'w')
     for itime in range(Ntimes):
