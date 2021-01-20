@@ -244,9 +244,8 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir,
     create_link(data_dir, 'vis', product_dir, 'vis')
     obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
     secs_to_run = "03:00:00" # sometimes the staging can take a while...
-    module_list = ["setuptools"]
+    module_list = ["manta-ray-client/python3"]
     commands = []
-    commands.append("module load manta-ray-client")
     commands.append("csvfile={0}".format(csvfile))
     commands.append('cd {0}'.format(vis_dir))
     commands.append('if [[ -z ${MWA_ASVO_API_KEY} ]]')
