@@ -88,7 +88,7 @@ def test_find_t_sys_gain():
                 295.7376549611132, 5.914753099222264, 0.31480323776600816, 0.05136230390439281))
 
 
-    for pulsar, obsid, beg, end query, metadata, full_meta,\
+    for pulsar, obsid, beg, end, query, metadata, full_meta,\
         exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err in test_cases:
         t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(pulsar, obsid, beg, end,\
                 query=query, obs_metadata=metadata, full_meta=full_meta)
