@@ -32,7 +32,6 @@ def test_pulsar_beam_coverage():
     test_cases.append((1223042487, 1223042587, 0.0, 1.0))
 
     test_none_cases = []
-    test_none_cases.append((None, None, 0.0, 0.072731816627943369))
     test_none_cases.append((-1e10, -1e4, 0.0, 0.072731816627943369))
 
     md = md_dict[str(obsid)][0]
@@ -58,14 +57,13 @@ def test_find_times():
     obsid = 1223042480
     pulsar = "J2234+2114"
     test_cases = []
-    test_cases.append((None, None, 1223042487.0, 1223042843.4768934, 356.47689342498774))
     test_cases.append((1223042487, 1223042587, 1223042487, 1223042587, 100.0))
 
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
 
     for beg, end, exp_beg, exp_end, exp_int in test_cases:
-        out_beg, out_end, out_int = snfe.find_times(obsid, pulsar, beg=beg, end=end, metadata=md, full_meta=full_md)
+        out_beg, out_end, out_int = snfe.find_times(obsid, pulsar, beg, end, metadata=md, full_meta=full_md)
         assert_almost_equal(exp_beg, out_beg, decimal=4)
         assert_almost_equal(exp_end, out_end, decimal=4)
         assert_almost_equal(exp_int, out_int, decimal=4)
@@ -76,28 +74,23 @@ def test_find_t_sys_gain():
     Tests the find_t_sys_gain function
     """
     print("find_t_sys_gain")
-    obsid_1=1223042480
-    pulsar_1= "J2234+2114"
-    obsid_2=1222697776
-    pulsar_2= "J2330-2005"
+    obsid=1222697776
+    pulsar= "J2330-2005"
+    beg = 1222697776 + 7
+    end = beg + 3599
 
-    md_1 = md_dict[str(obsid_1)][0]
-    full_md_1 = md_dict[str(obsid_1)][1]
-    md_2 = md_dict[str(obsid_2)][0]
-    full_md_2 = md_dict[str(obsid_2)][1]
+    md = md_dict[str(obsid)][0]
+    full_md = md_dict[str(obsid)][1]
 
-    q_1 = psrqpy.QueryATNF(psrs=[pulsar_1], loadfromdb=data_load.ATNF_LOC)
-    q_2 = psrqpy.QueryATNF(psrs=[pulsar_2], loadfromdb=data_load.ATNF_LOC)
+    q = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC)
     test_cases = []
-    test_cases.append((pulsar_1, obsid_1, 1223042887, q_1, md_1, full_md_1,\
-                325.16928459135534, 6.5034678040055613, 0.1405071004856564, 0.1065230048864121))
-    test_cases.append((pulsar_2, obsid_2, None, q_2, md_2, full_md_2,\
-                295.7376541472588, 5.914753082945176, 0.29127739909167133, 0.049367851504392074))
+    test_cases.append((pulsar, obsid, beg, end, q, md, full_md,\
+                295.7376549611132, 5.914753099222264, 0.31480323776600816, 0.05136230390439281))
 
 
-    for pulsar, obsid, beg, query, metadata, full_meta,\
+    for pulsar, obsid, beg, end query, metadata, full_meta,\
         exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err in test_cases:
-        t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(pulsar, obsid, beg=beg,\
+        t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(pulsar, obsid, beg, end,\
                 query=query, obs_metadata=metadata, full_meta=full_meta)
         assert_almost_equal(exp_t_sys, t_sys, decimal=4)
         assert_almost_equal(exp_t_sys_err, t_sys_err, decimal=4)
