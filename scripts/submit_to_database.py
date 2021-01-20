@@ -407,8 +407,8 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
             u_sn = prof_dict["sn_e"]
             w_equiv_bins = prof_dict["w_equiv_bins"]
             u_w_equiv_bins =  prof_dict["w_equiv_bins_e"]
-            w_equiv_phase = w_equiv_bins / bins
-            u_w_equiv_phase =  u_w_equiv_bins / bins
+            w_equiv_phase = w_equiv_bins / num_bins
+            u_w_equiv_phase =  u_w_equiv_bins / num_bins
             w_equiv_ms = period/num_bins * w_equiv_bins
             u_w_equiv_ms = period/num_bins * u_w_equiv_bins
             scattering = prof_dict["scattering"]*period/num_bins/1000 #convert to seconds
@@ -432,8 +432,8 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
         u_sn = prof_dict["sn_e"]
         w_equiv_phase = prof_dict["Weq"]
         u_w_equiv_phase =  prof_dict["Weq_e"]
-        w_equiv_bins = w_equiv_phase * bins
-        u_w_equiv_bins = w_equiv_phase * bins
+        w_equiv_bins = w_equiv_phase * num_bins
+        u_w_equiv_bins = w_equiv_phase * num_bins
         w_equiv_ms = period * w_equiv_phase
         u_w_equiv_ms = period * u_w_equiv_phase
         scattering = prof_dict["Wscat"]*period/1000 #convert to seconds
