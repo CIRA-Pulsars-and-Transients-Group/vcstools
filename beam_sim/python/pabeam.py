@@ -30,6 +30,7 @@ import logging
 #from mwapy import ephem_utils,metadata
 from vcstools.metadb_utils import getmeta
 from vcstools.pointing_utils import getTargetAZZA
+from vcstools.progress_bar import progress_bar
 from mwa_pb import primary_beam as pb
 from mwa_pb import config
 import mwa_hyperbeam
@@ -191,7 +192,9 @@ def createArrayFactor(data, rank):
     array_factor = np.zeros(za.shape, dtype=np.complex_)
 
     # determine the interference pattern seen for each tile
-    for x, y, z in zip(xpos, ypos, zpos):
+    #for x, y, z in zip(xpos, ypos, zpos):
+    for xyz in progress_bar(zip(xpos, ypos, zpos), "Performing tile calculations: "):
+        x, y, z = xyz
         #ph = kx * x + ky * y + kz * z
         #logger.debug("kz {} z {} kz * z {}".format(kz[0], z, np.multiply(kz, z)[0]))
         ph = np.add(np.multiply(kx, x), np.multiply(ky, y))
@@ -199,12 +202,11 @@ def createArrayFactor(data, rank):
         ph_target = target_kx * x + target_ky * y + target_kz * z
         #array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
         #logger.debug("ph {} ph_target {}".format(ph[0], ph_target))
-        temp = np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
-        #logger.debug("temp {}".format(temp[0]))
         array_factor = np.add(array_factor, np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target))
+        # With garbage collection (gc) enabeled this should clear the memory
+        ph = ph_target = None
+    kx = ky = kz = None
     logger.debug("array_factor {}".format(array_factor[0]))
-    # With garbage collection (gc) enabeled this should clear the memory
-    kx = ky = kz = ph = ph_target = None
     logger.debug("rank {:2d} array_factor shapes: {}".format(rank, array_factor.shape))
 
     # normalise to unity at pointing position
