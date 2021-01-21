@@ -982,7 +982,7 @@ def snfe_main(kwargs):
             decj = kwargs["pointing"].split("_")[1]
 
         multi_psr_snfe(kwargs["pulsars"], kwargs["obsid"], kwargs["beg"], kwargs["end"],
-                        p_ra=raj, p_dec=decj, plot_flux=kwargs["plot_est"], min_z_power=kwargs["min_z_power"])
+                        plot_flux=kwargs["plot_est"], min_z_power=kwargs["min_z_power"])
 
     elif kwargs["mode"] == "ATNF":
         if not kwargs["pulsars"]:
