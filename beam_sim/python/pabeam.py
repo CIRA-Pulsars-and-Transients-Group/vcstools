@@ -23,16 +23,17 @@ gc.enable()
 
 #utility and processing modules
 import os
+import sys
 from mpi4py import MPI
 import argparse
 import logging
 
 #from mwapy import ephem_utils,metadata
-from vcstools.metadb_utils import getmeta
+from vcstools.metadb_utils import getmeta, get_common_obs_metadata
 from vcstools.pointing_utils import getTargetAZZA
-from vcstools.progress_bar import progress_bar
 from mwa_pb import primary_beam as pb
 from mwa_pb import config
+from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
 import mwa_hyperbeam
 beam = mwa_hyperbeam.FEEBeam(config.h5file)
 
@@ -110,41 +111,31 @@ def calcWaveNumbers(wl, p, t):
     #   kz = a * cos(theta)
     # this is assuming that theta,phi are in the convention from Sutinjo et al. 2015
     #   i.e. phi = pi/2 - az
-    kx = (2*np.pi/wl) * np.sin(t) * np.cos(p)
-    ky = (2*np.pi/wl) * np.sin(t) * np.sin(p)
+    kx = (2*np.pi/wl) * np.multiply(np.sin(t), np.cos(p))
+    ky = (2*np.pi/wl) * np.multiply(np.sin(t), np.sin(p))
     kz = (2*np.pi/wl) * np.cos(t)
 
     return [kx,ky,kz]
 
 
-# Make generator functions for Azimuth and Zenith so we don't have to create the whole
-# meshgrid at once and then store it.
-# This is far more memory efficient that storing the entire AZ and ZA planes in memory,
-# especially with the required resolution.
-def genAZZA(start, stop, step, end=False):
-    """
-    Generator function to use for iterating over angles (both ZA and Azimuth).
+def convolve_sky_map(az_grid, za_grid, phased_array_pattern, freq, time):
+    # Get Haslam and interpolate onto grid
+    # taken from https://github.com/MWATelescope/mwa_pb/blob/master/mwa_pb/primarybeammap_tant.py
+    # then edited to include pixel size
+    my_map = get_Haslam(freq)
+    #mask = numpy.isnan(za_grid)
+    #za_grid[numpy.isnan(za_grid)] = 90.0  # Replace nans as they break the interpolation
 
-    Input:
-      start - angle to start iteration from
-      stop - angle to finish iteration before
-      step - step size between iterations
-      end - return the "stop" parameter to make range [start,stop] rather than [start,stop)
+    #Supress print statements of the primary beam model functions
+    sys.stdout = open(os.devnull, 'w')
+    sky_grid = map_sky(my_map['skymap'], my_map['RA'], my_map['dec'], time, az_grid, za_grid)
+    sys.stdout = sys.__stdout__
 
-    Return:
-      None - is a generator
-    """
-    i = 0
-    num = int((stop - start) / step)
-    while i < num:
-        yield start + i * step
-        i += 1
-    if end:
-        yield stop
-    return
+    t_ant = np.sum(phased_array_pattern * sky_grid * np.sin(za_grid)) / \
+            np.sum(phased_array_pattern * np.sin(za_grid))
+    return t_ant
 
-
-def createArrayFactor(data, rank):
+def createArrayFactor(data):
     """
     Primary function to calculate the array factor with the given information.
 
@@ -165,60 +156,46 @@ def createArrayFactor(data, rank):
     Return:
       results -  a list of lists cotaining [ZA, Az, beam power], for all ZA and Az in the given band
     """
-    time = data['time']
+    obsid = data['obsid']
+    ra = data['ra']
+    dec = data['dec']
+    times = data['time']
     delays = data['delays']
-    obsfreq = data['freqs']
-    obswl = data['obswl']
+    obsfreq = data['freqs'][rank]
     xpos = data['x']
     ypos = data['y']
     zpos = data['z']
-    target_kx = data['tkx']
-    target_ky = data['tky']
-    target_kz = data['tkz']
     theta_res = data['tres']
     phi_res = data['pres']
     eff = data['eff']
     beam_model = data['beam']
-    za = data['za_arr'][rank]
-    az = data['az_arr'][rank]
-    oname = data['oname']
+    za = data['za_arr']
+    az = data['az_arr']
+    out_dir = data['out_dir']
     write = data['write']
 
-    # calculate the relevent wavenumber for (theta,phi)
-    kx, ky, kz = calcWaveNumbers(obswl, (np.pi / 2) - az, za)
-    logger.debug("kx {} ky {} kz {}".format(kx[0], ky[0], kz[0]))
-    logger.debug("rank {:2d} Wavenumbers shapes: {} {} {}".format(rank, kx.shape, ky.shape, kz.shape))
-    #array_factor = 0 + 0.j
-    array_factor = np.zeros(za.shape, dtype=np.complex_)
 
-    # determine the interference pattern seen for each tile
-    #for x, y, z in zip(xpos, ypos, zpos):
-    for xyz in progress_bar(zip(xpos, ypos, zpos), "Performing tile calculations: "):
-        x, y, z = xyz
+    # convert frequency to wavelength
+    obswl =  obsfreq / c.value
+    # calculate the relevent wavenumber for (theta,phi)
+    logger.info("rank {:2d} Calculating wavenumbers".format(rank))
+    kx, ky, kz = calcWaveNumbers(obswl, (np.pi / 2) - az, za)
+    #logger.debug("kx[0] {} ky[0] {} kz[0] {}".format(kx[0], ky[0], kz[0]))
+    logger.debug("rank {:2d} Wavenumbers shapes: {} {} {}".format(rank, kx.shape, ky.shape, kz.shape))
+
+    # phase of each sky position for each tile
+    logger.info("rank {:2d} phase of each sky position for each tile".format(rank))
+    ph_tile = []
+    for x, y, z in zip(xpos, ypos, zpos):
         #ph = kx * x + ky * y + kz * z
         #logger.debug("kz {} z {} kz * z {}".format(kz[0], z, np.multiply(kz, z)[0]))
         ph = np.add(np.multiply(kx, x), np.multiply(ky, y))
-        ph = np.add(ph, np.multiply(kz, z))
-        ph_target = target_kx * x + target_ky * y + target_kz * z
-        #array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
-        #logger.debug("ph {} ph_target {}".format(ph[0], ph_target))
-        array_factor = np.add(array_factor, np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target))
-        # With garbage collection (gc) enabeled this should clear the memory
-        ph = ph_target = None
-    kx = ky = kz = None
-    logger.debug("array_factor {}".format(array_factor[0]))
-    logger.debug("rank {:2d} array_factor shapes: {}".format(rank, array_factor.shape))
-
-    # normalise to unity at pointing position
-    array_factor /= len(xpos)
-    array_factor_power = np.abs(array_factor)**2
-    logger.debug("array_factor_power {}".format(array_factor_power[0]))
-
-    array_factor_max = np.amax(array_factor_power)
-
-    logger.info("rank {:2d} array factor maximum = {}".format(rank, array_factor_max))
+        ph_tile.append(np.add(ph, np.multiply(kz, z)))
+    # With garbage collection (gc) enabeled this should clear the memory
+    ph = None
 
     # calculate the tile beam at the given Az,ZA pixel
+    logger.info("rank {:2d} calculating tile beam".format(rank))
     if beam_model == 'hyperbeam':
         logger.debug("rank {:2d} begin hyperbeam".format(rank))
         jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
@@ -228,136 +205,114 @@ def createArrayFactor(data, rank):
         tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
     elif beam_model == 'analytic':
         tile_xpol, tile_ypol = pb.MWA_Tile_analytic(za, az,
-                                                freq=obsfreq, delays=delays,
+                                                freq=obsfreq, delays=[delays, delays],
                                                 zenithnorm=True,
                                                 power=True)
     elif beam_model == 'advanced':
         tile_xpol, tile_ypol = pb.MWA_Tile_advanced(za, az,
-                                                freq=obsfreq, delays=delays,
+                                                freq=obsfreq, delays=[delays, delays],
                                                 zenithnorm=True,
                                                 power=True)
     elif beam_model == 'full_EE':
         tile_xpol, tile_ypol = pb.MWA_Tile_full_EE(za, az,
-                                                freq=obsfreq, delays=delays,
+                                                freq=obsfreq, delays=np.array([delays, delays]),
                                                 zenithnorm=True,
                                                 power=True)
-    logger.debug("rank {:2d} primary beam done".format(rank))
+    #logger.info("rank {:2d} Combining tile pattern".format(rank))
     tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0)
     tile_pattern = tile_pattern.flatten()
-    logger.debug("tile_pattern {}".format(tile_pattern[0]))
-    logger.debug("rank {:2d} tile_pattern done".format(rank))
+    #logger.debug("tile_pattern[0] {}".format(tile_pattern[0]))
 
-    # calculate the phased array power pattern
-    logger.debug("rank {:2d} tile_pattern.shape {} array_factor_power.shape {}".format(rank, tile_pattern.shape, array_factor_power.shape))
-    logger.debug("rank {:2d} tile_pattern {}".format(rank, tile_pattern[0]))
-    logger.debug("rank {:2d} array_factor_power {}".format(rank, array_factor_power[0]))
-    phased_array_pattern = np.multiply(tile_pattern, array_factor_power)
-    #phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
-    logger.debug("rank {:2d} phased_array_pattern done".format(rank))
-    # add this contribution to the beam solid angle
-    #omega_A_array = np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
-    omega_A_array = np.sin(za)
+    omega_A_times = []
+    eff_area_times = []
+    gain_times = []
+    t_ant_times = []
+    for time in times:
+        # set the base output file name (will be editted based on the worker rank)
+        oname = "{0}/{1}_{2}_{3:.2f}MHz_tres{4}_pres{5}_{6}_{7}.dat".format(out_dir, obsid, time, obsfreq / 1e6, theta_res, phi_res, ra, dec)
 
-    for A in [array_factor_power, np.radians(theta_res), np.radians(phi_res)]:
-        omega_A_array = np.multiply(omega_A_array, A)
-    logger.debug("rank {:2d} omega_A_array shapes: {}".format(rank, omega_A_array.shape))
-    omega_A = np.sum(omega_A_array)
-    logger.debug("omega_A 1 vals: za {}, array_factor_power {}, theta_res {}, phi_res {}".format(za[1], array_factor_power[1], theta_res, phi_res))
-    logger.debug("omega_A 1 {}".format(omega_A_array[1]))
+        # get the target azimuth and zenith angle in radians and degrees
+        # these are defined in the normal sense: za = 90 - elevation, az = angle east of North (i.e. E=90)
+        #logger.info("getting source position")
+        srcAz, srcZA, srcAz_deg, srcZA_deg = getTargetAZZA(ra, dec, time)# calculate the target (kx,ky,kz)
+        target_kx, target_ky, target_kz = calcWaveNumbers(obswl, (np.pi / 2) - srcAz, srcZA)
 
-    # write a file based on rank of the process being used
-    if write:
-        logger.info("writing file from worker {0}".format(rank))
-        with open(oname.replace(".dat",".{0}.dat".format(rank)), 'w') as f:
-            if rank == 0:
-                # if master process, write the header information first and then the data
-                f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa_tiedarray\n##Date: {0}\n".format(time.iso))
-                f.write("** File exported by FEKO kernel version 7.0.1-482\n\n")
-                f.write("#Request Name: FarField\n#Frequency: {0}\n".format(obsfreq))
-                f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}\n".format(ntheta, nphi))
-                f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
-                #f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
-                f.write('#"Theta"\t"Phi"\t"Gain(Total)"\n')
+        # determine the interference pattern seen for each tile
+        logger.info("rank {:2d} calculating array_factor".format(rank))
+        #array_factor = 0 + 0.j
+        array_factor = np.zeros(za.shape, dtype=np.complex_)
+        for i, xyz in enumerate(zip(xpos, ypos, zpos)):
+            x, y, z = xyz
+            ph_target = target_kx * x + target_ky * y + target_kz * z
+            #array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
+            #logger.debug("ph {} ph_target {}".format(ph[0], ph_target))
+            array_factor = np.add(array_factor, np.cos(ph_tile[i] - ph_target) + 1.j * np.sin(ph_tile[i] - ph_target))
+        #logger.debug("rank {:2d} array_factor[0] {}".format(rank, array_factor[0]))
+        logger.debug("rank {:2d} array_factor shapes: {}".format(rank, array_factor.shape))
 
-            #for res in results:
-            for zad, azd, pap in zip(np.degrees(za), np.degrees(az), phased_array_pattern):
-                # write each line of the data
-                # we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
-                # values are calculated using that convetion, so we need to represent that here
-                #f.write("{0:.5f}\t{1:.5f}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0], res[1], res[2]))
-                f.write("{0:.5f}\t{1:.5f}\t{2}\n".format(zad, azd, pap))
+        # normalise to unity at pointing position
+        array_factor /= len(xpos)
+        array_factor_power = np.abs(array_factor)**2
+        #logger.debug("array_factor_power[0] {}".format(array_factor_power[0]))
 
-    else:
-        logger.warn("worker {0} not writing".format(rank))
+        array_factor_max = np.amax(array_factor_power)
+        logger.debug("rank {:2d} array factor maximum = {}".format(rank, array_factor_max))
 
-    return omega_A
+        # calculate the phased array power pattern
+        logger.info("rank {:2d} Calculating phased array pattern".format(rank))
+        logger.debug("rank {:2d} tile_pattern.shape {} array_factor_power.shape {}".format(rank, tile_pattern.shape, array_factor_power.shape))
+        phased_array_pattern = np.multiply(tile_pattern, array_factor_power)
+        #phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
 
-def parse_options():#comm):
-    #####################
-    ##  OPTION PARSING ##
-    #####################
-    beam_models = ['analytic', 'advanced', 'full_EE', 'hyperbeam']
-    parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA.
-                            This is an MPI-based simulation code and will use all available processes when run
-                            (i.e. there is no user choice in how many to use)""",\
-                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        # add this contribution to the beam solid angle
+        logger.info("rank {:2d} Calculating omega_A".format(rank))
+        #omega_A_array = np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
+        omega_A_array = np.sin(za)
+        for A in [array_factor_power, np.radians(theta_res), np.radians(phi_res)]:
+            omega_A_array = np.multiply(omega_A_array, A)
+        logger.debug("rank {:2d} omega_A_array shapes: {}".format(rank, omega_A_array.shape))
+        omega_A = np.sum(omega_A_array)
+        logger.info("rank {:2d} freq {:.2f}MHz beam_area: {}".format(rank, obsfreq/1e6, omega_A))
+        omega_A_times.append(omega_A)
+        #logger.debug("omega_A[1] vals: za[1] {}, array_factor_power[1] {}, theta_res {}, phi_res {}".format(za[1], array_factor_power[1], theta_res, phi_res))
+        #logger.debug("omega_A[1] {}".format(omega_A_array[1]))
+        eff_area = eff * (c.value / obsfreq)**2 * (4 * np.pi / omega_A)
+        eff_area_times.append(eff_area)
+        gain = (1e-26) * eff_area / (2 * k_B.value)
+        gain_times.append(gain)
 
-    parser.add_argument("-o", "--obsid", type=str, action='store', metavar="obsID",
-                        help="""Observation ID (used to figure out spatial configuration of array).
-                             Also used to retrieve observation start-time and duration.""",default=None)
+        # work out T_ant by convolving a sky map with the phased_array_pattern
+        t_ant = convolve_sky_map(az, za, phased_array_pattern, obsfreq, time)
+        logger.debug("rank {:2d} T_ant: {}".format(rank, t_ant))
+        t_ant_times.append(t_ant)
 
-    parser.add_argument("--flagged_tiles", type=str, nargs='+', action='store', metavar="tile",
-                        help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5",default=None)
+        # write a file based on rank of the process being used
+        if write:
+            logger.info("writing file from worker {0}".format(rank))
+            with open(oname, 'w') as f:
+                if rank == 0:
+                    # if master process, write the header information first and then the data
+                    f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa_tiedarray\n##Date: {0}\n".format(time.iso))
+                    f.write("** File exported by FEKO kernel version 7.0.1-482\n\n")
+                    f.write("#Request Name: FarField\n#Frequency: {0}\n".format(obsfreq))
+                    f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}\n".format(ntheta, nphi))
+                    f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
+                    #f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
+                    f.write('#"Theta"\t"Phi"\t"Gain(Total)"\n')
 
-    parser.add_argument("--delays", type=int, nargs='+', action='store', metavar="tile",
-                        help="The tile delays", default=[0] * 16)
+                #for res in results:
+                for zad, azd, pap in zip(np.degrees(za), np.degrees(az), phased_array_pattern):
+                    # write each line of the data
+                    # we actually need to rotate out phi values by: phi = pi/2 - az because that's what FEKO expects.
+                    # values are calculated using that convetion, so we need to represent that here
+                    #f.write("{0:.5f}\t{1:.5f}\t0\t0\t0\t0\t0\t0\t{2}\n".format(res[0], res[1], res[2]))
+                    f.write("{0:.5f}\t{1:.5f}\t{2}\n".format(zad, azd, pap))
 
-    parser.add_argument("-p","--target",nargs=2,metavar=("ra","dec"),
-                help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.sss dd\"mm\'ss.ssss",
-                default=("00:00:00.0000","00:00:00.0000"))
+        else:
+            logger.warn("worker {0} not writing".format(rank))
 
-    parser.add_argument("-t","--time",type=float,action='store',metavar="time",\
-                help="""The GPS time desired for beam evaluation. This will override whatever is read from the metafits.""",default=None)
-
-    parser.add_argument("-f","--freq",type=float,action='store',metavar="frequency",help="The centre observing frequency for the observation (in Hz!)",default=184.96e6)
-
-    parser.add_argument("-e","--efficiency",type=float,action='store',metavar="eta",help="Frequency and pointing dependent array efficiency",default=1)
-
-    parser.add_argument("--grid_res",type=float,action='store',nargs=2,metavar=("theta_res","phi_res"),
-                help="""Resolution of the Azimuth (Az) and Zenith Angle (ZA) grid to be created in degrees.
-                    Be warned: setting these too small will result in a MemoryError and the job will die.""",default=(0.1,0.1))
-
-    parser.add_argument("--coplanar",action='store_true',help="Assume the array is co-planar (i.e. height above array centre is 0 for all tiles)")
-
-    parser.add_argument("--zenith",action='store_true',help="Assume zenith pointing (i.e  delays are 0), ZA = 0 and AZ = 0")
-
-    parser.add_argument("--out_dir",type=str,action='store',help="Location (full path) to write the output data files",default=".")
-
-    parser.add_argument("--write",action='store_true',
-                help="""Write the beam pattern to disk when done calculating.
-                    If this option is not passed, you will just get a '.stats' files containing basic information about simulation parameters and the calculated gain.""")
-
-    parser.add_argument("--metafits", type=str, help="Metafits file location")
-
-    parser.add_argument("--beam_model", type=str, default='hyperbeam', help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
-
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbositylevel. Default: INFO", choices=loglevels.keys(), default="INFO")
-
-    """
-    args = None
-    try:
-        if comm.Get_rank() == 0:
-            # parse the arguments
-            args = parser.parse_args()
-    finally:
-        args = comm.bcast(args, root=0)
-
-    if args is None:
-        comm.Abort()
-    """
-    args = parser.parse_args()
-
-    return args
+    # return lists of results for each time step
+    return [omega_A_times, eff_area_times, gain_times, t_ant_times]
 
 ###############
 ## Setup MPI ##
@@ -372,15 +327,56 @@ if __name__ == "__main__":
                     INFO=logging.INFO,
                     WARNING=logging.WARNING,
                     ERROR = logging.ERROR)
-    args = parse_options()#comm)
+    #####################
+    ##  OPTION PARSING ##
+    #####################
+    beam_models = ['analytic', 'advanced', 'full_EE', 'hyperbeam']
+    parser = argparse.ArgumentParser(description="""Script to calculate the array factor required to model the tied-array beam for the MWA.
+                                     This is an MPI-based simulation code and will use all available processes when run
+                                     (i.e. there is no user choice in how many to use)""",\
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument("-o", "--obsid", type=str,
+                        help="""Observation ID (used to figure out spatial configuration of array).
+                             Also used to retrieve observation start-time and duration.""")
+    parser.add_argument("--flagged_tiles", type=str, nargs='+',
+                        help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5")
+    parser.add_argument("--delays", type=int, nargs='+', default=[0] * 16,
+                        help="The tile delays")
+    parser.add_argument("-p", "--target", nargs=2, metavar=("ra","dec"), default=("00:00:00.0000","00:00:00.0000"),
+                        help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.sss dd\"mm\'ss.ssss")
+    parser.add_argument("-t", "--time", type=float, nargs='+',action='store', default=None,
+                        help="""The GPS time desired for beam evaluation. This will override whatever is read from the metafits.""")
+    parser.add_argument("-f", "--freq", type=float, nargs='+', default=None,
+                        help="The centre observing frequency for the observation (in Hz!)")
+    parser.add_argument("-e", "--efficiency", type=float, default=1,
+                        help="Frequency and pointing dependent array efficiency")
+    parser.add_argument("--grid_res", type=float, action='store', nargs=2, metavar=("theta_res","phi_res"), default=(0.1,0.1),
+                        help="""Resolution of the Azimuth (Az) and Zenith Angle (ZA) grid to be created in degrees.
+                             Be warned: setting these too small will result in a MemoryError and the job will die.""")
+    parser.add_argument("--coplanar", action='store_true',
+                        help="Assume the array is co-planar (i.e. height above array centre is 0 for all tiles)")
+    parser.add_argument("--out_dir", type=str, action='store', default=".",
+                        help="Location (full path) to write the output data files")
+    parser.add_argument("--write", action='store_true',
+                        help="""Write the beam pattern to disk when done calculating.
+                            If this option is not passed, you will just get a '.stats' files containing basic information about simulation parameters and the calculated gain.""")
+    parser.add_argument("--metafits", type=str,
+                        help="Metafits file location")
+    parser.add_argument("--beam_model", type=str, default='full_EE',
+                        help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
+    parser.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO",
+                        help="Logger verbositylevel. Default: INFO")
+    args = parser.parse_args()
 
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
     ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     logger.propagate = False
+
     if rank == 0:
         logger.info("will use {0} processes".format(size))
 
@@ -394,11 +390,7 @@ if __name__ == "__main__":
             flags = []
         else:
             flags = args.flagged_tiles
-
-        if args.zenith:
-            delays = [0] * 16
-        else:
-            delays = args.delays
+        delays = args.delays
 
         # same for obs time, master reads and then distributes
         logger.info("getting times")
@@ -407,13 +399,9 @@ if __name__ == "__main__":
         else:
             time = Time(args.time, format='gps')
 
-        # get the target azimuth and zenith angle in radians and degrees
-        # these are defined in the normal sense: za = 90 - elevation, az = angle east of North (i.e. E=90)
-        logger.info("getting source position")
-        if args.zenith:
-            srcAz, srcZA, srcAz_deg, srcZA_deg = 0, 0, 0, 0
-        else:
-            srcAz, srcZA, srcAz_deg, srcZA_deg = getTargetAZZA(ra, dec, time)
+        if args.freq is None:
+            # By default use the all coarse channel centre frequencies
+            args.freq = np.array(get_common_obs_metadata(1275751816)[-1])*1.28*1e6
 
         # get the tile locations from the metafits
         logger.info("getting tile locations from metafits file")
@@ -421,19 +409,7 @@ if __name__ == "__main__":
         if args.coplanar:
             zpos = np.zeros_like(xpos)
 
-        # convert frequency to wavelength
-        obswl =  args.freq / c.value
-
-        # calculate the target (kx,ky,kz)
-        target_kx, target_ky, target_kz = calcWaveNumbers(obswl, (np.pi / 2) - srcAz, srcZA)
-
-        # set the base output file name (will be editted based on the worker rank)
-        oname = "{0}/{1}_{2}_{3:.2f}MHz_tres{4}_pres{5}_{6}_{7}.dat".format(args.out_dir, args.obsid, time.gps, args.freq / 1e6, args.grid_res[0], args.grid_res[1], ra, dec)
-
-
-        # figure out how many chunks to split up ZA into
-        totalZAevals = ((np.pi / 2) / np.radians(tres)) + 1 # total number of ZA evaluations required
-        assert totalZAevals >= size, "Total number of ZA evalutions must be >= the number of processors available"
+        assert len(args.freq) == size, "Frequencies must be equal to the number of processors available"
 
         za = np.radians(np.linspace(0, 90, int(ntheta) + 1))
         az = np.radians(np.linspace(0, 360, int(nphi) + 1))
@@ -444,35 +420,29 @@ if __name__ == "__main__":
         azv = azv.flatten()
         zav = zav.flatten()
         logger.debug("flattened zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
-        logger.debug("zav[0] {} zav[-1] {} azv[0] {} azv[-1] {}".format(zav[0], zav[-1], azv[0], azv[-1]))
-        # split the sky into ZA chunks based on the number of available processes
-        za_array = np.array_split(zav, size)
-        az_array = np.array_split(azv, size)
-
 
 
         # create the object that contains all the data from master
         data = {'obsid' : args.obsid,
+                'ra':ra,
+                'dec':dec,
                 'time':time,
                 'delays':delays,
                 'flags':flags,
                 'freqs': args.freq,
-                'obswl': obswl,
                 'x':xpos,
                 'y':ypos,
                 'z':zpos,
-                'tkx':target_kx,
-                'tky':target_ky,
-                'tkz':target_kz,
                 'tres':tres,
                 'pres':pres,
                 'eff':args.efficiency,
                 'beam':args.beam_model,
-                'za_arr':za_array,
-                'az_arr':az_array,
-                'oname':oname,
+                'za_arr':zav,
+                'az_arr':azv,
+                'out_dir':args.out_dir,
                 'write':args.write,
                 }
+        logger.debug("data: {}".format(data))
     else:
         # create the data object, but leave it empty (will be filled by bcast call)
         data = None
@@ -490,30 +460,46 @@ if __name__ == "__main__":
     comm.barrier()
 
     # create array factor for given ZA band and write to file
-    beam_area = createArrayFactor(data, rank)
-    logger.debug("rank {:2d} beam_area: {}".format(rank, beam_area))
-
+    results_array = createArrayFactor(data)
     # collect results for the beam area calculation
     if rank != 0:
-        comm.send(beam_area, dest=0)
+        comm.send(results_array, dest=0)
     elif rank == 0:
-        result = beam_area
+        omega_A_freq_times  = np.empty((len(args.freq), len(time)))
+        eff_area_freq_times = np.empty((len(args.freq), len(time)))
+        gain_freq_times     = np.empty((len(args.freq), len(time)))
+        t_ant_freq_times    = np.empty((len(args.freq), len(time)))
+        omega_A_freq_times[0]  = results_array[0]
+        eff_area_freq_times[0] = results_array[1]
+        gain_freq_times[0]     = results_array[2]
+        t_ant_freq_times[0]    = results_array[3]
         for i in range(1, size):
-            result += comm.recv(source=i)
+            results_array = comm.recv(source=i)
+            omega_A_freq_times[i]  = results_array[0]
+            eff_area_freq_times[i] = results_array[1]
+            gain_freq_times[i]     = results_array[2]
+            t_ant_freq_times[i]    = results_array[3]
 
     # wait for everything to be collected (not really sure if this is necessary...)
     comm.barrier()
 
     # calculate the gain for that pointing and frequency and write a "stats" file
     if rank == 0:
-        eff_area = args.efficiency * (c.value / args.freq)**2 * (4 * np.pi / result)
-        gain = (1e-26) * eff_area / (2 * k_B.value)
+        # average over frequency and time
+        logger.debug("omega_A_freq_times {}".format(omega_A_freq_times))
+        omega_A  = np.average(omega_A_freq_times)
+        logger.debug("eff_area_freq_times {}".format(eff_area_freq_times))
+        eff_area = np.average(eff_area_freq_times)
+        logger.debug("gain_freq_times {}".format(gain_freq_times))
+        gain     = np.average(gain_freq_times)
+        logger.debug("t_ant_freq_times {}".format(t_ant_freq_times))
+        t_ant    = np.average(t_ant_freq_times)
 
         logger.info("==== Summary ====")
         logger.info("** Pointing **")
         logger.info("(RA, Dec)      : {0} {1}".format(ra, dec))
-        logger.info("(Az, ZA) [rad] : {0:.3f} {1:.3f}".format(srcAz, srcZA))
-        logger.info("(Az, ZA) [deg] : {0:.3f} {1:.3f}".format(srcAz_deg, srcZA_deg))
+        #logger.info("(Az, ZA) [rad] : {0:.3f} {1:.3f}".format(srcAz, srcZA))
+        #logger.info("(Az, ZA) [deg] : {0:.3f} {1:.3f}".format(srcAz_deg, srcZA_deg))
         logger.info("------------------------------------------")
         logger.info("** Time **")
         logger.info("GPS : {0}".format(time.gps))
@@ -533,18 +519,20 @@ if __name__ == "__main__":
         logger.info("                      [arcmin] : {0}".format(pres * 60))
         logger.info("------------------------------------------")
         logger.info("** Calculated quantities **")
-        logger.info("Beam solid angle [steradians] : {0}".format(result))
-        logger.info("Beam solid angle    [sq. deg] : {0}".format(np.degrees(np.degrees(result))))
+        logger.info("Beam solid angle [steradians] : {0}".format(omega_A))
+        logger.info("Beam solid angle    [sq. deg] : {0}".format(np.degrees(np.degrees(omega_A))))
         logger.info("Effective area          [m^2] : {0:.3f}".format(eff_area))
         logger.info("Effective gain         [K/Jy] : {0:.6f}".format(gain))
+        logger.info("Antena Temperature        [K] : {0:6.1f}".format(t_ant))
 
         # write the stats file
-        with open(oname.replace(".dat", ".stats"), "w") as f:
+        oname = "{0}/{1}_{2:.2f}-{3:.2f}MHz_tres{4}_pres{5}_{6}_{7}.stats".format(args.out_dir, args.obsid, args.freq[0]/1e6, args.freq[-1]/1e6, tres, pres, ra, dec)
+        with open(oname, "w") as f:
             f.write("==== Summary ====\n")
             f.write("** Pointing **\n")
             f.write("(RA, Dec)      : {0} {1}\n".format(ra, dec))
-            f.write("(Az, ZA) [rad] : {0:.3f} {1:.3f}\n".format(srcAz, srcZA))
-            f.write("(Az, ZA) [deg] : {0:.3f} {1:.3f}\n".format(srcAz_deg, srcZA_deg))
+            #f.write("(Az, ZA) [rad] : {0:.3f} {1:.3f}\n".format(srcAz, srcZA))
+            #f.write("(Az, ZA) [deg] : {0:.3f} {1:.3f}\n".format(srcAz_deg, srcZA_deg))
             f.write("\n")
             f.write("** Time **\n")
             f.write("GPS : {0}\n".format(time.gps))
@@ -564,9 +552,10 @@ if __name__ == "__main__":
             f.write("                      [arcmin] : {0}\n".format(pres * 60))
             f.write("\n")
             f.write("** Calculated quantities **\n")
-            f.write("Beam solid angle [steradians] : {0}\n".format(result))
-            f.write("Beam solid angle    [sq. deg] : {0}\n".format(np.degrees(np.degrees(result))))
+            f.write("Beam solid angle [steradians] : {0}\n".format(omega_A))
+            f.write("Beam solid angle    [sq. deg] : {0}\n".format(np.degrees(np.degrees(omega_A))))
             f.write("Effective area          [m^2] : {0:.3f}\n".format(eff_area))
             f.write("Effective gain         [K/Jy] : {0:.6f}".format(gain))
+            f.write("Antena Temperature        [K] : {0:6.1f}".format(t_ant))
 
 
