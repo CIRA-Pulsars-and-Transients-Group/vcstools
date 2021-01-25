@@ -339,7 +339,7 @@ def write_obs_info(obsid):
     channels = data_dict["rfstreams"]["0"]["frequencies"]
     centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
     array_phase = get_obs_array_phase(obsid)
-    start, stop = obs_max_min(obsid, meta=data_dict)
+    start, stop = obs_max_min(obsid)
 
     f = open(filename, "w+")
     f.write("-------------------------    Obs Info    --------------------------\n")
