@@ -25,7 +25,7 @@ import numpy as np
 import csv
 
 from vcstools.pointing_utils import sex2deg, format_ra_dec
-import vcstools.sn_flux_est as sfe
+import vcstools.sn_flux_utils as sfe
 from vcstools.metadb_utils import get_obs_array_phase, singles_source_search,\
                                   find_obsids_meta_pages
 from vcstools.catalogue_utils import grab_source_alog
@@ -128,7 +128,7 @@ def write_output_source_files(output_data,
                 output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}   {:6.2f} {:6.2f}'.\
                            format(obsid, duration, enter, leave, max_power, oap, freq, band))
                 if SN_est:
-                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(source, obsid, plot_flux=plot_est)
+                    pulsar_sn, pulsar_sn_err, _, _ = sfe.est_pulsar_sn(source, obsid, plot_flux=plot_est)
                     if pulsar_sn is None:
                         output_file.write('   None    None')
                     else:
