@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 def find_combined_beg_end(obsid, base_path="/astro/mwavcs/vcs/", channels=None):
     """
     looks through the comined files of the input obsid and returns the max and min in gps time
+
     Input:
         obsid: The MWA observation ID
     Optional Input:

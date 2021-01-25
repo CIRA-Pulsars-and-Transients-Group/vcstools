@@ -208,7 +208,7 @@ def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
         [obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
     """
     if full_meta_data is None:
-        logger.info("Obtaining metadata from http://ws.mwatelescope.org/metadata/ for OBS ID: " + str(obs))
+        logger.info("Obtaining metadata from http://ws.mwatelescope.org/metadata/ for OBS ID: " + str(obsid))
         full_meta_data = getmeta(service='obs', params={'obs_id':obsid})
     ra = full_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
     dec = full_meta_data[u'metadata'][u'dec_pointing']
