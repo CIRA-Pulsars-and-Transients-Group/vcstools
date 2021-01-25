@@ -23,7 +23,7 @@ import textwrap as _textwrap
 #MWA software imports
 from mwa_pulsar_client import client
 
-import vcstools.sn_flux_est as snfe
+import vcstools.sn_flux_utils as snfe
 from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata
 from vcstools.catalogue_utils import get_psrcat_ra_dec

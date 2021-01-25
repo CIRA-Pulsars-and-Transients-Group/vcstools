@@ -189,28 +189,41 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     return Alt, Az, Za
 
 
-def get_common_obs_metadata(obs, return_all = False):
+def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
     """
-    Gets needed comon meta data from http://ws.mwatelescope.org/metadata/
+    Gets needed common meta data from http://ws.mwatelescope.org/metadata/
+
+    Parameters:
+    -----------
+    obsid: int
+        The observation ID.
+    return_all: bool
+        OPTIONAL - If True will also return the full meta data dictionary. Default: False
+    full_meta_data: bool
+        OPTIONAL - The full meta data dictionary from getmeta. If this is not supplied will make the meta data call. Default: False.
+
+    Returns:
+    --------
+    common_meta_data: list
+        [obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
     """
-    logger.info("Obtaining metadata from http://ws.mwatelescope.org/metadata/ for OBS ID: " + str(obs))
-    #for line in txtfile:
-    beam_meta_data = getmeta(service='obs', params={'obs_id':obs})
-    #obn = beam_meta_data[u'obsname']
-    ra = beam_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
-    dec = beam_meta_data[u'metadata'][u'dec_pointing']
-    dura = beam_meta_data[u'stoptime'] - beam_meta_data[u'starttime'] #gps time
-    xdelays = beam_meta_data[u'rfstreams'][u"0"][u'xdelays']
-    ydelays = beam_meta_data[u'rfstreams'][u"0"][u'ydelays']
-    minfreq = float(min(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
-    maxfreq = float(max(beam_meta_data[u'rfstreams'][u"0"][u'frequencies']))
-    channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
+    if full_meta_data is None:
+        logger.info("Obtaining metadata from http://ws.mwatelescope.org/metadata/ for OBS ID: " + str(obsid))
+        full_meta_data = getmeta(service='obs', params={'obs_id':obsid})
+    ra = full_meta_data[u'metadata'][u'ra_pointing'] #in sexidecimal
+    dec = full_meta_data[u'metadata'][u'dec_pointing']
+    dura = full_meta_data[u'stoptime'] - full_meta_data[u'starttime'] #gps time
+    xdelays = full_meta_data[u'rfstreams'][u"0"][u'xdelays']
+    ydelays = full_meta_data[u'rfstreams'][u"0"][u'ydelays']
+    minfreq = float(min(full_meta_data[u'rfstreams'][u"0"][u'frequencies']))
+    maxfreq = float(max(full_meta_data[u'rfstreams'][u"0"][u'frequencies']))
+    channels = full_meta_data[u'rfstreams'][u"0"][u'frequencies']
     centrefreq = 1.28 * (minfreq + (maxfreq-minfreq)/2)
 
     if return_all:
-        return [obs, ra, dec, dura, [xdelays, ydelays], centrefreq, channels], beam_meta_data
+        return [obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels], full_meta_data
     else:
-        return [obs, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
+        return [obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
 
 
 def getmeta(servicetype='metadata', service='obs', params=None):
@@ -245,27 +258,28 @@ def getmeta(servicetype='metadata', service='obs', params=None):
     return result
 
 
-def get_files(obsid, files_meta=None):
+def get_files(obsid, files_meta_data=None):
     """
     Queries the metadata to find all the file names
+
     Parameters:
     -----------
     obsid: str
         The ID (gps time) of the observation you are querying
-    meta: dict
-        The output of the getmeta function. This is an optional input that can
-        be used if you just want to extract the relevant info and save a
-        metadata call
+    files_meta_data: dict
+        The output of the getmeta function with the data_files service.
+        This is an optional input that can be used if you just want to
+        extract the relevant info and save a metadata call
 
     Output:
     -------
     files: list
         A list of all the file names
     """
-    if files_meta is None:
-        files_meta = getmeta(servicetype='metadata', service='data_files', params={'obs_id':str(obsid)})
+    if files_meta_data is None:
+        files_meta_data = getmeta(servicetype='metadata', service='data_files', params={'obs_id':str(obsid)})
 
-    return list(files_meta.keys())
+    return list(files_meta_data.keys())
 
 
 def calc_ta_fwhm(freq, array_phase='P2C'):
@@ -311,18 +325,34 @@ def get_channels(obsid, channels=None):
     if channels is None:
         print("Obtaining frequency channel data from http://mwa-metadata01.pawsey.org.au/metadata/"
               "for OBS ID: {}".format(obsid))
-        beam_meta_data = getmeta(service='obs', params={'obs_id':obsid})
-        channels = beam_meta_data[u'rfstreams'][u"0"][u'frequencies']
+        full_meta_data = getmeta(service='obs', params={'obs_id':obsid})
+        channels = full_meta_data[u'rfstreams'][u"0"][u'frequencies']
     return channels
 
 
-def obs_max_min(obsid, meta=None):
+def obs_max_min(obsid, files_meta_data=None):
     """
     Small function to query the database and return the times of the first and last file
+
+    Parameters:
+    -----------
+    obsid: str
+        The ID (gps time) of the observation you are querying
+    files_meta_data: dict
+        The output of the getmeta function with the data_files service.
+        This is an optional input that can be used if you just want to
+        extract the relevant info and save a metadata call
+
+    Output:
+    -------
+    obs_start_end: list
+        [obs_start, obs_end]
     """
+    if files_meta_data is None:
+        files_meta_data = getmeta(servicetype='metadata', service='data_files', params={'obs_id':str(obsid)})
 
     # Make a list of gps times excluding non-numbers from list
-    times = [f[11:21] for f in get_files(obsid) if is_number(f[11:21])]
+    times = [f[11:21] for f in get_files(obsid, files_meta_data=files_meta_data) if is_number(f[11:21])]
     obs_start = int(min(times))
     obs_end = int(max(times))
     return obs_start, obs_end
@@ -339,7 +369,7 @@ def write_obs_info(obsid):
     channels = data_dict["rfstreams"]["0"]["frequencies"]
     centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
     array_phase = get_obs_array_phase(obsid)
-    start, stop = obs_max_min(obsid, meta=data_dict)
+    start, stop = obs_max_min(obsid)
 
     f = open(filename, "w+")
     f.write("-------------------------    Obs Info    --------------------------\n")

@@ -1,6 +1,5 @@
 #other
 import logging
-import argparse
 import os
 import sys
 import numpy as np
@@ -28,13 +27,15 @@ from mwa_pb import primarybeammap_tant as pbtant
 
 logger = logging.getLogger(__name__)
 
-def find_combined_beg_end(obsid, base_path="/group/mwavcs/vcs/", channels=None):
+
+def find_combined_beg_end(obsid, base_path="/astro/mwavcs/vcs/", channels=None):
     """
     looks through the comined files of the input obsid and returns the max and min in gps time
+
     Input:
         obsid: The MWA observation ID
     Optional Input:
-        base_path: the direct path the base vcs directory. Default: /group/mwavcs/vcs/\
+        base_path: the direct path the base vcs directory. Default: /astro/mwavcs/vcs/\
         channels: a list of the frequency channel ids. Default None which then gets the
                   from the mwa metadata
     """
@@ -59,7 +60,6 @@ def find_combined_beg_end(obsid, base_path="/group/mwavcs/vcs/", channels=None):
     return beg, end
 
 
-#---------------------------------------------------------------
 def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
                         my_nu=None, my_S=None, my_S_e=None, obsid=None,\
                         K=None, covar_mat=None, a_err=None):
@@ -180,8 +180,8 @@ def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
     plt.savefig(save_name)
     plt.close()
 
-#---------------------------------------------------------------
-def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None, ondisk=False, min_z_power=0.3, query=None):
+
+def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None, ondisk=False, min_z_power=0.3, query=None):
     """
     Finds the normalised time that a pulsar is in the beam for a given obsid
     If pulsar is not in beam, returns None, None
@@ -193,9 +193,9 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
     pulsar: string
         The pulsar's J name
     beg: int
-        OPTIONAL - The beginning of the processed observing time in gps time
+        The beginning of the processed observing time in gps time
     end: int
-        OPTIONAL - The end of the processed observing time in gps time
+        The end of the processed observing time in gps time
     obs_beg: int
         OPTIONAL - The beginning of the observation in gps time
     obs_end: int
@@ -214,7 +214,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
         metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     #Find the beginning and end of obs
-    obs_beg, obs_end = files_beg, files_end = obs_max_min(obsid, meta=full_meta)
+    obs_beg, obs_end = files_beg, files_end = obs_max_min(obsid)
     obs_dur = obs_end-obs_beg + 1
 
     #Logic loop:
@@ -222,9 +222,6 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
         #find the beginning and end time of the observation FILES you have on disk
         files_beg, files_end = find_combined_beg_end(obsid)
         files_duration = files_end - files_beg + 1
-    elif beg is None and end is None:
-        logger.debug("ondisk==False so beg and end can not be None. Returning Nones")
-        return None, None
     else:
         #uses manually input beginning and end times to find beam coverage
         files_beg = beg
@@ -260,7 +257,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg=None, end=None, metadata=None, full_
 
     return enter_files, exit_files
 
-#---------------------------------------------------------------
+
 def ATNF_spectral_data_plot(pulsar_list):
     """
     Given a list of pulsars, plots the available spectral energy distribution for each one using data from ATNF
@@ -284,7 +281,7 @@ def ATNF_spectral_data_plot(pulsar_list):
         plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
                         K=K, covar_mat=covar_mat, a_err=a_err)
 
-#---------------------------------------------------------------
+
 def least_squares_fit_plaw(x_data, y_data, y_err):
     """
     Used primarily by est_pulsar_flux() to to attain a power law function. Intended for use with pulsar flux densities
@@ -345,7 +342,7 @@ def least_squares_fit_plaw(x_data, y_data, y_err):
 
     return a, K, covar_mat
 
-#---------------------------------------------------------------
+
 def flux_from_plaw(freq, K, a, covar_mat):
     """
     Calculates the flux and error from a power law fit by extrapolating to the desired frequency.
@@ -391,7 +388,7 @@ def flux_from_plaw(freq, K, a, covar_mat):
 
     return flux, flux_err
 
-#---------------------------------------------------------------
+
 def flux_from_spind(nu_1, nu_2, s_2, s_2_err, a, a_err):
     """
     Calculates a flux value based on the spectral index, a using the formula:
@@ -430,6 +427,7 @@ def flux_from_spind(nu_1, nu_2, s_2, s_2_err, a, a_err):
     flux_est_err = np.sqrt(s_2_var + a_var)
 
     return flux_est, flux_est_err
+
 
 def flux_from_atnf(pulsar, query=None):
     """
@@ -496,6 +494,7 @@ def flux_from_atnf(pulsar, query=None):
 
     return freq_all, flux_all, flux_err_all, spind, spind_err
 
+
 def find_spind(pulsar, freq_all, flux_all, flux_err_all):
     """
     Tries to attain a spectral index from input data.
@@ -554,7 +553,7 @@ def find_spind(pulsar, freq_all, flux_all, flux_err_all):
 
     return spind, spind_err, K, covar_mat
 
-#---------------------------------------------------------------
+
 def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
     """
     Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency
@@ -612,7 +611,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
 
     return flux_est, flux_est_err
 
-#---------------------------------------------------------------
+
 def find_pulsar_w50(pulsar, query=None):
     """
     Attempts to find a pulsar's W50 from the ATNF catalogue. If unavailable, will estimate
@@ -677,8 +676,8 @@ def find_pulsar_w50(pulsar, query=None):
         W_50_err=None
     return W_50, W_50_err
 
-#---------------------------------------------------------------
-def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None, min_z_power=0.3, query=None):
+
+def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_power=0.3, query=None):
     """
     Find the total integration time of a pulsar in the primary beam of an obsid
 
@@ -689,9 +688,9 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
     pulsar: string
         The J name of the pulsar
     beg: int
-        OPTIONAL - The beginning of the processed observing time
+        The beginning of the processed observing time
     end: int
-        OPTIONAL - The end of the processed observing time
+        The end of the processed observing time
 
     Returns:
     -------
@@ -707,41 +706,28 @@ def find_times(obsid, pulsar, beg=None, end=None, metadata=None, full_meta=None,
 
     if not metadata or not full_meta:
         metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
-    obs_beg, obs_end = obs_max_min(obsid, meta=full_meta)
-
-    t_int=None
-    if beg is None or end is None:
-        logger.debug("Using duration for entire observation")
+    obs_beg, obs_end = obs_max_min(obsid)
+    enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+    if beg is not None and end is not None:
+        dur = end-beg
+    else: #use entire obs duration
         beg = obs_beg
         end = obs_end
         dur = end - beg + 1
-        enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end, metadata=metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+    if enter_norm is not None and exit_norm is not None:
         enter_time = beg + enter_norm * dur
         exit_time = beg + exit_norm * dur
-        t_int = (exit_norm - enter_norm ) * dur
-
-    if t_int is None:
-        enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg=beg, end=end, metadata=metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
-        if beg is not None and end is not None:
-            dur = end-beg
-        else: #use entire obs duration
-            beg = obs_beg
-            end = obs_end
-            dur = end - beg + 1
-        if enter_norm is not None and exit_norm is not None:
-            enter_time = beg + enter_norm * dur
-            exit_time = beg + exit_norm * dur
-            t_int = dur*(exit_norm-enter_norm)
-        else:
-            logger.debug("Integration time calculation failed")
-            enter_time = 0
-            exit_time = 0
-            t_int=0
+        t_int = dur*(exit_norm-enter_norm)
+    else:
+        logger.debug("Integration time calculation failed")
+        enter_time = 0
+        exit_time = 0
+        t_int=0
 
     return enter_time, exit_time, t_int
 
-#---------------------------------------------------------------
-def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
+
+def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, t_int=None,\
                     obs_metadata=None, full_meta=None, query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
     """
@@ -758,6 +744,10 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
         The beginning of the observing time
     end: float
         The end of the observing time
+    enter: float
+        OPTIONAL - The fractional time that the pulsar enters the beam wrt beg and end
+    t_int: float
+        OPTINOAL - The frctional time that the pulsar is in the beam wrt beg and end
     p_ra: str
         OPTIONAL - the target's right ascension
     p_dec: str
@@ -799,8 +789,9 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     obsid, obs_ra, obs_dec, _, delays, centrefreq, channels = obs_metadata
 
     #get enter time
-    logger.debug("Calculating beginning time for pulsar coverage")
-    enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+    if not enter or not t_int:
+        logger.debug("Calculating beginning time for pulsar coverage")
+        enter, _, t_int = find_times(obsid, pulsar, beg, end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
 
     start_time =  enter-int(obsid)
 
@@ -815,7 +806,7 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
     beam_power = np.mean(beam_power)
 
     # Usa a primary beam function to convolve the sky temperature with the primary beam
-    # (prints suppressed)
+    # prints suppressed
     sys.stdout = open(os.devnull, 'w')
     _, _, Tsky_XX, _, _, _, Tsky_YY, _ = pbtant.make_primarybeammap(int(obsid), delays, centrefreq*1e6, 'analytic', plottype='None')
     sys.stdout = sys.__stdout__
@@ -836,9 +827,9 @@ def find_t_sys_gain(pulsar, obsid, beg=None, end=None, p_ra=None, p_dec=None,\
 
     return t_sys, t_sys_err, gain, gain_err
 
-#---------------------------------------------------------------
-def est_pulsar_sn(pulsar, obsid,\
-                 beg=None, end=None, p_ra=None, p_dec=None, obs_metadata=None, full_meta=None, plot_flux=False,\
+
+def est_pulsar_sn(pulsar, obsid, beg, end,
+                 p_ra=None, p_dec=None, obs_metadata=None, full_meta=None, plot_flux=False,\
                  query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
     """
@@ -853,9 +844,9 @@ def est_pulsar_sn(pulsar, obsid,\
     obsid: int
         Observation ID e.g. 1226406800
     beg: int
-        OPTIONAL - beginning of the observing time
+        beginning of the observing time
     end: int
-        OPTIONAL - end of the observing time
+        end of the observing time
     p_ra: str
         OPTIONAL - the target's right ascension
     p_dec: str
@@ -874,7 +865,7 @@ def est_pulsar_sn(pulsar, obsid,\
     """
     #We will attain uncertainties for s_mean, gain, t_sys and W_50.
     # other uncertainties are considered negligible
-
+    logger.info("hello")
     if query is None:
         query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC).pandas
 
@@ -896,18 +887,18 @@ def est_pulsar_sn(pulsar, obsid,\
                          metadata=obs_metadata, query=query)
     #fluxes may be Nones. If so, return None
     if s_mean is None and s_mean_err is None:
-        return None, None
+        return None, None, None, None
 
     #find integration time
-    enter, leave, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+    enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
     if t_int<=0.:
         logger.warning("{} not in beam for obs files or specificed beginning and end times"\
                     .format(pulsar))
-        return 0., 0.
+        return 0., 0., 0., 0.
 
     #find system temp and gain
-    t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid,\
-                                beg=enter, end=leave, p_ra=p_ra, p_dec=p_dec, query=query,\
+    t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid, enter=enter, t_int=t_int,
+                                beg=beg, end=end, p_ra=p_ra, p_dec=p_dec, query=query,\
                                 obs_metadata=obs_metadata, full_meta=full_meta, trcvr=trcvr, min_z_power=min_z_power)
 
     #Find W_50
@@ -938,14 +929,13 @@ def est_pulsar_sn(pulsar, obsid,\
     logger.debug("period: {0}".format(period))
     logger.debug("W_50: {0} +/- {1}".format(W_50, W_50_err))
     logger.debug("t_sys: {0} +/- {1}".format(t_sys, t_sys_err))
-    logger.info("{0} Flux: {1} +/- {2} Jy".format(pulsar, s_mean, s_mean_err))
-    logger.info("{0} S/N: {1} +/- {2}".format(pulsar, SN, SN_err))
 
-    return SN, SN_err
+    return SN, SN_err, s_mean, s_mean_err
 
-def multi_psr_snfe(pulsar_list, obsid,\
-                   beg=None, end=None, obs_metadata=None, full_meta=None, plot_flux=False,\
-                   query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
+
+def multi_psr_snfe(pulsar_list, obsid, beg, end,
+                    obs_metadata=None, full_meta=None, plot_flux=False,\
+                    query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
     logger.info("""This script may use estimations where data is missing.
     For full verbosity, use the DEBUG logger (ie. -L DEBUG)""")
@@ -954,7 +944,7 @@ def multi_psr_snfe(pulsar_list, obsid,\
         logger.debug("Obtaining obs metadata")
         obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
-    obs_beg, obs_end = obs_max_min(obsid, meta=full_meta)
+    obs_beg, obs_end = obs_max_min(obsid)
     if beg is None:
         beg = obs_beg
     if end is None:
@@ -967,70 +957,10 @@ def multi_psr_snfe(pulsar_list, obsid,\
         for key in mega_query.keys():
             psr_query[key] = [mega_query[key][i]]
 
-        sn, sn_e = est_pulsar_sn(pulsar, obsid,\
+        sn, sn_e, s, s_e = est_pulsar_sn(pulsar, obsid,\
                                  beg=beg, end=end, obs_metadata=obs_metadata, full_meta=full_meta, plot_flux=plot_flux,\
                                  query=psr_query, min_z_power=min_z_power, trcvr=trcvr)
 
-        sn_dict[pulsar]=[sn, sn_e]
+        sn_dict[pulsar]=[sn, sn_e, s, s_e]
 
     return sn_dict
-
-#---------------------------------------------------------------
-if __name__ == "__main__":
-
-    loglevels = dict(DEBUG=logging.DEBUG,\
-                    INFO=logging.INFO,\
-                    WARNING=logging.WARNING,\
-                    ERROR=logging.ERROR)
-
-    parser = argparse.ArgumentParser(description="""A utility file for estimating the S/N of a pulsar in an obsid""")
-
-    parser.add_argument("-o", "--obsid", type=int, help="The Observation ID (e.g. 1221399680)")
-    parser.add_argument("-p", "--pulsar", type=str, nargs='+', help="The pulsar's name (e.g. J2241-5236).\
-                        Takes a single argument for flux estimation or multiple for ATNF plotting")
-    parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level. Default: INFO")
-    parser.add_argument("-b", "--beg", type=int, default=None, help="The beginning time of observation.\
-                        If None, will use beginning given by a metadata call. Default: None")
-    parser.add_argument("-e", "--end", type=int, default=None, help="The end time of observation.\
-                        If None, will use the end given by a metadata call. Default: None")
-    parser.add_argument("--pointing", type=str, default=None, help="The pointing of the target in the format '12:34:56_98:76:54'.\
-                        If None, will obtain from a call to ATNF. Default: None")
-    parser.add_argument("--min_z_power", type=float, default=0.3, help="The minimum zenith normalised power used to determine if the pulsar\
-                        is in the beam or not")
-    parser.add_argument("--plot_est", action="store_true", help="Use this tag to create a plot of flux estimation.")
-    parser.add_argument("--mode", type=str, help="""MODES: 'SNFE' = Estimate S/N and flux for a single pulsar in an obsid\n
-                                                'ATNF' = Plot the spectral energy distribution for any number of pulsars using data from ATNF.""")
-    args = parser.parse_args()
-
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
-
-    if args.mode == "SNFE":
-        if not args.obsid or not args.pulsar:
-            logger.error("Obsid and Pulsar name must be supplied. Exiting...")
-            sys.exit(1)
-        pulsar = args.pulsar[0]
-        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
-        #Decide what to use as ra and dec
-        if args.pointing is None:
-            raj = None
-            decj = None
-        else:
-            raj = args.pointing.split("_")[0]
-            decj = args.pointing.split("_")[1]
-
-        SN, SN_err = est_pulsar_sn(pulsar, args.obsid,\
-                beg=args.beg, end=args.end, p_ra=raj, p_dec=decj, plot_flux=args.plot_est, query=query, min_z_power=args.min_z_power)
-    elif args.mode == "ATNF":
-        if not args.pulsar:
-            logger.error("Pulsar name must be supplied. Exiting...")
-            sys.exit(1)
-        ATNF_spectral_data_plot(args.pulsar)
-    else:
-        logger.error("Valid mode not selected. Please refer to documentation for options")
-        sys.exit(1)

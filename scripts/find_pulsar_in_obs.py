@@ -25,9 +25,9 @@ import numpy as np
 import csv
 
 from vcstools.pointing_utils import sex2deg, format_ra_dec
-import vcstools.sn_flux_est as sfe
+import vcstools.sn_flux_utils as sfe
 from vcstools.metadb_utils import get_obs_array_phase, singles_source_search,\
-                                  find_obsids_meta_pages
+                                  find_obsids_meta_pages, obs_max_min
 from vcstools.catalogue_utils import grab_source_alog
 from vcstools.beam_calc import find_sources_in_obs
 
@@ -124,11 +124,13 @@ def write_output_source_files(output_data,
                 output_file.write('\n')
             for data in output_data[source]:
                 obsid, duration, enter, leave, max_power, freq, band = data
+                if SN_est:
+                    beg, end = obs_max_min(obsid)
                 oap = get_obs_array_phase(obsid)
                 output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}   {:6.2f} {:6.2f}'.\
                            format(obsid, duration, enter, leave, max_power, oap, freq, band))
                 if SN_est:
-                    pulsar_sn, pulsar_sn_err = sfe.est_pulsar_sn(source, obsid, plot_flux=plot_est)
+                    pulsar_sn, pulsar_sn_err, _, _ = sfe.est_pulsar_sn(source, obsid, beg, end, plot_flux=plot_est)
                     if pulsar_sn is None:
                         output_file.write('   None    None')
                     else:
@@ -154,8 +156,9 @@ def write_output_obs_files(output_data, obsid_meta,
 
     for on, obsid in enumerate(output_data):
         if SN_est:
+            beg, end = obs_max_min(obsid)
             psr_list = [el[0] for el in output_data[obsid]]
-            sn_dict = sfe.multi_psr_snfe(psr_list, obsid,\
+            sn_dict = sfe.multi_psr_snfe(psr_list, obsid, beg, end,\
                                          min_z_power=min_power, plot_flux=plot_est)
 
         oap = get_obs_array_phase(obsid)
@@ -197,7 +200,7 @@ def write_output_obs_files(output_data, obsid_meta,
                 if SN_est:
                     beg = int(obsid) + 7
                     end = beg + int(obsid_meta[on][3])
-                    pulsar_sn, pulsar_sn_err = sn_dict[pulsar]
+                    pulsar_sn, pulsar_sn_err, _, _ = sn_dict[pulsar]
                     if pulsar_sn is None:
                         output_file.write('   None    None\n')
                     else:
