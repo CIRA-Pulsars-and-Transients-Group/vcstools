@@ -1,6 +1,5 @@
 #other
 import logging
-import argparse
 import os
 import sys
 import numpy as np
@@ -865,7 +864,7 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
     """
     #We will attain uncertainties for s_mean, gain, t_sys and W_50.
     # other uncertainties are considered negligible
-
+    logger.info("hello")
     if query is None:
         query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC).pandas
 
@@ -887,14 +886,14 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
                          metadata=obs_metadata, query=query)
     #fluxes may be Nones. If so, return None
     if s_mean is None and s_mean_err is None:
-        return None, None
+        return None, None, None, None
 
     #find integration time
     enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
     if t_int<=0.:
         logger.warning("{} not in beam for obs files or specificed beginning and end times"\
                     .format(pulsar))
-        return 0., 0.
+        return 0., 0., 0., 0.
 
     #find system temp and gain
     t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid, enter=enter, t_int=t_int,
@@ -929,10 +928,8 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
     logger.debug("period: {0}".format(period))
     logger.debug("W_50: {0} +/- {1}".format(W_50, W_50_err))
     logger.debug("t_sys: {0} +/- {1}".format(t_sys, t_sys_err))
-    logger.info("{0} Flux: {1} +/- {2} Jy".format(pulsar, s_mean, s_mean_err))
-    logger.info("{0} S/N: {1} +/- {2}".format(pulsar, SN, SN_err))
 
-    return SN, SN_err
+    return SN, SN_err, s_mean, s_mean_err
 
 
 def multi_psr_snfe(pulsar_list, obsid, beg, end,
@@ -959,74 +956,10 @@ def multi_psr_snfe(pulsar_list, obsid, beg, end,
         for key in mega_query.keys():
             psr_query[key] = [mega_query[key][i]]
 
-        sn, sn_e = est_pulsar_sn(pulsar, obsid,\
+        sn, sn_e, s, s_e = est_pulsar_sn(pulsar, obsid,\
                                  beg=beg, end=end, obs_metadata=obs_metadata, full_meta=full_meta, plot_flux=plot_flux,\
                                  query=psr_query, min_z_power=min_z_power, trcvr=trcvr)
 
-        sn_dict[pulsar]=[sn, sn_e]
+        sn_dict[pulsar]=[sn, sn_e, s, s_e]
 
     return sn_dict
-
-
-def snfe_main(kwargs):
-    if kwargs["mode"] == "SNFE":
-        if not args.obsid or not args.pulsar:
-            logger.error("Obsid and Pulsar name must be supplied. Exiting...")
-            sys.exit(1)
-        #Decide what to use as ra and dec
-        if kwargs["pointing"] is None:
-            raj = None
-            decj = None
-        else:
-            raj = kwargs["pointing"].split("_")[0]
-            decj = kwargs["pointing"].split("_")[1]
-
-        multi_psr_snfe(kwargs["pulsars"], kwargs["obsid"], kwargs["beg"], kwargs["end"],
-                        plot_flux=kwargs["plot_est"], min_z_power=kwargs["min_z_power"])
-
-    elif kwargs["mode"] == "ATNF":
-        if not kwargs["pulsars"]:
-            logger.error("Pulsar name must be supplied. Exiting...")
-            sys.exit(1)
-        for psr in kwargs["pulsars"]:
-            ATNF_spectral_data_plot(psr)
-    else:
-        logger.error("Valid mode not selected. Please refer to documentation for options")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-
-    loglevels = dict(DEBUG=logging.DEBUG,\
-                    INFO=logging.INFO,\
-                    WARNING=logging.WARNING,\
-                    ERROR=logging.ERROR)
-
-    parser = argparse.ArgumentParser(description="""A utility file for estimating the S/N of a pulsar in an obsid""")
-
-    parser.add_argument("-o", "--obsid", type=int, required=True, help="The Observation ID (e.g. 1221399680)")
-    parser.add_argument("-p", "--pulsars", type=str, nargs='+', required=True, help="The pulsar's name (e.g. J2241-5236).\
-                        Takes a single argument for flux estimation or multiple for ATNF plotting")
-    parser.add_argument("-b", "--beg", type=int, required=True, help="The beginning time of observation.\
-                        If None, will use beginning given by a metadata call. Default: None")
-    parser.add_argument("-e", "--end", type=int, required=True, help="The end time of observation.\
-                        If None, will use the end given by a metadata call. Default: None")
-    parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level. Default: INFO")
-    parser.add_argument("--pointing", type=str, default=None, help="The pointing of the target in the format '12:34:56_98:76:54'.\
-                        If None, will obtain from a call to ATNF. Default: None")
-    parser.add_argument("--min_z_power", type=float, default=0.3, help="The minimum zenith normalised power used to determine if the pulsar\
-                        is in the beam or not")
-    parser.add_argument("--plot_est", action="store_true", help="Use this tag to create a plot of flux estimation.")
-    parser.add_argument("--mode", type=str, help="""MODES: 'SNFE' = Estimate S/N and flux for a single pulsar in an obsid\n
-                                                'ATNF' = Plot the spectral energy distribution for any number of pulsars using data from ATNF.""")
-    args = parser.parse_args()
-
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
-    kwargs=vars(args)
-    snfe_main(kwargs)
