@@ -213,7 +213,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None,
         metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     #Find the beginning and end of obs
-    obs_beg, obs_end = files_beg, files_end = obs_max_min(obsid, meta=full_meta)
+    obs_beg, obs_end = files_beg, files_end = obs_max_min(obsid)
     obs_dur = obs_end-obs_beg + 1
 
     #Logic loop:
@@ -705,7 +705,7 @@ def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_pow
 
     if not metadata or not full_meta:
         metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
-    obs_beg, obs_end = obs_max_min(obsid, meta=full_meta)
+    obs_beg, obs_end = obs_max_min(obsid)
     enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
     if beg is not None and end is not None:
         dur = end-beg
@@ -943,7 +943,7 @@ def multi_psr_snfe(pulsar_list, obsid, beg, end,
         logger.debug("Obtaining obs metadata")
         obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
-    obs_beg, obs_end = obs_max_min(obsid, meta=full_meta)
+    obs_beg, obs_end = obs_max_min(obsid)
     if beg is None:
         beg = obs_beg
     if end is None:
