@@ -316,7 +316,7 @@ def get_channels(obsid, channels=None):
     return channels
 
 
-def obs_max_min(obsid, meta=None):
+def obs_max_min(obsid):
     """
     Small function to query the database and return the times of the first and last file
     """
