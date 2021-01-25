@@ -9,7 +9,7 @@ import psrqpy
 
 from vcstools import data_load
 
-import vcstools.sn_flux_est as snfe
+import vcstools.sn_flux_utils as snfe
 
 import logging
 logger = logging.getLogger(__name__)
@@ -147,25 +147,26 @@ def test_est_pulsar_sn():
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
     test_cases.append(("J2241-5236", obsid, 1225713567, 1225714167, None, None, md, full_md,\
-                    175.5310369703948, 63.791707034461005))
+                    175.5310369703948, 63.791707034461005, 0.2845788591631629, 0.03456583343266214))
     #Has 6 fluxes on database
     obsid=1226062160
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
     test_cases.append(("J2330-2005", obsid, 1226062167, 1226062767, "23:00:00", "-20:00:00", md, full_md,\
-                    130.65746201950958, 40.836517282777486))
+                    130.65746201950958, 40.836517282777486, 0.13693009479003349, 0.02425180108094393))
     #adding a test that gave a none type error for alpha_bound, c_bound
     obsid=1117643248
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
     test_cases.append(("J1623-2631", obsid, 1117643268, 1117645615, None, None, md, full_md,\
-                    49.80408018806575, 12.304100665602133))
+                    49.80408018806575, 12.304100665602133, 0.2519753115659939, 0.03880844540477619))
 
-    for psr, obsid, beg, end, ra, dec, md, full_md, exp_sn, exp_sn_err in test_cases:
-        sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg, end, p_ra=ra, p_dec=dec, obs_metadata=md, full_meta=full_md)
+    for psr, obsid, beg, end, ra, dec, md, full_md, exp_sn, exp_sn_err, exp_flux, exp_flux_err in test_cases:
+        sn, sn_err, flux, flux_err = snfe.est_pulsar_sn(psr, obsid, beg, end, p_ra=ra, p_dec=dec, obs_metadata=md, full_meta=full_md)
         assert_almost_equal(exp_sn, sn, decimal=2)
         assert_almost_equal(exp_sn_err, sn_err, decimal=2)
-
+        assert_almost_equal(exp_flux, flux, decimal=2)
+        assert_almost_equal(exp_flux_err, flux_err, decimal=2)
 
 if __name__ == "__main__":
     """
