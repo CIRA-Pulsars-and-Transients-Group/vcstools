@@ -33,7 +33,8 @@ class NoFitError(Exception):
 #---------------------------------------------------------------
 def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
     """
-    Runs the pdv commnand from PSRCHIVE as a python subprocess
+    Runs the pdv commnand from PSRCHIVE as a python subprocess.
+    NOTE: Requires singularity loaded in environment (module load singularity)
 
     Parameters
     ----------
@@ -50,7 +51,8 @@ def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
         commands.append("pdv")
         commands.append(pdvops)
         commands.append(archive)
-        subprocess.run(commands, stdout=f)
+        a = subprocess.check_output(commands)
+        f.write(a.decode("utf-8"))
 
 #---------------------------------------------------------------
 def get_from_bestprof(file_loc):
