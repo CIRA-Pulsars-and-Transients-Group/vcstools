@@ -404,19 +404,19 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
                     t = Time(int(gpstime), format='gps', scale='utc')
                     unix_time = int(t.unix)
 
-                    offline_correlator_command = "-o {0}/{1} -s {2} -r {3} -i {4} -f 128 -n {5} "\
+                    offline_correlator_command = "-o {0}/{1} -s {2} -r {3} -i {4} -n {5} "\
                                                  "-c {6:0>2} -d {7}".format(corr_dir, obsid,
                                                  unix_time, num_frames, integrations,
                                                  int(ft_res[0]/10), gpubox_label, file)
                     body.append("{0} {1}".format("offline_correlator", offline_correlator_command))
                     to_corr += 1
 
-                module_list = ["module switch PrgEnv-cray PrgEnv-gnu"]
+                #module_list = ["module switch PrgEnv-cray PrgEnv-gnu"]
+                module_list = ["offline_correlator/v1.0.0"]
                 secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr))
                 # added factor two on 10 April 2017 as galaxy seemed really slow...
                 submit_slurm(corr_batch, body, module_list=module_list,
-                             slurm_kwargs={"time": secs_to_run, "nice": nice,
-                                           "gres": "gpu:1"},
+                             slurm_kwargs={"time": secs_to_run, "nice": nice},
                              queue='gpuq', vcstools_version=vcstools_version,
                              batch_dir=batch_dir, export="NONE")
             else:
