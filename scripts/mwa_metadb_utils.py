@@ -23,7 +23,7 @@ if __name__ == '__main__':
         channels = data_dict["rfstreams"]["0"]["frequencies"]
         centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
         array_phase = get_obs_array_phase(args.obsid)
-        start, stop = obs_max_min(args.obsid, meta=data_dict)
+        start, stop = obs_max_min(args.obsid)
         fov = field_of_view(args.obsid, beam_meta_data=beam_common_data)
 
         print("-------------------------    Obs Info    --------------------------")
