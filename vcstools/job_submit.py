@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-
 import subprocess
-from config_vcs import load_config_file
+from vcstools.config import load_config_file
 import logging
 import socket
 

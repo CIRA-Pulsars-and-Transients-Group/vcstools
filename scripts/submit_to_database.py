@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-
 """
 Author: Nicholas Swainston
 Creation Date: /05/2016
@@ -14,7 +13,6 @@ __date__ = '2016-05-12'
 
 import os
 import argparse
-import numpy as np
 import subprocess
 import sys
 from shutil import copyfile as cp
@@ -23,13 +21,13 @@ import glob
 import textwrap as _textwrap
 
 #MWA software imports
-from vcstools import data_load
-
 from mwa_pulsar_client import client
-from mwa_metadb_utils import get_common_obs_metadata
-import find_pulsar_in_obs as fpio
-import sn_flux_est as snfe
-import prof_utils
+
+import vcstools.sn_flux_utils as snfe
+from vcstools import data_load
+from vcstools.metadb_utils import get_common_obs_metadata
+from vcstools.catalogue_utils import get_psrcat_ra_dec
+from vcstools import prof_utils
 
 
 import logging
@@ -39,7 +37,9 @@ class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
         text = _textwrap.dedent(self._whitespace_matcher.sub(' ', text).strip())
         return _textwrap.wrap(text, width)
+
 class NoAuthError(Exception):
+
     """Raise when pulsar database authentication is not found"""
     pass
 
@@ -67,33 +67,6 @@ def get_pulsar_dm_p(pulsar):
         if len(columns) > 1:
             p = columns[1]
     return [dm, p]
-
-
-def from_power_to_gain(powers,cfreq,n,coh=True):
-    from astropy.constants import c,k_B
-    from math import sqrt
-
-    obswl = c.value/cfreq
-    #for coherent
-    if coh:
-        coeff = obswl**2*16*n/(4*np.pi*k_B.value)
-    else:
-        coeff = obswl**2*16*sqrt(n)/(4*np.pi*k_B.value)
-    logger.debug("Wavelength {} m".format(obswl))
-    logger.debug("Gain coefficient: {}".format(coeff))
-    SI_to_Jy = 1e-26
-    return (powers*coeff)*SI_to_Jy
-
-def get_Trec(tab,obsfreq):
-    Trec = 0.0
-    for r in range(len(tab)-1):
-        if tab[r][0]==obsfreq:
-            Trec = tab[r][1]
-        elif tab[r][0] < obsfreq < tab[r+1][0]:
-            Trec = ((tab[r][1] + tab[r+1][1])/2)
-    if Trec == 0.0:
-        logger.debug("ERROR getting Trec")
-    return Trec
 
 def get_subbands(metadata):
     """
@@ -166,14 +139,14 @@ def check_db_and_create_det(pulsar):
     if pulsar in pul_list_str:
         logger.info('This pulsar is already on the database')
         #gets Ra and DEC from PSRCAT
-        pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
-        pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
+        pulsar_ra_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])
+        _, pul_ra, pul_dec = pulsar_ra_dec[0]
         new_pulsar = False
     else:
         logger.info('Congratulations you have detected ' + pulsar + ' for the first time with the MWA')
         #gets Ra and DEC from PSRCAT
-        pulsar_ra_dec = fpio.get_psrcat_ra_dec(pulsar_list=[pulsar])
-        pulsar_name, pul_ra, pul_dec = pulsar_ra_dec[0]
+        pulsar_ra_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])
+        _, pul_ra, pul_dec = pulsar_ra_dec[0]
         #then adds it to the database
         client.pulsar_create(web_address, auth, name = pulsar, ra = pul_ra, dec = pul_dec)
         new_pulsar = True
@@ -423,7 +396,7 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
     try:
         prof_dict = prof_utils.auto_gfit(profile,\
                     period = period, plot_name="{0}_{1}_{2}_bins_gaussian_fit.png".format(obsid, pulsar, num_bins))
-    except (prof_utils.ProfileLengthError, prof_utils.NoFitError) as _:
+    except (prof_utils.ProfileLengthError, prof_utils.NoFitError):
         prof_dict=None
 
     if not prof_dict:
@@ -434,6 +407,8 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
             u_sn = prof_dict["sn_e"]
             w_equiv_bins = prof_dict["w_equiv_bins"]
             u_w_equiv_bins =  prof_dict["w_equiv_bins_e"]
+            w_equiv_phase = w_equiv_bins / num_bins
+            u_w_equiv_phase =  u_w_equiv_bins / num_bins
             w_equiv_ms = period/num_bins * w_equiv_bins
             u_w_equiv_ms = period/num_bins * u_w_equiv_bins
             scattering = prof_dict["scattering"]*period/num_bins/1000 #convert to seconds
@@ -455,19 +430,21 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
     else:
         sn = prof_dict["sn"]
         u_sn = prof_dict["sn_e"]
-        w_equiv_bins = prof_dict["Weq"]
-        u_w_equiv_bins =  prof_dict["Weq_e"]
-        w_equiv_ms = period/num_bins * w_equiv_bins
-        u_w_equiv_ms = period/num_bins * u_w_equiv_bins
-        scattering = prof_dict["Wscat"]*period/num_bins/1000 #convert to seconds
-        u_scattering = prof_dict["Wscat_e"]*period/num_bins/1000
+        w_equiv_phase = prof_dict["Weq"]
+        u_w_equiv_phase =  prof_dict["Weq_e"]
+        w_equiv_bins = w_equiv_phase * num_bins
+        u_w_equiv_bins = w_equiv_phase * num_bins
+        w_equiv_ms = period * w_equiv_phase
+        u_w_equiv_ms = period * u_w_equiv_phase
+        scattering = prof_dict["Wscat"]*period/1000 #convert to seconds
+        u_scattering = prof_dict["Wscat_e"]*period/1000
         scattered = prof_dict["scattered"]
 
     if prof_dict:
         logger.info("Profile scattered? {0}".format(scattered))
         logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
         logger.debug("Gain {0} K/Jy".format(gain))
-        logger.debug("Equivalent width in bins: {0}".format(w_equiv_bins))
+        logger.debug("Equivalent width in ms: {0}".format(w_equiv_ms))
         logger.debug("T_sys: {0} K".format(t_sys))
         logger.debug("Bandwidth: {0}".format(bandwidth))
         logger.debug("Detection time: {0}".format(t_int))
@@ -697,7 +674,7 @@ if __name__ == "__main__":
                          time_detection, profile, num_bins]
 
     if args.bestprof or args.ascii:
-        _, pul_ra, pul_dec = fpio.get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
+        _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
         subbands = flux_cal_and_submit(time_obs, metadata, bestprof_data,
                             pul_ra, pul_dec, coh, auth, pulsar=args.pulsar, trcvr=args.trcvr)
 
@@ -821,5 +798,5 @@ if __name__ == "__main__":
             cp(str(args.calibration),str(args.cal_id) + "_rts_calibrator.tar")
             cal_file_loc = str(args.cal_id) + "_rts_calibrator.tar"
 
-        upload_cal_files(str(args.obsid), str(cal_id), cal_file_loc, args.srclist, caltype=calibrator_type)
+        upload_cal_files(str(args.obsid), str(args.cal_id), cal_file_loc, args.srclist, caltype=calibrator_type)
         os.remove(cal_file_loc)

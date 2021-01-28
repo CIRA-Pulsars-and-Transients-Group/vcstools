@@ -4,12 +4,12 @@ Tests the sn_flux_est.py script
 """
 import os
 from numpy.testing import assert_almost_equal
-import mwa_metadb_utils
+from vcstools.metadb_utils import get_common_obs_metadata
 import psrqpy
 
 from vcstools import data_load
 
-import sn_flux_est as snfe
+import vcstools.sn_flux_utils as snfe
 
 import logging
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 md_dict={}
 obsid_list = [1223042480, 1222697776, 1226062160, 1225713560, 1117643248]
 for obs in obsid_list:
-    md_dict[str(obs)] = mwa_metadb_utils.get_common_obs_metadata(obs, return_all=True)
+    md_dict[str(obs)] = get_common_obs_metadata(obs, return_all=True)
 
 def test_pulsar_beam_coverage():
     """
@@ -32,7 +32,6 @@ def test_pulsar_beam_coverage():
     test_cases.append((1223042487, 1223042587, 0.0, 1.0))
 
     test_none_cases = []
-    test_none_cases.append((None, None, 0.0, 0.072731816627943369))
     test_none_cases.append((-1e10, -1e4, 0.0, 0.072731816627943369))
 
     md = md_dict[str(obsid)][0]
@@ -58,14 +57,13 @@ def test_find_times():
     obsid = 1223042480
     pulsar = "J2234+2114"
     test_cases = []
-    test_cases.append((None, None, 1223042487.0, 1223042843.4768934, 356.47689342498774))
     test_cases.append((1223042487, 1223042587, 1223042487, 1223042587, 100.0))
 
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
 
     for beg, end, exp_beg, exp_end, exp_int in test_cases:
-        out_beg, out_end, out_int = snfe.find_times(obsid, pulsar, beg=beg, end=end, metadata=md, full_meta=full_md)
+        out_beg, out_end, out_int = snfe.find_times(obsid, pulsar, beg, end, metadata=md, full_meta=full_md)
         assert_almost_equal(exp_beg, out_beg, decimal=4)
         assert_almost_equal(exp_end, out_end, decimal=4)
         assert_almost_equal(exp_int, out_int, decimal=4)
@@ -76,28 +74,23 @@ def test_find_t_sys_gain():
     Tests the find_t_sys_gain function
     """
     print("find_t_sys_gain")
-    obsid_1=1223042480
-    pulsar_1= "J2234+2114"
-    obsid_2=1222697776
-    pulsar_2= "J2330-2005"
+    obsid=1222697776
+    pulsar= "J2330-2005"
+    beg = 1222697776 + 7
+    end = beg + 3599
 
-    md_1 = md_dict[str(obsid_1)][0]
-    full_md_1 = md_dict[str(obsid_1)][1]
-    md_2 = md_dict[str(obsid_2)][0]
-    full_md_2 = md_dict[str(obsid_2)][1]
+    md = md_dict[str(obsid)][0]
+    full_md = md_dict[str(obsid)][1]
 
-    q_1 = psrqpy.QueryATNF(psrs=[pulsar_1], loadfromdb=data_load.ATNF_LOC)
-    q_2 = psrqpy.QueryATNF(psrs=[pulsar_2], loadfromdb=data_load.ATNF_LOC)
+    q = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC)
     test_cases = []
-    test_cases.append((pulsar_1, obsid_1, 1223042887, q_1, md_1, full_md_1,\
-                325.16928459135534, 6.5034678040055613, 0.1405071004856564, 0.1065230048864121))
-    test_cases.append((pulsar_2, obsid_2, None, q_2, md_2, full_md_2,\
-                295.7376541472588, 5.914753082945176, 0.29127739909167133, 0.049367851504392074))
+    test_cases.append((pulsar, obsid, beg, end, q, md, full_md,\
+                295.7376549611132, 5.914753099222264, 0.31480323776600816, 0.05136230390439281))
 
 
-    for pulsar, obsid, beg, query, metadata, full_meta,\
+    for pulsar, obsid, beg, end, query, metadata, full_meta,\
         exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err in test_cases:
-        t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(pulsar, obsid, beg=beg,\
+        t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(pulsar, obsid, beg, end,\
                 query=query, obs_metadata=metadata, full_meta=full_meta)
         assert_almost_equal(exp_t_sys, t_sys, decimal=4)
         assert_almost_equal(exp_t_sys_err, t_sys_err, decimal=4)
@@ -153,26 +146,27 @@ def test_est_pulsar_sn():
     obsid=1225713560
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
-    test_cases.append(("J2241-5236", obsid, None, None, None, None, md, full_md,\
-                    280.9035270638417, 102.95827699010243))
+    test_cases.append(("J2241-5236", obsid, 1225713567, 1225714167, None, None, md, full_md,\
+                    175.5310369703948, 63.791707034461005, 0.2845788591631629, 0.03456583343266214))
     #Has 6 fluxes on database
     obsid=1226062160
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
-    test_cases.append(("J2330-2005", obsid, None, None, "23:00:00", "-20:00:00", md, full_md,\
-                    142.0052581169168, 45.315968765282484))
+    test_cases.append(("J2330-2005", obsid, 1226062167, 1226062767, "23:00:00", "-20:00:00", md, full_md,\
+                    130.65746201950958, 40.836517282777486, 0.13693009479003349, 0.02425180108094393))
     #adding a test that gave a none type error for alpha_bound, c_bound
     obsid=1117643248
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
     test_cases.append(("J1623-2631", obsid, 1117643268, 1117645615, None, None, md, full_md,\
-                    49.80414834502304, 12.304114528369126))
+                    49.80408018806575, 12.304100665602133, 0.2519753115659939, 0.03880844540477619))
 
-    for psr, obsid, beg, end, ra, dec, md, full_md, exp_sn, exp_sn_err in test_cases:
-        sn, sn_err = snfe.est_pulsar_sn(psr, obsid, beg=beg, end=end, p_ra=ra, p_dec=dec, obs_metadata=md, full_meta=full_md)
+    for psr, obsid, beg, end, ra, dec, md, full_md, exp_sn, exp_sn_err, exp_flux, exp_flux_err in test_cases:
+        sn, sn_err, flux, flux_err = snfe.est_pulsar_sn(psr, obsid, beg, end, p_ra=ra, p_dec=dec, obs_metadata=md, full_meta=full_md)
         assert_almost_equal(exp_sn, sn, decimal=2)
         assert_almost_equal(exp_sn_err, sn_err, decimal=2)
-
+        assert_almost_equal(exp_flux, flux, decimal=2)
+        assert_almost_equal(exp_flux_err, flux_err, decimal=2)
 
 if __name__ == "__main__":
     """

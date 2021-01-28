@@ -7,6 +7,6 @@ build_logs/
 .cache/
 .eggs/
 dist/
-vcstools.egg-info/
 .nextflow*
 work*
+vcstools/data/psrcat.db

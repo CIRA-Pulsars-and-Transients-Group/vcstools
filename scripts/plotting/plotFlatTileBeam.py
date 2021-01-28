@@ -8,14 +8,14 @@ from astropy.coordinates import SkyCoord,EarthLocation,AltAz
 from astropy.time import Time
 import astropy.units as u
 import argparse
-from mwa_metadb_utils import get_common_obs_metadata, mwa_alt_az_za
+from vcstools.metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 
 import logging
 logger = logging.getLogger(__name__)
 
 
 def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
-    
+
     # extra imports from MWA_Tools to access database and beam models
     from mwa_pb import primary_beam as pb
 
@@ -23,12 +23,12 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     _za = np.linspace(0, 90, 900)
     az, za = np.meshgrid(_az, _za)
     
-    ## TARGET TRACKING ## 
+    ## TARGET TRACKING ##
     times = Time(obstime, format='gps')
     target = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
     location = EarthLocation(lat=-26.7033 * u.deg,
                              lon=116.671 * u.deg,
-                             height=377.827 * u.m)  
+                             height=377.827 * u.m)
     
     altaz = target.transform_to(AltAz(obstime=times, location=location))
     targetAZ = altaz.az.deg
@@ -38,7 +38,7 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     ## MWA BEAM CALCULATIONS ##
     delays = get_common_obs_metadata(obsid)[4] # x-pol and y-pol delays for obsid
     _, ptAZ, ptZA = mwa_alt_az_za(obsid)
-    #ptAZ, _, ptZA = dbq.get_beam_pointing(obsid) # Az and ZA in degrees for obsid   
+    #ptAZ, _, ptZA = dbq.get_beam_pointing(obsid) # Az and ZA in degrees for obsid
 
     logger.info("obs pointing: ({0}, {1})".format(ptAZ,ptZA))
 
@@ -49,7 +49,7 @@ def plot_beam_pattern(obsid, obsfreq, obstime, ra, dec, cutoff=0.1):
     hpp = 0.5 * pmax # half-power point
     logger.info("tile pattern maximum: {0:.3f}".format(pmax))
     logger.info("tile pattern half-max: {0:.3f}".format(hpp))
-    pattern[np.where(pattern < cutoff)] = 0 # ignore everything below cutoff 
+    pattern[np.where(pattern < cutoff)] = 0 # ignore everything below cutoff
 
     # figure out the fwhm
     fwhm_idx = np.where((pattern > 0.498*pmax) & (pattern < 0.502*pmax))
@@ -120,7 +120,7 @@ Beam half-Pmax: {3:.3f}
     axZA.plot(pattern_AZcol, _za, color='k') # collapsed along AZ
     for tz,c in zip(targetZA, colours): # draw tracking points
         axZA.axhline(tz, color=c)
-    axZA.set_ylim(0, 90)    
+    axZA.set_ylim(0, 90)
     axZA.set_yticklabels([])
     axZA.set_xscale('log')
 
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO", choices=loglevels.keys(), default="INFO")
     args = parser.parse_args()
     
-    #set log levels    
+    #set log levels
     logger.setLevel(loglevels[args.loglvl])
     ch = logging.StreamHandler()
     ch.setLevel(loglevels[args.loglvl])

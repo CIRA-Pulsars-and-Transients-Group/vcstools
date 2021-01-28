@@ -26,7 +26,7 @@ import argparse
 import logging
 
 #from mwapy import ephem_utils,metadata
-from mwa_metadb_utils import getmeta
+from vcstools.metadb_utils import getmeta
 from mwa_pb import primary_beam as pb
 
 logger = logging.getLogger(__name__)

@@ -27,10 +27,10 @@ from astropy.time import Time
 from astropy.coordinates import EarthLocation
 from astropy.io import fits
 
-from job_submit import submit_slurm
-from mdir import mdir
-from mwa_metadb_utils import getmeta
-from config_vcs import load_config_file
+from vcstools.job_submit import submit_slurm
+from vcstools.general_utils import mdir
+from vcstools.metadb_utils import getmeta
+from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)
 

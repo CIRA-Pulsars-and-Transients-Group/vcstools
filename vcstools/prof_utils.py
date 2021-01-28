@@ -1,18 +1,15 @@
-#!/usr/bin/env python3
-
 import numpy as np
 import re
-import sys
-import os
 import subprocess
 import logging
-import argparse
 from scipy.interpolate import UnivariateSpline
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from astropy.time import Time
 from scipy.optimize import curve_fit
+
+from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +33,8 @@ class NoFitError(Exception):
 #---------------------------------------------------------------
 def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
     """
-    Runs the pdv commnand from PSRCHIVE as a python subprocess
+    Runs the pdv commnand from PSRCHIVE as a python subprocess.
+    NOTE: Requires singularity loaded in environment (module load singularity)
 
     Parameters
     ----------
@@ -45,14 +43,16 @@ def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
     outfile: string
         OPTIONAL - The name of the text file to write the output to. Default: outfile
     pdvops: string
-        OPTIONAL - Additional options for the pdv. Default: -FTt        
+        OPTIONAL - Additional options for the pdv. Default: -FTt
     """
-    myoutput = open(outfile,'w+')
-    commands=["pdv"]
-    commands.append(pdvops)
-    commands.append(archive)
-    subprocess.run(commands, stdout=myoutput)
-    myoutput.close()
+    comp_config = load_config_file()
+    with open(outfile,'w+') as f:
+        commands = [comp_config["prschive_container"]]
+        commands.append("pdv")
+        commands.append(pdvops)
+        commands.append(archive)
+        a = subprocess.check_output(commands)
+        f.write(a.decode("utf-8"))
 
 #---------------------------------------------------------------
 def get_from_bestprof(file_loc):
@@ -1133,19 +1133,19 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, p
     fit_dict: dictionary
         contains the following keys:
         W10: float
-            The W10 width of the profile measured in number of bins
+            The W10 width of the profile measured in phase
         W10_e: float
             The uncertainty in the W10
         W50: float
-            The W50 width of the profile measured in number of bins
+            The W50 width of the profile measured in phase
         W50_e: float
             The uncertainty in the W50
         Weq: float
-            The equivalent width of the profile measured in number of bins
+            The equivalent width of the profile measured in phase
         Weq_e: float
             The uncertainty in the equivalent width
         Wscat: float
-            The scattering width of the profile measured in number of bins
+            The scattering width of the profile measured in phase
         Wscat_e: float
             The uncertainty in the scattering width
         maxima: list
@@ -1197,6 +1197,7 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, p
 
     y = y - np.nanmean(clipped)
     y = y/max(y)
+    proflen = len(y)
 
     #fit gaussians
     fit, chisq, bic, popt, pcov, comp_dict, comp_idx = fit_gaussian(y, max_N=max_N, min_comp_len=min_comp_len, alpha=alpha)
@@ -1206,6 +1207,15 @@ def prof_eval_gfit(profile, max_N=6, ignore_threshold=None, min_comp_len=None, p
 
     #Find widths + error
     W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e = find_widths(y, popt, pcov, alpha=alpha)
+    #Convert from bins to phase
+    W10 = W10/proflen
+    W50 = W50/proflen
+    Weq = Weq/proflen
+    Wscat = Wscat/proflen
+    W10_e = W10_e/proflen
+    W50_e = W50_e/proflen
+    Weq_e = Weq_e/proflen
+    Wscat_e = Wscat_e/proflen
 
     #find max, min, error
     for i, val in enumerate(clipped):
@@ -1282,7 +1292,7 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         alphas = np.linspace(1, 5, 33)
     else:
         raise ValueError("cliptype not recognised. Options are: 'regular', 'noisy' or 'verbose'.")
-        
+
     attempts_dict = {}
 
     loglvl = logger.level
@@ -1293,7 +1303,7 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         try:
             prof_dict = prof_eval_gfit(profile, max_N=6, ignore_threshold=ignore_threshold, min_comp_len=min_comp_len, alpha=alpha, period=period)
             attempts_dict[alpha] = prof_dict
-        except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError) as e:
+        except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError):
             logger.setLevel(loglvl)
             logger.info("Skipping alpha value: {}".format(alpha))
             logger.setLevel(logging.WARNING) #squelch logging for the loop
@@ -1329,63 +1339,3 @@ def auto_gfit(profile, max_N=6, plot_name=None, ignore_threshold=None, min_comp_
         logger.info("S/N estimate:          {0} +/- {1}".format(fit_dict["sn"], fit_dict["sn_e"]))
 
     return fit_dict
-
-#---------------------------------------------------------------
-if __name__ == '__main__':
-
-    loglevels = dict(DEBUG=logging.DEBUG,\
-                    INFO=logging.INFO,\
-                    WARNING=logging.WARNING,\
-                    ERROR=logging.ERROR)
-
-    parser = argparse.ArgumentParser(description="""A utility file for calculating a variety of pulse profile properties""",\
-                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    inputs = parser.add_argument_group("Inputs")
-    inputs.add_argument("--bestprof", type=str, help="The pathname of the file containing the pulse profile. Use if in .pfd.bestprof format")
-    inputs.add_argument("--ascii", type=str, help="The pathname of the file containing the pulse profile. Use if in ascii text format")
-    inputs.add_argument("--archive", type=str, help="The pathname of the file containing the pulse profile. Use if in archive format")
-    inputs.add_argument("--ignore_threshold", type=float, default=0.02, help="Maxima with values below this fraction of the profile maximum will be ignored.")
-    inputs.add_argument("--min_comp_len", type=int, default=None,\
-                        help="Minimum length of a component to be considered real. Measured in bins. If none, will use 1 percent of total profile length")
-    inputs.add_argument("--alpha", type=float, default=2, help="Used by the clipping function to determine the noise level. A lower value indicates\
-                        a higher verbosity level in the noise clipping function.")
-    inputs.add_argument("--auto", action="store_true", help="Used to automatically find the best alpha value to clip this profile")
-    inputs.add_argument("--period", type=float, help="The period of the puslar in ms. Found automatically if bestprof supplied.\
-                        Used in S/N calculation. Not required")
-
-    g_inputs = parser.add_argument_group("Gaussian Inputs")
-    g_inputs.add_argument("--max_N", type=int, default=6, help="The maximum number of gaussian components to attempt to fit")
-
-    other_inputs = parser.add_argument_group("Other Inputs")
-    other_inputs.add_argument("--plot_name", type=str, help="The name of the output plot file. If none, will not plot anything")
-    other_inputs.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level")
-    args = parser.parse_args()
-
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-
-    if args.bestprof:
-        _, _, _, period, _, _, _, profile, _  = get_from_bestprof(args.bestprof)
-    elif args.ascii:
-        profile = get_from_ascii(args.ascii)[0]
-        period = args.period
-    elif args.archive:
-        subprocess_pdv(args.archive, outfile="archive.txt")
-        profile = get_from_ascii("archive.txt")[0]
-        os.remove("archive.txt")
-        period = args.period
-    else:
-        logger.error("Please supply either an ascii or bestprof profile")
-        sys.exit(1)
-
-    if args.auto:
-        auto_gfit(profile, max_N=args.max_N, ignore_threshold=args.ignore_threshold,\
-                        plot_name=args.plot_name, min_comp_len=args.min_comp_len, period=period)
-    else :
-        prof_eval_gfit(profile, max_N=args.max_N, ignore_threshold=args.ignore_threshold,\
-                        plot_name=args.plot_name, min_comp_len=args.min_comp_len, alpha=args.alpha, period=period)

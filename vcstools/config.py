@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 Functions to handle parsing the config file for multiple super computers
 """
@@ -26,6 +24,7 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'copyq_partition' : 'copyq',
                  'container_module' : '',
                  'container_command' : '',
+                 'prschive_container' : '/pawsey/mwa/singularity/dspsr/dspsr.sif',
                  'ssd_dir' : None,
                  'gid' : 34858} # mwavcs
 
@@ -49,6 +48,7 @@ GARRAWARLA_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'copyq_partition' : 'copyq',
                  'container_module' : '', #'singularity',
                  'container_command' : '', #'singularity exec --nv /pawsey/mwa/singularity/vcstools_master.sif /bin/bash -c ',
+                 'prschive_container' : '/pawsey/mwa/singularity/dspsr/dspsr.sif',
                  'ssd_dir' : '/nvmetmp',
                  'gid' : 34858} # mwavcs
 
@@ -76,6 +76,7 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  #removed since I've now installed it on Ozstar
                  #'container_command' : 'singularity exec -H /fred/oz125/vcs/1221832280/ --nv /fred/oz125/container_images/vcstools_multi-pixel.simg'
                  'container_command' : '',
+                 'prschive_container' : '',
                  'ssd_dir' : '$JOBFS',
                  'gid' : 10169} # oz125
 
@@ -101,6 +102,7 @@ ARM_CONFIG =   {'base_data_dir' : '/ibo9000/Pulsar/vcs/',
                 'container_module' : '',
                 #'container_command' : 'docker run 192.168.6.123:5000/vcstools'}
                 'container_command' : '',
+                'prschive_container' : '',
                 'ssd_dir' : None,
                 'gid' : 10002} # pulsar
 

@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-
 import subprocess
 import argparse
 import logging
@@ -10,12 +9,19 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import random
+import yaml
 
-import rm as rm_synth
-
-import prof_utils
+from vcstools import rm_synth
+from vcstools import prof_utils
+from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)
+
+def remove_allfiles(randomgen):
+    allfiles = glob.glob(f"{randomgen}/*")
+    for afile in allfiles:
+        os.remove(afile)
+    os.rmdir(f"{randomgen}")
 
 def rmfit_quad(archive, phase_min, phase_max):
     """
@@ -30,16 +36,18 @@ def rmfit_quad(archive, phase_min, phase_max):
     phase_max: float
         The maximum phase to use to fit, should be a float between 0 and 1
     """
-    commands=["rmfit"]
+    comp_config = load_config_file()
+    commands = [comp_config["prschive_container"]]
+    commands.append("rmfit")
     commands.append("-m")
     commands.append("-10,10,20")
     commands.append("-w")
     commands.append(f"{phase_min},{phase_max}")
     commands.append("-Y")
-    commands.append(archive)
+    commands.append(f"{archive}")
     subprocess.run(commands)
 
-def find_on_pulse_ranges(I, **kwargs):
+def find_on_pulse_ranges(I, clip_type="regular", plot_name=None):
     """
     Find ranges of pulse components from a pulse profile by fitting a gaussian distribution
 
@@ -47,58 +55,23 @@ def find_on_pulse_ranges(I, **kwargs):
     -----------
     I:list
         The pulse profile
-    **kwargs:
+    kwargs:dict
         Keyword arguments for prof_utils.auto_gfit
+    plot_name:str
+        The name of the ouput plot. If none, will not produce one
 
     Returns:
     --------
     phases: list
         A list of phases (from 0 to 1) corresponding to the on-pulse components
     """
-    prof_dict = prof_utils.auto_gfit(I, **kwargs)
+    prof_dict = prof_utils.auto_gfit(I, cliptype=kwargs["cliptype"], plot_name=plot_name)
     phases = []
     for comp_no in prof_dict["comp_idx"].keys():
         phases.append(min(prof_dict["comp_idx"][comp_no])/len(I))
         phases.append(max(prof_dict["comp_idx"][comp_no])/len(I))
 
     return phases
-
-def read_rmsynth_out(filename):
-    """
-    Reads the ouput file from rm_synth_pipe()
-
-    Parameters:
-    -----------
-    filename:
-        The name of the file ouput from rm_synth_pipe()
-
-    Returns:
-    --------
-    rm_dict: dictionary
-        Contains the following keys:
-        i: dictionary
-            There are i entries where i is the number of different phase ranges
-            Contains the following keys:
-            rm: float
-                The rotation measure of this run
-            rm_e: float
-                The uncertainty in rm
-            phase_ranges: tuple
-                The range of phases used for this run
-    """
-    rm_dict={}
-    f = open(filename, "r")
-    lines = f.readlines()
-    j=0
-    for line in lines:
-        if line.split()[0] == "Phase:":
-            rm_dict[str(j)] = {}
-            rm_dict[str(j)]["phase_range"] = (float(line.split()[1]), float(line.split()[-1]))
-        if line.split()[0] == "Rotation":
-            rm_dict[str(j)]["rm"] = float(line.split()[2])
-            rm_dict[str(j)]["rm_e"] = float(line.split()[-1])
-            j += 1
-    return rm_dict
 
 def read_rmfit_QUVflux(QUVflux):
     """
@@ -138,9 +111,9 @@ def read_rmfit_QUVflux(QUVflux):
 
     return [freq_hz, I, I_e, Q, Q_e, U, U_e]
 
-def write_rm_to_file(filename, rm_dict):
+def write_rm_to_yaml(filename, rm_dict):
     """
-    Writes the rotation measure and its error to a file
+    Writes the rotation measure dictionary to a yaml file
 
     Parameters:
     -----------
@@ -149,15 +122,8 @@ def write_rm_to_file(filename, rm_dict):
     rm_dict: dictionary
         A dictionary with the RM information formatted like the output from rm_synth_pipe()
     """
-    f = open(filename, "w+")
-    for i in rm_dict.keys():
-        rm = rm_dict[i]["rm"]
-        rm_e = rm_dict[i]["rm_e"]
-        phase_range = rm_dict[i]["phase_range"]
-        f.write("Mearurement {} #######################\n".format(i))
-        f.write("Phase:                 {0} -   {1}\n".format(*phase_range))
-        f.write("Rotation Measure:    {0} +/- {1}\n".format(rm, rm_e))
-        f.write("######################################\n")
+    with open(filename, "w+") as f:
+        yaml.dump(rm_dict, f, default_flow_style=False)
     f.close()
 
 def find_best_range(I, Q, U, phase_ranges):
@@ -184,10 +150,9 @@ def find_best_range(I, Q, U, phase_ranges):
     """
     lin_pol = np.sqrt(np.array(Q)**2 + np.array(U)**2)
     I_pol_ratio = list(lin_pol / np.array(I))
-    int_ranges = []
 
     best_max = 0
-    for i, phase_min, phase_max in zip(range(len(phase_ranges)//2), phase_ranges[0::2], phase_ranges[1::2]):
+    for _, phase_min, phase_max in zip(range(len(phase_ranges)//2), phase_ranges[0::2], phase_ranges[1::2]):
         int_min = int(len(I)*phase_min)
         int_max = int(len(I)*phase_max)
         print(max(I_pol_ratio[int_min:int_max]))
@@ -316,100 +281,108 @@ def rm_synth_pipe(kwargs):
     filename: str
         The path of the file that was written to. None if not written
     """
+    # Make a randomly generated label for temp directory
     randomgen = random.getrandbits(64)
     if not kwargs["label"]:
         kwargs["label"] = randomgen
     logger.info(f"Applying label: {kwargs['label']}")
 
-    #Move to directory and make temporary working dir
+    # Move to directory and make temporary working dir
     os.chdir(kwargs["work_dir"])
     os.mkdir("{}".format(randomgen))
+
+    ## WORKING FROM A DIFFERENT DIRECTORY ##
     os.chdir("{}".format(randomgen))
-    archive = os.path.join("..", kwargs["archive"])
+    archive_path = os.path.join("..", kwargs["archive"])
 
-    #Write the .ar file to text archive
+    # Read the ascii file
     ascii_archive = f"{kwargs['label']}_archive.txt"
-    prof_utils.subprocess_pdv(archive, ascii_archive)
-    I, Q, U, V, _ = prof_utils.get_stokes_from_ascii(ascii_archive)
-    os.remove(ascii_archive) #remove the archive file, we don't need it anymore
+    prof_utils.subprocess_pdv(archive_path, ascii_archive)
+    I, Q, U, _, _ = prof_utils.get_stokes_from_ascii(ascii_archive)
+    os.remove(ascii_archive) # Remove the ascii file, we don't need it anymore
 
-    #find the phase range(s) to fit:
+    # Find the phase range(s) to fit:
     if not kwargs["phase_ranges"]:
-        kwargs["phase_ranges"] = find_on_pulse_ranges(I, cliptype=kwargs["cliptype"])
+        if kwargs["plot_gfit"]:
+            gaussian_name = f"{kwargs['label']}_RMsynth_gaussian_fit.png"
+        try:
+            kwargs["phase_ranges"] = find_on_pulse_ranges(I, clip_type=kwargs["cliptype"], plot_name=gaussian_name)
+        except prof_utils.NoFitError as e:
+            os.chdir("../")
+            remove_allfiles(randomgen)
+            raise(prof_utils.NoFitError("No profiles could be fit. Please supply on-pulse range"))
+        if kwargs["plot_gfit"]: # Move this out of the working dir
+            os.rename(gaussian_name, f"../{gaussian_name}")
         if kwargs["force_single"]:
             logger.info("Forcing use of a single phase range")
             kwargs["phase_ranges"], _ = find_best_range(I, Q, U, kwargs["phase_ranges"])
     logger.info(f"Using phase ranges: {kwargs['phase_ranges']}")
 
-    #run rmfit with -w option
+    # Run rmfit with -w option
     rm_dict = {}
     for i, phase_min, phase_max in zip(range(len(kwargs["phase_ranges"])//2), kwargs["phase_ranges"][0::2], kwargs["phase_ranges"][1::2]):
         logger.info(f"Performing RM synthesis on phase range: {phase_min} - {phase_max}")
-        rmfit_quad(archive, phase_min, phase_max)
-        #read the QUVflux.out file
+        rmfit_quad(archive_path, phase_min, phase_max)
+        # Read the QUVflux.out file
         QUVflux = "QUVflux.out"
         rmfreq, rmI, rmI_e, rmQ, rmQ_e, rmU, rmU_e, = read_rmfit_QUVflux(QUVflux)
 
-        #make plot name if needed
-        if kwargs["plot"]:
+        # Make plot name if needed
+        if kwargs["plot_rm"]:
             plotname = f"{kwargs['label']}_"
             if len(kwargs["phase_ranges"])>2:
                 plotname += f"{i}_"
             plotname += "RMsynthesis.png"
             kwargs["plotname"] = plotname
         else:
-            plotname = None
+            kwargs["plotname"] = None
         kwargs["phase_range"] = (phase_min, phase_max)
-        kwargs["title"] = ""
-        if kwargs["label"]:
-            kwargs["title"] = f"{kwargs['label']} "
-        kwargs["title"] += "RM Synthesis"
+        kwargs["title"] = f"{kwargs['label']} RM Synthesis"
 
-        #perform RM synthesis
+        # Perform RM synthesis
         rm, rm_e = IQU_rm_synth(rmfreq, rmI, rmQ, rmU, rmI_e, rmQ_e, rmU_e,
                    phase_range=kwargs["phase_range"], force_single=kwargs["force_single"], title=kwargs["title"],
                    plotname=kwargs["plotname"], phi_range=kwargs["phi_range"], phi_steps=kwargs["phi_steps"])
         rm_dict[str(i)] = {}
-        rm_dict[str(i)]["rm"]           = rm
-        rm_dict[str(i)]["rm_e"]         = rm_e
-        rm_dict[str(i)]["phase_range"]  = kwargs["phase_range"]
-        rm_dict[str(i)]["plotname"]     = plotname
+        rm_dict[str(i)]["rm"]           = float(rm)
+        rm_dict[str(i)]["rm_e"]         = float(rm_e)
+        rm_dict[str(i)]["phase_range"]  = list(kwargs["phase_range"])
+        rm_dict[str(i)]["plotname"]     = kwargs["plotname"]
         rm_dict[str(i)]["label"]        = kwargs["label"]
 
-        #move plot out of working dir
-        if plotname:
-            os.rename(plotname, f"../{plotname}")
+        # Move plot out of working dir
+        if kwargs["plotname"]:
+            os.rename(kwargs["plotname"], f"../{kwargs['plotname']}")
 
-        #keep quvflux if needed
+        # Keep quvflux if needed
         if kwargs["keep_QUV"]:
-            quvflux_name = label
-            if len(phase_ranges)>2:
+            quvflux_name = kwargs["label"]
+            if len(kwargs["phase_ranges"])>2:
                 quvflux_name += f"_{i}"
             quvflux_name += "_QUVflux.out"
             os.rename("QUVflux.out", f"../{quvflux_name}")
 
+    # Write results to file
     if kwargs["write"]:
-        filename = f"{kwargs['label']}_"
-        filename += "RMsynthesis.txt"
-        write_rm_to_file(filename, rm_dict)
+        filename = f"{kwargs['label']}_RMsynthesis.yaml"
+        write_rm_to_yaml(filename, rm_dict)
         os.rename(filename, f"../{filename}")
     else:
         filename = None
 
     os.chdir("../")
-    allfiles = glob.glob(f"{randomgen}/*")
-    for afile in allfiles:
-        os.remove(afile)
-    os.rmdir(f"{randomgen}")
-
+    ## BACK TO ORIGINAL DIRECTORY ##
+    # Clean directory
+    remove_allfiles(randomgen)
     return rm_dict, filename
 
 
 def rm_synth_main(kwargs):
     rm_dict, _ = rm_synth_pipe(kwargs)
-    for i in rm_dict.keys():
-        logger.info("For phase range: {0} - {1}".format(*rm_dict[i]["phase_range"]))
-        logger.info("RM: {0:7.3f} +/- {1:6.3f}".format(rm_dict[i]["rm"], rm_dict[i]["rm_e"]))
+    if rm_dict:
+        for i in rm_dict.keys():
+            logger.info("For phase range: {0} - {1}".format(*rm_dict[i]["phase_range"]))
+            logger.info("RM: {0:7.3f} +/- {1:6.3f}".format(rm_dict[i]["rm"], rm_dict[i]["rm_e"]))
 
 
 if __name__ == '__main__':
@@ -423,7 +396,7 @@ if __name__ == '__main__':
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     required = parser.add_argument_group("Required Inputs:")
-    required.add_argument("-f", "--archive", required=True, type=str, help="The name of the archive (.ar) file to work with")
+    required.add_argument("-a", "--archive", required=True, type=str, help="The name of the archvie file to work with.")
 
     fitting = parser.add_argument_group("Fitting Options:")
     fitting.add_argument("--phase_ranges", type=float, nargs="+", help="The phase range(s) to fit the RM to. If unsupplied, will find the on-pulse and fit that range.\
@@ -435,7 +408,8 @@ if __name__ == '__main__':
     output = parser.add_argument_group("Output Options:")
     output.add_argument("--label", type=str, help="A label for the output.")
     output.add_argument("--write", action="store_true", help="Use this tag to write the results to a labelled file")
-    output.add_argument("--plot", action="store_true", help="Use this tag to plot the result.")
+    output.add_argument("--plot_rm", action="store_true", help="Use this tag to plot the resulting RM fit.")
+    output.add_argument("--plot_gfit", action="store_true", help="Use this tag to plot the gaussian fit (if phase ranges not supplied).")
     output.add_argument("--keep_QUV", action="store_true", help="Use this tag to keep the QUVflux.out file from rmfit.")
 
     gfit = parser.add_argument_group("Gaussian Fit Options")

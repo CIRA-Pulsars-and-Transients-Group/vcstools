@@ -15,8 +15,8 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
-#include "slalib.h"
-#include "slamac.h"
+#include "star/pal.h"
+#include "star/palmac.h"
 #include "../make_beam/ascii_header.h"
 #include "../make_beam/mwa_header.h"
 #include <glob.h>
