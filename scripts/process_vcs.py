@@ -13,7 +13,7 @@ import logging
 #vcstools functions
 from vcstools.job_submit import submit_slurm
 import vcstools.metadb_utils as meta
-from vcstools.general_utils import mdir, gps_to_utc
+from vcstools.general_utils import mdir, gps_to_utc, create_link
 from vcstools.pointing_utils import format_ra_dec
 from vcstools.config import load_config_file
 from vcstools.general_utils import sfreq
@@ -42,55 +42,6 @@ def gps_time_lists(start, stop, chunk):
     return time_chunks
 
 
-def create_link(data_dir, target_dir, product_dir, link):
-    """
-    Creates a symbolic link product_dir/link that points to data_dir/target_dir
-
-    Parameters:
-    -----------
-    data_dir: string
-        The absolute path to the base directory of the true location of the files.
-        For our uses this is often a scratch partition like /astro on Galaxy
-    target_dir: string
-        The folder you would like to be linked to
-    product_dir: string
-        The absolute path of the link you would like to create
-    link: string
-        The name of the link you would like to create. Often the same as target_dir
-    """
-    data_dir = os.path.abspath(data_dir)
-    product_dir = os.path.abspath(product_dir)
-    if data_dir == product_dir:
-        # base directories are the same so doing nothing
-        return
-
-    # add product_dir and data_dir to link and target_dir respectively
-    link = link.replace(product_dir, '') # just in case...
-    link = link.replace('/', '')
-    link = os.path.join(product_dir, link)
-    target_dir = target_dir.replace(data_dir,'')
-    if target_dir.startswith("/"):
-        target_dir = target_dir[1:]
-    target_dir = os.path.join(data_dir, target_dir)
-
-    # check if link exists and whether it already points to where we'd like it to
-    if os.path.exists(link):
-        if os.path.islink(link):
-            if os.readlink(link) == target_dir:
-                return
-            else:
-                logger.warning("The link {0} already exists but points at {1} while you "
-                               "asked it to point at {2}. Deleting the link and creating"
-                               "a new one".format(link, os.readlink(link), target_dir))
-                os.unlink(link)
-                os.symlink(target_dir, link)
-        else:
-            logger.error("{0} is an existing directory and cannot be turned into a link. Aborting...".format(link))
-            sys.exit(0)
-    else:
-        logger.info("Trying to link {0} against {1}".format(link, target_dir))
-        os.symlink(target_dir, link)
-
 def get_frequencies(metafits,resort=False):
     # TODO: for robustness, this should force the entries to be 3-digit numbers
     hdulist    = pyfits.open(metafits)
@@ -100,6 +51,7 @@ def get_frequencies(metafits,resort=False):
         return sfreq(freq_array)
     else:
         return freq_array
+
 
 def vcs_download(obsid, start_time, stop_time, increment, data_dir,
                  product_dir, parallel,
