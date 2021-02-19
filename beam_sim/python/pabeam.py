@@ -197,9 +197,8 @@ def createArrayFactor(data):
     # calculate the tile beam at the given Az,ZA pixel
     logger.info("rank {:2d} calculating tile beam".format(rank))
     if beam_model == 'hyperbeam':
-        logger.debug("rank {:2d} begin hyperbeam".format(rank))
+        # This method is no longer needed as mwa_pb uses hyperbeam
         jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
-        logger.debug("rank {:2d} end hyperbeam".format(rank))
         jones = jones.reshape(za.shape[0], 1, 2, 2)
         vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
         tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
@@ -217,7 +216,8 @@ def createArrayFactor(data):
         tile_xpol, tile_ypol = pb.MWA_Tile_full_EE(za, az,
                                                 freq=obsfreq, delays=np.array([delays, delays]),
                                                 zenithnorm=True,
-                                                power=True)
+                                                power=True,
+                                                interp=False)
     #logger.info("rank {:2d} Combining tile pattern".format(rank))
     tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0)
     tile_pattern = tile_pattern.flatten()
@@ -309,7 +309,7 @@ def createArrayFactor(data):
                     f.write("{0:.5f}\t{1:.5f}\t{2}\n".format(zad, azd, pap))
 
         else:
-            logger.warn("worker {0} not writing".format(rank))
+            logger.warning("worker {0} not writing".format(rank))
 
     # return lists of results for each time step
     return [omega_A_times, eff_area_times, gain_times, t_ant_times]
