@@ -13,7 +13,7 @@ def test_hyperbeam_vs_pb():
     beam = mwa_hyperbeam.FEEBeam(config.h5file)
 
     # Set up fake data.
-    n = 1000000
+    n = 100000
     az = np.linspace(0, 0.9 * np.pi, n)
     za = np.linspace(0.1, 0.9 * np.pi / 2, n)
     freq = 167000000
