@@ -27,6 +27,8 @@ import sys
 from mpi4py import MPI
 import argparse
 import logging
+import time as timing
+from itertools import chain
 
 #from mwapy import ephem_utils,metadata
 from vcstools.metadb_utils import getmeta, get_common_obs_metadata
@@ -135,7 +137,7 @@ def convolve_sky_map(az_grid, za_grid, phased_array_pattern, freq, time):
             np.sum(phased_array_pattern * np.sin(za_grid))
     return t_ant
 
-def createArrayFactor(data):
+def createArrayFactor(za, az, data):
     """
     Primary function to calculate the array factor with the given information.
 
@@ -161,7 +163,6 @@ def createArrayFactor(data):
     dec = data['dec']
     times = data['time']
     delays = data['delays']
-    obsfreq = data['freqs'][rank]
     xpos = data['x']
     ypos = data['y']
     zpos = data['z']
@@ -169,33 +170,43 @@ def createArrayFactor(data):
     phi_res = data['pres']
     eff = data['eff']
     beam_model = data['beam']
-    za = data['za_arr']
-    az = data['az_arr']
+    #za = data['za_arr']
+    #az = data['az_arr']
     out_dir = data['out_dir']
     write = data['write']
+    coplanar = data['coplanar']
+
+    # work out core depent part of data to process
+    nfreq = len(data['freqs'])
+    ifreq = rank % nfreq
+    ichunk = rank // nfreq
+    obsfreq = data['freqs'][ifreq]
+    #za = zav_chunks[ichunk]
+    #az = azv_chunks[ichunk]
 
 
     # convert frequency to wavelength
     obswl =  obsfreq / c.value
     # calculate the relevent wavenumber for (theta,phi)
-    logger.info("rank {:2d} Calculating wavenumbers".format(rank))
+    logger.info( "rank {:3d} Calculating wavenumbers".format(rank))
     kx, ky, kz = calcWaveNumbers(obswl, (np.pi / 2) - az, za)
     #logger.debug("kx[0] {} ky[0] {} kz[0] {}".format(kx[0], ky[0], kz[0]))
-    logger.debug("rank {:2d} Wavenumbers shapes: {} {} {}".format(rank, kx.shape, ky.shape, kz.shape))
+    logger.debug("rank {:3d} Wavenumbers shapes: {} {} {}".format(rank, kx.shape, ky.shape, kz.shape))
 
     # phase of each sky position for each tile
-    logger.info("rank {:2d} phase of each sky position for each tile".format(rank))
-    ph_tile = []
-    for x, y, z in zip(xpos, ypos, zpos):
+    logger.info( "rank {:3d} phase of each sky position for each tile".format(rank))
+    #ph_tile = []
+    #for x, y, z in zip(xpos, ypos, zpos):
         #ph = kx * x + ky * y + kz * z
-        #logger.debug("kz {} z {} kz * z {}".format(kz[0], z, np.multiply(kz, z)[0]))
-        ph = np.add(np.multiply(kx, x), np.multiply(ky, y))
-        ph_tile.append(np.add(ph, np.multiply(kz, z)))
-    # With garbage collection (gc) enabeled this should clear the memory
-    ph = None
+    logger.debug("np.multiply(np.tile(kx, (len(xpos), 1))).shape : {}".format(np.tile(kx, (len(xpos), 1)).shape))
+    if coplanar:
+        ph_tile = list(chain(np.add(np.multiply(kx, x), np.multiply(ky, y)) for x, y in zip(xpos, ypos)))
+    else:
+        ph_tile = list(chain(np.add(np.add(np.multiply(kx, x), np.multiply(ky, y)), np.multiply(kz, z)) for x, y, z in zip(xpos, ypos, zpos)))
+    logger.debug("ph_tile.shape[0] : {}".format(ph_tile[0].shape))
 
     # calculate the tile beam at the given Az,ZA pixel
-    logger.info("rank {:2d} calculating tile beam".format(rank))
+    logger.info( "rank {:3d} calculating tile beam".format(rank))
     if beam_model == 'hyperbeam':
         # This method is no longer needed as mwa_pb uses hyperbeam
         jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
@@ -218,7 +229,7 @@ def createArrayFactor(data):
                                                 zenithnorm=True,
                                                 power=True,
                                                 interp=False)
-    #logger.info("rank {:2d} Combining tile pattern".format(rank))
+    #logger.info("rank {:3d} Combining tile pattern".format(rank))
     tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0)
     tile_pattern = tile_pattern.flatten()
     #logger.debug("tile_pattern[0] {}".format(tile_pattern[0]))
@@ -237,18 +248,20 @@ def createArrayFactor(data):
         srcAz, srcZA, srcAz_deg, srcZA_deg = getTargetAZZA(ra, dec, time)# calculate the target (kx,ky,kz)
         target_kx, target_ky, target_kz = calcWaveNumbers(obswl, (np.pi / 2) - srcAz, srcZA)
 
+        # Get phase of target for each tile
+        ph_target = []
+        for x, y, z in zip(xpos, ypos, zpos):
+            ph_target.append(target_kx * x + target_ky * y + target_kz * z)
+
         # determine the interference pattern seen for each tile
-        logger.info("rank {:2d} calculating array_factor".format(rank))
-        #array_factor = 0 + 0.j
-        array_factor = np.zeros(za.shape, dtype=np.complex_)
-        for i, xyz in enumerate(zip(xpos, ypos, zpos)):
-            x, y, z = xyz
-            ph_target = target_kx * x + target_ky * y + target_kz * z
+        logger.info( "rank {:3d} calculating array_factor".format(rank))
+        #array_factor = np.zeros(za.shape, dtype=np.complex_)
+        #for i, _ in enumerate(xpos):
             #array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
-            #logger.debug("ph {} ph_target {}".format(ph[0], ph_target))
-            array_factor = np.add(array_factor, np.cos(ph_tile[i] - ph_target) + 1.j * np.sin(ph_tile[i] - ph_target))
-        #logger.debug("rank {:2d} array_factor[0] {}".format(rank, array_factor[0]))
-        logger.debug("rank {:2d} array_factor shapes: {}".format(rank, array_factor.shape))
+        array_factor_tiles = list(chain(np.cos(ph_tile[i] - ph_target[i]) + 1.j * np.sin(ph_tile[i] - ph_target[i]) for i, _ in enumerate(xpos)))
+        array_factor = np.sum(array_factor_tiles, axis=0)
+        logger.debug("rank {:3d} array_factor[0] {}".format(rank, array_factor[0]))
+        logger.debug("rank {:3d} array_factor shapes: {}".format(rank, array_factor.shape))
 
         # normalise to unity at pointing position
         array_factor /= len(xpos)
@@ -256,23 +269,21 @@ def createArrayFactor(data):
         #logger.debug("array_factor_power[0] {}".format(array_factor_power[0]))
 
         array_factor_max = np.amax(array_factor_power)
-        logger.debug("rank {:2d} array factor maximum = {}".format(rank, array_factor_max))
+        logger.debug("rank {:3d} array factor maximum = {}".format(rank, array_factor_max))
 
         # calculate the phased array power pattern
-        logger.info("rank {:2d} Calculating phased array pattern".format(rank))
-        logger.debug("rank {:2d} tile_pattern.shape {} array_factor_power.shape {}".format(rank, tile_pattern.shape, array_factor_power.shape))
+        logger.info( "rank {:3d} Calculating phased array pattern".format(rank))
+        logger.debug("rank {:3d} tile_pattern.shape {} array_factor_power.shape {}".format(rank, tile_pattern.shape, array_factor_power.shape))
         phased_array_pattern = np.multiply(tile_pattern, array_factor_power)
         #phased_array_pattern = tile_pattern[0][0] * np.abs(array_factor)**2 # indexing due to tile_pattern now being a 2-D array
 
         # add this contribution to the beam solid angle
-        logger.info("rank {:2d} Calculating omega_A".format(rank))
+        logger.info( "rank {:3d} Calculating omega_A".format(rank))
         #omega_A_array = np.sin(za) * array_factor_power * np.radians(theta_res) * np.radians(phi_res)
-        omega_A_array = np.sin(za)
-        for A in [array_factor_power, np.radians(theta_res), np.radians(phi_res)]:
-            omega_A_array = np.multiply(omega_A_array, A)
-        logger.debug("rank {:2d} omega_A_array shapes: {}".format(rank, omega_A_array.shape))
+        omega_A_array = np.multiply(np.multiply(np.multiply(np.sin(za), array_factor_power), np.radians(theta_res)), np.radians(phi_res))
+        logger.debug("rank {:3d} omega_A_array shapes: {}".format(rank, omega_A_array.shape))
         omega_A = np.sum(omega_A_array)
-        logger.info("rank {:2d} freq {:.2f}MHz beam_area: {}".format(rank, obsfreq/1e6, omega_A))
+        logger.info( "rank {:3d} freq {:.2f}MHz beam_area: {}".format(rank, obsfreq/1e6, omega_A))
         omega_A_times.append(omega_A)
         #logger.debug("omega_A[1] vals: za[1] {}, array_factor_power[1] {}, theta_res {}, phi_res {}".format(za[1], array_factor_power[1], theta_res, phi_res))
         #logger.debug("omega_A[1] {}".format(omega_A_array[1]))
@@ -283,7 +294,7 @@ def createArrayFactor(data):
 
         # work out T_ant by convolving a sky map with the phased_array_pattern
         t_ant = convolve_sky_map(az, za, phased_array_pattern, obsfreq, time)
-        logger.debug("rank {:2d} T_ant: {}".format(rank, t_ant))
+        logger.debug("rank {:3d} T_ant: {}".format(rank, t_ant))
         t_ant_times.append(t_ant)
 
         # write a file based on rank of the process being used
@@ -406,21 +417,30 @@ if __name__ == "__main__":
         # get the tile locations from the metafits
         logger.info("getting tile locations from metafits file")
         xpos, ypos, zpos = getTileLocations(args.obsid, flags, metafits=args.metafits)
-        if args.coplanar:
-            zpos = np.zeros_like(xpos)
+        logger.debug("xpos: {}".format(xpos))
+        logger.debug("ypos: {}".format(ypos))
+        logger.debug("zpos: {}".format(zpos))
+        #if args.coplanar:
+        #    zpos = np.zeros_like(xpos)
 
-        assert len(args.freq) == size, "Frequencies must be equal to the number of processors available"
+        assert size % len(args.freq) == 0, "Frequencies must be a factor of the number of processors available"
+        # number of chunks to split the positions grid into
+        nchunks = size // len(args.freq)
 
         za = np.radians(np.linspace(0, 90, int(ntheta) + 1))
+        #za_s = np.array_split(za, nchunks)
         az = np.radians(np.linspace(0, 360, int(nphi) + 1))
         logger.debug("za.shape {} az.shape {}".format(za.shape, az.shape))
-        #azv, zav = np.meshgrid(az, za)
         zav, azv = np.meshgrid(za, az)
         logger.debug("zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
         azv = azv.flatten()
         zav = zav.flatten()
         logger.debug("flattened zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
+        logger.debug("zav.dtype {} azv.dtype {}".format(zav.dtype, azv.dtype))
+        azv_chunks = np.array_split(azv, nchunks)
+        zav_chunks = np.array_split(zav, nchunks)
 
+        npositions = [len(chunk) for chunk in azv_chunks]
 
         # create the object that contains all the data from master
         data = {'obsid' : args.obsid,
@@ -437,38 +457,79 @@ if __name__ == "__main__":
                 'pres':pres,
                 'eff':args.efficiency,
                 'beam':args.beam_model,
-                'za_arr':zav,
-                'az_arr':azv,
+                #'za_arr':za_s,
+                #'az_arr':az,
                 'out_dir':args.out_dir,
                 'write':args.write,
+                'nchunks':nchunks,
+                'coplanar':args.coplanar,
+                'npositions':npositions
                 }
         logger.debug("data: {}".format(data))
+
+        # Start timing
+        start_time = timing.perf_counter()
     else:
         # create the data object, but leave it empty (will be filled by bcast call)
         data = None
 
     # now broadcast the data from the master to the slaves
     data = comm.bcast(data, root=0)
-    if data:
+
+    # broadcasting az and za arrays seperately as it can cause overflow errors
+    nfreq = len(data['freqs'])
+    ichunk = rank // nfreq
+    zav_chunk = np.empty(data['npositions'][ichunk], dtype=np.float64)
+    azv_chunk = np.empty(data['npositions'][ichunk], dtype=np.float64)
+
+    for i in range(1, size):
+        # send data to each rank
+        if rank == 0:
+            logger.debug("send rank {}".format(i))
+            ichunk = i // nfreq
+            zav_chunk = comm.Send([zav_chunks[ichunk], MPI.DOUBLE], dest=i)
+        # receive the data for each rank
+        if rank == i:
+            ichunk = i // nfreq
+            comm.Recv([zav_chunk, MPI.DOUBLE], source=0)
+        comm.barrier()
+    if rank == 0:
+        zav_chunk = zav_chunks[ichunk]
+        azv_chunk = azv_chunks[ichunk]
+        logger.debug("rank {:3d} zav_chunk {}".format(rank, zav_chunk))
+        logger.debug("rank {:3d} azv_chunk {}".format(rank, azv_chunk))
+    #if rank != 0:
+    #    zav_chunks = [None] * data['nchunks']
+    #    azv_chunks = [None] * data['nchunks']
+    #zav = comm.bcast([zav, MPI.DOUBLE], root=0)
+    #for i in range(data['nchunks']):
+    #    zav_chunks[i] = comm.bcast(zav_chunks[i], root=0)
+    #    azv_chunks[i] = comm.bcast(azv_chunks[i], root=0)
+    #any(x is None for x in list_1)
+    #if data:
+    logger.debug("rank {:3d} zav_chunk {}".format(rank, zav_chunk))
+    logger.debug("rank {:3d} azv_chunk {}".format(rank, azv_chunk))
+    if data and (zav_chunk is not None) and (azv_chunk is not None):
         logger.info("broadcast received by worker {0} successfully".format(rank))
     else:
         logger.error("broadcast failed to worker {0}".format(rank))
         logger.error("!!! ABORTING !!!")
         comm.Abort(errorcode=1)
 
+
     # wait for all processes to have recieved the data
     comm.barrier()
 
     # create array factor for given ZA band and write to file
-    results_array = createArrayFactor(data)
+    results_array = createArrayFactor(zav_chunk, azv_chunk, data)
     # collect results for the beam area calculation
     if rank != 0:
         comm.send(results_array, dest=0)
     elif rank == 0:
-        omega_A_freq_times  = np.empty((len(args.freq), len(time)))
-        eff_area_freq_times = np.empty((len(args.freq), len(time)))
-        gain_freq_times     = np.empty((len(args.freq), len(time)))
-        t_ant_freq_times    = np.empty((len(args.freq), len(time)))
+        omega_A_freq_times  = np.empty((size, len(time)))
+        eff_area_freq_times = np.empty((size, len(time)))
+        gain_freq_times     = np.empty((size, len(time)))
+        t_ant_freq_times    = np.empty((size, len(time)))
         omega_A_freq_times[0]  = results_array[0]
         eff_area_freq_times[0] = results_array[1]
         gain_freq_times[0]     = results_array[2]
@@ -485,6 +546,7 @@ if __name__ == "__main__":
 
     # calculate the gain for that pointing and frequency and write a "stats" file
     if rank == 0:
+        logger.info("pabeam benchmark: {} s".format(timing.perf_counter()-start_time))
         # average over frequency and time
         logger.debug("omega_A_freq_times {}".format(omega_A_freq_times))
         omega_A  = np.average(omega_A_freq_times)
@@ -557,5 +619,3 @@ if __name__ == "__main__":
             f.write("Effective area          [m^2] : {0:.3f}\n".format(eff_area))
             f.write("Effective gain         [K/Jy] : {0:.6f}".format(gain))
             f.write("Antena Temperature        [K] : {0:6.1f}".format(t_ant))
-
-
