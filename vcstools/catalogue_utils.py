@@ -95,7 +95,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
             reader = csv.reader(f, delimiter=',')
             next(reader, None) # skip header
             for frb in reader:
-                name = frb[1]
+                name = frb[1].replace(" ", "_")
                 logger.debug('FRB name: {}'.format(name))
                 ra   = frb[2]
                 dec  = frb[3]
