@@ -371,9 +371,15 @@ def multi_upload_files(obsid, pulsar, files_dict, metadata=None, coh=True):
             logger.info("Uploading file to databse: {}".format(filename))
             upload_file_to_db(obsid, pulsar, filename, int(filetype), metadata=metadata, coh=coh)
 
+
+def read_sefd_file(sefd_file):
+    
+
+
 def flux_cal_and_submit(time_obs, metadata, bestprof_data,
                         pul_ra, pul_dec, coh, auth,
-                        pulsar=None, trcvr=data_load.TRCVR_FILE):
+                        pulsar=None, trcvr=data_load.TRCVR_FILE,
+                        simple_sefd=False, sefd_file=None):
     """
     time_obs: the time in seconds of the dectection from the metadata
     metadata: list from the function get_obs_metadata
@@ -388,9 +394,16 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
     period=float(period)
     num_bins=int(num_bins)
 
-    #get r_sys and gain
-    t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid, obs_metadata=metadata,\
-                                    beg=beg, end=(t_int + beg - 1))
+    #get T_sys and gain
+    if simple_sefd:
+        t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid,
+                                                      obs_metadata=metadata,
+                                                      beg=beg, end=(t_int + beg - 1))
+    else:
+        if sefd_file is None:
+            launch_pabeam_sim()
+        else:
+            t_sys, _, gain, u_gain = read_sefd_file(sefd_file)
 
     #estimate S/N
     try:
@@ -575,6 +588,7 @@ if __name__ == "__main__":
     parser.add_argument('-p','--pulsar',type=str,help='The pulsar J name.')
     parser.add_argument('--incoh',action='store_true',help='Used for incoherent detections to accurately calculate gain. The default is coherent.')
     parser.add_argument('--andre',action='store_true',help="Used for calibrations done using Andre Offrina's tools. Default is RTS.")
+    parser.add_argument('--simple_sefd',action='store_true',help="Just use the tile beam to estimate the SEFD (T_sys and gain) instead of submiting a job to do a full tied-array beam simulation. Default False")
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                         choices=loglevels.keys(), default="INFO")
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
@@ -676,7 +690,8 @@ if __name__ == "__main__":
     if args.bestprof or args.ascii:
         _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
         subbands = flux_cal_and_submit(time_obs, metadata, bestprof_data,
-                            pul_ra, pul_dec, coh, auth, pulsar=args.pulsar, trcvr=args.trcvr)
+                                       pul_ra, pul_dec, coh, auth,
+                                       pulsar=args.pulsar, trcvr=args.trcvr, simple_sefd=args.simple_sefd)
 
     if args.cal_dir_to_tar:
         if not args.srclist:
