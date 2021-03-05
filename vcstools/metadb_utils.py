@@ -358,6 +358,40 @@ def obs_max_min(obsid, files_meta_data=None):
     return obs_start, obs_end
 
 
+def files_available(obsid, files_meta_data=None):
+    """
+    Query the database and return a list of all files available (remote archived and not deleted) and a list of all files
+
+    Parameters:
+    -----------
+    obsid: str
+        The ID (gps time) of the observation you are querying
+    files_meta_data: dict
+        The output of the getmeta function with the data_files service.
+        This is an optional input that can be used if you just want to
+        extract the relevant info and save a metadata call
+
+    Output:
+    -------
+    obs_start_end: list
+        [[list of available files], [all files]]
+    """
+    if files_meta_data is None:
+        files_meta_data = getmeta(servicetype='metadata', service='data_files', params={'obs_id':str(obsid)})
+
+    # Loop over all the files and check if they're archived and not deleted
+    available_files = []
+    all_files = []
+    for file_name in files_meta_data.keys():
+        deleted = files_meta_data[file_name]['deleted']
+        remote_archived = files_meta_data[file_name]["remote_archived"]
+        if remote_archived and not deleted:
+            available_files.append(file_name)
+        all_files.append(file_name)
+
+    return available_files, all_files
+
+
 def write_obs_info(obsid):
     """
     Writes obs info to a file in the current direcory
