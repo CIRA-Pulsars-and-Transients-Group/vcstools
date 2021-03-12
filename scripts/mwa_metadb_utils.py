@@ -2,7 +2,8 @@
 import logging
 import argparse
 
-from vcstools.metadb_utils import write_obs_info, get_obs_array_phase, obs_max_min, calc_ta_fwhm, get_best_cal_obs, get_common_obs_metadata
+from vcstools.metadb_utils import write_obs_info, get_obs_array_phase, obs_max_min, calc_ta_fwhm,\
+                                  get_best_cal_obs, get_common_obs_metadata, files_available
 from vcstools.beam_calc import field_of_view
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,8 @@ if __name__ == '__main__':
         channels = data_dict["rfstreams"]["0"]["frequencies"]
         centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
         array_phase = get_obs_array_phase(args.obsid)
-        start, stop = obs_max_min(args.obsid, meta=data_dict)
+        start, stop = obs_max_min(args.obsid)
+        available_files, all_files = files_available(args.obsid)
         fov = field_of_view(args.obsid, beam_meta_data=beam_common_data)
 
         print("-------------------------    Obs Info    --------------------------")
@@ -36,6 +38,8 @@ if __name__ == '__main__':
         print("Start time:         {}".format(start))
         print("Stop time:          {}".format(stop))
         print("Duration (s):       {}".format(stop-start))
+        print("Files available:    {:4.1f}%  ({}/{})".format(len(available_files)/len(all_files)*100,
+                                                         len(available_files), len(all_files)))
         print("RA Pointing (deg):  {}".format(data_dict["metadata"]["ra_pointing"]))
         print("DEC Pointing (deg): {}".format(data_dict["metadata"]["dec_pointing"]))
         print("Channels:           {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
