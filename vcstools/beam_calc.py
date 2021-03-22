@@ -319,24 +319,51 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
             dt = dt_input
         logger.debug("obsid: {0}, time_obs {1} s, dt {2} s".format(obsid, beam_meta_data[3], dt))
 
-        #check for raw volatge files
-        filedata = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1})
-        if filedata is None:
-            logger.warning("No file data for obsid {}. Skipping".format(obsid))
+        # Perform the file meta data call
+        files_meta_data = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1})
+        if files_meta_data is None:
+            logger.warning("No file metadata data found for obsid {}. Skipping".format(obsid))
             obsid_to_remove.append(obsid)
             continue
-        keys = filedata.keys()
-        check = False
-        for k in keys:
-            if '.dat' in k: #TODO check if is still robust
-                check = True
-        if check or all_volt:
+
+        # Check raw voltage files
+        raw_available = False
+        raw_deleted   = False
+        for file_name in files_meta_data.keys():
+            if file_name.endswith('dat'):
+                deleted = files_meta_data[file_name]['deleted']
+                if deleted:
+                    raw_deleted   = True
+                else:
+                    raw_available = True
+
+        # Check combined voltage tar files
+        comb_available = False
+        comb_deleted   = False
+        for file_name in files_meta_data.keys():
+            if file_name.endswith('tar'):
+                deleted = files_meta_data[file_name]['deleted']
+                if deleted:
+                    comb_deleted   = True
+                else:
+                    comb_available = True
+
+        if raw_available or comb_available or all_volt:
             powers.append(get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                     dt=dt, centeronly=True, verbose=False,
                                     option=beam, degrees=degrees_check))
             obsid_meta.append(beam_meta_data)
+        elif raw_deleted and comb_deleted:
+            logger.warning('Raw and combined voltage files deleted for {}'.format(obsid))
+            obsid_to_remove.append(obsid)
+        elif raw_deleted:
+            logger.warning('Raw voltage files deleted for {}'.format(obsid))
+            obsid_to_remove.append(obsid)
+        elif comb_deleted:
+            logger.warning('Combined voltage files deleted for {}'.format(obsid))
+            obsid_to_remove.append(obsid)
         else:
-            logger.warning('No raw voltage files for %s' % obsid)
+            logger.warning('No raw or combined voltage files for {}'.format(obsid))
             obsid_to_remove.append(obsid)
     for otr in obsid_to_remove:
         obsid_list.remove(otr)
