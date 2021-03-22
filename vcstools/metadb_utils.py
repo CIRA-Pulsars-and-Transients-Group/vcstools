@@ -353,8 +353,12 @@ def obs_max_min(obsid, files_meta_data=None):
 
     # Make a list of gps times excluding non-numbers from list
     times = [f[11:21] for f in get_files(obsid, files_meta_data=files_meta_data) if is_number(f[11:21])]
-    obs_start = int(min(times))
-    obs_end = int(max(times))
+    if times:
+        obs_start = int(min(times))
+        obs_end   = int(max(times))
+    else:
+        obs_start = None
+        obs_end   = None
     return obs_start, obs_end
 
 

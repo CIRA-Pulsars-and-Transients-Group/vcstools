@@ -35,11 +35,14 @@ if __name__ == '__main__':
         if array_phase != 'OTH':
             print("~FWHM (arcminute)   {:4.2f}".format(calc_ta_fwhm(centre_freq,
                                                        array_phase=array_phase)*60.))
-        print("Start time:         {}".format(start))
-        print("Stop time:          {}".format(stop))
-        print("Duration (s):       {}".format(stop-start))
-        print("Files available:    {:4.1f}%  ({}/{})".format(len(available_files)/len(all_files)*100,
-                                                         len(available_files), len(all_files)))
+        if start is None or stop is None:
+            print("No VCS files found")
+        else:
+            print("Start time:         {}".format(start))
+            print("Stop time:          {}".format(stop))
+            print("Duration (s):       {}".format(stop-start))
+            print("Files available:    {:4.1f}%  ({}/{})".format(len(available_files)/len(all_files)*100,
+                                                            len(available_files), len(all_files)))
         print("RA Pointing (deg):  {}".format(data_dict["metadata"]["ra_pointing"]))
         print("DEC Pointing (deg): {}".format(data_dict["metadata"]["dec_pointing"]))
         print("Channels:           {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
