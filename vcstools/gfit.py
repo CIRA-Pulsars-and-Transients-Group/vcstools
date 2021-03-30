@@ -31,7 +31,7 @@ class gfit:
     period: float
         The period of the pulsar. Used for SN calculations
         Default - None
-    cliptype: str:
+    clip_type: str:
         The verbosity of clipping. Choose between 'regular', 'noisy' or 'verbose'.
         Default: 'regular'
 
@@ -100,13 +100,13 @@ class gfit:
             True is the profile is scattered. Will be None is period unsupplied
     """
 
-    def __init__(self, raw_profile, max_N=6, plot_name=None, min_comp_len=None, period=None, cliptype="regular"):
+    def __init__(self, raw_profile, max_N=6, plot_name=None, min_comp_len=None, period=None, clip_type="regular"):
         self._raw_profile = raw_profile
         self._max_N = max_N
         self._plot_name = plot_name
         self._min_comp_len = min_comp_len
         self._period = period
-        self._cliptype = cliptype
+        self._clip_type = clip_type
 
         self._fit_dict = {}
         self._best_chi = None
@@ -196,11 +196,11 @@ class gfit:
         if len(self._raw_profile)<100:
             raise ProfileLengthError("Profile must have length > 100")
 
-        if self._cliptype == "regular":
+        if self._clip_type == "regular":
             alphas = np.linspace(1, 5, 9)
-        elif self._cliptype == "noisy":
+        elif self._clip_type == "noisy":
             alphas = np.linspace(1, 3, 17)
-        elif self._cliptype == "verbose":
+        elif self._clip_type == "verbose":
             alphas = np.linspace(1, 5, 33)
         else:
             raise ValueError("cliptype not recognised. Options are: 'regular', 'noisy' or 'verbose'.")
