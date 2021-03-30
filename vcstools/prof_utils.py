@@ -236,12 +236,12 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
         tollvl = (oldstd - newstd) / newstd
 
         if tollvl <= tol:
-            logger.debug("Took {0} trials to reach tolerance".format(trial+1))
+            logger.debug("Took {trial+1} trials to reach tolerance")
             np.seterr(**old_settings)
             return oldstd, x
 
         if trial + 1 == ntrials:
-            logger.info("Reached number of trials without reaching tolerance level")
+            logger.debug("Reached number of trials without reaching tolerance level")
             np.seterr(**old_settings)
             return oldstd, x
 
