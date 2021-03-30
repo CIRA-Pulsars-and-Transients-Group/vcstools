@@ -15,6 +15,91 @@ logger = logging.getLogger(__name__)
 
 # Main class
 class gfit:
+    """
+    This class is used to fit multiple Gaussians to a pulse profile
+
+    User inputs:
+    ------------
+    raw_profile: list
+        The pulse profile to be fit
+    max_N: int
+        The maximum number of gaussians to attempt to fit
+        Default - 6
+    plot_name: str
+        The name of the output plot. Can be set with gfit.plot_name. If unsupplied, will use a generic name
+        Default - None
+    period: float
+        The period of the pulsar. Used for SN calculations
+        Default - None
+    cliptype: str:
+        The verbosity of clipping. Choose between 'regular', 'noisy' or 'verbose'.
+        Default: 'regular'
+
+
+    Functions for users:
+    --------------------
+    auto_gfit:
+        Runs the gaussian fit evaluation for a range of values of alpha. This is necessary as there is no way to know
+        a priori which alpha to use. Alpha is the input for sigmaClip() and can be interpreted as the level
+        of verbosity in the noice-clipping. This function fills out the fit_dict dictionary.
+
+    plot_fit:
+        Plots the best chosen gaussian fit to a .png whose name is gfit.plot_name. This can only be run after the fit_dict
+        dictionary has been filled (presumably by auto_gfit).
+
+
+    Products:
+    --------
+    fit_dict: dictionary
+        contains the following keys:
+        W10: float
+            The W10 width of the profile measured in phase
+        W10_e: float
+            The uncertainty in the W10
+        W50: float
+            The W50 width of the profile measured in phase
+        W50_e: float
+            The uncertainty in the W50
+        Weq: float
+            The equivalent width of the profile measured in phase
+        Weq_e: float
+            The uncertainty in the equivalent width
+        Wscat: float
+            The scattering width of the profile measured in phase
+        Wscat_e: float
+            The uncertainty in the scattering width
+        maxima: list
+            A lost of floats corresponding to the bin location of each maximum point
+        maxima_e: list
+            A list of floats, each correspinding to the error of the maxima of the same index. Measured in bins
+        redchisq: float
+            The reduced chi sqared of the fit
+        num_gauss: int
+            The number of gaussian components used in the best fit
+        bic: float
+            The Bayesian Information Criterion for the best fit
+        gaussian_params: list
+            A list of length 3*N there N is num_gauss. Each set of 3 parameters corresponds to the amp, centre and width of a guassian component
+        cov_mat: np.matrix
+            The covariance matrix from the fit
+        comp_dict: dictionary
+            dict["component_x"] contains an array of the component x
+        comp_idx: dictionary
+            dict["component_x"] contains an array of indexes of the original profile corresponding to component x
+        alpha: float
+            The alpha value used in sigmaClip()
+        profile: list
+            The input profile
+        fit: list
+            The best fit made into a list form
+        sn: float
+            The estimated signal to noise ratio, obtained from the profile. Will be None is period unsupplied
+        sn_e: float
+            The uncertainty in sn. Will be None is period unsupplied
+        scattered: boolean
+            True is the profile is scattered. Will be None is period unsupplied
+    """
+
     def __init__(self, raw_profile, max_N=6, plot_name=None, min_comp_len=None, period=None, cliptype="regular"):
         self._raw_profile = raw_profile
         self._max_N = max_N
@@ -107,29 +192,7 @@ class gfit:
 
     # Main function - intended for use by the user
     def auto_gfit(self):
-        """
-        runs the gaussian fit evaluation for a range of values of alpha. This is necessary as there is no way to know
-        a priori which alpha to use beforehand. Alpha is the input for sigmaClip() and can be interpreted as the level
-        of verbosity in clipping.
-
-        Parameters:
-        -----------
-        profile: list
-            A list containing the pulse profile to evaluate
-        max_N: int
-            OPTIONAL - The maximum number of gaussian components to use when fitting
-        plot_name: string
-            OPTIONAL - If not none, will make a plot of the best fit with this name. Default: None
-        ignore_threshold: float
-            OPTIONAL -  Maxima with values below this number will be ignored. If none, will use 3*noise. Default: None
-        min_comp_len: float
-            OPTIONAL - Minimum length of a component to be considered real. Measured in bins. If none, will use 1% of total profile lengths + 2, max 50. Default: None
-
-        Returns:
-        --------
-        fit_dict: dictionary
-            The dictionary of the best fit from prof_eval_gfit
-        """
+        """Fits multiple gaussian profiles and finds the best combination of N_Gaussians and alpha"""
         if len(self._raw_profile)<100:
             raise ProfileLengthError("Profile must have length > 100")
 
@@ -180,6 +243,7 @@ class gfit:
 
     # Plotter for the resulting fit
     def plot_fit(self):
+        """Plots the best fit set of Gaussians"""
         if not self._plot_name:
             self._plot_name = "Gaussian_fit.png"
         y = self._fit_dict["profile"]
@@ -224,65 +288,7 @@ class gfit:
 
 
     def _prof_eval_gfit(self):
-        """
-        Fits multiple gaussians to a profile and subsequently finds W10, W50, Weq and maxima
-
-        Parameters:
-        -----------
-        self: gfit class
-
-        Returns:
-        --------
-        fit_dict: dictionary
-            contains the following keys:
-            W10: float
-                The W10 width of the profile measured in phase
-            W10_e: float
-                The uncertainty in the W10
-            W50: float
-                The W50 width of the profile measured in phase
-            W50_e: float
-                The uncertainty in the W50
-            Weq: float
-                The equivalent width of the profile measured in phase
-            Weq_e: float
-                The uncertainty in the equivalent width
-            Wscat: float
-                The scattering width of the profile measured in phase
-            Wscat_e: float
-                The uncertainty in the scattering width
-            maxima: list
-                A lost of floats corresponding to the bin location of each maximum point
-            maxima_e: list
-                A list of floats, each correspinding to the error of the maxima of the same index. Measured in bins
-            redchisq: float
-                The reduced chi sqared of the fit
-            num_gauss: int
-                The number of gaussian components used in the best fit
-            bic: float
-                The Bayesian Information Criterion for the best fit
-            gaussian_params: list
-                A list of length 3*N there N is num_gauss. Each set of 3 parameters corresponds to the amp, centre and width of a guassian component
-            cov_mat: np.matrix
-                The covariance matrix from the fit
-            comp_dict: dictionary
-                dict["component_x"] contains an array of the component x
-            comp_idx: dictionary
-                dict["component_x"] contains an array of indexes of the original profile corresponding to component x
-            alpha: float
-                The alpha value used in sigmaClip()
-            profile: list
-                The input profile
-            fit: list
-                The best fit made into a list form
-            sn: float
-                The estimated signal to noise ratio, obtained from the profile. Will be None is period unsupplied
-            sn_e: float
-                The uncertainty in sn. Will be None is period unsupplied
-            scattered: boolean
-                True is the profile is scattered. Will be None is period unsupplied
-        """
-
+        """Fits multiple gaussians to a profile and subsequently finds W10, W50, Weq and maxima"""
         #Normalize, find the std
         self._standardise_raw_profile()
 
@@ -422,7 +428,8 @@ class gfit:
     # SigmaClip isn't perfect. Use these next function to fix bad clips
     def _fill_clipped_prof(self, search_scope=None, nan_type=0.):
         """
-        Intended for use on noisy profiles. Fills nan values that are surrounded by non-nans to avoid discontinuities in the profile
+        Intended for use on noisy profiles. Fills nan values that are surrounded by non-nans to avoid discontinuities
+        in the profile
         """
         length = len(self._clipped_prof)
         if search_scope is None:
@@ -446,13 +453,6 @@ class gfit:
     def _find_components(self):
         """
         Given a profile in which the noise is clipped to 0, finds the components that are clumped together.
-
-        Parameters:
-        -----------
-        profile: list
-            A list of floats describing the profile where the noise has been clipped to zero
-        min_comp_len: float
-            OPTIONAL - Minimum length of a component to be considered real. Measured in bins. Default: 5
 
         Returns:
         --------
@@ -509,6 +509,10 @@ class gfit:
             A list of the minimum points of the fit
         maxima: list
             A list of the maximum points of the fit
+        minima_e: list
+            The error in each minima
+        maxima_e: list
+            The error in each maxima
         """
         #Create the derivative list and spline it to find roots
         x = np.linspace(0, x_length-1, x_length)
