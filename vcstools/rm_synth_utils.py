@@ -11,6 +11,7 @@ import yaml
 
 from vcstools import rm_synth
 from vcstools import prof_utils
+from vcstools.gfit import gfit
 from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)
@@ -56,8 +57,8 @@ def find_on_pulse_ranges(I, clip_type="regular", plot_name=None):
     -----------
     I:list
         The pulse profile
-    kwargs:dict
-        Keyword arguments for prof_utils.auto_gfit
+    clip_type: str
+        The clipping verbosity for the Gaussian fitter. Choose between regular, noisy and verbose
     plot_name:str
         The name of the ouput plot. If none, will not produce one
 
@@ -66,7 +67,11 @@ def find_on_pulse_ranges(I, clip_type="regular", plot_name=None):
     phases: list
         A list of phases (from 0 to 1) corresponding to the on-pulse components
     """
-    prof_dict = prof_utils.auto_gfit(I, cliptype=clip_type, plot_name=plot_name)
+    g_fitter = gfit(I, clip_type=clip_type, plot_name=plot_name)
+    g_fitter.auto_gfit()
+    prof_dict = g_fitter.fit_dict
+    if plot_name:
+        g_fitter.plot_fit()
     phases = []
     for comp_no in prof_dict["comp_idx"].keys():
         phases.append(min(prof_dict["comp_idx"][comp_no])/len(I))
