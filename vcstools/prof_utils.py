@@ -24,6 +24,8 @@ class ProfileLengthError(Exception):
 class NoFitError(Exception):
     """Raise when no gaussian fits have been found"""
     pass
+class BadFitError(Exception):
+    """Raise when a particular fit is not suitable"""
 
 
 def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
