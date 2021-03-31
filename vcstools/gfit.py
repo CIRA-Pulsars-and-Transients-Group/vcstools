@@ -8,7 +8,7 @@ from scipy.optimize import curve_fit
 
 from vcstools.prof_utils import est_sn_from_prof, sigmaClip, check_clip
 # Error imports
-from vcstools.prof_utils import LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError, NoFitError
+from vcstools.prof_utils import LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError, NoFitError, BadFitError
 
 logger = logging.getLogger(__name__)
 
@@ -212,7 +212,7 @@ class gfit:
                 self._alpha = alpha
                 prof_dict = self._prof_eval_gfit()
                 attempts_dict[alpha] = prof_dict
-            except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError):
+            except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError, BadFitError):
                 logger.debug(f"Skipping alpha value: {alpha}")
 
         #Evaluate the best profile based on reduced chi-squared.
@@ -300,6 +300,7 @@ class gfit:
 
         #Find widths + error
         W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e = self._find_widths(popt, pcov)
+
         #Convert from bins to phase
         proflen = len(self._std_profile)
         W10 = W10/proflen
@@ -312,6 +313,7 @@ class gfit:
         Wscat_e = Wscat_e/proflen
 
         _, maxima, _, maxima_e = self._find_minima_maxima_gauss(popt, pcov, len(fit))
+
 
         #estimate SN
         if self._period:
@@ -387,6 +389,7 @@ class gfit:
         fit_dict = {}
 
         for num in range(1, self._max_N):
+            # Calculate bounds and guess
             guess += [next(max_guess), next(centre_guess), next(width_guess)]
             bounds_arr[0].append(0)
             bounds_arr[0].append(0)
@@ -395,9 +398,21 @@ class gfit:
             bounds_arr[1].append(len(self.std_profile))
             bounds_arr[1].append(len(self.std_profile))
             bounds_tuple=(tuple(bounds_arr[0]), tuple(bounds_arr[1]))
-            popt, pcov = curve_fit(self._multi_gauss, x, self._std_profile, bounds=bounds_tuple, p0=guess, maxfev=100000)
+
+            # Do the fitting
+            maxfev_list = [10000, 50000, 100000, 500000]
+            for maxfev in maxfev_list:
+                try:
+                    logger.debug(f"Maxfev in curve_fit: {i}")
+                    popt, pcov = curve_fit(self._multi_gauss, x, self._std_profile, bounds=bounds_tuple, p0=guess, maxfev=maxfev)
+                    break # Break if fit successful
+                except RuntimeError as e: # No fit found in maxfev
+                    pass
+
+            # Work out some stuff
             fit = self._multi_gauss(x, *popt)
             chisq = chsq(self._std_profile, fit, self._noise_std)
+
             #Bayesian information criterion for gaussian noise
             k = 3*(num+1)
             bic = chisq + k*np.log(len(self.std_profile))
@@ -580,6 +595,8 @@ class gfit:
         #perform spline operations on the fit
         x = np.linspace(0, len(self._std_profile)-1, len(self._std_profile))
         fit = self._multi_gauss(x, *popt)
+        if np.all(fit==0): # Occasionally this is filled with zeros, check before doing anything
+            raise BadFitError("This fit is not suitable for use")
         amp_fit = max(fit) - min(fit)
         spline10 = UnivariateSpline(x, fit - np.full(len(x), 0.1*amp_fit), s=0)
         spline50 = UnivariateSpline(x, fit - np.full(len(x), 0.5*amp_fit), s=0)
@@ -601,6 +618,9 @@ class gfit:
         W10_roots = spline10.roots()
         W50_roots = spline50.roots()
         Wscat_roots = spline_s.roots()
+        #print(W10_roots)
+        #print(W50_roots)
+        #print(Wscat_roots)
         W10 = W10_roots[-1] - W10_roots[0]
         W50 = W50_roots[-1] - W50_roots[0]
         Wscat = Wscat_roots[-1] - Wscat_roots[0]
