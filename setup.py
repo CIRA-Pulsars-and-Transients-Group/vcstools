@@ -91,7 +91,7 @@ setup(name="mwa_vcstools",
                'scripts/process_vcs.py', 'scripts/recombine.py', 'scripts/rename_corr_output.py',
                'scripts/reorder_chans.py', 'scripts/rts2ao.py', 'scripts/splice_wrapper.py',
                'scripts/cleanup.py', 'scripts/create_ics_psrfits.py', 'scripts/rm_synthesis.py',
-               'scripts/zapchan.py', 'scripts/sn_flux_est.py',
+               'scripts/zapchan.py', 'scripts/sn_flux_est.py', 'scripts/prof_estimate.py',
                # plotting scripts
                'scripts/plotting/plotPolarTileBeam.py', 'scripts/plotting/plotFlatTileBeam.py',
                'scripts/plotting/plotTiedArrayBeam.py', 'scripts/plotting/plotSkyMap.py',

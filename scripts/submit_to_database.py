@@ -28,6 +28,7 @@ from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata
 from vcstools.catalogue_utils import get_psrcat_ra_dec
 from vcstools import prof_utils
+from vcstools.gfit import gfit
 
 
 import logging
@@ -394,8 +395,11 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
 
     #estimate S/N
     try:
-        prof_dict = prof_utils.auto_gfit(profile,\
-                    period = period, plot_name="{0}_{1}_{2}_bins_gaussian_fit.png".format(obsid, pulsar, num_bins))
+        g_fitter = gfit(profile, period=period, clip_type="verbose")
+        g_fitter.plot_name = f"{obsid}_{pulsar}_{num_bins}_bins_gaussian_fit.png"
+        g_fitter.auto_gfit()
+        g_fitter.plot_fit()
+        prof_dict = g_fitter.fit_dict
     except (prof_utils.ProfileLengthError, prof_utils.NoFitError):
         prof_dict=None
 
