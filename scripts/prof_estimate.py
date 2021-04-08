@@ -29,8 +29,6 @@ if __name__ == '__main__':
     g_inputs.add_argument("--max_N", type=int, default=6, help="The maximum number of gaussian components to attempt to fit")
     g_inputs.add_argument("--min_comp_len", type=int, default=None,\
                         help="Minimum length of a component to be considered real. Measured in bins. If none, will use 1 percent of total profile length")
-    g_inputs.add_argument("--period", type=float, help="The period of the puslar in ms. Found automatically if bestprof supplied.\
-                        Used in S/N calculation. Not required")
     g_inputs.add_argument("--cliptype", type=str, default="regular", choices=["regular", "noisy", "verbose"], help="The verbosity of clipping used\
                         by the Gaussian fitter.")
 
@@ -50,20 +48,18 @@ if __name__ == '__main__':
     logger.propagate=True
 
     if args.bestprof:
-        _, _, _, period, _, _, _, profile, _  = get_from_bestprof(args.bestprof)
+        _, _, _, _, _, _, _, profile, _  = get_from_bestprof(args.bestprof)
     elif args.ascii:
         profile = get_from_ascii(args.ascii)[0]
-        period = args.period
     elif args.archive:
         subprocess_pdv(args.archive, outfile="archive.txt")
         profile = get_from_ascii("archive.txt")[0]
         os.remove("archive.txt")
-        period = args.period
     else:
         logger.error("Please supply either an ascii or bestprof profile")
         sys.exit(1)
 
-    g_fitter = gfit(profile, max_N=args.max_N, min_comp_len=args.min_comp_len, period=period,
+    g_fitter = gfit(profile, max_N=args.max_N, min_comp_len=args.min_comp_len,
                     plot_name=args.plot_name, cliptype=args.cliptype)
     g_fitter.auto_gfit()
     if args.plot_name:
