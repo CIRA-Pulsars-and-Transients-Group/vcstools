@@ -28,9 +28,6 @@ class gfit:
     plot_name: str
         The name of the output plot. Can be set with gfit.plot_name. If unsupplied, will use a generic name
         Default - None
-    period: float
-        The period of the pulsar. Used for SN calculations
-        Default - None
     clip_type: str:
         The verbosity of clipping. Choose between 'regular', 'noisy' or 'verbose'.
         Default: 'regular'
@@ -93,19 +90,18 @@ class gfit:
         fit: list
             The best fit made into a list form
         sn: float
-            The estimated signal to noise ratio, obtained from the profile. Will be None is period unsupplied
+            The estimated signal to noise ratio, obtained from the profile
         sn_e: float
-            The uncertainty in sn. Will be None is period unsupplied
+            The uncertainty in sn
         scattered: boolean
-            True is the profile is scattered. Will be None is period unsupplied
+            True is the profile is scattered
     """
 
-    def __init__(self, raw_profile, max_N=6, plot_name=None, min_comp_len=None, period=None, clip_type="regular"):
+    def __init__(self, raw_profile, max_N=6, plot_name=None, min_comp_len=None, clip_type="regular"):
         self._raw_profile = raw_profile
         self._max_N = max_N
         self._plot_name = plot_name
         self._min_comp_len = min_comp_len
-        self._period = period
         self._clip_type = clip_type
 
         self._fit_dict = {}
@@ -117,6 +113,7 @@ class gfit:
         self._alpha = None
         self._noise_std = None
         self._clipped_prof = []
+        self._n_off_pulse = None
 
         # Initialize minimum component length if not done by user
         if self._min_comp_len is None:
@@ -141,13 +138,6 @@ class gfit:
     @max_N.setter
     def max_N(self, val):
         self._max_N = val
-
-    @property
-    def period(self):
-        return self._period
-    @period.setter
-    def period(self, val):
-        self._period = val
 
     @property
     def fit_dict(self):
@@ -238,9 +228,7 @@ class gfit:
         logger.info(f"Weq:                   {self._fit_dict['Weq']} +/- {self._fit_dict['Weq_e']}")
         logger.info(f"Maxima:                {self._fit_dict['maxima']}")
         logger.info(f"Maxima error:          {self._fit_dict['maxima_e']}")
-        if self._fit_dict["sn"]:
-            logger.info(f"S/N estimate:          {self._fit_dict['sn']} +/- {self._fit_dict['sn_e']}")
-
+        logger.info(f"S/N estimate:          {self._fit_dict['sn']} +/- {self._fit_dict['sn_e']}")
 
     # Plotter for the resulting fit
     def plot_fit(self):
@@ -277,15 +265,17 @@ class gfit:
 
 
     def _standardise_raw_profile(self):
-        """Clips and normalises the raw profile"""
+        """Clips, normalises and fills in the raw profile"""
         y = np.array(self._raw_profile)/max(self._raw_profile)
         noise_std, self._clipped_prof = sigmaClip(y, alpha=self._alpha)
         check_clip(self._clipped_prof)
+        self._fill_clipped_prof(search_scope=int(len(self._std_profile)/100))
         ignore_threshold = 3 * noise_std
         y = y - np.nanmean(self._clipped_prof)
         y = y/max(y)
         self._noise_std = np.nanstd(np.array(self._clipped_prof)/max(y))
         self._std_profile = y
+        self._n_off_pulse = np.count_nonzero(~np.isnan(self._clipped_prof))
 
 
     def _prof_eval_gfit(self):
@@ -312,21 +302,16 @@ class gfit:
         W50_e = W50_e/proflen
         Weq_e = Weq_e/proflen
         Wscat_e = Wscat_e/proflen
-
-        _, maxima, _, maxima_e = self._find_minima_maxima_gauss(popt, pcov, len(fit))
-
+        minima, maxima, minima_e, maxima_e = self._find_minima_maxima_gauss(popt, pcov, len(fit))
 
         # Estimate SN
-        if self._period:
-            sn, sn_e, scattered = est_sn_from_prof(self._std_profile, self._period, alpha=self._alpha)
-        else:
-            sn = None
-            sn_e = None
-            scattered = None
+        _, _, scattered = est_sn_from_prof(self._std_profile, self._alpha)
+        sn = 1/self._noise_std
+        sn_e = 1/(self._noise_std * np.sqrt(2 * self._n_off_pulse -2)) #TODO: make this estimate better
 
         # Dump to dictionary
-        fit_dict = {"W10":W10, "W10_e":W10_e, "W50":W50, "W50_e":W50_e, "Wscat":Wscat, "Wscat_e":Wscat_e,
-                    "Weq":Weq, "Weq_e":Weq_e, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq,
+        fit_dict = {"W10":W10, "W10_e":W10_e, "W50":W50, "W50_e":W50_e, "Wscat":Wscat, "Wscat_e":Wscat_e, "Weq":Weq, "Weq_e":Weq_e,
+                    "maxima":maxima, "maxima_e":maxima_e, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq,
                     "num_gauss":num_gauss, "bic":bic, "gaussian_params":popt, "cov_mat":pcov, "comp_dict":comp_dict,
                     "comp_idx":comp_idx, "alpha":self._alpha, "profile":self._std_profile, "fit":fit, "sn":sn,
                     "sn_e":sn_e, "scattered":scattered}
@@ -364,7 +349,7 @@ class gfit:
             return test_statistic
 
         # Find profile components
-        self._fill_clipped_prof(search_scope=int(len(self._std_profile)/100))
+        # self._fill_clipped_prof(search_scope=int(len(self._std_profile)/100))
         comp_dict, comp_idx = self._find_components()
 
         # Estimate gaussian parameters based on profile components
