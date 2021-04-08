@@ -250,7 +250,7 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
         oldstd = newstd
 
 
-def est_sn_from_prof(prof_data, period, alpha=3.):
+def est_sn_from_prof(prof_data, alpha=3.):
     """
     Estimates the signal to noise ratio from a pulse profile
     Based on code oringally writted by Nick Swainston.
@@ -259,8 +259,6 @@ def est_sn_from_prof(prof_data, period, alpha=3.):
     -----------
     prof_data: string
         A list of floats that contains the pulse profile
-    period: float
-        The pulsar's period in ms
     alpha: float
         OPTIONAL - The alpha value to be used in sigmaClip(). Default: 3
 
