@@ -29,7 +29,7 @@ if __name__ == '__main__':
     g_inputs.add_argument("--max_N", type=int, default=6, help="The maximum number of gaussian components to attempt to fit")
     g_inputs.add_argument("--min_comp_len", type=int, default=None,\
                         help="Minimum length of a component to be considered real. Measured in bins. If none, will use 1 percent of total profile length")
-    g_inputs.add_argument("--cliptype", type=str, default="regular", choices=["regular", "noisy", "verbose"], help="The verbosity of clipping used\
+    g_inputs.add_argument("--clip_type", type=str, default="regular", choices=["regular", "noisy", "verbose"], help="The verbosity of clipping used\
                         by the Gaussian fitter.")
 
     other_inputs = parser.add_argument_group("Other Inputs")
@@ -60,7 +60,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     g_fitter = gfit(profile, max_N=args.max_N, min_comp_len=args.min_comp_len,
-                    plot_name=args.plot_name, cliptype=args.cliptype)
+                    plot_name=args.plot_name, clip_type=args.clip_type)
     g_fitter.auto_gfit()
     if args.plot_name:
         g_fitter.plot_fit()
