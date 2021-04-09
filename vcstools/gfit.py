@@ -497,7 +497,7 @@ class gfit:
     # Find min and max points
     def _find_minima_maxima_gauss(self, popt, pcov, x_length):
         """
-        Finds all roots of a gaussian function
+        Finds all roots of a gaussian function. Measured in Phase.
 
         Parameters:
         -----------
@@ -535,8 +535,15 @@ class gfit:
             else:
                 minima.append(root)
 
+        # Get errors
         minima_e = self._find_x_err(minima, popt, pcov)
         maxima_e = self._find_x_err(maxima, popt, pcov)
+
+        #Convert to phase
+        maxima = list(np.array(maxima)/x_length)
+        minima = list(np.array(minima)/x_length)
+        maxima_e = list(np.array(maxima_e)/x_length)
+        minima_e = list(np.array(minima_e)/x_length)
 
         return minima, maxima, minima_e, maxima_e
 
