@@ -231,8 +231,6 @@ if __name__ == "__main__":
                         help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
     parser.add_argument('-m', '--min_power', type=float, default=0.3,
                         help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3')
-    parser.add_argument('--min_time', type=float, default=0,
-                        help='The minimum observation duration to include in output files. Default 0')
     parser.add_argument('--output', type=str, default = './',
                         help='Chooses a file for all the text files to be output to. The default is your current directory')
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
@@ -259,6 +257,10 @@ if __name__ == "__main__":
                         help='Instead of searching all OBS IDs, only searchs for the obsids in the given directory. Does not check if the .fits files are within the directory. Default = /group/mwavcs/vcs')
     obargs.add_argument('-o','--obsid', type=int, nargs='*',
                         help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
+    parser.add_argument('--min_time', type=float, default=0,
+                        help='The minimum observation duration to include in output files. Default 0')
+    parser.add_argument('--freq_chan', type=int,
+                        help='Only use observations that include this frequency channel.')
     obargs.add_argument('--all_volt', action='store_true',
                         help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
     obargs.add_argument('--cal_check', action='store_true',
@@ -330,6 +332,7 @@ if __name__ == "__main__":
     if not degrees_check:
         names_ra_dec = format_ra_dec(names_ra_dec, ra_col=1, dec_col=2)
     names_ra_dec = np.array(names_ra_dec)
+    exit()
 
     #Check if the user wants to use --obs for source
     if (len(names_ra_dec) ==1) and (not args.obs_for_source):
@@ -343,6 +346,13 @@ if __name__ == "__main__":
 
     #get obs IDs
     logger.info("Gathering observation IDs")
+    # A dictionary of constraints used to search for suitable observations as explained here:
+    # https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Findobservations
+    params = {'mode':'VOLTAGE_START'}
+    if args.freq_chan:
+        # Update params to only use obs that contain this frequency channel
+        params.update({'anychan':args.freq_chan})
+        logger.debug("params: {}".format(params))
     if args.obsid:
         obsid_list = args.obsid
     elif args.FITS_dir:
@@ -354,10 +364,10 @@ if __name__ == "__main__":
             ob_dec = names_ra_dec[0][2]
         else:
             ob_ra, ob_dec = sex2deg(names_ra_dec[0][1], names_ra_dec[0][2])
-        obsid_list = singles_source_search(ob_ra)
+        obsid_list = singles_source_search(ob_ra, params=params)
     else:
         #use all obsids
-        obsid_list = find_obsids_meta_pages({'mode':'VOLTAGE_START'})
+        obsid_list = find_obsids_meta_pages(params)
 
 
     if args.beam == 'full_EE':
