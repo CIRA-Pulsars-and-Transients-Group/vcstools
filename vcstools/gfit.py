@@ -113,6 +113,7 @@ class gfit:
         self._alpha = None
         self._noise_std = None
         self._clipped_prof = []
+        self._off_pulse_prof = []
         self._n_off_pulse = None
 
         # Initialize minimum component length if not done by user
@@ -179,6 +180,13 @@ class gfit:
     def clipped_prof(self, val):
         self._clipped_prof = val
 
+    @property
+    def off_pulse_prof(self):
+        return self._off_pulse_prof
+    @clipped_prof.setter
+    def off_pulse_prof(self, val):
+        self._off_pulse_prof = val
+
 
     # Main function - intended for use by the user
     def auto_gfit(self):
@@ -204,7 +212,6 @@ class gfit:
                 attempts_dict[alpha] = prof_dict
             except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError, BadFitError):
                 logger.debug(f"Skipping alpha value: {alpha}")
-
         # Evaluate the best profile based on reduced chi-squared.
         chi_diff = []
         alphas = []
@@ -241,7 +248,7 @@ class gfit:
         maxima = self._fit_dict["maxima"]
         maxima_e= self._fit_dict["maxima_e"]
         x = np.linspace(0, len(y)-1, len(y))
-        plt.figure(figsize=(30, 18))
+        plt.figure(figsize=(20, 12))
 
         for j in range(0, len(popt), 3):
             z = self._multi_gauss(x, *popt[j:j+3])
@@ -266,16 +273,36 @@ class gfit:
 
     def _standardise_raw_profile(self):
         """Clips, normalises and fills in the raw profile"""
-        y = np.array(self._raw_profile)/max(self._raw_profile)
-        noise_std, self._clipped_prof = sigmaClip(y, alpha=self._alpha)
-        check_clip(self._clipped_prof)
-        self._fill_clipped_prof(search_scope=int(len(self._std_profile)/100))
-        ignore_threshold = 3 * noise_std
-        y = y - np.nanmean(self._clipped_prof)
-        y = y/max(y)
-        self._noise_std = np.nanstd(np.array(self._clipped_prof)/max(y))
-        self._std_profile = y
-        self._n_off_pulse = np.count_nonzero(~np.isnan(self._clipped_prof))
+        self._std_profile = self._raw_profile.copy()
+        # Roll the profile such that the max point is at 0.25 phase
+        roll_from = np.argmax(self._std_profile)
+        roll_to = round(0.25*len(self._std_profile))
+        roll_i = roll_to - roll_from
+        self._std_profile = np.roll(self._std_profile, roll_i)
+        # Normalise profile to max=1
+        self._std_profile = np.array(self.std_profile)/max(self._std_profile)
+        # Make a signal-clipped profile to determine which bins are noise vs on-pulse
+        _, self._off_pulse_prof = sigmaClip(self._std_profile, alpha=self._alpha)
+        # Check the clip to fill in gaps
+        check_clip(self._off_pulse_prof)
+        self._fill_off_pulse_prof()
+        # Remove the noise such that the on-pulse profile is centered about 0   
+        self._noise_std = np.nanstd(np.array(self._off_pulse_prof))     
+        self._std_profile = self._std_profile - self._noise_std
+        # Renormalise
+        self._std_profile = self._std_profile/max(self._std_profile)
+        # Remove noise from std_profile - make new array for this
+        self._clipped_prof = self._std_profile.copy()
+        for i, _ in enumerate(self._off_pulse_prof):
+            if not np.isnan(self._off_pulse_prof[i]):
+                self._clipped_prof[i] = 0
+        # Test plots
+        plt.plot(self.clipped_prof, label="clipped_profile")
+        plt.plot(self._std_profile, label="std_profile")
+        plt.legend()
+        plt.savefig(f"test_profile_{self._alpha}.png")
+        plt.close()
+        self._n_off_pulse = np.count_nonzero(~np.isnan(self._off_pulse_prof)) # Counts the number of off-pulse bins
 
 
     def _prof_eval_gfit(self):
@@ -349,7 +376,6 @@ class gfit:
             return test_statistic
 
         # Find profile components
-        # self._fill_clipped_prof(search_scope=int(len(self._std_profile)/100))
         comp_dict, comp_idx = self._find_components()
 
         # Estimate gaussian parameters based on profile components
@@ -392,7 +418,7 @@ class gfit:
             for maxfev in maxfev_list:
                 try:
                     logger.debug(f"Maxfev in curve_fit: {i}")
-                    popt, pcov = curve_fit(self._multi_gauss, x, self._std_profile, bounds=bounds_tuple, p0=guess, maxfev=maxfev)
+                    popt, pcov = curve_fit(self._multi_gauss, x, self._clipped_prof, bounds=bounds_tuple, p0=guess, maxfev=maxfev)
                     break # Break if fit successful
                 except (RuntimeError, ValueError) as e: # No fit found in maxfev
                     pass
@@ -402,6 +428,7 @@ class gfit:
             # Work out some stuff
             fit = self._multi_gauss(x, *popt)
             chisq = chsq(self._std_profile, fit, self._noise_std)
+            
 
             # Bayesian information criterion for gaussian noise
             k = 3*(num+1)
@@ -431,27 +458,43 @@ class gfit:
         return [fit, redchisq, best_bic, popt, pcov, comp_dict, comp_idx]
 
     # SigmaClip isn't perfect. Use these next function to fix bad clips
-    def _fill_clipped_prof(self, search_scope=None, nan_type=0.):
+    def _fill_off_pulse_prof(self, search_scope=None):
         """
         Intended for use on noisy profiles. Fills nan values that are surrounded by non-nans to avoid discontinuities
         in the profile
         """
-        length = len(self._clipped_prof)
+        length = len(self._off_pulse_prof)
         if search_scope is None:
             # Search 5% ahead for non-nans
-            search_scope = round(length*0.05)
-        search_scope = np.linspace(1, search_scope, search_scope, dtype=int)
+            search_scope = round(length*0.2)
+        search_scope = np.linspace(search_scope, 1, search_scope, dtype=int)
+        # Search scope = [x, x-1, x-2, ..., 1]
 
         # Loop over all values in clipped profile
-        for i, val in enumerate(self._clipped_prof):
-            if val == nan_type and not (i+max(search_scope)) >= length:
-                #look 'search_scope' indices ahead for non-nans
-                for j in sorted(search_scope, reverse=True):
-                    #fill in nans
-                    if self._clipped_prof[i+j]==nan_type:
-                        for k in range(j):
-                            self._clipped_prof[i+k]=nan_type
+        for i, val in enumerate(self._off_pulse_prof):
+            # If current index is on-pulse
+            if np.isnan(val):
+                fill_i=0
+                # Loop over search scope
+                for search_i in search_scope: 
+                    # Make a copy of the profile and roll back 
+                    rolled_prof = np.roll(self._off_pulse_prof, -search_i)
+                    # If we find more on-pulse within the search scope and break
+                    if np.isnan(rolled_prof[i]):
+                        fill_i = search_i
                         break
+                # Fill in the on-pulse
+                for j in range(fill_i):
+                    fill_idx = i+j if i+j<len(self._off_pulse_prof) else i+j-len(self._off_pulse_prof)
+                    self._off_pulse_prof[fill_idx] = np.nan
+
+                #look 'search_scope' indices ahead for non-nans
+                #for j in sorted(search_scope, reverse=True):
+                #    #fill in nans
+                #    if np.isnan(self._off_pulse_prof[i+j]):
+                #        for k in range(j):
+                #            self._off_pulse_prof[i+k]=np.nan
+                #        break
 
 
     # Find the individual profile components
@@ -470,9 +513,9 @@ class gfit:
         component_dict={}
         component_idx={}
         num_components=0
-        for i, val in enumerate(self._clipped_prof):
+        for i, val in enumerate(self._off_pulse_prof):
             if np.isnan(val): # On pulse
-                if not np.isnan(self._clipped_prof[i-1]) or i==0: # Off pulse or beginning of profile phase
+                if not np.isnan(self._off_pulse_prof[i-1]) or i==0: # Off pulse or beginning of profile phase
                     num_components+=1
                     comp_key = f"component_{num_components}"
                     component_dict[comp_key]=[]
@@ -683,7 +726,7 @@ class gfit:
         return x_err
 
 
-    # A bunch of maths stuff
+    # A bunch of maths stuff 
     def _integral_multi_gauss(self, *params):
         y=0
         for i in range(0, len(params), 3):

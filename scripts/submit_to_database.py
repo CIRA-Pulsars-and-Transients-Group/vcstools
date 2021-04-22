@@ -395,7 +395,7 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
 
     #estimate S/N
     try:
-        g_fitter = gfit(profile, period=period, clip_type="verbose")
+        g_fitter = gfit(profile, clip_type="verbose")
         g_fitter.plot_name = f"{obsid}_{pulsar}_{num_bins}_bins_gaussian_fit.png"
         g_fitter.auto_gfit()
         g_fitter.plot_fit()
