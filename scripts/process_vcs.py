@@ -64,8 +64,11 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
     logger.info("Downloading files from archive")
     voltdownload = "voltdownload.py"
     obsinfo = meta.getmeta(service='obs', params={'obs_id':str(obsid)})
+    comb_del_check = meta.combined_deleted_check(obsid, begin=start_time, end=stop_time)
     data_format = obsinfo['dataquality']
-    if data_format == 1:
+    if data_format == 1 or (comb_del_check and data_format == 6):
+        # either only the raw data is available (data_format == 1) 
+        # or there was combined files but they were deleted (comb_del_check and data_format == 6)
         target_dir = link = '/raw'
         if ics:
             logger.error("Data have not been recombined in the "

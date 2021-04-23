@@ -483,3 +483,44 @@ def get_best_cal_obs(obsid):
     cal_info = sorted(cal_info, key=itemgetter(1))
 
     return cal_info
+
+
+def combined_deleted_check(obsid, begin=None, end=None):
+    """
+    Check if the combined files are deleted (or do not exist)
+
+    Parameters
+    ----------
+    obsid: int
+        The MWA observation ID (gps time)
+    begin: int
+        The begin GPS time to check (optional)
+    end:   int
+        The end GPS time to check (optional)
+
+    Returns
+    -------
+    comb_del_check: bool
+        True if all combined files are deleted or if they do not exist
+    """
+    # Work out the data_files metadata call parameters
+    params = {'obs_id':obsid, 'nocache':1}
+    if begin is not None:
+        params['mintime'] = begin
+    if end is not None:
+        params['maxtime'] = end
+
+    files_meta = getmeta(service='data_files', params=params)
+
+    # Loop over files to search for a non deleted file
+    comb_del_check = True
+    for file in files_meta.keys():
+        if 'combined' in file:
+            deleted =         files_meta[file]['deleted']
+            remote_archived = files_meta[file]["remote_archived"]
+            if remote_archived and not deleted:
+                # A combined file exists
+                comb_del_check = False
+                break
+
+    return comb_del_check
