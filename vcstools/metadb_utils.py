@@ -85,8 +85,8 @@ def singles_source_search(ra, dec=None, box_size=45., params=None):
             m_o_p = True
 
     if m_o_p:
-        obsid_list = find_obsids_meta_pages(params=params.update({'minra':0.,      'maxra':360.,
-                                                                  'mindec':dec_bot,'maxdec':dec_top}))
+        params.update({'minra':0.,      'maxra':360.,
+                       'mindec':dec_bot,'maxdec':dec_top})
     else:
         ra_low = ra - 30. - box_size #30 is the how far an obs would drift in 2 hours(used as a max)
         ra_high = ra + box_size
@@ -94,8 +94,10 @@ def singles_source_search(ra, dec=None, box_size=45., params=None):
             ra_new = 360 + ra_low
         if ra_high > 360:
             ra_new = ra_high - 360
-        obsid_list = find_obsids_meta_pages(params=params.update({'minra':ra_low,  'maxra':ra_high,
-                                                                    'mindec':dec_bot,'maxdec':dec_top}))
+        params.update({'minra':ra_low,  'maxra':ra_high,
+                       'mindec':dec_bot,'maxdec':dec_top})
+    logger.debug("params: {}".format(params))
+    obsid_list = find_obsids_meta_pages(params=params)
     return obsid_list
 
 def find_obsids_meta_pages(params=None):

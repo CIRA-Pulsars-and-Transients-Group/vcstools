@@ -332,7 +332,6 @@ if __name__ == "__main__":
     if not degrees_check:
         names_ra_dec = format_ra_dec(names_ra_dec, ra_col=1, dec_col=2)
     names_ra_dec = np.array(names_ra_dec)
-    exit()
 
     #Check if the user wants to use --obs for source
     if (len(names_ra_dec) ==1) and (not args.obs_for_source):
