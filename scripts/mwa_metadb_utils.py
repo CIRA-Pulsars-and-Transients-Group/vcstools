@@ -25,8 +25,32 @@ if __name__ == '__main__':
         centre_freq = ( min(channels) + max(channels) ) / 2. * 1.28
         array_phase = get_obs_array_phase(args.obsid)
         start, stop = obs_max_min(args.obsid)
-        available_files, all_files = files_available(args.obsid)
         fov = field_of_view(args.obsid, beam_meta_data=beam_common_data)
+
+        # Check available files
+        available_files, all_files = files_available(args.obsid)
+        # Split into raw and combined files to give a clearer idea of files available
+        available_comb = []
+        available_raw  = []
+        available_ics  = []
+        all_comb = []
+        all_raw  = []
+        all_ics  = []
+        for file_name in all_files:
+            if 'combined' in file_name:
+                all_comb.append(file_name)
+                if file_name in available_files:
+                    available_comb.append(file_name)
+            elif 'ics' in file_name:
+                all_ics.append(file_name)
+                if file_name in available_files:
+                    available_ics.append(file_name)
+            else:
+                all_raw.append(file_name)
+                if file_name in available_files:
+                    available_raw.append(file_name)
+        print(available_raw)
+        #print(available_comb)
 
         print("-------------------------    Obs Info    --------------------------")
         print("Obs Name:           {}".format(data_dict["obsname"]))
@@ -41,8 +65,12 @@ if __name__ == '__main__':
             print("Start time:         {}".format(start))
             print("Stop time:          {}".format(stop))
             print("Duration (s):       {}".format(stop-start))
-            print("Files available:    {:4.1f}%  ({}/{})".format(len(available_files)/len(all_files)*100,
-                                                            len(available_files), len(all_files)))
+            print("Raw  files avail:   {:5.1f}%  ({}/{})".format(len(available_raw)/len(all_raw)*100,
+                                                                 len(available_raw), len(all_raw)))
+            print("ICS  files avail:   {:5.1f}%  ({}/{})".format(len(available_ics)/len(all_ics)*100,
+                                                                 len(available_ics), len(all_ics)))
+            print("Comb files avail:   {:5.1f}%  ({}/{})".format(len(available_comb)/len(all_comb)*100,
+                                                                 len(available_comb), len(all_comb)))
         print("RA Pointing (deg):  {}".format(data_dict["metadata"]["ra_pointing"]))
         print("DEC Pointing (deg): {}".format(data_dict["metadata"]["dec_pointing"]))
         print("Channels:           {}".format(data_dict["rfstreams"]["0"]["frequencies"]))
