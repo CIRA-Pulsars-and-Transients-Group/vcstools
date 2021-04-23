@@ -521,5 +521,6 @@ def combined_deleted_check(obsid, begin=None, end=None):
             if remote_archived and not deleted:
                 # A combined file exists
                 comb_del_check = False
+                break
 
     return comb_del_check
