@@ -261,6 +261,8 @@ if __name__ == "__main__":
                         help='The minimum observation duration to include in output files. Default 0')
     parser.add_argument('--freq_chan', type=int,
                         help='Only use observations that include this frequency channel.')
+    parser.add_argument('--contig', action='store_true',
+                        help='Only use observations that have contiguous frequency channels.')
     obargs.add_argument('--all_volt', action='store_true',
                         help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
     obargs.add_argument('--cal_check', action='store_true',
@@ -352,6 +354,11 @@ if __name__ == "__main__":
         # Update params to only use obs that contain this frequency channel
         params.update({'anychan':args.freq_chan})
         logger.debug("params: {}".format(params))
+    if args.contig:
+        # Update params to only use obs that have contiguous channels
+        params.update({'contigfreq':1})
+        logger.debug("params: {}".format(params))
+
     if args.obsid:
         obsid_list = args.obsid
     elif args.FITS_dir:
