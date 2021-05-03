@@ -696,14 +696,8 @@ if __name__ == '__main__':
 
     logger.info("Using vcstools/{0}".format(args.vcstools_version))
     if args.version:
-        try:
-            import version
-            logger.info(version.__version__)
-            sys.exit(0)
-        except ImportError as IE:
-            logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(IE))
-            sys.exit(0)
+        from vcstools.general_utils import print_version
+        print_version()
 
     #Option parsing
     if not args.obs:

@@ -47,14 +47,8 @@ if __name__ == '__main__':
     logger.propagate = False
 
     if args.version:
-        try:
-            import version
-            logger.info(version.__version__)
-            sys.exit(0)
-        except ImportError as ie:
-            logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(ie))
-            sys.exit(0)
+        from vcstools.general_utils import print_version
+        print_version()
 
     #Setting the_options to the arg inputs
     the_options["obsid"] = args.obsid

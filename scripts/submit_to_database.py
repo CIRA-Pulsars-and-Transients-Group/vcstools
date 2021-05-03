@@ -602,15 +602,6 @@ if __name__ == "__main__":
     uploadargs.add_argument('-i','--ippd',type=str,help="The Intergrated Pulse Profile (sometimes called a pulse profile) file location. Expects a single file that is the output of DSPSR's pav script.")
     uploadargs.add_argument('-w','--waterfall',type=str,help="The file location of a waterfall plot of pulse phase vs frequency. Expects a single file that is the output of DSPSR's psrplot.")
     args = parser.parse_args()
-    if args.version:
-        try:
-            import version
-            logger.info(version.__version__)
-            sys.exit(0)
-        except ImportError as ie:
-            logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(ie))
-            sys.exit(0)
 
     # set up the logger for stand-alone execution
     logger.setLevel(loglevels[args.loglvl])
@@ -620,6 +611,10 @@ if __name__ == "__main__":
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     logger.propagate = False
+
+    if args.version:
+        from vcstools.general_utils import print_version
+        print_version()
 
     #defaults for incoh and calibrator type
     if args.incoh:

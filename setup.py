@@ -70,7 +70,7 @@ download_ANTF_pulsar_database_file(datadir)
 
 vcstools_version = get_git_version()
 #make a temporary version file to be installed then delete it
-with open('version.py', 'a') as the_file:
+with open('vcstools/version.py', 'a') as the_file:
     the_file.write('__version__ = "{}"\n'.format(vcstools_version))
 
 setup(name="mwa_vcstools",
@@ -95,14 +95,14 @@ setup(name="mwa_vcstools",
                # plotting scripts
                'scripts/plotting/plotPolarTileBeam.py', 'scripts/plotting/plotFlatTileBeam.py',
                'scripts/plotting/plotTiedArrayBeam.py', 'scripts/plotting/plotSkyMap.py',
-               'scripts/plotting/plot_BPcal_128T.py', 'scripts/plotting/calc_ephem.py',
+               'scripts/plotting/plot_BPcal_128T.py', 'scripts/plotting/calc_ephem.py'],
                # temporary automatically generated version file
-               'version.py'],
+               #'vcstools/version.py'],
       setup_requires=['pytest-runner'],
       tests_require=['pytest']
 )
 
 # remove files
-os.remove('version.py')
+os.remove('vcstools/version.py')
 if os.path.isfile('record.txt'):
     os.remove('record.txt')

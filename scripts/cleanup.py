@@ -96,14 +96,8 @@ def remove_beamformed(obs, pointing=None):
 if __name__ == '__main__':
     args, loglevels = opt_parser()
     if args.version:
-        try:
-            import version
-            logger.info(version.__version__)
-            sys.exit(0)
-        except ImportError as ie:
-            logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(ie))
-            sys.exit(0)
+        from vcstools.general_utils import print_version
+        print_version()
     
     # set up the logger for stand-alone execution
     logger.setLevel(loglevels[args.loglvl])

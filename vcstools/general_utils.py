@@ -120,3 +120,16 @@ def create_link(data_dir, target_dir, product_dir, link):
     else:
         logger.info("Trying to link {0} against {1}".format(link, target_dir))
         os.symlink(target_dir, link)
+
+def print_version():
+    """
+    Outputs the vcstools version
+    """
+    try:
+        import vcstools.version
+        print(vcstools.version.__version__)
+        sys.exit(0)
+    except ImportError as IE:
+        logger.error("Couldn't import version.py - have you installed vcstools?")
+        logger.error("ImportError: {0}".format(IE))
+        sys.exit(0)
