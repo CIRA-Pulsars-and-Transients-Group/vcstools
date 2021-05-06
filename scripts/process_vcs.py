@@ -454,6 +454,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
     P_dir = os.path.join(product_dir, "pointings")
     mdir(P_dir, "Pointings", gid=comp_config['gid'])
+    mdir(os.path.join(product_dir, "incoh"), "Incoh", gid=comp_config['gid'])
     # startjobs = True
 
     # Set up supercomputer dependant parameters
@@ -601,6 +602,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                         commands.append("cp {0}/{1}/{2}_{3}_{1}_ch{4}_00*.fits "
                                         "{5}/{1}/".format(comp_config['ssd_dir'], pointing,
                                         project_id, obs_id, coarse_chan, P_dir))
+                    if 'i' in bf_formats:
+                        commands.append("cp {0}/{1}/{2}_{3}_{1}_ch{4}_00*.fits "
+                                        "{5}/{1}/".format(comp_config['ssd_dir'], "incoh",
+                                        project_id, obs_id, coarse_chan, product_dir))
                 commands.append("")
 
                 job_id = submit_slurm(make_beam_small_batch, commands,

@@ -262,7 +262,7 @@ void populate_psrfits_header(
             }
             else
             {
-                sprintf(pf[p].basefilename, "../incoh/%s_%s_incoh_ch%03d",
+                sprintf(pf[p].basefilename, "incoh/%s_%s_incoh_ch%03d",
                         pf[p].hdr.project_id, pf[p].hdr.source, ch);
             }
         }
