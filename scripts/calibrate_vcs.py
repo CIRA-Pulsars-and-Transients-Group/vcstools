@@ -670,12 +670,10 @@ class RTScal(object):
         jobids = []
         nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
-        slurm_kwargs = {"partition": "gpuq",
-                        "chdir": "{0}".format(self.rts_out_dir),
+        slurm_kwargs = {"chdir": "{0}".format(self.rts_out_dir),
                         "time": "2:00:00",
                         "nodes": "{0}".format(nnodes),
-                        "gres": "gpu:1",
-                        "ntasks-per-node": "1"}
+                        "cpus-per-gpu": "1"}
         module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
         commands.append("export UCX_MEMTYPE_CACHE=n")
@@ -868,12 +866,10 @@ class RTScal(object):
             nnodes = v + 1
             chans = k.split('_')[-1].split(".")[0]
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
-            slurm_kwargs = {"partition": "gpuq",
-                            "chdir": "{0}".format(self.rts_out_dir),
+            slurm_kwargs = {"chdir": "{0}".format(self.rts_out_dir),
                             "time": "2:00:00",
                             "nodes": "{0}".format(nnodes),
-                            "gres": "gpu:1",
-                            "ntasks-per-node": "1"}
+                            "cpus-per-gpu": "1"}
             module_list= ["RTS/master"]
             commands = list(self.script_body)  # make a copy of body to then extend
             commands.append("export UCX_MEMTYPE_CACHE=n")

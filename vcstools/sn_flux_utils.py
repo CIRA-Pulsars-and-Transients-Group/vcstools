@@ -865,7 +865,6 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
     """
     #We will attain uncertainties for s_mean, gain, t_sys and W_50.
     # other uncertainties are considered negligible
-    logger.info("hello")
     if query is None:
         query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC).pandas
 

@@ -83,7 +83,8 @@ def cal_on_database_check(obsid):
 
 def write_output_source_files(output_data,
                               beam='analytic', min_power=0.3, cal_check=False,
-                              SN_est=False, plot_est=False):
+                              SN_est=False, plot_est=False,
+                              min_time=0):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is true.
     """
@@ -124,32 +125,34 @@ def write_output_source_files(output_data,
                 output_file.write('\n')
             for data in output_data[source]:
                 obsid, duration, enter, leave, max_power, freq, band = data
-                if SN_est:
-                    beg, end = obs_max_min(obsid)
-                oap = get_obs_array_phase(obsid)
-                output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}   {:6.2f} {:6.2f}'.\
-                           format(obsid, duration, enter, leave, max_power, oap, freq, band))
-                if SN_est:
-                    pulsar_sn, pulsar_sn_err, _, _ = sfe.est_pulsar_sn(source, obsid, beg, end, plot_flux=plot_est)
-                    if pulsar_sn is None:
-                        output_file.write('   None    None')
-                    else:
-                        output_file.write('{:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
+                if duration > min_time:
+                    if SN_est:
+                        beg, end = obs_max_min(obsid)
+                    oap = get_obs_array_phase(obsid)
+                    output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}   {:6.2f} {:6.2f}'.\
+                            format(obsid, duration, enter, leave, max_power, oap, freq, band))
+                    if SN_est:
+                        pulsar_sn, pulsar_sn_err, _, _ = sfe.est_pulsar_sn(source, obsid, beg, end, plot_flux=plot_est)
+                        if pulsar_sn is None:
+                            output_file.write('   None    None')
+                        else:
+                            output_file.write('{:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
 
-                if cal_check:
-                    #checks the MWA Pulsar Database to see if the obsid has been
-                    #used or has been calibrated
-                    logger.info("Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid))
-                    cal_check_result = cal_on_database_check(obsid)
-                    output_file.write("   {0}\n".format(cal_check_result))
-                else:
-                    output_file.write("\n")
+                    if cal_check:
+                        #checks the MWA Pulsar Database to see if the obsid has been
+                        #used or has been calibrated
+                        logger.info("Checking the MWA Pulsar Databse for the obsid: {0}".format(obsid))
+                        cal_check_result = cal_on_database_check(obsid)
+                        output_file.write("   {0}\n".format(cal_check_result))
+                    else:
+                        output_file.write("\n")
     return
 
 
 def write_output_obs_files(output_data, obsid_meta,
                            beam='analytic', min_power=0.3,
-                           cal_check=False, SN_est=False, plot_est=False):
+                           cal_check=False, SN_est=False, plot_est=False,
+                           min_time=0):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is false.
     """
@@ -195,18 +198,19 @@ def write_output_obs_files(output_data, obsid_meta,
 
             for data in output_data[obsid]:
                 pulsar, enter_beam, exit_beam, max_power = data
-                output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} '.format(pulsar,
-                                  enter_beam, exit_beam, max_power))
-                if SN_est:
-                    beg = int(obsid) + 7
-                    end = beg + int(obsid_meta[on][3])
-                    pulsar_sn, pulsar_sn_err, _, _ = sn_dict[pulsar]
-                    if pulsar_sn is None:
-                        output_file.write('   None    None\n')
+                if (exit_beam - enter_beam) * obsid_meta[on][3] > min_time:
+                    output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} '.format(pulsar,
+                                    enter_beam, exit_beam, max_power))
+                    if SN_est:
+                        beg = int(obsid) + 7
+                        end = beg + int(obsid_meta[on][3])
+                        pulsar_sn, pulsar_sn_err, _, _ = sn_dict[pulsar]
+                        if pulsar_sn is None:
+                            output_file.write('   None    None\n')
+                        else:
+                            output_file.write('{:9.2f} {:9.2f}\n'.format(pulsar_sn, pulsar_sn_err))
                     else:
-                        output_file.write('{:9.2f} {:9.2f}\n'.format(pulsar_sn, pulsar_sn_err))
-                else:
-                    output_file.write('\n')
+                        output_file.write('\n')
 
     return
 
@@ -221,31 +225,52 @@ if __name__ == "__main__":
     description="""
     This code is used to list the sources within the beam of observations IDs or using --obs_for_source list all the observations for each source. The sources can be input serval ways: using a list of pulsar names (--pulsar), using a complete catalogue file of pulsars (--dl_PSRCAT) or RRATs (--RRAT and --dl_RRAT), using a compatable catalogue (--in_cat with the help of --names and --coordstype) or using a RA and DEC coordinate (--coords). The observation IDs can be input (--obsid) or gathered from a directory (--FITS_dir). The default is to search all observation IDs from http://mwa-metadata01.pawsey.org.au/metadata/ that have voltages and list every known pulsar from PSRCAT in each observation ID.
     """)
-    parser.add_argument('--obs_for_source',action='store_true',help='Instead of listing all the sources in each observation it will list all of the observations for each source. For increased efficiency it will only search OBSIDs within the primary beam.')
-    parser.add_argument('--output',type=str,help='Chooses a file for all the text files to be output to. The default is your current directory', default = './')
-    parser.add_argument('-b','--beam',type=str, default = 'analytic', help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
-    parser.add_argument('-m','--min_power',type=float,help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3', default=0.3)
+    parser.add_argument('--obs_for_source', action='store_true',
+                        help='Instead of listing all the sources in each observation it will list all of the observations for each source. For increased efficiency it will only search OBSIDs within the primary beam.')
+    parser.add_argument('-b', '--beam', type=str, default = 'analytic',
+                        help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
+    parser.add_argument('-m', '--min_power', type=float, default=0.3,
+                        help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3')
+    parser.add_argument('--output', type=str, default = './',
+                        help='Chooses a file for all the text files to be output to. The default is your current directory')
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
                                     choices=loglevels.keys(), default="INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
 
     #source options
     sourargs = parser.add_argument_group('Source options', 'The different options to control which sources are used. Default is all known pulsars.')
-    sourargs.add_argument('-p','--pulsar',type=str, nargs='*',help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"', default = None)
-    sourargs.add_argument('--max_dm',type=float, default = 250., help='The maximum DM for pulsars. All pulsars with DMs higher than the maximum will not be included in output files. Default=250.0')
-    sourargs.add_argument('--source_type',type=str, default = 'Pulsar', help="An astronomical source type from ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs', Fermi] to search for all sources in their respective web catalogue.")
-    sourargs.add_argument('--in_cat',type=str,help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
-    sourargs.add_argument('-c','--coords',type=str,nargs='*',help='String containing the source\'s coordinates to be searched for in the format "RA,DEC" "RA,DEC". Must be enterered as either: "hh:mm:ss.ss,+dd:mm:ss.ss" or "deg,-deg". Please only use one format.')
+    sourargs.add_argument('-p', '--pulsar', type=str, nargs='*', default = None,
+                          help='Searches for all known pulsars. This is the default. To search for individual pulsars list their Jnames in the format " -p J0534+2200 J0630-2834"')
+    sourargs.add_argument('--max_dm', type=float, default = 250.,
+                          help='The maximum DM for pulsars. All pulsars with DMs higher than the maximum will not be included in output files. Default=250.0')
+    sourargs.add_argument('--source_type', type=str, default='Pulsar',
+                          help="An astronomical source type from ['Pulsar', 'FRB', 'rFRB', 'GC', 'RRATs', Fermi] to search for all sources in their respective web catalogue.")
+    sourargs.add_argument('--in_cat', type=str,
+                          help='Location of source catalogue, must be a csv where each line is in the format "source_name, hh:mm:ss.ss, +dd:mm:ss.ss".')
+    sourargs.add_argument('-c', '--coords', type=str, nargs='*',
+                          help='String containing the source\'s coordinates to be searched for in the format "RA_DEC" "RA_DEC". Must be enterered as either: "hh:mm:ss.ss_+dd:mm:ss.ss" or "deg_-deg". Please only use one format.')
     #finish above later and make it more robust to incclude input as sex or deg and perhaps other coordinte systmes
 
     #observation options
     obargs = parser.add_argument_group('Observation ID options', 'The different options to control which observation IDs are used. Default is all observation IDs with voltages.')
-    obargs.add_argument('--FITS_dir',type=str,help='Instead of searching all OBS IDs, only searchs for the obsids in the given directory. Does not check if the .fits files are within the directory. Default = /group/mwavcs/vcs')
-    obargs.add_argument('-o','--obsid',type=int,nargs='*',help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
-    obargs.add_argument('--all_volt',action='store_true',help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
-    obargs.add_argument('--cal_check',action='store_true',help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
-    obargs.add_argument('--sn_est',action='store_true',help='Make a expected signal to noise calculation using the flux densities from the ANTF pulsar catalogue and include them in the output file. Default: False.')
-    obargs.add_argument('--plot_est',action='store_true',help='If used, will output flux estimation plots while sn_est arg is true. Default: False.')
+    obargs.add_argument('--FITS_dir', type=str,
+                        help='Instead of searching all OBS IDs, only searchs for the obsids in the given directory. Does not check if the .fits files are within the directory. Default = /group/mwavcs/vcs')
+    obargs.add_argument('-o','--obsid', type=int, nargs='*',
+                        help='Input several OBS IDs in the format " -o 1099414416 1095506112". If this option is not input all OBS IDs that have voltages will be used')
+    parser.add_argument('--min_time', type=float, default=0,
+                        help='The minimum observation duration to include in output files. Default 0')
+    parser.add_argument('--freq_chan', type=int,
+                        help='Only use observations that include this frequency channel.')
+    parser.add_argument('--contig', action='store_true',
+                        help='Only use observations that have contiguous frequency channels.')
+    obargs.add_argument('--all_volt', action='store_true',
+                        help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
+    obargs.add_argument('--cal_check', action='store_true',
+                        help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
+    obargs.add_argument('--sn_est', action='store_true',
+                        help='Make a expected signal to noise calculation using the flux densities from the ANTF pulsar catalogue and include them in the output file. Default: False.')
+    obargs.add_argument('--plot_est', action='store_true',
+                        help='If used, will output flux estimation plots while sn_est arg is true. Default: False.')
     args=parser.parse_args()
 
 
@@ -291,9 +316,8 @@ if __name__ == "__main__":
                 names_ra_dec.append(row)
     elif args.coords:
         names_ra_dec = []
-        for cn, c in enumerate(args.coords):
-            names_ra_dec.append(['{0}_{1}'.format(c.split(',')[0], c.split(',')[1]),
-                                c.split(',')[0], c.split(',')[1]])
+        for c in args.coords:
+            names_ra_dec.append([c, c.split('_')[0], c.split('_')[1]])
             if ":" not in c:
                 degrees_check = True
     else:
@@ -323,6 +347,18 @@ if __name__ == "__main__":
 
     #get obs IDs
     logger.info("Gathering observation IDs")
+    # A dictionary of constraints used to search for suitable observations as explained here:
+    # https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Findobservations
+    params = {'mode':'VOLTAGE_START'}
+    if args.freq_chan:
+        # Update params to only use obs that contain this frequency channel
+        params.update({'anychan':args.freq_chan})
+        logger.debug("params: {}".format(params))
+    if args.contig:
+        # Update params to only use obs that have contiguous channels
+        params.update({'contigfreq':1})
+        logger.debug("params: {}".format(params))
+
     if args.obsid:
         obsid_list = args.obsid
     elif args.FITS_dir:
@@ -334,10 +370,10 @@ if __name__ == "__main__":
             ob_dec = names_ra_dec[0][2]
         else:
             ob_ra, ob_dec = sex2deg(names_ra_dec[0][1], names_ra_dec[0][2])
-        obsid_list = singles_source_search(ob_ra)
+        obsid_list = singles_source_search(ob_ra, params=params)
     else:
         #use all obsids
-        obsid_list = find_obsids_meta_pages({'mode':'VOLTAGE_START'})
+        obsid_list = find_obsids_meta_pages(params)
 
 
     if args.beam == 'full_EE':
@@ -358,9 +394,11 @@ if __name__ == "__main__":
         write_output_source_files(output_data,
                                   beam=args.beam, min_power=args.min_power,
                                   cal_check=args.cal_check,
-                                  SN_est=args.sn_est, plot_est=args.plot_est)
+                                  SN_est=args.sn_est, plot_est=args.plot_est,
+                                  min_time=args.min_time)
     else:
         write_output_obs_files(output_data, obsid_meta,
                                beam=args.beam, min_power=args.min_power,
                                cal_check=args.cal_check,
-                               SN_est=args.sn_est, plot_est=args.plot_est)
+                               SN_est=args.sn_est, plot_est=args.plot_est,
+                               min_time=args.min_time)
