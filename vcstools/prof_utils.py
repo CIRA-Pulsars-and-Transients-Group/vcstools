@@ -564,7 +564,7 @@ def check_clip(prof_to_check, toomuch=0.9, toolittle_frac=0., toolittle_absolute
 
 
 # Alternative method to find the location and width of peaks
-def estimate_components_onpulse(profile, l=1e-4, noise_frac=0.2, plot_name=None):
+def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None):
     """ 
     Works by using stickel with lambda=1 to get a very generic profile outline, then uses UnivariateSpline to
     find the min/maxima and estimate which of these are real depending on their relative amplitude.
@@ -576,9 +576,9 @@ def estimate_components_onpulse(profile, l=1e-4, noise_frac=0.2, plot_name=None)
     profile: list
         The pulse profile
     l: float
-        The lambda value to use for Stickel regularisation. Don't touch unless you know what you're doing. Default: 1e-4
+        The lambda value to use for Stickel regularisation. Don't touch unless you know what you're doing. Default: 1e-5
     noise_frac: float
-        Maxima found with relative (to max) amplitude less than this will be ignored
+        Maxima found with relative (to max) amplitude less than this will be ignored. This can be lowered for bright profiles
     plot_name: string
         If supplied, will make a plot of the profile, its splined regularisation, maxima and best estimate of on-pulse
 
@@ -594,14 +594,16 @@ def estimate_components_onpulse(profile, l=1e-4, noise_frac=0.2, plot_name=None)
         est_on_oulse: list
             List of tuples containing and estimate of the true on-pulse.
             Indexes taken as half of the difference between estimates
+        noise: float
+            The standard deviation of the noise taken as the off-pulse region
     """
-    x = np.linspace(0, len(profile), len(profile))
+    x = np.linspace(0, len(profile)-1, len(profile))
     # Normalise profile
-    profile = profile/max(profile)
+    norm_prof = profile/max(profile)
 
     # Stickel takes a numpy array in the form [[x0, y0], [x1, y1], ..., [xn, yn]]
     xy_prof = []
-    for i, val in enumerate(profile):
+    for i, val in enumerate(norm_prof):
         xy_prof.append([x[i], val])
     xy_prof = np.array(xy_prof)
     
@@ -692,21 +694,65 @@ def estimate_components_onpulse(profile, l=1e-4, noise_frac=0.2, plot_name=None)
     underest_on_pulse = _fill_on_pulse_region(underest_on_pulse, splined_profile, noise_frac=noise_frac)
     est_on_pulse = _fill_on_pulse_region(est_on_pulse, splined_profile, noise_frac=noise_frac)
 
+    # Work out the noise using the oversetimated on-pulse region
+    noise = noise_from_on_pulse(profile, overest_on_pulse)
+
     if plot_name:
         plt.figure(figsize=(12, 8))
-        plt.plot(profile, label="Profile")
-        plt.plot(reg_prof, label="Smoothed Profile")
+        plt.plot(x, norm_prof, label="Profile")
+        plt.plot(x, reg_prof, label="Smoothed Profile")
         for i in real_max:
-            plt.axvline(x=i, ls=":", lw=2, color="blue")
+            plt.axvline(x=i, ls=":", lw=2, color="gray")
         for i in est_on_pulse:
+            plt.axvline(x=i[0], ls=":", lw=2, color="blue")
+            plt.axvline(x=i[1], ls=":", lw=2, color="blue")
+        for i in overest_on_pulse:
             plt.axvline(x=i[0], ls=":", lw=2, color="red")
             plt.axvline(x=i[1], ls=":", lw=2, color="red")
+        plt.text(0.05, 0.9, f"Noise: {round(noise, 4)}")
         plt.legend()
         plt.savefig(plot_name)
         plt.close()
 
     return {"maxima": real_max, "underestimated_on": underest_on_pulse, "overestimated_on": overest_on_pulse,
-            "est_on_pulse": est_on_pulse}
+            "est_on_pulse": est_on_pulse, "noise": noise}
+
+
+def noise_from_on_pulse(profile, on_pulse_pairs):
+    """ 
+    Works out the noise level using the input profile and on-pulse description
+
+    Parameters:
+    -----------
+    profile: list
+        The profile to check the noise of
+    on_pulse_pairs: list
+        List of sub-lists/tuples. Each sub-list is a pair of numbers that describes the upper and lower bounds of the 
+        ON PULSE region
+
+    Returns:
+    --------
+    noise: float
+        The STD noise of the profile
+    """
+    # Figure out the off-pulse profile
+    off_pulse = []
+    profile = list(profile)
+    for i in range(0, len(on_pulse_pairs)-1):
+        lower = on_pulse_pairs[i][1]
+        upper = on_pulse_pairs[i+1][0]
+        off_pulse += profile[lower:upper]
+    # Deal with wrap-around
+    lower = on_pulse_pairs[-1][1]
+    upper = on_pulse_pairs[0][0]
+    if lower > upper: # On-pulse region not across phase bounds
+        off_pulse += (profile[lower:])
+        off_pulse += (profile[:upper])
+    else: # On-pulse region is across phase bounds
+        off_pulse += (profile[:lower])
+        off_pulse += (profile[upper:])
+
+    return np.std(off_pulse)
 
 
 def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, noise_frac=0.2):
