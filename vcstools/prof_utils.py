@@ -3,8 +3,11 @@ import subprocess
 import re
 import logging
 from astropy.time import Time
+from scipy.interpolate import UnivariateSpline
+from matplotlib import pyplot as plt
 
 from vcstools.config import load_config_file
+from vcstools.stickel import Stickel
 
 logger = logging.getLogger(__name__)
 
@@ -534,7 +537,7 @@ def auto_analyse_pulse_prof(prof_data, period):
 
 
 # SigmaClip isn't perfect. Use these next function to check for bad clips
-def check_clip(prof_to_check, toomuch=0.8, toolittle_frac=0., toolittle_absolute=4):
+def check_clip(prof_to_check, toomuch=0.9, toolittle_frac=0., toolittle_absolute=4):
     """
     Determines whether a clipped profile from sigmaClip() has been appropriately clipped by checking the number of nans.
     Raises a LittleClipError or a LargeClipError if too little or toomuch of the data has been clipped respectively.
@@ -558,3 +561,206 @@ def check_clip(prof_to_check, toomuch=0.8, toolittle_frac=0., toolittle_absolute
         raise LittleClipError("Not enough data has been clipped. Condsier trying a smaller alpha value when clipping.")
     elif num_nans >= toomuch*len(prof_to_check):
         raise LargeClipError("A large portion of the data has been clipped. Condsier trying a larger alpha value when clipping.")
+
+
+# Alternative method to find the location and width of peaks
+def estimate_components_onpulse(profile, l=1e-4, noise_frac=0.2, plot_name=None):
+    """ 
+    Works by using stickel with lambda=1 to get a very generic profile outline, then uses UnivariateSpline to
+    find the min/maxima and estimate which of these are real depending on their relative amplitude.
+    NOTE:   The on-pulse estimates are read form LEFT to RIGHT. Meaning onpulse[0] can be a greater index than onpulse[1].
+            This indicates that the on-pulse is wrapped over the end of the phase.
+
+    Parameters:
+    -----------
+    profile: list
+        The pulse profile
+    l: float
+        The lambda value to use for Stickel regularisation. Don't touch unless you know what you're doing. Default: 1e-4
+    noise_frac: float
+        Maxima found with relative (to max) amplitude less than this will be ignored
+    plot_name: string
+        If supplied, will make a plot of the profile, its splined regularisation, maxima and best estimate of on-pulse
+
+    Returns:
+    --------
+    dict:
+        maxima: list
+            The maximum points of the splined profile
+        underestimated_on: list
+            list of tuples containing the understimated beginning and end of each profile component
+        overestimated_on: list
+            list of tuples containing the overestimated beginning and end of each profile component
+        est_on_oulse: list
+            List of tuples containing and estimate of the true on-pulse.
+            Indexes taken as half of the difference between estimates
+    """
+    x = np.linspace(0, len(profile), len(profile))
+    # Normalise profile
+    profile = profile/max(profile)
+
+    # Stickel takes a numpy array in the form [[x0, y0], [x1, y1], ..., [xn, yn]]
+    xy_prof = []
+    for i, val in enumerate(profile):
+        xy_prof.append([x[i], val])
+    xy_prof = np.array(xy_prof)
+    
+    # Perform the stickel smooth
+    stickel = Stickel(xy_prof)
+    stickel.smooth_y(l)
+    reg_prof = stickel.yhat
+
+    # Spline, get derivative and roots
+    spline = UnivariateSpline(x, reg_prof, s=0, k=4)
+    dy_spline = spline.derivative()
+    dy_roots = dy_spline.roots()
+    spline = UnivariateSpline(x, reg_prof, s=0, k=5)
+    dy2_spline = spline.derivative().derivative()
+    dy2_roots = dy2_spline.roots()
+    #all_roots = sorted(dy_roots + dy2_roots) # Amalgom of roots
+    
+    # Profile with spline applied
+    splined_profile = spline(x)
+    splined_profile /= max(splined_profile) # normalise
+
+    # Find which dy roots resemble real signal
+    real_max = []
+    false_max = []
+    for root in dy_roots:
+        rounded_root = round(root)
+        amp_at_root = splined_profile[rounded_root]
+        # If the amp is too small, it's not signal
+        if amp_at_root < noise_frac:
+            false_max.append(root)
+            continue
+        # If this is a min, we don't care about it
+        if splined_profile[rounded_root+1] > amp_at_root:    
+            false_max.append(root)
+            continue
+        
+        # Otherwise, this is a real max
+        real_max.append(root)
+
+    # Estimate the on-pulse regions
+    """
+    We will create an over and under-estimate...
+    The overestimate will mark the regions between the real max and the flanking inflections of the spline
+    The understimate will mark the regions between the real max and its flanking false maxima
+    """
+    overest_on_pulse = []
+    est_on_pulse = []
+    underest_on_pulse = []
+    for root in real_max:
+        # Underestimated on-pulse
+        dy2_roots = np.append(dy2_roots, root)
+        dy2_roots = sorted(dy2_roots)
+        i = dy2_roots.index(root)
+        dy2_roots.remove(root)
+        try:
+            understimate = [round(dy2_roots[i-1]), round(dy2_roots[i])]
+        except IndexError as e:
+            # The next inflection is on the other side of the profile
+            if i == 0: # Left side
+                underestimate = [round(dy2_roots[-1]), round(dy2_roots[i])]
+            else: # Right side
+                underestimate = [round(dy2_roots[i-1]), round(dy2_roots[0])]
+        underest_on_pulse.append(understimate)
+        
+        # Overestimated on-pulse
+        false_max = np.append(false_max, root)
+        false_max = sorted(false_max)
+        j = false_max.index(root)
+        false_max.remove(root)
+        try: 
+            overestimate = [round(false_max[j-1]), round(false_max[j])]
+        except IndexError as e:
+            # The next inflection is on the other side of the profile
+            if j == 0: # Left side
+                overestimate = [round(false_max[-1]), round(false_max[j])]
+            else: # Right side
+                overestimate = [round(false_max[j-1]), round(false_max[0])]
+        overest_on_pulse.append(overestimate)
+
+    # on-pulse estimate (between the over and under est)
+    for over, under in zip(overest_on_pulse, underest_on_pulse):
+        lo = round( (over[0] + under[0])/2 )
+        hi = round( (over[1]+ under[1])/2 )
+        est_on_pulse.append( [lo, hi] ) 
+
+    # Fill the on-pulse regions 
+    overest_on_pulse = _fill_on_pulse_region(overest_on_pulse, splined_profile, noise_frac=noise_frac)
+    underest_on_pulse = _fill_on_pulse_region(underest_on_pulse, splined_profile, noise_frac=noise_frac)
+    est_on_pulse = _fill_on_pulse_region(est_on_pulse, splined_profile, noise_frac=noise_frac)
+
+    if plot_name:
+        plt.figure(figsize=(12, 8))
+        plt.plot(profile, label="Profile")
+        plt.plot(reg_prof, label="Smoothed Profile")
+        for i in real_max:
+            plt.axvline(x=i, ls=":", lw=2, color="blue")
+        for i in est_on_pulse:
+            plt.axvline(x=i[0], ls=":", lw=2, color="red")
+            plt.axvline(x=i[1], ls=":", lw=2, color="red")
+        plt.legend()
+        plt.savefig(plot_name)
+        plt.close()
+
+    return {"maxima": real_max, "underestimated_on": underest_on_pulse, "overestimated_on": overest_on_pulse,
+            "est_on_pulse": est_on_pulse}
+
+
+def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, noise_frac=0.2):
+    # Nothing to do if the pairs are of length 1
+    if len(on_pulse_pairs) <= 1:
+        return on_pulse_pairs
+    
+    # Initiate the absolute noise limit
+    noise_min = noise_frac * max(smoothed_profile)
+
+    # Rearrange the tuples
+    # [(x1, x2), (y1, y2), (z1, z2)]
+    # ---->
+    # [(x2, y1), (y2, z1), (z2, x1)]
+    check_pairs = []
+    for i in range(0, len(on_pulse_pairs)-1):
+        a_pair = on_pulse_pairs[i]
+        b_pair = on_pulse_pairs[i+1]
+        check_pairs.append((a_pair[1], b_pair[0]))
+    # Add the bounds pair
+    a_pair = on_pulse_pairs[-1]
+    b_pair = on_pulse_pairs[0]
+    check_pairs.append((a_pair[1], b_pair[0]))
+
+    # Check the space between on_pulse regions
+    on_pulse_ammendments = []
+    for i in range(0, len(check_pairs)-1):
+        lower_bounds = check_pairs[i][0]
+        upper_bounds = check_pairs[i][1]
+        off_pulse_region = smoothed_profile[lower_bounds:upper_bounds]
+        if lower_bounds == upper_bounds: # Bounds are connected, so we can join them
+            on_pulse_ammendments.append(check_pairs[i])
+        elif min(off_pulse_region) >= noise_min: # This is still on-pulse
+            on_pulse_ammendments.append(check_pairs[i])
+    # Check the bounds pair
+    lower_bounds = check_pairs[-1][0]
+    off_pulse_region_1 = smoothed_profile[lower_bounds:]
+    upper_bunds = check_pairs[-1][1]
+    off_pulse_region_2 = smoothed_profile[:upper_bounds]
+    if min(off_pulse_region_1) >= noise_min and min(off_pulse_region_2) >= noise_min:
+        on_pulse_ammendments.append(check_pairs[-1])
+
+    # Apply the ammendments to the on-pulse region
+    true_on_pulse = on_pulse_pairs.copy()
+    for ammendment_pair in on_pulse_ammendments:
+        # The beginning point of the on-pulse to be ammended
+        begin = ammendment_pair[0]
+        end = ammendment_pair[1]
+        # Find where the beginning meets up with the endpoints
+        current_ends = np.array([i[1] for i in true_on_pulse])
+        idx = np.where(current_ends == begin)[0][0]
+        idx_next = idx+1 if begin<end else -1 # Compensates for wrap-around on-pulse region
+        # Change the end point to be the end of the next on-pulse region
+        true_on_pulse[idx][1] = true_on_pulse[idx_next][1]
+        del true_on_pulse[idx_next]
+
+    return true_on_pulse
