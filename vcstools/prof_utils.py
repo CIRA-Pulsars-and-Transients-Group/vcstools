@@ -5,6 +5,8 @@ import logging
 from astropy.time import Time
 from scipy.interpolate import UnivariateSpline
 from matplotlib import pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.lines import Line2D
 
 from vcstools.config import load_config_file
 from vcstools.stickel import Stickel
@@ -698,9 +700,10 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
     noise = noise_from_on_pulse(profile, overest_on_pulse)
 
     if plot_name:
-        plt.figure(figsize=(12, 8))
-        plt.plot(x, norm_prof, label="Profile")
-        plt.plot(x, reg_prof, label="Smoothed Profile")
+        plt.figure(figsize=(14, 10))
+        plt.plot(x, norm_prof, label="Profile", color="cornflowerblue")
+        plt.plot(x, reg_prof, label="Smoothed Profile", color="orange")
+        plt.xlim((0, len(x)-1))
         for i in real_max:
             plt.axvline(x=i, ls=":", lw=2, color="gray")
         for i in est_on_pulse:
@@ -709,9 +712,21 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
         for i in overest_on_pulse:
             plt.axvline(x=i[0], ls=":", lw=2, color="red")
             plt.axvline(x=i[1], ls=":", lw=2, color="red")
-        plt.text(0.05, 0.9, f"Noise: {round(noise, 4)}")
-        plt.legend()
-        plt.savefig(plot_name)
+        plt.errorbar(0.03*len(norm_prof), 0.9, yerr=noise, color="gray", capsize=10, markersize=0, label="Error")
+        plt.text(0.04*len(norm_prof), 0.89, f"Noise: {round(noise, 4)}")
+
+        # Add some custom stuff to the legend
+        colors = ['gray', 'blue', 'red']
+        lines = [Line2D([0], [0], color=c, linewidth=3, linestyle=':') for c in colors]
+        lines.append(Line2D([0], [0], color="cornflowerblue", linewidth=3, linestyle="-"))
+        lines.append(Line2D([0], [0], color="orange", linewidth=3, linestyle="-"))
+        lines.append(Line2D([0], [0], color="gray", linewidth=3, linestyle="-"))
+        labels = ["Maxima", "On-pulse estimate", "Noise estimate bounds", "Profile", "Smoothed Profile", "Error"]
+        plt.legend(lines, labels)
+        plt.xlabel("Bins")
+        plt.ylabel("Amplitude")
+        plt.title(plot_name[:-4])
+        plt.savefig(plot_name, bbox_inches="tight")
         plt.close()
 
     return {"maxima": real_max, "underestimated_on": underest_on_pulse, "overestimated_on": overest_on_pulse,
