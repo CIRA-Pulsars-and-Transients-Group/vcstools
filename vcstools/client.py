@@ -3,6 +3,14 @@
 import os
 import sys
 import requests
+import json
+import socket
+
+from vcstools.pointing_utils import sex2deg
+from vcstools.metadb_utils import getmeta
+
+import logging
+logger = logging.getLogger(__name__)
 
 auth=('admin', 'testing123')
 base_url = 'http://localhost:8000'
@@ -21,8 +29,49 @@ urls = {'search_parameters': base_url+'/search_parameters_create/',
         'detection': base_url + '/detection_create/',
         'detection_file':base_url + '/detection_file_create/'}
 
+
+def upload_wrapper(url, data):
+    """
+    Wrapper for the upload to the MWA pulsar database
+
+    Parameters
+    ----------
+    url: string
+        Website url for the relivent table
+    data: dict
+        Data dict in the format for the table
+    """
+    # set up a session with the given auth
+    session = requests.session()
+    session.auth = auth
+
+    #logger.debug(data)
+    print(data)
+    r = session.post(url, json=data)
+    if r.status_code > 201:
+        logger.error("Error uploading. Status code: {}".format(r.status_code))
+        sys.exit(r.status_code)
+    session.close()
+
+
+def find_supercomputer_id():
+    """
+    Work out which supercomputer you are on and return its ID
+    """
+    hostname = socket.gethostname()
+    if hostname.startswith('john') or hostname.startswith('farnarkle'):
+        return 1
+    elif hostname.startswith('mwa') or hostname.startswith('garrawarla'):
+        return 2
+    elif hostname.startswith('x86')  or hostname.startswith('arm'):
+        return 3
+    else:
+        logger.error('Unknown computer {}. Exiting'.format(hostname))
+        sys.exit(1)
+
 def upload_beam(name_obs_pos, begin, end,
-                vcstools_version=None, mwa_search_version=None, mwa_search_command=None):
+                vcstools_version=None, mwa_search_version=None,
+                mwa_search_command=None, supercomputer_id=None):
     """
     Upload the a pointing to the beams table of the MWA pulsar database
 
@@ -40,10 +89,9 @@ def upload_beam(name_obs_pos, begin, end,
         The mwa_search version. By default it will use mwa_search.version.__version__
     mwa_search_command: string
         The mwa_search_pipeline.nf command
+    supercompter_id: int
+        The ID of the supercomputer. By default will use the supercomputer you're currently on
     """
-    # set up a session with the given auth
-    session = requests.session()
-    session.auth = auth
 
     # Get info from input name
     name, obsid, raj, decj = name_obs_pos.split("_")
@@ -57,15 +105,62 @@ def upload_beam(name_obs_pos, begin, end,
         import mwa_search.version
         mwa_search_version = mwa_search.version.__version__
 
+    if supercomputer_id is None:
+        supercomputer_id = find_supercomputer_id()
+
     # Set up data to upload
     data = {'ra_degrees': rad,
             'dec_degrees': decd,
             'begin_gps_seconds': begin,
             'end_gps_seconds': end,
-            'supercomputer': ,
+            'username': auth[0],
+            'supercomputer_id': supercomputer_id,
             'vcstools_version': vcstools_version,
             'mwa_search_version': mwa_search_version,
             'mwa_search_command': mwa_search_command,
-            'observation': obsid}
+            'observation_id': obsid}
 
-    r = session.post(urls['beams'], data=data)
+    upload_wrapper(urls['beams'], data)
+
+
+def upload_obsid(obsid):
+    """
+    Upload the an Observation to the observation_settings table of the MWA pulsar database
+
+    Parameters
+    ----------
+    obsid: int or list of ints
+        MWA observation ID or list of IDs
+    """
+    # Make sure it's a list
+    obsids = [obsid] if not isinstance(obsid, list) else obsid
+
+    # Set up metadb keys to upload
+    base_keys = ['starttime', 'stoptime', 'obsname', 'creator',
+                 'modtime', 'mode', 'unpowered_tile_name', 'mode_params',
+                 'dec_phase_center', 'ra_phase_center', 'projectid',
+                 'int_time', 'freq_res']#, 'checked_user']
+    metadata_keys = ['elevation_pointing','azimuth_pointing',
+                     'ra_pointing', 'dec_pointing', 'sun_elevation',
+                     'sun_pointing_distance', 'jupiter_pointing_distance',
+                     'moon_pointing_distance', 'sky_temp', 'calibration',
+                     'gridpoint_name', 'gridpoint_number',
+                     'local_sidereal_time_deg', 'calibrators']
+    rfstreams_keys = ['azimuth', 'elevation', 'ra', 'dec',
+                     'frequencies', 'frequency_type', 'walsh_mode',
+                     'gain_control_type', 'gain_control_value', 'dipole_exclusion']
+    all_keys = base_keys + metadata_keys + rfstreams_keys
+
+
+    for obs in obsids:
+        data_dict = {'observation_id':int(obs)}
+        data = getmeta(params={'obsid':obs})
+        for keys, db in zip((base_keys, metadata_keys, rfstreams_keys),
+                            (data, data['metadata'],data['rfstreams']['0'])):
+            for key in keys:
+                if key not in db.keys():
+                    data_dict[key] = ""
+                elif db[key] is not None:
+                    # no 'checked_user' keys anywhere
+                    data_dict[key] = db[key]
+        upload_wrapper(urls['observation_setting'], data_dict)
