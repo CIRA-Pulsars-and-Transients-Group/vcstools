@@ -30,7 +30,7 @@ urls = {'search_parameters': base_url+'/search_parameters_create/',
         'detection_file':base_url + '/detection_file_create/'}
 
 
-def upload_wrapper(url, data):
+def upload_wrapper(url, data, files=None):
     """
     Wrapper for the upload to the MWA pulsar database
 
@@ -40,6 +40,8 @@ def upload_wrapper(url, data):
         Website url for the relivent table
     data: dict
         Data dict in the format for the table
+    files: dict
+        Files dict in the format for files in the table. Default None
     """
     # set up a session with the given auth
     session = requests.session()
@@ -47,7 +49,10 @@ def upload_wrapper(url, data):
 
     #logger.debug(data)
     print(data)
-    r = session.post(url, json=data)
+    if files is None:
+        r = session.post(url, data=data)
+    else:
+        r = session.post(url, data=data, files=files)
     if r.status_code > 201:
         logger.error("Error uploading. Status code: {}".format(r.status_code))
         sys.exit(r.status_code)
@@ -125,7 +130,7 @@ def upload_beam(name_obs_pos, begin, end,
 
 def upload_obsid(obsid):
     """
-    Upload the an Observation to the observation_settings table of the MWA pulsar database
+    Upload an observation to the observation_settings table of the MWA pulsar database
 
     Parameters
     ----------
@@ -164,3 +169,45 @@ def upload_obsid(obsid):
                     # no 'checked_user' keys anywhere
                     data_dict[key] = db[key]
         upload_wrapper(urls['observation_setting'], data_dict)
+
+
+def upload_cand(beam_id, search_type='Blind', search_params_id=1, png_file=None, pfd_file=None):
+    """
+    Upload a candidate to the candidates table of the MWA pulsar database
+
+    Parameters
+    ----------
+    beam_id: int
+        The beam ID of the pointing for the candidate
+    search_type: string
+        A label of the type of search that produced this candidate. Default Blind
+    search_params_id: int
+        The search params ID. This links to the search_paramaters table which
+        lists the search parameters such as DM range
+    png_file: string
+        Path to the png file of the candidate
+    pfd_file: string
+        Path to the pfd file of the candidate
+    """
+    # Open files
+    files = {'png': None, 'pfd': None}
+    if png_file is not None:
+        png = open(png_file, 'rb')
+        files['png'] = png
+    if pfd_file is not None:
+        pfd = open(pfd_file, 'rb')
+        files['pfd'] = pfd
+
+    # Set up data to upload
+    data = {'search_beam_id': beam_id,
+            'username': auth[0],
+            'search_type': search_type,
+            'search_params_id': search_params_id}
+
+    upload_wrapper(urls['candidates'], data, files=files)
+
+    # Close files
+    if png_file is not None:
+        png.close()
+    if pfd_file is not None:
+        pfd.close()
