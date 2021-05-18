@@ -565,6 +565,50 @@ def check_clip(prof_to_check, toomuch=0.9, toolittle_frac=0., toolittle_absolute
         raise LargeClipError("A large portion of the data has been clipped. Condsier trying a larger alpha value when clipping.")
 
 
+def error_in_x_pos(x, y, sigma_y, x_pos):
+    """
+    finds error in a position, x_pos, given an error in y
+    derivatives are found numerically
+
+    Parameters:
+    -----------
+    x: list
+        A list that covers the x range (ie. np.linspace(0, 1, len(x)))
+    y: list
+        The y components of the x range
+    sigma_y: float
+        The absolute error in y
+    x_pos: int
+        The location in x that we want to find the error for
+
+    Returns:
+    --------
+    x_er: float
+        The error in the x position
+    """
+    # Spline, get derivative and roots
+    spline = UnivariateSpline(x, y, s=0, k=4)
+    dy_spline = spline.derivative()
+    derivative_profile = dy_spline(x)
+    dydx = derivative_profile[x_pos]
+
+    # Double derivative
+    spline = UnivariateSpline(x, y, s=0, k=5)
+    d2y_spline = spline.derivative().derivative()
+    double_derivative_profile = d2y_spline(x)
+    d2ydx2 = double_derivative_profile[x_pos]
+
+    # Derived from a taylor expansion and solved using quadratic formula:
+    # x = ( dydx +/- sqrt( dydx^2 +/- 2*d2ydx2 * sigma_y ) / d2ydx2
+    # We only care about two of the four solutions because the other two are identical but negative
+    deriv_er_plus = (dydx + np.sqrt(dydx**2 + 2*d2ydx2 * sigma_y)) / d2ydx2
+    deriv_er_minus = (
+        dydx + np.sqrt(dydx**2 - 2*d2ydx2 * sigma_y)) / d2ydx2
+    x_er = abs(np.nanmean((deriv_er_plus, deriv_er_minus)))
+
+    return x_er
+
+
 # Alternative method to find the location and width of peaks
 def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None):
     """ 
@@ -645,11 +689,14 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
         # Otherwise, this is a real max
         real_max.append(root)
 
-    # Estimate the on-pulse regions
     """
     We will create an over and under-estimate...
-    The overestimate will mark the regions between the real max and the flanking inflections of the spline
-    The understimate will mark the regions between the real max and its flanking false maxima
+
+    The overestimate will mark the regions between the real max and the flanking false minima of the spline.
+    This range should include the entire on-pulse region but also some noise
+
+    The understimate will mark the regions between the real max and its flanking inflections.
+    This range should include no noise but will miss some of the on-pulse
     """
     overest_on_pulse = []
     est_on_pulse = []
@@ -697,7 +744,7 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
     est_on_pulse = _fill_on_pulse_region(est_on_pulse, splined_profile, noise_frac=noise_frac)
 
     # Work out the noise using the oversetimated on-pulse region
-    noise = noise_from_on_pulse(profile, overest_on_pulse)
+    noise = noise_from_on_pulse(norm_prof, overest_on_pulse)
 
     if plot_name:
         plt.figure(figsize=(14, 10))
