@@ -1,14 +1,16 @@
+from vcstools.prof_utils import ProfileLengthError, BadFitError
+from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos
+import itertools
+from scipy.stats import vonmises
+from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
 import numpy as np
 import logging
 from scipy.interpolate import UnivariateSpline
 import matplotlib
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
 
-from vcstools.prof_utils import est_sn_from_prof, sigmaClip, check_clip
 # Error imports
-from vcstools.prof_utils import LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError, NoFitError, BadFitError
 
 logger = logging.getLogger(__name__)
 
@@ -28,20 +30,20 @@ class gfit:
     plot_name: str
         The name of the output plot. Can be set with gfit.plot_name. If unsupplied, will use a generic name
         Default - None
-    clip_type: str:
-        The verbosity of clipping. Choose between 'regular', 'noisy' or 'verbose'.
-        Default: 'regular'
+    conponent_plot_name: str
+        The name of the plot for the component plot that illustrates how profile components are chosen. If 
+        unsupplied, will not plot.
+        Default - None
 
 
     Functions for users:
     --------------------
-    auto_gfit:
-        Runs the gaussian fit evaluation for a range of values of alpha. This is necessary as there is no way to know
-        a priori which alpha to use. Alpha is the input for sigmaClip() and can be interpreted as the level
-        of verbosity in the noice-clipping. This function fills out the fit_dict dictionary.
-
+    auto_fit:
+        Runs a gaussian fit evaluation using up to max_N gaussians. The quality of the fit is decided via a chi-square evaluation.
+        The best of these is saved and used to determine widths and maxima location. Part of the preprocessing of the profile will
+        also determine the on-pulse regions and subsequently the noise level and signal to noise ratio.
     plot_fit:
-        Plots the best chosen gaussian fit to a .png whose name is gfit.plot_name. This can only be run after the fit_dict
+        Plots the best chosen gaussian fit to a file whose name is gfit.plot_name. This can only be run after the fit_dict
         dictionary has been filled (presumably by auto_gfit).
 
 
@@ -66,76 +68,94 @@ class gfit:
         Wscat_e: float
             The uncertainty in the scattering width
         maxima: list
-            A lost of floats corresponding to the bin location of each maximum point
+            A lost of floats corresponding to the phase location of each maximum point
         maxima_e: list
-            A list of floats, each correspinding to the error of the maxima of the same index. Measured in bins
+            A list of floats, each correspinding to the error of the maxima of the same index. Measured in phase
+        minima: list
+            A lost of floats corresponding to the phase location of each minimum point
+        minima_e: list
+            A list of floats, each correspinding to the error of the minima of the same index. Measured in phase
         redchisq: float
             The reduced chi sqared of the fit
-        num_gauss: int
+        n_components: int
             The number of gaussian components used in the best fit
-        bic: float
-            The Bayesian Information Criterion for the best fit
-        gaussian_params: list
-            A list of length 3*N there N is num_gauss. Each set of 3 parameters corresponds to the amp, centre and width of a guassian component
+        n_profile_components: int
+            The number of distinguishable profile components
+        on_pulse_estimates: list
+            The output of prof_utils.estimate_components_onpulse()
+        fit_params: list
+            A list of length 5 + 3*(N-1) there N is num_gauss. Each set of 3 parameters corresponds to the amp, centre and width of a guassian component
+            The first five are baseline, tau, amp, centre and width
         cov_mat: np.matrix
-            The covariance matrix from the fit
-        comp_dict: dictionary
-            dict["component_x"] contains an array of the component x
-        comp_idx: dictionary
-            dict["component_x"] contains an array of indexes of the original profile corresponding to component x
-        alpha: float
-            The alpha value used in sigmaClip()
+            The covariance matrix output from curve_fit
         profile: list
-            The input profile
+            The normalised and rolled input profile
         fit: list
             The best fit made into a list form
         sn: float
             The estimated signal to noise ratio, obtained from the profile
         sn_e: float
             The uncertainty in sn
-        scattered: boolean
-            True is the profile is scattered
+        scattering: float
+            The tau value of the profile fit
     """
 
-    def __init__(self, raw_profile, max_N=6, plot_name=None, min_comp_len=None, clip_type="regular"):
+    def __init__(self, raw_profile, max_N=6, plot_name=None, component_plot_name=None):
+        # Initialise inputs
         self._raw_profile = raw_profile
         self._max_N = max_N
         self._plot_name = plot_name
-        self._min_comp_len = min_comp_len
-        self._clip_type = clip_type
+        self._component_plot_name = component_plot_name
 
+        # The return dictionary
         self._fit_dict = {}
+
+        # Stuff to put in the dictionary
+        self._fit_profile = None
         self._best_chi = None
-        self._best_alpha = None
-
-        # Private stuff
-        self._std_profile = []
-        self._alpha = None
+        self._std_profile = None
         self._noise_std = None
-        self._clipped_prof = []
-        self._off_pulse_prof = []
         self._n_off_pulse = None
-
-        # Initialize minimum component length if not done by user
-        if self._min_comp_len is None:
-            self._min_comp_len = int(len(self._raw_profile)/100 + 0.5) + 2
-            if self._min_comp_len > 100:
-                self._min_comp_len = 100
-        if self._min_comp_len < 3:
-            self._min_comp_len = 3
-
+        self._n_gaussians = None
+        self._comp_est_dict = None
+        self._n_prof_components = None
+        self._popt = None
+        self._pcov = None
+        self._W10 = None
+        self._W50 = None
+        self._Weq = None
+        self._Wscat = None
+        self._W10_e = None
+        self._W50_e = None
+        self._Weq_e = None
+        self._Wscat_e = None
+        self._minima = None
+        self._maxima = None
+        self._minima_e = None
+        self._maxima_e = None
 
     # Setters and Getters
+
     @property
     def plot_name(self):
         return self._plot_name
+
     @plot_name.setter
     def plot_name(self, val):
         self._plot_name = val
 
     @property
+    def component_plot_name(self):
+        return self.component_plot_name
+
+    @component_plot_name.setter
+    def component_plot_name(self, val):
+        self.component_plot_name = val
+
+    @property
     def max_N(self):
         return self._max_N
+
     @max_N.setter
     def max_N(self, val):
         self._max_N = val
@@ -144,135 +164,130 @@ class gfit:
     def fit_dict(self):
         return self._fit_dict
 
-    @property
-    def best_chi(self):
-        return self._best_chi
-
-    @property
-    def best_alpha(self):
-        return self._best_alpha
-
-    @property
-    def std_profile(self):
-        return self._std_profile
-    @std_profile.setter
-    def std_profile(self, val):
-        self._std_profile = val
-
-    @property
-    def alpha(self):
-        return self._alpha
-    @alpha.setter
-    def alpha(self, val):
-        self._alpha = val
-
-    @property
-    def noise_std(self):
-        return self._noise_std
-    @noise_std.setter
-    def noise_std(self, val):
-        self._noise_std = val
-
-    @property
-    def clipped_prof(self):
-        return self._clipped_prof
-    @clipped_prof.setter
-    def clipped_prof(self, val):
-        self._clipped_prof = val
-
-    @property
-    def off_pulse_prof(self):
-        return self._off_pulse_prof
-    @clipped_prof.setter
-    def off_pulse_prof(self, val):
-        self._off_pulse_prof = val
-
-
     # Main function - intended for use by the user
-    def auto_gfit(self):
+
+    def auto_fit(self):
         """Fits multiple gaussian profiles and finds the best combination of N_Gaussians and alpha"""
-        if len(self._raw_profile)<100:
+        if len(self._raw_profile) < 100:
             raise ProfileLengthError("Profile must have length > 100")
 
-        if self._clip_type == "regular":
-            alphas = np.linspace(1, 5, 9)
-        elif self._clip_type == "noisy":
-            alphas = np.linspace(1, 3, 17)
-        elif self._clip_type == "verbose":
-            alphas = np.linspace(1, 5, 33)
-        else:
-            raise ValueError("cliptype not recognised. Options are: 'regular', 'noisy' or 'verbose'.")
+        # Standarsdise the profile so that it's easy to fit
+        self._standardise_raw_profile()
+        # Estimate the on-pulse region, components and noise level
+        self._comp_est_dict = estimate_components_onpulse(
+            self._std_profile, plot_name=self._component_plot_name)
+        self._n_prof_components = len(self._comp_est_dict["est_on_pulse"])
+        self._noise_std = self._comp_est_dict["noise"]
 
-        # Loop over the gaussian evaluation fucntion, excepting in-built errors
-        attempts_dict = {}
-        for alpha in alphas:
-            try:
-                self._alpha = alpha
-                prof_dict = self._prof_eval_gfit()
-                attempts_dict[alpha] = prof_dict
-            except(LittleClipError, LargeClipError, NoComponentsError, ProfileLengthError, BadFitError):
-                logger.debug(f"Skipping alpha value: {alpha}")
-        # Evaluate the best profile based on reduced chi-squared.
-        chi_diff = []
-        alphas = []
-        for alpha_key in attempts_dict.keys():
-            chi_diff.append(abs(1 - attempts_dict[alpha_key]["redchisq"]))
-            alphas.append(alpha_key)
+        # Loop over the gaussian fitting function, excepting in-built errors
+        try:
+            self._fit_gaussian()
+        except BadFitError as e:
+            logger.error("No Fit Found!")
 
-        # Sometimes the profile can't be fit
-        if not chi_diff:
-            raise NoFitError("No suitable profile fit could be found!")
+        # Do all the fancy things with the fit
+        self._find_widths() # Find widths + error
+        self._find_minima_maxima_gauss() # Find turning points
+        self._est_sn() # Estimate SN
 
-        self._best_chi = min(chi_diff)
-        self._best_alpha = alphas[chi_diff.index(self._best_chi)]
-        self._fit_dict = attempts_dict[self._best_alpha]
+        # Dump to dictionary
+        self._fit_dict = {}
+        self._fit_dict["W10"] = self._W10
+        self._fit_dict["W10_e"] = self._W10_e
+        self._fit_dict["W50"] = self._W50
+        self._fit_dict["W50_e"] = self._W50_e
+        self._fit_dict["Wscat"] = self._Wscat
+        self._fit_dict["Wscat_e"] = self._Wscat_e
+        self._fit_dict["Weq"] = self._Weq
+        self._fit_dict["Weq_e"] = self._Weq_e
+        self._fit_dict["maxima"] = self._maxima
+        self._fit_dict["maxima_e"] = self._maxima_e
+        self._fit_dict["maxima"] = self._maxima
+        self._fit_dict["maxima_e"] = self._maxima_e
+        self._fit_dict["redchisq"] = self._best_chi
+        self._fit_dict["n_components"] = self._n_gaussians
+        self._fit_dict["fit_params"] = self._popt
+        self._fit_dict["cov_mat"] = self._pcov
+        self._fit_dict["profile"] = self._std_profile
+        self._fit_dict["fit"] = self._fit_profile
+        self._fit_dict["sn"] = self._sn
+        self._fit_dict["sn_e"] = self._sn_e
+        self._fit_dict["noise"] = self._noise_std
+        self._fit_dict["scattering"] = self._popt[1] # tau
+        self._fit_dict["on_pulse_estimates"] = self._comp_est_dict
+        self._fit_dict["n_profile_components"] = self._n_prof_components
 
+        # Log all the important stuff
         logger.info("### Best fit results ###")
-        logger.info(f"Best model found with BIC of {self._fit_dict['bic']} and reduced Chi of {self._fit_dict['redchisq']} using an alpha value of {self._best_alpha}")
-        logger.info(f"W10:                   {self._fit_dict['W10']} +/- {self._fit_dict['W10_e']}")
-        logger.info(f"W50:                   {self._fit_dict['W50']} +/- {self._fit_dict['W50_e']}")
-        logger.info(f"Wscat:                 {self._fit_dict['Wscat']} +/- {self._fit_dict['Wscat_e']}")
-        logger.info(f"Weq:                   {self._fit_dict['Weq']} +/- {self._fit_dict['Weq_e']}")
+        logger.info(
+            f"Best model found with reduced Chi square of {self._fit_dict['redchisq']} using {self._n_gaussians} Gaussian components")
+        logger.info(
+            f"W10:                   {self._fit_dict['W10']} +/- {self._fit_dict['W10_e']}")
+        logger.info(
+            f"W50:                   {self._fit_dict['W50']} +/- {self._fit_dict['W50_e']}")
+        logger.info(
+            f"Wscat:                 {self._fit_dict['Wscat']} +/- {self._fit_dict['Wscat_e']}")
+        logger.info(
+            f"Weq:                   {self._fit_dict['Weq']} +/- {self._fit_dict['Weq_e']}")
         logger.info(f"Maxima:                {self._fit_dict['maxima']}")
         logger.info(f"Maxima error:          {self._fit_dict['maxima_e']}")
-        logger.info(f"S/N estimate:          {self._fit_dict['sn']} +/- {self._fit_dict['sn_e']}")
+        logger.info(
+            f"S/N estimate:          {self._fit_dict['sn']} +/- {self._fit_dict['sn_e']}")
+        logger.debug(f"popt:                  {self._fit_dict['fit_params']}")
+
+        # And we're done 
 
     # Plotter for the resulting fit
+
     def plot_fit(self):
         """Plots the best fit set of Gaussians"""
         if not self._plot_name:
             self._plot_name = "Gaussian_fit.png"
-        y = self._fit_dict["profile"]
-        fit = self._fit_dict["fit"]
-        popt = self._fit_dict["gaussian_params"]
-        maxima = self._fit_dict["maxima"]
-        maxima_e= self._fit_dict["maxima_e"]
-        x = np.linspace(0, len(y)-1, len(y))
+        popt = self._fit_dict["fit_params"]
+        plot_x = np.linspace(0, 1, len(self._fit_profile))
+        gaussian_x = np.linspace(-np.pi, np.pi,
+                                 len(self._fit_profile), endpoint=False)
         plt.figure(figsize=(20, 12))
 
-        for j in range(0, len(popt), 3):
-            z = self._multi_gauss(x, *popt[j:j+3])
-            plt.plot(x, z, "--", label="Gaussian Component {}".format(int((j+3)/3)))
-        if maxima:
-            for i, mx in enumerate(maxima):
-                plt.axvline(x=(mx + maxima_e[i]), ls=":", lw=2, color="gray")
-                plt.axvline(x=(mx - maxima_e[i]), ls=":", lw=2, color="gray")
+        z = self._exp_vm_gauss_conv(gaussian_x, *self._popt[0:5])
+        plt_label = "Convolved Gaussian Component" if self._n_prof_components == 1 else f"Convolved Gaussian Component 1"
+        plt.plot(plot_x, z, "--", label=plt_label)
+        for i in range(1, self._n_prof_components):
+            base = 0
+            tau = self._popt[1]
+            popt_idx = 5 + (i-1)*3
+            z = self._exp_vm_gauss_conv(
+                gaussian_x, base, tau, *self._popt[popt_idx:popt_idx + 3])
+            plt.plot(plot_x, z, "--",
+                     label=f"Convolved Gaussian Component {i+1}")
+
+        start_j = 5 + (self._n_prof_components-1)*3
+        for i, j in list(enumerate(range(start_j, len(self._popt), 3))):
+            z = self._vm_gauss(gaussian_x, *self._popt[j:j+3])
+            plt.plot(plot_x, z, "--", label=f"Gaussian Component {i}")
+        if self._maxima:
+            for i, mx in enumerate(self._maxima):
+                plt.axvline(
+                    x=(mx + self._maxima_e[i]), ls=":", lw=2, color="gray")
+                plt.axvline(
+                    x=(mx - self._maxima_e[i]), ls=":", lw=2, color="gray")
 
         plt.title(self._plot_name.split("/")[-1].split(".")[0], fontsize=26)
         plt.xticks(fontsize=20)
         plt.yticks(fontsize=20)
-        plt.xlim(0, len(y))
+        plt.xlim(0, 1)
         plt.xlabel("Bins", fontsize=24)
         plt.ylabel("Intensity", fontsize=24)
-        plt.plot(x, y, label="Original Profile", color="black")
-        plt.plot(x, fit, label="Gaussian Model", color="red")
+        plt.plot(plot_x, self._std_profile,
+                 label="Original Profile", color="black")
+        plt.plot(plot_x, self._fit_profile,
+                 label="Gaussian Model", color="red")
         plt.legend(loc="best", prop={'size': 18})
-        plt.savefig(self._plot_name)
+        plt.savefig(self._plot_name, bbox_inches="tight")
         plt.close()
 
-
     def _standardise_raw_profile(self):
-        """Clips, normalises and fills in the raw profile"""
+        """Normalises and rolls the raw profile to 0.25 in phase"""
         self._std_profile = self._raw_profile.copy()
         # Roll the profile such that the max point is at 0.25 phase
         roll_from = np.argmax(self._std_profile)
@@ -280,375 +295,224 @@ class gfit:
         roll_i = roll_to - roll_from
         self._std_profile = np.roll(self._std_profile, roll_i)
         # Normalise profile to max=1
-        self._std_profile = np.array(self.std_profile)/max(self._std_profile)
-        # Make a signal-clipped profile to determine which bins are noise vs on-pulse
-        _, self._off_pulse_prof = sigmaClip(self._std_profile, alpha=self._alpha)
-        # Check the clip to fill in gaps
-        check_clip(self._off_pulse_prof)
-        self._fill_off_pulse_prof()
-        # Remove the noise such that the on-pulse profile is centered about 0   
-        self._noise_std = np.nanstd(np.array(self._off_pulse_prof))     
-        self._std_profile = self._std_profile - self._noise_std
-        # Renormalise
-        self._std_profile = self._std_profile/max(self._std_profile)
-        # Remove noise from std_profile - make new array for this
-        self._clipped_prof = self._std_profile.copy()
-        for i, _ in enumerate(self._off_pulse_prof):
-            if not np.isnan(self._off_pulse_prof[i]):
-                self._clipped_prof[i] = 0
-        # Test plots
-        plt.plot(self.clipped_prof, label="clipped_profile")
-        plt.plot(self._std_profile, label="std_profile")
-        plt.legend()
-        plt.savefig(f"test_profile_{self._alpha}.png")
-        plt.close()
-        self._n_off_pulse = np.count_nonzero(~np.isnan(self._off_pulse_prof)) # Counts the number of off-pulse bins
-
-
-    def _prof_eval_gfit(self):
-        """Fits multiple gaussians to a profile and subsequently finds W10, W50, Weq and maxima"""
-        # Normalize, find the std
-        self._standardise_raw_profile()
-
-        # Fit gaussian
-        fit, chisq, bic, popt, pcov, comp_dict, comp_idx = self._fit_gaussian()
-        fit = np.array(fit)
-        n_rows, _ = np.shape(pcov)
-        num_gauss = n_rows/3
-
-        # Find widths + error
-        W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e = self._find_widths(popt, pcov)
-
-        # Convert from bins to phase
-        proflen = len(self._std_profile)
-        W10 = W10/proflen
-        W50 = W50/proflen
-        Weq = Weq/proflen
-        Wscat = Wscat/proflen
-        W10_e = W10_e/proflen
-        W50_e = W50_e/proflen
-        Weq_e = Weq_e/proflen
-        Wscat_e = Wscat_e/proflen
-        minima, maxima, minima_e, maxima_e = self._find_minima_maxima_gauss(popt, pcov, len(fit))
-
-        # Estimate SN
-        _, _, scattered = est_sn_from_prof(self._std_profile, self._alpha)
-        sn = 1/self._noise_std
-        sn_e = 1/(self._noise_std * np.sqrt(2 * self._n_off_pulse -2)) #TODO: make this estimate better
-
-        # Dump to dictionary
-        fit_dict = {"W10":W10, "W10_e":W10_e, "W50":W50, "W50_e":W50_e, "Wscat":Wscat, "Wscat_e":Wscat_e, "Weq":Weq, "Weq_e":Weq_e,
-                    "maxima":maxima, "maxima_e":maxima_e, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq,
-                    "num_gauss":num_gauss, "bic":bic, "gaussian_params":popt, "cov_mat":pcov, "comp_dict":comp_dict,
-                    "comp_idx":comp_idx, "alpha":self._alpha, "profile":self._std_profile, "fit":fit, "sn":sn,
-                    "sn_e":sn_e, "scattered":scattered}
-
-        return fit_dict
-
+        self._std_profile = np.array(
+            self._std_profile)/max(self._std_profile)
 
     # The function that does the actual fitting
+
     def _fit_gaussian(self):
         """
         Fits multiple gaussian components to a pulse profile and finds the best number to use for a fit.
         Will always fit at least one gaussian per profile component.
-        Profile components are defined by find_components().
-        Each gaussian is defined by the following: y = amp * np.exp( -((x - ctr)/wid)**2)
-
-        Returns:
-        --------
-        [fit, redchisq, best_bic, popt, pcov]: list
-            fit: list
-                The data containing the multi-component gaussian fit to the input profile
-            redchisq: float
-                The reduced chi-sqaured value of the fit
-            best_bic: float
-                The bayesian information criterion for the fit
-            popt: list
-                A list of floats where each 3 numbers describes a single gaussain and are 'ctr', 'amp' and 'wid' respectively
-            pcov: numpy matrix
-                The covariance matrix generated by the curve_fit function
+        Profile components are defined by prof_utils.estimate_components_onpulse().
+        Will fit a number of gaussians convoled with an exponential tail equal to the number of profile components
+        Will then attempt to successively fit one more regular gaussian component until max_N is reached
+        The number of gaussians fit that yields the lowes Bayesian Information Criterion is deemed the most successful
         """
-        # Chi sqaured evaluation
-        def chsq(observed_values, expected_values, err):
-            test_statistic=0
-            for observed, expected in zip(observed_values, expected_values):
-                test_statistic+=((float(observed)-float(expected))/float(err))**2
-            return test_statistic
+        def add_bounds_guess(max_gen, width_gen, centre_gen, current_guess, current_bounds, base=False, tau=False):
+            if base:
+                # Base
+                current_guess += [0.1]  # Guess at 10%
+                current_bounds[0].append(0)
+                # Noise should definitely not be above 50% max anyway
+                current_bounds[1].append(0.5)
+            if tau:
+                # Tau
+                current_guess += [1]
+                current_bounds[0].append(1e-3)
+                current_bounds[1].append(100)
+            current_guess += [next(max_gen)*0.5**(len(current_guess)/5),
+                              next(width_gen), next(centre_gen)]  # [Amp, kappa, loc]
+            current_bounds[0].append(0)  # Amplitude
+            current_bounds[1].append(1)
+            current_bounds[0].append(1e-1)  # kappa
+            current_bounds[1].append(1e5)
+            current_bounds[0].append(-np.pi)  # Location
+            current_bounds[1].append(np.pi)
+            return current_guess, current_bounds
 
-        # Find profile components
-        comp_dict, comp_idx = self._find_components()
+        # Initiate x - we will be working in 1D circular coordinates
+        x = np.linspace(-np.pi, np.pi,
+                        len(self._std_profile), endpoint=False)
 
         # Estimate gaussian parameters based on profile components
         comp_centres = []
         comp_max = []
         comp_width = []
-        for i in range(self._max_N//len(comp_idx.keys())+1):
-            for key in comp_idx.keys():
-                comp_centres.append(np.mean(comp_idx[key]))
-                comp_max.append(max(comp_dict[key])*0.5)
-                comp_width.append((max(comp_idx[key])-min(comp_idx[key])))
-        centre_guess = iter(comp_centres)
-        width_guess=iter(comp_width)
-        max_guess=iter(comp_max)
+        for pair in self._comp_est_dict["est_on_pulse"]:
+            lower_bound = pair[0]
+            upper_bound = pair[1]
+            # Amplitude
+            # Amp guess is half of max amplitude of component
+            comp_max.append(
+                max(self._std_profile[lower_bound:upper_bound])*0.5)
+            # Gaussian width (kappa/sigma)
+            width_est = (upper_bound - lower_bound) / \
+                len(x)  # This is remeniscent of sigma
+            width_est /= 2  # halve the width estimate
+            comp_width.append(1/width_est**2)  # Convert this to kappa
+            # Centre location
+            # Looks like the middle of the profile component
+            centre_val = np.max(
+                max(self._std_profile[lower_bound:upper_bound]))
+            centre_loc_in_prof = np.where(self._std_profile == centre_val)[
+                0][0]  # get this in terms of profile index
+            # Convert from 0 -> len(x) to -pi -> pi coordinates
+            comp_centres.append((centre_loc_in_prof/len(x)) * 2*np.pi - np.pi)
+        # Turn guesses into generators that cycle between profile components
+        centre_gen = itertools.cycle(comp_centres)
+        width_gen = itertools.cycle(comp_width)
+        max_gen = itertools.cycle(comp_max)
 
-        n_comps=len(comp_dict.keys())
-        logger.debug(f"Number of profile components: {n_comps} ({comp_centres[:n_comps]})")
-
-        # Fit from 1 to max_N gaussians to the profile. Evaluate profile fit using bayesian information criterion
-        x = np.linspace(0, len(self._std_profile)-1, len(self._std_profile))
-        bounds_arr=[[],[]]
+        # Initiate bounds, guesses and fit dictionary
+        bounds_arr = [[], []]
         guess = []
         fit_dict = {}
 
-        for num in range(1, self._max_N):
-            # Calculate bounds and guess
-            guess += [next(max_guess), next(centre_guess), next(width_guess)]
-            bounds_arr[0].append(0)
-            bounds_arr[0].append(0)
-            bounds_arr[0].append(0)
-            bounds_arr[1].append(max(self.std_profile))
-            bounds_arr[1].append(len(self.std_profile))
-            bounds_arr[1].append(len(self.std_profile))
-            bounds_tuple=(tuple(bounds_arr[0]), tuple(bounds_arr[1]))
+        # Add base and tau to the first guassian component for exp tail
+        for i in range(0, self._n_prof_components):
+            is_first = True if i == 0 else False  # Add the baseline to a single gaussian
+            if i != self._n_prof_components:  # Don't add the rest of the guess to the last component, this is done in the next loop
+                guess, bounds_arr = add_bounds_guess(
+                    max_gen, width_gen, centre_gen, guess, bounds_arr, base=is_first, tau=is_first)
+
+        # Fit from n_components to max_N gaussians to the profile. Evaluate profile fit using bayesian information criterion
+        for num in range(self._n_prof_components, self._max_N):
+            # Append to the bounds and guesses
+            guess, bounds_arr = add_bounds_guess(
+                max_gen, width_gen, centre_gen, guess, bounds_arr)
+            # Bounds needs to be in tuple form for curve_fit
+            bounds_tuple = (tuple(bounds_arr[0]), tuple(bounds_arr[1]))
+
+            _guess = self._multi_gauss_exp_with_base(x, *guess)
+            plt.figure(figsize=(12, 8))
+            plt.plot(x, _guess)
+            plt.plot(x, self._std_profile)
+            plt.savefig(f"guess_plot_{num}.png")
+            plt.close()
 
             # Do the fitting
-            maxfev_list = [10000, 50000, 100000, 500000]
+            maxfev = 100000
             popt = None
             pcov = None
-            for maxfev in maxfev_list:
-                try:
-                    logger.debug(f"Maxfev in curve_fit: {i}")
-                    popt, pcov = curve_fit(self._multi_gauss, x, self._clipped_prof, bounds=bounds_tuple, p0=guess, maxfev=maxfev)
-                    break # Break if fit successful
-                except (RuntimeError, ValueError) as e: # No fit found in maxfev
-                    pass
-            if popt is None or pcov is None:
-                raise BadFitError("Could not successfully execute least squares fit")
+            try:
+                popt, pcov = curve_fit(self._multi_gauss_exp_with_base, x,
+                                       self._std_profile, bounds=bounds_tuple, p0=guess, maxfev=maxfev)
+            except (RuntimeError, ValueError) as e:  # No fit found in maxfev
+                raise BadFitError("No fit found in maxfev for this profile")
 
             # Work out some stuff
-            fit = self._multi_gauss(x, *popt)
-            chisq = chsq(self._std_profile, fit, self._noise_std)
-            
+            if popt is not None and pcov is not None:
+                fit = self._multi_gauss_exp_with_base(x, *popt)
+                chisq = self._calculate_chisq(
+                    self._std_profile, fit, self._noise_std)
+                fit_dict[str(num+1)] = {"popt": [], "pcov": [],
+                                        "fit": [], "chisq": []}
+                fit_dict[str(num+1)]["popt"] = popt
+                fit_dict[str(num+1)]["pcov"] = pcov
+                fit_dict[str(num+1)]["fit"] = fit
+                fit_dict[str(num+1)]["redchisq"] = chisq / \
+                    (len(self._std_profile)-1)
+                logger.debug(
+                    f"Reduced chi squared for               {num+1} components: {fit_dict[str(num+1)]['redchisq']}")
 
-            # Bayesian information criterion for gaussian noise
-            k = 3*(num+1)
-            bic = chisq + k*np.log(len(self.std_profile))
-            fit_dict[str(num+1)]={"popt":[], "pcov":[], "fit":[], "chisq":[], "bic":[]}
-            fit_dict[str(num+1)]["popt"] = popt
-            fit_dict[str(num+1)]["pcov"] = pcov
-            fit_dict[str(num+1)]["fit"] = fit
-            fit_dict[str(num+1)]["redchisq"] = chisq/(len(self.std_profile)-1)
-            fit_dict[str(num+1)]["bic"] = bic
-            logger.debug(f"Reduced chi squared for               {num+1} components: {fit_dict[str(num+1)]['redchisq']}")
-            logger.debug(f"Bayesian Information Criterion for    {num+1} components: {fit_dict[str(num+1)]['bic']}")
+        if not fit_dict:
+            raise BadFitError(
+                f"No suitable fit could be found for any provided values of N_gaussians")
 
-        # Find the best fit according to the BIC
-        best_bic = np.inf
-        best_fit = None
-        for n_components in fit_dict.keys():
-            if fit_dict[n_components]["bic"] < best_bic:
-                best_bic = fit_dict[n_components]["bic"]
-                best_fit = n_components
-        logger.debug(f"Fit {best_fit} gaussians for a reduced chi sqaured of {fit_dict[best_fit]['redchisq']}")
-        popt = fit_dict[best_fit]["popt"]
-        pcov = fit_dict[best_fit]["pcov"]
-        fit = fit_dict[best_fit]["fit"]
-        redchisq = fit_dict[best_fit]["redchisq"]
+        # Find the best fit according to reduced chi square
+        best_chi_diff = np.inf
+        for n_gaussians in fit_dict.keys():
+            chi_diff = abs(1 - fit_dict[n_gaussians]["redchisq"])
+            if chi_diff < best_chi_diff:
+                best_chi_diff = chi_diff
+                best_fit = n_gaussians
 
-        return [fit, redchisq, best_bic, popt, pcov, comp_dict, comp_idx]
-
-    # SigmaClip isn't perfect. Use these next function to fix bad clips
-    def _fill_off_pulse_prof(self, search_scope=None):
-        """
-        Intended for use on noisy profiles. Fills nan values that are surrounded by non-nans to avoid discontinuities
-        in the profile
-        """
-        length = len(self._off_pulse_prof)
-        if search_scope is None:
-            # Search 5% ahead for non-nans
-            search_scope = round(length*0.2)
-        search_scope = np.linspace(search_scope, 1, search_scope, dtype=int)
-        # Search scope = [x, x-1, x-2, ..., 1]
-
-        # Loop over all values in clipped profile
-        for i, val in enumerate(self._off_pulse_prof):
-            # If current index is on-pulse
-            if np.isnan(val):
-                fill_i=0
-                # Loop over search scope
-                for search_i in search_scope: 
-                    # Make a copy of the profile and roll back 
-                    rolled_prof = np.roll(self._off_pulse_prof, -search_i)
-                    # If we find more on-pulse within the search scope and break
-                    if np.isnan(rolled_prof[i]):
-                        fill_i = search_i
-                        break
-                # Fill in the on-pulse
-                for j in range(fill_i):
-                    fill_idx = i+j if i+j<len(self._off_pulse_prof) else i+j-len(self._off_pulse_prof)
-                    self._off_pulse_prof[fill_idx] = np.nan
-
-                #look 'search_scope' indices ahead for non-nans
-                #for j in sorted(search_scope, reverse=True):
-                #    #fill in nans
-                #    if np.isnan(self._off_pulse_prof[i+j]):
-                #        for k in range(j):
-                #            self._off_pulse_prof[i+k]=np.nan
-                #        break
-
-
-    # Find the individual profile components
-    def _find_components(self):
-        """
-        Given a profile in which the noise is clipped to 0, finds the components that are clumped together.
-
-        Returns:
-        --------
-        component_dict: dictionary
-            dict["component_x"] contains an array of the component x
-        component_idx: dictionary
-            dict["component_x"] contains an array of indexes of the original profile corresponding to component x
-        """
-        # Find the components by looking at the clipped profile
-        component_dict={}
-        component_idx={}
-        num_components=0
-        for i, val in enumerate(self._off_pulse_prof):
-            if np.isnan(val): # On pulse
-                if not np.isnan(self._off_pulse_prof[i-1]) or i==0: # Off pulse or beginning of profile phase
-                    num_components+=1
-                    comp_key = f"component_{num_components}"
-                    component_dict[comp_key]=[]
-                    component_idx[comp_key]=[]
-                component_dict[comp_key].append(self._std_profile[i])
-                component_idx[comp_key].append(i)
-
-        del_comps = []
-        for comp_key in component_dict.keys():
-            if len(component_dict[comp_key]) < self._min_comp_len or max(component_dict[comp_key]) < 0.:
-                del_comps.append(comp_key)
-        for i in del_comps:
-            del component_dict[i]
-            del component_idx[i]
-
-        if len(component_dict.keys()) == 0:
-            raise NoComponentsError("No profile components have been found")
-
-        return component_dict, component_idx
-
+        self._popt = fit_dict[best_fit]["popt"]
+        self._pcov = fit_dict[best_fit]["pcov"]
+        self._fit_profile = fit_dict[best_fit]["fit"]
+        self._best_chi = fit_dict[best_fit]["redchisq"]
+        self._n_gaussians = int(best_fit)
 
     # Find min and max points
-    def _find_minima_maxima_gauss(self, popt, pcov, x_length):
+
+    def _find_minima_maxima_gauss(self):
         """
         Finds all roots of a gaussian function. Measured in Phase.
-
-        Parameters:
-        -----------
-        popt: list
-            A list of length 3N where N is the number of gaussians. This list contains the parameters amp, mean, centre respectively
-        pcov: np.matrix
-            The covariance matric corresponding to the parameters from popt
-        x_length: int
-            The length of the list used to fit the gaussian
-
-        Returns:
-        --------
-        minima: list
-            A list of the minimum points of the fit
-        maxima: list
-            A list of the maximum points of the fit
-        minima_e: list
-            The error in each minima
-        maxima_e: list
-            The error in each maxima
         """
         # Create the derivative list and spline it to find roots
-        x = np.linspace(0, x_length-1, x_length)
-        dy = self._multi_gauss_ddx(x, *popt)
-        spline_dy = UnivariateSpline(x, dy, s=0)
-        roots = spline_dy.roots()
+        x = np.linspace(0, len(self._fit_profile)-1,  # Work in indexes
+                        len(self._fit_profile))
+        spline_prof = UnivariateSpline(x, self._fit_profile, s=0, k=4)
+        dy_spline = spline_prof.derivative()
+        dy_profile = dy_spline(x)
+        roots = dy_spline.roots()
+        plt.figure(figsize=(12, 8))
+        plt.plot(self._fit_profile)
+        plt.plot(np.array(dy_profile)/max(dy_profile))
+        plt.savefig("stupid_shit_wont_work.png", bbox_inches="tight")
+        plt.close()
 
-        # Find which are max and min
+        # Find which are max, min, and false
         maxima = []
         minima = []
         for root in roots:
-            idx = int(root + 0.5)
-            if dy[idx-1] > dy[idx]:
-                maxima.append(root)
-            else:
-                minima.append(root)
+            idx = round(root)
+            # Set valid maxima to be 2 times noise
+            if (self._fit_profile[idx] - self._popt[0]) > 2*self._noise_std:
+                if dy_profile[idx-1] > dy_profile[idx]:
+                    maxima.append(root)
+                else:
+                    minima.append(root)
 
         # Get errors
-        minima_e = self._find_x_err(minima, popt, pcov)
-        maxima_e = self._find_x_err(maxima, popt, pcov)
+        minima_e = []
+        maxima_e = []
+        for m in minima:
+            minima_e.append(error_in_x_pos(
+                x, self._fit_profile, self._noise_std, round(m)))
+        for m in maxima:
+            maxima_e.append(error_in_x_pos(
+                x, self._fit_profile, self._noise_std, round(m)))
 
-        #Convert to phase
-        maxima = list(np.array(maxima)/x_length)
-        minima = list(np.array(minima)/x_length)
-        maxima_e = list(np.array(maxima_e)/x_length)
-        minima_e = list(np.array(minima_e)/x_length)
-
-        return minima, maxima, minima_e, maxima_e
-
+        # Convert to phase, we're currently in indexes
+        self._maxima = list(np.array(maxima)/len(self._fit_profile))
+        self._minima = list(np.array(minima)/len(self._fit_profile))
+        self._maxima_e = list(np.array(maxima_e)/len(self._fit_profile))
+        self._minima_e = list(np.array(minima_e)/len(self._fit_profile))
 
     # Find the width of profile components
-    def _find_widths(self, popt, pcov):
+
+    def _find_widths(self):
         """
         Attempts to find the W_10, W_50 and equivalent width of a profile by using a spline approach.
-        W10 and W50 errors are estimated by using: sigma_x = sigma_y/(dy/dx)
         Weq errors are estimated by finding the average difference in Weq when you add and subtract the std from the on-pulse profile
-
-        Parameters:
-        -----------
-        popt: list
-            The parameters that are used to create the multi-gaussian fit
-        pcov: np.matrix
-            The covariance matrix corresponding to the parameters from popt
-
-        Returns:
-        --------
-        [W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e]: list
-            W10: float
-                The W10 width of the profile measured in number of bins
-            W50: float
-                The W50 width of the profile measured in number of bins
-            Weq: float
-                The equivalent width of the profile measured in number of bins
-            Wscat: float
-                The scattering width of the profile measured in number of bins
-            W10_e: float
-                The uncertainty in W10
-            W50_e: float
-                The uncertainty in W50
-            Weq_e: float
-                The uncertainty in Weq
-            Wscar_e: float
-                The unceratinty in Wscat
         """
-        def error_in_x_pos(pcov, popt, x):
-            J = self._jacobian_slope(x, *popt)
-            JC = np.matmul(J, pcov)
-            sigma_y = np.sqrt(np.matmul(JC, np.transpose(J)).item(0))
-            ddx = self._multi_gauss_ddx(x, *popt)
-            return sigma_y/ddx
 
         # Perform spline operations on the fit
-        x = np.linspace(0, len(self._std_profile)-1, len(self._std_profile))
-        fit = self._multi_gauss(x, *popt)
-        amp_fit = max(fit) - min(fit)
-        spline10 = UnivariateSpline(x, fit - np.full(len(x), 0.1*amp_fit), s=0)
-        spline50 = UnivariateSpline(x, fit - np.full(len(x), 0.5*amp_fit), s=0)
-        spline_s = UnivariateSpline(x, fit - np.full(len(x), 1/np.exp(1)*amp_fit), s=0)
+        x = np.linspace(0, len(self._fit_profile)-1,  # Work in indexes
+                        len(self._fit_profile), endpoint=False)
+        # Profile needs to be at zero baseline
+        profile_for_widths = self._fit_profile - min(self._fit_profile)
+        amp_fit = max(profile_for_widths) - min(profile_for_widths)
+        spline10 = UnivariateSpline(
+            x, profile_for_widths - np.full(len(x), 0.1*amp_fit), s=0)
+        spline50 = UnivariateSpline(
+            x, profile_for_widths - np.full(len(x), 0.5*amp_fit), s=0)
+        spline_s = UnivariateSpline(
+            x, profile_for_widths - np.full(len(x), 1/np.exp(1)*amp_fit), s=0)
 
-        # Find Weq using the real profile
-        std, off_pulse = sigmaClip(self._std_profile, alpha=self._alpha)
-        check_clip(off_pulse)
-        on_pulse=[]
-        for i, data in enumerate(off_pulse):
-            if np.isnan(data):
-                on_pulse.append(self._std_profile[i])
-        x = np.linspace(0, len(on_pulse)-1, len(on_pulse))
-        spline0 = UnivariateSpline(x, on_pulse, s=0)
+        # Find Weq
+        on_pulse_pairs = self._comp_est_dict["est_on_pulse"]
+        on_pulse = []
+        for pair in on_pulse_pairs:
+            if pair[0] < pair[1]:
+                on_pulse.extend(self._std_profile[pair[0]:pair[1]])
+            else:
+                on_pulse.extend(self._std_profile[pair[1]:])
+                on_pulse.extend(self._std_profile[0:pair[0]])
+        x_eq = np.linspace(0, len(on_pulse)-1, len(on_pulse))
+        spline0 = UnivariateSpline(x_eq, on_pulse, s=0)
         integral = spline0.integral(0, len(on_pulse)-1)
         Weq = integral/max(on_pulse)
 
@@ -664,77 +528,125 @@ class gfit:
         Wscat = Wscat_roots[-1] - Wscat_roots[0]
 
         # W10 root errors
-        err_10_1 = error_in_x_pos(pcov, popt, W10_roots[0])
-        err_10_2 = error_in_x_pos(pcov, popt, W10_roots[-1])
+        err_10_1 = error_in_x_pos(
+            x, self._fit_profile, self._noise_std, round(W10_roots[0]))
+        err_10_2 = error_in_x_pos(
+            x, self._fit_profile, self._noise_std, round(W10_roots[-1]))
         W10_e = np.sqrt(err_10_1**2 + err_10_2**2)
 
         # W50 root errors
-        err_50_1 = error_in_x_pos(pcov, popt, W50_roots[0])
-        err_50_2 = error_in_x_pos(pcov, popt, W50_roots[-1])
+        err_50_1 = error_in_x_pos(
+            x, self._fit_profile, self._noise_std, round(W50_roots[0]))
+        err_50_2 = error_in_x_pos(
+            x, self._fit_profile, self._noise_std, round(W50_roots[-1]))
         W50_e = np.sqrt(err_50_1**2 + err_50_2**2)
 
         # Wscat root errors
-        err_scat_1 = error_in_x_pos(pcov, popt, Wscat_roots[0])
-        err_scat_2 = error_in_x_pos(pcov, popt, Wscat_roots[-1])
+        err_scat_1 = error_in_x_pos(
+            x, self._fit_profile, self._noise_std, round(Wscat_roots[0]))
+        err_scat_2 = error_in_x_pos(
+            x, self._fit_profile, self._noise_std, round(Wscat_roots[-1]))
         Wscat_e = np.sqrt(err_scat_1**2 + err_scat_2**2)
 
         # Weq errors - using covariance formula
-        on_pulse_less = (on_pulse - std).clip(min=0)
-        spline0 = UnivariateSpline(x, on_pulse_less, s=0)
+        on_pulse_less = (on_pulse - self._noise_std).clip(min=0)
+        spline0 = UnivariateSpline(x_eq, on_pulse_less, s=0)
         integral = spline0.integral(0, len(self._std_profile)-1)
         dwdint = 1/max(on_pulse)**2
         dwdmax = -integral/max(on_pulse)**2
-        int_e = abs(integral/max(on_pulse - std) - integral/max(on_pulse))
-        max_e = std
-        Weq_e = np.sqrt( dwdint**2 * int_e**2 + dwdmax**2 * max_e**2 + 2*dwdint*dwdmax*int_e*max_e )
+        int_e = abs(integral/max(on_pulse - self._noise_std) -
+                    integral/max(on_pulse))
+        max_e = self._noise_std
+        Weq_e = np.sqrt(dwdint**2 * int_e**2 + dwdmax**2 *
+                        max_e**2 + 2*dwdint*dwdmax*int_e*max_e)
 
-        return [W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e]
+        # Convert to phases
+        self._W10 = W10/len(self._fit_profile)
+        self._W10_e = W10_e/len(self._fit_profile)
+        self._W50 = W50/len(self._fit_profile)
+        self._W50_e = W50_e/len(self._fit_profile)
+        self._Wscat = Wscat/len(self._fit_profile)
+        self._Wscat_e = Wscat_e/len(self._fit_profile)
+        self._Weq = Weq/len(self._fit_profile)
+        self._Weq_e = Weq_e/len(self._fit_profile)
 
-
-    def _find_x_err(self, x, popt, pcov):
+    def _est_sn(self):
         """
-        Finds the error in the horizontal position of a gaussian fit at the point x.
-        Uses the equation sigma_x = sigma_y/d2ydx2 where:
-        sigma_x = error in x
-        d2ydx2 = second derivative of the gaussian function at point x
-        sigma_y = J*C*J_T
-        J = Jacobian evalutated at point x
-        C = covariance matrix of gaussian fit
-        J_T = transposed jacobian
-
-        Parameters:
-        -----------
-        x: list
-            A list of points to evaluate the error at
-        popt: list
-            The parameters used to describe the gaussian fit
-        pcov: numpy.matrix
-            The covariance matrix corresponding to popt
-
-        Returns:
-        --------
-        x_err: list
-            The error evaluated at each point, x
+        Estimates the SN of a profile. Requires prof_utils.estimate_components_onpulse() to have been run
+        on the profile and the noise stored in self._noise_std and component estimates in self._comp_est_dict
         """
-        x_err = []
-        for _, point in enumerate(x):
-            J = self._jacobian_slope(point, *popt)
-            d2dx2 = self._multi_gauss_d2dx2(point, *popt)
-            JC = np.matmul(J, pcov)
-            sigma_y = np.sqrt( np.matmul(JC, np.transpose(J)).item(0) )
-            x_err.append(sigma_y / abs(d2dx2))
-        return x_err
+        on_pulse_bins = 0
+        for comp_range in self._comp_est_dict["overestimated_on"]:
+            comp_beg = comp_range[0]
+            comp_end = comp_range[1]
+            if comp_beg < comp_end:
+                on_pulse_bins += comp_end - comp_beg
+            else:  # Component has wrapped around the phase bounds
+                on_pulse_bins += len(self._std_profile) - comp_beg
+                on_pulse_bins += comp_end
+        self._n_off_pulse = len(self._std_profile) - on_pulse_bins
+        self._sn = 1/self._noise_std
+        # TODO: make this estimate better
+        self._sn_e = 1/(self._noise_std * np.sqrt(2 * self._n_off_pulse - 2))
 
+    
+    ####################################
+    ###### A bunch of maths stuff ######
+    ####################################
 
-    # A bunch of maths stuff 
+    def _exp_tail(self, tau, x):
+        return np.exp(-x/tau)/tau
+
+    def _exp_vm_gauss_conv(self, x, base, tau, amp, kappa, loc):
+        e_tail = self._exp_tail(tau/100, x)
+        e_tail = e_tail/max(e_tail)
+        g = self._vm_gauss(x, amp, kappa, loc)
+        y = np.fft.irfft(np.fft.rfft(g) * np.fft.rfft(e_tail))  # Convolve
+        y = amp*y/max(y)
+        y += base
+        return y
+
+    def _vm_gauss(self, x, amp, kappa, loc):
+        if kappa <= 10:  # Use vonmises
+            g = vonmises.pdf(x, kappa, loc)
+            g = amp * g/max(g)
+        else:  # Use regular gaussian - vonmises can't handle large kappa
+            sigma = np.sqrt(1/kappa)  # This is true for kappa approx > 10
+            g = amp * np.exp(-(((x-loc)**2) / (2*sigma**2)))
+        return g
+
+    def _multi_gauss_exp_with_base(self, x, base, tau, *params):
+        """
+        Where x is a sequenetial numpy array of floats from -pi to pi of any length
+        This function will employ a vonmises distribution where kappa is small and 
+        convolve the first gaussian/vonmises with an exponential tail described by tau.
+        base is the baseline noise
+        The parameters are passed as a list of len%3 = 0 with values:
+        amp: The amplitude of the gaussian
+        kappa: The kappa value of the vonmises distribution. For k>10 we will use sigma=sqrt(1/k) instead
+        loc: The location of the peak of the gaussian. Should be between -pi and pi
+        """
+        y = np.zeros_like(x)
+        for i in range(0, len(params), 3):
+            amp = params[i]
+            kappa = params[i+1]
+            loc = params[i+2]
+            if i < self._n_prof_components:  # Make a gauss with exp tail
+                if i != 0:  # Only use the base for one component
+                    base = 0
+                y += self._exp_vm_gauss_conv(x, base, tau, amp, kappa, loc)
+            else:  # Make a vonmises/gaussian
+                g = self._vm_gauss(x, amp, kappa, loc)
+                y += g
+        return y
+
     def _integral_multi_gauss(self, *params):
-        y=0
+        y = 0
         for i in range(0, len(params), 3):
             a = params[i]
             c = params[i+2]
             y = y + a*c*np.sqrt(2*np.pi)
         return y
-
 
     def _multi_gauss(self, x, *params):
         y = np.zeros_like(x)
@@ -742,9 +654,8 @@ class gfit:
             a = params[i]
             b = params[i+1]
             c = params[i+2]
-            y = y +  a * np.exp( -(((x-b)**2) / (2*c**2)) )
+            y = y + a * np.exp(-(((x-b)**2) / (2*c**2)))
         return y
-
 
     def _multi_gauss_ddx(self, x, *params):
         # Derivative of gaussian
@@ -753,9 +664,8 @@ class gfit:
             a = params[i]
             b = params[i+1]
             c = params[i+2]
-            y = y - a/c**2 * (x - b) * np.exp( -(((x-b)**2) / (2*c**2)) )
+            y = y - a/c**2 * (x - b) * np.exp(-(((x-b)**2) / (2*c**2)))
         return y
-
 
     def _multi_gauss_d2dx2(self, x, *params):
         # Double derivative of gaussian
@@ -764,48 +674,23 @@ class gfit:
             a = params[i]
             b = params[i+1]
             c = params[i+2]
-            y = y + (self._multi_gauss(x, a, b, c) / c**2) * (((x - b)**2)/(c**2) - 1)
+            y = y + (self._multi_gauss(x, a, b, c) / c**2) * \
+                (((x - b)**2)/(c**2) - 1)
         return y
 
-
     def _partial_gauss_dda(x, a, b, c):
-            return np.exp((-(b - x)**2)/(2*c**2))
+        return np.exp((-(b - x)**2)/(2*c**2))
+
     def _partial_gauss_ddb(x, a, b, c):
-            return a*(x - b) * np.exp((-(b - x)**2)/(2*c**2))/c**2
+        return a*(x - b) * np.exp((-(b - x)**2)/(2*c**2))/c**2
+
     def _partial_gauss_ddc(x, a, b, c):
-            return a*(x - b)**2 * np.exp((-(b - x)**2)/(2*c**2))/c**3
+        return a*(x - b)**2 * np.exp((-(b - x)**2)/(2*c**2))/c**3
 
+    # Chi sqaured evaluation
 
-    def _jacobian_slope(self, x, *params):
-        """
-        Evaluates the Jacobian matrix of a gaussian slope at a single point, x
-
-        Parameters:
-        -----------
-        x: float
-            The point to evaluate
-        *params: list
-            A list containing three parameters per gaussian component in the order: Amp, Mean, Width
-
-        Returns:
-        --------
-        J: numpy.matrix
-            The Jacobian matrix
-        """
-        def dda(a, b, c, x):
-            return -self._multi_gauss(x, a, b, c) * (x - b)/(c**2)/a
-        def ddb(a, b, c, x):
-            return self._multi_gauss(x, a, b, c) * (1 - (x - b)**2/(c**2))/c**2
-        def ddc(a, b, c, x):
-            return self._multi_gauss(x, a, b, c) * (x - b)/(c**3) * (2 - (x-b)**2/(c**2))
-        J = []
-        for i in range(0, len(params), 3):
-            a = params[i]
-            b = params[i+1]
-            c = params[i+2]
-            mypars = [a, b, c, x]
-            J.append(dda(*mypars))
-            J.append(ddb(*mypars))
-            J.append(ddc(*mypars))
-        J = np.asmatrix(J)
-        return J
+    def _calculate_chisq(self, observed_values, expected_values, err):
+        test_statistic = 0
+        for observed, expected in zip(observed_values, expected_values):
+            test_statistic += ((float(observed)-float(expected))/float(err))**2
+        return test_statistic
