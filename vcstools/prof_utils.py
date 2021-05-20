@@ -7,6 +7,7 @@ from scipy.interpolate import UnivariateSpline
 from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
+import itertools
 
 from vcstools.config import load_config_file
 from vcstools.stickel import Stickel
@@ -243,7 +244,7 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
         tollvl = (oldstd - newstd) / newstd
 
         if tollvl <= tol:
-            logger.debug("Took {trial+1} trials to reach tolerance")
+            logger.debug(f"Took {trial+1} trials to reach tolerance")
             np.seterr(**old_settings)
             return oldstd, x
 
@@ -610,9 +611,9 @@ def error_in_x_pos(x, y, sigma_y, x_pos):
 
 
 # Alternative method to find the location and width of peaks
-def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None):
+def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     """ 
-    Works by using stickel with lambda=1 to get a very generic profile outline, then uses UnivariateSpline to
+    Works by using stickel with lambda=1e-5 (default) to get a generic profile outline, then uses UnivariateSpline to
     find the min/maxima and estimate which of these are real depending on their relative amplitude.
     NOTE:   The on-pulse estimates are read form LEFT to RIGHT. Meaning onpulse[0] can be a greater index than onpulse[1].
             This indicates that the on-pulse is wrapped over the end of the phase.
@@ -623,8 +624,6 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
         The pulse profile
     l: float
         The lambda value to use for Stickel regularisation. Don't touch unless you know what you're doing. Default: 1e-5
-    noise_frac: float
-        Maxima found with relative (to max) amplitude less than this will be ignored. This can be lowered for bright profiles
     plot_name: string
         If supplied, will make a plot of the profile, its splined regularisation, maxima and best estimate of on-pulse
 
@@ -637,15 +636,20 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
             list of tuples containing the understimated beginning and end of each profile component
         overestimated_on: list
             list of tuples containing the overestimated beginning and end of each profile component
-        est_on_oulse: list
-            List of tuples containing and estimate of the true on-pulse.
-            Indexes taken as half of the difference between estimates
         noise: float
             The standard deviation of the noise taken as the off-pulse region
     """
     x = np.linspace(0, len(profile)-1, len(profile))
     # Normalise profile
-    norm_prof = profile/max(profile)
+    norm_prof = np.array(profile)/max(profile)
+
+    # Do only a very light sweep of sigmaClip to get a first order noise estimate
+    alpha, clip_noise = _profile_noise_initial_estimate(norm_prof)
+    _, y = sigmaClip(norm_prof, alpha=alpha)
+    noise_mean = np.nanmean(y)
+
+    # Take mean from normalised profile
+    norm_prof = norm_prof - noise_mean
 
     # Stickel takes a numpy array in the form [[x0, y0], [x1, y1], ..., [xn, yn]]
     xy_prof = []
@@ -662,27 +666,26 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
     spline = UnivariateSpline(x, reg_prof, s=0, k=4)
     dy_spline = spline.derivative()
     dy_roots = dy_spline.roots()
+    dy_roots = [int(round(i)) for i in dy_roots] # round to integer
     spline = UnivariateSpline(x, reg_prof, s=0, k=5)
     dy2_spline = spline.derivative().derivative()
     dy2_roots = dy2_spline.roots()
-    #all_roots = sorted(dy_roots + dy2_roots) # Amalgom of roots
+    dy2_roots = [int(round(i)) for i in dy2_roots] # round to integer
     
     # Profile with spline applied
     splined_profile = spline(x)
-    splined_profile /= max(splined_profile) # normalise
 
     # Find which dy roots resemble real signal
     real_max = []
     false_max = []
     for root in dy_roots:
-        rounded_root = round(root)
-        amp_at_root = splined_profile[rounded_root]
+        amp_at_root = splined_profile[root]
         # If the amp is too small, it's not signal
-        if amp_at_root < noise_frac:
+        if amp_at_root < 3 * clip_noise:
             false_max.append(root)
             continue
         # If this is a min, we don't care about it
-        if splined_profile[rounded_root+1] > amp_at_root:    
+        if splined_profile[root+1] > amp_at_root:    
             false_max.append(root)
             continue
         
@@ -732,19 +735,12 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
                 overestimate = [round(false_max[j-1]), round(false_max[0])]
         overest_on_pulse.append(overestimate)
 
-    # on-pulse estimate (between the over and under est)
-    for over, under in zip(overest_on_pulse, underest_on_pulse):
-        lo = round( (over[0] + under[0])/2 )
-        hi = round( (over[1]+ under[1])/2 )
-        est_on_pulse.append( [lo, hi] ) 
-
     # Fill the on-pulse regions 
-    overest_on_pulse = _fill_on_pulse_region(overest_on_pulse, splined_profile, noise_frac=noise_frac)
-    underest_on_pulse = _fill_on_pulse_region(underest_on_pulse, splined_profile, noise_frac=noise_frac)
-    est_on_pulse = _fill_on_pulse_region(est_on_pulse, splined_profile, noise_frac=noise_frac)
+    overest_on_pulse = _fill_on_pulse_region(overest_on_pulse, splined_profile, norm_prof, clip_noise)
+    underest_on_pulse = _fill_on_pulse_region(underest_on_pulse, splined_profile, norm_prof, clip_noise)
 
     # Work out the noise using the oversetimated on-pulse region
-    noise = noise_from_on_pulse(norm_prof, overest_on_pulse)
+    off_pulse_noise = noise_from_on_pulse(norm_prof, overest_on_pulse)
 
     if plot_name:
         plt.figure(figsize=(14, 10))
@@ -753,14 +749,15 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
         plt.xlim((0, len(x)-1))
         for i in real_max:
             plt.axvline(x=i, ls=":", lw=2, color="gray")
-        for i in est_on_pulse:
-            plt.axvline(x=i[0], ls=":", lw=2, color="blue")
-            plt.axvline(x=i[1], ls=":", lw=2, color="blue")
         for i in overest_on_pulse:
             plt.axvline(x=i[0], ls=":", lw=2, color="red")
             plt.axvline(x=i[1], ls=":", lw=2, color="red")
-        plt.errorbar(0.03*len(norm_prof), 0.9, yerr=noise, color="gray", capsize=10, markersize=0, label="Error")
-        plt.text(0.04*len(norm_prof), 0.89, f"Noise: {round(noise, 4)}")
+        if est_on_pulse:
+            for i in est_on_pulse:
+                plt.axvline(x=i[0], ls=":", lw=2, color="blue")
+                plt.axvline(x=i[1], ls=":", lw=2, color="blue")
+        plt.errorbar(0.03*len(norm_prof), 0.9, yerr=off_pulse_noise, color="gray", capsize=10, markersize=0, label="Error")
+        plt.text(0.04*len(norm_prof), 0.89, f"Noise: {round(off_pulse_noise, 5)}")
 
         # Add some custom stuff to the legend
         colors = ['gray', 'blue', 'red']
@@ -776,8 +773,14 @@ def estimate_components_onpulse(profile, l=1e-5, noise_frac=0.2, plot_name=None)
         plt.savefig(plot_name, bbox_inches="tight")
         plt.close()
 
-    return {"maxima": real_max, "underestimated_on": underest_on_pulse, "overestimated_on": overest_on_pulse,
-            "est_on_pulse": est_on_pulse, "noise": noise}
+    comp_est_dict = {}
+    comp_est_dict["maxima"] = real_max
+    comp_est_dict["underestimated_on"] = underest_on_pulse
+    comp_est_dict["overestimated_on"] = overest_on_pulse
+    comp_est_dict["norm_noise"] = off_pulse_noise
+    comp_est_dict["alpha"] = alpha
+
+    return comp_est_dict
 
 
 def noise_from_on_pulse(profile, on_pulse_pairs):
@@ -797,78 +800,171 @@ def noise_from_on_pulse(profile, on_pulse_pairs):
     noise: float
         The STD noise of the profile
     """
-    # Figure out the off-pulse profile
+    profile = list(profile) # This fixes some bugs for some reason - don't touch it
     off_pulse = []
-    profile = list(profile)
-    for i in range(0, len(on_pulse_pairs)-1):
-        lower = on_pulse_pairs[i][1]
-        upper = on_pulse_pairs[i+1][0]
-        off_pulse += profile[lower:upper]
-    # Deal with wrap-around
-    lower = on_pulse_pairs[-1][1]
-    upper = on_pulse_pairs[0][0]
-    if lower > upper: # On-pulse region not across phase bounds
-        off_pulse += (profile[lower:])
-        off_pulse += (profile[:upper])
-    else: # On-pulse region is across phase bounds
-        off_pulse += (profile[:lower])
-        off_pulse += (profile[upper:])
-
+    # Make cycling generators to deal with wrap-around
+    current_pair_gen = itertools.cycle(on_pulse_pairs)
+    next_pair_gen = itertools.cycle(on_pulse_pairs)
+    next(next_pair_gen)
+    # Figure out the off-pulse profile
+    for i in range(len(on_pulse_pairs)):
+        current_pair = next(current_pair_gen)
+        next_pair = next(next_pair_gen)
+        region = profile_region_from_pair(profile, (current_pair[1], next_pair[0]))
+        off_pulse.extend(region)
     return np.std(off_pulse)
 
 
-def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, noise_frac=0.2):
+def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, real_profile, noise_est):
+    """ 
+    Attempts to fill small gaps in the on_pulse_pairs of the smoothed profile provided these
+    gaps resemble real signal
+
+    Parameters:
+    -----------
+    on_pulse_pairs: list
+        A list of pairs of indexes that mark the on-pulse regions of the profile
+    smoothed_profile: list
+        The profile that has been smoothed with the stickel regularisation algorithm
+    real_profile: list
+        The profile that stickel was applied to
+    noise_est: float
+        A first order estimate of the profile's noise. This will determine what looks like real signal
+
+    Return:
+    -------
+    true_on_pulse: list
+        A list of pairs that represent the index ranges of the ammended on-pulse regions.
+        Note that the first or last pairs may have idx[0] > idx[1] which represents that
+        the on-pulse region wraps over the end of the phase
+    """
     # Nothing to do if the pairs are of length 1
     if len(on_pulse_pairs) <= 1:
         return on_pulse_pairs
-    
-    # Initiate the absolute noise limit
-    noise_min = noise_frac * max(smoothed_profile)
 
-    # Rearrange the tuples
-    # [(x1, x2), (y1, y2), (z1, z2)]
-    # ---->
-    # [(x2, y1), (y2, z1), (z2, x1)]
-    check_pairs = []
-    for i in range(0, len(on_pulse_pairs)-1):
-        a_pair = on_pulse_pairs[i]
-        b_pair = on_pulse_pairs[i+1]
-        check_pairs.append((a_pair[1], b_pair[0]))
-    # Add the bounds pair
-    a_pair = on_pulse_pairs[-1]
-    b_pair = on_pulse_pairs[0]
-    check_pairs.append((a_pair[1], b_pair[0]))
+    real_profile = list(real_profile)
 
-    # Check the space between on_pulse regions
+    # Remove duplicates if they exists somehow
+    #on_pulse_pairs = [list(tupl) for tupl in {tuple(item) for item in on_pulse_pairs }]
+
+    # First, join the ammendments that are touching
+    flawless_pass = False
+    loop_pairs = on_pulse_pairs.copy()
+    while True: # This is a really gross while loop. I'm sorry
+        ammend_indexes = []
+        for i, range_pair in enumerate(loop_pairs[:-1]):
+            # Compare all other pairs ahead of this one
+            for j in range(len(loop_pairs[i+1:])):
+                comparison_pair = loop_pairs[j+i+1]
+                if bool( set(range_pair) & set(comparison_pair) ): # If the pairs share an element
+                    ammend_indexes = [i, j+i+1]
+                    break # get out of this loop
+            if ammend_indexes:
+                break # get out of this loop
+        # Ammend the touching ranges
+        if ammend_indexes:
+            pair_1 = loop_pairs[ammend_indexes[0]]
+            pair_2 = loop_pairs[ammend_indexes[1]]            
+            if pair_1[1] == pair_2[0]:
+                new_pair = [pair_1[0], pair_2[1]]
+            elif pair_1[0] == pair_2[1]:
+                new_pair = [pair_2[0], pair_1[1]]
+            del loop_pairs[j]
+            del loop_pairs[i]
+            loop_pairs.append(new_pair)
+            continue
+        # loop will exit when nothing is ammended
+        break
+            
+
+    # Create two cycling generators to avoid out of bounds errors for the last pair
     on_pulse_ammendments = []
-    for i in range(0, len(check_pairs)-1):
-        lower_bounds = check_pairs[i][0]
-        upper_bounds = check_pairs[i][1]
-        off_pulse_region = smoothed_profile[lower_bounds:upper_bounds]
-        if lower_bounds == upper_bounds: # Bounds are connected, so we can join them
-            on_pulse_ammendments.append(check_pairs[i])
-        elif min(off_pulse_region) >= noise_min: # This is still on-pulse
-            on_pulse_ammendments.append(check_pairs[i])
-    # Check the bounds pair
-    lower_bounds = check_pairs[-1][0]
-    off_pulse_region_1 = smoothed_profile[lower_bounds:]
-    upper_bunds = check_pairs[-1][1]
-    off_pulse_region_2 = smoothed_profile[:upper_bounds]
-    if min(off_pulse_region_1) >= noise_min and min(off_pulse_region_2) >= noise_min:
-        on_pulse_ammendments.append(check_pairs[-1])
+    current_pair_gen = itertools.cycle(loop_pairs)
+    next_pair_gen = itertools.cycle(loop_pairs)
+    next(next_pair_gen)
+    for i in range(len(loop_pairs)):
+        # Next pair from the generator
+        current_pair = next(current_pair_gen)
+        next_pair = next(next_pair_gen)
+
+        # Figure out off pulse region
+        off_pulse_region = profile_region_from_pair(real_profile, (current_pair[1], next_pair[0]))
+
+        # See if this looks like signal
+        if min(off_pulse_region) >= noise_est:
+            # Add to ammendments that we need to make
+            on_pulse_ammendments.append( [current_pair[1], next_pair[0]] )
 
     # Apply the ammendments to the on-pulse region
-    true_on_pulse = on_pulse_pairs.copy()
+    true_on_pulse = loop_pairs.copy()
     for ammendment_pair in on_pulse_ammendments:
         # The beginning point of the on-pulse to be ammended
         begin = ammendment_pair[0]
         end = ammendment_pair[1]
         # Find where the beginning meets up with the endpoints
+        current_begs = np.array([i[0] for i in true_on_pulse])
         current_ends = np.array([i[1] for i in true_on_pulse])
-        idx = np.where(current_ends == begin)[0][0]
-        idx_next = idx+1 if begin<end else -1 # Compensates for wrap-around on-pulse region
-        # Change the end point to be the end of the next on-pulse region
-        true_on_pulse[idx][1] = true_on_pulse[idx_next][1]
-        del true_on_pulse[idx_next]
+        # Find the indexes of the start and end pairs
+        idx_begin = np.where(current_ends == begin)[0][0]
+        idx_end = np.where(current_begs == end)[0][0]
+        # Modify the on-pulse pair
+        start_of_begin = true_on_pulse[idx_begin][0]
+        end_of_end = true_on_pulse[idx_end][1]
+        true_on_pulse[idx_begin] = [start_of_begin, end_of_end]
+        # Remove the other pair as it's been absorbed
+        del true_on_pulse[i]
 
     return true_on_pulse
+
+def profile_region_from_pair(profile, pair):
+    """
+    Acquires a list of the region described by a pair of indexes accounting for wrap-around
+
+    Parameters:
+    -----------
+    profile: list
+        The profile that we want to get the region of
+    pair: list/tuple
+        A list/tuple of length two that describes the indexes of the region to grab
+
+    Return: 
+    -------
+    region: list
+        The region of the profile described by the pair
+    """
+    profile = list(profile)
+    if pair[0] < pair[1]:
+        region = profile[pair[0]:pair[1]]
+    else:
+        region = profile[pair[0]:]
+        region.extend(profile[:pair[1]])
+    return region
+
+def _profile_noise_initial_estimate(profile):
+    """
+    Attempts to guess the best value for alpha for sigmaClip in order to get a good 
+    estimate of the off-pulse noise level for a profile
+
+    Parameters:
+    -----------
+    profile: list
+        The profile to clip
+    
+    Returns:
+    --------
+    best_alpha: float:
+        The chosen alpha value for sigmaClip
+    best_nois: float:
+        The corresponding standard deviatino of the noise
+    """
+    alphas = np.linspace(4, 2, 9)
+    valid_alphas = []
+    valid_noise = []
+    for alpha in alphas:
+        noise_std, off_pulse = sigmaClip(profile, alpha=alpha)
+        n_off_pulse = np.count_nonzero(~np.isnan(off_pulse))
+        if n_off_pulse >= 0.1*len(profile): # At least 10% of the profile is still unclipped
+            valid_alphas.append(alpha)
+            valid_noise.append(noise_std)
+    best_noise, best_alpha = sorted(zip(valid_noise, valid_alphas))[0] # lowest noise is prioritised
+    return best_alpha, best_noise
