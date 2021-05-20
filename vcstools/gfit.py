@@ -1,5 +1,5 @@
 from vcstools.prof_utils import ProfileLengthError, BadFitError
-from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos
+from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos, profile_region_from_pair
 import itertools
 from scipy.stats import vonmises
 from scipy.optimize import curve_fit
@@ -176,8 +176,8 @@ class gfit:
         # Estimate the on-pulse region, components and noise level
         self._comp_est_dict = estimate_components_onpulse(
             self._std_profile, plot_name=self._component_plot_name)
-        self._n_prof_components = len(self._comp_est_dict["est_on_pulse"])
-        self._noise_std = self._comp_est_dict["noise"]
+        self._n_prof_components = len(self._comp_est_dict["overestimated_on"])
+        self._noise_std = self._comp_est_dict["norm_noise"]
 
         # Loop over the gaussian fitting function, excepting in-built errors
         try:
@@ -186,9 +186,9 @@ class gfit:
             logger.error("No Fit Found!")
 
         # Do all the fancy things with the fit
-        self._find_widths() # Find widths + error
-        self._find_minima_maxima_gauss() # Find turning points
-        self._est_sn() # Estimate SN
+        self._find_widths()  # Find widths + error
+        self._find_minima_maxima_gauss()  # Find turning points
+        self._est_sn()  # Estimate SN
 
         # Dump to dictionary
         self._fit_dict = {}
@@ -212,8 +212,8 @@ class gfit:
         self._fit_dict["fit"] = self._fit_profile
         self._fit_dict["sn"] = self._sn
         self._fit_dict["sn_e"] = self._sn_e
-        self._fit_dict["noise"] = self._noise_std
-        self._fit_dict["scattering"] = self._popt[1] # tau
+        self._fit_dict["noise_std"] = self._noise_std
+        self._fit_dict["scattering"] = self._popt[1]  # tau
         self._fit_dict["on_pulse_estimates"] = self._comp_est_dict
         self._fit_dict["n_profile_components"] = self._n_prof_components
 
@@ -229,13 +229,13 @@ class gfit:
             f"Wscat:                 {self._fit_dict['Wscat']} +/- {self._fit_dict['Wscat_e']}")
         logger.info(
             f"Weq:                   {self._fit_dict['Weq']} +/- {self._fit_dict['Weq_e']}")
-        logger.info(f"Maxima:                {self._fit_dict['maxima']}")
-        logger.info(f"Maxima error:          {self._fit_dict['maxima_e']}")
         logger.info(
-            f"S/N estimate:          {self._fit_dict['sn']} +/- {self._fit_dict['sn_e']}")
+            f"S/N:                   {self._fit_dict['sn']} +/- {self._fit_dict['sn_e']}")
+        logger.info(
+            f"Noise estiamte:        {self._noise_std}")
         logger.debug(f"popt:                  {self._fit_dict['fit_params']}")
 
-        # And we're done 
+        # And we're done
 
     # Plotter for the resulting fit
 
@@ -244,14 +244,19 @@ class gfit:
         if not self._plot_name:
             self._plot_name = "Gaussian_fit.png"
         popt = self._fit_dict["fit_params"]
+        # We need an x range for the plot - which will be phase and for
+        # Recreating the Gaussians - which will be -pi to pi
         plot_x = np.linspace(0, 1, len(self._fit_profile))
         gaussian_x = np.linspace(-np.pi, np.pi,
                                  len(self._fit_profile), endpoint=False)
         plt.figure(figsize=(20, 12))
 
+        # Plot the convolved gaussian
         z = self._exp_vm_gauss_conv(gaussian_x, *self._popt[0:5])
         plt_label = "Convolved Gaussian Component" if self._n_prof_components == 1 else f"Convolved Gaussian Component 1"
         plt.plot(plot_x, z, "--", label=plt_label)
+
+        # Plot any other convoled gaussians - one for each component past the first
         for i in range(1, self._n_prof_components):
             base = 0
             tau = self._popt[1]
@@ -261,10 +266,11 @@ class gfit:
             plt.plot(plot_x, z, "--",
                      label=f"Convolved Gaussian Component {i+1}")
 
+        # Plot the other gaussian components
         start_j = 5 + (self._n_prof_components-1)*3
         for i, j in list(enumerate(range(start_j, len(self._popt), 3))):
             z = self._vm_gauss(gaussian_x, *self._popt[j:j+3])
-            plt.plot(plot_x, z, "--", label=f"Gaussian Component {i}")
+            plt.plot(plot_x, z, "--", label=f"Gaussian Component {i+1}")
         if self._maxima:
             for i, mx in enumerate(self._maxima):
                 plt.axvline(
@@ -272,17 +278,26 @@ class gfit:
                 plt.axvline(
                     x=(mx - self._maxima_e[i]), ls=":", lw=2, color="gray")
 
+        # Error bar - for noise and SN
+        plt.errorbar(0.02, 0.98 - self._noise_std, yerr=self._noise_std, color="gray",
+                     capsize=10, markersize=0, label="Noise")
+        plt.text(
+            0.03, 0.95 - self._noise_std, f"Noise: {round(self._noise_std, 5)}", fontsize=14)
+        plt.text(0.03, 0.97,
+                 f"S/N:   {round(self._sn, 2)} +/- \n          {round(self._sn_e, 3)}", fontsize=14)
+
+        # All the other plotting stuff
         plt.title(self._plot_name.split("/")[-1].split(".")[0], fontsize=26)
         plt.xticks(fontsize=20)
         plt.yticks(fontsize=20)
         plt.xlim(0, 1)
-        plt.xlabel("Bins", fontsize=24)
+        plt.xlabel("Phase", fontsize=24)
         plt.ylabel("Intensity", fontsize=24)
         plt.plot(plot_x, self._std_profile,
                  label="Original Profile", color="black")
         plt.plot(plot_x, self._fit_profile,
                  label="Gaussian Model", color="red")
-        plt.legend(loc="best", prop={'size': 18})
+        plt.legend(loc="best", prop={'size': 14})
         plt.savefig(self._plot_name, bbox_inches="tight")
         plt.close()
 
@@ -321,9 +336,13 @@ class gfit:
                 current_guess += [1]
                 current_bounds[0].append(1e-3)
                 current_bounds[1].append(100)
-            current_guess += [next(max_gen)*0.5**(len(current_guess)/5),
-                              next(width_gen), next(centre_gen)]  # [Amp, kappa, loc]
-            current_bounds[0].append(0)  # Amplitude
+            # Add the guess
+            max_guess = next(max_gen)*0.5**(len(current_guess)/5)
+            max_guess = 0.05 if max_guess < 0.05 else max_guess
+            # [Amp, kappa, loc]
+            current_guess += [max_guess, next(width_gen), next(centre_gen)]
+            # Add the bounds
+            current_bounds[0].append(0.05)  # Amplitude
             current_bounds[1].append(1)
             current_bounds[0].append(1e-1)  # kappa
             current_bounds[1].append(1e5)
@@ -339,22 +358,23 @@ class gfit:
         comp_centres = []
         comp_max = []
         comp_width = []
-        for pair in self._comp_est_dict["est_on_pulse"]:
+        on_pulse_pairs = self._comp_est_dict["overestimated_on"]
+
+        for pair in on_pulse_pairs:
             lower_bound = pair[0]
             upper_bound = pair[1]
             # Amplitude
             # Amp guess is half of max amplitude of component
-            comp_max.append(
-                max(self._std_profile[lower_bound:upper_bound])*0.5)
+            on_pulse_region = profile_region_from_pair(self._std_profile, pair)
+            comp_max.append(max(on_pulse_region)*0.5)
             # Gaussian width (kappa/sigma)
-            width_est = (upper_bound - lower_bound) / \
+            width_est = abs(upper_bound - lower_bound) / \
                 len(x)  # This is remeniscent of sigma
             width_est /= 2  # halve the width estimate
             comp_width.append(1/width_est**2)  # Convert this to kappa
             # Centre location
             # Looks like the middle of the profile component
-            centre_val = np.max(
-                max(self._std_profile[lower_bound:upper_bound]))
+            centre_val = np.max(max(on_pulse_region))
             centre_loc_in_prof = np.where(self._std_profile == centre_val)[
                 0][0]  # get this in terms of profile index
             # Convert from 0 -> len(x) to -pi -> pi coordinates
@@ -384,13 +404,6 @@ class gfit:
             # Bounds needs to be in tuple form for curve_fit
             bounds_tuple = (tuple(bounds_arr[0]), tuple(bounds_arr[1]))
 
-            _guess = self._multi_gauss_exp_with_base(x, *guess)
-            plt.figure(figsize=(12, 8))
-            plt.plot(x, _guess)
-            plt.plot(x, self._std_profile)
-            plt.savefig(f"guess_plot_{num}.png")
-            plt.close()
-
             # Do the fitting
             maxfev = 100000
             popt = None
@@ -399,6 +412,8 @@ class gfit:
                 popt, pcov = curve_fit(self._multi_gauss_exp_with_base, x,
                                        self._std_profile, bounds=bounds_tuple, p0=guess, maxfev=maxfev)
             except (RuntimeError, ValueError) as e:  # No fit found in maxfev
+                import traceback
+                logger.error(e)
                 raise BadFitError("No fit found in maxfev for this profile")
 
             # Work out some stuff
@@ -447,20 +462,15 @@ class gfit:
         dy_spline = spline_prof.derivative()
         dy_profile = dy_spline(x)
         roots = dy_spline.roots()
-        plt.figure(figsize=(12, 8))
-        plt.plot(self._fit_profile)
-        plt.plot(np.array(dy_profile)/max(dy_profile))
-        plt.savefig("stupid_shit_wont_work.png", bbox_inches="tight")
-        plt.close()
+        roots = [int(round(i)) for i in roots]
 
         # Find which are max, min, and false
         maxima = []
         minima = []
         for root in roots:
-            idx = round(root)
             # Set valid maxima to be 2 times noise
-            if (self._fit_profile[idx] - self._popt[0]) > 2*self._noise_std:
-                if dy_profile[idx-1] > dy_profile[idx]:
+            if (self._fit_profile[root] - self._popt[0]) > 2*self._noise_std:
+                if dy_profile[root-1] > dy_profile[root]:
                     maxima.append(root)
                 else:
                     minima.append(root)
@@ -503,7 +513,7 @@ class gfit:
             x, profile_for_widths - np.full(len(x), 1/np.exp(1)*amp_fit), s=0)
 
         # Find Weq
-        on_pulse_pairs = self._comp_est_dict["est_on_pulse"]
+        on_pulse_pairs = self._comp_est_dict["overestimated_on"]
         on_pulse = []
         for pair in on_pulse_pairs:
             if pair[0] < pair[1]:
@@ -518,8 +528,11 @@ class gfit:
 
         # Find W10, W50 and Wscat
         W10_roots = spline10.roots()
+        W10_roots = [int(round(i)) for i in W10_roots]
         W50_roots = spline50.roots()
+        W50_roots = W50_roots = [int(round(i)) for i in W50_roots]
         Wscat_roots = spline_s.roots()
+        Wscat_roots = [int(round(i)) for i in Wscat_roots]
         # If any of the widths roots don't exist, this fit sucks
         if not list(W10_roots) or not list(W50_roots) or not list(Wscat_roots):
             raise BadFitError("This fit is not suitable for use")
@@ -589,7 +602,6 @@ class gfit:
         # TODO: make this estimate better
         self._sn_e = 1/(self._noise_std * np.sqrt(2 * self._n_off_pulse - 2))
 
-    
     ####################################
     ###### A bunch of maths stuff ######
     ####################################
@@ -601,7 +613,8 @@ class gfit:
         e_tail = self._exp_tail(tau/100, x)
         e_tail = e_tail/max(e_tail)
         g = self._vm_gauss(x, amp, kappa, loc)
-        y = np.fft.irfft(np.fft.rfft(g) * np.fft.rfft(e_tail))  # Convolve
+        y = np.real(np.fft.ifft(np.fft.fft(g) *
+                    np.fft.fft(e_tail)))  # Convolve
         y = amp*y/max(y)
         y += base
         return y
@@ -634,7 +647,8 @@ class gfit:
             if i < self._n_prof_components:  # Make a gauss with exp tail
                 if i != 0:  # Only use the base for one component
                     base = 0
-                y += self._exp_vm_gauss_conv(x, base, tau, amp, kappa, loc)
+                conv = self._exp_vm_gauss_conv(x, base, tau, amp, kappa, loc)
+                y += conv
             else:  # Make a vonmises/gaussian
                 g = self._vm_gauss(x, amp, kappa, loc)
                 y += g
