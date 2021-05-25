@@ -1,5 +1,5 @@
 from vcstools.prof_utils import ProfileLengthError, BadFitError
-from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos, profile_region_from_pair
+from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos, profile_region_from_pairs
 import itertools
 from scipy.stats import vonmises
 from scipy.optimize import curve_fit
@@ -173,17 +173,22 @@ class gfit:
 
         # Standarsdise the profile so that it's easy to fit
         self._standardise_raw_profile()
+
         # Estimate the on-pulse region, components and noise level
+        self._comp_est_dict = estimate_components_onpulse(self._std_profile)
+        self._n_prof_components = len(self._comp_est_dict["overest_on_pulse"])
+
+        # Roll the profile such that an off-pulse region is on the phase edge
+        self._roll_to_ideal_phase()
+
+        # This has ruined our component estimates so we need get them back
         self._comp_est_dict = estimate_components_onpulse(
             self._std_profile, plot_name=self._component_plot_name)
-        self._n_prof_components = len(self._comp_est_dict["overestimated_on"])
-        self._noise_std = self._comp_est_dict["norm_noise"]
+        self._n_prof_components = len(self._comp_est_dict["overest_on_pulse"])
+        self._noise_std = self._comp_est_dict["norm_noise_std"]
 
-        # Loop over the gaussian fitting function, excepting in-built errors
-        try:
-            self._fit_gaussian()
-        except BadFitError as e:
-            logger.error("No Fit Found!")
+        # Attempt to fit gaussians to the profile
+        self._fit_gaussian()
 
         # Do all the fancy things with the fit
         self._find_widths()  # Find widths + error
@@ -214,7 +219,7 @@ class gfit:
         self._fit_dict["sn_e"] = self._sn_e
         self._fit_dict["noise_std"] = self._noise_std
         self._fit_dict["scattering"] = self._popt[1]  # tau
-        self._fit_dict["on_pulse_estimates"] = self._comp_est_dict
+        self._fit_dict["component_estimates"] = self._comp_est_dict
         self._fit_dict["n_profile_components"] = self._n_prof_components
 
         # Log all the important stuff
@@ -233,6 +238,8 @@ class gfit:
             f"S/N:                   {self._fit_dict['sn']} +/- {self._fit_dict['sn_e']}")
         logger.info(
             f"Noise estiamte:        {self._noise_std}")
+        logger.info(
+            f"Scattering Timescale:  {self._popt[1]}")
         logger.debug(f"popt:                  {self._fit_dict['fit_params']}")
 
         # And we're done
@@ -279,10 +286,10 @@ class gfit:
                     x=(mx - self._maxima_e[i]), ls=":", lw=2, color="gray")
 
         # Error bar - for noise and SN
-        plt.errorbar(0.02, 0.98 - self._noise_std, yerr=self._noise_std, color="gray",
+        plt.errorbar(0.02, 0.95 - self._noise_std/2, yerr=self._noise_std, color="gray",
                      capsize=10, markersize=0, label="Noise")
         plt.text(
-            0.03, 0.95 - self._noise_std, f"Noise: {round(self._noise_std, 5)}", fontsize=14)
+            0.03, 0.94 - self._noise_std/2, f"Noise: {round(self._noise_std, 5)}", fontsize=14)
         plt.text(0.03, 0.97,
                  f"S/N:   {round(self._sn, 2)} +/- \n          {round(self._sn_e, 3)}", fontsize=14)
 
@@ -301,17 +308,50 @@ class gfit:
         plt.savefig(self._plot_name, bbox_inches="tight")
         plt.close()
 
-    def _standardise_raw_profile(self):
+    def _standardise_raw_profile(self, roll_phase=0.25):
         """Normalises and rolls the raw profile to 0.25 in phase"""
         self._std_profile = self._raw_profile.copy()
         # Roll the profile such that the max point is at 0.25 phase
         roll_from = np.argmax(self._std_profile)
-        roll_to = round(0.25*len(self._std_profile))
+        roll_to = round(roll_phase*len(self._std_profile))
         roll_i = roll_to - roll_from
         self._std_profile = np.roll(self._std_profile, roll_i)
         # Normalise profile to max=1
         self._std_profile = np.array(
             self._std_profile)/max(self._std_profile)
+
+    def _roll_to_ideal_phase(self):
+        """Finds the largest off-pulse region and rolls the profile to that index"""
+        # Find the largest off-pulse range
+        off_pulse_ranges = self._comp_est_dict["overest_off_pulse"]
+        off_pulse_lens = []
+        for off_range in off_pulse_ranges:
+            start_off = off_range[0]
+            end_off = off_range[1]
+            if start_off > end_off:  # Wrapped around phase end
+                off_pulse_lens.append(
+                    len(self._std_profile) - start_off + end_off)
+            else:
+                off_pulse_lens.append(end_off - start_off)
+
+        longest_range, _ = sorted(zip(off_pulse_ranges, off_pulse_lens), reverse=True)[
+            0]  # Grabs the longest one
+        start_off, end_off = longest_range
+        # Find the centre index of this range
+        if start_off > end_off:  # off pulse is wrapped over phase end
+            off_pulse_len = (len(self._std_profile) - start_off + end_off)
+            centre_of_off_pulse = start_off + off_pulse_len/2
+            if centre_of_off_pulse > len(self._std_profile):
+                centre_of_off_pulse = centre_of_off_pulse - \
+                    len(self._std_profile)
+            roll_from = int(centre_of_off_pulse)
+        else:  # Easy case - off pulse is not wrapped
+            roll_from = int((end_off - start_off)/2 + start_off)
+
+        # Do the rolling
+        roll_to = len(self._std_profile)
+        roll_i = roll_to - roll_from
+        self._std_profile = np.roll(self._std_profile, roll_i)
 
     # The function that does the actual fitting
 
@@ -324,7 +364,7 @@ class gfit:
         Will then attempt to successively fit one more regular gaussian component until max_N is reached
         The number of gaussians fit that yields the lowes Bayesian Information Criterion is deemed the most successful
         """
-        def add_bounds_guess(max_gen, width_gen, centre_gen, current_guess, current_bounds, base=False, tau=False):
+        def add_bounds_guess(amp_gen, width_gen, loc_gen, current_guess, current_bounds, base=False, tau=False):
             if base:
                 # Base
                 current_guess += [0.1]  # Guess at 10%
@@ -336,18 +376,31 @@ class gfit:
                 current_guess += [1]
                 current_bounds[0].append(1e-3)
                 current_bounds[1].append(100)
-            # Add the guess
-            max_guess = next(max_gen)*0.5**(len(current_guess)/5)
-            max_guess = 0.05 if max_guess < 0.05 else max_guess
+            amp_lo = self._noise_std
+            amp_hi = 1.0
+            width_lo = 1e-1
+            width_hi = 1e5
+            loc_lo = -np.pi
+            loc_hi = np.pi
+            # Add the guesses
+            amp_guess = next(amp_gen)
+            amp_guess = amp_lo if amp_guess < amp_lo else amp_guess
+            amp_guess = amp_hi if amp_guess > amp_hi else amp_guess
+            width_guess = next(width_gen)
+            width_guess = width_lo if width_guess < width_lo else width_guess
+            width_guess = width_hi if width_guess > width_hi else width_guess
+            loc_guess = next(loc_gen)
+            loc_guess = loc_lo if loc_guess < loc_lo else loc_guess
+            loc_guess = loc_hi if loc_guess > loc_hi else loc_guess
             # [Amp, kappa, loc]
-            current_guess += [max_guess, next(width_gen), next(centre_gen)]
+            current_guess += [amp_guess, width_guess, loc_guess]
             # Add the bounds
-            current_bounds[0].append(0.05)  # Amplitude
-            current_bounds[1].append(1)
-            current_bounds[0].append(1e-1)  # kappa
-            current_bounds[1].append(1e5)
-            current_bounds[0].append(-np.pi)  # Location
-            current_bounds[1].append(np.pi)
+            current_bounds[0].append(amp_lo)  # Amplitude
+            current_bounds[1].append(amp_hi)
+            current_bounds[0].append(width_lo)  # kappa
+            current_bounds[1].append(width_hi)
+            current_bounds[0].append(loc_lo)  # Location
+            current_bounds[1].append(loc_hi)
             return current_guess, current_bounds
 
         # Initiate x - we will be working in 1D circular coordinates
@@ -355,34 +408,35 @@ class gfit:
                         len(self._std_profile), endpoint=False)
 
         # Estimate gaussian parameters based on profile components
-        comp_centres = []
-        comp_max = []
+        comp_locs = []
+        comp_amp = []
         comp_width = []
-        on_pulse_pairs = self._comp_est_dict["overestimated_on"]
-
+        on_pulse_pairs = self._comp_est_dict["overest_on_pulse"]
         for pair in on_pulse_pairs:
             lower_bound = pair[0]
             upper_bound = pair[1]
             # Amplitude
             # Amp guess is half of max amplitude of component
-            on_pulse_region = profile_region_from_pair(self._std_profile, pair)
-            comp_max.append(max(on_pulse_region)*0.5)
+            on_pulse_region = profile_region_from_pairs(
+                self._std_profile, [pair])
+            comp_amp.append(max(on_pulse_region)*0.5)
+
             # Gaussian width (kappa/sigma)
-            width_est = abs(upper_bound - lower_bound) / \
-                len(x)  # This is remeniscent of sigma
-            width_est /= 2  # halve the width estimate
-            comp_width.append(1/width_est**2)  # Convert this to kappa
-            # Centre location
-            # Looks like the middle of the profile component
-            centre_val = np.max(max(on_pulse_region))
-            centre_loc_in_prof = np.where(self._std_profile == centre_val)[
-                0][0]  # get this in terms of profile index
-            # Convert from 0 -> len(x) to -pi -> pi coordinates
-            comp_centres.append((centre_loc_in_prof/len(x)) * 2*np.pi - np.pi)
+            width_est = len(profile_region_from_pairs(
+                self._std_profile, [pair]))/2
+            width_est = 1/width_est**2  # Convert this to kappa
+            width_est = 0.1 if width_est < 0.1 else width_est
+            comp_width.append(width_est)
+
+        # Centre location - loop over maxima
+        for m in self._comp_est_dict["maxima"]:
+            # Convert m from 0 -> len(x) to -pi -> pi coordinates
+            comp_locs.append((m/len(x)) * 2*np.pi - np.pi)
+
         # Turn guesses into generators that cycle between profile components
-        centre_gen = itertools.cycle(comp_centres)
+        amp_gen = itertools.cycle(comp_amp)
         width_gen = itertools.cycle(comp_width)
-        max_gen = itertools.cycle(comp_max)
+        loc_gen = itertools.cycle(comp_locs)
 
         # Initiate bounds, guesses and fit dictionary
         bounds_arr = [[], []]
@@ -394,13 +448,13 @@ class gfit:
             is_first = True if i == 0 else False  # Add the baseline to a single gaussian
             if i != self._n_prof_components:  # Don't add the rest of the guess to the last component, this is done in the next loop
                 guess, bounds_arr = add_bounds_guess(
-                    max_gen, width_gen, centre_gen, guess, bounds_arr, base=is_first, tau=is_first)
+                    amp_gen, width_gen, loc_gen, guess, bounds_arr, base=is_first, tau=is_first)
 
         # Fit from n_components to max_N gaussians to the profile. Evaluate profile fit using bayesian information criterion
         for num in range(self._n_prof_components, self._max_N):
             # Append to the bounds and guesses
             guess, bounds_arr = add_bounds_guess(
-                max_gen, width_gen, centre_gen, guess, bounds_arr)
+                amp_gen, width_gen, loc_gen, guess, bounds_arr)
             # Bounds needs to be in tuple form for curve_fit
             bounds_tuple = (tuple(bounds_arr[0]), tuple(bounds_arr[1]))
 
@@ -412,9 +466,12 @@ class gfit:
                 popt, pcov = curve_fit(self._multi_gauss_exp_with_base, x,
                                        self._std_profile, bounds=bounds_tuple, p0=guess, maxfev=maxfev)
             except (RuntimeError, ValueError) as e:  # No fit found in maxfev
-                import traceback
-                logger.error(e)
-                raise BadFitError("No fit found in maxfev for this profile")
+                print(e)
+                for i, g in enumerate(guess):
+                    print(
+                        f"Guess: {g} | bounds: {bounds_tuple[0][i]} -> {bounds_tuple[1][i]}")
+                # continue
+                break
 
             # Work out some stuff
             if popt is not None and pcov is not None:
@@ -513,7 +570,7 @@ class gfit:
             x, profile_for_widths - np.full(len(x), 1/np.exp(1)*amp_fit), s=0)
 
         # Find Weq
-        on_pulse_pairs = self._comp_est_dict["overestimated_on"]
+        on_pulse_pairs = self._comp_est_dict["overest_on_pulse"]
         on_pulse = []
         for pair in on_pulse_pairs:
             if pair[0] < pair[1]:
@@ -589,7 +646,7 @@ class gfit:
         on the profile and the noise stored in self._noise_std and component estimates in self._comp_est_dict
         """
         on_pulse_bins = 0
-        for comp_range in self._comp_est_dict["overestimated_on"]:
+        for comp_range in self._comp_est_dict["overest_on_pulse"]:
             comp_beg = comp_range[0]
             comp_end = comp_range[1]
             if comp_beg < comp_end:
