@@ -15,21 +15,33 @@ from vcstools.stickel import Stickel
 logger = logging.getLogger(__name__)
 
 # Custom Errors
+
+
 class LittleClipError(Exception):
     """Raise when not enough data is clipped"""
     pass
+
+
 class LargeClipError(Exception):
     """Raise when too much data is clipped"""
     pass
+
+
 class NoComponentsError(Exception):
     """Raise when there are no feasible profile components"""
     pass
+
+
 class ProfileLengthError(Exception):
     """Raise when a profile's legnth is too small to be fit"""
     pass
+
+
 class NoFitError(Exception):
     """Raise when no gaussian fits have been found"""
     pass
+
+
 class BadFitError(Exception):
     """Raise when a particular fit is not suitable"""
 
@@ -49,7 +61,7 @@ def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
         OPTIONAL - Additional options for the pdv. Default: -FTt
     """
     comp_config = load_config_file()
-    with open(outfile,'w+') as f:
+    with open(outfile, 'w+') as f:
         commands = [comp_config["prschive_container"]]
         commands.append("pdv")
         commands.append(pdvops)
@@ -90,7 +102,7 @@ def get_from_bestprof(file_loc):
             The number of bins in the profile
     """
 
-    with open(file_loc,"r") as bestprof:
+    with open(file_loc, "r") as bestprof:
         lines = bestprof.readlines()
         # Find the obsid by finding a 10 digit int in the file name
         obsid = re.findall(r'(\d{10})', lines[0])[0]
@@ -150,11 +162,11 @@ def get_from_ascii(file_loc):
 
     f = open(file_loc)
     lines = iter(f.readlines())
-    next(lines) #skip first line
+    next(lines)  # skip first line
     f.close()
-    profile=[]
+    profile = []
     for line in lines:
-        thisline=line.split()
+        thisline = line.split()
         profile.append(float(thisline[3]))
 
     return [profile, len(profile)]
@@ -186,13 +198,13 @@ def get_stokes_from_ascii(file_loc):
     f = open(file_loc)
     lines = iter(f.readlines())
     f.close()
-    next(lines) #skip first line
-    I=[]
-    Q=[]
-    U=[]
-    V=[]
+    next(lines)  # skip first line
+    I = []
+    Q = []
+    U = []
+    V = []
     for line in lines:
-        thisline=line.split()
+        thisline = line.split()
         I.append(float(thisline[3]))
         Q.append(float(thisline[4]))
         U.append(float(thisline[5]))
@@ -229,16 +241,16 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
     """
     x = np.copy(data)
     oldstd = np.nanstd(x)
-    #When the x[x<lolim] and x[x>hilim] commands encounter a nan it produces a
-    #warning. This is expected because it is ignoring flagged data from a
-    #previous trial so the warning is supressed.
+    # When the x[x<lolim] and x[x>hilim] commands encounter a nan it produces a
+    # warning. This is expected because it is ignoring flagged data from a
+    # previous trial so the warning is supressed.
     old_settings = np.seterr(all='ignore')
     for trial in range(ntrials):
         median = np.nanmedian(x)
         lolim = median - alpha * oldstd
         hilim = median + alpha * oldstd
-        x[x<lolim] = np.nan
-        x[x>hilim] = np.nan
+        x[x < lolim] = np.nan
+        x[x > hilim] = np.nan
 
         newstd = np.nanstd(x)
         tollvl = (oldstd - newstd) / newstd
@@ -249,7 +261,8 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
             return oldstd, x
 
         if trial + 1 == ntrials:
-            logger.debug("Reached number of trials without reaching tolerance level")
+            logger.debug(
+                "Reached number of trials without reaching tolerance level")
             np.seterr(**old_settings)
             return oldstd, x
 
@@ -281,29 +294,30 @@ def est_sn_from_prof(prof_data, alpha=3.):
     # Check profile is normalised
     prof_data = prof_data / max(prof_data)
 
-    #centre the profile around the max
+    # centre the profile around the max
     shift = -int(np.argmax(prof_data))+int(len(prof_data))//2
     prof_data = np.roll(prof_data, shift)
 
-    #find std and check if profile is scattered
+    # find std and check if profile is scattered
     sigma, flags = sigmaClip(prof_data, tol=0.01, ntrials=100, alpha=alpha)
     check_clip(flags)
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
-    scattered=False
-    if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
-        logger.warning("The profile is highly scattered. S/N estimate cannot be calculated")
-        scattered=True
+    scattered = False
+    if (np.nanmin(flags) > bot_prof_min) or (not np.isnan(flags).any()):
+        logger.warning(
+            "The profile is highly scattered. S/N estimate cannot be calculated")
+        scattered = True
         sn = sn_e = None
     else:
-        #prof_e = 500. #this is when it's not normalised
-        prof_e = 0.0005 #this is an approximation
+        # prof_e = 500. #this is when it's not normalised
+        prof_e = 0.0005  # this is an approximation
         non_pulse_bins = 0
-        #work out the above parameters
+        # work out the above parameters
         for i, _ in enumerate(prof_data):
             if not np.isnan(flags[i]):
                 non_pulse_bins += 1
         sigma_e = sigma / np.sqrt(2 * non_pulse_bins - 2)
-        #now calc S/N
+        # now calc S/N
         sn = max(prof_data)/sigma
         sn_e = sn * np.sqrt(prof_e/max(prof_data)**2 + (sigma_e/sigma)**2)
         logger.debug(f"max prof: {max(prof_data)} +/- {prof_e} ")
@@ -355,20 +369,21 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
     """
     prof_dict = {}
     nbins = len(prof_data)
-    #centre the profile around the max
+    # centre the profile around the max
     shift = -int(np.argmax(prof_data))+int(nbins)//2
     prof_data = np.roll(prof_data, shift)
 
-    #find sigma and check if profile is scattered
+    # find sigma and check if profile is scattered
     sigma, flags = sigmaClip(prof_data, alpha=alpha, tol=0.01, ntrials=100)
     check_clip(flags)
 
     bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
-    scattered=False
-    if (np.nanmin(flags) > bot_prof_min) or ( not np.isnan(flags).any() ):
-        logger.info("The profile is highly scattered. S/N estimate cannot be calculated")
-        scattered=True
-        #making a new profile with the only bin being the lowest point
+    scattered = False
+    if (np.nanmin(flags) > bot_prof_min) or (not np.isnan(flags).any()):
+        logger.info(
+            "The profile is highly scattered. S/N estimate cannot be calculated")
+        scattered = True
+        # making a new profile with the only bin being the lowest point
         prof_min_i = np.argmin(prof_data)
         flags = []
         for fi, _ in enumerate(prof_data):
@@ -379,18 +394,18 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
 
         flags = np.array(flags)
         prof_data -= min(prof_data)
-        #Assuming width is equal to pulsar period because of the scattering
+        # Assuming width is equal to pulsar period because of the scattering
         w_equiv_ms = period
         u_w_equiv_ms = period/nbins
         sn = None
         u_sn = None
     else:
-        u_prof = 500. #this is an approximation
+        u_prof = 500.  # this is an approximation
         pulse_width_bins = 0
         non_pulse_bins = 0
         p_total = 0.
         u_p = 0.
-        #work out the above parameters
+        # work out the above parameters
         for i, data in enumerate(prof_data):
             if np.isnan(flags[i]):
                 pulse_width_bins += 1
@@ -400,7 +415,7 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
                 non_pulse_bins += 1
         u_simga = sigma / np.sqrt(2 * non_pulse_bins - 2)
 
-        #now calc S/N
+        # now calc S/N
         sn = max(prof_data)/sigma
         u_sn = sn * np.sqrt(u_prof/max(prof_data)**2 + (u_simga/sigma)**2)
 
@@ -411,10 +426,10 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
 
         prof_max = max(prof_data)
         w_equiv_bins = p_total / prof_max
-        w_equiv_ms = w_equiv_bins / nbins * period # in ms
-        u_w_equiv_bins = np.sqrt(p_total /prof_max)**2 +\
-                                   (p_total * u_prof / (prof_max)**2)**2
-        u_w_equiv_ms = u_w_equiv_bins / nbins * period # in ms
+        w_equiv_ms = w_equiv_bins / nbins * period  # in ms
+        u_w_equiv_bins = np.sqrt(p_total / prof_max)**2 +\
+            (p_total * u_prof / (prof_max)**2)**2
+        u_w_equiv_ms = u_w_equiv_bins / nbins * period  # in ms
 
     else:
         w_equiv_ms = period
@@ -422,14 +437,15 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
         w_equiv_bins = w_equiv_ms/period*nbins
         u_w_equiv_bins = (u_w_equiv_ms/w_equiv_ms)*w_equiv_bins
 
-    #calc scattering
+    # calc scattering
     scat_height = max(prof_data) / 2.71828
     scat_bins = 0
     for p in prof_data:
         if p > scat_height:
             scat_bins = scat_bins + 1
-    scattering = float(scat_bins + 1) * float(period) /1000. #in s
-    u_scattering = 1. * float(period) /1000. # assumes the uncertainty is one bin
+    scattering = float(scat_bins + 1) * float(period) / 1000.  # in s
+    u_scattering = 1. * float(period) / \
+        1000.  # assumes the uncertainty is one bin
 
     prof_dict["sn"] = sn
     prof_dict["sn_e"] = u_sn
@@ -489,9 +505,9 @@ def auto_analyse_pulse_prof(prof_data, period):
     attempts_dict = {}
 
     loglvl = logger.level
-    logger.setLevel(logging.WARNING) #squelch logging for the loop
+    logger.setLevel(logging.WARNING)  # squelch logging for the loop
 
-    #loop over the gaussian evaluation fucntion, excepting in-built errors
+    # loop over the gaussian evaluation fucntion, excepting in-built errors
     for alpha in alphas:
         try:
             prof_dict = analyse_pulse_prof(prof_data, period, alpha=alpha)
@@ -500,10 +516,10 @@ def auto_analyse_pulse_prof(prof_data, period):
             logger.setLevel(loglvl)
             logger.info(e)
             logger.info(f"Skipping alpha value: {alpha}")
-            logger.setLevel(logging.WARNING) #squelch logging for the loop
+            logger.setLevel(logging.WARNING)  # squelch logging for the loop
     logger.setLevel(loglvl)
 
-    #Evaluate the best profile based on the SN error.
+    # Evaluate the best profile based on the SN error.
     sne = []
     sne_alphas = []
     scattered_trials = []
@@ -514,7 +530,7 @@ def auto_analyse_pulse_prof(prof_data, period):
                 sne.append(attempts_dict[alpha_key]["sn_e"])
                 sne_alphas.append(alpha_key)
 
-    if sne: #there is an SN estimate available. Only look through these analyses as candidates
+    if sne:  # there is an SN estimate available. Only look through these analyses as candidates
         best_sne = min(sne)
         best_alpha = sne_alphas[sne.index(best_sne)]
         fit_dict = attempts_dict[best_alpha]
@@ -523,14 +539,15 @@ def auto_analyse_pulse_prof(prof_data, period):
         scattered_alphas = []
         for alpha_key in attempts_dict.keys():
             if attempts_dict[alpha_key]["scattered"]:
-                #use mean square of width errors as a metric for the best fit
-                mse.append(np.sqrt(attempts_dict[alpha_key]["w_equiv_bins_e"]**2 + attempts_dict[alpha_key]["scattering_e"]**2))
+                # use mean square of width errors as a metric for the best fit
+                mse.append(np.sqrt(
+                    attempts_dict[alpha_key]["w_equiv_bins_e"]**2 + attempts_dict[alpha_key]["scattering_e"]**2))
                 scattered_alphas.append(alpha_key)
         best_mse = min(mse)
         best_alpha = scattered_alphas[mse.index(best_mse)]
         fit_dict = attempts_dict[best_alpha]
 
-    if not attempts_dict: #sometimes things go wrong :/
+    if not attempts_dict:  # sometimes things go wrong :/
         logger.error("Profile could not be fit. Returning empty dictionary!")
         return {}
 
@@ -561,9 +578,11 @@ def check_clip(prof_to_check, toomuch=0.9, toolittle_frac=0., toolittle_absolute
         if np.isnan(i):
             num_nans += 1
     if num_nans <= toolittle_frac*len(prof_to_check) or num_nans <= toolittle_absolute:
-        raise LittleClipError("Not enough data has been clipped. Condsier trying a smaller alpha value when clipping.")
+        raise LittleClipError(
+            "Not enough data has been clipped. Condsier trying a smaller alpha value when clipping.")
     elif num_nans >= toomuch*len(prof_to_check):
-        raise LargeClipError("A large portion of the data has been clipped. Condsier trying a larger alpha value when clipping.")
+        raise LargeClipError(
+            "A large portion of the data has been clipped. Condsier trying a larger alpha value when clipping.")
 
 
 def error_in_x_pos(x, y, sigma_y, x_pos):
@@ -662,7 +681,7 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     for i, val in enumerate(norm_prof):
         xy_prof.append([x[i], val])
     xy_prof = np.array(xy_prof)
-    
+
     # Perform the stickel smooth
     stickel = Stickel(xy_prof)
     stickel.smooth_y(l)
@@ -672,80 +691,108 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     spline = UnivariateSpline(x, reg_prof, s=0, k=4)
     dy_spline = spline.derivative()
     dy_roots = dy_spline.roots()
-    dy_roots = [int(round(i)) for i in dy_roots] # round to integer
+    dy_roots = [int(round(i)) for i in dy_roots]  # round to integer
     spline = UnivariateSpline(x, reg_prof, s=0, k=5)
     dy2_spline = spline.derivative().derivative()
     dy2_roots = dy2_spline.roots()
-    dy2_roots = [int(round(i)) for i in dy2_roots] # round to integer
-    
+    dy2_roots = [int(round(i)) for i in dy2_roots]  # round to integer
+
     # Profile with spline applied
     splined_profile = spline(x)
 
     # Find which dy roots resemble real signal
-    real_max = []
-    false_max = []
-    for root in dy_roots:
-        amp_at_root = splined_profile[root]
-        if amp_at_root < 3 * clip_noise: # If the amp is too small, it's not signal
-            false_max.append(root)
-        elif splined_profile[root+1] > amp_at_root: # If this is a min, we don't care about it
-            false_max.append(root)
-        else: # Otherwise, this is a real max
-            real_max.append(root)
+    for i in (2.0, 1.0, 0): # This represents how generous we are with what is real signal
+        real_max = []
+        false_max = []
+        for root in dy_roots:
+            amp_at_root = splined_profile[root]
+            if amp_at_root < i*clip_noise:  # If the amp of the regularised profile is too small, it's not signal
+                false_max.append(root)
+            # If this is a min, we don't care about it
+            elif splined_profile[root+1] > amp_at_root:
+                false_max.append(root)
+            else:  # Otherwise, this is a real max
+                real_max.append(root)
+        if real_max:
+            break  # Break if anything has populated real_max
 
-    """
-    We will create an over and under-estimate...
+    ##########################################################################################################
+    # We will create an over and under-estimate...
 
-    The overestimate will mark the regions between the real max and the flanking false minima of the spline.
-    This range should include the entire on-pulse region but also some noise
+    # The overestimate will mark the regions between the real max and the flanking false minima of the spline.
+    # This range should include the entire on-pulse region but also some noise
 
-    The understimate will mark the regions between the real max and its flanking inflections.
-    This range should include no noise but will miss some of the on-pulse
-    """
+    # The understimate will mark the regions between the real max and its flanking inflections.
+    # This range should include no noise but will miss some of the on-pulse
+    ##########################################################################################################
+
     overest_on_pulse = []
-    est_on_pulse = []
     underest_on_pulse = []
     for root in real_max:
         # Underestimated on-pulse
+        # Find where the index of root would be
         dy2_roots = np.append(dy2_roots, root)
         dy2_roots = sorted(dy2_roots)
         i = dy2_roots.index(root)
         dy2_roots.remove(root)
         try:
-            understimate = [round(dy2_roots[i-1]), round(dy2_roots[i])]
+            underestimate = [round(dy2_roots[i-1]), round(dy2_roots[i])]
         except IndexError as e:
             # The next inflection is on the other side of the profile
-            if i == 0: # Left side
+            if i == 0:  # Left side
                 underestimate = [round(dy2_roots[-1]), round(dy2_roots[i])]
-            else: # Right side
+            else:  # Right side
                 underestimate = [round(dy2_roots[i-1]), round(dy2_roots[0])]
-        underest_on_pulse.append(understimate)
-        
+        underest_on_pulse.append(underestimate)
+
         # Overestimated on-pulse
         false_max = np.append(false_max, root)
         false_max = sorted(false_max)
         j = false_max.index(root)
         false_max.remove(root)
-        try: 
+        # Append the overestimate
+        try:
             overestimate = [round(false_max[j-1]), round(false_max[j])]
         except IndexError as e:
             # The next inflection is on the other side of the profile
-            if j == 0: # Left side
+            if j == 0:  # Left side
                 overestimate = [round(false_max[-1]), round(false_max[j])]
-            else: # Right side
+            else:  # Right side
                 overestimate = [round(false_max[j-1]), round(false_max[0])]
-        overest_on_pulse.append(overestimate)
+        # If the bounds are touching
+        if overest_on_pulse and overestimate[0] == overest_on_pulse[-1][1]:
+            overest_on_pulse[-1][1] = overestimate[1]
+        # If the last element wraps around to the first
+        elif overest_on_pulse and overestimate[1] == overest_on_pulse[0][0]:
+            overest_on_pulse[0][0] = overestimate[0]
+        else:
+            overest_on_pulse.append(overestimate)
 
-    # Fill the on-pulse regions 
-    overest_on_pulse = _fill_on_pulse_region(overest_on_pulse, splined_profile, norm_prof, clip_noise)
-    underest_on_pulse = _fill_on_pulse_region(underest_on_pulse, splined_profile, norm_prof, clip_noise)
+    # Remove any duplicate items because somehow this happens sometimes
+    overest_on_pulse.sort()
+    overest_on_pulse = list(k for k, _ in itertools.groupby(overest_on_pulse))
+    underest_on_pulse.sort()
+    underest_on_pulse = list(
+        k for k, _ in itertools.groupby(underest_on_pulse))
 
+    # Fill the on-pulse regions
+    overest_on_pulse = _fill_on_pulse_region(
+        overest_on_pulse, splined_profile, norm_prof, clip_noise)
+    underest_on_pulse = _fill_on_pulse_region(
+        underest_on_pulse, splined_profile, norm_prof, clip_noise)
     # Get the off-pulse pairs as well
     overest_off_pulse = get_off_pulse(norm_prof, overest_on_pulse)
     underest_off_pulse = get_off_pulse(norm_prof, underest_on_pulse)
 
     # Work out the noise using the oversetimated on-pulse region
-    off_pulse_noise = np.nanstd(profile_region_from_pairs(norm_prof, overest_off_pulse))
+    off_pulse_noise = np.nanstd(
+        profile_region_from_pairs(norm_prof, overest_off_pulse))
+
+    # Sort the maxima based on amplitude
+    maxima_amps = []
+    for m in real_max:
+        maxima_amps.append(splined_profile[m])
+    real_max = [i for _, i in sorted(zip(maxima_amps, real_max), reverse=True)]
 
     # plot if necessary
     if plot_name:
@@ -758,20 +805,23 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
         for i in overest_on_pulse:
             plt.axvline(x=i[0], ls=":", lw=2, color="red")
             plt.axvline(x=i[1], ls=":", lw=2, color="red")
-        if est_on_pulse:
-            for i in est_on_pulse:
-                plt.axvline(x=i[0], ls=":", lw=2, color="blue")
-                plt.axvline(x=i[1], ls=":", lw=2, color="blue")
-        plt.errorbar(0.03*len(norm_prof), 0.9, yerr=off_pulse_noise, color="gray", capsize=10, markersize=0, label="Error")
-        plt.text(0.04*len(norm_prof), 0.89, f"Noise: {round(off_pulse_noise, 5)}")
+        plt.errorbar(0.03*len(norm_prof), 0.9, yerr=off_pulse_noise,
+                     color="gray", capsize=10, markersize=0, label="Error")
+        plt.text(0.04*len(norm_prof), 0.89,
+                 f"Noise: {round(off_pulse_noise, 5)}")
 
         # Add some custom stuff to the legend
-        colors = ['gray', 'blue', 'red']
-        lines = [Line2D([0], [0], color=c, linewidth=3, linestyle=':') for c in colors]
-        lines.append(Line2D([0], [0], color="cornflowerblue", linewidth=3, linestyle="-"))
-        lines.append(Line2D([0], [0], color="orange", linewidth=3, linestyle="-"))
-        lines.append(Line2D([0], [0], color="gray", linewidth=3, linestyle="-"))
-        labels = ["Maxima", "On-pulse estimate", "Noise estimate bounds", "Profile", "Smoothed Profile", "Error"]
+        colors = ['gray', 'red']
+        lines = [Line2D([0], [0], color=c, linewidth=3, linestyle=':')
+                 for c in colors]
+        lines.append(
+            Line2D([0], [0], color="cornflowerblue", linewidth=3, linestyle="-"))
+        lines.append(Line2D([0], [0], color="orange",
+                     linewidth=3, linestyle="-"))
+        lines.append(Line2D([0], [0], color="gray",
+                     linewidth=3, linestyle="-"))
+        labels = ["Maxima", "Noise estimate bounds",
+                  "Profile", "Smoothed Profile", "Error"]
         plt.legend(lines, labels)
         plt.xlabel("Bins")
         plt.ylabel("Amplitude")
@@ -813,7 +863,6 @@ def get_off_pulse(profile, on_pulse_pairs):
     # Make cycling generators to deal with wrap-around
     current_pair_gen = itertools.cycle(on_pulse_pairs)
     next_pair_gen = itertools.cycle(on_pulse_pairs)
-    next(next_pair_gen)
     # Figure out the off-pulse profile
     for i in range(len(on_pulse_pairs)):
         current_pair = next(current_pair_gen)
@@ -836,7 +885,7 @@ def profile_region_from_pairs(profile, pairs):
     Return: 
     -------
     region: list
-        The region of the profile described by the pair
+        The region of the profile described by the pairs
     """
     profile = list(profile)
     region = []
@@ -847,6 +896,7 @@ def profile_region_from_pairs(profile, pairs):
             region = profile[pair[0]:]
             region.extend(profile[:pair[1]])
     return region
+
 
 def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, real_profile, noise_est):
     """ 
@@ -876,40 +926,7 @@ def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, real_profile, noise_
         return on_pulse_pairs
 
     real_profile = list(real_profile)
-
-    # Remove duplicates if they exists somehow
-    #on_pulse_pairs = [list(tupl) for tupl in {tuple(item) for item in on_pulse_pairs }]
-
-    # First, join the ammendments that are touching
-    flawless_pass = False
     loop_pairs = on_pulse_pairs.copy()
-    while True: # This is a really gross while loop. I'm sorry
-        ammend_indexes = []
-        for i, range_pair in enumerate(loop_pairs[:-1]):
-            # Compare all other pairs ahead of this one
-            for j in range(len(loop_pairs[i+1:])):
-                comparison_pair = loop_pairs[j+i+1]
-                if bool( set(range_pair) & set(comparison_pair) ): # If the pairs share an element
-                    ammend_indexes = [i, j+i+1]
-                    break # get out of this loop
-            if ammend_indexes:
-                break # get out of this loop
-        # Ammend the touching ranges
-        if ammend_indexes:
-            pair_1 = loop_pairs[ammend_indexes[0]]
-            pair_2 = loop_pairs[ammend_indexes[1]]            
-            if pair_1[1] == pair_2[0]:
-                new_pair = [pair_1[0], pair_2[1]]
-            elif pair_1[0] == pair_2[1]:
-                new_pair = [pair_2[0], pair_1[1]]
-            del loop_pairs[j]
-            del loop_pairs[i]
-            loop_pairs.append(new_pair)
-            continue
-        # loop will exit when nothing is ammended
-        break
-            
-
     # Create two cycling generators to avoid out of bounds errors for the last pair
     on_pulse_ammendments = []
     current_pair_gen = itertools.cycle(loop_pairs)
@@ -921,12 +938,13 @@ def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, real_profile, noise_
         next_pair = next(next_pair_gen)
 
         # Figure out off pulse region
-        off_pulse_region = profile_region_from_pairs(real_profile, [[current_pair[1], next_pair[0]]])
+        off_pulse_region = profile_region_from_pairs(
+            real_profile, [[current_pair[1], next_pair[0]]])
 
         # See if this looks like signal
         if min(off_pulse_region) >= noise_est:
             # Add to ammendments that we need to make
-            on_pulse_ammendments.append( [current_pair[1], next_pair[0]] )
+            on_pulse_ammendments.append([current_pair[1], next_pair[0]])
 
     # Apply the ammendments to the on-pulse region
     true_on_pulse = loop_pairs.copy()
@@ -959,7 +977,7 @@ def _profile_noise_initial_estimate(profile):
     -----------
     profile: list
         The profile to clip
-    
+
     Returns:
     --------
     best_alpha: float:
@@ -967,14 +985,16 @@ def _profile_noise_initial_estimate(profile):
     best_nois: float:
         The corresponding standard deviatino of the noise
     """
-    alphas = np.linspace(4, 2, 9)
+    alphas = np.linspace(4, 2.0, 9)
     valid_alphas = []
     valid_noise = []
     for alpha in alphas:
         noise_std, off_pulse = sigmaClip(profile, alpha=alpha)
         n_off_pulse = np.count_nonzero(~np.isnan(off_pulse))
-        if n_off_pulse >= 0.1*len(profile): # At least 10% of the profile is still unclipped
+        # At least 10% of the profile is still unclipped
+        if n_off_pulse >= 0.1*len(profile):
             valid_alphas.append(alpha)
             valid_noise.append(noise_std)
-    best_noise, best_alpha = sorted(zip(valid_noise, valid_alphas))[0] # lowest noise is prioritised
+    best_noise, best_alpha = sorted(zip(valid_noise, valid_alphas))[
+        0]  # lowest noise is prioritised
     return best_alpha, best_noise
