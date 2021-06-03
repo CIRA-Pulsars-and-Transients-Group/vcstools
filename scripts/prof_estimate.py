@@ -48,7 +48,7 @@ if __name__ == '__main__':
     logger.addHandler(ch)
 
     if args.bestprof:
-        _, _, _, period, _, _, _, profile, _  = get_from_bestprof(args.bestprof)
+        _, _, _, period, _, _, _, profile, _, _  = get_from_bestprof(args.bestprof)
     elif args.ascii:
         profile = get_from_ascii(args.ascii)[0]
         period = args.period

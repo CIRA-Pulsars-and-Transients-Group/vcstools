@@ -94,6 +94,10 @@ def get_from_bestprof(file_loc):
         except ValueError:
             obsid = None
 
+        # Get a pointing from the input fits file name
+        ra, dec = lines[0].split("_ch")[0].split("_")[-2:]
+        pointing = "{}_{}".format(ra, dec)
+
         pulsar = str(lines[1].split("_")[-1][:-1])
         if not (pulsar.startswith('J') or pulsar.startswith('B')):
             pulsar = 'J{0}'.format(pulsar)
@@ -122,7 +126,7 @@ def get_from_bestprof(file_loc):
         for p, _ in enumerate(orig_profile):
             profile[p] = orig_profile[p] - min_prof
 
-    return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
+    return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num, pointing]
 
 #---------------------------------------------------------------
 def get_from_ascii(file_loc):
