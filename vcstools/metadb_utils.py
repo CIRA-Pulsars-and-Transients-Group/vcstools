@@ -38,7 +38,7 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         copy2("{0}".format(metafits_file), "{0}".format(data_dir))
 
 
-def singles_source_search(ra, dec=None, box_size=45., params=None):
+def singles_source_search(ra, dec=None, box_size=50., params=None):
     """
     Used to find all obsids within a box around the source to make searching through obs_ids more efficient.
 
@@ -91,12 +91,13 @@ def singles_source_search(ra, dec=None, box_size=45., params=None):
         ra_low = ra - 30. - box_size #30 is the how far an obs would drift in 2 hours(used as a max)
         ra_high = ra + box_size
         if ra_low < 0.:
-            ra_new = 360 + ra_low
+            ra_low = 360 + ra_low
         if ra_high > 360:
-            ra_new = ra_high - 360
+            ra_high = ra_high - 360
         params.update({'minra':ra_low,  'maxra':ra_high,
                        'mindec':dec_bot,'maxdec':dec_top})
     logger.debug("params: {}".format(params))
+    print("params: {}".format(params))
     obsid_list = find_obsids_meta_pages(params=params)
     return obsid_list
 
