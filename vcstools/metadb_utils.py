@@ -2,6 +2,7 @@ from vcstools.general_utils import is_number
 import logging
 import os
 import subprocess
+from time import sleep
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +232,7 @@ def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
         return [obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
 
 
-def getmeta(servicetype='metadata', service='obs', params=None):
+def getmeta(servicetype='metadata', service='obs', params=None, retries=3):
     """
     Function to call a JSON web service and return a dictionary:
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
@@ -251,14 +252,25 @@ def getmeta(servicetype='metadata', service='obs', params=None):
     else:
         data = ''
 
-    try:
-        result = json.load(urllib.request.urlopen(BASEURL + servicetype + '/' + service + '?' + data))
-    except urllib.error.HTTPError as err:
-        logger.error("HTTP error from server: code=%d, response:\n %s" % (err.code, err.read()))
-        return
-    except urllib.error.URLError as err:
-        logger.error("URL or network error: %s" % err.reason)
-        return
+    # Try several times (3 by default)
+    wait_time = 30
+    result = None
+    for x in range(0, retries):
+        err = False
+        try:
+            result = json.load(urllib.request.urlopen(BASEURL + servicetype + '/' + service + '?' + data))
+        except urllib.error.HTTPError as err:
+            logger.error("HTTP error from server: code=%d, response: %s" % (err.code, err.read()))
+            break
+        except urllib.error.URLError as err:
+            logger.error("URL or network error: %s" % err.reason)
+            logger.error("Waiting {} seconds and trying again".format(wait_time))
+            sleep(wait_time)
+            pass
+        else:
+            break
+    else:
+        logger.error("Tried {} times. Exiting.".format(retries))
 
     return result
 
