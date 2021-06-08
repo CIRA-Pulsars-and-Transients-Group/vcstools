@@ -34,6 +34,9 @@ class gfit:
         The name of the plot for the component plot that illustrates how profile components are chosen. If 
         unsupplied, will not plot.
         Default - None
+    scattering_threshold: float
+        The threshold for which any tau value greater will be deemed scattered. 
+        Default - 40
 
 
     Functions for users:
@@ -98,6 +101,8 @@ class gfit:
             The uncertainty in sn
         scattering: float
             The tau value of the profile fit
+        scattered: bool
+            Whether or not the final profile's tau value is greater than the sattering threshold
     """
 
     def __init__(self, raw_profile, max_N=10, plot_name=None, component_plot_name=None, scattering_threshold=40):
