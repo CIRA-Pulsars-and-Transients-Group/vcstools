@@ -1,5 +1,5 @@
 from vcstools.prof_utils import ProfileLengthError, BadFitError
-from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos, profile_region_from_pairs
+from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos, profile_region_from_pairs, filled_profile_region_between_pairs
 import itertools
 from scipy.stats import vonmises
 from scipy.optimize import curve_fit
@@ -100,12 +100,13 @@ class gfit:
             The tau value of the profile fit
     """
 
-    def __init__(self, raw_profile, max_N=6, plot_name=None, component_plot_name=None):
+    def __init__(self, raw_profile, max_N=10, plot_name=None, component_plot_name=None, scattering_threshold=40):
         # Initialise inputs
         self._raw_profile = raw_profile
         self._max_N = max_N
         self._plot_name = plot_name
         self._component_plot_name = component_plot_name
+        self._scattering_threshold = scattering_threshold
 
         # The return dictionary
         self._fit_dict = {}
@@ -114,7 +115,9 @@ class gfit:
         self._fit_profile = None
         self._best_chi = None
         self._std_profile = None
+        self._on_pulse_prof = None
         self._noise_std = None
+        self._noise_mean = None
         self._n_off_pulse = None
         self._n_gaussians = None
         self._comp_est_dict = None
@@ -186,14 +189,26 @@ class gfit:
             self._std_profile, plot_name=self._component_plot_name)
         self._n_prof_components = len(self._comp_est_dict["overest_on_pulse"])
         self._noise_std = self._comp_est_dict["norm_noise_std"]
+        self._noise_mean = self._comp_est_dict["norm_noise_mean"]
+
+        # Create the on-pulse profile where the noise is set to the mean noise value
+        self._on_pulse_prof = filled_profile_region_between_pairs(
+            self._std_profile, self._comp_est_dict["overest_on_pulse"], fill_value=self._noise_mean)
 
         # Attempt to fit gaussians to the profile
-        self._fit_gaussian()
+        self._fit_gaussian()  # Initial fit
+        self._est_noise_sn()  # Initial Estimate SN estimate from the fit
+        # Force no scattering if the fit isn't scattered now
+        no_scat = True if self._scattered and self._popt[1] <= self._scattering_threshold else False
+        # Redo the fit with updated scattering and noise information
+        self._fit_gaussian(force_no_scattering=no_scat)
+        # Update scattering information
+        self._scattered = True if self._popt[1] >= self._scattering_threshold else False
 
         # Do all the fancy things with the fit
         self._find_widths()  # Find widths + error
         self._find_minima_maxima_gauss()  # Find turning points
-        self._est_sn()  # Estimate SN
+        self._est_noise_sn()  # Estimate SN
 
         # Dump to dictionary
         self._fit_dict = {}
@@ -218,7 +233,9 @@ class gfit:
         self._fit_dict["sn"] = self._sn
         self._fit_dict["sn_e"] = self._sn_e
         self._fit_dict["noise_std"] = self._noise_std
+        self._fit_dict["noise_mean"] = self._noise_mean
         self._fit_dict["scattering"] = self._popt[1]  # tau
+        self._fit_dict["scattered"] = self._scattered
         self._fit_dict["component_estimates"] = self._comp_est_dict
         self._fit_dict["n_profile_components"] = self._n_prof_components
 
@@ -240,7 +257,7 @@ class gfit:
             f"Noise estiamte:        {self._noise_std}")
         logger.info(
             f"Scattering Timescale:  {self._popt[1]}")
-        logger.debug(f"popt:                  {self._fit_dict['fit_params']}")
+        logger.info(f"popt:                  {self._fit_dict['fit_params']}")
 
         # And we're done
 
@@ -256,7 +273,7 @@ class gfit:
         plot_x = np.linspace(0, 1, len(self._fit_profile))
         gaussian_x = np.linspace(-np.pi, np.pi,
                                  len(self._fit_profile), endpoint=False)
-        plt.figure(figsize=(20, 12))
+        fig = plt.figure(figsize=(20, 12))
 
         # Plot the convolved gaussian
         z = self._exp_vm_gauss_conv(gaussian_x, *self._popt[0:5])
@@ -286,15 +303,23 @@ class gfit:
                     x=(mx - self._maxima_e[i]), ls=":", lw=2, color="gray")
 
         # Error bar - for noise and SN
-        plt.errorbar(0.02, 0.95 - self._noise_std/2, yerr=self._noise_std, color="gray",
-                     capsize=10, markersize=0, label="Noise")
-        plt.text(
-            0.03, 0.94 - self._noise_std/2, f"Noise: {round(self._noise_std, 5)}", fontsize=14)
-        plt.text(0.03, 0.97,
+        plt.text(0.03, 0.94,
                  f"S/N:   {round(self._sn, 2)} +/- \n          {round(self._sn_e, 3)}", fontsize=14)
+        plt.text(
+            0.03, 0.91 - self._noise_std/2, f"Noise: {round(self._noise_std, 5)}", fontsize=14)
+        plt.errorbar(0.02, 0.91 - self._noise_std/2, yerr=self._noise_std, color="gray",
+                     capsize=10, markersize=0, label="Noise")
 
         # All the other plotting stuff
-        plt.title(self._plot_name.split("/")[-1].split(".")[0], fontsize=26)
+        formats = tuple(list(fig.canvas.get_supported_filetypes().keys()))
+        for f in formats:
+            if self._plot_name.endswith(f):
+                title = self.plot_name[:-len(f)-1]
+        if not self.plot_name.endswith(formats):
+            title = self._plot_name
+            self._plot_name += ".png"
+
+        plt.title(title, fontsize=26)
         plt.xticks(fontsize=20)
         plt.yticks(fontsize=20)
         plt.xlim(0, 1)
@@ -355,7 +380,7 @@ class gfit:
 
     # The function that does the actual fitting
 
-    def _fit_gaussian(self):
+    def _fit_gaussian(self, force_no_scattering=False):
         """
         Fits multiple gaussian components to a pulse profile and finds the best number to use for a fit.
         Will always fit at least one gaussian per profile component.
@@ -364,45 +389,6 @@ class gfit:
         Will then attempt to successively fit one more regular gaussian component until max_N is reached
         The number of gaussians fit that yields the lowes Bayesian Information Criterion is deemed the most successful
         """
-        def add_bounds_guess(amp_gen, width_gen, loc_gen, current_guess, current_bounds, base=False, tau=False):
-            if base:
-                # Base
-                current_guess += [0.1]  # Guess at 10%
-                current_bounds[0].append(0)
-                # Noise should definitely not be above 50% max anyway
-                current_bounds[1].append(0.5)
-            if tau:
-                # Tau
-                current_guess += [1]
-                current_bounds[0].append(1e-3)
-                current_bounds[1].append(100)
-            amp_lo = self._noise_std
-            amp_hi = 1.0
-            width_lo = 1e-1
-            width_hi = 1e5
-            loc_lo = -np.pi
-            loc_hi = np.pi
-            # Add the guesses
-            amp_guess = next(amp_gen)
-            amp_guess = amp_lo if amp_guess < amp_lo else amp_guess
-            amp_guess = amp_hi if amp_guess > amp_hi else amp_guess
-            width_guess = next(width_gen)
-            width_guess = width_lo if width_guess < width_lo else width_guess
-            width_guess = width_hi if width_guess > width_hi else width_guess
-            loc_guess = next(loc_gen)
-            loc_guess = loc_lo if loc_guess < loc_lo else loc_guess
-            loc_guess = loc_hi if loc_guess > loc_hi else loc_guess
-            # [Amp, kappa, loc]
-            current_guess += [amp_guess, width_guess, loc_guess]
-            # Add the bounds
-            current_bounds[0].append(amp_lo)  # Amplitude
-            current_bounds[1].append(amp_hi)
-            current_bounds[0].append(width_lo)  # kappa
-            current_bounds[1].append(width_hi)
-            current_bounds[0].append(loc_lo)  # Location
-            current_bounds[1].append(loc_hi)
-            return current_guess, current_bounds
-
         # Initiate x - we will be working in 1D circular coordinates
         x = np.linspace(-np.pi, np.pi,
                         len(self._std_profile), endpoint=False)
@@ -411,6 +397,7 @@ class gfit:
         comp_locs = []
         comp_amp = []
         comp_width = []
+        components = []
         on_pulse_pairs = self._comp_est_dict["overest_on_pulse"]
         for pair in on_pulse_pairs:
             lower_bound = pair[0]
@@ -423,10 +410,14 @@ class gfit:
 
             # Gaussian width (kappa/sigma)
             width_est = len(profile_region_from_pairs(
-                self._std_profile, [pair]))/2
+                self._std_profile, [pair]))/2  # halve the width est because it always looks too big
+            width_est = 2*np.pi * width_est/len(self._std_profile)
             width_est = 1/width_est**2  # Convert this to kappa
-            width_est = 0.1 if width_est < 0.1 else width_est
             comp_width.append(width_est)
+
+            # The entire component profile will be useful to know about
+            components.append(profile_region_from_pairs(
+                np.linspace(-np.pi, np.pi, len(self._std_profile), endpoint=False), [pair]))
 
         # Centre location - loop over maxima
         for m in self._comp_est_dict["maxima"]:
@@ -437,38 +428,96 @@ class gfit:
         amp_gen = itertools.cycle(comp_amp)
         width_gen = itertools.cycle(comp_width)
         loc_gen = itertools.cycle(comp_locs)
+        components_gen = itertools.cycle(components)
+
+        # Check if the profile is scattered - this will determine which profile to use for curve_fit()
+        if not force_no_scattering:
+            scattering_bounds = [[], []]
+            scattering_guess = []
+            amp_gen_sc = itertools.cycle(comp_amp)
+            width_gen_sc = itertools.cycle(comp_width)
+            loc_gen_sc = itertools.cycle(comp_locs)
+            components_gen_sc = itertools.cycle(components)
+            for i in range(self._n_prof_components):
+                # Add the baseline and tau to a single gaussian
+                is_first = True if i == 0 else False
+                scattering_guess, scattering_bounds = self._add_bounds_guess(
+                    amp_gen_sc, width_gen_sc, loc_gen_sc, components_gen_sc, scattering_guess, scattering_bounds, base=is_first, tau=is_first)
+            # Bounds needs to be in tuple form for curve_fit
+            scattering_bounds_tuple = (
+                tuple(scattering_bounds[0]), tuple(scattering_bounds[1]))
+            try:
+                popt, _ = curve_fit(self._multi_gauss_exp_with_base, x, self._std_profile,
+                                    bounds=scattering_bounds_tuple, p0=scattering_guess, maxfev=10000)
+                # TODO: make this estimate better
+                self._scattered = True if popt[1] >= self._scattering_threshold else False
+            except (RuntimeError, ValueError) as e:
+                self._scattered = True
+            # The profile to fit - scattered profiles will use the entire standardised profile as we expect that the
+            # on-pulse region is not accurate
+            fitting_profile = self._std_profile if self._scattered else self._on_pulse_prof
+        else:
+            fitting_profile = self._on_pulse_prof
+
+        # Do the fittingloop
+        fit_dict = self._fit_loop(
+            fitting_profile, amp_gen, width_gen, loc_gen, components_gen)
+
+        if not fit_dict:
+            raise BadFitError(
+                f"No suitable fit could be found for any provided values of N_gaussians")
+
+        # Find the best fit according to reduced chi square
+        best_chi_diff = np.inf
+        for n_gaussians in fit_dict.keys():
+            chi_diff = abs(1 - fit_dict[n_gaussians]["redchisq"])
+            if chi_diff < best_chi_diff:
+                best_chi_diff = chi_diff
+                best_fit = n_gaussians
+
+        # Record the best things in the object
+        self._popt = fit_dict[best_fit]["popt"]
+        self._pcov = fit_dict[best_fit]["pcov"]
+        self._fit_profile = fit_dict[best_fit]["fit"]
+        self._best_chi = fit_dict[best_fit]["redchisq"]
+        self._n_gaussians = int(best_fit)
+
+    def _fit_loop(self, profile, amp_gen, width_gen, loc_gen, components_gen, reduce_chi_threshold=0.05):
+        """
+        A loop that attempts to fit multiple gaussians, some with exponential tails, to a profile.
+        If scattered=True, 
+        """
+        # Initiate x - we will be working in 1D circular coordinates
+        x = np.linspace(-np.pi, np.pi,
+                        len(self._std_profile), endpoint=False)
 
         # Initiate bounds, guesses and fit dictionary
         bounds_arr = [[], []]
         guess = []
         fit_dict = {}
 
-        # Add base and tau to the first guassian component for exp tail
-        for i in range(0, self._n_prof_components):
-            is_first = True if i == 0 else False  # Add the baseline to a single gaussian
-            if i != self._n_prof_components:  # Don't add the rest of the guess to the last component, this is done in the next loop
-                guess, bounds_arr = add_bounds_guess(
-                    amp_gen, width_gen, loc_gen, guess, bounds_arr, base=is_first, tau=is_first)
-
         # Fit from n_components to max_N gaussians to the profile. Evaluate profile fit using bayesian information criterion
-        for num in range(self._n_prof_components, self._max_N):
-            # Append to the bounds and guesses
-            guess, bounds_arr = add_bounds_guess(
-                amp_gen, width_gen, loc_gen, guess, bounds_arr)
+        for num in range(self._max_N):
+            # Add the baseline and tau to a single gaussian
+            is_first = True if num == 0 else False
+            guess, bounds_arr = self._add_bounds_guess(
+                amp_gen, width_gen, loc_gen, components_gen, guess, bounds_arr, base=is_first, tau=is_first)
             # Bounds needs to be in tuple form for curve_fit
             bounds_tuple = (tuple(bounds_arr[0]), tuple(bounds_arr[1]))
 
+            if num+1 < self._n_prof_components:  # Skip until we have at least num = profile_components
+                continue
+
             # Do the fitting
-            maxfev = 100000
             popt = None
             pcov = None
             try:
                 popt, pcov = curve_fit(self._multi_gauss_exp_with_base, x,
-                                       self._std_profile, bounds=bounds_tuple, p0=guess, maxfev=maxfev)
+                                       profile, bounds=bounds_tuple, p0=guess, maxfev=10000)
             except (RuntimeError, ValueError) as e:  # No fit found in maxfev
-                print(e)
+                logger.warn(e)
                 for i, g in enumerate(guess):
-                    print(
+                    logger.info(
                         f"Guess: {g} | bounds: {bounds_tuple[0][i]} -> {bounds_tuple[1][i]}")
                 # continue
                 break
@@ -484,27 +533,67 @@ class gfit:
                 fit_dict[str(num+1)]["pcov"] = pcov
                 fit_dict[str(num+1)]["fit"] = fit
                 fit_dict[str(num+1)]["redchisq"] = chisq / \
-                    (len(self._std_profile)-1)
+                    (len(self._std_profile)-len(popt))
                 logger.debug(
                     f"Reduced chi squared for               {num+1} components: {fit_dict[str(num+1)]['redchisq']}")
 
-        if not fit_dict:
-            raise BadFitError(
-                f"No suitable fit could be found for any provided values of N_gaussians")
+                # function exit condition
+                if abs(fit_dict[str(num+1)]["redchisq"]-1) <= reduce_chi_threshold:
+                    return fit_dict
+        return fit_dict
 
-        # Find the best fit according to reduced chi square
-        best_chi_diff = np.inf
-        for n_gaussians in fit_dict.keys():
-            chi_diff = abs(1 - fit_dict[n_gaussians]["redchisq"])
-            if chi_diff < best_chi_diff:
-                best_chi_diff = chi_diff
-                best_fit = n_gaussians
+    def _add_bounds_guess(self, amp_gen, width_gen, loc_gen, component_gen, current_guess, current_bounds, base=False, tau=False):
+        if base:
+            # Base
+            current_guess += [0.1]  # Guess at 10%
+            current_bounds[0].append(0)
+            # Noise should definitely not be above 50% max anyway
+            current_bounds[1].append(0.5)
+        if tau:
+            # Tau
+            current_guess += [1]
+            current_bounds[0].append(1e-3)
+            current_bounds[1].append(200)
+        # Add the guesses
+        amp_guess = next(amp_gen)
+        width_guess = next(width_gen)
+        loc_guess = next(loc_gen)
+        component_guess = next(component_gen)
+        # Add the bounds
+        amp_lo = 3*self._noise_std if self._noise_std < 0.2 else 0.6
+        amp_hi = 1.0
+        # width bounds is hard - need to reverse engineer how we got here in the first place
+        # kappa_sigma (width_est) = (2pi * og_width / prof_len)^-2
+        # og_width = (kappa_sigma^-1/2 * prof_len) / 2pi
+        og_width = (width_guess**(-1/2) * len(self._std_profile)) / (2*np.pi)
+        # Profiles are not allowed to be much wider than their component estimates
+        width_lo = og_width * 3
+        width_lo = (2*np.pi * width_lo / len(self._std_profile))**-2
+        width_hi = 1e6  # Components are allowed to be very sharp
+        # Locations should be confined to their respective component
+        loc_lo = component_guess[0]
+        loc_hi = component_guess[-1]
+        if loc_lo > loc_hi:
+            loc_lo = -np.pi
+            loc_hi = np.pi
 
-        self._popt = fit_dict[best_fit]["popt"]
-        self._pcov = fit_dict[best_fit]["pcov"]
-        self._fit_profile = fit_dict[best_fit]["fit"]
-        self._best_chi = fit_dict[best_fit]["redchisq"]
-        self._n_gaussians = int(best_fit)
+        # Fix guesses if they're out of bounds
+        amp_guess = amp_lo if amp_guess < amp_lo else amp_guess
+        amp_guess = amp_hi if amp_guess > amp_hi else amp_guess
+        width_guess = width_lo if width_guess < width_lo else width_guess
+        width_guess = width_hi if width_guess > width_hi else width_guess
+        loc_guess = loc_lo if loc_guess < loc_lo else loc_guess
+        loc_guess = loc_hi if loc_guess > loc_hi else loc_guess
+        # [Amp, kappa, loc]
+        current_guess += [amp_guess, width_guess, loc_guess]
+        # Add the bounds
+        current_bounds[0].append(amp_lo)  # Amplitude
+        current_bounds[1].append(amp_hi)
+        current_bounds[0].append(width_lo)  # kappa
+        current_bounds[1].append(width_hi)
+        current_bounds[0].append(loc_lo)  # Location
+        current_bounds[1].append(loc_hi)
+        return current_guess, current_bounds
 
     # Find min and max points
 
@@ -555,7 +644,6 @@ class gfit:
         Attempts to find the W_10, W_50 and equivalent width of a profile by using a spline approach.
         Weq errors are estimated by finding the average difference in Weq when you add and subtract the std from the on-pulse profile
         """
-
         # Perform spline operations on the fit
         x = np.linspace(0, len(self._fit_profile)-1,  # Work in indexes
                         len(self._fit_profile), endpoint=False)
@@ -640,24 +728,18 @@ class gfit:
         self._Weq = Weq/len(self._fit_profile)
         self._Weq_e = Weq_e/len(self._fit_profile)
 
-    def _est_sn(self):
+    def _est_noise_sn(self):
         """
-        Estimates the SN of a profile. Requires prof_utils.estimate_components_onpulse() to have been run
-        on the profile and the noise stored in self._noise_std and component estimates in self._comp_est_dict
+        Estimates the SN of a profile using the fit profile to determine an off-pulse region.
         """
-        on_pulse_bins = 0
-        for comp_range in self._comp_est_dict["overest_on_pulse"]:
-            comp_beg = comp_range[0]
-            comp_end = comp_range[1]
-            if comp_beg < comp_end:
-                on_pulse_bins += comp_end - comp_beg
-            else:  # Component has wrapped around the phase bounds
-                on_pulse_bins += len(self._std_profile) - comp_beg
-                on_pulse_bins += comp_end
-        self._n_off_pulse = len(self._std_profile) - on_pulse_bins
+        sorted_profile = [i for _, i in sorted(
+            zip(self._fit_profile, self._std_profile), key=lambda pair: pair[0])]
+        ten_percent = round(0.1*len(self._std_profile))
+        self._noise_std = np.std(sorted_profile[:ten_percent])
+        self._noise_mean = np.mean(sorted_profile[:ten_percent])
         self._sn = 1/self._noise_std
         # TODO: make this estimate better
-        self._sn_e = 1/(self._noise_std * np.sqrt(2 * self._n_off_pulse - 2))
+        self._sn_e = 1/(self._noise_std * np.sqrt(2 * ten_percent - 2))
 
     ####################################
     ###### A bunch of maths stuff ######
@@ -701,7 +783,7 @@ class gfit:
             amp = params[i]
             kappa = params[i+1]
             loc = params[i+2]
-            if i < self._n_prof_components:  # Make a gauss with exp tail
+            if i < 3*self._n_prof_components:  # Make a gauss with exp tail
                 if i != 0:  # Only use the base for one component
                     base = 0
                 conv = self._exp_vm_gauss_conv(x, base, tau, amp, kappa, loc)
