@@ -641,7 +641,7 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     -----------
     profile: list
         The pulse profile
-    l: floatEPTA_fit_13.out
+    l: float
         The lambda value to use for Stickel regularisation. Don't touch unless you know what you're doing. Default: 1e-5
     plot_name: string
         If supplied, will make a plot of the profile, its splined regularisation, maxima and best estimate of on-pulse
