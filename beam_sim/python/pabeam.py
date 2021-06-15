@@ -354,8 +354,8 @@ if __name__ == "__main__":
                         help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5")
     parser.add_argument("--delays", type=int, nargs='+', default=[0] * 16,
                         help="The tile delays")
-    parser.add_argument("-p", "--target", nargs=2, metavar=("ra","dec"), default=("00:00:00.0000","00:00:00.0000"),
-                        help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.sss dd\"mm\'ss.ssss")
+    parser.add_argument("-p", "--target", type=str,
+                        help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.ss_dd:mm:ss.ss")
     parser.add_argument("-t", "--time", type=float, nargs='+',action='store', default=None,
                         help="""The GPS time desired for beam evaluation. This will override whatever is read from the metafits.""")
     parser.add_argument("-f", "--freq", type=float, nargs='+', default=None,
@@ -392,8 +392,7 @@ if __name__ == "__main__":
         logger.info("will use {0} processes".format(size))
 
         # small calculations and data gathering from arguments is fine and won't run into trouble by having multiple processes do it simultaneously
-        ra = str(args.target[0]).replace('"', '').replace("'", "")
-        dec = args.target[1].replace('"', '').replace("'", "")
+        ra, dec = args.target.split("_")
         tres, pres = args.grid_res
         ntheta, nphi = 90 // tres, 360 // pres
 
