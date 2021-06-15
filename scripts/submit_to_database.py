@@ -19,6 +19,7 @@ from shutil import copyfile as cp
 import math
 import glob
 import textwrap as _textwrap
+import datetime
 
 #MWA software imports
 from mwa_pulsar_client import client
@@ -28,6 +29,8 @@ from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata
 from vcstools.catalogue_utils import get_psrcat_ra_dec
 from vcstools import prof_utils
+from vcstools.config import load_config_file
+from vcstools.job_submit import submit_slurm
 
 
 import logging
@@ -372,7 +375,51 @@ def multi_upload_files(obsid, pulsar, files_dict, metadata=None, coh=True):
             upload_file_to_db(obsid, pulsar, filename, int(filetype), metadata=metadata, coh=coh)
 
 
-def read_sefd_file(sefd_file):
+def launch_pabeam_sim(bestprof_data,
+                      metafits_file=None,
+                      phi_res=0.05, theta_res=0.05,
+                      efficiency=1,
+                      nodes=3):
+    """
+    Submit a job to run the pabeam code to estimate the system equivelent
+    flux density and returns a job id so a dependent job to resume the
+    submit_to_databse.py code can be launched in a different function.
+    """
+    # Load computer dependant config file
+    comp_config = load_config_file()
+
+    # Unpack bestprof data list
+    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
+
+    # Parse defaults
+    if metafits_file is None:
+        metafits_file  = "{0}{1}/{1}_metafits_ppds.fits".format(comp_config['base_data_dir'], obsid)
+
+    # Set up pabeam command
+    command = 'srun --export=all -u -n {} pabeam.py'.format(nodes*24)
+    command += ' -o {}'.format(obsid)
+    command += ' -t {}'.format(t_int)
+    command += ' -e {}'.format(efficiency)
+    command += ' --metafits {}'.format(metafits_file)
+    command += ' -p {}'.format(pointing)
+    command += ' --grid_res {} {}'.format(theta_res, phi_res)
+
+
+    # Set up job
+    batch_file_name = 'pabeam_{}_{}_{}'.format(obsid, prof_psr, pointing)
+    batch_dir = "{}{}/batch".format(comp_config['base_data_dir'], obsid)
+    job_id = submit_slurm(batch_file_name, [command],
+                          batch_dir=batch_dir,
+                          slurm_kwargs={"time": datetime.timedelta(seconds=10*60*60),
+                                        "nodes":nodes},
+                          module_list=['hyperbeam-python', 'mwa_pb/hyperbeam'],
+                          queue='cpuq',
+                          cpu_threads=24,
+                          mem=12288,
+                          vcstools_version='nswainston')#TODO remove
+    return job_id
+
+#def read_sefd_file(sefd_file):
     
 
 
@@ -388,7 +435,7 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
     """
     #unpack the bestprof_data
     #[obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
-    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins = bestprof_data
+    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
     if not pulsar:
         pulsar = prof_psr
     period=float(period)
@@ -401,7 +448,8 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
                                                       beg=beg, end=(t_int + beg - 1))
     else:
         if sefd_file is None:
-            launch_pabeam_sim()
+            launch_pabeam_sim(bestprof_data)
+            sys.exit(0)
         else:
             t_sys, _, gain, u_gain = read_sefd_file(sefd_file)
 
@@ -686,6 +734,7 @@ if __name__ == "__main__":
         time_detection = args.stop - args.start
         bestprof_data = [args.obsid, args.pulsar, dm, period, None, args.start,
                          time_detection, profile, num_bins]
+        # TODO work out the best way to add pointing to ascii files
 
     if args.bestprof or args.ascii:
         _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
