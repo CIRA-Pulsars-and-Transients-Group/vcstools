@@ -83,7 +83,7 @@ def cal_on_database_check(obsid):
 
 def write_output_source_files(output_data,
                               beam='analytic', min_power=0.3, cal_check=False,
-                              SN_est=False, plot_est=False,
+                              SN_est=False, flux_est=False, plot_est=False,
                               min_time=0):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is true.
@@ -112,12 +112,17 @@ def write_output_source_files(output_data,
             if SN_est:
                 output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
                 output_file.write("#S/N Err: The uncertainty of S/N Est\n")
+            if flux_est:
+                output_file.write("#Flux Est: An estimate of the expected flux density (mJy) using ANTF flux desnities\n")
+                output_file.write("#Flux Err: The uncertainty of Flux Est (mJy)\n")
             if cal_check:
                 output_file.write('#Cal ID: Observation ID of an available '+\
                                             'calibration solution\n')
             output_file.write('#Obs ID   |Dur |Enter|Exit |Power| OAP | Freq | Band ')
             if SN_est:
                 output_file.write("|S/N Est|S/N Err")
+            if flux_est:
+                output_file.write("|Flux Est|Flux Err")
 
             if cal_check:
                 output_file.write("|Cal ID\n")
@@ -129,14 +134,20 @@ def write_output_source_files(output_data,
                     if SN_est:
                         beg, end = obs_max_min(obsid)
                     oap = get_obs_array_phase(obsid)
-                    output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}   {:6.2f} {:6.2f}'.\
+                    output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}  {:6.2f} {:6.2f}'.\
                             format(obsid, duration, enter, leave, max_power, oap, freq, band))
                     if SN_est:
                         pulsar_sn, pulsar_sn_err, _, _ = sfe.est_pulsar_sn(source, obsid, beg, end, plot_flux=plot_est)
                         if pulsar_sn is None:
                             output_file.write('   None    None')
                         else:
-                            output_file.write('{:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
+                            output_file.write(' {:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
+                    if flux_est:
+                        pulsar_flux, pulsar_flux_err = sfe.est_pulsar_flux(source, obsid, plot_flux=plot_est)
+                        if pulsar_flux is None:
+                            output_file.write('   None    None')
+                        else:
+                            output_file.write(' {:8.2f} {:8.2f}'.format(pulsar_flux*1000, pulsar_flux_err*1000))
 
                     if cal_check:
                         #checks the MWA Pulsar Database to see if the obsid has been
@@ -151,14 +162,15 @@ def write_output_source_files(output_data,
 
 def write_output_obs_files(output_data, obsid_meta,
                            beam='analytic', min_power=0.3,
-                           cal_check=False, SN_est=False, plot_est=False,
+                           cal_check=False,
+                           SN_est=False, flux_est=False, plot_est=False,
                            min_time=0):
     """
     Writes an ouput file using the output of find_sources_in_obs when obs_for_source is false.
     """
 
     for on, obsid in enumerate(output_data):
-        if SN_est:
+        if SN_est or flux_est:
             beg, end = obs_max_min(obsid)
             psr_list = [el[0] for el in output_data[obsid]]
             sn_dict = sfe.multi_psr_snfe(psr_list, obsid, beg, end,\
@@ -189,12 +201,16 @@ def write_output_obs_files(output_data, obsid_meta,
             if SN_est:
                 output_file.write("#S/N Est: An estimate of the expected signal to noise using ANTF flux desnities\n")
                 output_file.write("#S/N Err: The uncertainty of S/N Est\n")
+            if flux_est:
+                output_file.write("#Flux Est: An estimate of the expected flux density (mJy) using ANTF flux desnities\n")
+                output_file.write("#Flux Err: The uncertainty of Flux Est (mJy)\n")
 
             output_file.write('#Source    |Enter|Exit |Power')
             if SN_est:
-                output_file.write('| S/N Est | S/N Err \n')
-            else:
-                output_file.write('\n')
+                output_file.write('| S/N Est | S/N Err')
+            if flux_est:
+                output_file.write("|Flux Est|Flux Err")
+            output_file.write('\n')
 
             for data in output_data[obsid]:
                 pulsar, enter_beam, exit_beam, max_power = data
@@ -202,15 +218,18 @@ def write_output_obs_files(output_data, obsid_meta,
                     output_file.write('{:11} {:1.3f} {:1.3f} {:1.3f} '.format(pulsar,
                                     enter_beam, exit_beam, max_power))
                     if SN_est:
-                        beg = int(obsid) + 7
-                        end = beg + int(obsid_meta[on][3])
                         pulsar_sn, pulsar_sn_err, _, _ = sn_dict[pulsar]
                         if pulsar_sn is None:
-                            output_file.write('   None    None\n')
+                            output_file.write('   None    None')
                         else:
-                            output_file.write('{:9.2f} {:9.2f}\n'.format(pulsar_sn, pulsar_sn_err))
-                    else:
-                        output_file.write('\n')
+                            output_file.write('{:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
+                    if flux_est:
+                        _, _, pulsar_flux, pulsar_flux_err = sn_dict[pulsar]
+                        if pulsar_flux is None:
+                            output_file.write('    None     None')
+                        else:
+                            output_file.write('{:8.2f} {:8.2f}'.format(pulsar_flux*1000, pulsar_flux_err*1000))
+                    output_file.write('\n')
 
     return
 
@@ -231,6 +250,12 @@ if __name__ == "__main__":
                         help='Decides the beam approximation that will be used. Options: "analytic" the analytic beam model (2012 model, fast and reasonably accurate), "advanced" the advanced beam model (2014 model, fast and slighty more accurate) or "full_EE" the full EE model (2016 model, slow but accurate). " Default: "analytic"')
     parser.add_argument('-m', '--min_power', type=float, default=0.3,
                         help='The minimum fraction of the zenith normalised power that a source needs to have to be recorded. Default 0.3')
+    parser.add_argument('--sn_est', action='store_true',
+                        help='Make a expected signal to noise calculation using the flux densities from the ANTF pulsar catalogue and include them in the output file. Default: False.')
+    parser.add_argument('--flux_est', action='store_true',
+                        help='Make a expected flux density calculation using the flux densities from the ANTF pulsar catalogue and include them in the output file. Default: False.')
+    parser.add_argument('--plot_est', action='store_true',
+                        help='If used, will output flux estimation plots while sn_est arg is true. Default: False.')
     parser.add_argument('--output', type=str, default = './',
                         help='Chooses a file for all the text files to be output to. The default is your current directory')
     parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
@@ -267,10 +292,6 @@ if __name__ == "__main__":
                         help='Includes observation IDs even if there are no raw voltages in the archive. Some incoherent observation ID files may be archived even though there are raw voltage files. The default is to only include files with raw voltage files.')
     obargs.add_argument('--cal_check', action='store_true',
                         help='Check the MWA Pulsar Database to check if the obsid has every succesfully detected a pulsar and if it has a calibration solution.')
-    obargs.add_argument('--sn_est', action='store_true',
-                        help='Make a expected signal to noise calculation using the flux densities from the ANTF pulsar catalogue and include them in the output file. Default: False.')
-    obargs.add_argument('--plot_est', action='store_true',
-                        help='If used, will output flux estimation plots while sn_est arg is true. Default: False.')
     args=parser.parse_args()
 
 
@@ -394,11 +415,11 @@ if __name__ == "__main__":
         write_output_source_files(output_data,
                                   beam=args.beam, min_power=args.min_power,
                                   cal_check=args.cal_check,
-                                  SN_est=args.sn_est, plot_est=args.plot_est,
+                                  SN_est=args.sn_est, flux_est=args.flux_est, plot_est=args.plot_est,
                                   min_time=args.min_time)
     else:
         write_output_obs_files(output_data, obsid_meta,
                                beam=args.beam, min_power=args.min_power,
                                cal_check=args.cal_check,
-                               SN_est=args.sn_est, plot_est=args.plot_est,
+                               SN_est=args.sn_est, flux_est=args.flux_est, plot_est=args.plot_est,
                                min_time=args.min_time)
