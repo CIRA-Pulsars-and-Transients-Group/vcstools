@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 import re
 import subprocess
 import logging
@@ -53,7 +54,8 @@ def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
         subprocess.run(commands, stdout=f)
 
 #---------------------------------------------------------------
-def get_from_bestprof(file_loc):
+def get_from_bestprof(file_loc,
+                      pointing_input=None):
     """
     Get info from a bestprof file
 
@@ -97,6 +99,12 @@ def get_from_bestprof(file_loc):
         # Get a pointing from the input fits file name
         ra, dec = lines[0].split("_ch")[0].split("_")[-2:]
         pointing = "{}_{}".format(ra, dec)
+        if ":" not in pointing:
+            if pointing_input is None:
+                logger.error("No pointing found, please input one. Exiting.")
+                sys.exit(0)
+            else:
+                pointing = pointing_input
 
         pulsar = str(lines[1].split("_")[-1][:-1])
         if not (pulsar.startswith('J') or pulsar.startswith('B')):

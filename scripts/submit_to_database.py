@@ -31,6 +31,7 @@ from vcstools.catalogue_utils import get_psrcat_ra_dec
 from vcstools import prof_utils
 from vcstools.config import load_config_file
 from vcstools.job_submit import submit_slurm
+from vcstools.general_utils import mdir
 
 
 import logging
@@ -136,9 +137,11 @@ def check_db_and_create_det(pulsar):
     """
     web_address, auth = get_db_auth_addr()
     pul_list_dict = client.pulsar_list(web_address, auth)
+    logger.debug("pul_list_dict: {}".format(pul_list_dict))
     pul_list_str = ''
     for p in pul_list_dict:
         pul_list_str = pul_list_str + p[u'name']
+    logger.debug("pul_list_str: {}".format(pul_list_str))
     if pulsar in pul_list_str:
         logger.info('This pulsar is already on the database')
         #gets Ra and DEC from PSRCAT
@@ -408,6 +411,7 @@ def launch_pabeam_sim(bestprof_data,
     # Set up job
     batch_file_name = 'pabeam_{}_{}_{}'.format(obsid, prof_psr, pointing)
     batch_dir = "{}{}/batch".format(comp_config['base_data_dir'], obsid)
+    mdir(batch_dir, "Batch", gid=comp_config['gid'])
     job_id = submit_slurm(batch_file_name, [command],
                           batch_dir=batch_dir,
                           slurm_kwargs={"time": datetime.timedelta(seconds=10*60*60),
@@ -644,6 +648,8 @@ if __name__ == "__main__":
     calcargs = parser.add_argument_group('Detection Calculation Options', 'All the values of a pulsar detection (such as flux density, width, scattering) can be calculated by this code using either a .besprof file or a soon to be implemented DSPSR equivalent and automatically uploaded to the MWA Pulsar Database. Analysis files can still be uploaded before this step but this will leave the pulsar values as nulls.')
     calcargs.add_argument('-b','--bestprof',type=str,help='The location of the .bestprof file. Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputting the observation ID and pulsar name.')
     calcargs.add_argument('--ascii',type=str,help='The location of the ascii file (pulsar profile output of DSPSR). Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering).')
+    calcargs.add_argument('--pointing', type=str,
+            help="The pointing of the detection with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS, e.g. \"19:23:48.53_-20:31:52.95 19:23:40.00_-20:31:50.00\". This is only required if the bestprof has a non standard input fits file.")
     calcargs.add_argument('--start', type=int,
             help="The start time of the detection in GPS format.")
     calcargs.add_argument('--stop', type=int,
@@ -724,7 +730,7 @@ if __name__ == "__main__":
 
     if args.bestprof:
         #Does the flux calculation and submits the results to the MWA pulsar database
-        bestprof_data = prof_utils.get_from_bestprof(args.bestprof)
+        bestprof_data = prof_utils.get_from_bestprof(args.bestprof, pointing_input=args.pointing)
     elif args.ascii:
         if not args.stop or not args.start:
             logger.error("Please supply both start and stop times of the detection for ascii files")
