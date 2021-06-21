@@ -32,6 +32,7 @@ if glob.glob('{0}/{1}*fits'.format(args.work_dir, args.observation)) and \
 # Get frequency channels
 if args.channels:
     channels = args.channels
+    channels.sort()
 else:
     print("Obtaining metadata from http://mwa-metadata01.pawsey.org.au/metadata/ for OBS ID: " + str(obsid))
     beam_meta_data = meta.getmeta(service='obs', params={'obs_id':obsid})

@@ -24,7 +24,7 @@ import datetime
 #MWA software imports
 from mwa_pulsar_client import client
 
-import vcstools.sn_flux_est as snfe
+import vcstools.sn_flux_utils as snfe
 from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata
 from vcstools.catalogue_utils import get_psrcat_ra_dec
@@ -32,6 +32,7 @@ from vcstools import prof_utils
 from vcstools.config import load_config_file
 from vcstools.job_submit import submit_slurm
 from vcstools.general_utils import mdir
+from vcstools.gfit import gfit
 
 
 import logging
@@ -459,8 +460,11 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
 
     #estimate S/N
     try:
-        prof_dict = prof_utils.auto_gfit(profile,\
-                    period = period, plot_name="{0}_{1}_{2}_bins_gaussian_fit.png".format(obsid, pulsar, num_bins))
+        g_fitter = gfit(profile, clip_type="verbose")
+        g_fitter.plot_name = f"{obsid}_{pulsar}_{num_bins}_bins_gaussian_fit.png"
+        g_fitter.auto_gfit()
+        g_fitter.plot_fit()
+        prof_dict = g_fitter.fit_dict
     except (prof_utils.ProfileLengthError, prof_utils.NoFitError):
         prof_dict=None
 
@@ -472,8 +476,8 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
             u_sn = prof_dict["sn_e"]
             w_equiv_bins = prof_dict["w_equiv_bins"]
             u_w_equiv_bins =  prof_dict["w_equiv_bins_e"]
-            w_equiv_phase = w_equiv_bins / bins
-            u_w_equiv_phase =  u_w_equiv_bins / bins
+            w_equiv_phase = w_equiv_bins / num_bins
+            u_w_equiv_phase =  u_w_equiv_bins / num_bins
             w_equiv_ms = period/num_bins * w_equiv_bins
             u_w_equiv_ms = period/num_bins * u_w_equiv_bins
             scattering = prof_dict["scattering"]*period/num_bins/1000 #convert to seconds
@@ -497,8 +501,8 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
         u_sn = prof_dict["sn_e"]
         w_equiv_phase = prof_dict["Weq"]
         u_w_equiv_phase =  prof_dict["Weq_e"]
-        w_equiv_bins = w_equiv_phase * bins
-        u_w_equiv_bins = w_equiv_phase * bins
+        w_equiv_bins = w_equiv_phase * num_bins
+        u_w_equiv_bins = w_equiv_phase * num_bins
         w_equiv_ms = period * w_equiv_phase
         u_w_equiv_ms = period * u_w_equiv_phase
         scattering = prof_dict["Wscat"]*period/1000 #convert to seconds

@@ -13,7 +13,7 @@ import logging
 #vcstools functions
 from vcstools.job_submit import submit_slurm
 import vcstools.metadb_utils as meta
-from vcstools.general_utils import mdir, gps_to_utc
+from vcstools.general_utils import mdir, gps_to_utc, create_link
 from vcstools.pointing_utils import format_ra_dec
 from vcstools.config import load_config_file
 from vcstools.general_utils import sfreq
@@ -42,55 +42,6 @@ def gps_time_lists(start, stop, chunk):
     return time_chunks
 
 
-def create_link(data_dir, target_dir, product_dir, link):
-    """
-    Creates a symbolic link product_dir/link that points to data_dir/target_dir
-
-    Parameters:
-    -----------
-    data_dir: string
-        The absolute path to the base directory of the true location of the files.
-        For our uses this is often a scratch partition like /astro on Galaxy
-    target_dir: string
-        The folder you would like to be linked to
-    product_dir: string
-        The absolute path of the link you would like to create
-    link: string
-        The name of the link you would like to create. Often the same as target_dir
-    """
-    data_dir = os.path.abspath(data_dir)
-    product_dir = os.path.abspath(product_dir)
-    if data_dir == product_dir:
-        # base directories are the same so doing nothing
-        return
-
-    # add product_dir and data_dir to link and target_dir respectively
-    link = link.replace(product_dir, '') # just in case...
-    link = link.replace('/', '')
-    link = os.path.join(product_dir, link)
-    target_dir = target_dir.replace(data_dir,'')
-    if target_dir.startswith("/"):
-        target_dir = target_dir[1:]
-    target_dir = os.path.join(data_dir, target_dir)
-
-    # check if link exists and whether it already points to where we'd like it to
-    if os.path.exists(link):
-        if os.path.islink(link):
-            if os.readlink(link) == target_dir:
-                return
-            else:
-                logger.warning("The link {0} already exists but points at {1} while you "
-                               "asked it to point at {2}. Deleting the link and creating"
-                               "a new one".format(link, os.readlink(link), target_dir))
-                os.unlink(link)
-                os.symlink(target_dir, link)
-        else:
-            logger.error("{0} is an existing directory and cannot be turned into a link. Aborting...".format(link))
-            sys.exit(0)
-    else:
-        logger.info("Trying to link {0} against {1}".format(link, target_dir))
-        os.symlink(target_dir, link)
-
 def get_frequencies(metafits,resort=False):
     # TODO: for robustness, this should force the entries to be 3-digit numbers
     hdulist    = pyfits.open(metafits)
@@ -100,6 +51,7 @@ def get_frequencies(metafits,resort=False):
         return sfreq(freq_array)
     else:
         return freq_array
+
 
 def vcs_download(obsid, start_time, stop_time, increment, data_dir,
                  product_dir, parallel,
@@ -112,8 +64,11 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
     logger.info("Downloading files from archive")
     voltdownload = "voltdownload.py"
     obsinfo = meta.getmeta(service='obs', params={'obs_id':str(obsid)})
+    comb_del_check = meta.combined_deleted_check(obsid, begin=start_time, end=stop_time)
     data_format = obsinfo['dataquality']
-    if data_format == 1:
+    if data_format == 1 or (comb_del_check and data_format == 6):
+        # either only the raw data is available (data_format == 1) 
+        # or there was combined files but they were deleted (comb_del_check and data_format == 6)
         target_dir = link = '/raw'
         if ics:
             logger.error("Data have not been recombined in the "
@@ -244,9 +199,8 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir,
     create_link(data_dir, 'vis', product_dir, 'vis')
     obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
     secs_to_run = "03:00:00" # sometimes the staging can take a while...
-    module_list = ["setuptools"]
+    module_list = ["manta-ray-client/python3"]
     commands = []
-    commands.append("module load manta-ray-client")
     commands.append("csvfile={0}".format(csvfile))
     commands.append('cd {0}'.format(vis_dir))
     commands.append('if [[ -z ${MWA_ASVO_API_KEY} ]]')
@@ -405,19 +359,19 @@ def vcs_correlate(obsid,start,stop,increment, data_dir, product_dir, ft_res,
                     t = Time(int(gpstime), format='gps', scale='utc')
                     unix_time = int(t.unix)
 
-                    offline_correlator_command = "-o {0}/{1} -s {2} -r {3} -i {4} -f 128 -n {5} "\
+                    offline_correlator_command = "-o {0}/{1} -s {2} -r {3} -i {4} -n {5} "\
                                                  "-c {6:0>2} -d {7}".format(corr_dir, obsid,
                                                  unix_time, num_frames, integrations,
                                                  int(ft_res[0]/10), gpubox_label, file)
                     body.append("{0} {1}".format("offline_correlator", offline_correlator_command))
                     to_corr += 1
 
-                module_list = ["module switch PrgEnv-cray PrgEnv-gnu"]
+                #module_list = ["module switch PrgEnv-cray PrgEnv-gnu"]
+                module_list = ["offline_correlator/v1.0.0"]
                 secs_to_run = str(datetime.timedelta(seconds=2*12*num_frames*to_corr))
                 # added factor two on 10 April 2017 as galaxy seemed really slow...
                 submit_slurm(corr_batch, body, module_list=module_list,
-                             slurm_kwargs={"time": secs_to_run, "nice": nice,
-                                           "gres": "gpu:1"},
+                             slurm_kwargs={"time": secs_to_run, "nice": nice},
                              queue='gpuq', vcstools_version=vcstools_version,
                              batch_dir=batch_dir, export="NONE")
             else:
@@ -500,6 +454,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
     P_dir = os.path.join(product_dir, "pointings")
     mdir(P_dir, "Pointings", gid=comp_config['gid'])
+    mdir(os.path.join(product_dir, "incoh"), "Incoh", gid=comp_config['gid'])
     # startjobs = True
 
     # Set up supercomputer dependant parameters
@@ -647,6 +602,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                         commands.append("cp {0}/{1}/{2}_{3}_{1}_ch{4}_00*.fits "
                                         "{5}/{1}/".format(comp_config['ssd_dir'], pointing,
                                         project_id, obs_id, coarse_chan, P_dir))
+                    if 'i' in bf_formats:
+                        commands.append("cp {0}/{1}/{2}_{3}_{1}_ch{4}_00*.fits "
+                                        "{5}/{1}/".format(comp_config['ssd_dir'], "incoh",
+                                        project_id, obs_id, coarse_chan, product_dir))
                 commands.append("")
 
                 job_id = submit_slurm(make_beam_small_batch, commands,

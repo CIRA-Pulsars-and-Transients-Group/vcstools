@@ -82,21 +82,24 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         name_ra_dec = get_psrcat_ra_dec(pulsar_list=pulsar_list, max_dm=max_dm, include_dm=include_dm, query=query)
 
     elif source_type == 'FRB':
-        import json
         import urllib.request
+        from io import StringIO
         try:
-            frb_data = json.load(urllib.request.urlopen('http://frbcat.org/products?search=&min=0&max=1000&page=1'))
+            frb_csv = urllib.request.urlopen("https://www.wis-tns.org/search?&include_frb=1&objtype[]=130&num_page=500&format=csv").read().decode('utf-8')
         except urllib.error.HTTPError:
-            logger.error('http://frbcat.org/ not available. Returning empty list')
+            logger.error('frbcat (https://www.wis-tns.org) not available. Returning empty list')
             # putting and FRB at 90 dec which we should never be able to detect
             name_ra_dec = [['fake', "00:00:00.00", "90:00:00.00", 0.0]]
         else:
-            for frb in frb_data['products']:
-                name = frb['frb_name']
+            f = StringIO(frb_csv)
+            reader = csv.reader(f, delimiter=',')
+            next(reader, None) # skip header
+            for frb in reader:
+                name = frb[1].replace(" ", "_")
                 logger.debug('FRB name: {}'.format(name))
-                ra   = frb['rop_raj']
-                dec  = frb['rop_decj']
-                dm   = frb['rmp_dm'].split("&")[0]
+                ra   = frb[2]
+                dec  = frb[3]
+                dm   = frb[6]
                 if include_dm:
                     name_ra_dec.append([name, ra, dec, dm])
                 else:
