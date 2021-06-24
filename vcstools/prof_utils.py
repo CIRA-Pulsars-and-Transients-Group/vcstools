@@ -797,8 +797,8 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     underest_on_pulse = _fill_on_pulse_region(
         underest_on_pulse, splined_profile, norm_prof, clip_noise)
     # Get the off-pulse pairs as well
-    overest_off_pulse = get_off_pulse(norm_prof, overest_on_pulse)
-    underest_off_pulse = get_off_pulse(norm_prof, underest_on_pulse)
+    overest_off_pulse = get_off_pulse(overest_on_pulse)
+    underest_off_pulse = get_off_pulse(underest_on_pulse)
 
     # Work out the noise std and mean using the oversetimated on-pulse region
     off_pulse_noise_std = np.nanstd(
@@ -860,24 +860,21 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     return comp_est_dict
 
 
-def get_off_pulse(profile, on_pulse_pairs):
+def get_off_pulse(on_pulse_pairs):
     """ 
-    Works out the noise level using the input profile and on-pulse description
+    Works out the off pulse ranges from the on-pulse
 
     Parameters:
     -----------
-    profile: list
-        The profile to check the noise of
     on_pulse_pairs: list
         List of sub-lists/tuples. Each sub-list is a pair of numbers that describes the upper and lower bounds of the 
         ON PULSE region
 
     Returns:
     --------
-    noise: float
-        The STD noise of the profile
+    off_pulse: list
+        A list of two-lists that decribes the off-pulse region
     """
-    profile = list(sorted(profile))
     off_pulse = []
     # Make cycling generators to deal with wrap-around
     current_pair_gen = itertools.cycle(on_pulse_pairs)
