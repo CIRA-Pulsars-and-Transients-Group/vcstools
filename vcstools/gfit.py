@@ -1,5 +1,5 @@
 from vcstools.prof_utils import ProfileLengthError, BadFitError
-from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos, profile_region_from_pairs, filled_profile_region_between_pairs, normamlise_prof
+from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos, profile_region_from_pairs, filled_profile_region_between_pairs, normamlise_prof, get_off_pulse
 import itertools
 from scipy.stats import vonmises
 from scipy.optimize import curve_fit
@@ -26,7 +26,7 @@ class gfit:
         The pulse profile to be fit
     max_N: int
         The maximum number of gaussians to attempt to fit
-        Default - 6
+        Default - 10
     plot_name: str
         The name of the output plot. Can be set with gfit.plot_name. If unsupplied, will use a generic name
         Default - None
@@ -37,7 +37,7 @@ class gfit:
     scattering_threshold: float
         The threshold for which any tau value greater will be deemed scattered. 
         Default - 40
-    on_pulse_range: list
+    on_pulse_ranges: list
         A list of two-lists/tuples that describes the on pulse region in phase.
         e.g. [[0.1, 0.2], [0.6, 0.7]]
         If not supplied, will attempt to find on-pulse region
@@ -182,7 +182,7 @@ class gfit:
 
             # Get the off-pulse region and calculate noise
             off_pulse_range = get_off_pulse(self._on_pulse_ranges)
-            off_pulse_region = profile_region_from_pairs(off_pulse_range)
+            off_pulse_region = profile_region_from_pairs(self._std_profile, off_pulse_range)
             self._noise_std = np.nanstd(off_pulse_region)
             self._noise_mean = np.nanmean(off_pulse_region)
             self._n_prof_components = len(self._on_pulse_ranges)
@@ -191,13 +191,14 @@ class gfit:
             profile_bins = np.linspace(
                 0, len(self._std_profile)-1, len(self._std_profile))
             roll_i = self._roll_to_ideal_phase(off_pulse_range)
-            rolled_profile_bins = np.roll(profile_bins, roll_i)
+            rolled_profile_bins = np.roll(profile_bins, -roll_i)
             on_pulse_ranges = []
             for phase_range in self._on_pulse_ranges:
                 lower = rolled_profile_bins[phase_range[0]]
                 upper = rolled_profile_bins[phase_range[1]]
-                on_pulse_ranges.append([lower, upper])
+                on_pulse_ranges.append([int(lower), int(upper)])
             self._on_pulse_ranges = on_pulse_ranges
+            #quit()
 
         else:  # We need to estimate what the on-pulse region is
             self._standardise_raw_profile()
