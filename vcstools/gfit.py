@@ -1,5 +1,5 @@
 from vcstools.prof_utils import ProfileLengthError, BadFitError
-from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos, profile_region_from_pairs, filled_profile_region_between_pairs
+from vcstools.prof_utils import estimate_components_onpulse, error_in_x_pos, profile_region_from_pairs, filled_profile_region_between_pairs, normamlise_prof
 import itertools
 from scipy.stats import vonmises
 from scipy.optimize import curve_fit
@@ -32,11 +32,16 @@ class gfit:
         Default - None
     conponent_plot_name: str
         The name of the plot for the component plot that illustrates how profile components are chosen. If 
-        unsupplied, will not plot.
+        unsupplied, will not plot. Only applicable if on_pulse_range unsupplied.
         Default - None
     scattering_threshold: float
         The threshold for which any tau value greater will be deemed scattered. 
         Default - 40
+    on_pulse_range: list
+        A list of two-lists/tuples that describes the on pulse region in phase.
+        e.g. [[0.1, 0.2], [0.6, 0.7]]
+        If not supplied, will attempt to find on-pulse region
+        Default - None
 
 
     Functions for users:
@@ -67,25 +72,10 @@ class gfit:
         Weq_e: float
             The uncertainty in the equivalent width
         Wscat: float
-            The scattering width of the profile measured in phase
-        Wscat_e: float
-            The uncertainty in the scattering width
-        maxima: list
-            A lost of floats corresponding to the phase location of each maximum point
-        maxima_e: list
-            A list of floats, each correspinding to the error of the maxima of the same index. Measured in phase
-        minima: list
-            A lost of floats corresponding to the phase location of each minimum point
-        minima_e: list
-            A list of floats, each correspinding to the error of the minima of the same index. Measured in phase
-        redchisq: float
-            The reduced chi sqared of the fit
-        n_components: int
-            The number of gaussian components used in the best fit
-        n_profile_components: int
+            The scattering width of the profile measured in phaseprofile_region_from_pairs
             The number of distinguishable profile components
         on_pulse_estimates: list
-            The output of prof_utils.estimate_components_onpulse()
+            The output of prof_utils.estimate_components_onpulse(). Will be the rolled on_pulse_range input instead if supplied
         fit_params: list
             A list of length 5 + 3*(N-1) there N is num_gauss. Each set of 3 parameters corresponds to the amp, centre and width of a guassian component
             The first five are baseline, tau, amp, centre and width
@@ -105,13 +95,14 @@ class gfit:
             Whether or not the final profile's tau value is greater than the sattering threshold
     """
 
-    def __init__(self, raw_profile, max_N=10, plot_name=None, component_plot_name=None, scattering_threshold=40):
+    def __init__(self, raw_profile, max_N=10, plot_name=None, component_plot_name=None, scattering_threshold=40, on_pulse_ranges=None):
         # Initialise inputs
         self._raw_profile = raw_profile
         self._max_N = max_N
         self._plot_name = plot_name
         self._component_plot_name = component_plot_name
         self._scattering_threshold = scattering_threshold
+        self._on_pulse_ranges = on_pulse_ranges
 
         # The return dictionary
         self._fit_dict = {}
@@ -125,7 +116,6 @@ class gfit:
         self._noise_mean = None
         self._n_off_pulse = None
         self._n_gaussians = None
-        self._comp_est_dict = None
         self._n_prof_components = None
         self._popt = None
         self._pcov = None
@@ -179,26 +169,55 @@ class gfit:
         if len(self._raw_profile) < 100:
             raise ProfileLengthError("Profile must have length > 100")
 
-        # Standarsdise the profile so that it's easy to fit
-        self._standardise_raw_profile()
+        if self._on_pulse_ranges:  # Use the on-pulse region to get noise estimates
+            self._standardise_raw_profile(roll_phase=None)
 
-        # Estimate the on-pulse region, components and noise level
-        self._comp_est_dict = estimate_components_onpulse(self._std_profile)
-        self._n_prof_components = len(self._comp_est_dict["overest_on_pulse"])
+            # Convert phases to bins
+            on_pulse_ranges = []
+            for phase_range in self._on_pulse_ranges:
+                lower = int(phase_range[0] * len(self._std_profile))
+                upper = int(phase_range[1] * len(self._std_profile))
+                on_pulse_ranges.append([lower, upper])
+            self._on_pulse_ranges = on_pulse_ranges
 
-        # Roll the profile such that an off-pulse region is on the phase edge
-        self._roll_to_ideal_phase()
+            # Get the off-pulse region and calculate noise
+            off_pulse_range = get_off_pulse(self._on_pulse_ranges)
+            off_pulse_region = profile_region_from_pairs(off_pulse_range)
+            self._noise_std = np.nanstd(off_pulse_region)
+            self._noise_mean = np.nanmean(off_pulse_region)
+            self._n_prof_components = len(self._on_pulse_ranges)
 
-        # This has ruined our component estimates so we need get them back
-        self._comp_est_dict = estimate_components_onpulse(
-            self._std_profile, plot_name=self._component_plot_name)
-        self._n_prof_components = len(self._comp_est_dict["overest_on_pulse"])
-        self._noise_std = self._comp_est_dict["norm_noise_std"]
-        self._noise_mean = self._comp_est_dict["norm_noise_mean"]
+            # Roll the profile while preserving the known on-pulse region
+            profile_bins = np.linspace(
+                0, len(self._std_profile)-1, len(self._std_profile))
+            roll_i = self._roll_to_ideal_phase(off_pulse_range)
+            rolled_profile_bins = np.roll(profile_bins, roll_i)
+            on_pulse_ranges = []
+            for phase_range in self._on_pulse_ranges:
+                lower = rolled_profile_bins[phase_range[0]]
+                upper = rolled_profile_bins[phase_range[1]]
+                on_pulse_ranges.append([lower, upper])
+            self._on_pulse_ranges = on_pulse_ranges
+
+        else:  # We need to estimate what the on-pulse region is
+            self._standardise_raw_profile()
+            comp_est_dict = estimate_components_onpulse(self._std_profile)
+            self._n_prof_components = len(comp_est_dict["overest_on_pulse"])
+
+            # Roll the profile such that an off-pulse region is on the phase edge
+            self._roll_to_ideal_phase(comp_est_dict["overest_off_pulse"])
+
+            # This has ruined our component estimates so we need get them back
+            comp_est_dict = estimate_components_onpulse(
+                self._std_profile, plot_name=self._component_plot_name)
+            self._on_pulse_ranges = comp_est_dict["overest_on_pulse"]
+            self._n_prof_components = len(comp_est_dict["overest_on_pulse"])
+            self._noise_std = comp_est_dict["norm_noise_std"]
+            self._noise_mean = comp_est_dict["norm_noise_mean"]
 
         # Create the on-pulse profile where the noise is set to the mean noise value
         self._on_pulse_prof = filled_profile_region_between_pairs(
-            self._std_profile, self._comp_est_dict["overest_on_pulse"], fill_value=self._noise_mean)
+            self._std_profile, self._on_pulse_ranges, fill_value=self._noise_mean)
 
         # Attempt to fit gaussians to the profile
         self._fit_gaussian()  # Initial fit
@@ -241,7 +260,6 @@ class gfit:
         self._fit_dict["noise_mean"] = self._noise_mean
         self._fit_dict["scattering"] = self._popt[1]  # tau
         self._fit_dict["scattered"] = self._scattered
-        self._fit_dict["component_estimates"] = self._comp_est_dict
         self._fit_dict["n_profile_components"] = self._n_prof_components
 
         # Log all the important stuff
@@ -275,7 +293,7 @@ class gfit:
         popt = self._fit_dict["fit_params"]
         # We need an x range for the plot - which will be phase and for
         # Recreating the Gaussians - which will be -pi to pi
-        plot_x = np.linspace(0, 1, len(self._fit_profile))
+        plot_x = np.linspace(0, 1, len(self._fit_profile), endpoint=False)
         gaussian_x = np.linspace(-np.pi, np.pi,
                                  len(self._fit_profile), endpoint=False)
         fig = plt.figure(figsize=(20, 12))
@@ -301,11 +319,8 @@ class gfit:
             z = self._vm_gauss(gaussian_x, *self._popt[j:j+3])
             plt.plot(plot_x, z, "--", label=f"Gaussian Component {i+1}")
         if self._maxima:
-            for i, mx in enumerate(self._maxima):
-                plt.axvline(
-                    x=(mx + self._maxima_e[i]), ls=":", lw=2, color="gray")
-                plt.axvline(
-                    x=(mx - self._maxima_e[i]), ls=":", lw=2, color="gray")
+            for mx in self._maxima:
+                plt.axvline(x=mx, ls=":", lw=2, color="gray")
 
         # Error bar - for noise and SN
         plt.text(0.03, 0.94,
@@ -341,19 +356,18 @@ class gfit:
     def _standardise_raw_profile(self, roll_phase=0.25):
         """Normalises and rolls the raw profile to 0.25 in phase"""
         self._std_profile = self._raw_profile.copy()
-        # Roll the profile such that the max point is at 0.25 phase
-        roll_from = np.argmax(self._std_profile)
-        roll_to = round(roll_phase*len(self._std_profile))
-        roll_i = roll_to - roll_from
-        self._std_profile = np.roll(self._std_profile, roll_i)
-        # Normalise profile to max=1
-        self._std_profile = np.array(
-            self._std_profile)/max(self._std_profile)
+        # Roll the profile such that the max point is at 0.25 phase (default)
+        if roll_phase:
+            roll_from = np.argmax(self._std_profile)
+            roll_to = round(roll_phase*len(self._std_profile))
+            roll_i = roll_to - roll_from
+            self._std_profile = np.roll(self._std_profile, roll_i)
+        # Normalise profile to max=1, min=0
+        self._std_profile = normamlise_prof(self._std_profile)
 
-    def _roll_to_ideal_phase(self):
-        """Finds the largest off-pulse region and rolls the profile to that index"""
+    def _roll_to_ideal_phase(self, off_pulse_ranges):
+        """Finds the largest off-pulse region from the off pulse ranges and rolls the profile to that index"""
         # Find the largest off-pulse range
-        off_pulse_ranges = self._comp_est_dict["overest_off_pulse"]
         off_pulse_lens = []
         for off_range in off_pulse_ranges:
             start_off = off_range[0]
@@ -382,6 +396,7 @@ class gfit:
         roll_to = len(self._std_profile)
         roll_i = roll_to - roll_from
         self._std_profile = np.roll(self._std_profile, roll_i)
+        return roll_i
 
     # The function that does the actual fitting
 
@@ -403,8 +418,7 @@ class gfit:
         comp_amp = []
         comp_width = []
         components = []
-        on_pulse_pairs = self._comp_est_dict["overest_on_pulse"]
-        for pair in on_pulse_pairs:
+        for pair in self._on_pulse_ranges:
             lower_bound = pair[0]
             upper_bound = pair[1]
             # Amplitude
@@ -424,10 +438,12 @@ class gfit:
             components.append(profile_region_from_pairs(
                 np.linspace(-np.pi, np.pi, len(self._std_profile), endpoint=False), [pair]))
 
-        # Centre location - loop over maxima
-        for m in self._comp_est_dict["maxima"]:
+        # Centre location - loop over on-pulse. This estimate only makes sense if the edge of the phase is
+        # off-pulse. Which should always be the case by this point.
+        for on_range in self._on_pulse_ranges:
+            middle = (on_range[0] + on_range[1])/2
             # Convert m from 0 -> len(x) to -pi -> pi coordinates
-            comp_locs.append((m/len(x)) * 2*np.pi - np.pi)
+            comp_locs.append((middle/len(x)) * 2*np.pi - np.pi)
 
         # Turn guesses into generators that cycle between profile components
         amp_gen = itertools.cycle(comp_amp)
@@ -522,7 +538,7 @@ class gfit:
             except (RuntimeError, ValueError) as e:  # No fit found in maxfev
                 logger.warn(e)
                 for i, g in enumerate(guess):
-                    logger.info(
+                    logger.debug(
                         f"Guess: {g} | bounds: {bounds_tuple[0][i]} -> {bounds_tuple[1][i]}")
                 # continue
                 break
@@ -611,9 +627,11 @@ class gfit:
                         len(self._fit_profile))
         spline_prof = UnivariateSpline(x, self._fit_profile, s=0, k=4)
         dy_spline = spline_prof.derivative()
-        dy_profile = dy_spline(x)
+        d2y_spline = UnivariateSpline(
+            x, self._fit_profile, s=0, k=5).derivative().derivative()
+        d2y_profile = d2y_spline(x)
         roots = dy_spline.roots()
-        roots = [int(round(i)) for i in roots]
+        roots = [round(i) for i in roots]
 
         # Find which are max, min, and false
         maxima = []
@@ -621,7 +639,7 @@ class gfit:
         for root in roots:
             # Set valid maxima to be 2 times noise
             if (self._fit_profile[root] - self._popt[0]) > 2*self._noise_std:
-                if dy_profile[root-1] > dy_profile[root]:
+                if d2y_profile[root] < 0:
                     maxima.append(root)
                 else:
                     minima.append(root)
@@ -663,9 +681,8 @@ class gfit:
             x, profile_for_widths - np.full(len(x), 1/np.exp(1)*amp_fit), s=0)
 
         # Find Weq
-        on_pulse_pairs = self._comp_est_dict["overest_on_pulse"]
         on_pulse = []
-        for pair in on_pulse_pairs:
+        for pair in self._on_pulse_ranges:
             if pair[0] < pair[1]:
                 on_pulse.extend(self._std_profile[pair[0]:pair[1]])
             else:

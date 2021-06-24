@@ -585,6 +585,17 @@ def check_clip(prof_to_check, toomuch=0.9, toolittle_frac=0., toolittle_absolute
             "A large portion of the data has been clipped. Condsier trying a larger alpha value when clipping.")
 
 
+def normamlise_prof(x):
+    """ 
+    normalises a profile, x, to minimum 0 and maximum 1
+    """
+    x = np.array(x)
+    min_x = min(x)
+    max_x = max(x)
+    norm_x = (x - min_x)/(max_x - min_x)
+    return norm_x
+
+
 def error_in_x_pos(x, y, sigma_y, x_pos):
     """
     finds error in a position, x_pos, given an error in y
@@ -666,7 +677,7 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     """
     x = np.linspace(0, len(profile)-1, len(profile))
     # Normalise profile
-    norm_prof = np.array(profile)/max(profile)
+    norm_prof = normamlise_prof(profile)
 
     # Do only a very light sweep of sigmaClip to get a first order noise estimate
     alpha, clip_noise = _profile_noise_initial_estimate(norm_prof)
@@ -793,7 +804,7 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     off_pulse_noise_std = np.nanstd(
         profile_region_from_pairs(norm_prof, overest_off_pulse))
     off_pulse_noise_mean = np.nanmean(
-        profile_region_from_pairs(np.array(profile)/max(profile), overest_off_pulse))
+        profile_region_from_pairs(normamlise_prof(profile), overest_off_pulse))
 
     # Sort the maxima based on amplitude
     maxima_amps = []
