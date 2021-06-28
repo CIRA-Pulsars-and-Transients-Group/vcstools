@@ -120,3 +120,20 @@ def create_link(data_dir, target_dir, product_dir, link):
     else:
         logger.info("Trying to link {0} against {1}".format(link, target_dir))
         os.symlink(target_dir, link)
+
+def setup_logger(logger, log_level=logging.INFO):
+    # set up the logger for stand-alone execution
+    formatter = logging.Formatter('%(asctime)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
+    ch = logging.StreamHandler()
+    ch.setFormatter(formatter)
+    # Set up local logger
+    logger.setLevel(log_level)
+    logger.addHandler(ch)
+    logger.propagate = False
+    # Loop over imported vcstools modules and set up their loggers
+    for imported_module in sys.modules.keys():
+        if imported_module.startswith('vcstools'):
+            logging.getLogger(imported_module).setLevel(log_level)
+            logging.getLogger(imported_module).addHandler(ch)
+            logging.getLogger(imported_module).propagate = False
+    return logger
