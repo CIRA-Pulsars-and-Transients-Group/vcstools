@@ -616,5 +616,5 @@ if __name__ == "__main__":
             f.write("Beam solid angle [steradians] : {0}\n".format(omega_A))
             f.write("Beam solid angle    [sq. deg] : {0}\n".format(np.degrees(np.degrees(omega_A))))
             f.write("Effective area          [m^2] : {0:.3f}\n".format(eff_area))
-            f.write("Effective gain         [K/Jy] : {0:.6f}".format(gain))
-            f.write("Antena Temperature        [K] : {0:6.1f}".format(t_ant))
+            f.write("Effective gain         [K/Jy] : {0:.6f}\n".format(gain))
+            f.write("Antena Temperature        [K] : {0:6.1f}\n".format(t_ant))
