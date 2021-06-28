@@ -3,6 +3,7 @@ import logging
 import os
 import subprocess
 from time import sleep
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,7 @@ def singles_source_search(ra, dec=None, box_size=50., params=None):
     obsid_list = find_obsids_meta_pages(params=params)
     return obsid_list
 
+
 def find_obsids_meta_pages(params=None):
     """
     Loops over pages for each page for MWA metadata calls
@@ -137,6 +139,7 @@ def find_obsids_meta_pages(params=None):
         page += 1
 
     return obsid_list
+
 
 def get_obs_array_phase(obsid):
     """
@@ -205,8 +208,8 @@ def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
         The observation ID.
     return_all: bool
         OPTIONAL - If True will also return the full meta data dictionary. Default: False
-    full_meta_data: bool
-        OPTIONAL - The full meta data dictionary from getmeta. If this is not supplied will make the meta data call. Default: False.
+    full_meta_data: dict
+        OPTIONAL - The full meta data dictionary from getmeta. If this is not supplied will make the meta data call.
 
     Returns:
     --------
@@ -273,6 +276,37 @@ def getmeta(servicetype='metadata', service='obs', params=None, retries=3):
         logger.error("Tried {} times. Exiting.".format(retries))
 
     return result
+
+
+def get_ambient_temperature(obsid, full_meta_data=None):
+    """
+    Queries the metadata to find the ambient temperature of the MWA tiles in K
+
+    Parameters:
+    -----------
+    obsid: int
+        The observation ID.
+    full_meta_data: dict
+        OPTIONAL - The full meta data dictionary from getmeta.
+        If this is not supplied will make the meta data call.
+
+    Output:
+    -------
+    t_0: float
+        The ambient temperature of the MWA tiles in K
+    """
+    if full_meta_data is None:
+        logger.info("Obtaining metadata from http://ws.mwatelescope.org/metadata/ for OBS ID: " + str(obsid))
+        full_meta_data = getmeta(service='obs', params={'obs_id':obsid})
+    ambient_temp_dict = full_meta_data[u'bftemps']
+    logger.debug("ambient_temp_dict: {}".format(ambient_temp_dict))
+    temperature_list_raw = []
+    for tile_key in ambient_temp_dict:
+        temperature_list_raw.append(ambient_temp_dict[tile_key][-1])
+    # Remove Nones
+    temperature_list = [i for i in temperature_list_raw if i]
+    logger.debug("temperature_list: {}".format(temperature_list))
+    return np.mean(temperature_list) + 273.15
 
 
 def get_files(obsid, files_meta_data=None):
