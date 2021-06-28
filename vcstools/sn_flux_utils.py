@@ -677,7 +677,7 @@ def find_pulsar_w50(pulsar, query=None):
     return W_50, W_50_err
 
 
-def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_power=0.3, query=None):
+def find_t(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_power=0.3, query=None):
     """
     Find the total integration time of a pulsar in the primary beam of an obsid
 
@@ -728,7 +728,7 @@ def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_pow
 
 
 def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, t_int=None,\
-                    obs_metadata=None, full_meta=None, query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
+                    common_metadata=None, full_meta=None, query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
     """
     Finds the system temperature and gain for an observation.
@@ -747,12 +747,12 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
     enter: float
         OPTIONAL - The fractional time that the pulsar enters the beam wrt beg and end
     t_int: float
-        OPTINOAL - The frctional time that the pulsar is in the beam wrt beg and end
+        OPTIONAL - The fractional time that the pulsar is in the beam wrt beg and end
     p_ra: str
         OPTIONAL - the target's right ascension
     p_dec: str
         OPTIONAL - the target's declination
-    obs_metadata: list
+    common_metadata: list
         OPTIONAL - the array generated from get_common_obs_metadata(obsid)
     query: object
         OPTIONAL - The return of the psrqpy function for this pulsar
@@ -782,16 +782,16 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
         p_dec= query["DECJ"][0]
 
     #get metadata if not supplied
-    if not obs_metadata or not full_meta:
+    if not common_metadata or not full_meta:
         logger.debug("Obtaining obs metadata")
-        obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
+        common_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
-    obsid, obs_ra, obs_dec, _, delays, centrefreq, channels = obs_metadata
+    obsid, obs_ra, obs_dec, _, delays, centrefreq, channels = common_metadata
 
     #get enter time
     if not enter or not t_int:
         logger.debug("Calculating beginning time for pulsar coverage")
-        enter, _, t_int = find_times(obsid, pulsar, beg, end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+        enter, _, t_int = find_times(obsid, pulsar, beg, end, metadata=common_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
 
     start_time =  enter-int(obsid)
 
@@ -829,8 +829,10 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
 
 
 def est_pulsar_sn(pulsar, obsid, beg, end,
-                 p_ra=None, p_dec=None, obs_metadata=None, full_meta=None, plot_flux=False,\
-                 query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
+                  p_ra=None, p_dec=None,
+                  common_metadata=None, full_meta=None, query=None,
+                  plot_flux=False,
+                  min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
     """
     Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
@@ -851,7 +853,7 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
         OPTIONAL - the target's right ascension
     p_dec: str
         OPTIONAL - the target's declination
-    obs_metadata: list
+    common_metadata: list
         OPTIONAL - the array generated from get_common_obs_metadata(obsid)
     plot_flux: boolean
         OPTIONAL - whether or not to produce a plot of the flux estimation. Default = False
@@ -874,22 +876,22 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
         p_dec = query["DECJ"][0]
 
     #get metadata if not supplied
-    if not obs_metadata or not full_meta:
+    if not common_metadata or not full_meta:
         logger.debug("Obtaining obs metadata")
-        obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
+        common_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     n_p = 2 #constant
     df = 30.72e6 #(24*1.28e6)
 
     #estimate flux
     s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux,\
-                         metadata=obs_metadata, query=query)
+                         metadata=common_metadata, query=query)
     #fluxes may be Nones. If so, return None
     if s_mean is None and s_mean_err is None:
         return None, None, None, None
 
     #find integration time
-    enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=obs_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+    enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=common_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
     if t_int<=0.:
         logger.warning("{} not in beam for obs files or specificed beginning and end times"\
                     .format(pulsar))
@@ -898,7 +900,7 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
     #find system temp and gain
     t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid, enter=enter, t_int=t_int,
                                 beg=beg, end=end, p_ra=p_ra, p_dec=p_dec, query=query,\
-                                obs_metadata=obs_metadata, full_meta=full_meta, trcvr=trcvr, min_z_power=min_z_power)
+                                common_metadata=common_metadata, full_meta=full_meta, trcvr=trcvr, min_z_power=min_z_power)
 
     #Find W_50
     W_50, W_50_err = find_pulsar_w50(pulsar, query=query)
@@ -933,15 +935,15 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
 
 
 def multi_psr_snfe(pulsar_list, obsid, beg, end,
-                    obs_metadata=None, full_meta=None, plot_flux=False,\
+                    common_metadata=None, full_meta=None, plot_flux=False,\
                     query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
 
     logger.info("""This script may use estimations where data is missing.
     For full verbosity, use the DEBUG logger (ie. -L DEBUG)""")
 
-    if obs_metadata is None or full_meta is None:
+    if common_metadata is None or full_meta is None:
         logger.debug("Obtaining obs metadata")
-        obs_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
+        common_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     obs_beg, obs_end = obs_max_min(obsid)
     if beg is None:
@@ -957,7 +959,7 @@ def multi_psr_snfe(pulsar_list, obsid, beg, end,
             psr_query[key] = [mega_query[key][i]]
 
         sn, sn_e, s, s_e = est_pulsar_sn(pulsar, obsid,\
-                                 beg=beg, end=end, obs_metadata=obs_metadata, full_meta=full_meta, plot_flux=plot_flux,\
+                                 beg=beg, end=end, common_metadata=common_metadata, full_meta=full_meta, plot_flux=plot_flux,\
                                  query=psr_query, min_z_power=min_z_power, trcvr=trcvr)
 
         sn_dict[pulsar]=[sn, sn_e, s, s_e]
