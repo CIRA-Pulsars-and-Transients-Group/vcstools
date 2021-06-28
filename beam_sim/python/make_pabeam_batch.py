@@ -9,7 +9,7 @@ import logging
 
 from vcstools.metadb_utils import obs_max_min, get_common_obs_metadata, ensure_metafits
 from vcstools.job_submit import submit_slurm
-from vcstools.general_utils import mdir
+from vcstools.general_utils import mdir, setup_logger
 from vcstools.config import load_config_file
 
 logger = logging.getLogger(__name__)
@@ -237,12 +237,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     # get metadata
     common_metadata = get_common_obs_metadata(args.obsid)

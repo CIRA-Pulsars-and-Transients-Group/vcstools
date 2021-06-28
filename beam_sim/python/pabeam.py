@@ -33,6 +33,7 @@ from itertools import chain
 #from mwapy import ephem_utils,metadata
 from vcstools.metadb_utils import getmeta, get_common_obs_metadata
 from vcstools.pointing_utils import getTargetAZZA
+from vcstools.general_utils import setup_logger
 from mwa_pb import primary_beam as pb
 from mwa_pb import config
 from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
@@ -380,13 +381,8 @@ if __name__ == "__main__":
                         help="Logger verbositylevel. Default: INFO")
     args = parser.parse_args()
 
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if rank == 0:
         logger.info("will use {0} processes".format(size))

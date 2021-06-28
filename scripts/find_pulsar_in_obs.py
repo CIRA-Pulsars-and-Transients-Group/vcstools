@@ -30,6 +30,7 @@ from vcstools.metadb_utils import get_obs_array_phase, singles_source_search,\
                                   find_obsids_meta_pages, obs_max_min
 from vcstools.catalogue_utils import grab_source_alog
 from vcstools.beam_calc import find_sources_in_obs
+from vcstools.general_utils import setup_logger
 
 
 import logging
@@ -307,13 +308,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     #Parse options
     if args.in_cat and args.coords:
