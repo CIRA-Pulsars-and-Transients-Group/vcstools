@@ -633,6 +633,7 @@ class gfit:
         d2y_profile = d2y_spline(x)
         roots = dy_spline.roots()
         roots = [round(i) for i in roots]
+        roots = list(set(roots)) # Remove duplicates
 
         # Find which are max, min, and false
         maxima = []
