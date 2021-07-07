@@ -43,11 +43,19 @@ def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
     format_ra_dec([[name,ra,dec]], ra_col = 1, dec_col = 2)
     """
     for i in range(len(ra_dec_list)):
-        #catching errors in old psrcat RAs
+        #catching errors in old psrcat RAs and Decs
         if len(ra_dec_list[i][ra_col]) >5:
             if  ra_dec_list[i][ra_col][5] == '.':
                 ra_dec_list[i][ra_col] = ra_dec_list[i][ra_col][:5] + ":" +\
                         str(int(float('0'+ra_dec_list[i][ra_col][5:])*60.))
+        if ra_dec_list[i][dec_col].count(":") == 1 and ra_dec_list[i][dec_col].count(".") == 1:
+            # Only arcminutes so split it into arcseconds
+            ra_dec_list[i][dec_col] = ra_dec_list[i][dec_col].split(".")[0] + ":" +\
+                        str(float("0." + str(ra_dec_list[i][dec_col].split(".")[-1]))*60 )[:5]
+        if len(ra_dec_list[i][dec_col].split(":")[-1]) == 1:
+            # Some final digits do not have leading zeros
+            ra_dec_list[i][dec_col] = ra_dec_list[i][dec_col].rsplit(':', 1)[0] + ":0" +\
+                        ra_dec_list[i][dec_col].split(":")[-1]
         #make sure there are two digits in the HH slot for RA or DD for Dec
         if len(ra_dec_list[i][ra_col].split(':')[0]) == 1:
             ra_dec_list[i][ra_col] = '0' + ra_dec_list[i][ra_col]

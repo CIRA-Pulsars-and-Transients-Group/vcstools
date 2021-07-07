@@ -1,6 +1,7 @@
 import subprocess
 import os
 import numpy as np
+import re
 import traceback
 import logging
 from vcstools.metadb_utils import getmeta, get_files
@@ -189,7 +190,7 @@ def get_files_and_sizes(obsID, mode, mintime=0, maxtime=2000000000):
         sizes[0]:     size of files in bytes
     """
     if mode == 'raw':
-        suffix = '.dat'
+        suffix = '[0-9].dat' # checks for a digit to make this distinct from ics
     elif mode == 'tar_ics':
         suffix = '.tar'
     elif mode == 'ics':
@@ -205,7 +206,9 @@ def get_files_and_sizes(obsID, mode, mintime=0, maxtime=2000000000):
     files_masked = []
     sizes = []
     for f in files:
-        if suffix in f:
+        #if suffix in f:
+        if re.match(".*{}".format(suffix), f):
+            logger.debug("f: {}   suffix: {}   size:{}".format(f, suffix, files_meta[f]['size']))
             sizes.append(files_meta[f]['size'])
             files_masked.append(f)
     logger.info("...Done. Expect all on database to be {0} bytes in size...".format(sizes[0]))
