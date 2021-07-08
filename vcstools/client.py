@@ -48,14 +48,14 @@ def upload_wrapper(url, data, files=None):
     session.auth = auth
 
     #logger.debug(data)
-    print(data)
+    #print(data)
     if files is None:
         r = session.post(url, data=data)
     else:
         r = session.post(url, data=data, files=files)
     if r.status_code > 201:
         logger.error("Error uploading. Status code: {}".format(r.status_code))
-        sys.exit(r.status_code)
+        #sys.exit(r.status_code)
     session.close()
 
 
