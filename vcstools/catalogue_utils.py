@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_psrcat_ra_dec(pulsar_list=None, max_dm=250., include_dm=False, query=None):
+def get_psrcat_ra_dec(pulsar_list=None, max_dm=5000., include_dm=False, query=None):
     """
     Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
@@ -43,7 +43,7 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=250., include_dm=False, query=Non
     return pulsar_ra_dec
 
 
-def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False, query=None):
+def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=5000., include_dm=False, query=None):
     """
     Will search different source catalogues and extract all the source names, RAs, Decs and, if requested, DMs
 
