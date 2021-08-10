@@ -592,22 +592,33 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
     logger.debug("{0} there are {1} flux values available on the ATNF database"\
                 .format(pulsar, len(flux_all)))
 
-    if not spind or spind_err:
-        spind, spind_err, K, covar_mat = find_spind(pulsar, freq_all, flux_all, flux_err_all)
-
-    if K and covar_mat is not None and spind:
-        flux_est, flux_est_err = flux_from_plaw(f_mean, K, spind, covar_mat)
-    elif spind and spind_err:
-        flux_est, flux_est_err = flux_from_spind(f_mean, freq_all[0], flux_all[0], flux_err_all[0],\
-                                                spind, spind_err)
-    else:
+    # Check if there is enough data to estimate the flux
+    if len(flux_all) == 0:
         logger.debug("{} no flux values on archive. Cannot estimate flux. Will return Nones".format(pulsar))
         return None, None
+    elif ( len(flux_all) == 1 ) and ( ( not spind ) or ( not spind_err ) ):
+        logger.debug("{} has only a single flux value and no spectral index. Cannot estimate flux. Will return Nones".format(pulsar))
+        return None, None
 
-    if plot_flux==True:
-            plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
-                                my_nu=f_mean, my_S=flux_est, my_S_e=flux_est_err, obsid=obsid,
-                                a_err=spind_err,  K=K, covar_mat=covar_mat)
+    if ( not spind ) or ( not spind_err ):
+        # If no spind on ATNF fit our own
+        spind, spind_err, K, covar_mat = find_spind(pulsar, freq_all, flux_all, flux_err_all)
+    else:
+        K = covar_mat = None
+
+    if K and covar_mat is not None:
+        # Use the spind power law we fit
+        flux_est, flux_est_err = flux_from_plaw(f_mean, K, spind, covar_mat)
+    elif spind and spind_err and flux_all:
+        # Use ATNF spind
+        flux_est, flux_est_err = flux_from_spind(f_mean, freq_all[0], flux_all[0], flux_err_all[0],\
+                                                 spind, spind_err)
+    logger.debug("Finished estimating flux")
+
+    if plot_flux == True:
+        plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
+                             my_nu=f_mean, my_S=flux_est, my_S_e=flux_est_err, obsid=obsid,
+                             a_err=spind_err,  K=K, covar_mat=covar_mat)
 
     return flux_est, flux_est_err
 
