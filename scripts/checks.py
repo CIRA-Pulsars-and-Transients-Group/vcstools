@@ -8,6 +8,7 @@ import logging
 
 from vcstools.config import load_config_file
 from vcstools.check_files import check_download, check_recombine
+from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -62,13 +63,7 @@ if __name__ == '__main__':
     work_dir_base = os.path.join(comp_config['base_data_dir'], str(args.obsID))
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.version:
         try:

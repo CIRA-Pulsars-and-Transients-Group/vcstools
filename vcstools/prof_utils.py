@@ -1,4 +1,6 @@
 import numpy as np
+import sys
+import re
 import subprocess
 import re
 import logging
@@ -52,7 +54,9 @@ def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
         f.write(a.decode("utf-8"))
 
 
-def get_from_bestprof(file_loc):
+#---------------------------------------------------------------
+def get_from_bestprof(file_loc,
+                      pointing_input=None):
     """
     Get info from a bestprof file
 
@@ -93,6 +97,16 @@ def get_from_bestprof(file_loc):
         except ValueError:
             obsid = None
 
+        # Get a pointing from the input fits file name
+        ra, dec = lines[0].split("_ch")[0].split("_")[-2:]
+        pointing = "{}_{}".format(ra, dec)
+        if ":" not in pointing:
+            if pointing_input is None:
+                logger.error("No pointing found, please input one. Exiting.")
+                sys.exit(0)
+            else:
+                pointing = pointing_input
+
         pulsar = str(lines[1].split("_")[-1][:-1])
         if not (pulsar.startswith('J') or pulsar.startswith('B')):
             pulsar = 'J{0}'.format(pulsar)
@@ -121,7 +135,7 @@ def get_from_bestprof(file_loc):
         for p, _ in enumerate(orig_profile):
             profile[p] = orig_profile[p] - min_prof
 
-    return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
+    return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num, pointing]
 
 
 def get_from_ascii(file_loc):

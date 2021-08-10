@@ -30,6 +30,7 @@ from vcstools.metadb_utils import get_obs_array_phase, singles_source_search,\
                                   find_obsids_meta_pages, obs_max_min
 from vcstools.catalogue_utils import grab_source_alog
 from vcstools.beam_calc import find_sources_in_obs
+from vcstools.general_utils import setup_logger
 
 
 import logging
@@ -239,7 +240,7 @@ if __name__ == "__main__":
     loglevels = dict(DEBUG=logging.DEBUG,
                      INFO=logging.INFO,
                      WARNING=logging.WARNING)
-    beam_models = ['analytic', 'advanced', 'full_EE']
+    beam_models = ['analytic', 'advanced', 'full_EE', 'hyperbeam']
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     description="""
     This code is used to list the sources within the beam of observations IDs or using --obs_for_source list all the observations for each source. The sources can be input serval ways: using a list of pulsar names (--pulsar), using a complete catalogue file of pulsars (--dl_PSRCAT) or RRATs (--RRAT and --dl_RRAT), using a compatable catalogue (--in_cat with the help of --names and --coordstype) or using a RA and DEC coordinate (--coords). The observation IDs can be input (--obsid) or gathered from a directory (--FITS_dir). The default is to search all observation IDs from http://mwa-metadata01.pawsey.org.au/metadata/ that have voltages and list every known pulsar from PSRCAT in each observation ID.
@@ -307,13 +308,7 @@ if __name__ == "__main__":
             sys.exit(0)
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     #Parse options
     if args.in_cat and args.coords:

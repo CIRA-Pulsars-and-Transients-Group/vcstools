@@ -3,6 +3,7 @@ import logging
 import argparse
 
 from vcstools.rm_synth_utils import rm_synth_pipe
+from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +50,8 @@ if __name__ == '__main__':
     optional.add_argument("-d", "--work_dir", type=str, default="./", help="The directory to work in")
     optional.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbosity level. Default: INFO", choices=loglevels.keys())
 
-    args = parser.parse_args()
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
+
     kwargs = vars(args)
     rm_synth_main(kwargs)

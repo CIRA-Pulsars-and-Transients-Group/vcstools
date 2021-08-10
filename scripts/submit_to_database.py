@@ -19,20 +19,28 @@ from shutil import copyfile as cp
 import math
 import glob
 import textwrap as _textwrap
+import datetime
+import numpy as np
+from astropy.table import Table
+
+import logging
+logger = logging.getLogger(__name__)
 
 #MWA software imports
 from mwa_pulsar_client import client
 
 import vcstools.sn_flux_utils as snfe
 from vcstools import data_load
-from vcstools.metadb_utils import get_common_obs_metadata
+from vcstools.metadb_utils import get_common_obs_metadata, get_ambient_temperature
 from vcstools.catalogue_utils import get_psrcat_ra_dec
 from vcstools import prof_utils
+from vcstools.config import load_config_file
+from vcstools.job_submit import submit_slurm
+from vcstools.general_utils import mdir, setup_logger
 from vcstools.gfit import gfit
+from vcstools.beam_calc import get_Trec
 
 
-import logging
-logger = logging.getLogger(__name__)
 
 class LineWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def _split_lines(self, text, width):
@@ -134,9 +142,11 @@ def check_db_and_create_det(pulsar):
     """
     web_address, auth = get_db_auth_addr()
     pul_list_dict = client.pulsar_list(web_address, auth)
+    logger.debug("pul_list_dict: {}".format(pul_list_dict))
     pul_list_str = ''
     for p in pul_list_dict:
         pul_list_str = pul_list_str + p[u'name']
+    logger.debug("pul_list_str: {}".format(pul_list_str))
     if pulsar in pul_list_str:
         logger.info('This pulsar is already on the database')
         #gets Ra and DEC from PSRCAT
@@ -372,26 +382,106 @@ def multi_upload_files(obsid, pulsar, files_dict, metadata=None, coh=True):
             logger.info("Uploading file to databse: {}".format(filename))
             upload_file_to_db(obsid, pulsar, filename, int(filetype), metadata=metadata, coh=coh)
 
-def flux_cal_and_submit(time_obs, metadata, bestprof_data,
-                        pul_ra, pul_dec, coh, auth,
-                        pulsar=None, trcvr=data_load.TRCVR_FILE):
+
+def launch_pabeam_sim(bestprof_data,
+                      metafits_file=None,
+                      phi_res=0.05, theta_res=0.05,
+                      efficiency=1,
+                      nodes=3):
     """
-    time_obs: the time in seconds of the dectection from the metadata
+    Submit a job to run the pabeam code to estimate the system equivelent
+    flux density and returns a job id so a dependent job to resume the
+    submit_to_databse.py code can be launched in a different function.
+    """
+    # Load computer dependant config file
+    comp_config = load_config_file()
+
+    # Unpack bestprof data list
+    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
+
+    # Parse defaults
+    if metafits_file is None:
+        metafits_file  = "{0}{1}/{1}_metafits_ppds.fits".format(comp_config['base_data_dir'], obsid)
+
+    # Set up pabeam command
+    command = 'srun --export=all -u -n {} pabeam.py'.format(nodes*24)
+    command += ' -o {}'.format(obsid)
+    command += ' -t {}'.format(t_int)
+    command += ' -e {}'.format(efficiency)
+    command += ' --metafits {}'.format(metafits_file)
+    command += ' -p {}'.format(pointing)
+    command += ' --grid_res {} {}'.format(theta_res, phi_res)
+
+
+    # Set up job
+    batch_file_name = 'pabeam_{}_{}_{}'.format(obsid, prof_psr, pointing)
+    batch_dir = "{}{}/batch".format(comp_config['base_data_dir'], obsid)
+    mdir(batch_dir, "Batch", gid=comp_config['gid'])
+    job_id = submit_slurm(batch_file_name, [command],
+                          batch_dir=batch_dir,
+                          slurm_kwargs={"time": datetime.timedelta(seconds=10*60*60),
+                                        "nodes":nodes},
+                          module_list=['hyperbeam-python', 'mwa_pb/hyperbeam'],
+                          queue='cpuq',
+                          cpu_threads=24,
+                          mem=12288,
+                          vcstools_version='nswainston')#TODO remove
+    return job_id
+
+def read_sefd_file(sefd_file):
+    with open(sefd_file) as f:
+        lines = f.readlines()
+        for l in lines:
+            if "Effective gain         [K/Jy] :" in l:
+                gain = float(l.split("Effective gain         [K/Jy] : ")[1])
+            if "Antena Temperature        [K] :" in l:
+                t_ant = float(l.split("Antena Temperature        [K] :")[1].strip())
+    return gain, t_ant
+    
+
+
+def flux_cal_and_submit(bestprof_data,
+                        pul_ra, pul_dec, coh, auth,
+                        common_metadata=None, full_meta_data=None,
+                        pulsar=None, trcvr=data_load.TRCVR_FILE,
+                        simple_sefd=False, sefd_file=None):
+    """
     metadata: list from the function get_obs_metadata
     bestprof_data: list from the function get_from_bestprof
     trcvr: the file location of antena temperatures
     """
     #unpack the bestprof_data
-    #[obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]
-    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins = bestprof_data
+    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
+
+    # Perform metadata calls
+    if common_metadata is None:
+        common_metadata, full_meta_data = get_common_obs_metadata(obsid, return_all=True, full_meta_data=full_meta_data)
+    obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels = common_metadata
+
     if not pulsar:
         pulsar = prof_psr
     period=float(period)
     num_bins=int(num_bins)
 
-    #get r_sys and gain
-    t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid, obs_metadata=metadata,\
-                                    beg=beg, end=(t_int + beg - 1))
+    #get T_sys and gain
+    if simple_sefd:
+        t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid,
+                                                      obs_metadata=metadata,
+                                                      beg=beg, end=(t_int + beg - 1))
+    else:
+        if sefd_file is None:
+            launch_pabeam_sim(bestprof_data)
+            sys.exit(0)
+        else:
+            gain, t_ant = read_sefd_file(sefd_file)
+            # TODO work out if the following is reasonable
+            u_gain = gain * 0.05
+            trec_table = Table.read(trcvr,format="csv")
+            t_rec = np.mean(get_Trec(trec_table, centrefreq))
+            # TODO once Daniel Ung tells us how to calculate this impliment it
+            eta = 0.98 # Radiation Efficiency
+            t_0 = get_ambient_temperature(obsid) # ambient temperature (K)
+            t_sys = eta * t_ant + ( 1 - eta ) * t_0 + t_rec
 
     #estimate S/N
     try:
@@ -452,23 +542,23 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
         logger.debug("T_sys: {0} K".format(t_sys))
         logger.debug("Bandwidth: {0}".format(bandwidth))
         logger.debug("Detection time: {0}".format(t_int))
-        logger.debug("NUmber of bins: {0}".format(num_bins))
+        logger.debug("Number of bins: {0}".format(num_bins))
 
-        if scattered == False:
-            #final calc of the mean fluxdesnity in mJy
+        if scattered:
+            logger.info("Profile is scattered. Flux cannot be estimated")
+            S_mean = None
+            u_S_mean = None
+        else:
+            # final calc of the mean flux density in mJy
             S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(t_int) * bandwidth)) *\
                     math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
-            #constants to make uncertainty calc easier
+            # constants to make uncertainty calc easier
             S_mean_cons = t_sys / ( math.sqrt(2. * float(t_int) * bandwidth)) *\
                     math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
             u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
                                 math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
 
             logger.info('Smean {0:.2f} +/- {1:.2f} mJy'.format(S_mean, u_S_mean))
-        else:
-            logger.info("Profile is scattered. Flux cannot be estimated")
-            S_mean = None
-            u_S_mean = None
 
     #calc obstype
     if (maxfreq - minfreq) == 23:
@@ -476,7 +566,7 @@ def flux_cal_and_submit(time_obs, metadata, bestprof_data,
     else:
         obstype = 2
 
-    subbands = get_subbands(metadata)
+    subbands = get_subbands(common_metadata)
     web_address, auth = get_db_auth_addr()
 
     #get cal id
@@ -576,16 +666,23 @@ if __name__ == "__main__":
     """))
     parser.add_argument('-o','--obsid',type=str,help='The observation ID (eg. 1221399680).')
     parser.add_argument('-O', '--cal_id',type=str,help='The observation ID of the calibrator.')
-    parser.add_argument('-p','--pulsar',type=str,help='The pulsar J name.')
+    parser.add_argument('-p','--pulsar', type=str,
+            help='The pulsar J name.')
     parser.add_argument('--incoh',action='store_true',help='Used for incoherent detections to accurately calculate gain. The default is coherent.')
     parser.add_argument('--andre',action='store_true',help="Used for calibrations done using Andre Offrina's tools. Default is RTS.")
-    parser.add_argument("-L", "--loglvl", type=str, help="Logger verbosity level. Default: INFO",
-                        choices=loglevels.keys(), default="INFO")
+    parser.add_argument('--sefd_file', type=str,
+            help='The output file of the pabeam.py code to be used for accurate flux density calculations.')
+    parser.add_argument('--simple_sefd', action='store_true',
+            help="Just use the tile beam to estimate the SEFD (T_sys and gain) instead of submiting a job to do a full tied-array beam simulation. Default False")
+    parser.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO",
+            help="Logger verbosity level. Default: INFO")
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
 
     calcargs = parser.add_argument_group('Detection Calculation Options', 'All the values of a pulsar detection (such as flux density, width, scattering) can be calculated by this code using either a .besprof file or a soon to be implemented DSPSR equivalent and automatically uploaded to the MWA Pulsar Database. Analysis files can still be uploaded before this step but this will leave the pulsar values as nulls.')
     calcargs.add_argument('-b','--bestprof',type=str,help='The location of the .bestprof file. Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputting the observation ID and pulsar name.')
     calcargs.add_argument('--ascii',type=str,help='The location of the ascii file (pulsar profile output of DSPSR). Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering).')
+    calcargs.add_argument('--pointing', type=str,
+            help="The pointing of the detection with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS, e.g. \"19:23:48.53_-20:31:52.95 19:23:40.00_-20:31:50.00\". This is only required if the bestprof has a non standard input fits file.")
     calcargs.add_argument('--start', type=int,
             help="The start time of the detection in GPS format.")
     calcargs.add_argument('--stop', type=int,
@@ -602,6 +699,10 @@ if __name__ == "__main__":
     uploadargs.add_argument('-i','--ippd',type=str,help="The Intergrated Pulse Profile (sometimes called a pulse profile) file location. Expects a single file that is the output of DSPSR's pav script.")
     uploadargs.add_argument('-w','--waterfall',type=str,help="The file location of a waterfall plot of pulse phase vs frequency. Expects a single file that is the output of DSPSR's psrplot.")
     args = parser.parse_args()
+
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
+
     if args.version:
         try:
             import version
@@ -611,15 +712,6 @@ if __name__ == "__main__":
             logger.error("Couldn't import version.py - have you installed vcstools?")
             logger.error("ImportError: {0}".format(ie))
             sys.exit(0)
-
-    # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
 
     #defaults for incoh and calibrator type
     if args.incoh:
@@ -652,8 +744,8 @@ if __name__ == "__main__":
         check_db_and_create_det(args.pulsar)
 
     #get meta data from obsid
-    metadata = get_common_obs_metadata(args.obsid)
-    _, ra_obs, _, time_obs, delays, centrefreq, channels = metadata
+    common_metadata, full_meta_data = get_common_obs_metadata(args.obsid, return_all=True)
+    _, ra_obs, _, time_obs, delays, centrefreq, channels = common_metadata
     minfreq = float(min(channels))
     maxfreq = float(max(channels))
     bandwidth = 30720000. #In Hz
@@ -666,7 +758,7 @@ if __name__ == "__main__":
 
     if args.bestprof:
         #Does the flux calculation and submits the results to the MWA pulsar database
-        bestprof_data = prof_utils.get_from_bestprof(args.bestprof)
+        bestprof_data = prof_utils.get_from_bestprof(args.bestprof, pointing_input=args.pointing)
     elif args.ascii:
         if not args.stop or not args.start:
             logger.error("Please supply both start and stop times of the detection for ascii files")
@@ -676,11 +768,15 @@ if __name__ == "__main__":
         time_detection = args.stop - args.start
         bestprof_data = [args.obsid, args.pulsar, dm, period, None, args.start,
                          time_detection, profile, num_bins]
+        # TODO work out the best way to add pointing to ascii files
 
     if args.bestprof or args.ascii:
         _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
-        subbands = flux_cal_and_submit(time_obs, metadata, bestprof_data,
-                            pul_ra, pul_dec, coh, auth, pulsar=args.pulsar, trcvr=args.trcvr)
+        subbands = flux_cal_and_submit(bestprof_data,
+                                       pul_ra, pul_dec, coh, auth,
+                                       common_metadata=common_metadata, full_meta_data=full_meta_data,
+                                       pulsar=args.pulsar, trcvr=args.trcvr,
+                                       simple_sefd=args.simple_sefd, sefd_file=args.sefd_file)
 
     if args.cal_dir_to_tar:
         if not args.srclist:
@@ -746,9 +842,7 @@ if __name__ == "__main__":
 
     #Upload analysis files to the database
     #create filname prefix
-    bins=None
-    if args.bestprof:
-        bins = prof_utils.get_from_bestprof(args.bestprof)[-1]
+    bins = bestprof_data[8]
     fname_pref = filename_prefix(args.obsid, args.pulsar, bins=bins, cal=args.cal_id)
     upfiles_dict={"1":[], "2":[], "3":[], "4":[], "5":[]}
     remove_list=[]
