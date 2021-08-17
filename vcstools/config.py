@@ -112,6 +112,9 @@ ARM_CONFIG =   {'base_data_dir' : '/ibo9000/Pulsar/vcs/',
 import logging
 import socket
 import argparse
+import sys
+
+from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -121,8 +124,8 @@ def load_config_file():
     """
     #Work out which supercomputer you're using
     hostname = socket.gethostname()
-    # galaxy head node, galaxy and magnus job nodes, zeus job nodes, garrawarla job nodes
-    if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z'):
+    #  galaxy head node,                galaxy and magnus job nodes,  zeus job nodes,         zeus copyq
+    if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z') or hostname.startswith('hpc-data'):
         comp_config = GALAXY_CONFIG
     elif hostname.startswith('mwa') or hostname.startswith('garrawarla'):
         comp_config = GARRAWARLA_CONFIG
@@ -132,7 +135,7 @@ def load_config_file():
         comp_config = ARM_CONFIG
     else:
         logger.error('Unknown computer {}. Exiting'.format(hostname))
-        quit()
+        sys.exit(1)
 
     return comp_config
 
@@ -153,6 +156,9 @@ if __name__ == '__main__':
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
     args = parser.parse_args()
 
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
+
     if args.version:
         try:
             import version
@@ -162,16 +168,6 @@ if __name__ == '__main__':
             print("Couldn't import version.py - have you installed vcstools?")
             print("ImportError: {0}".format(ie))
             sys.exit(0)
-
-    # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
-
 
     #print config file
     config = load_config_file()

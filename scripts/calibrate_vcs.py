@@ -28,7 +28,7 @@ from astropy.coordinates import EarthLocation
 from astropy.io import fits
 
 from vcstools.job_submit import submit_slurm
-from vcstools.general_utils import mdir
+from vcstools.general_utils import mdir, setup_logger
 from vcstools.metadb_utils import getmeta
 from vcstools.config import load_config_file
 
@@ -670,12 +670,10 @@ class RTScal(object):
         jobids = []
         nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
-        slurm_kwargs = {"partition": "gpuq",
-                        "chdir": "{0}".format(self.rts_out_dir),
+        slurm_kwargs = {"chdir": "{0}".format(self.rts_out_dir),
                         "time": "2:00:00",
                         "nodes": "{0}".format(nnodes),
-                        "gres": "gpu:1",
-                        "ntasks-per-node": "1"}
+                        "cpus-per-gpu": "1"}
         module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
         commands.append("export UCX_MEMTYPE_CACHE=n")
@@ -868,12 +866,10 @@ class RTScal(object):
             nnodes = v + 1
             chans = k.split('_')[-1].split(".")[0]
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
-            slurm_kwargs = {"partition": "gpuq",
-                            "chdir": "{0}".format(self.rts_out_dir),
+            slurm_kwargs = {"chdir": "{0}".format(self.rts_out_dir),
                             "time": "2:00:00",
                             "nodes": "{0}".format(nnodes),
-                            "gres": "gpu:1",
-                            "ntasks-per-node": "1"}
+                            "cpus-per-gpu": "1"}
             module_list= ["RTS/master"]
             commands = list(self.script_body)  # make a copy of body to then extend
             commands.append("export UCX_MEMTYPE_CACHE=n")
@@ -984,13 +980,7 @@ if __name__ == '__main__':
             sys.exit(0)
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     logger.info("Creating BaseRTSconfig instance - compiling basic RTS configuration script")
     try:

@@ -9,6 +9,7 @@ import numpy as np
 import json
 
 from vcstools import prof_utils
+from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -131,14 +132,9 @@ if __name__ == '__main__':
     parser.add_argument("--phase_ranges", type=float, nargs="+", help="The phase range(s) to fit the RM to. If unsupplied, will find the on-pulse and fit that range.\
                          Supports multiple ranges. eg. 0.1 0.15 0.55 0.62 will fit values from 0.1 to 0.15 and from 0.55 to 0.62.")
     parser.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level")
-
     args = parser.parse_args()
 
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     fit(vars(args))

@@ -5,6 +5,9 @@ import math
 
 #MWA scripts
 from mwa_pb import primary_beam
+from mwa_pb import config
+import mwa_hyperbeam
+
 
 from vcstools.pointing_utils import sex2deg
 from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata, getmeta
@@ -198,6 +201,8 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     """
     obsid, _, _, time, delays, centrefreq, channels = beam_meta_data
     names_ra_dec = np.array(names_ra_dec)
+    beam = mwa_hyperbeam.FEEBeam(config.h5file)
+    amps = [1.0] * 16
     logger.info("Calculating beam power for OBS ID: {0}".format(obsid))
 
     starttimes=np.arange(start_time,time+start_time,dt)
@@ -263,6 +268,11 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
                                                      freq=frequencies[ifreq], delays=delays,
                                                      zenithnorm=True,
                                                      power=True)
+            elif option == 'hyperbeam':
+                jones = beam.calc_jones_array(phi, theta, int(frequencies[ifreq]), delays[0], amps, True)
+                jones = jones.reshape(1, len(phi), 2, 2)
+                vis = primary_beam.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
+                rX, rY = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
         PowersX[:,itime,ifreq]=rX
         PowersY[:,itime,ifreq]=rY
     if verbose is False:

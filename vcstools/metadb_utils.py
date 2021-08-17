@@ -2,6 +2,8 @@ from vcstools.general_utils import is_number
 import logging
 import os
 import subprocess
+from time import sleep
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,7 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
         copy2("{0}".format(metafits_file), "{0}".format(data_dir))
 
 
-def singles_source_search(ra, dec=None, box_size=45.):
+def singles_source_search(ra, dec=None, box_size=50., params=None):
     """
     Used to find all obsids within a box around the source to make searching through obs_ids more efficient.
 
@@ -51,12 +53,21 @@ def singles_source_search(ra, dec=None, box_size=45.):
         Declination of the source in degrees. By default will use the enitre declination range to account for grating lobes
     box_size: float
         Radius of the search box. Default: 45
+    params: dict
+        The dictionary of constraints used to search for suitable observations as explained here:
+        https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Findobservations
+        Default: {'mode':'VOLTAGE_START'}
 
     Returns:
     --------
     obsid_metadata: list
-        List of of the metadata for each obsid. The metadata is in the same format as getmeta's output
+        List of the metadata for each obsid. The metadata is in the same format as getmeta's output
     """
+    if params is None:
+        # Load default params
+        params={'mode':'VOLTAGE_START'}
+    logger.debug("params: {}".format(params))
+
     ra = float(ra)
     m_o_p = False # moved over (north or south) pole
 
@@ -76,41 +87,38 @@ def singles_source_search(ra, dec=None, box_size=45.):
             m_o_p = True
 
     if m_o_p:
-        obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
-                                                    'minra':0., 'maxra':360.,
-                                                    'mindec':dec_bot,'maxdec':dec_top})
+        params.update({'minra':0.,      'maxra':360.,
+                       'mindec':dec_bot,'maxdec':dec_top})
     else:
         ra_low = ra - 30. - box_size #30 is the how far an obs would drift in 2 hours(used as a max)
         ra_high = ra + box_size
         if ra_low < 0.:
-            ra_new = 360 + ra_low
-            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
-                                                        'minra':ra_new, 'maxra':360.,
-                                                        'mindec':dec_bot,'maxdec':dec_top})
-            temp_obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
-                                                             'minra':0.,'maxra':ra_high,
-                                                             'mindec':dec_bot,'maxdec':dec_top})
-            for row in temp_obsid_list:
-                obsid_list.append(row)
-        elif ra_high > 360:
-            ra_new = ra_high - 360
-            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
-                                                        'minra':ra_low, 'maxra':360.,
-                                                        'mindec':dec_bot,'maxdec':dec_top})
-            temp_obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
-                                                             'minra':0., 'maxra':ra_new,
-                                                             'mindec':dec_bot,'maxdec':dec_top})
-            for row in temp_obsid_list:
-                obsid_list.append(row)
-        else:
-            obsid_list = find_obsids_meta_pages(params={'mode':'VOLTAGE_START',
-                                                        'minra':ra_low, 'maxra':ra_high,
-                                                        'mindec':dec_bot,'maxdec':dec_top})
+            ra_low = 360 + ra_low
+        if ra_high > 360:
+            ra_high = ra_high - 360
+        params.update({'minra':ra_low,  'maxra':ra_high,
+                       'mindec':dec_bot,'maxdec':dec_top})
+    logger.debug("params: {}".format(params))
+    print("params: {}".format(params))
+    obsid_list = find_obsids_meta_pages(params=params)
     return obsid_list
+
 
 def find_obsids_meta_pages(params=None):
     """
     Loops over pages for each page for MWA metadata calls
+
+    Parameters:
+    --------
+    params: dict
+        The dictionary of constraints used to search for suitable observations as explained here:
+        https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Findobservations
+        Default: {'mode':'VOLTAGE_START'}
+
+    Returns:
+    --------
+    obsid_list: list
+        List of observation IDs.
     """
     if params is None:
         params = {'mode':'VOLTAGE_START'}
@@ -131,6 +139,7 @@ def find_obsids_meta_pages(params=None):
         page += 1
 
     return obsid_list
+
 
 def get_obs_array_phase(obsid):
     """
@@ -199,8 +208,8 @@ def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
         The observation ID.
     return_all: bool
         OPTIONAL - If True will also return the full meta data dictionary. Default: False
-    full_meta_data: bool
-        OPTIONAL - The full meta data dictionary from getmeta. If this is not supplied will make the meta data call. Default: False.
+    full_meta_data: dict
+        OPTIONAL - The full meta data dictionary from getmeta. If this is not supplied will make the meta data call.
 
     Returns:
     --------
@@ -226,7 +235,7 @@ def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
         return [obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
 
 
-def getmeta(servicetype='metadata', service='obs', params=None):
+def getmeta(servicetype='metadata', service='obs', params=None, retries=3):
     """
     Function to call a JSON web service and return a dictionary:
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
@@ -246,16 +255,58 @@ def getmeta(servicetype='metadata', service='obs', params=None):
     else:
         data = ''
 
-    try:
-        result = json.load(urllib.request.urlopen(BASEURL + servicetype + '/' + service + '?' + data))
-    except urllib.error.HTTPError as err:
-        logger.error("HTTP error from server: code=%d, response:\n %s" % (err.code, err.read()))
-        return
-    except urllib.error.URLError as err:
-        logger.error("URL or network error: %s" % err.reason)
-        return
+    # Try several times (3 by default)
+    wait_time = 30
+    result = None
+    for x in range(0, retries):
+        err = False
+        try:
+            result = json.load(urllib.request.urlopen(BASEURL + servicetype + '/' + service + '?' + data))
+        except urllib.error.HTTPError as err:
+            logger.error("HTTP error from server: code=%d, response: %s" % (err.code, err.read()))
+            break
+        except urllib.error.URLError as err:
+            logger.error("URL or network error: %s" % err.reason)
+            logger.error("Waiting {} seconds and trying again".format(wait_time))
+            sleep(wait_time)
+            pass
+        else:
+            break
+    else:
+        logger.error("Tried {} times. Exiting.".format(retries))
 
     return result
+
+
+def get_ambient_temperature(obsid, full_meta_data=None):
+    """
+    Queries the metadata to find the ambient temperature of the MWA tiles in K
+
+    Parameters:
+    -----------
+    obsid: int
+        The observation ID.
+    full_meta_data: dict
+        OPTIONAL - The full meta data dictionary from getmeta.
+        If this is not supplied will make the meta data call.
+
+    Output:
+    -------
+    t_0: float
+        The ambient temperature of the MWA tiles in K
+    """
+    if full_meta_data is None:
+        logger.info("Obtaining metadata from http://ws.mwatelescope.org/metadata/ for OBS ID: " + str(obsid))
+        full_meta_data = getmeta(service='obs', params={'obs_id':obsid})
+    ambient_temp_dict = full_meta_data[u'bftemps']
+    logger.debug("ambient_temp_dict: {}".format(ambient_temp_dict))
+    temperature_list_raw = []
+    for tile_key in ambient_temp_dict:
+        temperature_list_raw.append(ambient_temp_dict[tile_key][-1])
+    # Remove Nones
+    temperature_list = [i for i in temperature_list_raw if i]
+    logger.debug("temperature_list: {}".format(temperature_list))
+    return np.mean(temperature_list) + 273.15
 
 
 def get_files(obsid, files_meta_data=None):
@@ -483,3 +534,44 @@ def get_best_cal_obs(obsid):
     cal_info = sorted(cal_info, key=itemgetter(1))
 
     return cal_info
+
+
+def combined_deleted_check(obsid, begin=None, end=None):
+    """
+    Check if the combined files are deleted (or do not exist)
+
+    Parameters
+    ----------
+    obsid: int
+        The MWA observation ID (gps time)
+    begin: int
+        The begin GPS time to check (optional)
+    end:   int
+        The end GPS time to check (optional)
+
+    Returns
+    -------
+    comb_del_check: bool
+        True if all combined files are deleted or if they do not exist
+    """
+    # Work out the data_files metadata call parameters
+    params = {'obs_id':obsid, 'nocache':1}
+    if begin is not None:
+        params['mintime'] = begin
+    if end is not None:
+        params['maxtime'] = end
+
+    files_meta = getmeta(service='data_files', params=params)
+
+    # Loop over files to search for a non deleted file
+    comb_del_check = True
+    for file in files_meta.keys():
+        if 'combined' in file:
+            deleted =         files_meta[file]['deleted']
+            remote_archived = files_meta[file]["remote_archived"]
+            if remote_archived and not deleted:
+                # A combined file exists
+                comb_del_check = False
+                break
+
+    return comb_del_check

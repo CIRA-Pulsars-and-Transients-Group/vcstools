@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_psrcat_ra_dec(pulsar_list=None, max_dm=250., include_dm=False, query=None):
+def get_psrcat_ra_dec(pulsar_list=None, max_dm=5000., include_dm=False, query=None):
     """
     Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
@@ -26,24 +26,32 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=250., include_dm=False, query=Non
 
     #params = ['JNAME', 'RAJ', 'DECJ', 'DM']
     if query is None:
-        query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'DM'], psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
-
+        query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'RAJD', 'DECJD', 'DM'], psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
     pulsar_ra_dec = []
     for i, _ in enumerate(query["PSRJ"]):
         # Only record if under the max_dm
         dm = query["DM"][i]
         if not math.isnan(dm):
+            if math.isnan(query["RAJD"][i]) or math.isnan(query["DECJD"][i]):
+                if query["RAJ"][i] == '' or query["DECJ"][i] == '':
+                    # there is an error error in the database that will skip pulsars with no values
+                    continue
+                # ANTF raj and decj can be glitchy so only use them if the degree values aren't on ATNF
+                raj = query["RAJ"][i]
+                decj = query["DECJ"][i]
+            else:
+                # convert from dec to raj decj
+                raj, decj = deg2sex(query["RAJD"][i], query["DECJD"][i])
+
             if float(dm) < max_dm:
                 if include_dm:
-                    pulsar_ra_dec.append([query["PSRJ"][i], query["RAJ"][i], query["DECJ"][i], dm])
+                    pulsar_ra_dec.append([query["PSRJ"][i], raj, decj, dm])
                 else:
-                    pulsar_ra_dec.append([query["PSRJ"][i], query["RAJ"][i], query["DECJ"][i]])
-
-
+                    pulsar_ra_dec.append([query["PSRJ"][i], raj, decj])
     return pulsar_ra_dec
 
 
-def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False, query=None):
+def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=5000., include_dm=False, query=None):
     """
     Will search different source catalogues and extract all the source names, RAs, Decs and, if requested, DMs
 

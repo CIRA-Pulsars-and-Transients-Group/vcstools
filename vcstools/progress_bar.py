@@ -5,6 +5,7 @@ def progress_bar(it, prefix="", size=60, file=sys.stdout):
     I stole this code from here: https://stackoverflow.com/questions/3160699/python-progress-bar
     It's used like this: for i in progressbar(range(15), "Computing: ", 40):
     """
+    it = list(it)
     count = len(it)
     def show(j):
         x = int(size*j/count)

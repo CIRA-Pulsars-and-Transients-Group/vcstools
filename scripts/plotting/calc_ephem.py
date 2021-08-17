@@ -18,6 +18,7 @@ from astropy.time import Time, TimezoneInfo
 from datetime import datetime
 import logging
 
+from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -236,13 +237,8 @@ if __name__ == "__main__":
             logger.error("ImportError: {0}".format(ie))
             sys.exit(0)
 
-    logger.setLevel(logging.DEBUG)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if (args.ra is None) or (args.dec is None) or (args.utcdate is None):
         logger.error("You must specify a RA, Dec and UTC date to plot the ephemeris")
