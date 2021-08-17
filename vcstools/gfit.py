@@ -247,8 +247,8 @@ class gfit:
         self._fit_dict["Weq_e"] = self._Weq_e
         self._fit_dict["maxima"] = self._maxima
         self._fit_dict["maxima_e"] = self._maxima_e
-        self._fit_dict["maxima"] = self._maxima
-        self._fit_dict["maxima_e"] = self._maxima_e
+        self._fit_dict["minima"] = self._minima
+        self._fit_dict["minima_e"] = self._minima_e
         self._fit_dict["redchisq"] = self._best_chi
         self._fit_dict["n_components"] = self._n_gaussians
         self._fit_dict["fit_params"] = self._popt
