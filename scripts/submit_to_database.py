@@ -383,11 +383,14 @@ def multi_upload_files(obsid, pulsar, files_dict, metadata=None, coh=True):
             upload_file_to_db(obsid, pulsar, filename, int(filetype), metadata=metadata, coh=coh)
 
 
-def launch_pabeam_sim(bestprof_data,
+def launch_pabeam_sim(obsid, pointing,
+                      begin, duration,
+                      source_name="noname",
                       metafits_file=None,
                       phi_res=0.05, theta_res=0.05,
                       efficiency=1,
-                      nodes=3):
+                      nodes=3,
+                      vcstools_version='master'):
     """
     Submit a job to run the pabeam code to estimate the system equivelent
     flux density and returns a job id so a dependent job to resume the
@@ -396,9 +399,6 @@ def launch_pabeam_sim(bestprof_data,
     # Load computer dependant config file
     comp_config = load_config_file()
 
-    # Unpack bestprof data list
-    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
-
     # Parse defaults
     if metafits_file is None:
         metafits_file  = "{0}{1}/{1}_metafits_ppds.fits".format(comp_config['base_data_dir'], obsid)
@@ -406,7 +406,8 @@ def launch_pabeam_sim(bestprof_data,
     # Set up pabeam command
     command = 'srun --export=all -u -n {} pabeam.py'.format(nodes*24)
     command += ' -o {}'.format(obsid)
-    command += ' -t {}'.format(t_int)
+    command += ' -b {}'.format(begin)
+    command += ' -d {}'.format(duration)
     command += ' -e {}'.format(efficiency)
     command += ' --metafits {}'.format(metafits_file)
     command += ' -p {}'.format(pointing)
@@ -414,18 +415,18 @@ def launch_pabeam_sim(bestprof_data,
 
 
     # Set up job
-    batch_file_name = 'pabeam_{}_{}_{}'.format(obsid, prof_psr, pointing)
+    batch_file_name = 'pabeam_{}_{}_{}'.format(obsid, source_name, pointing)
     batch_dir = "{}{}/batch".format(comp_config['base_data_dir'], obsid)
     mdir(batch_dir, "Batch", gid=comp_config['gid'])
     job_id = submit_slurm(batch_file_name, [command],
                           batch_dir=batch_dir,
                           slurm_kwargs={"time": datetime.timedelta(seconds=10*60*60),
                                         "nodes":nodes},
-                          module_list=['hyperbeam-python', 'mwa_pb/hyperbeam'],
+                          module_list=['hyperbeam-python'],
                           queue='cpuq',
                           cpu_threads=24,
                           mem=12288,
-                          vcstools_version='nswainston')#TODO remove
+                          vcstools_version=vcstools_version)
     return job_id
 
 def read_sefd_file(sefd_file):
@@ -444,7 +445,8 @@ def flux_cal_and_submit(bestprof_data,
                         pul_ra, pul_dec, coh, auth,
                         common_metadata=None, full_meta_data=None,
                         pulsar=None, trcvr=data_load.TRCVR_FILE,
-                        simple_sefd=False, sefd_file=None):
+                        simple_sefd=False, sefd_file=None,
+                        vcstools_version='master'):
     """
     metadata: list from the function get_obs_metadata
     bestprof_data: list from the function get_from_bestprof
@@ -470,7 +472,7 @@ def flux_cal_and_submit(bestprof_data,
                                                       beg=beg, end=(t_int + beg - 1))
     else:
         if sefd_file is None:
-            launch_pabeam_sim(bestprof_data)
+            launch_pabeam_sim(obsid, pointing, beg, t_int, soruce_name=prof_psr, vcstools_version=vcstools_version)
             sys.exit(0)
         else:
             gain, t_ant = read_sefd_file(sefd_file)
@@ -674,6 +676,7 @@ if __name__ == "__main__":
             help='The output file of the pabeam.py code to be used for accurate flux density calculations.')
     parser.add_argument('--simple_sefd', action='store_true',
             help="Just use the tile beam to estimate the SEFD (T_sys and gain) instead of submiting a job to do a full tied-array beam simulation. Default False")
+    parser.add_argument("--vcstools_version", type=str, default="master", help="VCSTools version to load in jobs (i.e. on the queues) ")
     parser.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO",
             help="Logger verbosity level. Default: INFO")
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
@@ -776,7 +779,8 @@ if __name__ == "__main__":
                                        pul_ra, pul_dec, coh, auth,
                                        common_metadata=common_metadata, full_meta_data=full_meta_data,
                                        pulsar=args.pulsar, trcvr=args.trcvr,
-                                       simple_sefd=args.simple_sefd, sefd_file=args.sefd_file)
+                                       simple_sefd=args.simple_sefd, sefd_file=args.sefd_file,
+                                       vcstools_version=args.vcstools_version)
 
     if args.cal_dir_to_tar:
         if not args.srclist:

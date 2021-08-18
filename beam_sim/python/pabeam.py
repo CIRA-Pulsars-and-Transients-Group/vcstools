@@ -355,12 +355,18 @@ if __name__ == "__main__":
                         help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5")
     parser.add_argument("--delays", type=int, nargs='+', default=[0] * 16,
                         help="The tile delays")
-    parser.add_argument("-p", "--target", type=str,
-                        help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.ss_dd:mm:ss.ss")
-    parser.add_argument("-t", "--time", type=float, nargs='+',action='store', default=None,
-                        help="""The GPS time desired for beam evaluation. This will override whatever is read from the metafits.""")
     parser.add_argument("-f", "--freq", type=float, nargs='+', default=None,
                         help="The centre observing frequency for the observation (in Hz!)")
+
+    parser.add_argument("-p", "--target", type=str,
+                        help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.ss_dd:mm:ss.ss")
+    parser.add_argument("-b", "--begin", type=int,
+                        help="""The GPS time to begin the simulation from. This will override whatever is read from the metafits.""")
+    parser.add_argument("-d", "--duration", type=int,
+                        help="""The duration of the simulation in seconds from the begin time. This will override whatever is read from the metafits.""")
+    parser.add_argument("-s", "--step", type=int, default=1800,
+                        help="""The step between simulations in seconds. Default: 1800 (30 mins).""")
+
     parser.add_argument("-e", "--efficiency", type=float, default=1,
                         help="Frequency and pointing dependent array efficiency")
     parser.add_argument("--grid_res", type=float, action='store', nargs=2, metavar=("theta_res","phi_res"), default=(0.1,0.1),
@@ -400,10 +406,21 @@ if __name__ == "__main__":
 
         # same for obs time, master reads and then distributes
         logger.info("getting times")
-        if args.time is None:
-            time = Time(get_obstime_duration(args.obsid, args.metafits)[0], format='gps', fdir=args.out_dir)
-        else:
-            time = Time(args.time, format='gps')
+        obs_begin, obs_duration = get_obstime_duration(args.obsid, args.metafits)
+        if not args.begin:
+            # Use observation begin time from metafits
+            args.begin = obs_begin
+        if not args.duration:
+            # Use observation duration time from metafits
+            args.duration = obs_duration
+        sim_end = args.begin + args.duration -1
+        # Make a range of times to test
+        times_range = np.arange(args.begin, sim_end, args.step)
+        # Centre the range
+        times_range = times_range + (sim_end - times_range[-1]) // 2
+        logger.info("running for {} time steps: {}".format(len(times_range), times_range))
+        # Convert to astropy format
+        time = Time(times_range, format='gps')
 
         if args.freq is None:
             # By default use the all coarse channel centre frequencies
