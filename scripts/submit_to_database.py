@@ -387,6 +387,8 @@ def launch_pabeam_sim(obsid, pointing,
                       begin, duration,
                       source_name="noname",
                       metafits_file=None,
+                      flagged_tiles=None,
+                      delays=None,
                       phi_res=0.05, theta_res=0.05,
                       efficiency=1,
                       nodes=3,
@@ -403,6 +405,12 @@ def launch_pabeam_sim(obsid, pointing,
     if metafits_file is None:
         metafits_file  = "{0}{1}/{1}_metafits_ppds.fits".format(comp_config['base_data_dir'], obsid)
 
+    # Get delays if none given
+    if delays is None:
+        delays = get_common_obs_metadata(obsid)[4][0]
+        print(delays)
+        print(' '.join(np.array(delays, dtype=str)))
+
     # Set up pabeam command
     command = 'srun --export=all -u -n {} pabeam.py'.format(nodes*24)
     command += ' -o {}'.format(obsid)
@@ -412,6 +420,9 @@ def launch_pabeam_sim(obsid, pointing,
     command += ' --metafits {}'.format(metafits_file)
     command += ' -p {}'.format(pointing)
     command += ' --grid_res {} {}'.format(theta_res, phi_res)
+    command += ' --delays {}'.format(' '.join(np.array(delays, dtype=str)))
+    if flagged_tiles:
+        command += ' --flagged_tiles {}'.format(' '.join(flagged_tiles))
 
 
     # Set up job
@@ -441,17 +452,21 @@ def read_sefd_file(sefd_file):
     
 
 
-def flux_cal_and_submit(bestprof_data,
+def flux_cal_and_submit(bestprof_data, calid,
                         pul_ra, pul_dec, coh, auth,
                         common_metadata=None, full_meta_data=None,
                         pulsar=None, trcvr=data_load.TRCVR_FILE,
                         simple_sefd=False, sefd_file=None,
+                        flagged_tiles=None,
                         vcstools_version='master'):
     """
     metadata: list from the function get_obs_metadata
     bestprof_data: list from the function get_from_bestprof
     trcvr: the file location of antena temperatures
     """
+    # Load computer dependant config file
+    comp_config = load_config_file()
+
     #unpack the bestprof_data
     obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
 
@@ -459,6 +474,15 @@ def flux_cal_and_submit(bestprof_data,
     if common_metadata is None:
         common_metadata, full_meta_data = get_common_obs_metadata(obsid, return_all=True, full_meta_data=full_meta_data)
     obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels = common_metadata
+
+    # Work out flagged tiles from calbration directory
+    if not flagged_tiles:
+        flagged_file = os.path.join(comp_config['base_data_dir'], obsid, "cal", calid, "rts", "flagged_tiles.txt")
+        with open(flagged_file, "r") as ftf:
+            flagged_tiles = []
+            reader = csv.reader(ftf)
+            for row in reader:
+                flagged_tiles.append(row)
 
     if not pulsar:
         pulsar = prof_psr
@@ -472,7 +496,11 @@ def flux_cal_and_submit(bestprof_data,
                                                       beg=beg, end=(t_int + beg - 1))
     else:
         if sefd_file is None:
-            launch_pabeam_sim(obsid, pointing, beg, t_int, soruce_name=prof_psr, vcstools_version=vcstools_version)
+            launch_pabeam_sim(obsid, pointing, beg, t_int,
+                              soruce_name=prof_psr,
+                              vcstools_version=vcstools_version,
+                              flagged_tiles=flagged_tiles,
+                              delays=xdelays)
             sys.exit(0)
         else:
             gain, t_ant = read_sefd_file(sefd_file)
@@ -576,12 +604,12 @@ def flux_cal_and_submit(bestprof_data,
         cal_list = client.calibrator_list(web_address, auth)
         cal_already_created = False
         for c in cal_list:
-            if ( c[u'observationid'] == int(args.cal_id) ) and ( c[u'caltype'] == calibrator_type ):
+            if ( c[u'observationid'] == int(cal_id) ) and ( c[u'caltype'] == calibrator_type ):
                 cal_already_created = True
                 cal_db_id = c[u'id']
         if not cal_already_created:
             cal_db_id = int(client.calibrator_create(web_address, auth,
-                                                  observationid = str(args.cal_id),
+                                                  observationid = str(cal_id),
                                                   caltype = calibrator_type)[u'id'])
     else:
         cal_db_id = None
@@ -775,7 +803,8 @@ if __name__ == "__main__":
 
     if args.bestprof or args.ascii:
         _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[args.pulsar])[0]
-        subbands = flux_cal_and_submit(bestprof_data,
+
+        subbands = flux_cal_and_submit(bestprof_data, args.cal_id,
                                        pul_ra, pul_dec, coh, auth,
                                        common_metadata=common_metadata, full_meta_data=full_meta_data,
                                        pulsar=args.pulsar, trcvr=args.trcvr,
