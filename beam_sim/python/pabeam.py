@@ -29,6 +29,9 @@ import argparse
 import logging
 import time as timing
 from itertools import chain
+import requests
+import random
+
 
 #from mwapy import ephem_utils,metadata
 from vcstools.metadb_utils import getmeta, get_common_obs_metadata
@@ -176,6 +179,7 @@ def createArrayFactor(za, az, data):
     out_dir = data['out_dir']
     write = data['write']
     coplanar = data['coplanar']
+    plot_jobid = data['plot_jobid']
 
     # work out core depent part of data to process
     nfreq = len(data['freqs'])
@@ -195,7 +199,7 @@ def createArrayFactor(za, az, data):
     logger.debug("rank {:3d} Wavenumbers shapes: {} {} {}".format(rank, kx.shape, ky.shape, kz.shape))
 
     # phase of each sky position for each tile
-    logger.info( "rank {:3d} phase of each sky position for each tile".format(rank))
+    logger.info( "rank {:3d} Calculating phase of each sky position for each tile".format(rank))
     #ph_tile = []
     #for x, y, z in zip(xpos, ypos, zpos):
         #ph = kx * x + ky * y + kz * z
@@ -206,8 +210,15 @@ def createArrayFactor(za, az, data):
         ph_tile = list(chain(np.add(np.add(np.multiply(kx, x), np.multiply(ky, y)), np.multiply(kz, z)) for x, y, z in zip(xpos, ypos, zpos)))
     logger.debug("ph_tile.shape[0] : {}".format(ph_tile[0].shape))
 
+    requests.get('https://ws.mwatelescope.org/progress/update',
+                 params={'jobid':plot_jobid,
+                         'workid':rank,
+                         'current':2,
+                         'total':5,
+                         'desc':'WaveN_phase'})
+
     # calculate the tile beam at the given Az,ZA pixel
-    logger.info( "rank {:3d} calculating tile beam".format(rank))
+    logger.info( "rank {:3d} Calculating tile beam".format(rank))
     if beam_model == 'hyperbeam':
         # This method is no longer needed as mwa_pb uses hyperbeam
         jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
@@ -233,7 +244,14 @@ def createArrayFactor(za, az, data):
     #logger.info("rank {:3d} Combining tile pattern".format(rank))
     tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0)
     tile_pattern = tile_pattern.flatten()
-    #logger.debug("tile_pattern[0] {}".format(tile_pattern[0]))
+    logger.debug("max(tile_pattern) {}".format(max(tile_pattern)))
+
+    requests.get('https://ws.mwatelescope.org/progress/update',
+                 params={'jobid':plot_jobid,
+                         'workid':rank,
+                         'current':3,
+                         'total':5,
+                         'desc':'tilebeam'})
 
     omega_A_times = []
     eff_area_times = []
@@ -255,7 +273,7 @@ def createArrayFactor(za, az, data):
             ph_target.append(target_kx * x + target_ky * y + target_kz * z)
 
         # determine the interference pattern seen for each tile
-        logger.info( "rank {:3d} calculating array_factor".format(rank))
+        logger.info( "rank {:3d} Calculating array_factor".format(rank))
         #array_factor = np.zeros(za.shape, dtype=np.complex_)
         #for i, _ in enumerate(xpos):
             #array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
@@ -263,6 +281,13 @@ def createArrayFactor(za, az, data):
         array_factor = np.sum(array_factor_tiles, axis=0)
         logger.debug("rank {:3d} array_factor[0] {}".format(rank, array_factor[0]))
         logger.debug("rank {:3d} array_factor shapes: {}".format(rank, array_factor.shape))
+
+        requests.get('https://ws.mwatelescope.org/progress/update',
+                    params={'jobid':plot_jobid,
+                            'workid':rank,
+                            'current':4,
+                            'total':5,
+                            'desc':'array_factor'})
 
         # normalise to unity at pointing position
         array_factor /= len(xpos)
@@ -284,7 +309,7 @@ def createArrayFactor(za, az, data):
         omega_A_array = np.multiply(np.multiply(np.multiply(np.sin(za), array_factor_power), np.radians(theta_res)), np.radians(phi_res))
         logger.debug("rank {:3d} omega_A_array shapes: {}".format(rank, omega_A_array.shape))
         omega_A = np.sum(omega_A_array)
-        logger.info( "rank {:3d} freq {:.2f}MHz beam_area: {}".format(rank, obsfreq/1e6, omega_A))
+        logger.debug( "rank {:3d} freq {:.2f}MHz beam_area: {}".format(rank, obsfreq/1e6, omega_A))
         omega_A_times.append(omega_A)
         #logger.debug("omega_A[1] vals: za[1] {}, array_factor_power[1] {}, theta_res {}, phi_res {}".format(za[1], array_factor_power[1], theta_res, phi_res))
         #logger.debug("omega_A[1] {}".format(omega_A_array[1]))
@@ -321,7 +346,7 @@ def createArrayFactor(za, az, data):
                     f.write("{0:.5f}\t{1:.5f}\t{2}\n".format(zad, azd, pap))
 
         else:
-            logger.warning("worker {0} not writing".format(rank))
+            logger.info("worker {0} done and not writing".format(rank))
 
     # return lists of results for each time step
     return [omega_A_times, eff_area_times, gain_times, t_ant_times]
@@ -454,6 +479,16 @@ if __name__ == "__main__":
 
         npositions = [len(chunk) for chunk in azv_chunks]
 
+        # Create a progress plot
+        plot_jobid = random.randint(0, 1000) # random job id
+        requests.get('https://ws.mwatelescope.org/progress/create',
+                     params={'jobid':plot_jobid,
+                             'desc':'pabeam simultation',
+                             'maxage':43200}) # 12 hours
+        logger.info('plot_jobid: {}'.format(plot_jobid))
+        logger.info('View the plot at: https://ws.mwatelescope.org/progress/show?jobid={}'.format(plot_jobid))
+
+
         # create the object that contains all the data from master
         data = {'obsid' : args.obsid,
                 'ra':ra,
@@ -475,7 +510,8 @@ if __name__ == "__main__":
                 'write':args.write,
                 'nchunks':nchunks,
                 'coplanar':args.coplanar,
-                'npositions':npositions
+                'npositions':npositions,
+                'plot_jobid':plot_jobid
                 }
         logger.debug("data: {}".format(data))
 
@@ -532,8 +568,24 @@ if __name__ == "__main__":
     # wait for all processes to have recieved the data
     comm.barrier()
 
-    # create array factor for given ZA band and write to file
+    # Show progress began
+    requests.get('https://ws.mwatelescope.org/progress/update',
+                 params={'jobid':data['plot_jobid'],
+                         'workid':rank,
+                         'current':1,
+                         'total':5,
+                         'desc':'start'})
+
+    # Perform cacluation
     results_array = createArrayFactor(zav_chunk, azv_chunk, data)
+
+    requests.get('https://ws.mwatelescope.org/progress/update',
+                 params={'jobid':data['plot_jobid'],
+                         'workid':rank,
+                         'current':5,
+                         'total':5,
+                         'desc':'Done'})
+
     # collect results for the beam area calculation
     if rank != 0:
         comm.send(results_array, dest=0)
@@ -585,6 +637,7 @@ if __name__ == "__main__":
         logger.info("Frequency            : {0} MHz".format(args.freq/1e6))
         logger.info("Radiation efficiency : {0}".format(args.efficiency))
         logger.info("Flagged tiles        : {0}".format(" ".join(flags)))
+        logger.info("Delays               : {0}".format(' '.join(np.array(delays, dtype=str))))
         logger.info("------------------------------------------")
         logger.info("** Simulation resolution **")
         logger.info("Theta (ZA) resolution    [deg] : {0}".format(tres))
@@ -618,6 +671,7 @@ if __name__ == "__main__":
             f.write("Frequency            : {0} MHz\n".format(args.freq/1e6))
             f.write("Radiation efficiency : {0}\n".format(args.efficiency))
             f.write("Flagged tiles        : {0}\n".format(" ".join(flags)))
+            f.write("Delays               : {0}".format(' '.join(np.array(delays, dtype=str))))
             f.write("\n")
             f.write("** Simulation resolution **\n")
             f.write("Theta (ZA) resolution    [deg] : {0}\n".format(tres))
