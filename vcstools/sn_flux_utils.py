@@ -688,7 +688,7 @@ def find_pulsar_w50(pulsar, query=None):
     return W_50, W_50_err
 
 
-def find_t(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_power=0.3, query=None):
+def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_power=0.3, query=None):
     """
     Find the total integration time of a pulsar in the primary beam of an obsid
 
