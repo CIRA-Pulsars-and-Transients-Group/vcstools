@@ -415,20 +415,21 @@ int main(int argc, char **argv)
     int ch, pol;
 
     // Set up timing for each section
-    long read_time[nfiles], delay_time[nfiles], calc_time[nfiles], write_time[nfiles][npointing];
+    double read_time[nfiles], delay_time[nfiles], calc_time[nfiles], write_time[nfiles][npointing];
     int file_no;
 
+    double start;
     for (file_no = 0; file_no < nfiles; file_no++)
     {
         // Read in data from next file
-        clock_t start = clock();
+        start = NOW;
         fprintf( stderr, "[%f] [%d/%d] Reading in data from %s \n", NOW-begintime,
                 file_no+1, nfiles, filenames[file_no]);
         read_data( filenames[file_no], data, bytes_per_file  );
-        read_time[file_no] = clock() - start;
+        read_time[file_no] = NOW - start;
 
         // Get the next second's worth of phases / jones matrices, if needed
-        start = clock();
+        start = NOW;
         fprintf( stderr, "[%f] [%d/%d] Calculating delays\n", NOW-begintime,
                                 file_no+1, nfiles );
         get_delays(
@@ -445,12 +446,12 @@ int main(int argc, char **argv)
                 &mi,                    // Struct containing info from metafits file
                 complex_weights_array,  // complex weights array (answer will be output here)
                 invJi );                // invJi array           (answer will be output here)
-        delay_time[file_no] = clock() - start;
+        delay_time[file_no] = NOW - start;
 
 
         fprintf( stderr, "[%f] [%d/%d] Calculating beam\n", NOW-begintime,
                                 file_no+1, nfiles);
-        start = clock();
+        start = NOW;
 
         if (!opts.out_bf) // don't beamform, but only procoess one ant/pol combination
         {
@@ -487,13 +488,13 @@ int main(int argc, char **argv)
                                opts.sample_rate, nchan, npol, vf->sizeof_buffer,
                                &gi, data_buffer_vdif );
         }
-        calc_time[file_no] = clock() - start;
+        calc_time[file_no] = NOW - start;
 
 
         // Write out for each pointing
         for ( p = 0; p < npointing; p++)
         {
-            start = clock();
+            start = NOW;
             fprintf( stderr, "[%f] [%d/%d] [%d/%d] Writing data to file(s)\n",
                     NOW-begintime, file_no+1, nfiles, p+1, npointing );
 
@@ -506,35 +507,35 @@ int main(int argc, char **argv)
             if (opts.out_vdif)
                 vdif_write_second( &vf[p], &vhdr,
                                    data_buffer_vdif + p * vf->sizeof_buffer );
-            write_time[file_no][p] = clock() - start;
+            write_time[file_no][p] = NOW - start;
         }
     }
 
     // Calculate total processing times
-    float read_sum = 0, delay_sum = 0, calc_sum = 0, write_sum = 0;
+    double read_sum = 0, delay_sum = 0, calc_sum = 0, write_sum = 0;
     for (file_no = 0; file_no < nfiles; file_no++)
     {
-        read_sum  += (float) read_time[file_no];
-        delay_sum += (float) delay_time[file_no];
-        calc_sum  += (float) calc_time[file_no];
+        read_sum  += read_time[file_no];
+        delay_sum += delay_time[file_no];
+        calc_sum  += calc_time[file_no];
         for ( p = 0; p < npointing; p++)
-            write_sum += (float) write_time[file_no][p];
+            write_sum += write_time[file_no][p];
     }
-    float read_mean, delay_mean, calc_mean, write_mean;
+    double read_mean, delay_mean, calc_mean, write_mean;
     read_mean  = read_sum  / nfiles;
     delay_mean = delay_sum / nfiles / npointing;
     calc_mean  = calc_sum  / nfiles / npointing;
     write_mean = write_sum / nfiles / npointing;
 
     // Calculate the standard deviations
-    float read_std = 0, delay_std = 0, calc_std = 0, write_std = 0;
+    double read_std = 0, delay_std = 0, calc_std = 0, write_std = 0;
     for (file_no = 0; file_no < nfiles; file_no++)
     {
-        read_std  += pow((float)read_time[file_no]  - read_mean,  2);
-        delay_std += pow((float)delay_time[file_no] - delay_mean / npointing, 2);
-        calc_std  += pow((float)calc_time[file_no]  - calc_mean / npointing,  2);
+        read_std  += pow(read_time[file_no]  - read_mean,  2);
+        delay_std += pow(delay_time[file_no] - delay_mean / npointing, 2);
+        calc_std  += pow(calc_time[file_no]  - calc_mean / npointing,  2);
         for ( p = 0; p < npointing; p++)
-            write_std += pow((float)write_time[file_no][p] - write_mean / npointing, 2);
+            write_std += pow(write_time[file_no][p] - write_mean / npointing, 2);
     }
     read_std  = sqrt( read_std  / nfiles );
     delay_std = sqrt( delay_std / nfiles / npointing );
@@ -544,21 +545,21 @@ int main(int argc, char **argv)
 
     fprintf( stderr, "[%f]  **FINISHED BEAMFORMING**\n", NOW-begintime);
     fprintf( stderr, "[%f]  Total read  processing time: %9.3f s\n",
-                     NOW-begintime, read_sum / CLOCKS_PER_SEC);
+                     NOW-begintime, read_sum);
     fprintf( stderr, "[%f]  Mean  read  processing time: %9.3f +\\- %8.3f s\n",
-                     NOW-begintime, read_mean / CLOCKS_PER_SEC, read_std / CLOCKS_PER_SEC);
+                     NOW-begintime, read_mean, read_std);
     fprintf( stderr, "[%f]  Total delay processing time: %9.3f s\n",
-                     NOW-begintime, delay_sum / CLOCKS_PER_SEC);
+                     NOW-begintime, delay_sum);
     fprintf( stderr, "[%f]  Mean  delay processing time: %9.3f +\\- %8.3f s\n",
-                     NOW-begintime, delay_mean / CLOCKS_PER_SEC, delay_std / CLOCKS_PER_SEC);
+                     NOW-begintime, delay_mean, delay_std);
     fprintf( stderr, "[%f]  Total calc  processing time: %9.3f s\n",
-                     NOW-begintime, calc_sum / CLOCKS_PER_SEC);
+                     NOW-begintime, calc_sum);
     fprintf( stderr, "[%f]  Mean  calc  processing time: %9.3f +\\- %8.3f s\n",
-                     NOW-begintime, calc_mean / CLOCKS_PER_SEC, calc_std / CLOCKS_PER_SEC);
+                     NOW-begintime, calc_mean, calc_std);
     fprintf( stderr, "[%f]  Total write processing time: %9.3f s\n",
-                     NOW-begintime, write_sum  * npointing / CLOCKS_PER_SEC);
+                     NOW-begintime, write_sum  * npointing);
     fprintf( stderr, "[%f]  Mean  write processing time: %9.3f +\\- %8.3f s\n",
-                     NOW-begintime, write_mean / CLOCKS_PER_SEC, write_std / CLOCKS_PER_SEC);
+                     NOW-begintime, write_mean, write_std);
 
 
     fprintf( stderr, "[%f]  Starting clean-up\n", NOW-begintime);
