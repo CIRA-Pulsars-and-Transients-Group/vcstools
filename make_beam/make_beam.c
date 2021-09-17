@@ -557,7 +557,7 @@ int main(int argc, char **argv)
     fprintf( stderr, "[%f]  Mean  calc  processing time: %9.3f +\\- %8.3f s\n",
                      NOW-begintime, calc_mean, calc_std);
     fprintf( stderr, "[%f]  Total write processing time: %9.3f s\n",
-                     NOW-begintime, write_sum  * npointing);
+                     NOW-begintime, write_sum);
     fprintf( stderr, "[%f]  Mean  write processing time: %9.3f +\\- %8.3f s\n",
                      NOW-begintime, write_mean, write_std);
 
