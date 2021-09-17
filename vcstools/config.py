@@ -80,8 +80,8 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'ssd_dir' : '$JOBFS',
                  'gid' : 10169} # oz125
 
-ARM_CONFIG =   {'base_data_dir' : '/ibo9000/Pulsar/vcs/',
-                'base_product_dir' : '/ibo9000/Pulsar/vcs/',
+ARM_CONFIG =   {'base_data_dir' : '/o9000/Pulsar/vcs/',
+                'base_product_dir' : '/o9000/Pulsar/vcs/',
                 'group_account' : {'cpuq':  '',
                                    'gpuq':  '',
                                    'copyq': '',
