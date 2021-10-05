@@ -8,18 +8,12 @@ Author: Bradley Meyers
 Date: 2016-12-8
 """
 
-
-
 # numerical and maths modules
 import numpy as np
 from astropy.time import Time
-from astropy.io import fits
 import astropy.units as u
 from astropy.constants import c, k_B
 # use updated astropy ephemerides
-
-import gc
-gc.enable()
 
 #utility and processing modules
 import os
@@ -28,10 +22,10 @@ from mpi4py import MPI
 import argparse
 import logging
 import time as timing
-from itertools import chain
 import requests
 import random
-
+import gc
+gc.enable()
 
 #from mwapy import ephem_utils,metadata
 from vcstools.metadb_utils import getmeta, get_common_obs_metadata
@@ -39,107 +33,13 @@ from vcstools.pointing_utils import getTargetAZZA
 from vcstools.general_utils import setup_logger
 from mwa_pb import primary_beam as pb
 from mwa_pb import config
-from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
 import mwa_hyperbeam
 beam = mwa_hyperbeam.FEEBeam(config.h5file)
+from vcstools.beam_sim import getTileLocations, get_obstime_duration, partial_convolve_sky_map,\
+                              calcWaveNumbers, calcSkyPhase, calcArrayFactor
 
 logger = logging.getLogger(__name__)
 
-def getTileLocations(obsid, flags=[], metafits=None):
-    """
-    Function grab the MWA tile locations for any given observation ID. Downloads the relevant metafits file from the database, saves it as <obdID>_metafits_ppds.fits.
-
-    Input:
-      obsid - the GPS observation ID
-      flags - RTS tile flags (i.e. the first entry in the metafits correspond to "tile 0", irrespective of what the antenna name is)
-
-    Return:
-      a list of lists containing the following:
-        list[0] = a list of tile positions East of the array centre
-        list[1] = a list of tile positions North of the array centre
-        list[2] = a list of tile heights about sea-level
-    """
-
-    f = fits.open(metafits)
-
-    east = f[1].data['East'][::2]
-    north = f[1].data['North'][::2]
-    height = f[1].data['Height'][::2] # height above sea-level
-
-    # MWA array centre height above sea-level
-    mwacentre_h = 377.827
-    height = height - mwacentre_h
-
-    # flag the tiles from the x,y,z positions
-    east = np.delete(east,flags)
-    north = np.delete(north,flags)
-    height = np.delete(height,flags)
-
-    return east, north, height
-
-
-def get_obstime_duration(obsid, metafits):
-    """
-    Funciton to grab the recorded start-time and duration of the observation
-
-    Input:
-      obsid - the GPS observation ID
-
-    Return:
-      a list containing the folloing two items (in order):
-        list[0] = observation starting time in UTC
-        list[1] = observation duration in seconds
-    """
-
-    # metafits file will already have been downloaded
-    f = fits.open(metafits)
-
-    return [f[0].header['DATE-OBS'], f[0].header['EXPOSURE']]
-
-
-
-def calcWaveNumbers(wl, p, t):
-    """
-    Function to calculate the 3D wavenumbers for a given wavelength and az/za grid.
-
-    Input:
-      wl - central wavelength for the observation
-      p - azimuth/phi (either a scalar or an array)
-      t - zenith angle/theta (either a scalar or an array)
-
-    Return:
-      [kx, ky, kz] - the 3D wavenumbers
-    """
-    # the standard equations are:
-    #   a = 2 * pi / lambda
-    #   kx = a * sin(theta) * cos(phi)
-    #   ky = a * sin(theta) * sin(phi)
-    #   kz = a * cos(theta)
-    # this is assuming that theta,phi are in the convention from Sutinjo et al. 2015
-    #   i.e. phi = pi/2 - az
-    kx = (2*np.pi/wl) * np.multiply(np.sin(t), np.cos(p))
-    ky = (2*np.pi/wl) * np.multiply(np.sin(t), np.sin(p))
-    kz = (2*np.pi/wl) * np.cos(t)
-
-    return [kx,ky,kz]
-
-
-def convolve_sky_map(az_grid, za_grid, phased_array_pattern, freq, time):
-    # Get Haslam and interpolate onto grid
-    # taken from https://github.com/MWATelescope/mwa_pb/blob/master/mwa_pb/primarybeammap_tant.py
-    # then edited to include pixel size
-    my_map = get_Haslam(freq)
-    #mask = numpy.isnan(za_grid)
-    #za_grid[numpy.isnan(za_grid)] = 90.0  # Replace nans as they break the interpolation
-
-    #Supress print statements of the primary beam model functions
-    sys.stdout = open(os.devnull, 'w')
-    sky_grid = map_sky(my_map['skymap'], my_map['RA'], my_map['dec'], time, az_grid, za_grid)
-    sys.stdout = sys.__stdout__
-
-    t_ant = np.sum(phased_array_pattern * sky_grid * np.sin(za_grid)) / \
-            np.sum(phased_array_pattern * np.sin(za_grid))
-    return t_ant
 
 def createArrayFactor(za, az, data):
     """
@@ -200,15 +100,7 @@ def createArrayFactor(za, az, data):
 
     # phase of each sky position for each tile
     logger.info( "rank {:3d} Calculating phase of each sky position for each tile".format(rank))
-    #ph_tile = []
-    #for x, y, z in zip(xpos, ypos, zpos):
-        #ph = kx * x + ky * y + kz * z
-    logger.debug("np.multiply(np.tile(kx, (len(xpos), 1))).shape : {}".format(np.tile(kx, (len(xpos), 1)).shape))
-    if coplanar:
-        ph_tile = list(chain(np.add(np.multiply(kx, x), np.multiply(ky, y)) for x, y in zip(xpos, ypos)))
-    else:
-        ph_tile = list(chain(np.add(np.add(np.multiply(kx, x), np.multiply(ky, y)), np.multiply(kz, z)) for x, y, z in zip(xpos, ypos, zpos)))
-    logger.debug("ph_tile.shape[0] : {}".format(ph_tile[0].shape))
+    ph_tile = calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=coplanar)
 
     requests.get('https://ws.mwatelescope.org/progress/update',
                  params={'jobid':plot_jobid,
@@ -254,9 +146,8 @@ def createArrayFactor(za, az, data):
                          'desc':'tilebeam'})
 
     omega_A_times = []
-    eff_area_times = []
-    gain_times = []
-    t_ant_times = []
+    sum_B_T_times = []
+    sum_B_times   = []
     for time in times:
         # set the base output file name (will be editted based on the worker rank)
         oname = "{0}/{1}_{2}_{3:.2f}MHz_tres{4}_pres{5}_{6}_{7}.dat".format(out_dir, obsid, time, obsfreq / 1e6, theta_res, phi_res, ra, dec)
@@ -268,19 +159,18 @@ def createArrayFactor(za, az, data):
         target_kx, target_ky, target_kz = calcWaveNumbers(obswl, (np.pi / 2) - srcAz, srcZA)
 
         # Get phase of target for each tile
-        ph_target = []
-        for x, y, z in zip(xpos, ypos, zpos):
-            ph_target.append(target_kx * x + target_ky * y + target_kz * z)
+        # phase of each sky position for each tile
+        logger.info( "rank {:3d} Calculating phase of each sky position for the target at time {}".format(rank, time))
+        ph_target = calcSkyPhase(xpos, ypos, zpos, target_kx, target_ky, target_kz)
 
         # determine the interference pattern seen for each tile
         logger.info( "rank {:3d} Calculating array_factor".format(rank))
-        #array_factor = np.zeros(za.shape, dtype=np.complex_)
-        #for i, _ in enumerate(xpos):
-            #array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
-        array_factor_tiles = list(chain(np.cos(ph_tile[i] - ph_target[i]) + 1.j * np.sin(ph_tile[i] - ph_target[i]) for i, _ in enumerate(xpos)))
-        array_factor = np.sum(array_factor_tiles, axis=0)
+        array_factor, array_factor_power = calcArrayFactor(ph_tile, ph_target)
+
+        #logger.debug("array_factor_power[0] {}".format(array_factor_power[0]))
         logger.debug("rank {:3d} array_factor[0] {}".format(rank, array_factor[0]))
         logger.debug("rank {:3d} array_factor shapes: {}".format(rank, array_factor.shape))
+        logger.debug("rank {:3d} array factor maximum = {}".format(rank, np.amax(array_factor_power)))
 
         requests.get('https://ws.mwatelescope.org/progress/update',
                     params={'jobid':plot_jobid,
@@ -288,14 +178,6 @@ def createArrayFactor(za, az, data):
                             'current':4,
                             'total':5,
                             'desc':'array_factor'})
-
-        # normalise to unity at pointing position
-        array_factor /= len(xpos)
-        array_factor_power = np.abs(array_factor)**2
-        #logger.debug("array_factor_power[0] {}".format(array_factor_power[0]))
-
-        array_factor_max = np.amax(array_factor_power)
-        logger.debug("rank {:3d} array factor maximum = {}".format(rank, array_factor_max))
 
         # calculate the phased array power pattern
         logger.info( "rank {:3d} Calculating phased array pattern".format(rank))
@@ -313,15 +195,12 @@ def createArrayFactor(za, az, data):
         omega_A_times.append(omega_A)
         #logger.debug("omega_A[1] vals: za[1] {}, array_factor_power[1] {}, theta_res {}, phi_res {}".format(za[1], array_factor_power[1], theta_res, phi_res))
         #logger.debug("omega_A[1] {}".format(omega_A_array[1]))
-        eff_area = eff * (c.value / obsfreq)**2 * (4 * np.pi / omega_A)
-        eff_area_times.append(eff_area)
-        gain = (1e-26) * eff_area / (2 * k_B.value)
-        gain_times.append(gain)
 
-        # work out T_ant by convolving a sky map with the phased_array_pattern
-        t_ant = convolve_sky_map(az, za, phased_array_pattern, obsfreq, time)
-        logger.debug("rank {:3d} T_ant: {}".format(rank, t_ant))
-        t_ant_times.append(t_ant)
+        # Do a partial sum over the sky and frequency to be finished outside of the function
+        sum_B_T, sum_B = partial_convolve_sky_map(az, za, phased_array_pattern, obsfreq, time)
+        sum_B_T_times.append(sum_B_T)
+        sum_B_times.append(sum_B)
+
 
         # write a file based on rank of the process being used
         if write:
@@ -346,10 +225,15 @@ def createArrayFactor(za, az, data):
                     f.write("{0:.5f}\t{1:.5f}\t{2}\n".format(zad, azd, pap))
 
         else:
-            logger.info("worker {0} done and not writing".format(rank))
+            logger.info("rank {:3d} done and not writing".format(rank))
+
+    # Average over time
+    omega_A = np.average(omega_A_times)
+    sum_B_T = np.average(sum_B_T_times)
+    sum_B   = np.average(sum_B_times)
 
     # return lists of results for each time step
-    return [omega_A_times, eff_area_times, gain_times, t_ant_times]
+    return [omega_A, sum_B_T, sum_B]
 
 ###############
 ## Setup MPI ##
@@ -434,10 +318,10 @@ if __name__ == "__main__":
         obs_begin, obs_duration = get_obstime_duration(args.obsid, args.metafits)
         if not args.begin:
             # Use observation begin time from metafits
-            args.begin = obs_begin
+            args.begin = Time(obs_begin, format='isot', scale='utc').gps
         if not args.duration:
             # Use observation duration time from metafits
-            args.duration = obs_duration
+            args.duration = int(obs_duration)
         sim_end = args.begin + args.duration -1
         # Make a range of times to test
         times_range = np.arange(args.begin, sim_end, args.step)
@@ -590,20 +474,19 @@ if __name__ == "__main__":
     if rank != 0:
         comm.send(results_array, dest=0)
     elif rank == 0:
-        omega_A_freq_times  = np.empty((size, len(time)))
-        eff_area_freq_times = np.empty((size, len(time)))
-        gain_freq_times     = np.empty((size, len(time)))
-        t_ant_freq_times    = np.empty((size, len(time)))
-        omega_A_freq_times[0]  = results_array[0]
-        eff_area_freq_times[0] = results_array[1]
-        gain_freq_times[0]     = results_array[2]
-        t_ant_freq_times[0]    = results_array[3]
+        omega_A_sky_freq = np.empty(size)
+        sum_B_T_sky_freq = np.empty(size)
+        sum_B_sky_freq   = np.empty(size)
+        omega_A, sum_B_T, sum_B = results_array
+        omega_A_sky_freq[0] = omega_A
+        sum_B_T_sky_freq[0] = sum_B_T
+        sum_B_sky_freq[0]   = sum_B
         for i in range(1, size):
             results_array = comm.recv(source=i)
-            omega_A_freq_times[i]  = results_array[0]
-            eff_area_freq_times[i] = results_array[1]
-            gain_freq_times[i]     = results_array[2]
-            t_ant_freq_times[i]    = results_array[3]
+            omega_A, sum_B_T, sum_B = results_array
+            omega_A_sky_freq[i] = omega_A
+            sum_B_T_sky_freq[i] = sum_B_T
+            sum_B_sky_freq[i]   = sum_B
 
     # wait for everything to be collected (not really sure if this is necessary...)
     comm.barrier()
@@ -611,15 +494,22 @@ if __name__ == "__main__":
     # calculate the gain for that pointing and frequency and write a "stats" file
     if rank == 0:
         logger.info("pabeam benchmark: {} s".format(timing.perf_counter()-start_time))
-        # average over frequency and time
-        logger.debug("omega_A_freq_times {}".format(omega_A_freq_times))
-        omega_A  = np.average(omega_A_freq_times)
-        logger.debug("eff_area_freq_times {}".format(eff_area_freq_times))
-        eff_area = np.average(eff_area_freq_times)
-        logger.debug("gain_freq_times {}".format(gain_freq_times))
-        gain     = np.average(gain_freq_times)
-        logger.debug("t_ant_freq_times {}".format(t_ant_freq_times))
-        t_ant    = np.average(t_ant_freq_times)
+        # split the omega_A values into the sky chuncks
+        omega_A_sky_freq = np.array_split(omega_A_sky_freq, nchunks)
+        # Sum over the sky chuncks
+        omega_A_freq = np.sum(omega_A_sky_freq, axis=0)
+        # Average over frequency
+        omega_A = np.average(omega_A_freq)
+        # Opposite method
+        #omega_A_sky = np.average(omega_A_sky_freq, axis=1)
+        #omega_A = np.sum(omega_A_sky)
+
+        # Convert to eff area and gain (work out for each frequency then average)
+        eff_area = args.efficiency * 4 * np.pi * np.average( (c.value / np.array(args.freq))**2 / omega_A_freq)
+        gain = (1e-26) * eff_area / (2 * k_B.value)
+
+        # Sum all the partial sums then do the final division
+        t_ant = np.sum(sum_B_T_sky_freq) / np.sum(sum_B_sky_freq)
 
         logger.info("==== Summary ====")
         logger.info("** Pointing **")

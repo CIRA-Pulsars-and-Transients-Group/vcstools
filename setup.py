@@ -93,8 +93,7 @@ setup(name="mwa_vcstools",
                'scripts/reorder_chans.py', 'scripts/rts2ao.py', 'scripts/splice_wrapper.py',
                'scripts/cleanup.py', 'scripts/create_ics_psrfits.py', 'scripts/rm_synthesis.py',
                'scripts/zapchan.py', 'scripts/sn_flux_est.py', 'scripts/prof_estimate.py',
-               # beam_sim
-               'beam_sim/python/make_pabeam_batch.py', 'beam_sim/python/pabeam.py',
+               'scripts/pabeam.py',
                # plotting scripts
                'scripts/plotting/plotPolarTileBeam.py', 'scripts/plotting/plotFlatTileBeam.py',
                'scripts/plotting/plotTiedArrayBeam.py', 'scripts/plotting/plotSkyMap.py',
