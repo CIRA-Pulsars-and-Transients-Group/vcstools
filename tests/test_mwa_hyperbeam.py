@@ -22,6 +22,7 @@ def test_hyperbeam_vs_pb():
     test_decimals = 4
 
     # Jones --------------------------------------------------
+    print("Jones benchmarks")
     # mwa_pb method
     start_time = time.perf_counter()
     pb_jones = primary_beam.MWA_Tile_full_EE(za, az,
@@ -30,29 +31,35 @@ def test_hyperbeam_vs_pb():
                                                 power=True,
                                                 jones=True,
                                                 interp=False)
-    print("mwa_pb benchmark: {} s".format(time.perf_counter()-start_time))
+    print("mwa_pb:    {:6.3f} s".format(time.perf_counter()-start_time))
 
     # hyperbeam method
     #print(freq, delays, amps)
     start_time = time.perf_counter()
     hb_jones = beam.calc_jones_array(az, za, freq, delays, amps, True)
-    print("hyperbeam benchmark: {} s".format(time.perf_counter()-start_time))
+    print("hyperbeam: {:6.3f} s".format(time.perf_counter()-start_time))
     hb_jones = hb_jones.reshape(n, 2, 2)
 
     # Compare Jones
     assert_almost_equal(pb_jones, hb_jones, decimal=test_decimals)
 
     # Power ---------------------------------------------------
+    print("\nPower benchmarks")
     # mwa_pb method
+    start_time = time.perf_counter()
     pb_xx, pb_yy = primary_beam.MWA_Tile_full_EE(za, az,
                                                freq=freq, delays=np.array(delays),
                                                zenithnorm=True,
                                                power=True)
+    print("mwa_pb:    {:6.3f} s".format(time.perf_counter()-start_time))
 
     # hyperbeam method
+    start_time = time.perf_counter()
+    hb_jones = beam.calc_jones_array(az, za, freq, delays, amps, True)
     hb_jones = hb_jones.reshape(1, n, 2, 2)
     vis = primary_beam.mwa_tile.makeUnpolInstrumentalResponse(hb_jones, hb_jones)
     hb_xx, hb_yy = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
+    print("hyperbeam: {:6.3f} s".format(time.perf_counter()-start_time))
 
     # Compare power
     assert_almost_equal(pb_xx, hb_xx[0], decimal=test_decimals)
