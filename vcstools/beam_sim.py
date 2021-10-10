@@ -4,12 +4,14 @@ All equations can be found in https://ui.adsabs.harvard.edu/abs/2018IAUS..337..3
 """
 # numerical and maths modules
 import numpy as np
-from itertools import chain
+from astropy.constants import c
 
 #utility and processing modules
 import sys
 import os
+from itertools import chain
 from astropy.io import fits
+import matplotlib.pyplot as plt
 
 #from mwapy import ephem_utils,metadata
 from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
@@ -69,29 +71,47 @@ def get_obstime_duration(obsid, metafits):
     return [f[0].header['DATE-OBS'], f[0].header['EXPOSURE']]
 
 
+def calc_pixel_area(za, az_res, za_res):
+    """
+    Calculate the area of a pixel on the sky from their height, width and zenith angle
 
-def calcWaveNumbers(wl, p, t):
+    Parameters:
+    -----------
+    za: float
+        The zenith angle of the pixel in radians
+    az_res: float
+        The azuimuth resolution of the pixel in degrees
+    za_res: float
+        The zenith   resolution of the pixel in degrees
+
+    Returns:
+    --------
+    area: float
+        Area of the pixel in square radians
+    """
+    return np.radians(az_res * za_res) * np.sin(za)
+
+
+def calcWaveNumbers(freq, p, t):
     """
     Function to calculate the 3D wavenumbers for a given wavelength and az/za grid. 
     This is the part of equation 7 within the square brackets not includeing x_n, y_n and z_n
 
     Parameters:
     -----------
-      wl - central wavelength for the observation
-      p - azimuth/phi (either a scalar or an array)
-      t - zenith angle/theta (either a scalar or an array)
+    freq: float
+        Central frequency for the observation in Hz
+    p: float
+        azimuth/phi (either a scalar or an array)
+        this is assuming that theta,phi are in the convention from Sutinjo et al. 2015
+    t: float
+        zenith angle/theta (either a scalar or an array)
 
     Returns:
     --------
       [kx, ky, kz] - the 3D wavenumbers
     """
-    # the standard equations are:
-    #   a = 2 * pi / lambda
-    #   kx = a * sin(theta) * cos(phi)
-    #   ky = a * sin(theta) * sin(phi)
-    #   kz = a * cos(theta)
-    # this is assuming that theta,phi are in the convention from Sutinjo et al. 2015
-    #   i.e. phi = pi/2 - az
+    wl =  freq / c.value
     kx = (2*np.pi/wl) * np.multiply(np.sin(t), np.cos(p))
     ky = (2*np.pi/wl) * np.multiply(np.sin(t), np.sin(p))
     kz = (2*np.pi/wl) * np.cos(t)
@@ -165,10 +185,11 @@ def calcArrayFactor(ph_tiles, ph_targets):
     return array_factor, array_factor_power
 
 
-def convolve_sky_map(az_grid, za_grid, phased_array_pattern, freq, time):
+def partial_convolve_sky_map(az_grid, za_grid, pixel_area, phased_array_pattern, freq, time):
     # Get Haslam and interpolate onto grid
     # taken from https://github.com/MWATelescope/mwa_pb/blob/master/mwa_pb/primarybeammap_tant.py
     # then edited to include pixel size
+    logger.debug("freq: {}".format(freq))
     my_map = get_Haslam(freq)
     #mask = numpy.isnan(za_grid)
     #za_grid[numpy.isnan(za_grid)] = 90.0  # Replace nans as they break the interpolation
@@ -176,26 +197,101 @@ def convolve_sky_map(az_grid, za_grid, phased_array_pattern, freq, time):
     #Supress print statements of the primary beam model functions
     sys.stdout = open(os.devnull, 'w')
     sky_grid = map_sky(my_map['skymap'], my_map['RA'], my_map['dec'], time, az_grid, za_grid)
+    logger.debug("np.max(sky_grid): {}".format(np.max(sky_grid.flatten())))
+    logger.debug("sky_grid.shape: {}".format(sky_grid.flatten().shape))
+    logger.debug("phased_array_pattern.shape: {}".format(phased_array_pattern.shape))
     sys.stdout = sys.__stdout__
 
-    t_ant = np.sum(phased_array_pattern * sky_grid * np.sin(za_grid)) / \
-            np.sum(phased_array_pattern * np.sin(za_grid))
-    return t_ant
-
-
-def partial_convolve_sky_map(az_grid, za_grid, phased_array_pattern, freq, time):
-    # Get Haslam and interpolate onto grid
-    # taken from https://github.com/MWATelescope/mwa_pb/blob/master/mwa_pb/primarybeammap_tant.py
-    # then edited to include pixel size
-    my_map = get_Haslam(freq)
-    #mask = numpy.isnan(za_grid)
-    #za_grid[numpy.isnan(za_grid)] = 90.0  # Replace nans as they break the interpolation
-
-    #Supress print statements of the primary beam model functions
-    sys.stdout = open(os.devnull, 'w')
-    sky_grid = map_sky(my_map['skymap'], my_map['RA'], my_map['dec'], time, az_grid, za_grid)
-    sys.stdout = sys.__stdout__
-
-    sum_B_T = np.sum(phased_array_pattern * sky_grid * np.sin(za_grid))
-    sum_B   = np.sum(phased_array_pattern * np.sin(za_grid))
+    sum_B_T = np.sum(phased_array_pattern * sky_grid.flatten() * pixel_area)
+    sum_B   = np.sum(phased_array_pattern * pixel_area)
     return sum_B_T, sum_B
+
+
+def plot_vcsbeam_psf(psf_file, output_name="vcsbeam_psf.png"):
+    input_array = np.loadtxt(psf_file, dtype=float)
+    print(input_array.shape[0])
+    ra    = input_array[:,0]
+    dec   = input_array[:,1]
+    power = input_array[:,2]
+    ra.shape = dec.shape = power.shape = (int(np.sqrt(input_array.shape[0])),
+                                          int(np.sqrt(input_array.shape[0])))
+    fig, ax = plt.subplots()
+    im = ax.pcolormesh(ra, dec, power)
+
+    plt.xlabel(r"Right Ascension ($^{\circ}$)")
+    plt.ylabel(r"Declination ($^{\circ}$)")
+    plt.colorbar(im,#spacing='uniform', shrink = 0.65, #ticks=[2., 10., 20., 30., 40., 50.],
+                 label="Normalised array factor power")
+    plt.savefig(output_name)
+
+
+def plot_track_beam_response(response_file, output_name="vcsbeam_response.png", time_max=-1):
+    input_array = np.loadtxt(response_file, dtype=float)
+    sec          = input_array[:,0]
+    freq         = input_array[:,1]
+    stokes_I     = input_array[:,5]
+    array_factor = input_array[:,9]
+    response = stokes_I * array_factor**2
+
+    # Split into freq chunks
+    nsec = max(sec)
+    nfreq = input_array.shape[0] // nsec
+    sec_map   = np.array(np.array_split(sec,      nfreq))[:,:time_max]
+    freq_map  = np.array(np.array_split(freq,     nfreq))[:,:time_max]
+    power_map = np.array(np.array_split(response, nfreq))[:,:time_max]
+
+    # Sum over frequency
+    power_time = np.average(power_map, axis=0)
+    sec_time = sec_map[0]
+
+    # Sum over time
+    power_freq = np.average(power_map, axis=1)
+    freq_freq = freq_map[:,0]
+
+    size = 3
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(2*size,size))
+
+    # Plot rack over time
+    ax1.plot(sec_time, power_time)
+    ax1.set_xlabel("Time (s)")
+    ax1.set_ylabel("Array Factor")
+
+    # Plot rack over time
+    ax2.plot(freq_freq, power_freq)
+    ax2.set_xlabel("Frequency (MHz)")
+    ax2.set_ylabel("Array Factor")
+    plt.tight_layout()
+    plt.savefig(output_name)
+
+
+def plot_pabeam(dat_file, output_name="pabeam_psf.png"):
+    with open(dat_file) as file:
+        lines = file.readlines()
+        lines = [line.rstrip() for line in lines]
+        nza = int(lines[7].split(" ")[-1])
+        naz = int(lines[8].split(" ")[-1])
+    input_array = np.loadtxt(dat_file, dtype=float)
+    print(input_array.shape)
+    za    = input_array[:,0]
+    az    = input_array[:,1]
+    power = input_array[:,2]
+    print(za[0:10])
+    print(az[0:10])
+    #za.shape = az.shape = power.shape = (nza, naz)
+    za.shape = az.shape = power.shape = (naz, nza)
+    ax = plt.subplot(1, 1, 1, projection='polar')
+    #ax = plt.subplot(1, 1, 1)
+    #ax.set_rlim(1, 100)
+    #ax.set_rscale('log')
+    print(za.shape)
+    print(za[0])
+    #print(za[nza-1])
+    print(az.shape)
+    print(az[0])
+    #print(az[nza-1])
+
+    im = plt.pcolormesh(np.radians(az), za, power)
+    plt.xlabel(r"Azimuth ($^{\circ}$)")
+    plt.ylabel(r"Zenith ($^{\circ}$)")
+    plt.colorbar(im, label="Normalised array factor power")
+    plt.savefig(output_name, dpi=500)
