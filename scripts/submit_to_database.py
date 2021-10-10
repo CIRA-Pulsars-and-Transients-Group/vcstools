@@ -22,6 +22,7 @@ import textwrap as _textwrap
 import datetime
 import numpy as np
 from astropy.table import Table
+import csv
 
 import logging
 logger = logging.getLogger(__name__)
@@ -389,7 +390,7 @@ def launch_pabeam_sim(obsid, pointing,
                       metafits_file=None,
                       flagged_tiles=None,
                       delays=None,
-                      phi_res=0.05, theta_res=0.05,
+                      phi_res=0.1, theta_res=0.05,
                       efficiency=1,
                       nodes=3,
                       vcstools_version='master'):
@@ -415,13 +416,14 @@ def launch_pabeam_sim(obsid, pointing,
     command = 'srun --export=all -u -n {} pabeam.py'.format(nodes*24)
     command += ' -o {}'.format(obsid)
     command += ' -b {}'.format(begin)
-    command += ' -d {}'.format(duration)
+    command += ' -d {}'.format(int(duration))
     command += ' -e {}'.format(efficiency)
     command += ' --metafits {}'.format(metafits_file)
     command += ' -p {}'.format(pointing)
     command += ' --grid_res {} {}'.format(theta_res, phi_res)
     command += ' --delays {}'.format(' '.join(np.array(delays, dtype=str)))
-    if flagged_tiles:
+    if flagged_tiles is not None:
+        logger.debug("flagged_tiles: {}".format(flagged_tiles))
         command += ' --flagged_tiles {}'.format(' '.join(flagged_tiles))
 
 
@@ -440,15 +442,20 @@ def launch_pabeam_sim(obsid, pointing,
                           vcstools_version=vcstools_version)
     return job_id
 
-def read_sefd_file(sefd_file):
-    with open(sefd_file) as f:
-        lines = f.readlines()
-        for l in lines:
-            if "Effective gain         [K/Jy] :" in l:
-                gain = float(l.split("Effective gain         [K/Jy] : ")[1])
-            if "Antena Temperature        [K] :" in l:
-                t_ant = float(l.split("Antena Temperature        [K] :")[1].strip())
-    return gain, t_ant
+def read_sefd_file(sefd_file, all_data=False):
+    input_array = np.loadtxt(sefd_file, dtype=float)
+    if all_data:
+        freq  = input_array[:,0]
+        sefd  = input_array[:,1]
+        t_sys = input_array[:,3]
+        t_ant = input_array[:,4]
+        gain  = input_array[:,5]
+        effective_area = input_array[:,6]
+        return freq, sefd, t_sys, t_ant, gain, effective_area
+    else:
+        sefd  = input_array[:,1]
+        sefd = np.average(sefd)
+        return sefd
     
 
 
@@ -483,6 +490,7 @@ def flux_cal_and_submit(bestprof_data, calid,
             reader = csv.reader(ftf)
             for row in reader:
                 flagged_tiles.append(row)
+            flagged_tiles = np.array(flagged_tiles).flatten()
 
     if not pulsar:
         pulsar = prof_psr
@@ -494,24 +502,19 @@ def flux_cal_and_submit(bestprof_data, calid,
         t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid,
                                                       obs_metadata=metadata,
                                                       beg=beg, end=(t_int + beg - 1))
+        sefd = tsys / gain
     else:
         if sefd_file is None:
             launch_pabeam_sim(obsid, pointing, beg, t_int,
-                              soruce_name=prof_psr,
+                              source_name=prof_psr,
                               vcstools_version=vcstools_version,
                               flagged_tiles=flagged_tiles,
                               delays=xdelays)
             sys.exit(0)
         else:
-            gain, t_ant = read_sefd_file(sefd_file)
-            # TODO work out if the following is reasonable
-            u_gain = gain * 0.05
-            trec_table = Table.read(trcvr,format="csv")
-            t_rec = np.mean(get_Trec(trec_table, centrefreq))
-            # TODO once Daniel Ung tells us how to calculate this impliment it
-            eta = 0.98 # Radiation Efficiency
-            t_0 = get_ambient_temperature(obsid) # ambient temperature (K)
-            t_sys = eta * t_ant + ( 1 - eta ) * t_0 + t_rec
+            sefd = read_sefd_file(sefd_file)
+            # assume 10% for now
+            u_sefd = sefd * 0.1
 
     #estimate S/N
     try:
@@ -580,13 +583,15 @@ def flux_cal_and_submit(bestprof_data, calid,
             u_S_mean = None
         else:
             # final calc of the mean flux density in mJy
-            S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(t_int) * bandwidth)) *\
-                    math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
+            #S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(t_int) * bandwidth)) *\
+            S_mean = sn * sefd / (math.sqrt(2. * float(t_int) * bandwidth)) *\
+                     math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
             # constants to make uncertainty calc easier
-            S_mean_cons = t_sys / ( math.sqrt(2. * float(t_int) * bandwidth)) *\
-                    math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
-            u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
-                                math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
+            #S_mean_cons = t_sys / ( math.sqrt(2. * float(t_int) * bandwidth)) *\
+            #        math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
+            #u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
+            #                    math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
+            u_S_mean = math.sqrt( (u_sn / sn)**2 + (u_sefd / sefd)**2 ) * S_mean
 
             logger.info('Smean {0:.2f} +/- {1:.2f} mJy'.format(S_mean, u_S_mean))
 
