@@ -2,19 +2,22 @@
 The functions required to simulate the tied-array beam response of the MWA. 
 All equations can be found in https://ui.adsabs.harvard.edu/abs/2018IAUS..337..378M/abstract
 """
-# numerical and maths modules
 import numpy as np
-from astropy.constants import c
-
-#utility and processing modules
 import sys
 import os
 from itertools import chain
 from astropy.io import fits
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, EarthLocation
+import astropy.units as u
+from astropy.constants import c
 
 #from mwapy import ephem_utils,metadata
 from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
+from vcstools.pointing_utils import getTargetAZZA, getTargetRADec
 
 import logging
 logger = logging.getLogger(__name__)
@@ -175,7 +178,8 @@ def calcArrayFactor(ph_tiles, ph_targets):
     #array_factor = np.zeros(za.shape, dtype=np.complex_)
     #for i, _ in enumerate(xpos):
         #array_factor += np.cos(ph - ph_target) + 1.j * np.sin(ph - ph_target)
-    array_factor_tiles = list(chain(np.cos(ph_tile - ph_target) + 1.j * np.sin(ph_tile - ph_target) for ph_tile, ph_target in zip(ph_tiles, ph_targets)))
+    #array_factor_tiles = list(chain(np.cos(ph_tile - ph_target) + 1.j * np.sin(ph_tile - ph_target) for ph_tile, ph_target in zip(ph_tiles, ph_targets)))
+    array_factor_tiles = list(chain( np.multiply( np.cos(ph_tile) + 1.j * np.sin(ph_tile),  np.cos(ph_target) - 1.j * np.sin(ph_target) ) for ph_tile, ph_target in zip(ph_tiles, ph_targets)))
     array_factor = np.sum(array_factor_tiles, axis=0)
 
     # normalise to unity at pointing position
@@ -215,10 +219,10 @@ def plot_vcsbeam_psf(psf_file, output_name="vcsbeam_psf.png"):
     power = input_array[:,2]
     ra.shape = dec.shape = power.shape = (int(np.sqrt(input_array.shape[0])),
                                           int(np.sqrt(input_array.shape[0])))
-    fig, ax = plt.subplots()
-    im = ax.pcolormesh(ra, dec, power)
+    ax = plt.subplot(1, 1, 1,)
+    im = ax.pcolormesh(ra, dec, power, norm=colors.LogNorm(), cmap='plasma')
 
-    plt.xlabel(r"Right Ascension ($^{\circ}$)")
+    plt.xlabel(r"Right Ascension (hours)")
     plt.ylabel(r"Declination ($^{\circ}$)")
     plt.colorbar(im,#spacing='uniform', shrink = 0.65, #ticks=[2., 10., 20., 30., 40., 50.],
                  label="Normalised array factor power")
@@ -295,3 +299,58 @@ def plot_pabeam(dat_file, output_name="pabeam_psf.png"):
     plt.ylabel(r"Zenith ($^{\circ}$)")
     plt.colorbar(im, label="Normalised array factor power")
     plt.savefig(output_name, dpi=500)
+
+def plot_pabeam_ra_dec(dat_file, output_name="pabeam_psf.png"):
+    with open(dat_file) as file:
+        lines = file.readlines()
+        lines = [line.rstrip() for line in lines]
+        date  = lines[3].split("'")[-2]
+        time = Time(date, format='iso', scale='utc')
+        nra   = int(lines[7].split(" ")[-1])
+        ndec  = int(lines[8].split(" ")[-1])
+    input_array = np.loadtxt(dat_file, dtype=float)
+    print(input_array.shape)
+    za    = input_array[:,0]
+    az    = input_array[:,1]
+    power = input_array[:,2]
+
+    # Convert to RA and Dec
+    _, _, ra, dec = getTargetRADec(az, za, time)
+
+    # test
+    _, _, taz, tza = getTargetAZZA(ra, dec, time, units=(u.deg, u.deg))
+    print(taz[0], az[0])
+    print(taz[-1], az[-1])
+    print(tza[0], za[0])
+    print(tza[-1], za[-1])
+
+    print(ra[0:10])
+    print(dec[0:10])
+    #za.shape = az.shape = power.shape = (nza, naz)
+    ra.shape = dec.shape = power.shape = (nra, ndec)
+    ax = plt.subplot(1, 1, 1,)
+    print(ra.shape)
+    print(min(ra[0]), max(ra[0]))
+    print(min(ra[-1]), max(ra[-1]))
+    #print(ra)
+
+    print(dec.shape)
+    print(min(dec[0]), max(dec[0]))
+    print(min(dec[-1]), max(dec[-1]))
+    #print(dec)
+
+    im = plt.pcolormesh(ra, dec, power, norm=colors.LogNorm(), cmap='plasma')
+    plt.xlabel(r"Right Acension ($^{\circ}$)")
+    plt.ylabel(r"Declination ($^{\circ}$)")
+    plt.colorbar(im, label="Normalised array factor power")
+    plt.savefig(output_name, dpi=500)
+
+    colour_list = np.array(list(range(len(ra.flatten()))))/len(ra.flatten())
+    print(colour_list[-1])
+    print(len(ra.flatten()), len(dec.flatten()), len(colour_list))
+    #for x,y,c in zip(ra.flatten(), dec.flatten(), colour_list):
+        #print(x,y,c)
+        #plt.scatter(x, y, c=[c])
+    #plt.scatter(ra.flatten(), dec.flatten(), c=colour_list)
+    #plt.colorbar(label="Normalised array factor power")
+    #plt.savefig("scatter.png", dpi=500)

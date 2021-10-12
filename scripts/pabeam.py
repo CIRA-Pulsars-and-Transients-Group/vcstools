@@ -25,12 +25,13 @@ import time as timing
 import requests
 import random
 from astropy.table import Table
+from astropy.coordinates import SkyCoord
 import gc
 gc.enable()
 
 #from mwapy import ephem_utils,metadata
 from vcstools.metadb_utils import getmeta, get_common_obs_metadata, get_ambient_temperature
-from vcstools.pointing_utils import getTargetAZZA
+from vcstools.pointing_utils import getTargetAZZA, getTargetRADec
 from vcstools.general_utils import setup_logger
 from vcstools import data_load
 from mwa_pb import primary_beam as pb
@@ -220,55 +221,70 @@ if __name__ == "__main__":
                                      (i.e. there is no user choice in how many to use)""",\
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument("-o", "--obsid", type=str,
-                        help="""Observation ID (used to figure out spatial configuration of array).
-                             Also used to retrieve observation start-time and duration.""")
-    parser.add_argument("--metafits", type=str,
-                        help="Metafits file location")
-    parser.add_argument("-p", "--target", type=str,
-                        help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.ss_dd:mm:ss.ss")
+    obsargs = parser.add_argument_group('Observation options.')
+    obsargs.add_argument("-o", "--obsid", type=str,
+                         help="""Observation ID (used to figure out spatial configuration of array).
+                              Also used to retrieve observation start-time and duration.""")
+    obsargs.add_argument("--metafits", type=str,
+                         help="Metafits file location")
+    obsargs.add_argument("-f", "--freq", type=float, nargs='+', default=None,
+                         help="The centre observing frequency for the observation (in Hz!)")
+    obsargs.add_argument("--flagged_tiles", type=str, nargs='+',
+                         help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5")
+    obsargs.add_argument("--delays", type=int, nargs='+', default=[0] * 16,
+                         help="The tile delays")
+    obsargs.add_argument("-e", "--efficiency", type=float, default=1,
+                         help="Frequency and pointing dependent array efficiency")
+    obsargs.add_argument("--coplanar", action='store_true',
+                         help="Assume the array is co-planar (i.e. height above array centre is 0 for all tiles)")
 
-    parser.add_argument("--flagged_tiles", type=str, nargs='+',
-                        help="The tiles flagged as in when running the RTS. Must be a list of space separated tile numbers, e.g. 0 1 2 5")
-    parser.add_argument("--delays", type=int, nargs='+', default=[0] * 16,
-                        help="The tile delays")
-    parser.add_argument("-f", "--freq", type=float, nargs='+', default=None,
-                        help="The centre observing frequency for the observation (in Hz!)")
+    tarargs = parser.add_argument_group('Target options.')
+    tarargs.add_argument("-p", "--target", type=str,
+                         help="The RA and DEC of the target pointing (i.e the desired phase-centre). Should be formtted like: hh:mm:ss.ss_dd:mm:ss.ss")
+    tarargs.add_argument("-b", "--begin", type=int,
+                         help="""The GPS time to begin the simulation from. This will override whatever is read from the metafits.""")
+    tarargs.add_argument("-d", "--duration", type=int,
+                         help="""The duration of the simulation in seconds from the begin time. This will override whatever is read from the metafits.""")
+    tarargs.add_argument("-s", "--step", type=int, default=1800,
+                         help="""The step between simulations in seconds. Default: 1800 (30 mins).""")
 
-    parser.add_argument("-b", "--begin", type=int,
-                        help="""The GPS time to begin the simulation from. This will override whatever is read from the metafits.""")
-    parser.add_argument("-d", "--duration", type=int,
-                        help="""The duration of the simulation in seconds from the begin time. This will override whatever is read from the metafits.""")
-    parser.add_argument("-s", "--step", type=int, default=1800,
-                        help="""The step between simulations in seconds. Default: 1800 (30 mins).""")
+    simargs = parser.add_argument_group('Simulation area options.')
+    simargs.add_argument("--grid_res", type=float, nargs=2, default=(0.1,0.1),
+                         help="""Resolution of the Azimuth (Az) and Zenith Angle (ZA) grid to be created in degrees.
+                              Be warned: setting these too small will result in a MemoryError and the job will die.""")
+    simargs.add_argument("--az", type=float, nargs=2, default=(0., 360.),
+                         help="""The Azimuth (Az) range in degrees. Default: 0 360.""")
+    simargs.add_argument("--za", type=float, nargs=2, default=(0., 90.),
+                         help="""The Zenith Angle (ZA) range in degrees. Default: 0 90.""")
 
-    parser.add_argument("--grid_res", type=float, nargs=2, metavar=("theta_res","phi_res"), default=(0.1,0.1),
-                        help="""Resolution of the Azimuth (Az) and Zenith Angle (ZA) grid to be created in degrees.
-                             Be warned: setting these too small will result in a MemoryError and the job will die.""")
-    parser.add_argument("--az", type=float, nargs=2, default=(0., 360.),
-                        help="""The Azimuth (Az) range in degrees. Default: 0 360.""")
-    parser.add_argument("--za", type=float, nargs=2, default=(0., 90.),
-                        help="""The Zenith Angle (ZA) range in degrees. Default: 0 90.""")
+    simargs.add_argument("--ra_dec_projection", action='store_true',
+                         help="""If this option is used calculate a RA and Dec projection instead of an Az ZA projection.
+                                 Shouldn't be used for SEFD calculations""")
+    simargs.add_argument("--ra_dec_res", type=float, nargs=2, default=(0.01, 0.01),
+                         help="""Resolution of the RA and Declination grid to be created in degrees.
+                              Be warned: setting these too small will result in a MemoryError and the job will die.""")
+    simargs.add_argument("--ra_radius", type=float, default=1.,
+                         help="""The radius of the RA search area in degrees. Default: 1.""")
+    simargs.add_argument("--dec_radius", type=float, default=1.,
+                         help="""The radius of the Declination search area in degrees. Default: 1.""")
 
-    parser.add_argument("-e", "--efficiency", type=float, default=1,
-                        help="Frequency and pointing dependent array efficiency")
-    parser.add_argument("--coplanar", action='store_true',
-                        help="Assume the array is co-planar (i.e. height above array centre is 0 for all tiles)")
-    parser.add_argument("--out_dir", type=str, action='store', default=".",
-                        help="Location (full path) to write the output data files")
-    parser.add_argument("--write", action='store_true',
-                        help="""Write the beam pattern to disk when done calculating.
-                                If this option is not passed, you will just get a '.stats' files containing basic
-                                information about simulation parameters and the calculated gain.""")
-    parser.add_argument("--beam_model", type=str, default='hyperbeam',
-                        help="""Decides the beam approximation that will be used. Options:
-                                "analytic" the analytic beam model (2012 model, fast and reasonably accurate),
-                                "advanced" the advanced beam model (2014 model, fast and slighty more accurate),
-                                "full_EE" the full EE model (2016 model, slow but accurate) or
-                                "hyperbeam" the rust accelerated full EE model. Default: "hyperbeam" """)
+    outargs = parser.add_argument_group('Output options.')
+    outargs.add_argument("--out_dir", type=str, action='store', default=".",
+                         help="Location (full path) to write the output data files")
+    outargs.add_argument("--write", action='store_true',
+                         help="""Write the beam pattern to disk when done calculating.
+                                 If this option is not passed, you will just get a '.stats' files containing basic
+                                 information about simulation parameters and the calculated gain.""")
 
-    parser.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO",
-                        help="Logger verbositylevel. Default: INFO")
+    othargs = parser.add_argument_group('Other options.')
+    othargs.add_argument("--beam_model", type=str, default='hyperbeam',
+                         help="""Decides the beam approximation that will be used. Options:
+                                 "analytic" the analytic beam model (2012 model, fast and reasonably accurate),
+                                 "advanced" the advanced beam model (2014 model, fast and slighty more accurate),
+                                 "full_EE" the full EE model (2016 model, slow but accurate) or
+                                 "hyperbeam" the rust accelerated full EE model. Default: "hyperbeam" """)
+    othargs.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO",
+                         help="Logger verbositylevel. Default: INFO")
     args = parser.parse_args()
 
     # set up the logger for stand-alone execution
@@ -321,24 +337,47 @@ if __name__ == "__main__":
         ra, dec = args.target.split("_")
         tres, pres = args.grid_res
 
-        # Azimuth angle calculations
-        za_min, za_max = args.za
-        ntheta =  (za_max - za_min) // tres
-        za = np.radians(np.linspace(za_min, za_max, int(ntheta)))
+        if args.ra_dec_projection:
+            coords = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
+            rares, decres = args.ra_dec_res
+            # RA angle calculations
+            nra = 2 * args.ra_radius // rares + 1
+            ras = np.linspace(coords.ra.deg - args.ra_radius, coords.ra.deg + args.ra_radius, int(nra))
+            logger.debug("ras(degrees): {}".format(ras))
 
-        # Zenith angle calculationshgre
-        az_min, az_max = args.az
-        nphi = (az_max - az_min) // pres
-        az = np.radians(np.linspace(az_min, az_max, int(nphi)))
+            # Declination angle calculations
+            ndec = 2 * args.dec_radius // decres + 1
+            decs = np.linspace(coords.dec.deg - args.dec_radius, coords.dec.deg + args.dec_radius, int(ndec))
+            logger.debug("decs(degrees): {}".format(decs))
 
-        # Convert az and za into the meshgrid format
-        logger.debug("za.shape {} az.shape {}".format(za.shape, az.shape))
-        zav, azv = np.meshgrid(za, az)
-        logger.debug("zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
-        azv = azv.flatten()
-        zav = zav.flatten()
-        logger.debug("flattened zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
-        logger.debug("zav.dtype {} azv.dtype {}".format(zav.dtype, azv.dtype))
+            rav, decv = np.meshgrid(ras, decs)
+            rav  = rav.flatten()
+            decv = decv.flatten()
+            # Convert to Az Za
+            azv, zav, _, _ = getTargetAZZA(rav, decv, time[0], units=(u.deg, u.deg))
+            _, _, tra, tdec = getTargetRADec(azv[0], zav[0], time[0], units=(u.rad, u.rad))
+            logger.debug("tra: {} tdec: {}".format(tra, tdec))
+            logger.debug("azv[0]: {} zav[0]: {}".format(np.degrees(azv[0]), np.degrees(zav[0])))
+        else:
+
+            # Azimuth angle calculations
+            za_min, za_max = args.za
+            ntheta =  (za_max - za_min) // tres
+            za = np.radians(np.linspace(za_min, za_max, int(ntheta)))
+
+            # Zenith angle calculationshgre
+            az_min, az_max = args.az
+            nphi = (az_max - az_min) // pres
+            az = np.radians(np.linspace(az_min, az_max, int(nphi)))
+
+            # Convert az and za into the meshgrid format
+            logger.debug("za.shape {} az.shape {}".format(za.shape, az.shape))
+            zav, azv = np.meshgrid(za, az)
+            logger.debug("zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
+            azv = azv.flatten()
+            zav = zav.flatten()
+            logger.debug("flattened zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
+            logger.debug("zav.dtype {} azv.dtype {}".format(zav.dtype, azv.dtype))
 
         # Calculate pixel area
         pixel_area = calc_pixel_area(zav, pres, tres)
@@ -544,7 +583,10 @@ if __name__ == "__main__":
         logger.info("Delays               : {0}".format(' '.join(np.array(delays, dtype=str))))
         logger.info("------------------------------------------")
         logger.info("** Simulation resolution **")
-        logger.info("Pixels: {} za     {} az".format(ntheta, nphi))
+        if args.ra_dec_projection:
+            logger.info("Pixels: {} ra     {} dec".format(nra, ndec))
+        else:
+            logger.info("Pixels: {} za     {} az".format(ntheta, nphi))
         logger.info("Theta (ZA) resolution    [deg] : {0}".format(tres))
         logger.info("                      [arcmin] : {0}".format(tres * 60))
         logger.info("Phi   (Az) resolution    [deg] : {0}".format(pres))
@@ -579,6 +621,10 @@ if __name__ == "__main__":
             f.write("#Delays               : {0}".format(' '.join(np.array(delays, dtype=str))))
             f.write("#\n")
             f.write("#** Simulation resolution **\n")
+            if args.ra_dec_projection:
+                f.write("Pixels: {} ra     {} dec".format(nra, ndec))
+            else:
+                f.write("Pixels: {} za     {} az".format(ntheta, nphi))
             f.write("#Theta (ZA) resolution    [deg] : {0}\n".format(tres))
             f.write("#                      [arcmin] : {0}\n".format(tres * 60))
             f.write("#Phi   (Az) resolution    [deg] : {0}\n".format(pres))
@@ -621,10 +667,21 @@ if __name__ == "__main__":
             for freq, phased_array_pattern in zip(args.freq, phased_array_pattern_freq):
                 oname = "{0}/{1}_{2:.2f}MHz_tres{3}_pres{4}_{5}_{6}.dat".format(args.out_dir, args.obsid, freq/1e6, tres, pres, ra, dec)
                 with open(oname, 'w') as f:
-                    f.write("##File Type: Far field\n##File Format: 3\n##Source: mwa_tiedarray\n##Date: {0}\n".format(list(time.iso)))
-                    f.write("#Request Name: FarField\n#Frequency: {0}\n".format(freq))
-                    f.write("#Coordinate System: Spherical\n#No. of Theta Samples: {0}\n#No. of Phi Samples: {1}\n".format(int(ntheta), int(nphi)))
-                    f.write("#Result Type: Gain\n#No. of Header Lines: 1\n")
+                    f.write("##File Type: Far field\n")
+                    f.write("##File Format: 3\n")
+                    f.write("##Source: mwa_tiedarray\n")
+                    f.write("##Date: {}\n".format(list(time.iso)))
+                    f.write("#Request Name: FarField\n")
+                    f.write("#Frequency: {}\n".format(freq))
+                    f.write("#Coordinate System: Spherical\n")
+                    if args.ra_dec_projection:
+                        f.write("#No. of RA Samples: {}\n".format(int(nra)))
+                        f.write("#No. of Dec Samples: {}\n".format(int(ndec)))
+                    else:
+                        f.write("#No. of Theta Samples: {}\n".format(int(ntheta)))
+                        f.write("#No. of Phi Samples: {}\n".format(int(nphi)))
+                    f.write("#Result Type: Gain\n")
+                    f.write("#No. of Header Lines: 1\n")
                     #f.write('#\t"Theta"\t"Phi"\t"Re(Etheta)"\t"Im(Etheta)"\t"Re(Ephi)"\t"Im(Ephi)"\t"Gain(Theta)"\t"Gain(Phi)"\t"Gain(Total)"\n')
                     f.write('#"Theta"\t"Phi"\t"Gain(Total)"\n')
 
