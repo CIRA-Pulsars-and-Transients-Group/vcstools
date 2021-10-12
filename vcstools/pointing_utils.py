@@ -104,7 +104,7 @@ def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
     return ra_dec_list
 
 
-def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827):
+def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827, units=(u.hourangle, u.deg)):
     """
     Function to get the target position in alt/az at a given EarthLocation and Time.
 
@@ -124,23 +124,49 @@ def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827):
         list[2] = target azimuth in degrees
         list[3] = target zenith angle in degrees
     """
-
     # Create Earth location for MWA
     location = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=height*u.m)
 
     # Create sky coordinates for target
-    coord = SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
-
-    # Create a time object for desired observing time
-    obstime = Time(time)
+    coord = SkyCoord(ra, dec, unit=units)
 
     # Convert from RA/Dec to Alt/Az
-    altaz = coord.transform_to(AltAz(obstime=obstime, location=location))
+    altaz = coord.transform_to(AltAz(obstime=Time(time), location=location))
 
     az = altaz.az.rad
     azdeg = altaz.az.deg
 
     za = np.pi / 2 - altaz.alt.rad
-    zadeg = 90 - altaz.alt.deg
+    zadeg = 90. - altaz.alt.deg
 
     return az, za, azdeg, zadeg
+
+
+def getTargetRADec(az, za, time, lat=-26.7033, lon=116.671, height=377.827, units=(u.deg, u.deg)):
+    """
+    Function to get the target position in ra dec at a given EarthLocation and Time.
+
+    Default lat,lon,height is the centre of  MWA.
+
+    Input:
+      az - target azimuthin astropy-readable format
+      za - target zenith in astropy-readable format
+      time - time of observation in UTC (i.e. a string on form: yyyy-mm-dd hh:mm:ss.ssss)
+      lat - observatory latitude in degrees
+      lon - observatory longitude in degrees
+
+    Returns:
+      a list containing four elements in the following order:
+        list[0] = target right acension in radians
+        list[1] = target declination angle in radians
+        list[2] = target right acension in degrees
+        list[3] = target declination angle in degrees
+    """
+    # Create Earth location for MWA
+    location = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=height*u.m)
+
+    # Create sky coordinates for target
+    coord = SkyCoord(az=az, alt=(90.*u.deg - za*units[0]), unit=units, frame='altaz', obstime=Time(time), location=location)
+    radec = coord.icrs
+
+    return radec.ra.rad, radec.dec.rad, radec.ra.deg, radec.dec.deg
