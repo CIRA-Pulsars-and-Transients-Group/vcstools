@@ -33,7 +33,7 @@ from mwa_pulsar_client import client
 import vcstools.sn_flux_utils as snfe
 from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata, get_ambient_temperature
-from vcstools.catalogue_utils import get_psrcat_ra_dec
+from vcstools.catalogue_utils import get_psrcat_ra_dec, get_psrcat_dm_period
 from vcstools import prof_utils
 from vcstools.config import load_config_file
 from vcstools.job_submit import submit_slurm
@@ -58,25 +58,6 @@ def send_cmd(cmd):
                               stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT).communicate()[0].decode()
     return output
-
-def get_pulsar_dm_p(pulsar):
-    #Gets the ra and dec from the output of PSRCAT
-    cmd = 'psrcat -c dm {}'.format(pulsar)
-    output = send_cmd(cmd)
-    lines = output.split('\n')
-    for l in lines[4:-1]:
-        columns = l.split()
-
-        if len(columns) > 1:
-            dm = columns[1]
-    cmd = 'psrcat -c p0 {}'.format(pulsar)
-    output = send_cmd(cmd)
-    lines = output.split('\n')
-    for l in lines[4:-1]:
-        columns = l.split()
-        if len(columns) > 1:
-            p = columns[1]
-    return [dm, p]
 
 def get_subbands(common_metadata):
     """
@@ -450,6 +431,17 @@ def launch_pabeam_sim(obsid, pointing,
     return job_id
 
 def read_sefd_file(sefd_file, all_data=False):
+    """
+    Read in the output sefd file from a pabeam.py simulation.
+
+    Parameters:
+    -----------
+    sefd_file: str
+        The location of the sefd file to be read in.
+    all_data: boolean
+        If True will return the freq, sefd, t_sys, t_ant, gain, effective_area.
+        If False will only return the sefd. Default False
+    """
     input_array = np.loadtxt(sefd_file, dtype=float)
     if all_data:
         freq  = input_array[:,0]
@@ -463,25 +455,56 @@ def read_sefd_file(sefd_file, all_data=False):
         sefd  = input_array[:,1]
         sefd = np.average(sefd)
         return sefd
-    
 
-
-def analyise_and_flux_cal(pulsar, bestprof_data, calid,
+def analyise_and_flux_cal(pulsar, bestprof_data,
+                          flagged_tiles=None,
+                          calid=None,
                           common_metadata=None,
                           trcvr=data_load.TRCVR_FILE,
                           simple_sefd=False, sefd_file=None,
-                          flagged_tiles=None,
                           vcstools_version='master'):
     """
-    metadata: list from the function get_obs_metadata
-    bestprof_data: list from the function get_from_bestprof
-    trcvr: the file location of antena temperatures
+    Analyise a pulse profile and calculates its flux density
+
+    Parameters:
+    -----------
+    pulsar: str
+        The pulsar's Jname
+    bestprof_data: list
+        The output list from the function get_from_bestprof
+
+    Optional parameters:
+    --------------------
+    flagged_tiles: str
+        The location of the flagged_tiles.txt file. If it's in the default location you can just supply the calid.
+    calid: int
+        The calibration ID of the detection. This is used to find the flagged_tiles.txt file.
+    common_metadata: list
+        The output of mwa_metadb_utils.get_common_obs_metadata(). If not supplied it will be downloaded.
+    trcvr: str
+        The file location of antena temperatures.
+    simple_sefd: boolean
+        If True perfom just a simple SEFD calculation instead of simulating the phased array beam response over the sky. Default: False.
+    sefd_file: str
+        The location of the pabeam.py's simulation of the phased array beam response over the sky output file. If not supplied will launch a pabeam.py simulation.
+    vcstools_version: str
+        The version of vcstools to use for the pabeam.py simulation. Default: master.
+
+    Returns:
+    --------
+    det_kwargs: dict
+    det_kwargs["flux"]: The mean flux density of the pulsar in mJy
+    det_kwargs["flux_error"]: The flux desnity error in mJy
+    det_kwargs["width"]: The equivalent width of the pulsar in ms
+    det_kwargs["width_error"]: The error of the equivalent width in ms
+    det_kwargs["scattering"]: The scattering width in s
+    det_kwargs["scattering_error"]: The error of the scattering in s
     """
     # Load computer dependant config file
     comp_config = load_config_file()
 
     #unpack the bestprof_data
-    obsid, prof_psr, dm, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
+    obsid, prof_psr, _, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
     period=float(period)
     num_bins=int(num_bins)
 
@@ -495,13 +518,21 @@ def analyise_and_flux_cal(pulsar, bestprof_data, calid,
 
     # Work out flagged tiles from calbration directory
     if not flagged_tiles:
-        flagged_file = os.path.join(comp_config['base_data_dir'], obsid, "cal", calid, "rts", "flagged_tiles.txt")
-        with open(flagged_file, "r") as ftf:
+        if calid:
+            flagged_file = os.path.join(comp_config['base_data_dir'], obsid, "cal", calid, "rts", "flagged_tiles.txt")
+            if os.path.exists(flagged_file):
+                with open(flagged_file, "r") as ftf:
+                    flagged_tiles = []
+                    reader = csv.reader(ftf)
+                    for row in reader:
+                        flagged_tiles.append(row)
+                    flagged_tiles = np.array(flagged_tiles).flatten()
+            else:
+                logger.warn("No flagged_tiles.txt file found so assuming no tiles have been flagged")
+                flagged_tiles = []
+        else:
+            logger.warn("No flagged_tiles or calid provided so assuming no tiles have been flagged")
             flagged_tiles = []
-            reader = csv.reader(ftf)
-            for row in reader:
-                flagged_tiles.append(row)
-            flagged_tiles = np.array(flagged_tiles).flatten()
 
 
     # Calc SEFD from the T_sys and gain
@@ -624,7 +655,6 @@ def analyise_and_flux_cal(pulsar, bestprof_data, calid,
     det_kwargs["width_error"]       = u_w_equiv_ms
     det_kwargs["scattering"]        = scattering
     det_kwargs["scattering_error"]  = u_scattering
-    det_kwargs["dm"]                = float(dm)
     return det_kwargs
 
 """
@@ -760,7 +790,7 @@ if __name__ == "__main__":
             logger.error("Please supply both start and stop times of the detection for ascii files")
             sys.exit(1)
         profile, num_bins = prof_utils.get_from_ascii(args.ascii)
-        dm, period = get_pulsar_dm_p(args.pulsar)
+        _, dm, period = get_psrcat_dm_period(args.pulsar)[0]
         time_detection = args.stop - args.start
         bestprof_data = [args.obsid, args.pulsar, dm, period, None, args.start,
                          time_detection, profile, num_bins]
@@ -775,6 +805,7 @@ if __name__ == "__main__":
                         trcvr=args.trcvr,
                         simple_sefd=args.simple_sefd, sefd_file=args.sefd_file,
                         vcstools_version=args.vcstools_version)
+        det_kwargs["dm"] = float(bestprof_data[2]) # DM from profile
     else:
         # No profile provided so just create pulsar table without the pulsar properties
         det_kwargs = {}
@@ -833,11 +864,13 @@ if __name__ == "__main__":
 
     # Upload analysis files to the database --------------------------------------------------------
 
-    # Create filname prefix
-    bins = bestprof_data[8]
-    fname_pref = filename_prefix(args.obsid, args.pulsar, bins=bins, cal=args.cal_id)
-    upfiles_dict={"1":[], "2":[], "3":[], "4":[], "5":[]}
-    remove_list=[]
+    if args.bestprof or args.archive or args.single_pulse_series or \
+       args.ppps or args.ippd or args.waterfall:
+        # Create filname prefix
+        bins = bestprof_data[8]
+        fname_pref = filename_prefix(args.obsid, args.pulsar, bins=bins, cal=args.cal_id)
+        upfiles_dict={"1":[], "2":[], "3":[], "4":[], "5":[]}
+        remove_list=[]
 
     # Change file names to standard format
     if args.bestprof:
@@ -869,10 +902,12 @@ if __name__ == "__main__":
         upfiles_dict["3"].append(d_file_loc)
         remove_list.append(d_file_loc)
 
-    # Upload all files and remove copies
-    multi_upload_files(str(args.obsid), args.pulsar, upfiles_dict, subbands=subbands, coh=coh)
-    for filename in remove_list:
-        os.remove(filename)
+    if args.bestprof or args.archive or args.single_pulse_series or \
+       args.ppps or args.ippd or args.waterfall:
+        # Upload all files and remove copies
+        multi_upload_files(str(args.obsid), args.pulsar, upfiles_dict, subbands=subbands, coh=coh)
+        for filename in remove_list:
+            os.remove(filename)
 
     # Upload calibration solution
     if args.cal_dir_to_tar:
