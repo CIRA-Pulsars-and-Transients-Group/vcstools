@@ -3,20 +3,20 @@ import sys
 import numpy as np
 import math
 
+import logging
+logger = logging.getLogger(__name__)
+
 #MWA scripts
 from mwa_pb import primary_beam
 from mwa_pb import config
-try:
-    import mwa_hyperbeam
-except ImportError:
-    logger.warning('Could not import mwa_hyperbeam; using pure Python implementation')
-
 
 from vcstools.pointing_utils import sex2deg
 from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata, getmeta
 
-import logging
-logger = logging.getLogger(__name__)
+try:
+    import mwa_hyperbeam
+except ImportError:
+    logger.warning('Could not import mwa_hyperbeam; using pure Python implementation')
 
 
 def pixel_area(ra_min, ra_max, dec_min, dec_max):

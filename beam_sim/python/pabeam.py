@@ -30,6 +30,8 @@ import logging
 import time as timing
 from itertools import chain
 
+logger = logging.getLogger(__name__)
+
 #from mwapy import ephem_utils,metadata
 from vcstools.metadb_utils import getmeta, get_common_obs_metadata
 from vcstools.pointing_utils import getTargetAZZA
@@ -37,12 +39,12 @@ from vcstools.general_utils import setup_logger
 from mwa_pb import primary_beam as pb
 from mwa_pb import config
 from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
+
 try:
     import mwa_hyperbeam
 except ImportError:
     logger.warning('Could not import mwa_hyperbeam; using pure Python implementation')
 
-logger = logging.getLogger(__name__)
 
 def getTileLocations(obsid, flags=[], metafits=None):
     """
