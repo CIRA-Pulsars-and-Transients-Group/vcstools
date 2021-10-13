@@ -37,8 +37,10 @@ from vcstools.general_utils import setup_logger
 from mwa_pb import primary_beam as pb
 from mwa_pb import config
 from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
-import mwa_hyperbeam
-beam = mwa_hyperbeam.FEEBeam(config.h5file)
+try:
+    import mwa_hyperbeam
+except ImportError:
+    logger.warning('Could not import mwa_hyperbeam; using pure Python implementation')
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +211,11 @@ def createArrayFactor(za, az, data):
     # calculate the tile beam at the given Az,ZA pixel
     logger.info( "rank {:3d} calculating tile beam".format(rank))
     if beam_model == 'hyperbeam':
+        if "mwa_hyperbeam" not in sys.modules:
+            logger.error("mwa_hyperbeam not installed so can not use hyperbeam to create a beam model. Exiting")
+            sys.exit(1)
         # This method is no longer needed as mwa_pb uses hyperbeam
+        beam = mwa_hyperbeam.FEEBeam(config.h5file)
         jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
         jones = jones.reshape(za.shape[0], 1, 2, 2)
         vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
