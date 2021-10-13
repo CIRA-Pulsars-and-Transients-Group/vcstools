@@ -6,7 +6,10 @@ import math
 #MWA scripts
 from mwa_pb import primary_beam
 from mwa_pb import config
-import mwa_hyperbeam
+try:
+    import mwa_hyperbeam
+except ImportError:
+    logger.warning('Could not import mwa_hyperbeam; using pure Python implementation')
 
 
 from vcstools.pointing_utils import sex2deg
@@ -201,9 +204,16 @@ def get_beam_power_over_time(beam_meta_data, names_ra_dec,
     """
     obsid, _, _, time, delays, centrefreq, channels = beam_meta_data
     names_ra_dec = np.array(names_ra_dec)
-    beam = mwa_hyperbeam.FEEBeam(config.h5file)
     amps = [1.0] * 16
     logger.info("Calculating beam power for OBS ID: {0}".format(obsid))
+
+    if option == 'hyperbeam':
+        if "mwa_hyperbeam" not in sys.modules:
+            logger.error("mwa_hyperbeam not installed so can not use hyperbeam to create a beam model. Exiting")
+            sys.exit(1)
+        beam = mwa_hyperbeam.FEEBeam(config.h5file)
+
+
 
     starttimes=np.arange(start_time,time+start_time,dt)
     stoptimes=starttimes+dt
