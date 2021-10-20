@@ -101,7 +101,7 @@ def calc_pixel_area(za, az_res, za_res):
     area: float
         Area of the pixel in square radians
     """
-    return np.radians(az_res * za_res) * np.sin(za)
+    return np.radians(az_res) * np.radians(za_res) * np.sin(za)
 
 
 def calcWaveNumbers(freq, p, t):
