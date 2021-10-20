@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import logging
 from scipy.interpolate import UnivariateSpline
+from scipy.special import erf
 import matplotlib
 matplotlib.use('Agg')
 
@@ -353,6 +354,55 @@ class gfit:
         plt.legend(loc="best", prop={'size': 14})
         plt.savefig(self._plot_name, bbox_inches="tight")
         plt.close()
+
+
+    def _prof_eval_gfit(self):
+        """Fits multiple gaussians to a profile and subsequently finds W10, W50, Weq and maxima"""
+        # Normalize, find the std
+        self._standardise_raw_profile()
+
+        # Fit gaussian
+        fit, chisq, bic, popt, pcov, comp_dict, comp_idx = self._fit_gaussian()
+        fit = np.array(fit)
+        n_rows, _ = np.shape(pcov)
+        num_gauss = n_rows/3
+
+        # Find widths + error
+        W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e = self._find_widths(popt, pcov)
+
+        # Convert from bins to phase
+        proflen = len(self._std_profile)
+        W10 = W10/proflen
+        W50 = W50/proflen
+        Weq = Weq/proflen
+        Wscat = Wscat/proflen
+        W10_e = W10_e/proflen
+        W50_e = W50_e/proflen
+        Weq_e = Weq_e/proflen
+        Wscat_e = Wscat_e/proflen
+        minima, maxima, minima_e, maxima_e = self._find_minima_maxima_gauss(popt, pcov, len(fit))
+
+        # Check if scattered
+        _, _, scattered = est_sn_from_prof(self._std_profile, self._alpha)
+
+        # Estimate SN
+        sn_simple = 1/self._noise_std
+        sn_simple_e = 1/(self._noise_std * np.sqrt(2 * self._n_off_pulse -2)) #TODO: make this estimate better
+        # Equation 7.1 in the handbook of pulsar astronomy
+        sn = np.sum(self._std_profile) / (self._noise_std * np.sqrt(Weq * proflen))
+        # Equation 7.2 in the handbook of pulsar astronomy. This is probablity of finding a SN by chance
+        #sn_e =  1/2*(1 + erf(sn/np.sqrt(2)))
+        # not sure how to convert this to an uncertainty so using simple uncertainty
+        sn_e = sn_simple_e
+
+        # Dump to dictionary
+        fit_dict = {"W10":W10, "W10_e":W10_e, "W50":W50, "W50_e":W50_e, "Wscat":Wscat, "Wscat_e":Wscat_e, "Weq":Weq, "Weq_e":Weq_e,
+                    "maxima":maxima, "maxima_e":maxima_e, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq,
+                    "num_gauss":num_gauss, "bic":bic, "gaussian_params":popt, "cov_mat":pcov, "comp_dict":comp_dict,
+                    "comp_idx":comp_idx, "alpha":self._alpha, "profile":self._std_profile, "fit":fit, "scattered":scattered,
+                    "sn":sn, "sn_e":sn_e, "sn_simple":sn_simple, "sn_simple_e":sn_simple_e}
+
+        return fit_dict
 
     def _standardise_raw_profile(self, roll_phase=0.25):
         """Normalises and rolls the raw profile to 0.25 in phase"""

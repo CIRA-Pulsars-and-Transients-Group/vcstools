@@ -1,6 +1,7 @@
 import os
 import math
 import csv
+import psrqpy
 
 from vcstools import data_load
 from vcstools.pointing_utils import deg2sex
@@ -13,18 +14,26 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=5000., include_dm=False, query=No
     """
     Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
-    If no pulsar_list given then returns all pulsar on the catalogue
-    If include_dm is True then also ouput DM
 
-    get_psrcat_ra_dec(pulsar_list = None)
-    Args:
-        pulsar_list: A space list of pulsar names eg: [J0534+2200, J0538+2817].
-               (default: uses all pulsars)
-    return [[Jname, RAJ, DecJ]]
+    Parameters
+    ----------
+    pulsar_list: list
+        List of the pulsar Jnames to search the catalogue for.
+        If no pulsar_list is given then returns all pulsar on the catalogue.
+        Default: None.
+    max_dm: float: float
+        The maximum dispersion measure of pulsars to include in the output.
+        Default: 250.
+    include_dm: boolean
+        If True will also return the pulsars' dispersion measure.
+    query: psrqpy object
+        A previous psrqpy query. Can be supplied to save time of performing a new query.
+
+    Returns
+    -------
+    pulsar_ra_dec: list
+        [[Jname, RAJ, DecJ]]
     """
-    import psrqpy
-
-    #params = ['JNAME', 'RAJ', 'DECJ', 'DM']
     if query is None:
         query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'RAJD', 'DECJD', 'DM'], psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
     pulsar_ra_dec = []
@@ -48,6 +57,35 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=5000., include_dm=False, query=No
                     pulsar_ra_dec.append([query["PSRJ"][i], raj, decj, dm])
                 else:
                     pulsar_ra_dec.append([query["PSRJ"][i], raj, decj])
+
+    return pulsar_ra_dec
+
+
+def get_psrcat_dm_period(pulsar_list=None, query=None):
+    """
+    Uses PSRCAT to return a list of pulsar names, periods and dispersion measures.
+
+    Parameters
+    ----------
+    pulsar_list: list
+        List of the pulsar Jnames to search the catalogue for.
+        If no pulsar_list is given then returns all pulsar on the catalogue.
+        Default: None.
+    query: psrqpy object
+        A previous psrqpy query. Can be supplied to save time of performing a new query.
+
+    Returns
+    -------
+    pulsar_ra_dec: list
+        [[Jname, DM, period]]
+    """
+    if query is None:
+        query = psrqpy.QueryATNF(params = ['PSRJ', 'DM', 'P0'], psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
+
+    pulsar_dm_p = []
+    for i, _ in enumerate(query["PSRJ"]):
+        pulsar_dm_p.append([query["PSRJ"][i], query["DM"][i], query["P0"][i], dm])
+
     return pulsar_ra_dec
 
 

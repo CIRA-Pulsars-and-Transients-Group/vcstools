@@ -1,7 +1,6 @@
 import os
 import sys
 import numpy as np
-import math
 
 import logging
 logger = logging.getLogger(__name__)
@@ -39,7 +38,7 @@ def pixel_area(ra_min, ra_max, dec_min, dec_max):
     area: float
         Area of the pixel in square degrees
     """
-    return (180./math.pi) * (ra_max - ra_min) * (math.sin(math.radians(dec_max)) - math.sin(math.radians(dec_min)))
+    return (ra_max - ra_min) * np.degrees(np.sin(np.radians(dec_max)) - np.sin(np.radians(dec_min)))
 
 
 def field_of_view(obsid,
@@ -107,7 +106,7 @@ def field_of_view(obsid,
 
 def from_power_to_gain(powers, cfreq, n, coh=True):
     from astropy.constants import c,k_B
-    from math import sqrt
+    from np import sqrt
 
     obswl = c.value/cfreq
     #for coherent
