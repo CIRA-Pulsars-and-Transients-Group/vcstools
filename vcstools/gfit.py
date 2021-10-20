@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 from scipy.interpolate import UnivariateSpline
+from scipy.special import erf
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -304,17 +305,25 @@ class gfit:
         Wscat_e = Wscat_e/proflen
         minima, maxima, minima_e, maxima_e = self._find_minima_maxima_gauss(popt, pcov, len(fit))
 
-        # Estimate SN
+        # Check if scattered
         _, _, scattered = est_sn_from_prof(self._std_profile, self._alpha)
-        sn = 1/self._noise_std
-        sn_e = 1/(self._noise_std * np.sqrt(2 * self._n_off_pulse -2)) #TODO: make this estimate better
+
+        # Estimate SN
+        sn_simple = 1/self._noise_std
+        sn_simple_e = 1/(self._noise_std * np.sqrt(2 * self._n_off_pulse -2)) #TODO: make this estimate better
+        # Equation 7.1 in the handbook of pulsar astronomy
+        sn = np.sum(self._std_profile) / (self._noise_std * np.sqrt(Weq * proflen))
+        # Equation 7.2 in the handbook of pulsar astronomy. This is probablity of finding a SN by chance
+        #sn_e =  1/2*(1 + erf(sn/np.sqrt(2)))
+        # not sure how to convert this to an uncertainty so using simple uncertainty
+        sn_e = sn_simple_e
 
         # Dump to dictionary
         fit_dict = {"W10":W10, "W10_e":W10_e, "W50":W50, "W50_e":W50_e, "Wscat":Wscat, "Wscat_e":Wscat_e, "Weq":Weq, "Weq_e":Weq_e,
                     "maxima":maxima, "maxima_e":maxima_e, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq,
                     "num_gauss":num_gauss, "bic":bic, "gaussian_params":popt, "cov_mat":pcov, "comp_dict":comp_dict,
-                    "comp_idx":comp_idx, "alpha":self._alpha, "profile":self._std_profile, "fit":fit, "sn":sn,
-                    "sn_e":sn_e, "scattered":scattered}
+                    "comp_idx":comp_idx, "alpha":self._alpha, "profile":self._std_profile, "fit":fit, "scattered":scattered,
+                    "sn":sn, "sn_e":sn_e, "sn_simple":sn_simple, "sn_simple_e":sn_simple_e}
 
         return fit_dict
 
