@@ -6,18 +6,12 @@ import numpy as np
 import sys
 import os
 from itertools import chain
-from astropy.io import fits
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
 
-from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation
-import astropy.units as u
 from astropy.constants import c
+from astropy.io import fits
 
 #from mwapy import ephem_utils,metadata
 from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
-from vcstools.pointing_utils import getTargetAZZA, getTargetRADec
 
 import logging
 logger = logging.getLogger(__name__)
@@ -130,6 +124,7 @@ def calcWaveNumbers(freq, p, t):
 
     return [kx,ky,kz]
 
+
 def calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=False):
     """
     Completes the calculation of equation 7 to get the phase of the tiles for each position on the sky
@@ -165,6 +160,7 @@ def calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=False):
     logger.debug("ph_tile.shape[0] : {}".format(ph_tile[0].shape))
     return ph_tile
 
+
 def calc_geometric_delay_distance(p, t):
     """
     Equation 1 of Ord 2019. Changed cos(el) to sin(za)
@@ -175,6 +171,7 @@ def calc_geometric_delay_distance(p, t):
     #gy = np.multiply(np.sin(t), np.sin(p))
     gz = np.cos(t)
     return gx, gy, gz
+
 
 def cal_phase_ord(xpos, ypos, zpos, delays, gx, gy, gz, freq, coplanar=False, no_delays=False):
     """
@@ -217,6 +214,7 @@ def cal_phase_ord(xpos, ypos, zpos, delays, gx, gy, gz, freq, coplanar=False, no
     logger.debug("ph_tile.shape[0] : {}".format(ph_tile[0].shape))
     return ph_tile
 
+
 def calcArrayFactor(ph_tiles, ph_targets):
     """
     Calculates array factor pointed at some target zenith angle (za) and azimuth (az) (equation 11)
@@ -243,7 +241,7 @@ def calcArrayFactor(ph_tiles, ph_targets):
     array_factor = np.sum(array_factor_tiles, axis=0)
 
     # normalise to unity at pointing position
-    array_factor /= len(ph_tiles)
+    array_factor = np.divide(array_factor, len(ph_tiles))
     array_factor_power = np.abs(array_factor)**2
 
     return array_factor, array_factor_power
@@ -266,151 +264,34 @@ def partial_convolve_sky_map(az_grid, za_grid, pixel_area, phased_array_pattern,
     logger.debug("phased_array_pattern.shape: {}".format(phased_array_pattern.shape))
     sys.stdout = sys.__stdout__
 
+    logger.debug("np.average(sky_grid.flatten()): {}".format(np.average(sky_grid.flatten())))
     sum_B_T = np.sum(phased_array_pattern * sky_grid.flatten() * pixel_area)
     sum_B   = np.sum(phased_array_pattern * pixel_area)
     return sum_B_T, sum_B
 
 
-def plot_vcsbeam_psf(psf_file, output_name="vcsbeam_psf.png"):
-    input_array = np.loadtxt(psf_file, dtype=float)
-    print(input_array.shape[0])
-    ra    = input_array[:,0]
-    dec   = input_array[:,1]
-    power = input_array[:,2]
-    ra.shape = dec.shape = power.shape = (int(np.sqrt(input_array.shape[0])),
-                                          int(np.sqrt(input_array.shape[0])))
-    ax = plt.subplot(1, 1, 1,)
-    im = ax.pcolormesh(ra, dec, power, norm=colors.LogNorm(), cmap='plasma')
+def read_sefd_file(sefd_file, all_data=False):
+    """
+    Read in the output sefd file from a pabeam.py simulation.
 
-    plt.xlabel(r"Right Ascension (hours)")
-    plt.ylabel(r"Declination ($^{\circ}$)")
-    plt.colorbar(im,#spacing='uniform', shrink = 0.65, #ticks=[2., 10., 20., 30., 40., 50.],
-                 label="Normalised array factor power")
-    plt.savefig(output_name)
-
-
-def plot_track_beam_response(response_file, output_name="vcsbeam_response.png", time_max=-1):
-    input_array = np.loadtxt(response_file, dtype=float)
-    sec          = input_array[:,0]
-    freq         = input_array[:,1]
-    stokes_I     = input_array[:,5]
-    array_factor = input_array[:,9]
-    response = stokes_I * array_factor**2
-
-    # Split into freq chunks
-    nsec = max(sec)
-    nfreq = input_array.shape[0] // nsec
-    sec_map   = np.array(np.array_split(sec,      nfreq))[:,:time_max]
-    freq_map  = np.array(np.array_split(freq,     nfreq))[:,:time_max]
-    power_map = np.array(np.array_split(response, nfreq))[:,:time_max]
-
-    # Sum over frequency
-    power_time = np.average(power_map, axis=0)
-    sec_time = sec_map[0]
-
-    # Sum over time
-    power_freq = np.average(power_map, axis=1)
-    freq_freq = freq_map[:,0]
-
-    size = 3
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(2*size,size))
-
-    # Plot rack over time
-    ax1.plot(sec_time, power_time)
-    ax1.set_xlabel("Time (s)")
-    ax1.set_ylabel("Array Factor")
-
-    # Plot rack over time
-    ax2.plot(freq_freq, power_freq)
-    ax2.set_xlabel("Frequency (MHz)")
-    ax2.set_ylabel("Array Factor")
-    plt.tight_layout()
-    plt.savefig(output_name)
-
-
-def plot_pabeam(dat_file, output_name="pabeam_psf.png"):
-    with open(dat_file) as file:
-        lines = file.readlines()
-        lines = [line.rstrip() for line in lines]
-        nza = int(lines[7].split(" ")[-1])
-        naz = int(lines[8].split(" ")[-1])
-    input_array = np.loadtxt(dat_file, dtype=float)
-    print(input_array.shape)
-    za    = input_array[:,0]
-    az    = input_array[:,1]
-    power = input_array[:,2]
-    print(za[0:10])
-    print(az[0:10])
-    #za.shape = az.shape = power.shape = (nza, naz)
-    za.shape = az.shape = power.shape = (naz, nza)
-    ax = plt.subplot(1, 1, 1, projection='polar')
-    #ax = plt.subplot(1, 1, 1)
-    #ax.set_rlim(1, 100)
-    #ax.set_rscale('log')
-    print(za.shape)
-    print(za[0])
-    #print(za[nza-1])
-    print(az.shape)
-    print(az[0])
-    #print(az[nza-1])
-
-    im = plt.pcolormesh(np.radians(az), za, power)
-    plt.xlabel(r"Azimuth ($^{\circ}$)")
-    plt.ylabel(r"Zenith ($^{\circ}$)")
-    plt.colorbar(im, label="Normalised array factor power")
-    plt.savefig(output_name, dpi=500)
-
-def plot_pabeam_ra_dec(dat_file, output_name="pabeam_psf.png"):
-    with open(dat_file) as file:
-        lines = file.readlines()
-        lines = [line.rstrip() for line in lines]
-        date  = lines[3].split("'")[-2]
-        time = Time(date, format='iso', scale='utc')
-        nra   = int(lines[7].split(" ")[-1])
-        ndec  = int(lines[8].split(" ")[-1])
-    input_array = np.loadtxt(dat_file, dtype=float)
-    print(input_array.shape)
-    za    = input_array[:,0]
-    az    = input_array[:,1]
-    power = input_array[:,2]
-
-    # Convert to RA and Dec
-    _, _, ra, dec = getTargetRADec(az, za, time)
-
-    # test
-    _, _, taz, tza = getTargetAZZA(ra, dec, time, units=(u.deg, u.deg))
-    print(taz[0], az[0])
-    print(taz[-1], az[-1])
-    print(tza[0], za[0])
-    print(tza[-1], za[-1])
-
-    print(ra[0:10])
-    print(dec[0:10])
-    #za.shape = az.shape = power.shape = (nza, naz)
-    ra.shape = dec.shape = power.shape = (nra, ndec)
-    ax = plt.subplot(1, 1, 1,)
-    print(ra.shape)
-    print(min(ra[0]), max(ra[0]))
-    print(min(ra[-1]), max(ra[-1]))
-    #print(ra)
-
-    print(dec.shape)
-    print(min(dec[0]), max(dec[0]))
-    print(min(dec[-1]), max(dec[-1]))
-    #print(dec)
-
-    im = plt.pcolormesh(ra, dec, power, norm=colors.LogNorm(), cmap='plasma')
-    plt.xlabel(r"Right Acension ($^{\circ}$)")
-    plt.ylabel(r"Declination ($^{\circ}$)")
-    plt.colorbar(im, label="Normalised array factor power")
-    plt.savefig(output_name, dpi=500)
-
-    colour_list = np.array(list(range(len(ra.flatten()))))/len(ra.flatten())
-    print(colour_list[-1])
-    print(len(ra.flatten()), len(dec.flatten()), len(colour_list))
-    #for x,y,c in zip(ra.flatten(), dec.flatten(), colour_list):
-        #print(x,y,c)
-        #plt.scatter(x, y, c=[c])
-    #plt.scatter(ra.flatten(), dec.flatten(), c=colour_list)
-    #plt.colorbar(label="Normalised array factor power")
-    #plt.savefig("scatter.png", dpi=500)
+    Parameters:
+    -----------
+    sefd_file: str
+        The location of the sefd file to be read in.
+    all_data: boolean
+        If True will return the freq, sefd, t_sys, t_ant, gain, effective_area.
+        If False will only return the sefd. Default False
+    """
+    input_array = np.loadtxt(sefd_file, dtype=float)
+    if all_data:
+        freq  = input_array[:,0]
+        sefd  = input_array[:,1]
+        t_sys = input_array[:,3]
+        t_ant = input_array[:,4]
+        gain  = input_array[:,5]
+        effective_area = input_array[:,6]
+        return freq, sefd, t_sys, t_ant, gain, effective_area
+    else:
+        sefd  = input_array[:,1]
+        sefd = np.average(sefd)
+        return sefd
