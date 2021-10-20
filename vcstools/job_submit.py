@@ -13,6 +13,7 @@ SLURM_TMPL = """{shebag}
 #SBATCH --clusters={cluster}
 #SBATCH --partition={partition}
 #
+#SBATCH --cpus-per-task=1
 #SBATCH --ntasks-per-node={threads}
 #SBATCH --mem-per-cpu={mem}MB
 #SBATCH --nice={nice}

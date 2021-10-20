@@ -112,6 +112,7 @@ ARM_CONFIG =   {'base_data_dir' : '/ibo9000/Pulsar/vcs/',
 import logging
 import socket
 import argparse
+import sys
 
 from vcstools.general_utils import setup_logger
 
@@ -123,8 +124,8 @@ def load_config_file():
     """
     #Work out which supercomputer you're using
     hostname = socket.gethostname()
-    # galaxy head node, galaxy and magnus job nodes, zeus job nodes, garrawarla job nodes
-    if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z'):
+    #  galaxy head node,                galaxy and magnus job nodes,  zeus job nodes,         zeus copyq
+    if hostname.startswith('galaxy') or hostname.startswith('nid') or hostname.startswith('z') or hostname.startswith('hpc-data'):
         comp_config = GALAXY_CONFIG
     elif hostname.startswith('mwa') or hostname.startswith('garrawarla'):
         comp_config = GARRAWARLA_CONFIG
@@ -134,7 +135,7 @@ def load_config_file():
         comp_config = ARM_CONFIG
     else:
         logger.error('Unknown computer {}. Exiting'.format(hostname))
-        quit()
+        sys.exit(1)
 
     return comp_config
 
