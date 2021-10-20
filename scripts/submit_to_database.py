@@ -389,17 +389,17 @@ def launch_pabeam_sim(obsid, pointing,
     if common_metadata is None:
         common_metadata = get_common_obs_metadata(obsid)
     # Get frequencies
-    centre_freq = common_metadata[5]
-    low_freq  = common_metadata[6][0] * 1.28
-    high_freq = common_metadata[6][-1] * 1.28
+    centre_freq = common_metadata[5] * 10e5
+    low_freq  = common_metadata[6][0] * 1.28 * 10e5
+    high_freq = common_metadata[6][-1] * 1.28 * 10e5
+    sim_freqs = [str(low_freq), str(centre_freq), str(high_freq)]
 
     # Calculate required pixels
     array_phase = get_obs_array_phase(obsid)
-    fwhm = calc_ta_fwhm(high_freq, array_phase=array_phase) #degrees
-    phi_res = theta_res = fwhm / 2
+    fwhm = calc_ta_fwhm(high_freq / 10e5, array_phase=array_phase) #degrees
+    phi_res = theta_res = fwhm / 1.5 #2
     npixels = 360. // phi_res + 90. // theta_res
-    mb_required = 0.005 * npixels
-    cores_required = 12288 // mb_required
+    cores_required = npixels * len(sim_freqs) // 800
     nodes_required = cores_required // 24 + 1
 
     # Make directories
@@ -429,11 +429,11 @@ def launch_pabeam_sim(obsid, pointing,
     command += ' -e {}'.format(efficiency)
     command += ' --metafits {}'.format(metafits_file)
     command += ' -p {}'.format(pointing)
-    command += ' --grid_res {:.5f} {:.5f}'.format(theta_res, phi_res)
+    command += ' --grid_res {:.3f} {:.3f}'.format(theta_res, phi_res)
     command += ' --delays {}'.format(' '.join(np.array(delays, dtype=str)))
     command += ' --out_dir {}'.format(sefd_dir)
     command += ' --out_name {}'.format(source_name)
-    command += ' --freq {} {} {}'.format(low_freq, centre_freq, high_freq)
+    command += ' --freq {}'.format(" ".join(sim_freqs))
     if flagged_tiles is not None:
         logger.debug("flagged_tiles: {}".format(flagged_tiles))
         command += ' --flagged_tiles {}'.format(' '.join(flagged_tiles))
@@ -675,7 +675,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     det_kwargs["width_error"]       = u_w_equiv_ms
     det_kwargs["scattering"]        = scattering
     det_kwargs["scattering_error"]  = u_scattering
-    return det_kwargs
+    return det_kwargs, sn, u_sn
 
 """
 Test set:
