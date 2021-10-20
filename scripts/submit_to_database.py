@@ -32,7 +32,7 @@ from mwa_pulsar_client import client
 
 import vcstools.sn_flux_utils as snfe
 from vcstools import data_load
-from vcstools.metadb_utils import get_common_obs_metadata, get_ambient_temperature
+from vcstools.metadb_utils import get_common_obs_metadata, get_ambient_temperature, get_obs_array_phase, calc_ta_fwhm
 from vcstools.catalogue_utils import get_psrcat_ra_dec, get_psrcat_dm_period
 from vcstools import prof_utils
 from vcstools.config import load_config_file
@@ -40,6 +40,7 @@ from vcstools.job_submit import submit_slurm
 from vcstools.general_utils import mdir, setup_logger
 from vcstools.gfit import gfit
 from vcstools.beam_calc import get_Trec
+from vcstools.beam_sim import read_sefd_file
 
 
 
@@ -373,7 +374,9 @@ def launch_pabeam_sim(obsid, pointing,
                       phi_res=0.1, theta_res=0.05,
                       efficiency=1,
                       nodes=3,
-                      vcstools_version='master'):
+                      vcstools_version='master',
+                      args=None,
+                      common_metadata=None):
     """
     Submit a job to run the pabeam code to estimate the system equivelent
     flux density and returns a job id so a dependent job to resume the
@@ -401,60 +404,55 @@ def launch_pabeam_sim(obsid, pointing,
         print(' '.join(np.array(delays, dtype=str)))
 
     # Set up pabeam command
-    command = 'srun --export=all -u -n {} pabeam.py'.format(nodes*24)
+    command = 'srun --export=all -u -n {} pabeam.py'.format(int(nodes_required*24))
     command += ' -o {}'.format(obsid)
     command += ' -b {}'.format(begin)
-    command += ' -d {}'.format(int(duration))
+    #command += ' -d {}'.format(int(duration))
+    command += ' -d 300' # force it to only do a single time calc until I understand the best way to average it
     command += ' -e {}'.format(efficiency)
     command += ' --metafits {}'.format(metafits_file)
     command += ' -p {}'.format(pointing)
-    command += ' --grid_res {} {}'.format(theta_res, phi_res)
+    command += ' --grid_res {:.5f} {:.5f}'.format(theta_res, phi_res)
     command += ' --delays {}'.format(' '.join(np.array(delays, dtype=str)))
     command += ' --out_dir {}'.format(sefd_dir)
     command += ' --out_name {}'.format(source_name)
+    command += ' --freq {} {} {}'.format(low_freq, centre_freq, high_freq)
     if flagged_tiles is not None:
         logger.debug("flagged_tiles: {}".format(flagged_tiles))
         command += ' --flagged_tiles {}'.format(' '.join(flagged_tiles))
-
 
     # Set up and launch job
     batch_file_name = 'pabeam_{}_{}_{}'.format(obsid, source_name, pointing)
     job_id = submit_slurm(batch_file_name, [command],
                           batch_dir=batch_dir,
                           slurm_kwargs={"time": datetime.timedelta(seconds=10*60*60),
-                                        "nodes":nodes},
+                                        "nodes":int(nodes_required)},
                           module_list=['hyperbeam-python'],
                           queue='cpuq',
                           cpu_threads=24,
                           mem=12288,
                           vcstools_version=vcstools_version)
-    return job_id
 
-def read_sefd_file(sefd_file, all_data=False):
-    """
-    Read in the output sefd file from a pabeam.py simulation.
+    # Set up dependant submit_to_database.py job
+    submit_args = vars(args)
+    # Add sefd_file argument
+    submit_args['sefd_file'] = "{}/{}*stats".format(sefd_dir, source_name)
+    command_str = "submit_to_database.py"
+    for key, val in submit_args.items():
+        if val:
+            if val == True:
+                command_str += " --{}".format(key)
+            else:
+                command_str += " --{} {}".format(key, val)
 
-    Parameters:
-    -----------
-    sefd_file: str
-        The location of the sefd file to be read in.
-    all_data: boolean
-        If True will return the freq, sefd, t_sys, t_ant, gain, effective_area.
-        If False will only return the sefd. Default False
-    """
-    input_array = np.loadtxt(sefd_file, dtype=float)
-    if all_data:
-        freq  = input_array[:,0]
-        sefd  = input_array[:,1]
-        t_sys = input_array[:,3]
-        t_ant = input_array[:,4]
-        gain  = input_array[:,5]
-        effective_area = input_array[:,6]
-        return freq, sefd, t_sys, t_ant, gain, effective_area
-    else:
-        sefd  = input_array[:,1]
-        sefd = np.average(sefd)
-        return sefd
+    batch_file_name = 'submit_to_database_{}_{}_{}'.format(obsid, source_name, pointing)
+    job_id_dependant = submit_slurm(batch_file_name, [command_str],
+                                    batch_dir=batch_dir,
+                                    slurm_kwargs={"time": datetime.timedelta(seconds=1*60*60)},
+                                    queue='cpuq',
+                                    vcstools_version=vcstools_version,
+                                    depend=[job_id])
+    return job_id, job_id_dependant
 
 def analyise_and_flux_cal(pulsar, bestprof_data,
                           flagged_tiles=None,
@@ -462,7 +460,8 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
                           common_metadata=None,
                           trcvr=data_load.TRCVR_FILE,
                           simple_sefd=False, sefd_file=None,
-                          vcstools_version='master'):
+                          vcstools_version='master',
+                          args=None):
     """
     Analyise a pulse profile and calculates its flux density
 
@@ -489,6 +488,8 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
         The location of the pabeam.py's simulation of the phased array beam response over the sky output file. If not supplied will launch a pabeam.py simulation.
     vcstools_version: str
         The version of vcstools to use for the pabeam.py simulation. Default: master.
+    args: Namespace
+        The args from argparse to be used for job resubmission. Default: None.
 
     Returns:
     --------
@@ -547,7 +548,9 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
                               source_name=prof_psr,
                               vcstools_version=vcstools_version,
                               flagged_tiles=flagged_tiles,
-                              delays=xdelays)
+                              delays=xdelays,
+                              args=args,
+                              common_metadata=common_metadata)
             sys.exit(0)
         else:
             sefd = read_sefd_file(sefd_file)
@@ -800,11 +803,13 @@ if __name__ == "__main__":
     # Perform the profile analysis and flux calibration if profile available ------------------------
     if args.bestprof or args.ascii:
         logger.info("Performing profile analaysis and flux density calculation")
-        det_kwargs = analyise_and_flux_cal(args.pulsar, bestprof_data, args.cal_id,
-                        common_metadata=common_metadata,
-                        trcvr=args.trcvr,
-                        simple_sefd=args.simple_sefd, sefd_file=args.sefd_file,
-                        vcstools_version=args.vcstools_version)
+        det_kwargs, sn, u_sn = analyise_and_flux_cal(args.pulsar,
+                bestprof_data, args.cal_id,
+                common_metadata=common_metadata,
+                trcvr=args.trcvr,
+                simple_sefd=args.simple_sefd, sefd_file=args.sefd_file,
+                vcstools_version=args.vcstools_version,
+                args=args)
         det_kwargs["dm"] = float(bestprof_data[2]) # DM from profile
     else:
         # No profile provided so just create pulsar table without the pulsar properties
