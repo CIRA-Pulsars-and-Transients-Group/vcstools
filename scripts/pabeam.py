@@ -40,7 +40,8 @@ import mwa_hyperbeam
 beam = mwa_hyperbeam.FEEBeam(config.h5file)
 from vcstools.beam_calc import get_Trec
 from vcstools.beam_sim import getTileLocations, get_obstime_duration, partial_convolve_sky_map,\
-                              calcWaveNumbers, calcSkyPhase, calcArrayFactor, calc_pixel_area
+                              calcWaveNumbers, calcSkyPhase, calcArrayFactor, calc_pixel_area,\
+                              calc_geometric_delay_distance, cal_phase_ord
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +75,13 @@ def createArrayFactor(za, az, pixel_area, data):
     xpos = data['x']
     ypos = data['y']
     zpos = data['z']
+    cable_delays = data['cd']
     theta_res = data['tres']
     phi_res = data['pres']
     beam_model = data['beam']
-    out_dir = data['out_dir']
-    write = data['write']
     coplanar = data['coplanar']
+    ord_version = data['ord_version']
+    no_delays = data['no_delays']
     plot_jobid = data['plot_jobid']
 
     # work out core depent part of data to process
@@ -91,12 +93,27 @@ def createArrayFactor(za, az, pixel_area, data):
     logger.info( "rank {:3d} Calculating phase of each sky position for each tile".format(rank))
     # calculate the relevent wavenumber for (theta,phi)
     #logger.info( "rank {:3d} Calculating wavenumbers".format(rank))
-    kx, ky, kz = calcWaveNumbers(obsfreq, (np.pi / 2) - az, za)
-    #logger.debug("kx[0] {} ky[0] {} kz[0] {}".format(kx[0], ky[0], kz[0]))
-    logger.debug("rank {:3d} Wavenumbers shapes: {} {} {}".format(rank, kx.shape, ky.shape, kz.shape))
+    if ord_version:
+        #gx, gy, gz = calc_geometric_delay_distance((np.pi / 2) - az, za)
+        gx, gy, gz = calc_geometric_delay_distance(az, za)
+        logger.debug("rank {:3d} Wavenumbers shapes: {} {} {}".format(rank, gx.shape, gy.shape, gz.shape))
 
-    # phase of each sky position for each tile
-    ph_tile = calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=coplanar)
+        # phase of each sky position for each tile
+        ph_tile = cal_phase_ord(xpos, ypos, zpos, cable_delays, gx, gy, gz, obsfreq,
+                                coplanar=coplanar, no_delays=no_delays)
+    else:
+        kx, ky, kz = calcWaveNumbers(obsfreq, (np.pi / 2) - az, za)
+        #logger.debug("kx[0] {} ky[0] {} kz[0] {}".format(kx[0], ky[0], kz[0]))
+        logger.debug("rank {:3d} Wavenumbers shapes: {} {} {}".format(rank, kx.shape, ky.shape, kz.shape))
+
+        # phase of each sky position for each tile
+        ph_tile = calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=coplanar)
+    #TODO REMOVE
+    gx, gy, gz = calc_geometric_delay_distance(az, za)
+    kx, ky, kz = calcWaveNumbers(obsfreq, (np.pi / 2) - az, za)
+    logger.debug("gx: {}".format(gx *2 * np.pi * obsfreq / c.value))
+    logger.debug("kx: {}".format(kx))
+
 
     requests.get('https://ws.mwatelescope.org/progress/update',
                  params={'jobid':plot_jobid,
@@ -150,10 +167,19 @@ def createArrayFactor(za, az, pixel_area, data):
         # these are defined in the normal sense: za = 90 - elevation, az = angle east of North (i.e. E=90)
         logger.info( "rank {:3d} Calculating phase of each sky position for the target at time {}".format(rank, time))
         srcAz, srcZA, _, _ = getTargetAZZA(ra, dec, time)# calculate the target (kx,ky,kz)
-        target_kx, target_ky, target_kz = calcWaveNumbers(obsfreq, (np.pi / 2) - srcAz, srcZA)
 
-        # Get phase of target for each tile phase of each sky position for each tile
-        ph_target = calcSkyPhase(xpos, ypos, zpos, target_kx, target_ky, target_kz)
+        if ord_version:
+            #t_gx, t_gy, t_gz = calc_geometric_delay_distance((np.pi / 2) - srcAz, srcZA)
+            t_gx, t_gy, t_gz = calc_geometric_delay_distance(srcAz, srcZA)
+
+            # phase of each sky position for each tile
+            ph_target = cal_phase_ord(xpos, ypos, zpos, cable_delays, t_gx, t_gy, t_gz, obsfreq,
+                                      coplanar=coplanar, no_delays=no_delays)
+        else:
+            target_kx, target_ky, target_kz = calcWaveNumbers(obsfreq, (np.pi / 2) - srcAz, srcZA)
+
+            # Get phase of target for each tile phase of each sky position for each tile
+            ph_target = calcSkyPhase(xpos, ypos, zpos, target_kx, target_ky, target_kz)
 
         # determine the interference pattern seen for each tile
         logger.info( "rank {:3d} Calculating array_factor".format(rank))
@@ -283,6 +309,10 @@ if __name__ == "__main__":
                                  "advanced" the advanced beam model (2014 model, fast and slighty more accurate),
                                  "full_EE" the full EE model (2016 model, slow but accurate) or
                                  "hyperbeam" the rust accelerated full EE model. Default: "hyperbeam" """)
+    othargs.add_argument("--ord_version", action='store_true',
+                         help="""Use the ord version of the phase calculations to include cable delays.""")
+    othargs.add_argument("--no_delays", action='store_true',
+                         help="""Set the cable delays to zero so tehey don't effect the calculation.""")
     othargs.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO",
                          help="Logger verbositylevel. Default: INFO")
     args = parser.parse_args()
@@ -325,7 +355,7 @@ if __name__ == "__main__":
 
         # get the tile locations from the metafits
         logger.info("getting tile locations from metafits file")
-        xpos, ypos, zpos = getTileLocations(args.obsid, flags, metafits=args.metafits)
+        xpos, ypos, zpos, cable_delays = getTileLocations(args.obsid, flags, metafits=args.metafits)
         logger.debug("xpos: {}".format(xpos))
         logger.debug("ypos: {}".format(ypos))
         logger.debug("zpos: {}".format(zpos))
@@ -412,13 +442,14 @@ if __name__ == "__main__":
                 'x':xpos,
                 'y':ypos,
                 'z':zpos,
+                'cd':cable_delays,
                 'tres':tres,
                 'pres':pres,
                 'beam':args.beam_model,
-                'out_dir':args.out_dir,
-                'write':args.write,
                 'nchunks':nchunks,
                 'coplanar':args.coplanar,
+                'ord_version':args.ord_version,
+                'no_delays':args.no_delays,
                 'npositions':npositions,
                 'plot_jobid':plot_jobid
                 }

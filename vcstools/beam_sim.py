@@ -35,6 +35,7 @@ def getTileLocations(obsid, flags=[], metafits=None):
         list[0] = a list of tile positions East of the array centre
         list[1] = a list of tile positions North of the array centre
         list[2] = a list of tile heights about sea-level
+        list[3] = a list of tile cable delays
     """
 
     f = fits.open(metafits)
@@ -42,6 +43,13 @@ def getTileLocations(obsid, flags=[], metafits=None):
     east = f[1].data['East'][::2]
     north = f[1].data['North'][::2]
     height = f[1].data['Height'][::2] # height above sea-level
+    cable_delays_raw = f[1].data['Length']
+
+    # Format Cable delays to floats
+    cable_delays = []
+    for cab in cable_delays_raw:
+        cable_delays.append(float(cab[3:]))
+    cable_delays = np.array(cable_delays)
 
     # MWA array centre height above sea-level
     mwacentre_h = 377.827
@@ -51,8 +59,9 @@ def getTileLocations(obsid, flags=[], metafits=None):
     east = np.delete(east,flags)
     north = np.delete(north,flags)
     height = np.delete(height,flags)
+    cable_delays = np.delete(cable_delays,flags)
 
-    return east, north, height
+    return east, north, height, cable_delays
 
 
 def get_obstime_duration(obsid, metafits):
@@ -156,6 +165,57 @@ def calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=False):
     logger.debug("ph_tile.shape[0] : {}".format(ph_tile[0].shape))
     return ph_tile
 
+def calc_geometric_delay_distance(p, t):
+    """
+    Equation 1 of Ord 2019. Changed cos(el) to sin(za)
+    """
+    gx = np.multiply(np.sin(t), np.sin(p))
+    gy = np.multiply(np.sin(t), np.cos(p))
+    #gx = np.multiply(np.sin(t), np.cos(p))
+    #gy = np.multiply(np.sin(t), np.sin(p))
+    gz = np.cos(t)
+    return gx, gy, gz
+
+def cal_phase_ord(xpos, ypos, zpos, delays, gx, gy, gz, freq, coplanar=False, no_delays=False):
+    """
+    Equation 2 and 3 of Ord 2019.
+
+    Parameters:
+    -----------
+    xpos[N]:
+        A list of tile positions East of the array centre
+    ypos[N]:
+        A list of tile positions North of the array centre
+    zpos[N]:
+        A list of tile heights about sea-level
+    gx[az/za]:
+        The x 3D wavenumbers for a given wavelength and az/za grid
+    gy[az/za]:
+        The y 3D wavenumbers for a given wavelength and az/za grid
+    gz[az/za]:
+        The z 3D wavenumbers for a given wavelength and az/za grid
+
+    Returns:
+    --------
+    ph_tile[N][az/za]:
+        A list of the phases for each tile
+    """
+    if no_delays:
+        # Set cable delays to zeros so that they're not included
+        delays = np.zeros_like(delays)
+    #ph_tile = []
+    #for x, y, z in zip(xpos, ypos, zpos):
+        #ph = kx * x + ky * y + kz * z
+    # Equation 1 and 2 (TODO there is a minus in the ord paper so check if this is required)
+    # /delta t * c = gx * x + gy * y + gz * z + L
+    if coplanar:
+        wl = list(chain(np.subtract(np.add(np.multiply(gx, x), np.multiply(gy, y)), l) for x, y, l in zip(xpos, ypos, delays)))
+    else:
+        wl = list(chain(np.subtract(np.add(np.add(np.multiply(gx, x), np.multiply(gy, y)), np.multiply(gz, z)), l) for x, y, z, l in zip(xpos, ypos, zpos, delays)))
+    # Equation 3
+    ph_tile = 2 * np.pi * np.array(wl) * freq / c.value
+    logger.debug("ph_tile.shape[0] : {}".format(ph_tile[0].shape))
+    return ph_tile
 
 def calcArrayFactor(ph_tiles, ph_targets):
     """
