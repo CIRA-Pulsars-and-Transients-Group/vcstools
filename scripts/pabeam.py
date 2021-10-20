@@ -184,6 +184,7 @@ def createArrayFactor(za, az, pixel_area, data):
         # determine the interference pattern seen for each tile
         logger.info( "rank {:3d} Calculating array_factor".format(rank))
         array_factor, array_factor_power = calcArrayFactor(ph_tile, ph_target)
+        ph_tile = ph_target = None # Dereference for garbage collection
 
         #logger.debug("array_factor_power[0] {}".format(array_factor_power[0]))
         logger.debug("rank {:3d} array_factor[0] {}".format(rank, array_factor[0]))
@@ -381,10 +382,12 @@ if __name__ == "__main__":
             logger.debug("decs(degrees): {}".format(decs))
 
             rav, decv = np.meshgrid(ras, decs)
+            ras = decs = None # Dereference for garbage collection
             rav  = rav.flatten()
             decv = decv.flatten()
             # Convert to Az Za
             azv, zav, _, _ = getTargetAZZA(rav, decv, time[0], units=(u.deg, u.deg))
+            rav = decv = None # Dereference for garbage collection
             _, _, tra, tdec = getTargetRADec(azv[0], zav[0], time[0], units=(u.rad, u.rad))
             logger.debug("tra: {} tdec: {}".format(tra, tdec))
             logger.debug("azv[0]: {} zav[0]: {}".format(np.degrees(azv[0]), np.degrees(zav[0])))
@@ -403,6 +406,7 @@ if __name__ == "__main__":
             # Convert az and za into the meshgrid format
             logger.debug("za.shape {} az.shape {}".format(za.shape, az.shape))
             zav, azv = np.meshgrid(za, az)
+            za = az = None # Dereference for garbage collection
             logger.debug("zav.shape {} azv.shape {}".format(zav.shape, azv.shape))
             azv = azv.flatten()
             zav = zav.flatten()
@@ -417,6 +421,7 @@ if __name__ == "__main__":
         nchunks = size // len(args.freq)
         azv_chunks = np.array_split(azv, nchunks)
         zav_chunks = np.array_split(zav, nchunks)
+        zav = azv = None # Dereference for garbage collection
         pixel_area_chunks = np.array_split(pixel_area, nchunks)
 
         npositions = [len(chunk) for chunk in azv_chunks]
@@ -517,6 +522,7 @@ if __name__ == "__main__":
 
     # wait for all processes to have recieved the data
     comm.barrier()
+    #zav_chunks = azv_chunks = pixel_area_chunks = None # Dereference for garbage collection
 
     # Show progress began
     requests.get('https://ws.mwatelescope.org/progress/update',
