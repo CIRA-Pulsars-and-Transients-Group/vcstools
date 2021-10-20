@@ -385,6 +385,23 @@ def launch_pabeam_sim(obsid, pointing,
     # Load computer dependant config file
     comp_config = load_config_file()
 
+    # Perform metadata calls
+    if common_metadata is None:
+        common_metadata = get_common_obs_metadata(obsid)
+    # Get frequencies
+    centre_freq = common_metadata[5]
+    low_freq  = common_metadata[6][0] * 1.28
+    high_freq = common_metadata[6][-1] * 1.28
+
+    # Calculate required pixels
+    array_phase = get_obs_array_phase(obsid)
+    fwhm = calc_ta_fwhm(high_freq, array_phase=array_phase) #degrees
+    phi_res = theta_res = fwhm / 2
+    npixels = 360. // phi_res + 90. // theta_res
+    mb_required = 0.005 * npixels
+    cores_required = 12288 // mb_required
+    nodes_required = cores_required // 24 + 1
+
     # Make directories
     batch_dir = "{}{}/batch".format(comp_config['base_data_dir'], obsid)
     sefd_dir = "{}{}/sefd_simulations".format(comp_config['base_data_dir'], obsid)
@@ -725,6 +742,8 @@ if __name__ == "__main__":
             help='The location of the .bestprof file. Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering). Using this option can be used instead of inputting the observation ID and pulsar name.')
     calcargs.add_argument('--ascii', type=str,
             help='The location of the ascii file (pulsar profile output of DSPSR). Using this option will cause the code to calculate the needed parameters to be uploaded to the database (such as flux density, width and scattering).')
+    calcargs.add_argument('--dont_upload', action='store_true',
+            help='Will not upload the results or files to the database. Instead will just output the results of the analysis and flux calibration to a file.')
     calcargs.add_argument('--pointing', type=str,
             help="The pointing of the detection with the RA and Dec seperated by _ in the format HH:MM:SS_+DD:MM:SS, e.g. \"19:23:48.53_-20:31:52.95 19:23:40.00_-20:31:50.00\". This is only required if the bestprof has a non standard input fits file.")
     calcargs.add_argument('--start', type=int,
@@ -820,6 +839,19 @@ if __name__ == "__main__":
     det_kwargs["startcchan"]            = int(minfreq)
     det_kwargs["stopcchan"]             = int(maxfreq)
     det_kwargs["observation_type"]      = int(obstype)
+
+    if args.dont_upload:
+        # Just output a results file instead of uploading to database
+        file_name = "{}_{}_{}_flux_results.csv".format(args.pulsar, args.obsid, args.cal_id)
+        w = csv.writer(open(file_name, "w"))
+        # loop over dictionary keys and values
+        for key, val in det_kwargs.items():
+            w.writerow([key, val])
+        # also output the calculated SN
+        w.writerow(["sn", sn])
+        w.writerow(["u_sn", u_sn])
+        logger.info("Outut file {} written. Exiting".format(file_name))
+        sys.exit(0)
 
 
     # Create all the necessary database tables and upload the data/files ---------------------------------------
