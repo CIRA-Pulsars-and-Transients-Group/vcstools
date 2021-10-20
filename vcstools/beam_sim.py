@@ -123,10 +123,10 @@ def calcWaveNumbers(freq, p, t):
     --------
       [kx, ky, kz] - the 3D wavenumbers
     """
-    wl =  freq / c.value
-    kx = (2*np.pi/wl) * np.multiply(np.sin(t), np.cos(p))
-    ky = (2*np.pi/wl) * np.multiply(np.sin(t), np.sin(p))
-    kz = (2*np.pi/wl) * np.cos(t)
+    C =  2 * np.pi * freq / c.value
+    kx = C * np.multiply(np.sin(t), np.cos(p))
+    ky = C * np.multiply(np.sin(t), np.sin(p))
+    kz = C * np.cos(t)
 
     return [kx,ky,kz]
 
