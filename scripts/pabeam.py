@@ -296,8 +296,10 @@ if __name__ == "__main__":
                          help="""The radius of the Declination search area in degrees. Default: 1.""")
 
     outargs = parser.add_argument_group('Output options.')
-    outargs.add_argument("--out_dir", type=str, action='store', default=".",
+    outargs.add_argument("--out_dir", type=str, default=".",
                          help="Location (full path) to write the output data files")
+    outargs.add_argument("--out_name", type=str, default=".",
+                         help="The beginning of the output file name, ment to be used as a label. Default: pabeam")
     outargs.add_argument("--write", action='store_true',
                          help="""Write the beam pattern to disk when done calculating.
                                  If this option is not passed, you will just get a '.stats' files containing basic
@@ -550,6 +552,7 @@ if __name__ == "__main__":
         sum_B_T_sky_freq = np.empty(size)
         sum_B_sky_freq   = np.empty(size)
         phased_array_pattern_sky_freq = np.empty_like(np.repeat(zav_chunks, len(args.freq), axis=0))
+        logger.debug("rank {:3d} phased_array_pattern_sky_freq.shape: {}".format(rank, phased_array_pattern_sky_freq.shape))
         omega_A, sum_B_T, sum_B, phased_array_pattern = results_array
         omega_A_sky_freq[0] = omega_A
         sum_B_T_sky_freq[0] = sum_B_T
@@ -621,9 +624,9 @@ if __name__ == "__main__":
         logger.info("------------------------------------------")
         logger.info("** Simulation resolution **")
         if args.ra_dec_projection:
-            logger.info("Pixels: {} ra     {} dec".format(nra, ndec))
+            logger.info("#Pixels: {} ra     {} dec".format(nra, ndec))
         else:
-            logger.info("Pixels: {} za     {} az".format(ntheta, nphi))
+            logger.info("#Pixels: {} za     {} az".format(ntheta, nphi))
         logger.info("Theta (ZA) resolution    [deg] : {0}".format(tres))
         logger.info("                      [arcmin] : {0}".format(tres * 60))
         logger.info("Phi   (Az) resolution    [deg] : {0}".format(pres))
@@ -639,7 +642,8 @@ if __name__ == "__main__":
         logger.info("SEFD                     [Jy] : {0}".format(sefd_freq))
 
         # write the stats file
-        oname = "{0}/{1}_{2:.2f}-{3:.2f}MHz_tres{4}_pres{5}_{6}_{7}.stats".format(args.out_dir, args.obsid, args.freq[0]/1e6, args.freq[-1]/1e6, tres, pres, ra, dec)
+        oname = "{0}/{1}_{2}_{3:.2f}-{4:.2f}MHz_tres{5}_pres{6}_{7}_{8}.stats".format(args.out_dir, args.out_name,
+                args.obsid, args.freq[0]/1e6, args.freq[-1]/1e6, tres, pres, ra, dec)
         with open(oname, "w") as f:
             f.write("#==== Summary ====\n")
             f.write("#** Pointing **\n")
@@ -659,9 +663,9 @@ if __name__ == "__main__":
             f.write("#\n")
             f.write("#** Simulation resolution **\n")
             if args.ra_dec_projection:
-                f.write("Pixels: {} ra     {} dec".format(nra, ndec))
+                f.write("#Pixels: {} ra     {} dec\n".format(nra, ndec))
             else:
-                f.write("Pixels: {} za     {} az".format(ntheta, nphi))
+                f.write("#Pixels: {} za     {} az\n".format(ntheta, nphi))
             f.write("#Theta (ZA) resolution    [deg] : {0}\n".format(tres))
             f.write("#                      [arcmin] : {0}\n".format(tres * 60))
             f.write("#Phi   (Az) resolution    [deg] : {0}\n".format(pres))
