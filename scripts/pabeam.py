@@ -101,6 +101,7 @@ def createArrayFactor(za, az, pixel_area, data):
         # phase of each sky position for each tile
         ph_tile = cal_phase_ord(xpos, ypos, zpos, cable_delays, gx, gy, gz, obsfreq,
                                 coplanar=coplanar, no_delays=no_delays)
+        gx = gy = gz = None # Dereference for garbage collection
     else:
         kx, ky, kz = calcWaveNumbers(obsfreq, (np.pi / 2) - az, za)
         #logger.debug("kx[0] {} ky[0] {} kz[0] {}".format(kx[0], ky[0], kz[0]))
@@ -108,11 +109,7 @@ def createArrayFactor(za, az, pixel_area, data):
 
         # phase of each sky position for each tile
         ph_tile = calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=coplanar)
-    #TODO REMOVE
-    gx, gy, gz = calc_geometric_delay_distance(az, za)
-    kx, ky, kz = calcWaveNumbers(obsfreq, (np.pi / 2) - az, za)
-    logger.debug("gx: {}".format(gx *2 * np.pi * obsfreq / c.value))
-    logger.debug("kx: {}".format(kx))
+        kx = ky = kz = None # Dereference for garbage collection
 
 
     requests.get('https://ws.mwatelescope.org/progress/update',
@@ -129,7 +126,9 @@ def createArrayFactor(za, az, pixel_area, data):
         jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
         jones = jones.reshape(za.shape[0], 1, 2, 2)
         vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
+        jones = None # Dereference for garbage collection
         tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
+        vis = None # Dereference for garbage collection
     elif beam_model == 'analytic':
         tile_xpol, tile_ypol = pb.MWA_Tile_analytic(za, az,
                                                 freq=obsfreq, delays=[delays, delays],
@@ -543,6 +542,9 @@ if __name__ == "__main__":
                          'current':3+len(data['time']),
                          'total'  :3+len(data['time']),
                          'desc':'Done'})
+
+    # The different processing time sometimes can cause the following sends to time out without this barrier
+    comm.barrier()
 
     # collect results for the beam area calculation
     if rank != 0:
