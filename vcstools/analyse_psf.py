@@ -275,7 +275,12 @@ def read_psf_fits(fits_file, centre_size=None):
 
     # Other header info
     centre_freq = hdul[0].header['CRVAL3'] #Hz
-    ra_npixels, dec_npixels = hdul[0].data.shape
+    if len(hdul[0].data.shape) == 4:
+        _, _, ra_npixels, dec_npixels = hdul[0].data.shape
+        fits_data = hdul[0].data[0][0]
+    else:
+        ra_npixels, dec_npixels = hdul[0].data.shape
+        fits_data = hdul[0].data
     raj, decj = deg2sex(float(ra_ref_pos), float(dec_ref_pos))
     pointing = "{}_{}".format(raj,decj)
 
@@ -290,7 +295,6 @@ def read_psf_fits(fits_file, centre_size=None):
 
     # Plot data
     rav, decv = np.meshgrid(ra_range, dec_range)
-    fits_data = hdul[0].data
 
     if centre_size:
         # Grab the centre pixels
@@ -342,7 +346,7 @@ def plot_imaging_psf(fits_file, output_name="imaging_psf.png",
     else:
         # Create plot
         im = plt.pcolormesh(rav, decv, fits_data, cmap='plasma',
-                            vmin=vmin, norm=colors.LogNorm(), vmax=0.3)
+                            vmin=vmin, norm=colors.LogNorm())
         #image_data = fits.getdata(fits_file, ext=0)
         #plt.imshow(image_data, cmap='plasma', extent=[np.amin(rav), np.amax(rav),
         #                                              np.amin(decv), np.amax(decv)])
@@ -402,11 +406,14 @@ def plot_psf_comparison(imaging_psf,
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(2*size,size))
     pixel_radius = 30
 
-    # remove an offset
-    ra_diff = rap[rap_middle][rap_middle] - rai[rai_middle][rai_middle]
+    # remove offsets
+    rap_diff = rap[rap_middle][rap_middle] - rai[rai_middle][rai_middle]
+    rac_diff = rac[rac_middle][rac_middle] - rai[rai_middle][rai_middle]
 
     # plot RA cuts -----------------------------------------------------------------
-    spline = UnivariateSpline(rai[rai_middle][rai_middle-pixel_radius:rai_middle+pixel_radius],
+    image_ra = list(rai[rai_middle][rai_middle-pixel_radius:rai_middle+pixel_radius])
+    image_ra.reverse()
+    spline = UnivariateSpline(image_ra,
                               ipower[rai_middle][rai_middle-pixel_radius:rai_middle+pixel_radius] - 0.5, s=0)
     enter_beam, exit_beam = spline.roots()
     fwhm = exit_beam - enter_beam
@@ -418,7 +425,7 @@ def plot_psf_comparison(imaging_psf,
                               ppower[rap_middle][rap_middle-pixel_radius:rap_middle+pixel_radius] - 0.5, s=0)
     enter_beam, exit_beam = spline.roots()
     fwhm = exit_beam - enter_beam
-    ax1.plot(rap[rap_middle][rap_middle-pixel_radius:rap_middle+pixel_radius] - ra_diff,
+    ax1.plot(rap[rap_middle][rap_middle-pixel_radius:rap_middle+pixel_radius] - rap_diff,
              ppower[rap_middle][rap_middle-pixel_radius:rap_middle+pixel_radius],
              label=r"Phased Array FWHM: {:.2f}$^\prime$".format(fwhm*60))
 
@@ -429,11 +436,11 @@ def plot_psf_comparison(imaging_psf,
         rac_slice.append(rac[i][rac_middle])
     psfc_slice = np.array(psfc_slice)
     rac_slice = np.array(rac_slice)
-    print(rac_slice)
+    #print(rac_slice)
     spline = UnivariateSpline(rac_slice, psfc_slice - 0.5, s=0)
     enter_beam, exit_beam = spline.roots()
     fwhm = exit_beam - enter_beam
-    ax1.plot(rac_slice, psfc_slice,
+    ax1.plot(rac_slice - rac_diff, psfc_slice,
              label=r"C Phased Array FWHM: {:.2f}$^\prime$".format(fwhm*60))
 
     ax1.set_xlabel(r"Right Acension ($^{\circ}$)")
@@ -450,7 +457,8 @@ def plot_psf_comparison(imaging_psf,
     spline = UnivariateSpline(deci_slice, psfi_slice - 0.5, s=0)
     enter_beam, exit_beam = spline.roots()
     fwhm = exit_beam - enter_beam
-    ax2.plot(deci_slice, psfi_slice,
+    deci_diff = deci_slice[pixel_radius] - decc[decc_middle][decc_middle]
+    ax2.plot(deci_slice - deci_diff, psfi_slice,
              label=r"Image FWHM: {:.2f}$^\prime$".format(fwhm*60))
 
     psfp_slice = []
