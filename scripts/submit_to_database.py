@@ -32,7 +32,7 @@ from mwa_pulsar_client import client
 
 import vcstools.sn_flux_utils as snfe
 from vcstools import data_load
-from vcstools.metadb_utils import get_common_obs_metadata, get_ambient_temperature, get_obs_array_phase, calc_ta_fwhm
+from vcstools.metadb_utils import get_common_obs_metadata, get_ambient_temperature, get_obs_array_phase, calc_ta_fwhm, ensure_metafits
 from vcstools.catalogue_utils import get_psrcat_ra_dec, get_psrcat_dm_period
 from vcstools import prof_utils
 from vcstools.config import load_config_file
@@ -385,6 +385,10 @@ def launch_pabeam_sim(obsid, pointing,
     # Load computer dependant config file
     comp_config = load_config_file()
 
+    # Ensure metafits file is there
+    data_dir = "{}{}".format(comp_config['base_data_dir'], obsid)
+    ensure_metafits(data_dir, obsid, "{0}_metafits_ppds.fits".format(obsid))
+
     # Perform metadata calls
     if common_metadata is None:
         common_metadata = get_common_obs_metadata(obsid)
@@ -403,8 +407,8 @@ def launch_pabeam_sim(obsid, pointing,
     nodes_required = cores_required // 24 + 1
 
     # Make directories
-    batch_dir = "{}{}/batch".format(comp_config['base_data_dir'], obsid)
-    sefd_dir = "{}{}/sefd_simulations".format(comp_config['base_data_dir'], obsid)
+    batch_dir = "{}/batch".format(data_dir)
+    sefd_dir = "{}/sefd_simulations".format(data_dir)
     if not os.path.exists(batch_dir):
         mdir(batch_dir, "Batch", gid=comp_config['gid'])
     if not os.path.exists(sefd_dir):
@@ -562,7 +566,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     else:
         if sefd_file is None:
             launch_pabeam_sim(obsid, pointing, beg, t_int,
-                              source_name=prof_psr,
+                              source_name=pulsar,
                               vcstools_version=vcstools_version,
                               flagged_tiles=flagged_tiles,
                               delays=xdelays,
@@ -579,7 +583,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
         g_fitter = gfit(profile)
         g_fitter.plot_name = f"{obsid}_{pulsar}_{num_bins}_bins_gaussian_fit.png"
         g_fitter.component_plot_name = f"{obsid}_{pulsar}_{num_bins}_bins_gaussian_components.png"
-        g_fitter.auto_gfit()
+        g_fitter.auto_fit()
         g_fitter.plot_fit()
         prof_dict = g_fitter.fit_dict
     except (prof_utils.ProfileLengthError, prof_utils.NoFitError):
@@ -658,6 +662,25 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
         #prevent TypeError caused by trying to format Nones given to fluxes for highly scattered pulsars
         S_mean = float("{0:.2f}".format(S_mean))
         u_S_mean = float("{0:.2f}".format(u_S_mean))
+
+        # Plot flux comparisons for ANTF
+        freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar, query=query)
+        logger.debug("Freqs: {0}".format(freq_all))
+        logger.debug("Fluxes: {0}".format(flux_all))
+        logger.debug("Flux Errors: {0}".format(flux_err_all))
+        logger.debug("{0} there are {1} flux values available on the ATNF database"\
+                    .format(pulsar, len(flux_all)))
+
+        # Check if there is enough data to estimate the flux
+        if len(flux_all) == 0:
+            logger.debug("{} no flux values on archive. Cannot estimate flux.".format(pulsar))
+        #elif ( len(flux_all) == 1 ) and ( ( not spind ) or ( not spind_err ) ):
+        #    logger.debug("{} has only a single flux value and no spectral index. Cannot estimate flux. Will return Nones".format(pulsar))
+        else:
+            spind, spind_err, K, covar_mat = find_spind(pulsar, freq_all, flux_all, flux_err_all)
+            plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
+                                 my_nu=centrefreq, my_S=S_mean, my_S_e=u_S_mean, obsid=obsid,
+                                 a_err=spind_err,  K=K, covar_mat=covar_mat)
 
     #format data for uploading
     if w_equiv_ms:

@@ -34,7 +34,7 @@ def ensure_metafits(data_dir, obs_id, metafits_file):
     # in case --work_dir was specified in process_vcs call product_dir and data_dir
     # are the same and thus we will not perform the copy
     #data_dir = data_dir.replace(comp_config['base_data_dir'], comp_config['base_product_dir']) # being pedantic
-    if os.path.exists(data_dir) and not os.path.exists(metafits_file):
+    if os.path.exists(data_dir) and not os.path.exists("{}/{}".format(data_dir, metafits_file)):
         logger.info("Copying {0} to {1}".format(metafits_file, data_dir))
         from shutil import copy2
         copy2("{0}".format(metafits_file), "{0}".format(data_dir))
@@ -99,12 +99,11 @@ def singles_source_search(ra, dec=None, box_size=50., params=None):
         params.update({'minra':ra_low,  'maxra':ra_high,
                        'mindec':dec_bot,'maxdec':dec_top})
     logger.debug("params: {}".format(params))
-    print("params: {}".format(params))
     obsid_list = find_obsids_meta_pages(params=params)
     return obsid_list
 
 
-def find_obsids_meta_pages(params=None):
+def find_obsids_meta_pages(params=None, pagesize=50):
     """
     Loops over pages for each page for MWA metadata calls
 
@@ -122,14 +121,15 @@ def find_obsids_meta_pages(params=None):
     """
     if params is None:
         params = {'mode':'VOLTAGE_START'}
+    params["pagesize"] = pagesize
     obsid_list = []
-    temp =[]
+    temp = []
     page = 1
     #need to ask for a page of results at a time
-    while len(temp) == 200 or page == 1:
+    while len(temp) == pagesize or page == 1:
         params['page'] = page
         logger.debug("Page: {0}   params: {1}".format(page, params))
-        temp = getmeta(service='find', params=params)
+        temp = getmeta(service='find', params=params, retry_http_error=True)
         if temp is not None:
             # if there are non obs in the field (which is rare) None is returned
             for row in temp:
@@ -174,7 +174,7 @@ def mwa_alt_az_za(obsid, ra=None, dec=None, degrees=False):
     """
     from astropy.utils import iers
     iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
-    logger.debug(iers.IERS_A_URL)
+    #logger.debug(iers.IERS_A_URL)
 
     from astropy.time import Time
     from astropy.coordinates import SkyCoord, AltAz, EarthLocation
@@ -235,7 +235,7 @@ def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
         return [obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
 
 
-def getmeta(servicetype='metadata', service='obs', params=None, retries=3):
+def getmeta(servicetype='metadata', service='obs', params=None, retries=3, retry_http_error=False):
     """
     Function to call a JSON web service and return a dictionary:
     Given a JSON web service ('obs', find, or 'con') and a set of parameters as
@@ -264,7 +264,13 @@ def getmeta(servicetype='metadata', service='obs', params=None, retries=3):
             result = json.load(urllib.request.urlopen(BASEURL + servicetype + '/' + service + '?' + data))
         except urllib.error.HTTPError as err:
             logger.error("HTTP error from server: code=%d, response: %s" % (err.code, err.read()))
-            break
+            if retry_http_error:
+                logger.error("Waiting {} seconds and trying again".format(wait_time))
+                sleep(wait_time)
+                pass
+            else:
+                raise err
+                break
         except urllib.error.URLError as err:
             logger.error("URL or network error: %s" % err.reason)
             logger.error("Waiting {} seconds and trying again".format(wait_time))

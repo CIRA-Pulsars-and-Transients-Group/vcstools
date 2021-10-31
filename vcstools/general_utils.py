@@ -34,7 +34,7 @@ def is_number(s):
 def gps_to_utc(gps):
     # GPS time as is done in timeconvert.py
     iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
-    logger.info(iers.IERS_A_URL)
+    #logger.debug(iers.IERS_A_URL)
     utctime = Time(gps, format='gps', scale='utc').fits
     # remove (UTC) that some astropy versions leave on the end
     if utctime.endswith('(UTC)'):

@@ -398,6 +398,7 @@ if __name__ == "__main__":
         dt = 100
 
     logger.debug("names_ra_dec:{}".format(names_ra_dec))
+    logger.debug("obsid:{}".format(obsid_list))
     logger.info("Getting observation metadata and calculating the tile beam")
     output_data, obsid_meta = find_sources_in_obs(obsid_list, names_ra_dec,
                                 obs_for_source=args.obs_for_source, dt_input=dt,

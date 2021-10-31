@@ -145,11 +145,11 @@ class gfit:
 
     @property
     def component_plot_name(self):
-        return self.component_plot_name
+        return self._component_plot_name
 
     @component_plot_name.setter
     def component_plot_name(self, val):
-        self.component_plot_name = val
+        self._component_plot_name = val
 
     @property
     def max_N(self):

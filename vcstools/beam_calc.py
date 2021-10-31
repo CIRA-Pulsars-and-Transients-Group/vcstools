@@ -317,6 +317,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                                              [jname, enter, exit, max_power]]}
         obsid_meta: a list of the output of get_common_obs_metadata for each obsid
     """
+    import urllib.request
     #prepares metadata calls and calculates power
     powers = []
     #powers[obsid][source][time][freq]
@@ -339,7 +340,12 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         logger.debug("obsid: {0}, time_obs {1} s, dt {2} s".format(obsid, beam_meta_data[3], dt))
 
         # Perform the file meta data call
-        files_meta_data = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1})
+        try:
+            files_meta_data = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1,
+                                                                    'mintime':int(obsid)+10,
+                                                                    'maxtime':int(obsid)+20})
+        except urllib.error.HTTPError as err:
+            files_meta_data = None
         if files_meta_data is None:
             logger.warning("No file metadata data found for obsid {}. Skipping".format(obsid))
             obsid_to_remove.append(obsid)
