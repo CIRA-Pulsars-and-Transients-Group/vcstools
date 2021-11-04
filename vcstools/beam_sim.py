@@ -81,8 +81,8 @@ def calc_pixel_area(za, az_res, za_res):
     """
     Calculate the area of a pixel on the sky from their height, width and zenith angle
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     za: float
         The zenith angle of the pixel in radians
     az_res: float
@@ -90,8 +90,8 @@ def calc_pixel_area(za, az_res, za_res):
     za_res: float
         The zenith   resolution of the pixel in degrees
 
-    Returns:
-    --------
+    Returns
+    -------
     area: float
         Area of the pixel in square radians
     """
@@ -103,8 +103,8 @@ def calcWaveNumbers(freq, p, t):
     Function to calculate the 3D wavenumbers for a given wavelength and az/za grid. 
     This is the part of equation 7 within the square brackets not includeing x_n, y_n and z_n
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     freq: float
         Central frequency for the observation in Hz
     p: float
@@ -113,8 +113,8 @@ def calcWaveNumbers(freq, p, t):
     t: float
         zenith angle/theta (either a scalar or an array)
 
-    Returns:
-    --------
+    Returns
+    -------
       [kx, ky, kz] - the 3D wavenumbers
     """
     C =  2 * np.pi * freq / c.value
@@ -129,8 +129,8 @@ def calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=False):
     """
     Completes the calculation of equation 7 to get the phase of the tiles for each position on the sky
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     xpos[N]:
         A list of tile positions East of the array centre
     ypos[N]:
@@ -144,8 +144,8 @@ def calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=False):
     kz[az/za]:
         The z 3D wavenumbers for a given wavelength and az/za grid
 
-    Returns:
-    --------
+    Returns
+    -------
     ph_tile[N][az/za]:
         A list of the phases for each tile
     """
@@ -177,8 +177,8 @@ def cal_phase_ord(xpos, ypos, zpos, delays, gx, gy, gz, freq, coplanar=False, no
     """
     Equation 2 and 3 of Ord 2019.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     xpos[N]:
         A list of tile positions East of the array centre
     ypos[N]:
@@ -192,8 +192,8 @@ def cal_phase_ord(xpos, ypos, zpos, delays, gx, gy, gz, freq, coplanar=False, no
     gz[az/za]:
         The z 3D wavenumbers for a given wavelength and az/za grid
 
-    Returns:
-    --------
+    Returns
+    -------
     ph_tile[N][az/za]:
         A list of the phases for each tile
     """
@@ -219,15 +219,15 @@ def calcArrayFactor(ph_tiles, ph_targets):
     """
     Calculates array factor pointed at some target zenith angle (za) and azimuth (az) (equation 11)
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     ph_tiles[N][az/za]:
         List of the sky phases for the tiles
     ph_targets[N]:
         List of the sky phases for the target
 
-    Returns:
-    --------
+    Returns
+    -------
     array_factor[az/za]:
         The array factor for each za and az
     array_factor_power[az/za]:
@@ -274,8 +274,8 @@ def read_sefd_file(sefd_file, all_data=False):
     """
     Read in the output sefd file from a pabeam.py simulation.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     sefd_file: str
         The location of the sefd file to be read in.
     all_data: boolean

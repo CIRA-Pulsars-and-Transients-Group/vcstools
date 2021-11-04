@@ -28,8 +28,8 @@ def rmfit_quad(archive, phase_min, phase_max):
     """
     Runs the PRSCHIVE rmfit command as a python subprocess using the -w option for a quadratic fit
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     archive: string
         The name of the archive file to take as an input
     phase_min: float
@@ -53,8 +53,8 @@ def find_on_pulse_ranges(I, clip_type="regular", plot_name=None):
     """
     Find ranges of pulse components from a pulse profile by fitting a gaussian distribution
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     I:list
         The pulse profile
     clip_type: str
@@ -62,8 +62,8 @@ def find_on_pulse_ranges(I, clip_type="regular", plot_name=None):
     plot_name:str
         The name of the ouput plot. If none, will not produce one
 
-    Returns:
-    --------
+    Returns
+    -------
     phases: list
         A list of phases (from 0 to 1) corresponding to the on-pulse components
     """
@@ -84,13 +84,13 @@ def read_rmfit_QUVflux(QUVflux):
     """
     Reads the freq, I, Q and U values with their errors from a QUVflux.out file generated from rmfit
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     QUVflux: string
         The QUVflux.out file
 
-    Returns:
-    --------
+    Returns
+    -------
     List containing:
         freq_hz: list
             Frequency values in Hz
@@ -123,8 +123,8 @@ def write_rm_to_yaml(filename, rm_dict):
     """
     Writes the rotation measure dictionary to a yaml file
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     filename: str
         The pathname of the file to write to
     rm_dict: dictionary
@@ -139,8 +139,8 @@ def find_best_range(I, Q, U, phase_ranges):
     """
     Finds the phase range with the largest ratio of lin pol to stokes I
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     I: list
         Stokes I
     Q: list
@@ -150,7 +150,7 @@ def find_best_range(I, Q, U, phase_ranges):
     phase_ranges: list
         A list where every 2 entries is a phase range from 0 to 1. ie. [0.1 0.3 0.4 0.8]
 
-    Returns:
+    Returns
     ---------
     best_phase_range: list
         The most suitable phase range
@@ -176,8 +176,8 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single
     """
     Performs RM synthesis on input data
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     freq_hz: list
         Frequency values in Hz
     I: list
@@ -201,8 +201,8 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single
     plotname: string
         OPTIONAL - The name of the plot. If None, will not plot: Default: None
 
-    Returns:
-    --------
+    Returns
+    -------
     rm: float
         The rotation measure
     rm_e: float
@@ -247,13 +247,13 @@ def read_rmsynth_out(filename):
     """
     Reads the ouput file from rm_synth_pipe()
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     filename:
         The name of the file ouput from rm_synth_pipe()
 
-    Returns:
-    --------
+    Returns
+    -------
     rm_dict: dictionary
         Contains the following keys:
         i: dictionary
@@ -285,8 +285,8 @@ def rm_synth_pipe(kwargs):
     """
     Performs all the nexessary operations on an archive file to attain a rotation measure through the RM synthesis technique
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     archive: string
         The name of the archive file to use
     work_dir: string
@@ -310,8 +310,8 @@ def rm_synth_pipe(kwargs):
     kwargs_gfit: dict
         keyword arguments for prof_utils.auto_gfit()
 
-    Returns:
-    --------
+    Returns
+    -------
     rm_dict: dictionary
         Contains the following keys:
         i: dictionary

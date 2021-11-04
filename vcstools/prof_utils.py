@@ -78,13 +78,13 @@ def get_from_bestprof(file_loc,
     """
     Get info from a bestprof file
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     file_loc: string
         The path to the bestprof file
 
-    Returns:
-    --------
+    Returns
+    -------
     [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]: list
         obsid: int
             The observation ID
@@ -160,13 +160,13 @@ def get_from_ascii(file_loc):
     """
     Retrieves the profile from an ascii file
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     file_loc: string
         The location of the ascii file
 
-    Returns:
-    --------
+    Returns
+    -------
     [profile, len(profile)]: list
         profile: list
             A list of floats containing the profile data
@@ -190,13 +190,13 @@ def get_stokes_from_ascii(file_loc):
     """
     Retrieves the all stokes components from an ascii file
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     file_loc: string
         The location of the ascii file
 
-    Returns:
-    --------
+    Returns
+    -------
     [I, Q, U, V, len(profile)]: list
         I: list
             Stokes I
@@ -235,8 +235,8 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
 
     This operation is repeated ntrials number of times or until the tolerance level is hit.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     data: list
         A list of floats - the data to clip
     alpha: float
@@ -246,8 +246,8 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
     ntrials: int
         OPTIONAL - The maximum number of times to apply the operation. Default=10
 
-    Returns:
-    --------
+    Returns
+    -------
     oldstd: float
         The std of the clipped data
     x: list
@@ -288,15 +288,15 @@ def est_sn_from_prof(prof_data, alpha=3.):
     Estimates the signal to noise ratio from a pulse profile
     Based on code oringally writted by Nick Swainston.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     prof_data: string
         A list of floats that contains the pulse profile
     alpha: float
         OPTIONAL - The alpha value to be used in sigmaClip(). Default: 3
 
-    Returns:
-    --------
+    Returns
+    -------
     [sn, sn_e, scattered]
     sn: float
         The estimated signal to noise ratio
@@ -347,8 +347,8 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
     Based on code oringally writted by Nick Swainston.
     This is the old version of 'est_sn_from_prof' but is useful when we can't fit gaussians
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     prof_data: list
         A list of floats that contains the pulse profile.
     period: float
@@ -356,8 +356,8 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
     alpha: float
         OPTIONAL - The alpha value to use when clipping using sigmaClip(). Default: 3
 
-    Returns:
-    --------
+    Returns
+    -------
     prof_dict: dictionary
         contains keys:
         sn: float
@@ -479,15 +479,15 @@ def auto_analyse_pulse_prof(prof_data, period):
     """
     Automatically finds the best alpha value to use for analyse_pulse_prof() and returns the best resulting dictionary
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     prof_data: list
         A list of floats that contains the pulse profile.
     preiod: float
         The period of the pulsar
 
-    Returns:
-    --------
+    Returns
+    -------
     fit_dict: dictionary
         contains keys:
         sn: float
@@ -576,8 +576,8 @@ def check_clip(prof_to_check, toomuch=0.9, toolittle_frac=0., toolittle_absolute
     Determines whether a clipped profile from sigmaClip() has been appropriately clipped by checking the number of nans.
     Raises a LittleClipError or a LargeClipError if too little or toomuch of the data has been clipped respectively.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     clipped_prof: list
         The clipped profile from sigmaClip()
     toomuch: float
@@ -615,8 +615,8 @@ def error_in_x_pos(x, y, sigma_y, x_pos):
     finds error in a position, x_pos, given an error in y
     derivatives are found numerically
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     x: list
         A list that covers the x range (ie. np.linspace(0, 1, len(x)))
     y: list
@@ -626,8 +626,8 @@ def error_in_x_pos(x, y, sigma_y, x_pos):
     x_pos: int
         The location in x that we want to find the error for
 
-    Returns:
-    --------
+    Returns
+    -------
     x_er: float
         The error in the x position
     """
@@ -662,8 +662,8 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     NOTE:   The on-pulse estimates are read form LEFT to RIGHT. Meaning onpulse[0] can be a greater index than onpulse[1].
             This indicates that the on-pulse is wrapped over the end of the phase.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     profile: list
         The pulse profile
     l: float
@@ -671,8 +671,8 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
     plot_name: string
         If supplied, will make a plot of the profile, its splined regularisation, maxima and best estimate of on-pulse
 
-    Returns:
-    --------
+    Returns
+    -------
     dict:
         maxima: list
             The maximum points of the splined profile
@@ -878,14 +878,14 @@ def get_off_pulse(on_pulse_pairs):
     """ 
     Works out the off pulse ranges from the on-pulse
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     on_pulse_pairs: list
         List of sub-lists/tuples. Each sub-list is a pair of numbers that describes the upper and lower bounds of the 
         ON PULSE region
 
-    Returns:
-    --------
+    Returns
+    -------
     off_pulse: list
         A list of two-lists that decribes the off-pulse region
     """
@@ -906,8 +906,8 @@ def profile_region_from_pairs(profile, pairs):
     """
     Acquires a list of the region described by a pair of indexes accounting for wrap-around
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     profile: list
         The profile that we want to get the region of
     pairs: list/tuple
@@ -933,8 +933,8 @@ def filled_profile_region_between_pairs(profile, pairs, fill_value=0):
     """
     Fills the off-pair region of a profile with the fill value
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     profile: list/numpy array
         The profile we want to fill
     pairs: list/tuple
@@ -964,8 +964,8 @@ def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, real_profile, noise_
     Attempts to fill small gaps in the on_pulse_pairs of the smoothed profile provided these
     gaps resemble real signal
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     on_pulse_pairs: list
         A list of pairs of indexes that mark the on-pulse regions of the profile
     smoothed_profile: list
@@ -1034,13 +1034,13 @@ def _profile_noise_initial_estimate(profile):
     Attempts to guess the best value for alpha for sigmaClip in order to get a good 
     estimate of the off-pulse noise level for a profile
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     profile: list
         The profile to clip
 
-    Returns:
-    --------
+    Returns
+    -------
     best_alpha: float:
         The chosen alpha value for sigmaClip
     best_nois: float:

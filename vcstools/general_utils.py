@@ -76,8 +76,8 @@ def create_link(data_dir, target_dir, product_dir, link):
     """
     Creates a symbolic link product_dir/link that points to data_dir/target_dir
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     data_dir: string
         The absolute path to the base directory of the true location of the files.
         For our uses this is often a scratch partition like /astro on Galaxy

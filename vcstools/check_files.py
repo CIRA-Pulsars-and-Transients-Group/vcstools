@@ -171,8 +171,8 @@ def get_files_and_sizes(obsID, mode, mintime=0, maxtime=2000000000):
     """
     Get files and sizes from the MWA metadata server and check that they're all the same size
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsID: int
         The MWA observation ID
     mode: str
@@ -182,8 +182,8 @@ def get_files_and_sizes(obsID, mode, mintime=0, maxtime=2000000000):
     maxtime: int
         The maximum GPS time of observations to check (exculsive, <)  Default: 2000000000
 
-    Returns:
-    --------
+    Returns
+    -------
     files_masked, suffix, sizes[0]: list
         files_masked: list of the files with the input mode/suffix
         suffix:       '.dat', '.tar' or '_ics.dat' depnding on the input mode

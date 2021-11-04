@@ -26,7 +26,7 @@ if __name__ == '__main__':
         array_phase = get_obs_array_phase(args.obsid)
         fov = field_of_view(args.obsid, beam_meta_data=beam_common_data)
 
-        print("-------------------------    Obs Info    --------------------------")
+        print("-------------------------    Obs Info    -------------------------")
         print("Obs Name:           {}".format(data_dict["obsname"]))
         print("Creator:            {}".format(data_dict["rfstreams"]["0"]["creator"]))
         print("Array phase:        {}".format(array_phase))

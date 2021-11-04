@@ -21,8 +21,8 @@ class gfit:
     """
     This class is used to fit multiple Gaussians to a pulse profile
 
-    User inputs:
-    ------------
+    User inputs
+    -----------
     raw_profile: list
         The pulse profile to be fit
     max_N: int
@@ -45,8 +45,8 @@ class gfit:
         Default - None
 
 
-    Functions for users:
-    --------------------
+    Functions for users
+    -------------------
     auto_fit:
         Runs a gaussian fit evaluation using up to max_N gaussians. The quality of the fit is decided via a chi-square evaluation.
         The best of these is saved and used to determine widths and maxima location. Part of the preprocessing of the profile will
@@ -56,7 +56,7 @@ class gfit:
         dictionary has been filled (presumably by auto_gfit).
 
 
-    Products:
+    Products
     --------
     fit_dict: dictionary
         contains the following keys:

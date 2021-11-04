@@ -87,8 +87,8 @@ def get_db_auth_addr():
     """
     Checks for MWA database usernames and passwords
 
-    Returns:
-    --------
+    Returns
+    -------
     auth: tuple
         The username and password for the pulsar databse
     web_address: string
@@ -113,13 +113,13 @@ def check_db_and_create_pulsar(pulsar):
     """
     Checks to see if a pulsar is already on the database. If not, will create a new entry
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     puslar: str
         The name of the pulsar
 
-    Returns:
-    --------
+    Returns
+    -------
     new_pulsar: boolean
         If True, this is a new pulsar detection
     """
@@ -150,8 +150,8 @@ def get_filetypes_from_db(obsid, pulsar, filetype):
     """
     Searches the pulsar database and returns the given obsid/pulsar/filetype files
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: int
         Observation ID
     pulsar: string
@@ -160,8 +160,8 @@ def get_filetypes_from_db(obsid, pulsar, filetype):
         The type of file to search for. Options are:
         1: Archive, 2: Timeseries, 3: Diagnostics, 4: Calibration Solution, 5: Bestprof
 
-    Returns:
-    --------
+    Returns
+    -------
     myfiles: list
         A list of filenames fitting the given parameters
     """
@@ -200,8 +200,8 @@ def upload_cal_files(obsid, cal_id, cal_dir_to_tar, srclist, caltype=2):
     """
     Uploads the calibrator solutions to the MWA pulsar database
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: int
         The observation ID
     cal_id: int
@@ -237,8 +237,8 @@ def filename_prefix(obsid, pulsar, bins=None, cal=None):
     """
     Creates a filename prefix depending on inputs
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: int
         The observation ID
     pulsar: str
@@ -248,8 +248,8 @@ def filename_prefix(obsid, pulsar, bins=None, cal=None):
     cal: int
         The calibrator ID
 
-    Returns:
-    --------
+    Returns
+    -------
     pref: str
         The filename prefix
     """
@@ -316,8 +316,8 @@ def upload_file_to_db(obsid, pulsar, filepath, filetype, subbands=None, coh=True
     """
     Uploads a file to the pulsar database
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: str
         The observation ID
     pulsar: str
@@ -346,8 +346,8 @@ def multi_upload_files(obsid, pulsar, files_dict, subbands=None, coh=True):
     """
     Uploads any number of files to the same obsid/pulsar on the database
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: str
         The observation ID
     pulsar: str
@@ -482,15 +482,15 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     """
     Analyise a pulse profile and calculates its flux density
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     pulsar: str
         The pulsar's Jname
     bestprof_data: list
         The output list from the function get_from_bestprof
 
     Optional parameters:
-    --------------------
+    -------------------
     flagged_tiles: str
         The location of the flagged_tiles.txt file. If it's in the default location you can just supply the calid.
     calid: int
@@ -508,8 +508,8 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     args: Namespace
         The args from argparse to be used for job resubmission. Default: None.
 
-    Returns:
-    --------
+    Returns
+    -------
     det_kwargs: dict
     det_kwargs["flux"]: The mean flux density of the pulsar in mJy
     det_kwargs["flux_error"]: The flux desnity error in mJy

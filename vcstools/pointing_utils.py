@@ -117,7 +117,7 @@ def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827, unit
       lat - observatory latitude in degrees
       lon - observatory longitude in degrees
 
-    Returns:
+    Returns
       a list containing four elements in the following order:
         list[0] = target azimuth in radians
         list[1] = target zenith angle in radians
@@ -155,7 +155,7 @@ def getTargetRADec(az, za, time, lat=-26.7033, lon=116.671, height=377.827, unit
       lat - observatory latitude in degrees
       lon - observatory longitude in degrees
 
-    Returns:
+    Returns
       a list containing four elements in the following order:
         list[0] = target right acension in radians
         list[1] = target declination angle in radians
