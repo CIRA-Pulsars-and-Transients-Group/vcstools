@@ -21,13 +21,13 @@ def read_vcsbeam_psf(psf_file):
     """
     Read in the PSF data file output from vcsbeam's mwa_tied_array_beam_psf
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     dat_file: str
         The PSF data file output from vcsbeam's mwa_tied_array_beam_psf
 
-    Returns:
-    --------
+    Returns
+    -------
     ra: numpy array
         The RA (degrees) in the meshgrid format
     dec: numpy array
@@ -48,8 +48,8 @@ def plot_vcsbeam_psf(psf_file, output_name="vcsbeam_psf.png", normalise=False, v
     """
     Plot the PSF data file output from vcsbeam's mwa_tied_array_beam_psf
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     psf_file: str
         The PSF data file output from vcsbeam's mwa_tied_array_beam_psf
     output_name: str
@@ -76,8 +76,8 @@ def plot_track_beam_response(response_file, output_name="vcsbeam_response.png", 
     """
     Plot the data file output from vcsbeam's mwa_track_primary_beam_response
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     response_file: str
         The PSF data file output from vcsbeam's mwa_track_primary_beam_response
     output_name: str
@@ -127,8 +127,8 @@ def plot_pabeam(dat_file, output_name="pabeam_psf.png"):
     """
     Makes a polar plot over the sky response with the data file output from pabeam.py
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     dat_file: str
         The data file output from pabeam.py
     output_name: str
@@ -158,13 +158,13 @@ def read_pabeam_ra_dec(dat_file):
     Read in the PSF data file output from pabeam.py when using 
     the --ra_dec_projection option
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     dat_file: str
         The PSF data file output from pabeam.py
 
-    Returns:
-    --------
+    Returns
+    -------
     ra: numpy array
         The RA (degrees) in the meshgrid format
     dec: numpy array
@@ -195,8 +195,8 @@ def plot_pabeam_ra_dec(dat_file, output_name="pabeam_psf.png",
     Plots the PSF data file output pabeam.py when using 
     the --ra_dec_projection option
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     dat_file: str
         The PSF data file output pabeam.py when using 
         the --ra_dec_projection option
@@ -243,15 +243,15 @@ def read_psf_fits(fits_file, centre_size=None):
     """
     Read in an imaging PSF fits file (from WSCLEAN for example)
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     fits_file: str
         The PSF fits file gained from imaging (WSCLEAN)
     centre_size: int
         The radius in pixels to plot from the centre. Default: None
 
-    Returns:
-    --------
+    Returns
+    -------
     rav: numpy array
         The RA (degrees) in the meshgrid format
     devv: numpy array
@@ -309,8 +309,8 @@ def plot_imaging_psf(fits_file, output_name="imaging_psf.png",
     """
     Plots the imaging PSF (from WSCLEAN for example)
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     fits_file: str
         The PSF fits file gained from imaging (WSCLEAN)
     output_name: str
@@ -368,8 +368,8 @@ def plot_psf_comparison(imaging_psf,
     Compare the PSFs FWHM along RA and declination from imaging, pabeam.py and vcsbeam's mwa_tied_array_beam_psf
     Outputs a plot called comparing_psf_cuts.png
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     imaging_psf: str
         The PSF fits file gained from imaging (WSCLEAN)
     pabeam_psf: str

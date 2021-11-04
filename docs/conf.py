@@ -48,6 +48,8 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
+    'numpydoc',
+    'myst_parser'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -75,8 +77,7 @@ language = None
 exclude_patterns = []
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = None
-
+pygments_style = 'sphinx'
 
 # -- Options for HTML output -------------------------------------------------
 

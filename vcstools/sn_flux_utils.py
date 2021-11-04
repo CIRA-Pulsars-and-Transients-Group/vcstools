@@ -69,8 +69,8 @@ def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
     For the former, supply the covariance matrix and the K value.
     For the latter supply the spectral index error.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     pulsar: string
         The name of the pulsar
     nu_atnf: list
@@ -186,8 +186,8 @@ def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None,
     Finds the normalised time that a pulsar is in the beam for a given obsid
     If pulsar is not in beam, returns None, None
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: int
         The observation ID
     pulsar: string
@@ -203,8 +203,8 @@ def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None,
     ondisk: boolean
         Whether to use files that are on-disk for beginning and end times. Default=False
 
-    Returns:
-    --------
+    Returns
+    -------
     enter_files: float
         A float between 0 and 1 that describes the normalised time that the pulsar enters the beam
     exit_files: float
@@ -262,8 +262,8 @@ def ATNF_spectral_data_plot(pulsar_list):
     """
     Given a list of pulsars, plots the available spectral energy distribution for each one using data from ATNF
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     pulsar_list: list
         A list of the J names of pulsars to plot
     """
@@ -286,8 +286,8 @@ def least_squares_fit_plaw(x_data, y_data, y_err):
     """
     Used primarily by est_pulsar_flux() to to attain a power law function. Intended for use with pulsar flux densities
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     x_data: list
         A list of frequencies in Hz
     y_data: list
@@ -295,8 +295,8 @@ def least_squares_fit_plaw(x_data, y_data, y_err):
     y_err: list
         A list containing the corresponding error values for y_data in Hz
 
-    Returns:
-    --------
+    Returns
+    -------
     a: float
         The fit spectral index
     c: float
@@ -348,8 +348,8 @@ def flux_from_plaw(freq, K, a, covar_mat):
     Calculates the flux and error from a power law fit by extrapolating to the desired frequency.
     The power law is of the form S = c * nu**a
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     freq: float
         The frequency for which we want to calculate a flux for (nu)
     K: float
@@ -359,8 +359,8 @@ def flux_from_plaw(freq, K, a, covar_mat):
     covar_matrix: numpy matrix
         The covariance matrix from our power law fit. The main diagonal elements are sigma_c^2, sigma_a^2 respectively
 
-    Returns:
-    --------
+    Returns
+    -------
     flux: float
         The calculated flux
     flux_err: float
@@ -395,8 +395,8 @@ def flux_from_spind(nu_1, nu_2, s_2, s_2_err, a, a_err):
     S_1 = nu_1^a * nu_2 ^-a * S_2
     Unvcertainty in nu is negligable
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     nu_1: float
         The frequency at the desired flux estimation (Hz)
     nu_2: float
@@ -410,8 +410,8 @@ def flux_from_spind(nu_1, nu_2, s_2, s_2_err, a, a_err):
     a_err: float
         The uncertainty in the spectral index
 
-    Returns:
-    --------
+    Returns
+    -------
     flux_est: float
         The estimated flux (Jy)
     flux_est_err: float
@@ -433,15 +433,15 @@ def flux_from_atnf(pulsar, query=None):
     """
     Queries the ATNF database for flux and spectral index info on a particular pulsar at all frequencies
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     pulsar: string
         The J name of the pulsar
     query: object
         OPTIONAL - The return from psrqpy.QueryATNF for this pulsar. Default: None
 
-    Returns:
-    --------
+    Returns
+    -------
     freq_all: list
         All frequencies in Hz with flux values on ATNF
     flux_all: list
@@ -500,8 +500,8 @@ def find_spind(pulsar, freq_all, flux_all, flux_err_all):
     Tries to attain a spectral index from input data.
     If this fails, uses an index of -1.4 with uncertainty of 1 as per Bates 2013.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     pulsar: string
         The J name of the pulsar
     freq_all: list
@@ -511,8 +511,8 @@ def find_spind(pulsar, freq_all, flux_all, flux_err_all):
     flux_err_all: list
         The uncertainty in the fluxes
 
-    Returns:
-    --------
+    Returns
+    -------
     spind: float
         The spectral index
     spind_err: float
@@ -558,8 +558,8 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
     """
     Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     pulsar: string
         The puslar's name. e.g. 'J2241-5236'
     obsid: int
@@ -571,7 +571,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
     query: object
         OPTIONAL - The return from psrqpy.QueryATNF for this pulsar
 
-    Returns:
+    Returns
     -------
     flux: float
         The estimated flux in Jy
@@ -633,8 +633,8 @@ def find_pulsar_w50(pulsar, query=None):
         The J-name of the pulsar. e.g. 'J2241-5236'
     query: object
         OPTIONAL - The query for 'pulsar' returned from psrqpy.QueryATNF
-    Returns:
-    --------
+    Returns
+    -------
     w50: float
         The pulsar's W50
     w50_err: float
@@ -692,7 +692,7 @@ def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_pow
     """
     Find the total integration time of a pulsar in the primary beam of an obsid
 
-    Parameters:
+    Parameters
     ----------
     obsid: int
         The observation ID
@@ -703,7 +703,7 @@ def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_pow
     end: int
         The end of the processed observing time
 
-    Returns:
+    Returns
     -------
     enter_time: int
         The time when the pulsar enters the beam in gps
@@ -745,8 +745,8 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
     Finds the system temperature and gain for an observation.
     A function snippet originally written by Nick Swainston - adapted for general VCS use.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     pulsar: str
         the J name of the pulsar. e.g. J2241-5236
     obsid: int
@@ -770,8 +770,8 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
     trcvr: str
         The location of the MWA receiver temp csv file. Default = <vcstools_data_dir>MWA_Trcvr_tile_56.csv
 
-    Returns:
-    --------
+    Returns
+    -------
     t_sys: float
         The system temperature
     t_sys_err: float
@@ -850,7 +850,7 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
     S/N = (s_mean * gain * sqrt(n_p * t_int * df * (period - W_50)/W_50)) / t_sys
     Note that W_50 should be W_equiv but we can't figure that out so we're estimating
 
-    Parameters:
+    Parameters
     ----------
     pulsar: string
         Name of the pulsar e.g. J2241-5236
@@ -869,8 +869,8 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
     plot_flux: boolean
         OPTIONAL - whether or not to produce a plot of the flux estimation. Default = False
 
-    Returns:
-    --------
+    Returns
+    -------
     sn: float
         The expected signal to noise ratio for the given inputs
     sn_err: float

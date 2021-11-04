@@ -22,8 +22,8 @@ def pixel_area(ra_min, ra_max, dec_min, dec_max):
     """
     Calculate the area of a pixel on the sky from the pixel borders
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     ra_min: float
         The Right Acension minimum in degrees
     ra_max: float
@@ -33,8 +33,8 @@ def pixel_area(ra_min, ra_max, dec_min, dec_max):
     dec_max: float
         The Declination maximum in degrees
 
-    Returns:
-    --------
+    Returns
+    -------
     area: float
         Area of the pixel in square degrees
     """
@@ -46,8 +46,8 @@ def field_of_view(obsid,
     """
     Will find the field-of-view of the observation (including the drift) in square degrees.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: int
         The observation ID
     beam_meta_data: list
@@ -57,8 +57,8 @@ def field_of_view(obsid,
         OPTIONAL - Duration of observation to calculate for in seconds
         By default will use the entire observation duration
 
-    Returns:
-    --------
+    Returns
+    -------
     area: float
         The field-of-view of the observation in square degrees
     """

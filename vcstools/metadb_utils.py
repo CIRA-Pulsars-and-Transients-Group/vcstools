@@ -45,7 +45,7 @@ def singles_source_search(ra, dec=None, box_size=50., params=None):
     Used to find all obsids within a box around the source to make searching through obs_ids more efficient.
 
     singles_source_search(ra, dec=None, box_size=45.)
-    Parameters:
+    Parameters
     ----------
     ra: float
         Right Acension of the source in degrees
@@ -58,8 +58,8 @@ def singles_source_search(ra, dec=None, box_size=50., params=None):
         https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Findobservations
         Default: {'mode':'VOLTAGE_START'}
 
-    Returns:
-    --------
+    Returns
+    -------
     obsid_metadata: list
         List of the metadata for each obsid. The metadata is in the same format as getmeta's output
     """
@@ -108,15 +108,15 @@ def find_obsids_meta_pages(params=None):
     """
     Loops over pages for each page for MWA metadata calls
 
-    Parameters:
-    --------
+    Parameters
+    ----------
     params: dict
         The dictionary of constraints used to search for suitable observations as explained here:
         https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Findobservations
         Default: {'mode':'VOLTAGE_START'}
 
-    Returns:
-    --------
+    Returns
+    -------
     obsid_list: list
         List of observation IDs.
     """
@@ -202,8 +202,8 @@ def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
     """
     Gets needed common meta data from http://ws.mwatelescope.org/metadata/
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: int
         The observation ID.
     return_all: bool
@@ -211,8 +211,8 @@ def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
     full_meta_data: dict
         OPTIONAL - The full meta data dictionary from getmeta. If this is not supplied will make the meta data call.
 
-    Returns:
-    --------
+    Returns
+    -------
     common_meta_data: list
         [obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels]
     """
@@ -282,8 +282,8 @@ def get_ambient_temperature(obsid, full_meta_data=None):
     """
     Queries the metadata to find the ambient temperature of the MWA tiles in K
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: int
         The observation ID.
     full_meta_data: dict
@@ -313,8 +313,8 @@ def get_files(obsid, files_meta_data=None):
     """
     Queries the metadata to find all the file names
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: str
         The ID (gps time) of the observation you are querying
     files_meta_data: dict
@@ -337,14 +337,14 @@ def calc_ta_fwhm(freq, array_phase='P2C'):
     """
     Calculates the approximate FWHM of the tied array beam in degrees.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     freq: float
         Frequency in MHz
     array_phase: string
         OPTIONAL - The different array phase (from P1, P2C, P2E) to work out the maximum baseline length. Default = 'P2C'
-    Returns:
-    --------
+    Returns
+    -------
     fwhm: float
         FWHM in degrees
     """
@@ -385,8 +385,8 @@ def obs_max_min(obsid, files_meta_data=None):
     """
     Small function to query the database and return the times of the first and last file
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: str
         The ID (gps time) of the observation you are querying
     files_meta_data: dict
@@ -417,8 +417,8 @@ def files_available(obsid, files_meta_data=None):
     """
     Query the database and return a list of all files available (remote archived and not deleted) and a list of all files
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     obsid: str
         The ID (gps time) of the observation you are querying
     files_meta_data: dict
@@ -461,7 +461,7 @@ def write_obs_info(obsid):
     start, stop = obs_max_min(obsid)
 
     f = open(filename, "w+")
-    f.write("-------------------------    Obs Info    --------------------------\n")
+    f.write("-------------------------    Obs Info    -------------------------\n")
     f.write("Obs Name:           {}\n".format(data_dict["obsname"]))
     f.write("Creator:            {}\n".format(data_dict["rfstreams"]["0"]["creator"]))
     f.write("Array phase:        {}\n".format(array_phase))
