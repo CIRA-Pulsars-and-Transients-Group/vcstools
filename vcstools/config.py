@@ -135,7 +135,8 @@ def load_config_file():
         comp_config = ARM_CONFIG
     else:
         logger.error('Unknown computer {}. Exiting'.format(hostname))
-        sys.exit(1)
+        raise Exception
+        #sys.exit(1)
 
     return comp_config
 

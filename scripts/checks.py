@@ -14,7 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 def opt_parser(loglevels):
-    comp_config = load_config_file()
+    try:
+        comp_config = load_config_file()
+    except Exception:
+        # No computer found so making a default for the argparse help to work
+        comp_config = {'base_data_dir' : "/astro/mwavcs/vcs/"}
     parser = argparse.ArgumentParser(description="scripts to check sanity of downloads and recombine.")
     parser.add_argument("-m", "--mode", type=str, choices=['download','recombine'],\
                           help="Mode you want to run: download, recombine", dest='mode', default=None)
