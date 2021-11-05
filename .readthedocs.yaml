@@ -10,5 +10,5 @@ sphinx:
 python:
   version: 3.7
   install:
-    - pip3 install .
+    - pip install .
     - requirements: docs/requirements.txt
