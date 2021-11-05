@@ -333,7 +333,7 @@ if __name__ == "__main__":
 
         # same for obs time, master reads and then distributes
         logger.info("getting times")
-        obs_begin, obs_duration = get_obstime_duration(args.obsid, args.metafits)
+        obs_begin, obs_duration = get_obstime_duration(args.metafits)
         if not args.begin:
             # Use observation begin time from metafits
             args.begin = Time(obs_begin, format='isot', scale='utc').gps

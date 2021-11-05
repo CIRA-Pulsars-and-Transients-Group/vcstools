@@ -30,11 +30,11 @@ def rmfit_quad(archive, phase_min, phase_max):
 
     Parameters
     ----------
-    archive: string
+    archive : `str`
         The name of the archive file to take as an input
-    phase_min: float
+    phase_min : `float`
         The minimum phase to begin the fit, should be a float between 0 and 1
-    phase_max: float
+    phase_max : `float`
         The maximum phase to use to fit, should be a float between 0 and 1
     """
     comp_config = load_config_file()
@@ -57,7 +57,7 @@ def find_on_pulse_ranges(I, clip_type="regular", plot_name=None):
     ----------
     I:list
         The pulse profile
-    clip_type: str
+    clip_type : `str`
         The clipping verbosity for the Gaussian fitter. Choose between regular, noisy and verbose
     plot_name:str
         The name of the ouput plot. If none, will not produce one
@@ -86,7 +86,7 @@ def read_rmfit_QUVflux(QUVflux):
 
     Parameters
     ----------
-    QUVflux: string
+    QUVflux : `str`
         The QUVflux.out file
 
     Returns
@@ -125,7 +125,7 @@ def write_rm_to_yaml(filename, rm_dict):
 
     Parameters
     ----------
-    filename: str
+    filename : `str`
         The pathname of the file to write to
     rm_dict: dictionary
         A dictionary with the RM information formatted like the output from rm_synth_pipe()
@@ -154,7 +154,7 @@ def find_best_range(I, Q, U, phase_ranges):
     ---------
     best_phase_range: list
         The most suitable phase range
-    best_max: float
+    best_max : `float`
         The maximum linear polarisation value
     """
     lin_pol = np.sqrt(np.array(Q)**2 + np.array(U)**2)
@@ -194,18 +194,18 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single
         Stokes U uncertainties
     phi_range: tuple
         OPTIONAL - The range of RMs to search over. Default: (-300, 300)
-    phi_steps: int
+    phi_steps : `int`
         OPTINAL - The bumber of RM steps to search over. Default: 10000
     phase_range: tuple
         OPTIONAL - The phase range of the profile used in fitting. Will be displayed on plot. Default: None
-    plotname: string
+    plotname : `str`
         OPTIONAL - The name of the plot. If None, will not plot: Default: None
 
     Returns
     -------
-    rm: float
+    rm : `float`
         The rotation measure
-    rm_e: float
+    rm_e : `float`
         The uncertainty in the rotation measure
     """
     p = rm_synth.PolObservation(freq_hz, (I, Q, U), IQUerr=(I_e, Q_e, U_e))
@@ -259,9 +259,9 @@ def read_rmsynth_out(filename):
         i: dictionary
             There are i entries where i is the number of different phase ranges
             Contains the following keys:
-            rm: float
+            rm : `float`
                 The rotation measure of this run
-            rm_e: float
+            rm_e : `float`
                 The uncertainty in rm
             phase_ranges: tuple
                 The range of phases used for this run
@@ -287,23 +287,23 @@ def rm_synth_pipe(kwargs):
 
     Parameters
     ----------
-    archive: string
+    archive : `str`
         The name of the archive file to use
-    work_dir: string
+    work_dir : `str`
         OPTIONAL - The directory to work in. Default: './'
-    pulsar: string
+    pulsar : `str`
         OPTIONAL - The name of the puslar (used for naming purposes). Default: None
-    obsid: int
+    obsid : `int`
         OPTIONAL - The observation ID (used for naming purposes). Default: None
-    plot: boolean
+    plot : `boolean`
         OPTIONAL - If True, will ouput a plot when finished. Default: False
-    write: boolean
+    write : `boolean`
         OPTIONAL - If True, will write the result to a file. Default: False
-    label: string
+    label : `str`
         OPTIONAL - A label used to identify the output files. If None, will generate a 64 bit string
-    keep_QUV: boolean
+    keep_QUV : `boolean`
         OPTIONAL - If True, will keep the QUVflux.out file generated from rmfit
-    force_single: boolean
+    force_single : `boolean`
         OPTIONAL - If True, will find the phase range with the greates lin_pol ratio and fit with only this (only if kwargs_rms['phase_range'] is None). Default: False
     kwagrs_rms: dict
         keyword arguments for IQU_rm_synth()
@@ -317,17 +317,17 @@ def rm_synth_pipe(kwargs):
         i: dictionary
             There are i entries where i is the number of different phase ranges
             Contains the following keys:
-            rm: float
+            rm : `float`
                 The rotation measure of this run
-            rm_e: float
+            rm_e : `float`
                 The uncertainty in rm
             phase_range: tuple
                 The range of phases used for this run
-            plotname: str
+            plotname : `str`
                 The name of the output plot. None if no plot
-            label: str
+            label : `str`
                 The label used
-    filename: str
+    filename : `str`
         The path of the file that was written to. None if not written
     """
     # Make a randomly generated label for temp directory

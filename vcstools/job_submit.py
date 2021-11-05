@@ -43,14 +43,14 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
 
     Parameters
     ----------
-    name : str
+    name  : `str`
         The base name that is used to create the "`name`.batch" and "`name`.out" files.
 
     commands : list of strs
         The actual bash script commands you wnat to run.
         Expects a list where each element is a single line of the bash script.
 
-    tmpl : str
+    tmpl  : `str`
         A template header string with format place holders: export, outfile,
         cluster, header and script.
         This is used to create the final string to be written to the job script.
@@ -75,7 +75,7 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
     vcstools_version :  str
         The version of vcstools to load. Default: master.
 
-    batch_dir : str [optional]
+    batch_dir  : `str` [optional]
         The LOCAL directory where you want to write the batch scripts
         (i.e. it will write to `$PWD/batch_dir`).
         Default: "batch/"
@@ -85,45 +85,45 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
         If `None` then it is assumed there is no dependency on any other job.
         Default: `None`
 
-    depend_type : str [optional]
+    depend_type  : `str` [optional]
         The type of slurm dependancy required. For example if you wanted the
         job to run after the jobs have been terminated use 'afterany'.
         Default: "afterok"
 
-    submit : boolean [optional]
+    submit  : `boolean` [optional]
         Whether to write and submit the job scripts (`True`) or only write the scripts (`False`).
         Default: `True`
 
-    outfile : str [optional]
+    outfile  : `str` [optional]
         The output file name if "`name`.out" is not desirable.
         Default: `None` (i.e. "`batch_dir`/`name`.out")
 
-    queue : str [optional]
+    queue  : `str` [optional]
         The type of queue you require (cpuq, gpuq or copyq) then the script will
         choose the correct partitions and clusters for the job to run on
         Default: "cpuq"
 
-    export : str [optional]
+    export  : `str` [optional]
         Switch that lets SLURM use your login environment on the compute
         nodes ("ALL") or not ("NONE").
         Default: "None"
 
-    gpu_res : int [optional]
+    gpu_res  : `int` [optional]
         Number of GPUs that the SLURM job will reserve.
         Default: "None"
 
-    mem : int [optional]
+    mem  : `int` [optional]
         The MB of ram required for your slurm job.
         Default: 8192
 
-    cpu_threads : int [optional]
+    cpu_threads  : `int` [optional]
         The number of cpu threads required for your slurm job.
         Default: 1
 
 
     Returns
     -------
-    jobid : int
+    jobid  : `int`
         The unique SLURM job ID associated with the submitted job.
     """
     if slurm_kwargs is None:

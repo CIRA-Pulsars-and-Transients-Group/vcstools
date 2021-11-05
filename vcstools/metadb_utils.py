@@ -47,11 +47,11 @@ def singles_source_search(ra, dec=None, box_size=50., params=None):
     singles_source_search(ra, dec=None, box_size=45.)
     Parameters
     ----------
-    ra: float
+    ra : `float`
         Right Acension of the source in degrees
-    dec: float
+    dec : `float`
         Declination of the source in degrees. By default will use the enitre declination range to account for grating lobes
-    box_size: float
+    box_size : `float`
         Radius of the search box. Default: 45
     params: dict
         The dictionary of constraints used to search for suitable observations as explained here:
@@ -204,7 +204,7 @@ def get_common_obs_metadata(obsid, return_all=False, full_meta_data=None):
 
     Parameters
     ----------
-    obsid: int
+    obsid : `int`
         The observation ID.
     return_all: bool
         OPTIONAL - If True will also return the full meta data dictionary. Default: False
@@ -284,7 +284,7 @@ def get_ambient_temperature(obsid, full_meta_data=None):
 
     Parameters
     ----------
-    obsid: int
+    obsid : `int`
         The observation ID.
     full_meta_data: dict
         OPTIONAL - The full meta data dictionary from getmeta.
@@ -292,7 +292,7 @@ def get_ambient_temperature(obsid, full_meta_data=None):
 
     Output:
     -------
-    t_0: float
+    t_0 : `float`
         The ambient temperature of the MWA tiles in K
     """
     if full_meta_data is None:
@@ -315,7 +315,7 @@ def get_files(obsid, files_meta_data=None):
 
     Parameters
     ----------
-    obsid: str
+    obsid : `str`
         The ID (gps time) of the observation you are querying
     files_meta_data: dict
         The output of the getmeta function with the data_files service.
@@ -339,13 +339,13 @@ def calc_ta_fwhm(freq, array_phase='P2C'):
 
     Parameters
     ----------
-    freq: float
+    freq : `float`
         Frequency in MHz
-    array_phase: string
+    array_phase : `str`
         OPTIONAL - The different array phase (from P1, P2C, P2E) to work out the maximum baseline length. Default = 'P2C'
     Returns
     -------
-    fwhm: float
+    fwhm : `float`
         FWHM in degrees
     """
     from scipy.constants import c
@@ -387,7 +387,7 @@ def obs_max_min(obsid, files_meta_data=None):
 
     Parameters
     ----------
-    obsid: str
+    obsid : `str`
         The ID (gps time) of the observation you are querying
     files_meta_data: dict
         The output of the getmeta function with the data_files service.
@@ -419,7 +419,7 @@ def files_available(obsid, files_meta_data=None):
 
     Parameters
     ----------
-    obsid: str
+    obsid : `str`
         The ID (gps time) of the observation you are querying
     files_meta_data: dict
         The output of the getmeta function with the data_files service.
@@ -485,7 +485,7 @@ def get_best_cal_obs(obsid):
 
     Parameters
     ----------
-    obsid: int
+    obsid : `int`
         The MWA observation ID (gps time)
 
     Returns
@@ -542,9 +542,9 @@ def combined_deleted_check(obsid, begin=None, end=None):
 
     Parameters
     ----------
-    obsid: int
+    obsid : `int`
         The MWA observation ID (gps time)
-    begin: int
+    begin : `int`
         The begin GPS time to check (optional)
     end:   int
         The end GPS time to check (optional)

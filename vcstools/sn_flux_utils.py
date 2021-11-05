@@ -71,7 +71,7 @@ def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
 
     Parameters
     ----------
-    pulsar: string
+    pulsar : `str`
         The name of the pulsar
     nu_atnf: list
         The frequencies in which the known flux values correspond to (Hz)
@@ -79,21 +79,21 @@ def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
         The known flux values (Jy)
     S_atnf_e: list
         The uncertainties correspodning to the known fluxes
-    a: float
+    a : `float`
         The spectral index
-    my_nu: float
+    my_nu : `float`
         OPTIONAL - The frequency you're estimating the flux at (Hz). Default: None
-    my_S: float
+    my_S : `float`
         OPTIONAL - The estimated flux (Jy). Default: None
-    my_S_e: float
+    my_S_e : `float`
         OPTIONAL - The uncertainty in the estimated flux (Jy). Default: None
-    obsid: int
+    obsid : `int`
         OPTIONAL - The observation ID. Default: None
-    K: float
+    K : `float`
         OPTIONAL - The K value of the least-squares fit. Use only when a least-sqaures fit has been done. Default: None
     covar_mat: numpy.matrix object
         OPTIONAL - The covariance matrix from the least-squares fit. Use only when a least-squares fit has been done. Default: None
-    a_err: float
+    a_err : `float`
         OPTIONAL - The error in the spectral index. Use only when the flux has been estimated without least-squares. Default: None
     """
     #making title and .png name
@@ -188,26 +188,26 @@ def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None,
 
     Parameters
     ----------
-    obsid: int
+    obsid : `int`
         The observation ID
-    pulsar: string
+    pulsar : `str`
         The pulsar's J name
-    beg: int
+    beg : `int`
         The beginning of the processed observing time in gps time
-    end: int
+    end : `int`
         The end of the processed observing time in gps time
-    obs_beg: int
+    obs_beg : `int`
         OPTIONAL - The beginning of the observation in gps time
-    obs_end: int
+    obs_end : `int`
         OPTIONAL - The end of the observation in gps time
-    ondisk: boolean
+    ondisk : `boolean`
         Whether to use files that are on-disk for beginning and end times. Default=False
 
     Returns
     -------
-    enter_files: float
+    enter_files : `float`
         A float between 0 and 1 that describes the normalised time that the pulsar enters the beam
-    exit_files: float
+    exit_files : `float`
          a float between 0 and 1 that describes the normalised time that the pulsar exits the beam
     """
     if not metadata or not full_meta:
@@ -297,9 +297,9 @@ def least_squares_fit_plaw(x_data, y_data, y_err):
 
     Returns
     -------
-    a: float
+    a : `float`
         The fit spectral index
-    c: float
+    c : `float`
         The fit y-intercept
     covar_mat: np.matrix
         The covariance matrix of the fit. Contains the information required to for uncertainty calculations
@@ -350,20 +350,20 @@ def flux_from_plaw(freq, K, a, covar_mat):
 
     Parameters
     ----------
-    freq: float
+    freq : `float`
         The frequency for which we want to calculate a flux for (nu)
-    K: float
+    K : `float`
         The value of K from the power law function
-    a: float
+    a : `float`
         The value of a (spectral index) from the power law function
     covar_matrix: numpy matrix
         The covariance matrix from our power law fit. The main diagonal elements are sigma_c^2, sigma_a^2 respectively
 
     Returns
     -------
-    flux: float
+    flux : `float`
         The calculated flux
-    flux_err: float
+    flux_err : `float`
         The uncertainty of the calculated flux
     """
 
@@ -397,24 +397,24 @@ def flux_from_spind(nu_1, nu_2, s_2, s_2_err, a, a_err):
 
     Parameters
     ----------
-    nu_1: float
+    nu_1 : `float`
         The frequency at the desired flux estimation (Hz)
-    nu_2: float
+    nu_2 : `float`
         The frequency at the known flux value (Hz)
-    s_2: float
+    s_2 : `float`
         The known flux value (Jy)
-    S_2_err: float
+    S_2_err : `float`
         The uncertainty in the known flux value (Jy)
-    a: float
+    a : `float`
         The spectral index
-    a_err: float
+    a_err : `float`
         The uncertainty in the spectral index
 
     Returns
     -------
-    flux_est: float
+    flux_est : `float`
         The estimated flux (Jy)
-    flux_est_err: float
+    flux_est_err : `float`
         The uncertainty in the estimated flux - calculated using the variance formula (Jy)
     """
 
@@ -435,7 +435,7 @@ def flux_from_atnf(pulsar, query=None):
 
     Parameters
     ----------
-    pulsar: string
+    pulsar : `str`
         The J name of the pulsar
     query: object
         OPTIONAL - The return from psrqpy.QueryATNF for this pulsar. Default: None
@@ -448,9 +448,9 @@ def flux_from_atnf(pulsar, query=None):
         The flux values corresponding to the freq_all list in Jy
     flux_err_all: list
         The uncertainty in the flux_all values
-    spind: float
+    spind : `float`
         The spectral index from ATNF, will be None if not available
-    spind_err: float
+    spind_err : `float`
         The ucnertainty in spind from ATNF, will be None if not available
     """
     if query is None:
@@ -502,7 +502,7 @@ def find_spind(pulsar, freq_all, flux_all, flux_err_all):
 
     Parameters
     ----------
-    pulsar: string
+    pulsar : `str`
         The J name of the pulsar
     freq_all: list
         The frequencies in Hz
@@ -513,11 +513,11 @@ def find_spind(pulsar, freq_all, flux_all, flux_err_all):
 
     Returns
     -------
-    spind: float
+    spind : `float`
         The spectral index
-    spind_err: float
+    spind_err : `float`
         The uncertainty in the spectral index. Will be None if power law fit was attained
-    K: float
+    K : `float`
         The K value of the power law fit. Will be None if not attained
     covar_mat: numpy.matrix
         The covariance matrix of the power law fit. Will be None if not attained
@@ -560,11 +560,11 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
 
     Parameters
     ----------
-    pulsar: string
+    pulsar : `str`
         The puslar's name. e.g. 'J2241-5236'
-    obsid: int
+    obsid : `int`
         The observation ID
-    plot_flux: boolean
+    plot_flux : `boolean`
         OPTIONAL - Whether or not to make a plot of the flux estimation. Default = False
     metadata: list
         OPTIONAL - The metadata call for this obsid
@@ -573,9 +573,9 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
 
     Returns
     -------
-    flux: float
+    flux : `float`
         The estimated flux in Jy
-    flux_err: float
+    flux_err : `float`
         The estimated flux's uncertainty in Jy
     """
 
@@ -629,15 +629,15 @@ def find_pulsar_w50(pulsar, query=None):
 
     Paramters:
     ---------
-    pulsar: string
+    pulsar : `str`
         The J-name of the pulsar. e.g. 'J2241-5236'
     query: object
         OPTIONAL - The query for 'pulsar' returned from psrqpy.QueryATNF
     Returns
     -------
-    w50: float
+    w50 : `float`
         The pulsar's W50
-    w50_err: float
+    w50_err : `float`
         The W50's uncertainty
     """
     if query is None:
@@ -694,22 +694,22 @@ def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_pow
 
     Parameters
     ----------
-    obsid: int
+    obsid : `int`
         The observation ID
-    pulsar: string
+    pulsar : `str`
         The J name of the pulsar
-    beg: int
+    beg : `int`
         The beginning of the processed observing time
-    end: int
+    end : `int`
         The end of the processed observing time
 
     Returns
     -------
-    enter_time: int
+    enter_time : `int`
         The time when the pulsar enters the beam in gps
-    exit_time: int
+    exit_time : `int`
         The time when the pulsar exits the beam in gps
-    t_int: int
+    t_int : `int`
         The total time that the pulsar is in the beam in seconds
     """
     #type assurances
@@ -747,38 +747,38 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
 
     Parameters
     ----------
-    pulsar: str
+    pulsar : `str`
         the J name of the pulsar. e.g. J2241-5236
-    obsid: int
+    obsid : `int`
         The observation ID. e.g. 1226406800
-    beg: int
+    beg : `int`
         The beginning of the observing time
-    end: float
+    end : `float`
         The end of the observing time
-    enter: float
+    enter : `float`
         OPTIONAL - The fractional time that the pulsar enters the beam wrt beg and end
-    t_int: float
+    t_int : `float`
         OPTIONAL - The fractional time that the pulsar is in the beam wrt beg and end
-    p_ra: str
+    p_ra : `str`
         OPTIONAL - the target's right ascension
-    p_dec: str
+    p_dec : `str`
         OPTIONAL - the target's declination
     common_metadata: list
         OPTIONAL - the array generated from get_common_obs_metadata(obsid)
     query: object
         OPTIONAL - The return of the psrqpy function for this pulsar
-    trcvr: str
+    trcvr : `str`
         The location of the MWA receiver temp csv file. Default = <vcstools_data_dir>MWA_Trcvr_tile_56.csv
 
     Returns
     -------
-    t_sys: float
+    t_sys : `float`
         The system temperature
-    t_sys_err: float
+    t_sys_err : `float`
         The system temperature's uncertainty
-    gain: float
+    gain : `float`
         The system gain
-    gain_err: float
+    gain_err : `float`
         The gain's uncertainty
     """
 
@@ -852,28 +852,28 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
 
     Parameters
     ----------
-    pulsar: string
+    pulsar : `str`
         Name of the pulsar e.g. J2241-5236
-    obsid: int
+    obsid : `int`
         Observation ID e.g. 1226406800
-    beg: int
+    beg : `int`
         beginning of the observing time
-    end: int
+    end : `int`
         end of the observing time
-    p_ra: str
+    p_ra : `str`
         OPTIONAL - the target's right ascension
-    p_dec: str
+    p_dec : `str`
         OPTIONAL - the target's declination
     common_metadata: list
         OPTIONAL - the array generated from get_common_obs_metadata(obsid)
-    plot_flux: boolean
+    plot_flux : `boolean`
         OPTIONAL - whether or not to produce a plot of the flux estimation. Default = False
 
     Returns
     -------
-    sn: float
+    sn : `float`
         The expected signal to noise ratio for the given inputs
-    sn_err: float
+    sn_err : `float`
         The uncertainty in the signal to noise ratio
     """
     #We will attain uncertainties for s_mean, gain, t_sys and W_50.

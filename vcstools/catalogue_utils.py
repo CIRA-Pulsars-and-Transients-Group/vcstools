@@ -21,10 +21,10 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=5000., include_dm=False, query=No
         List of the pulsar Jnames to search the catalogue for.
         If no pulsar_list is given then returns all pulsar on the catalogue.
         Default: None.
-    max_dm: float: float
+    max_dm : `float`
         The maximum dispersion measure of pulsars to include in the output.
         Default: 250.
-    include_dm: boolean
+    include_dm : `boolean`
         If True will also return the pulsars' dispersion measure.
     query: psrqpy object
         A previous psrqpy query. Can be supplied to save time of performing a new query.
@@ -95,7 +95,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=5000., inclu
 
     Parameters
     ----------
-    source_type: string
+    source_type : `str`
         The type of source you would like to get the catalogue for.
         Your choices are: ['Pulsar', 'FRB', 'rFRB', 'POI' 'RRATs', 'Fermi']
         Default: 'Pulsar'
@@ -103,7 +103,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=5000., inclu
         List of sources you would like to extract data for.
         If None is given then it will search for all available sources
         Default: None
-    max_dm: float
+    max_dm : `float`
         If the source_type is 'Pulsar' then you can set a maximum dm and the function will only
         return pulsars under that value.
         Default: 1000.

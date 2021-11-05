@@ -78,14 +78,14 @@ def create_link(data_dir, target_dir, product_dir, link):
 
     Parameters
     ----------
-    data_dir: string
+    data_dir : `str`
         The absolute path to the base directory of the true location of the files.
         For our uses this is often a scratch partition like /astro on Galaxy
-    target_dir: string
+    target_dir : `str`
         The folder you would like to be linked to
-    product_dir: string
+    product_dir : `str`
         The absolute path of the link you would like to create
-    link: string
+    link : `str`
         The name of the link you would like to create. Often the same as target_dir
     """
     data_dir = os.path.abspath(data_dir)

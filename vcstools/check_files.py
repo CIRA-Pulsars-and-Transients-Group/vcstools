@@ -173,13 +173,13 @@ def get_files_and_sizes(obsID, mode, mintime=0, maxtime=2000000000):
 
     Parameters
     ----------
-    obsID: int
+    obsID : `int`
         The MWA observation ID
-    mode: str
+    mode : `str`
         The typ of file from 'raw', 'tar_ics' and 'ics'
-    mintime: int
+    mintime : `int`
         The minimum GPS time of observations to check (inclusive, >=)  Default: 0
-    maxtime: int
+    maxtime : `int`
         The maximum GPS time of observations to check (exculsive, <)  Default: 2000000000
 
     Returns

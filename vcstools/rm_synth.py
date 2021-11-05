@@ -56,7 +56,7 @@ class PolObservation:
 		    N is the length of freq.
 		IQUerr : array, optional (default None)
 		    Stokes IQU uncertainties in a 3xN array
-		verbose : boolean, optional (default True)
+		verbose  : `boolean`, optional (default True)
 		    Print some output?
 
 		When initialised, a powerlaw will be fit to Stokes I
@@ -96,26 +96,26 @@ class PolObservation:
 		----------
 		phi : array
 		   RM values to use (should be contiguous and regularly spaced)
-		norm_mod : boolean, optional (default False)
+		norm_mod  : `boolean`, optional (default False)
 		   Normalise QU values with the Stokes I fitted power-law model?
-		norm_vals : boolean, optional (default False)
+		norm_vals  : `boolean`, optional (default False)
 		   Normalise QU values with the Stokes I data points
 		   per channel?
-		double : boolean, optional (default True)
+		double  : `boolean`, optional (default True)
 		   Create the RMSF double the length along the RM axis?
 		   This should be kept as True unless you are not planning
 		   to RMCLEAN.
-		clip : float, optional (default -inf)
+		clip  : `float`, optional (default -inf)
 		   Ignore channels with Stokes I S/N ratio < clip
-		pclip : float, optional (default -inf)
+		pclip  : `float`, optional (default -inf)
 		   Ignore channels with sqrt(Q**2+U**2) S/N ratio < pclip
-		weightmode : str, optional (default 'none')
+		weightmode  : `str`, optional (default 'none')
 		   How to do weighting in the Fourier transform. Options are:
 		     'none'	= no weighting (uniform weights)
 		     'varwt'	= inverse variance weights based on
 				  Stokes I noise
 		   Further options may be added later.
-		verbose : boolean, optional (default True)
+		verbose  : `boolean`, optional (default True)
 		    Print some output?
 
 		"""
@@ -215,13 +215,13 @@ class PolObservation:
 
 		Parameters
 		----------
-		display : boolean, optional (default True)
+		display  : `boolean`, optional (default True)
 		       Show plot on screen?
-		save : str, optional (default None)
+		save  : `str`, optional (default None)
 		       Save figure to disk? Provide filename if desired.
-		rescale : boolean, optional (default False)
+		rescale  : `boolean`, optional (default False)
 		       Rescale RMSF peak to match that of FDF?
-		plot_rmsf : boolean, optional (default True)
+		plot_rmsf  : `boolean`, optional (default True)
 		       Plot RMSF?
 
 		"""
@@ -263,9 +263,9 @@ class PolObservation:
 
 		Parameters
 		----------
-		display : boolean, optional (default True)
+		display  : `boolean`, optional (default True)
 		       Show plot on screen?
-		save : str, optional (default None)
+		save  : `str`, optional (default None)
 		       Save figure to disk? Provide filename if desired.
 
 		"""
@@ -296,7 +296,7 @@ class PolObservation:
 
 		Parameters
 		----------
-		verbose : boolean, optional (default True)
+		verbose  : `boolean`, optional (default True)
 		    Print some output?
 
 		"""
@@ -344,17 +344,17 @@ class PolObservation:
 
 		Parameters
 		----------
-		niter : int, optional (default 1000)
+		niter  : `int`, optional (default 1000)
 		     Maximum number of clean iterations
-		gain : float, optional (default 0.1)
+		gain  : `float`, optional (default 0.1)
 		     Clean gain
-		cutoff : float, optional (default 2)
+		cutoff  : `float`, optional (default 2)
 		     Clean cutoff, in units of S/N
 		     The default stops at 2*sigma above the mean
-		mask : boolean (default False)
+		mask  : `boolean` (default False)
 		     If True, all clean components must be within an
 		     RMSF FWHM of the first peak
-		verbose : boolean, optional (default True)
+		verbose  : `boolean`, optional (default True)
 		    Print some output?
 
 		"""

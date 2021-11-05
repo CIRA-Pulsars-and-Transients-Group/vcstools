@@ -25,17 +25,17 @@ class gfit:
     -----------
     raw_profile: list
         The pulse profile to be fit
-    max_N: int
+    max_N : `int`
         The maximum number of gaussians to attempt to fit
         Default - 10
-    plot_name: str
+    plot_name : `str`
         The name of the output plot. Can be set with gfit.plot_name. If unsupplied, will use a generic name
         Default - None
-    conponent_plot_name: str
+    conponent_plot_name : `str`
         The name of the plot for the component plot that illustrates how profile components are chosen. If 
         unsupplied, will not plot. Only applicable if on_pulse_range unsupplied.
         Default - None
-    scattering_threshold: float
+    scattering_threshold : `float`
         The threshold for which any tau value greater will be deemed scattered. 
         Default - 40
     on_pulse_ranges: list
@@ -60,19 +60,19 @@ class gfit:
     --------
     fit_dict: dictionary
         contains the following keys:
-        W10: float
+        W10 : `float`
             The W10 width of the profile measured in phase
-        W10_e: float
+        W10_e : `float`
             The uncertainty in the W10
-        W50: float
+        W50 : `float`
             The W50 width of the profile measured in phase
-        W50_e: float
+        W50_e : `float`
             The uncertainty in the W50
-        Weq: float
+        Weq : `float`
             The equivalent width of the profile measured in phase
-        Weq_e: float
+        Weq_e : `float`
             The uncertainty in the equivalent width
-        Wscat: float
+        Wscat : `float`
             The scattering width of the profile measured in phaseprofile_region_from_pairs
             The number of distinguishable profile components
         on_pulse_estimates: list
@@ -86,11 +86,11 @@ class gfit:
             The normalised and rolled input profile
         fit: list
             The best fit made into a list form
-        sn: float
+        sn : `float`
             The estimated signal to noise ratio, obtained from the profile
-        sn_e: float
+        sn_e : `float`
             The uncertainty in sn
-        scattering: float
+        scattering : `float`
             The tau value of the profile fit
         scattered: bool
             Whether or not the final profile's tau value is greater than the sattering threshold

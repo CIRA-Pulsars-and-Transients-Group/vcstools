@@ -1,3 +1,7 @@
+"""
+Functions used to calculate or simulat the MWA tile beam.
+"""
+
 import os
 import sys
 import numpy as np
@@ -19,23 +23,22 @@ except ImportError:
 
 
 def pixel_area(ra_min, ra_max, dec_min, dec_max):
-    """
-    Calculate the area of a pixel on the sky from the pixel borders
+    """Calculate the area of a pixel on the sky from the pixel borders
 
     Parameters
     ----------
-    ra_min: float
+    ra_min : `float`
         The Right Acension minimum in degrees
-    ra_max: float
+    ra_max : `float`
         The Right Acension maximum in degrees
-    dec_min: float
+    dec_min : `float`
         The Declination minimum in degrees
-    dec_max: float
+    dec_max : `float`
         The Declination maximum in degrees
 
     Returns
     -------
-    area: float
+    area : `float`
         Area of the pixel in square degrees
     """
     return (ra_max - ra_min) * np.degrees(np.sin(np.radians(dec_max)) - np.sin(np.radians(dec_min)))
@@ -43,23 +46,22 @@ def pixel_area(ra_min, ra_max, dec_min, dec_max):
 
 def field_of_view(obsid,
                   beam_meta_data=None, dur=None):
-    """
-    Will find the field-of-view of the observation (including the drift) in square degrees.
+    """Will find the field-of-view of the observation (including the drift) in square degrees.
 
     Parameters
     ----------
-    obsid: int
+    obsid : `int`
         The observation ID
     beam_meta_data: list
         OPTIONAL - the list of common metadata from vcstools.metadb_utils.get_common_obs_metadata.
         By default will download the metadata for you
-    dur: int
+    dur : `int`
         OPTIONAL - Duration of observation to calculate for in seconds
         By default will use the entire observation duration
 
     Returns
     -------
-    area: float
+    area : `float`
         The field-of-view of the observation in square degrees
     """
     if beam_meta_data is None:
@@ -133,14 +135,23 @@ def get_Trec(tab, obsfreq):
 
 
 def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
-    """
-    Calculates when the source enters and exits the beam
+    """Calculates when the source enters and exits the beam
 
-    beam_enter_exit(min_power, powers, imax, dt):
-        powers: list of powers fo the duration every dt and freq powers[times][freqs]
-        dt: the time interval of how often powers are calculated
-        duration: duration of the observation according to the metadata in seconds
-        min_power: zenith normalised power cut off
+    Parameters
+    ----------
+    powers : `list`, (times, freqs)
+        Powers for the duration every dt and freq.
+    duration : `int`
+        Duration of the observation according to the metadata in seconds.
+    dt : `int`, optional
+        The time interval of how often powers are calculated. Default: 296.
+    min_power : `float`, optional
+        Zenith normalised power cut off. Default: 0.3.
+
+    Returns
+    -------
+    enter_beam, exit_beam : `float`
+        Fraction of the observation when the source enters and exits the beam respectively.
     """
     from scipy.interpolate import UnivariateSpline
     time_steps = np.array(range(0, duration, dt), dtype=float)
@@ -180,28 +191,37 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
     return enter_beam, exit_beam
 
 
-def get_beam_power_over_time(beam_meta_data, names_ra_dec,
+def get_beam_power_over_time(common_meta_data, names_ra_dec,
                              dt=296, centeronly=True, verbose=False,
                              option='analytic', degrees=False,
                              start_time=0):
-    """
-    Calulates the power (gain at coordinate/gain at zenith) for each source over time.
+    """Calculates the zenith normalised power for each source over time.
 
-    get_beam_power_over_time(beam_meta_data, names_ra_dec,
-                             dt=296, centeronly=True, verbose=False,
-                             option = 'analytic')
-    Args:
-        beam_meta_data: [obsid,ra, dec, time, delays,centrefreq, channels]
-                        obsid metadata obtained from meta.get_common_obs_metadata
-        names_ra_dec: and array in the format [[source_name, RAJ, DecJ]]
-        dt: time step in seconds for power calculations (default 296)
-        centeronly: only calculates for the centre frequency (default True)
-        verbose: prints extra data to (default False)
-        option: primary beam model [analytic, advanced, full_EE]
-        start_time: the time in seconds from the begining of the observation to
-                    start calculating at
+    Parameters
+    ----------
+    common_meta_data : `list`, [obsid,ra, dec, time, delays,centrefreq, channels]
+        The observation metadata obtained from vcstools.metadb_utils.get_common_obs_metadata.
+    names_ra_dec : `list`
+        An array in the format [[source_name, RAJ, DecJ]]
+    dt : `int`, optional
+        The time interval of how often powers are calculated. Default: 296.
+    centeronly : `boolean`, optional
+        Only calculates for the centre frequency. Default: `True`.
+    verbose : `boolean`, optional
+        If `True` will not supress the output from mwa_pb. Default: `False`.
+    option : `str`, optional
+        The primary beam model to use out of [analytic, advanced, full_EE]. Default: analytic.
+    degrees : `boolean`, optional
+        If true assumes RAJ and DecJ are in degrees. Default: `False`.
+    start_time : `int`, optional
+        The time in seconds from the begining of the observation to start calculating at. Default: 0.
+
+    Returns
+    -------
+    Powers : `numpy.array`, (len(names_ra_dec), Ntimes, Nfreqs)
+        The zenith normalised power for each source over time.
     """
-    obsid, _, _, time, delays, centrefreq, channels = beam_meta_data
+    obsid, _, _, time, delays, centrefreq, channels = common_meta_data
     names_ra_dec = np.array(names_ra_dec)
     amps = [1.0] * 16
     logger.info("Calculating beam power for OBS ID: {0}".format(obsid))
@@ -294,28 +314,46 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
                         obs_for_source=False, dt_input=100, beam='analytic',
                         min_power=0.3, cal_check=False, all_volt=False,
                         degrees_check=False, metadata_list=None):
-    """
-    Either creates text files for each MWA obs ID of each source within it or a text
+    """Either creates text files for each MWA obs ID of each source within it or a text
     file for each source with each MWA obs is that the source is in.
-    Args:
-        obsid_list: list of MWA obs IDs
-        names_ra_dec: [[source_name, ra, dec]]
-        dt: the time step in seconds to do power calculations
-        beam: beam simulation type ['analytic', 'advanced', 'full_EE']
-        min_power: if above the minium power assumes it's in the beam
-        cal_check: checks the MWA pulsar database if there is a calibration for the obsid
-        all_volt: Use all voltages observations including some inital test data
-                  with incorrect formats
-        degrees_check: if false ra and dec is in hms, if true in degrees
-    Output [output_data, obsid_meta]:
-        output_data: The format of output_data is dependant on obs_for_source.
-                     If obs_for_source is True:
-                        output_data = {jname:[[obsid, duration, enter, exit, max_power],
-                                              [obsid, duration, enter, exit, max_power]]}
-                     If obs_for_source is False:
-                        ouput_data = {obsid:[[jname, enter, exit, max_power],
-                                             [jname, enter, exit, max_power]]}
-        obsid_meta: a list of the output of get_common_obs_metadata for each obsid
+
+    Parameters
+    ----------
+    obsid_list : `list`
+        List of MWA observation IDs.
+    names_ra_dec : `list`
+        An array in the format [[source_name, RAJ, DecJ]]
+    obs_for_source : `boolean`, optional
+        If `True` creates a text file for each source with each MWA observation that the source is in.
+        If `False` creates text files for each MWA obs ID of each source within it. Default: `False`.
+    dt_input : `int`, optional
+        The time interval of how often powers are calculated. Default: 296.
+    beam : `str`, optional
+        The primary beam model to use out of [analytic, advanced, full_EE]. Default: analytic.
+    min_power : `float`, optional
+        Zenith normalised power cut off. Default: 0.3.
+    cal_check : `boolean`, optional
+        Checks the MWA pulsar database if there is a calibration suitable for the observation ID.
+    all_volt : `boolean`, optional
+        Included observations with missing or incorrect voltage files. Default: `False`.
+    degrees_check : `boolean`, optional
+        If true assumes RAJ and DecJ are in degrees. Default: `False`.
+    metadata_list : `list`
+        List of the outputs of vcstools.metadb_utils.get_common_obs_metadata. 
+        If not provided, will make the metadata calls to find the data. Default: `None`.
+
+    Returns
+    -------
+    output_data : `dict`
+        The format of output_data is dependant on obs_for_source.
+        If obs_for_source is `True`:
+            output_data = {jname:[[obsid, duration, enter, exit, max_power],
+                                    [obsid, duration, enter, exit, max_power]]}
+       If obs_for_source is `False`:
+            ouput_data = {obsid:[[jname, enter, exit, max_power],
+                                    [jname, enter, exit, max_power]]}
+    obsid_meta : `list`
+        A list of the output of get_common_obs_metadata for each obsid
     """
     #prepares metadata calls and calculates power
     powers = []
