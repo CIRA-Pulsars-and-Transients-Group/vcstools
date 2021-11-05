@@ -17,8 +17,8 @@ help:
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile
 # Generate scripts markdown files
-	mkdir -p include_scripts
-	bash make_scripts_rst.sh
+#	mkdir -p include_scripts
+#	bash make_scripts_rst.sh
 # Run sphinx
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 # Remove the auto generated markdown scripts

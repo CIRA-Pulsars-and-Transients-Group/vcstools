@@ -9,16 +9,12 @@ analyse\_psf
 
 .. automodule:: vcstools.analyse_psf
     :members:
-    :undoc-members:
-    :show-inheritance:
 
 aocal
 -----
 
 .. automodule:: vcstools.aocal
     :members:
-    :undoc-members:
-    :show-inheritance:
 
 beam\_calc
 ----------
