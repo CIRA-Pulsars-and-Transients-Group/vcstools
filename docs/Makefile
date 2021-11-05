@@ -16,4 +16,10 @@ help:
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
 %: Makefile
+# Generate scripts markdown files
+	mkdir -p include_scripts
+	bash make_scripts_rst.sh
+# Run sphinx
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+# Remove the auto generated markdown scripts
+	rm -r include_scripts scripts.md

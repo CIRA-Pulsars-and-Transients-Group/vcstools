@@ -13,4 +13,4 @@ Welcome to vcstools's documentation!
 
    modules
    scripts
-   includes/*
+   includes_scripts/*
