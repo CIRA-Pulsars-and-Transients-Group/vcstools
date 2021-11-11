@@ -29,15 +29,23 @@ logger = logging.getLogger(__name__)
 
 
 def find_combined_beg_end(obsid, base_path="/astro/mwavcs/vcs/", channels=None):
-    """
-    looks through the comined files of the input obsid and returns the max and min in gps time
+    """Looks through the comined files of the input obsid and returns the max and min in gps time.
 
-    Input:
-        obsid: The MWA observation ID
-    Optional Input:
-        base_path: the direct path the base vcs directory. Default: /astro/mwavcs/vcs/\
-        channels: a list of the frequency channel ids. Default None which then gets the
-                  from the mwa metadata
+    Parameters
+    ----------
+    obsid : `int`
+        The MWA Observation ID.
+    base_path : `str`, optional
+        The base data dir. |br| Default: "/astro/mwavcs/vcs/"
+    channels : `list`, optional
+        A list of the frequency channel ids. If no supplied will the with :py:meth:`vcstools.metadb_utils.get_channels`.
+
+    Returns
+    -------
+    beg : `int`
+        Beginning of the observation GPS time.
+    end : `int`
+        End of the observation GPS time.
     """
     #TODO have some sort of check to look for gaps
     if glob.glob("{0}/{1}/combined/{1}*_ics.dat".format(base_path, obsid)):
@@ -60,11 +68,10 @@ def find_combined_beg_end(obsid, base_path="/astro/mwavcs/vcs/", channels=None):
     return beg, end
 
 
-def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
-                        my_nu=None, my_S=None, my_S_e=None, obsid=None,\
-                        K=None, covar_mat=None, a_err=None):
-    """
-    Used for plotting the estimated flux density against the known flux values.
+def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,
+                         my_nu=None, my_S=None, my_S_e=None, obsid=None,
+                         K=None, covar_mat=None, a_err=None):
+    """Used for plotting the estimated flux density against the known flux values.
     Can plot against either a least-sqaures fit flux or a spectral-index calculated flux.
     For the former, supply the covariance matrix and the K value.
     For the latter supply the spectral index error.
@@ -72,29 +79,29 @@ def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
     Parameters
     ----------
     pulsar : `str`
-        The name of the pulsar
-    nu_atnf: list
-        The frequencies in which the known flux values correspond to (Hz)
-    S_atnf: list
-        The known flux values (Jy)
-    S_atnf_e: list
-        The uncertainties correspodning to the known fluxes
+        The name of the pulsar.
+    nu_atnf : `list`
+        The frequencies in which the known flux values correspond to in Hz.
+    S_atnf : `list`
+        The known flux values in Jy.
+    S_atnf_e : `list`
+        The uncertainties correspodning to the known fluxes.
     a : `float`
-        The spectral index
-    my_nu : `float`
-        OPTIONAL - The frequency you're estimating the flux at (Hz). Default: None
-    my_S : `float`
-        OPTIONAL - The estimated flux (Jy). Default: None
-    my_S_e : `float`
-        OPTIONAL - The uncertainty in the estimated flux (Jy). Default: None
-    obsid : `int`
-        OPTIONAL - The observation ID. Default: None
-    K : `float`
-        OPTIONAL - The K value of the least-squares fit. Use only when a least-sqaures fit has been done. Default: None
-    covar_mat: numpy.matrix object
-        OPTIONAL - The covariance matrix from the least-squares fit. Use only when a least-squares fit has been done. Default: None
-    a_err : `float`
-        OPTIONAL - The error in the spectral index. Use only when the flux has been estimated without least-squares. Default: None
+        The spectral index.
+    my_nu : `float`, optional
+        The frequency you're estimating the flux at (Hz). |br| Default: `None`
+    my_S : `float`, optional
+        The estimated flux (Jy). |br| Default: `None`
+    my_S_e : `float`, optional
+        The uncertainty in the estimated flux (Jy). |br| Default: `None`
+    obsid : `int`, optional
+        The MWA observation ID. |br| Default: `None`
+    K : `float`, optional
+        The K value of the least-squares fit. Use only when a least-sqaures fit has been done. |br| Default: `None`
+    covar_mat: numpy.matrix object, optional
+        The covariance matrix from the least-squares fit. Use only when a least-squares fit has been done. |br| Default: `None`
+    a_err : `float`, optional
+        The error in the spectral index. Use only when the flux has been estimated without least-squares. |br| Default: `None`
     """
     #making title and .png name
     title ="{0} Flux Estimate".format(pulsar)
@@ -181,9 +188,8 @@ def plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
     plt.close()
 
 
-def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None, ondisk=False, min_z_power=0.3, query=None):
-    """
-    Finds the normalised time that a pulsar is in the beam for a given obsid
+def pulsar_beam_coverage(obsid, pulsar, beg, end, common_metadata=None, full_meta=None, ondisk=False, min_z_power=0.3, query=None):
+    """Finds the normalised time that a pulsar is in the beam for a given obsid.
     If pulsar is not in beam, returns None, None
 
     Parameters
@@ -196,12 +202,16 @@ def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None,
         The beginning of the processed observing time in gps time
     end : `int`
         The end of the processed observing time in gps time
-    obs_beg : `int`
-        OPTIONAL - The beginning of the observation in gps time
-    obs_end : `int`
-        OPTIONAL - The end of the observation in gps time
+    common_metadata : `list`, optional
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`
+    full_metadata : `dict`, optional
+        The dictionary of metadata generated from :py:meth:`vcstools.metadb_utils.getmeta`
     ondisk : `boolean`
-        Whether to use files that are on-disk for beginning and end times. Default=False
+        Whether to use files that are on-disk for beginning and end times. |br| Default: `False`
+    min_z_power : `float`, optional
+        Zenith normalised power cut off. |br| Default: 0.3.
+    query : psrqpy object, optional
+        A previous psrqpy query. Can be supplied to prevent performing a new query.
 
     Returns
     -------
@@ -210,8 +220,8 @@ def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None,
     exit_files : `float`
          a float between 0 and 1 that describes the normalised time that the pulsar exits the beam
     """
-    if not metadata or not full_meta:
-        metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
+    if not common_metadata or not full_meta:
+        common_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
 
     #Find the beginning and end of obs
     obs_beg, obs_end = files_beg, files_end = obs_max_min(obsid)
@@ -230,7 +240,7 @@ def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None,
 
     #find the enter and exit times of pulsar normalized with the observing time
     names_ra_dec = grab_source_alog(pulsar_list=[pulsar], query=query)
-    beam_source_data, _ = find_sources_in_obs([obsid], names_ra_dec, min_power=min_z_power, metadata_list=[[metadata, full_meta]])
+    beam_source_data, _ = find_sources_in_obs([obsid], names_ra_dec, min_power=min_z_power, metadata_list=[[common_metadata, full_meta]])
     if beam_source_data[obsid]:
         enter_obs_norm = beam_source_data[obsid][0][1]
         exit_obs_norm = beam_source_data[obsid][0][2]
@@ -259,12 +269,11 @@ def pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=None, full_meta=None,
 
 
 def ATNF_spectral_data_plot(pulsar_list):
-    """
-    Given a list of pulsars, plots the available spectral energy distribution for each one using data from ATNF
+    """Given a list of pulsars, plots the available spectral energy distribution for each one using data from ATNF
 
     Parameters
     ----------
-    pulsar_list: list
+    pulsar_list : `list`
         A list of the J names of pulsars to plot
     """
     K=None
@@ -278,22 +287,21 @@ def ATNF_spectral_data_plot(pulsar_list):
         if not a or a_err:
             a, a_err, K, covar_mat = find_spind(pulsar, nu_atnf, S_atnf, S_atnf_e)
 
-        plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,\
-                        K=K, covar_mat=covar_mat, a_err=a_err)
+        plot_flux_estimation(pulsar, nu_atnf, S_atnf, S_atnf_e, a,
+                             K=K, covar_mat=covar_mat, a_err=a_err)
 
 
 def least_squares_fit_plaw(x_data, y_data, y_err):
-    """
-    Used primarily by est_pulsar_flux() to to attain a power law function. Intended for use with pulsar flux densities
+    """Used primarily by est_pulsar_flux() to to attain a power law function. Intended for use with pulsar flux densities.
 
     Parameters
     ----------
-    x_data: list
-        A list of frequencies in Hz
-    y_data: list
-        A list of fluxes in Jy correspodning to the input x_data frequencies
-    y_err: list
-        A list containing the corresponding error values for y_data in Hz
+    x_data : `list`
+        A list of frequencies in Hz.
+    y_data : `list`
+        A list of fluxes in Jy correspodning to the input x_data frequencies.
+    y_err : `list`
+        A list containing the corresponding error values for y_data in Hz.
 
     Returns
     -------
@@ -301,9 +309,8 @@ def least_squares_fit_plaw(x_data, y_data, y_err):
         The fit spectral index
     c : `float`
         The fit y-intercept
-    covar_mat: np.matrix
-        The covariance matrix of the fit. Contains the information required to for uncertainty calculations
-
+    covar_mat : np.matrix
+        The covariance matrix of the fit. Contains the information required to for uncertainty calculations.
     """
     #convert everything to numpy arrays
     x_data = np.array(x_data)
@@ -344,27 +351,25 @@ def least_squares_fit_plaw(x_data, y_data, y_err):
 
 
 def flux_from_plaw(freq, K, a, covar_mat):
-    """
-    Calculates the flux and error from a power law fit by extrapolating to the desired frequency.
-    The power law is of the form S = c * nu**a
+    """Calculates the flux and error from a power law fit by extrapolating to the desired frequency. The power law is of the form :math:`S = c \\nu^a`.
 
     Parameters
     ----------
     freq : `float`
-        The frequency for which we want to calculate a flux for (nu)
+        The frequency for which we want to calculate a flux for (:math:`\\nu`).
     K : `float`
-        The value of K from the power law function
+        The value of K from the power law function.
     a : `float`
-        The value of a (spectral index) from the power law function
-    covar_matrix: numpy matrix
-        The covariance matrix from our power law fit. The main diagonal elements are sigma_c^2, sigma_a^2 respectively
+        The value of a (spectral index) from the power law function.
+    covar_matrix : numpy.matrix
+        The covariance matrix from our power law fit. The main diagonal elements are :math:`\\sigma_c^2, \\sigma_a^2` respectively.
 
     Returns
     -------
     flux : `float`
-        The calculated flux
+        The calculated flux (mJy).
     flux_err : `float`
-        The uncertainty of the calculated flux
+        The uncertainty of the calculated flux (mJy).
     """
 
     def plaw_func(nu, K, a):
@@ -390,32 +395,31 @@ def flux_from_plaw(freq, K, a, covar_mat):
 
 
 def flux_from_spind(nu_1, nu_2, s_2, s_2_err, a, a_err):
-    """
-    Calculates a flux value based on the spectral index, a using the formula:
-    S_1 = nu_1^a * nu_2 ^-a * S_2
-    Unvcertainty in nu is negligable
+    """Calculates a flux value based on the spectral index, a using the formula:
+    :math:`S_1 = \\nu_1^a  \\nu_2 ^{-a}  S_2`
+    Uncertainty in :math:`\\nu` is negligable.
 
     Parameters
     ----------
     nu_1 : `float`
-        The frequency at the desired flux estimation (Hz)
+        The frequency at the desired flux estimation (Hz).
     nu_2 : `float`
-        The frequency at the known flux value (Hz)
+        The frequency at the known flux value (Hz).
     s_2 : `float`
-        The known flux value (Jy)
+        The known flux value (Jy).
     S_2_err : `float`
-        The uncertainty in the known flux value (Jy)
+        The uncertainty in the known flux value (Jy).
     a : `float`
-        The spectral index
+        The spectral index.
     a_err : `float`
-        The uncertainty in the spectral index
+        The uncertainty in the spectral index.
 
     Returns
     -------
     flux_est : `float`
-        The estimated flux (Jy)
+        The estimated flux (Jy).
     flux_est_err : `float`
-        The uncertainty in the estimated flux - calculated using the variance formula (Jy)
+        The uncertainty in the estimated flux - calculated using the variance formula (Jy).
     """
 
     flux_est = nu_1**a * nu_2**(-a) * s_2
@@ -430,28 +434,27 @@ def flux_from_spind(nu_1, nu_2, s_2, s_2_err, a, a_err):
 
 
 def flux_from_atnf(pulsar, query=None):
-    """
-    Queries the ATNF database for flux and spectral index info on a particular pulsar at all frequencies
+    """Queries the ATNF database for flux and spectral index info on a particular pulsar at all frequencies
 
     Parameters
     ----------
     pulsar : `str`
-        The J name of the pulsar
-    query: object
-        OPTIONAL - The return from psrqpy.QueryATNF for this pulsar. Default: None
+        The Jname of the pulsar.
+    query : psrqpy object, optional
+        A previous psrqpy.QueryATNF query. Can be supplied to prevent performing a new query.
 
     Returns
     -------
-    freq_all: list
-        All frequencies in Hz with flux values on ATNF
-    flux_all: list
-        The flux values corresponding to the freq_all list in Jy
-    flux_err_all: list
-        The uncertainty in the flux_all values
+    freq_all : `list`
+        All frequencies in Hz with flux values on ATNF.
+    flux_all : `list`
+        The flux values corresponding to the freq_all list in Jy.
+    flux_err_all : `list`
+        The uncertainty in the flux_all values.
     spind : `float`
-        The spectral index from ATNF, will be None if not available
+        The spectral index from ATNF, will be None if not available.
     spind_err : `float`
-        The ucnertainty in spind from ATNF, will be None if not available
+        The ucnertainty in spind from ATNF, will be None if not available.
     """
     if query is None:
         query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
@@ -496,31 +499,30 @@ def flux_from_atnf(pulsar, query=None):
 
 
 def find_spind(pulsar, freq_all, flux_all, flux_err_all):
-    """
-    Tries to attain a spectral index from input data.
+    """Tries to attain a spectral index from input data.
     If this fails, uses an index of -1.4 with uncertainty of 1 as per Bates 2013.
 
     Parameters
     ----------
     pulsar : `str`
-        The J name of the pulsar
-    freq_all: list
-        The frequencies in Hz
-    flux_all:list
-        The fluxes in Jy
-    flux_err_all: list
-        The uncertainty in the fluxes
+        The Jname of the pulsar.
+    freq_all : `list`
+        The frequencies in Hz.
+    flux_all : `list`
+        The fluxes in Jy.
+    flux_err_all : `list`
+        The uncertainty in the fluxes.
 
     Returns
     -------
     spind : `float`
-        The spectral index
+        The spectral index.
     spind_err : `float`
-        The uncertainty in the spectral index. Will be None if power law fit was attained
+        The uncertainty in the spectral index. Will be None if power law fit was attained.
     K : `float`
-        The K value of the power law fit. Will be None if not attained
-    covar_mat: numpy.matrix
-        The covariance matrix of the power law fit. Will be None if not attained
+        The K value of the power law fit. Will be None if not attained.
+    covar_mat : numpy.matrix
+        The covariance matrix of the power law fit. Will be None if not attained.
     """
     spind = None
     K = None
@@ -554,35 +556,35 @@ def find_spind(pulsar, freq_all, flux_all, flux_err_all):
     return spind, spind_err, K, covar_mat
 
 
-def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
+def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=None):
     """
     Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency
 
     Parameters
     ----------
     pulsar : `str`
-        The puslar's name. e.g. 'J2241-5236'
+        The Jname of the pulsar.
     obsid : `int`
-        The observation ID
-    plot_flux : `boolean`
-        OPTIONAL - Whether or not to make a plot of the flux estimation. Default = False
-    metadata: list
-        OPTIONAL - The metadata call for this obsid
-    query: object
-        OPTIONAL - The return from psrqpy.QueryATNF for this pulsar
+        The MWA observation ID
+    plot_flux : `boolean`, optional
+        Whether or not to make a plot of the flux estimation. |br| Default: `False`
+    common_metadata : `list`, optional
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`
+    query : psrqpy object, optional
+        A previous psrqpy.QueryATNF query. Can be supplied to prevent performing a new query.
 
     Returns
     -------
     flux : `float`
-        The estimated flux in Jy
+        The estimated flux in Jy.
     flux_err : `float`
-        The estimated flux's uncertainty in Jy
+        The estimated flux's uncertainty in Jy.
     """
 
-    if metadata is None:
-        logger.debug("obtaining mean freq from obs metadata")
-        metadata = get_common_obs_metadata(obsid)
-    f_mean = metadata[5]*1e6
+    if common_metadata is None:
+        logger.debug("Obtaining mean freq from obs metadata")
+        common_metadata = get_common_obs_metadata(obsid)
+    f_mean = common_metadata[5]*1e6
 
     freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar, query=query)
 
@@ -624,21 +626,21 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, metadata=None, query=None):
 
 
 def find_pulsar_w50(pulsar, query=None):
-    """
-    Attempts to find a pulsar's W50 from the ATNF catalogue. If unavailable, will estimate
+    """Attempts to find a pulsar's W50 from the ATNF catalogue. If unavailable, will estimate
 
     Paramters:
     ---------
     pulsar : `str`
-        The J-name of the pulsar. e.g. 'J2241-5236'
-    query: object
-        OPTIONAL - The query for 'pulsar' returned from psrqpy.QueryATNF
+        The Jname of the pulsar.
+    query : psrqpy object, optional
+        A previous psrqpy.QueryATNF query. Can be supplied to prevent performing a new query.
+
     Returns
     -------
     w50 : `float`
-        The pulsar's W50
+        The pulsar's w50 in s.
     w50_err : `float`
-        The W50's uncertainty
+        The W50's uncertainty.
     """
     if query is None:
         #returns W_50 and error for a pulsar from the ATNF archive IN SECONDS
@@ -688,37 +690,44 @@ def find_pulsar_w50(pulsar, query=None):
     return W_50, W_50_err
 
 
-def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_power=0.3, query=None):
-    """
-    Find the total integration time of a pulsar in the primary beam of an obsid
+def find_times(obsid, pulsar, beg, end, common_metadata=None, full_meta=None, min_z_power=0.3, query=None):
+    """Find the total integration time of a pulsar in the primary beam of an obsid
 
     Parameters
     ----------
     obsid : `int`
-        The observation ID
+        The MWA observation ID.
     pulsar : `str`
-        The J name of the pulsar
+        The Jname of the pulsar.
     beg : `int`
-        The beginning of the processed observing time
+        Beginning of the observation GPS time.
     end : `int`
-        The end of the processed observing time
+        End of the observation GPS time.
+    common_metadata : `list`, optional
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`
+    full_metadata : `dict`, optional
+        The dictionary of metadata generated from :py:meth:`vcstools.metadb_utils.getmeta`
+    min_z_power : `float`, optional
+        Zenith normalised power cut off. |br| Default: 0.3.
+    query : psrqpy object, optional
+        A previous psrqpy.QueryATNF query. Can be supplied to prevent performing a new query.
 
     Returns
     -------
     enter_time : `int`
-        The time when the pulsar enters the beam in gps
+        The time when the pulsar enters the beam in gps.
     exit_time : `int`
-        The time when the pulsar exits the beam in gps
+        The time when the pulsar exits the beam in gps.
     t_int : `int`
-        The total time that the pulsar is in the beam in seconds
+        The total time that the pulsar is in the beam in seconds.
     """
     #type assurances
     obsid = int(obsid)
 
-    if not metadata or not full_meta:
-        metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
+    if not common_metadata or not full_meta:
+        common_metadata, full_meta = get_common_obs_metadata(obsid, return_all=True)
     obs_beg, obs_end = obs_max_min(obsid)
-    enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+    enter_norm, exit_norm = pulsar_beam_coverage(obsid, pulsar, beg, end, common_metadata=common_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
     if beg is not None and end is not None:
         dur = end-beg
     else: #use entire obs duration
@@ -738,48 +747,49 @@ def find_times(obsid, pulsar, beg, end, metadata=None, full_meta=None, min_z_pow
     return enter_time, exit_time, t_int
 
 
-def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, t_int=None,\
+def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, t_int=None,
                     common_metadata=None, full_meta=None, query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
-
-    """
-    Finds the system temperature and gain for an observation.
-    A function snippet originally written by Nick Swainston - adapted for general VCS use.
+    """Finds the system temperature and gain for an observation.
 
     Parameters
     ----------
     pulsar : `str`
-        the J name of the pulsar. e.g. J2241-5236
+        The Jname of the pulsar.
     obsid : `int`
-        The observation ID. e.g. 1226406800
+        The MWA Observation ID.
     beg : `int`
-        The beginning of the observing time
-    end : `float`
-        The end of the observing time
-    enter : `float`
-        OPTIONAL - The fractional time that the pulsar enters the beam wrt beg and end
-    t_int : `float`
-        OPTIONAL - The fractional time that the pulsar is in the beam wrt beg and end
-    p_ra : `str`
-        OPTIONAL - the target's right ascension
-    p_dec : `str`
-        OPTIONAL - the target's declination
-    common_metadata: list
-        OPTIONAL - the array generated from get_common_obs_metadata(obsid)
-    query: object
-        OPTIONAL - The return of the psrqpy function for this pulsar
+        Beginning of the observation GPS time.
+    end : `int`
+        End of the observation GPS time.
+    p_ra : `str`, optional
+        The target's right ascension.
+    p_dec : `str`, optional
+        The target's declination.
+    enter : `float`, optional
+        The fractional time that the pulsar enters the beam wrt beg and end.
+    t_int : `float`, optional
+        The fractional time that the pulsar is in the beam wrt beg and end.
+    common_metadata : `list`, optional
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`.
+    full_metadata : `dict`, optional
+        The dictionary of metadata generated from :py:meth:`vcstools.metadb_utils.getmeta`.
+    query : psrqpy object, optional
+        A previous psrqpy.QueryATNF query. Can be supplied to prevent performing a new query.
+    min_z_power : `float`, optional
+        Zenith normalised power cut off. |br| Default: 0.3.
     trcvr : `str`
-        The location of the MWA receiver temp csv file. Default = <vcstools_data_dir>MWA_Trcvr_tile_56.csv
+        The location of the MWA receiver temp csv file. |br| Default: <vcstools_data_dir>MWA_Trcvr_tile_56.csv
 
     Returns
     -------
     t_sys : `float`
-        The system temperature
+        The system temperature in K.
     t_sys_err : `float`
-        The system temperature's uncertainty
+        The system temperature's uncertainty.
     gain : `float`
-        The system gain
+        The system gain in K/mJy.
     gain_err : `float`
-        The gain's uncertainty
+        The gain's uncertainty.
     """
 
     #get ra and dec if not supplied
@@ -844,37 +854,43 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
                   common_metadata=None, full_meta=None, query=None,
                   plot_flux=False,
                   min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
-
-    """
-    Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
+    """Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
     S/N = (s_mean * gain * sqrt(n_p * t_int * df * (period - W_50)/W_50)) / t_sys
     Note that W_50 should be W_equiv but we can't figure that out so we're estimating
 
     Parameters
     ----------
     pulsar : `str`
-        Name of the pulsar e.g. J2241-5236
+        The Jname of the pulsar.
     obsid : `int`
-        Observation ID e.g. 1226406800
+        The MWA Observation ID.
     beg : `int`
-        beginning of the observing time
+        Beginning of the observation GPS time.
     end : `int`
-        end of the observing time
-    p_ra : `str`
-        OPTIONAL - the target's right ascension
-    p_dec : `str`
-        OPTIONAL - the target's declination
-    common_metadata: list
-        OPTIONAL - the array generated from get_common_obs_metadata(obsid)
+        End of the observation GPS time.
+    p_ra : `str`, optional
+        The target's right ascension.
+    p_dec : `str`, optional
+        The target's declination.
+    common_metadata : `list`, optional
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`
+    full_metadata : `dict`, optional
+        The dictionary of metadata generated from :py:meth:`vcstools.metadb_utils.getmeta`
+    query : psrqpy object, optional
+        A previous psrqpy.QueryATNF query. Can be supplied to prevent performing a new query.
     plot_flux : `boolean`
-        OPTIONAL - whether or not to produce a plot of the flux estimation. Default = False
+        OPTIONAL - whether or not to produce a plot of the flux estimation. |br| Default: `False`.
+    min_z_power : `float`, optional
+        Zenith normalised power cut off. |br| Default: 0.3.
+    trcvr : `str`
+        The location of the MWA receiver temp csv file. |br| Default: <vcstools_data_dir>MWA_Trcvr_tile_56.csv
 
     Returns
     -------
     sn : `float`
-        The expected signal to noise ratio for the given inputs
+        The expected signal to noise ratio for the given inputs.
     sn_err : `float`
-        The uncertainty in the signal to noise ratio
+        The uncertainty in the signal to noise ratio.
     """
     #We will attain uncertainties for s_mean, gain, t_sys and W_50.
     # other uncertainties are considered negligible
@@ -946,8 +962,40 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
 
 
 def multi_psr_snfe(pulsar_list, obsid, beg, end,
-                    common_metadata=None, full_meta=None, plot_flux=False,\
-                    query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
+                   common_metadata=None, full_meta=None, plot_flux=False,
+                   query=None, min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
+    """Runs :py:meth:`vcstools.sn_flux_utils.est_pulsar_sn` for multiple pulsars in the same MWA observation.
+
+    Parameters
+    ----------
+    pulsar : `list`
+        A list of the pulsar Jnames.
+    obsid : `int`
+        The MWA Observation ID.
+    beg : `int`
+        Beginning of the observation GPS time.
+    end : `int`
+        end of the observation GPS time.
+    common_metadata : `list`, optional
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`
+    full_metadata : `dict`, optional
+        The dictionary of metadata generated from :py:meth:`vcstools.metadb_utils.getmeta`
+    plot_flux : `boolean`, optional
+        If `True` will produce a plot of the flux estimation. |br| Default: False
+    query : psrqpy object, optional
+        A previous psrqpy.QueryATNF query. Can be supplied to prevent performing a new query.
+    min_z_power : `float`, optional
+        Zenith normalised power cut off. |br| Default: 0.3.
+    trcvr : `str`
+        The location of the MWA receiver temp csv file. |br| Default: <vcstools_data_dir>MWA_Trcvr_tile_56.csv
+
+    Returns
+    -------
+    sn : `float`
+        The expected signal to noise ratio for the given inputs.
+    sn_err : `float`
+        The uncertainty in the signal to noise ratio.
+    """
 
     logger.info("""This script may use estimations where data is missing.
     For full verbosity, use the DEBUG logger (ie. -L DEBUG)""")
