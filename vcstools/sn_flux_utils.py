@@ -629,7 +629,7 @@ def find_pulsar_w50(pulsar, query=None):
     """Attempts to find a pulsar's W50 from the ATNF catalogue. If unavailable, will estimate
 
     Paramters:
-    ---------
+    ----------
     pulsar : `str`
         The Jname of the pulsar.
     query : psrqpy object, optional
