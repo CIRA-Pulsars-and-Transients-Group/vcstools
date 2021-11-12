@@ -10,6 +10,7 @@ sphinx:
 build:
   apt_packages:
     - python3-mpi4py
+    - libopenmpi-dev
 
 # Explicitly set the version of Python and its requirements
 python:
