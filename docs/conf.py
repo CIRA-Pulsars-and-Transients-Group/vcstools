@@ -198,4 +198,4 @@ todo_include_todos = True
 # Run automatic geneartion bash script
 if not os.path.isdir("include_scripts"):
     os.mkdir("include_scripts")
-#os.system("bash make_scripts_rst.sh")
+os.system("bash make_scripts_rst.sh")
