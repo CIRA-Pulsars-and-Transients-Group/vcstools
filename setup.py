@@ -59,10 +59,11 @@ reqs = ['astropy>=3.2.1',
         'numpy>=1.13.3',
         'matplotlib>=2.1.0',
         'psrqpy>=1.0.5',
+        'mpi4py',
         #mwa software
         'mwa-voltage',
         'mwa_pb',
-        'mwa-hyperbeam']
+        'mwa-hyperbeam',]
 
 # Download the ANTF_pulsar_database_file file if it doesn't exist
 datadir = os.path.join(os.path.dirname(__file__), 'vcstools', 'data')

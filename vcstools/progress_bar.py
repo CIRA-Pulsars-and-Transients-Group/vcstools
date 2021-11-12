@@ -1,9 +1,22 @@
 import sys
 
 def progress_bar(it, prefix="", size=60, file=sys.stdout):
-    """
-    I stole this code from here: https://stackoverflow.com/questions/3160699/python-progress-bar
-    It's used like this: for i in progressbar(range(15), "Computing: ", 40):
+    """I stole this code from here: https://stackoverflow.com/questions/3160699/python-progress-bar
+
+    Parameters
+    ----------
+    it : `list`
+        The list to iterate over.
+    prefix : `str`
+        The prefix do display in the progress bar. |br| Default: "".
+    size : `int`
+        The length of the progress bar to display in characters. |br| Default: 60.
+    file : stdout
+        The output of the progress bar. |br| Default: `sys.stdout`.
+    
+    Examples
+    --------
+    >>> for i in progressbar(range(15), "Computing: ", 40):
     """
     it = list(it)
     count = len(it)

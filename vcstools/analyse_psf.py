@@ -18,22 +18,21 @@ logger = logging.getLogger(__name__)
 
 
 def read_vcsbeam_psf(psf_file):
-    """
-    Read in the PSF data file output from vcsbeam's mwa_tied_array_beam_psf
+    """Read in the PSF data file output from vcsbeam's mwa_tied_array_beam_psf
 
-    Parameters:
-    -----------
-    dat_file: str
-        The PSF data file output from vcsbeam's mwa_tied_array_beam_psf
+    Parameters
+    ----------
+    psf_file : `str`
+        The PSF data file output from vcsbeam's mwa_tied_array_beam_psf.
 
-    Returns:
-    --------
-    ra: numpy array
-        The RA (degrees) in the meshgrid format
-    dec: numpy array
-        The declination (degrees) in the meshgrid format
-    power: numpy array
-        The the data values of the fits file in the meshgrid format
+    Returns
+    -------
+    ra : `numpy.array`, (Ny, Nx)
+        The RA (degrees) in the meshgrid format.
+    dec : `numpy.array`, (Ny, Nx)
+        The declination (degrees) in the meshgrid format.
+    power : `numpy.array`, (Ny, Nx)
+        The the data values of the fits file in the meshgrid format.
     """
     input_array = np.loadtxt(psf_file, dtype=float)
     ra    = input_array[:,0]
@@ -45,20 +44,21 @@ def read_vcsbeam_psf(psf_file):
 
 
 def plot_vcsbeam_psf(psf_file, output_name="vcsbeam_psf.png", normalise=False, vmin=None):
-    """
-    Plot the PSF data file output from vcsbeam's mwa_tied_array_beam_psf
+    """Plot the PSF data file output from vcsbeam's mwa_tied_array_beam_psf
 
-    Parameters:
-    -----------
-    psf_file: str
-        The PSF data file output from vcsbeam's mwa_tied_array_beam_psf
-    output_name: str
-        Output plot name. Default: vcsbeam_psf.png
-    normalise: boolean
-        Normalise the PSF. Default: False
-    vmin: float
-        Minimum value of plot. Default: None
+    Parameters
+    ----------
+    psf_file : `str`
+        The PSF data file output from vcsbeam's mwa_tied_array_beam_psf.
+    output_name : `str`, optional
+        Output plot name. |br| Default: vcsbeam_psf.png.
+    normalise : `boolean`, optional
+        Normalise the PSF. |br| Default: `False`.
+    vmin : `float`, optional
+        Minimum value of plot. |br| Default: `None`.
     """
+    ra, dec, power = read_vcsbeam_psf(psf_file)
+
     if normalise:
         power = power / np.amax(power)
 
@@ -73,17 +73,16 @@ def plot_vcsbeam_psf(psf_file, output_name="vcsbeam_psf.png", normalise=False, v
 
 
 def plot_track_beam_response(response_file, output_name="vcsbeam_response.png", time_max=-1):
-    """
-    Plot the data file output from vcsbeam's mwa_track_primary_beam_response
+    """Plot the data file output from vcsbeam's mwa_track_primary_beam_response
 
-    Parameters:
-    -----------
-    response_file: str
-        The PSF data file output from vcsbeam's mwa_track_primary_beam_response
-    output_name: str
-        Output plot name. Default: vcsbeam_psf.png
-    time_max: int
-        Maximum number of seconds to process. Default: -1
+    Parameters
+    ----------
+    response_file : `str`
+        The PSF data file output from vcsbeam's mwa_track_primary_beam_response.
+    output_name : `str`, optional
+        Output plot name. |br| Default: vcsbeam_psf.png.
+    time_max : `int`, optional
+        Maximum number of seconds to process. |br| Default: -1.
     """
     input_array = np.loadtxt(response_file, dtype=float)
     sec          = input_array[:,0]
@@ -124,15 +123,14 @@ def plot_track_beam_response(response_file, output_name="vcsbeam_response.png", 
 
 
 def plot_pabeam(dat_file, output_name="pabeam_psf.png"):
-    """
-    Makes a polar plot over the sky response with the data file output from pabeam.py
+    """Makes a polar plot over the sky response with the data file output from pabeam.py
 
-    Parameters:
-    -----------
-    dat_file: str
-        The data file output from pabeam.py
-    output_name: str
-        Output plot name. Default: pabeam_psf.png
+    Parameters
+    ----------
+    dat_file : `str`
+        The data file output from pabeam.py.
+    output_name : `str`, optional
+        Output plot name. |br| Default: pabeam_psf.png.
     """
     with open(dat_file) as file:
         lines = file.readlines()
@@ -154,22 +152,21 @@ def plot_pabeam(dat_file, output_name="pabeam_psf.png"):
 
 
 def read_pabeam_ra_dec(dat_file):
-    """
-    Read in the PSF data file output from pabeam.py when using 
-    the --ra_dec_projection option
+    """Read in the PSF data file output from pabeam.py when using 
+    the --ra_dec_projection option.
 
-    Parameters:
-    -----------
-    dat_file: str
+    Parameters
+    ----------
+    dat_file : `str`
         The PSF data file output from pabeam.py
 
-    Returns:
-    --------
-    ra: numpy array
+    Returns
+    -------
+    ra : `numpy.array`, (Nx, Ny)
         The RA (degrees) in the meshgrid format
-    dec: numpy array
+    dec : `numpy.array`, (Nx, Ny)
         The declination (degrees) in the meshgrid format
-    power: numpy array
+    power : `numpy.array`, (Nx, Ny)
         The the data values of the fits file in the meshgrid format
     """
     with open(dat_file) as file:
@@ -191,27 +188,20 @@ def read_pabeam_ra_dec(dat_file):
 
 def plot_pabeam_ra_dec(dat_file, output_name="pabeam_psf.png",
                        normalise=False, vmin=None):
-    """
-    Plots the PSF data file output pabeam.py when using 
-    the --ra_dec_projection option
+    """Plots the PSF data file output pabeam.py when using 
+    the --ra_dec_projection option.
 
-    Parameters:
-    -----------
-    dat_file: str
+    Parameters
+    ----------
+    dat_file : `str`
         The PSF data file output pabeam.py when using 
         the --ra_dec_projection option
-    output_name: str
-        Output plot name. Default: pabeam_psf.png
-    normalise: boolean
-        Normalise the PSF. Default: False
-    vmin: float
-        Minimum value of plot. Default: None
-    centre_size: int
-        The radius in pixels to plot from the centre. Default: None
-    fft_abs: boolean
-        Take the fft of the PSF and plot the amplitude. Default: False
-    fft_angle: boolean
-        Take the fft of the PSF and plot the phase. Default: False
+    output_name : `str`, optional
+        Output plot name. |br| Default: pabeam_psf.png.
+    normalise : `boolean`, optional
+        Normalise the PSF. |br| Default: `False`.
+    vmin : `float`, optional
+        Minimum value of plot. |br| Default: `None`.
     """
     ra, dec, power = read_pabeam_ra_dec(dat_file)
     ax = plt.subplot(1, 1, 1,)
@@ -240,24 +230,23 @@ def plot_pabeam_ra_dec(dat_file, output_name="pabeam_psf.png",
 
 
 def read_psf_fits(fits_file, centre_size=None):
-    """
-    Read in an imaging PSF fits file (from WSCLEAN for example)
+    """Read in an imaging PSF fits file (from WSCLEAN for example).
 
-    Parameters:
-    -----------
-    fits_file: str
-        The PSF fits file gained from imaging (WSCLEAN)
-    centre_size: int
-        The radius in pixels to plot from the centre. Default: None
+    Parameters
+    ----------
+    fits_file : `str`
+        The PSF fits file gained from imaging (WSCLEAN).
+    centre_size : `int`, optional
+        The radius in pixels to plot from the centre. |br| Default: `None`.
 
-    Returns:
-    --------
-    rav: numpy array
-        The RA (degrees) in the meshgrid format
-    devv: numpy array
-        The declination (degrees) in the meshgrid format
-    fits_data: numpy array
-        The the data values of the fits file in the meshgrid format
+    Returns
+    -------
+    rav : `numpy.array`, (Nx, Ny)
+        The RA (degrees) in the meshgrid format.
+    decv : `numpy.array`, (Nx, Ny)
+        The declination (degrees) in the meshgrid format.
+    fits_data : `numpy.array`, (Nx, Ny)
+        The the data values of the fits file in the meshgrid format.
     """
     hdul = fits.open(fits_file)
 
@@ -306,25 +295,24 @@ def read_psf_fits(fits_file, centre_size=None):
 def plot_imaging_psf(fits_file, output_name="imaging_psf.png",
                      normalise=False, vmin=None, centre_size=None,
                      fft_abs=False, fft_angle=False):
-    """
-    Plots the imaging PSF (from WSCLEAN for example)
+    """Plots the imaging PSF (from WSCLEAN for example).
 
-    Parameters:
-    -----------
-    fits_file: str
-        The PSF fits file gained from imaging (WSCLEAN)
-    output_name: str
-        Output plot name. Default: imaging_psf.png
-    normalise: boolean
-        Normalise the PSF. Default: False
-    vmin: float
-        Minimum value of plot. Default: None
-    centre_size: int
-        The radius in pixels to plot from the centre. Default: None
-    fft_abs: boolean
-        Take the fft of the PSF and plot the amplitude. Default: False
-    fft_angle: boolean
-        Take the fft of the PSF and plot the phase. Default: False
+    Parameters
+    ----------
+    fits_file : `str`
+        The PSF fits file gained from imaging (WSCLEAN).
+    output_name : `str`, optional
+        Output plot name. |br| Default: imaging_psf.png.
+    normalise : `boolean`, optional
+        Normalise the PSF. |br| Default: `False`.
+    vmin : `float`, optional
+        Minimum value of plot. |br| Default: `None`.
+    centre_size : `int`, optional
+        The radius in pixels to plot from the centre. |br| Default: `None`.
+    fft_abs : `boolean`, optional
+        Take the fft of the PSF and plot the amplitude. |br| Default: `False`.
+    fft_angle : `boolean`, optional
+        Take the fft of the PSF and plot the phase. |br| Default: `False`.
     """
     rav, decv, fits_data = read_psf_fits(fits_file, centre_size=centre_size)
     if normalise:
@@ -364,18 +352,17 @@ def plot_imaging_psf(fits_file, output_name="imaging_psf.png",
 def plot_psf_comparison(imaging_psf,
                         pabeam_psf,
                         c_pabeam_psf):
-    """
-    Compare the PSFs FWHM along RA and declination from imaging, pabeam.py and vcsbeam's mwa_tied_array_beam_psf
-    Outputs a plot called comparing_psf_cuts.png
+    """Compare the PSFs FWHM along RA and declination from imaging, pabeam.py and vcsbeam's mwa_tied_array_beam_psf.
+    Outputs a plot called comparing_psf_cuts.png.
 
-    Parameters:
-    -----------
-    imaging_psf: str
-        The PSF fits file gained from imaging (WSCLEAN)
-    pabeam_psf: str
-        The PSF data file output from pabeam.py
-    c_pabeam_psf: str
-        The PSF data file output from vcsbeam's mwa_tied_array_beam_psf
+    Parameters
+    ----------
+    imaging_psf : `str`
+        The PSF fits file gained from imaging (WSCLEAN).
+    pabeam_psf : `str`
+        The PSF data file output from pabeam.py.
+    c_pabeam_psf : `str`
+        The PSF data file output from vcsbeam's mwa_tied_array_beam_psf.
     """
     # read image psf
     rai, deci, ipower = read_psf_fits(imaging_psf)

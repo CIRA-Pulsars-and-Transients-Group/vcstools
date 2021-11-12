@@ -1,3 +1,7 @@
+
+"""
+Collection of database related utilities that are used throughout the VCS processing pipeline
+"""
 import numpy as np
 import struct, os, logging
 from collections import namedtuple
@@ -10,11 +14,7 @@ HEADER_INTRO = b"MWAOCAL\0"
 Header = namedtuple("header", "intro fileType structureType intervalCount antennaCount channelCount polarizationCount timeStart timeEnd")
 Header.__new__.__defaults__ = (HEADER_INTRO, 0, 0, 0, 0, 0, 0, 0.0, 0.0)
 
-"""
-Collection of database related utilities that are used throughout the VCS processing pipeline
-"""
 class AOCal(np.ndarray):
-
     """
     AOCAl stored as a numpy array (with start and stop time stored as floats)
 

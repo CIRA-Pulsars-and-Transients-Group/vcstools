@@ -3,6 +3,7 @@ VCStools software tools
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/77cdb25072364ee48dd2f1e3ca078af5)](https://www.codacy.com/gh/CIRA-Pulsars-and-Transients-Group/vcstools/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&amp;utm_campaign=Badge_Grade)
 [![Codacy Badge](https://app.codacy.com/project/badge/Coverage/77cdb25072364ee48dd2f1e3ca078af5)](https://www.codacy.com/gh/CIRA-Pulsars-and-Transients-Group/vcstools/dashboard?utm_source=github.com&utm_medium=referral&utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&utm_campaign=Badge_Coverage)
 [![Build Status](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools.svg?branch=master)](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools)
+[![Documentation Status](https://readthedocs.org/projects/mwa-vcstools/badge/?version=latest)](https://mwa-vcstools.readthedocs.io/en/latest/?badge=latest)
 
 Installation
 ------
@@ -38,7 +39,7 @@ You will have to make your own entry in vcstools/config.py for your supercompute
 
 Help
 ------
-Documentation on how to process MWA VCS data can be found [here](https://wiki.mwatelescope.org/display/MP/Documentation)
+Documentation on how to process MWA VCS data can be found [here](https://wiki.mwatelescope.org/display/MP/Documentation) and the developer documentation can be found [here](https://mwa-vcstools.readthedocs.io)
 
 Credit
 ------
