@@ -6,6 +6,11 @@ version: 2
 sphinx:
   configuration: docs/conf.py
 
+# Install mpi
+build:
+  apt_packages:
+    - python3-mpi4py
+
 # Explicitly set the version of Python and its requirements
 python:
   version: 3.7
