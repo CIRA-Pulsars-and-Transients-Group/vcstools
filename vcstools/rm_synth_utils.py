@@ -17,25 +17,31 @@ from vcstools.config import load_config_file
 logger = logging.getLogger(__name__)
 
 
-def remove_allfiles(randomgen):
-    allfiles = glob.glob(f"{randomgen}/*")
+def remove_allfiles(directory):
+    """Delete all files in a directory then the directory itself.
+
+    Parameters
+    ----------
+    directory : `str`
+        The directory to delete.
+    """
+    allfiles = glob.glob(f"{directory}/*")
     for afile in allfiles:
         os.remove(afile)
-    os.rmdir(f"{randomgen}")
+    os.rmdir(f"{directory}")
 
 
 def rmfit_quad(archive, phase_min, phase_max):
-    """
-    Runs the PRSCHIVE rmfit command as a python subprocess using the -w option for a quadratic fit
+    """Runs the PRSCHIVE rmfit command as a python subprocess using the -w option for a quadratic fit.
 
     Parameters
     ----------
     archive : `str`
-        The name of the archive file to take as an input
+        The name of the archive file to take as an input,
     phase_min : `float`
-        The minimum phase to begin the fit, should be a float between 0 and 1
+        The minimum phase to begin the fit, should be a float between 0 and 1,
     phase_max : `float`
-        The maximum phase to use to fit, should be a float between 0 and 1
+        The maximum phase to use to fit, should be a float between 0 and 1,
     """
     comp_config = load_config_file()
     commands = [comp_config["prschive_container"]]
@@ -50,22 +56,21 @@ def rmfit_quad(archive, phase_min, phase_max):
 
 
 def find_on_pulse_ranges(I, clip_type="regular", plot_name=None):
-    """
-    Find ranges of pulse components from a pulse profile by fitting a gaussian distribution
+    """Find ranges of pulse components from a pulse profile by fitting a gaussian distribution.
 
     Parameters
     ----------
-    I:list
-        The pulse profile
+    I : `list`
+        The pulse profile.
     clip_type : `str`
-        The clipping verbosity for the Gaussian fitter. Choose between regular, noisy and verbose
-    plot_name:str
-        The name of the ouput plot. If none, will not produce one
+        The clipping verbosity for the Gaussian fitter. Choose between regular, noisy and verbose.
+    plot_name : `str`
+        The name of the ouput plot. If none, will not produce one.
 
     Returns
     -------
-    phases: list
-        A list of phases (from 0 to 1) corresponding to the on-pulse components
+    phases : `list`
+        A list of phases (from 0 to 1) corresponding to the on-pulse components.
     """
     g_fitter = gfit(I, clip_type=clip_type, plot_name=plot_name)
     g_fitter.auto_gfit()
@@ -81,8 +86,7 @@ def find_on_pulse_ranges(I, clip_type="regular", plot_name=None):
 
 
 def read_rmfit_QUVflux(QUVflux):
-    """
-    Reads the freq, I, Q and U values with their errors from a QUVflux.out file generated from rmfit
+    """Reads the freq, I, Q and U values with their errors from a QUVflux.out file generated from rmfit.
 
     Parameters
     ----------
@@ -91,21 +95,20 @@ def read_rmfit_QUVflux(QUVflux):
 
     Returns
     -------
-    List containing:
-        freq_hz: list
-            Frequency values in Hz
-        I: list
-            Stokes I values
-        I_e: list
-            Stokes I uncertainties
-        Q: list
-            Stokes Q values
-        Q_e: list
-            Stokes Q uncertainties
-        U: list
-            Stokes U values
-        U_e: list
-            Stokes U uncertainties
+    freq_hz : `list`
+        Frequency values in Hz.
+    I : `list`
+        Stokes I values.
+    I_e : `list`
+        Stokes I uncertainties.
+    Q : `list`
+        Stokes Q values.
+    Q_e : `list`
+        Stokes Q uncertainties.
+    U : `list`
+        Stokes U values.
+    U_e : `list`
+        Stokes U uncertainties.
     """
     f = np.genfromtxt(QUVflux)
     freq_hz = np.array([i[1] for i in f])*1e6
@@ -120,15 +123,14 @@ def read_rmfit_QUVflux(QUVflux):
 
 
 def write_rm_to_yaml(filename, rm_dict):
-    """
-    Writes the rotation measure dictionary to a yaml file
+    """Writes the rotation measure dictionary to a yaml file.
 
     Parameters
     ----------
     filename : `str`
-        The pathname of the file to write to
-    rm_dict: dictionary
-        A dictionary with the RM information formatted like the output from rm_synth_pipe()
+        The pathname of the file to write to.
+    rm_dict : `dict`
+        A dictionary with the RM information formatted like the output from :py:meth:`vcstools.rm_synth_utils.rm_synth_pipe`.
     """
     with open(filename, "w+") as f:
         yaml.dump(rm_dict, f, default_flow_style=False)
@@ -136,26 +138,25 @@ def write_rm_to_yaml(filename, rm_dict):
 
 
 def find_best_range(I, Q, U, phase_ranges):
-    """
-    Finds the phase range with the largest ratio of lin pol to stokes I
+    """Finds the phase range with the largest ratio of lin pol to stokes I.
 
     Parameters
     ----------
-    I: list
-        Stokes I
-    Q: list
-        Stokes Q
-    U: list
-        Stokes U
-    phase_ranges: list
-        A list where every 2 entries is a phase range from 0 to 1. ie. [0.1 0.3 0.4 0.8]
+    I : `list`
+        Stokes I.
+    Q : `list`
+        Stokes Q.
+    U : `list`
+        Stokes U.
+    phase_ranges : `list`
+        A list where every 2 entries is a phase range from 0 to 1. ie. [0.1 0.3 0.4 0.8].
 
     Returns
     ---------
-    best_phase_range: list
-        The most suitable phase range
+    best_phase_range : `list`
+        The most suitable phase range.
     best_max : `float`
-        The maximum linear polarisation value
+        The maximum linear polarisation value.
     """
     lin_pol = np.sqrt(np.array(Q)**2 + np.array(U)**2)
     I_pol_ratio = list(lin_pol / np.array(I))
@@ -173,40 +174,39 @@ def find_best_range(I, Q, U, phase_ranges):
 
 
 def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single=False, title=None, plotname=None, phi_range=(-300, 300), phi_steps=10000):
-    """
-    Performs RM synthesis on input data
+    """Performs RM synthesis on input data.
 
     Parameters
     ----------
-    freq_hz: list
-        Frequency values in Hz
-    I: list
-        Stokes I values
-    I_e: list
-        Stokes I uncertainties
-    Q: list
-        Stokes Q values
-    Q_e: list
-        Stokes Q uncertainties
-    U: list
-        Stokes U values
-    U_e: list
-        Stokes U uncertainties
-    phi_range: tuple
-        OPTIONAL - The range of RMs to search over. Default: (-300, 300)
-    phi_steps : `int`
-        OPTINAL - The bumber of RM steps to search over. Default: 10000
-    phase_range: tuple
-        OPTIONAL - The phase range of the profile used in fitting. Will be displayed on plot. Default: None
-    plotname : `str`
-        OPTIONAL - The name of the plot. If None, will not plot: Default: None
+    freq_hz : `list`
+        Frequency values in Hz.
+    I : `list`
+        Stokes I values.
+    I_e : `list`
+        Stokes I uncertainties.
+    Q : `list`
+        Stokes Q values.
+    Q_e : `list`
+        Stokes Q uncertainties.
+    U : `list`
+        Stokes U values.
+    U_e : `list`
+        Stokes U uncertainties.
+    phi_range : `tuple`, optional
+        The range of RMs to search over. |br| Default: (-300, 300).
+    phi_steps : `int`, optional
+        The bumber of RM steps to search over. |br| Default: 10000.
+    phase_range : tuple, optional
+        The phase range of the profile used in fitting. Will be displayed on plot. |br| Default: None.
+    plotname : `str`, optional
+        The name of the plot. If None, will not plot: |br| Default: None.
 
     Returns
     -------
     rm : `float`
-        The rotation measure
+        The rotation measure.
     rm_e : `float`
-        The uncertainty in the rotation measure
+        The uncertainty in the rotation measure.
     """
     p = rm_synth.PolObservation(freq_hz, (I, Q, U), IQUerr=(I_e, Q_e, U_e))
     phi_axis = np.linspace(*phi_range, phi_steps)
@@ -244,27 +244,27 @@ def IQU_rm_synth(freq_hz, I, Q, U, I_e, Q_e, U_e, phase_range=None, force_single
 
 
 def read_rmsynth_out(filename):
-    """
-    Reads the ouput file from rm_synth_pipe()
+    """Reads the ouput file from :py:meth:`vcstools.rm_synth_utils.rm_synth_pipe`
 
     Parameters
     ----------
-    filename:
-        The name of the file ouput from rm_synth_pipe()
+    filename : `str`
+        The name of the file ouput from :py:meth:`vcstools.rm_synth_utils.rm_synth_pipe`.
 
     Returns
     -------
-    rm_dict: dictionary
+    rm_dict : `dict`
         Contains the following keys:
-        i: dictionary
-            There are i entries where i is the number of different phase ranges
-            Contains the following keys:
-            rm : `float`
-                The rotation measure of this run
-            rm_e : `float`
-                The uncertainty in rm
-            phase_ranges: tuple
-                The range of phases used for this run
+
+        ``"i"``
+            There are i entries where i is the number of different phase ranges (`dict`). Contains the following keys:
+
+            ``"rm"``
+                The rotation measure of this run (`float`).
+            ``"rm_e"``
+                The uncertainty in rm (`float`).
+            ``"phase_ranges"``
+                The range of phases used for this run (`tuple`).
     """
     rm_dict={}
     f = open(filename, "r")
@@ -282,53 +282,53 @@ def read_rmsynth_out(filename):
 
 
 def rm_synth_pipe(kwargs):
-    """
-    Performs all the nexessary operations on an archive file to attain a rotation measure through the RM synthesis technique
+    """Performs all the nexessary operations on an archive file to attain a rotation measure through the RM synthesis technique.
 
     Parameters
     ----------
     archive : `str`
-        The name of the archive file to use
-    work_dir : `str`
-        OPTIONAL - The directory to work in. Default: './'
-    pulsar : `str`
-        OPTIONAL - The name of the puslar (used for naming purposes). Default: None
-    obsid : `int`
-        OPTIONAL - The observation ID (used for naming purposes). Default: None
-    plot : `boolean`
-        OPTIONAL - If True, will ouput a plot when finished. Default: False
+        The name of the archive file to use.
+    work_dir : `str`, optional
+        The directory to work in. |br| Default: './'.
+    pulsar : `str`, optional
+        The name of the puslar (used for naming purposes). |br| Default: None.
+    obsid : `int`, optional
+        The observation ID (used for naming purposes). |br| Default: None.
+    plot : `boolean`, optional
+        If True, will ouput a plot when finished. |br| Default: False.
     write : `boolean`
-        OPTIONAL - If True, will write the result to a file. Default: False
-    label : `str`
-        OPTIONAL - A label used to identify the output files. If None, will generate a 64 bit string
-    keep_QUV : `boolean`
-        OPTIONAL - If True, will keep the QUVflux.out file generated from rmfit
-    force_single : `boolean`
-        OPTIONAL - If True, will find the phase range with the greates lin_pol ratio and fit with only this (only if kwargs_rms['phase_range'] is None). Default: False
-    kwagrs_rms: dict
-        keyword arguments for IQU_rm_synth()
-    kwargs_gfit: dict
-        keyword arguments for prof_utils.auto_gfit()
+        If True, will write the result to a file. |br| Default: False.
+    label : `str`, optional
+        A label used to identify the output files. If None, will generate a 64 bit string.
+    keep_QUV : `boolean`, optional
+        If True, will keep the QUVflux.out file generated from rmfit.
+    force_single : `boolean`, optional
+        If True, will find the phase range with the greates lin_pol ratio and fit with only this (only if kwargs_rms['phase_range'] is None). |br| Default: False.
+    kwagrs_rms : `dict`
+        keyword arguments for :py:meth:`vcstools.rm_synth_utils.IQU_rm_synth`.
+    kwargs_gfit : `dict`
+        keyword arguments for :py:meth:`vcstools.prof_utils.auto_gfit`.
 
     Returns
     -------
     rm_dict: dictionary
         Contains the following keys:
-        i: dictionary
-            There are i entries where i is the number of different phase ranges
-            Contains the following keys:
-            rm : `float`
-                The rotation measure of this run
-            rm_e : `float`
-                The uncertainty in rm
-            phase_range: tuple
-                The range of phases used for this run
-            plotname : `str`
-                The name of the output plot. None if no plot
-            label : `str`
-                The label used
+
+        ``"i"``
+            There are i entries where i is the number of different phase ranges (`dict`). Contains the following keys:
+
+            ``"rm"``
+                The rotation measure of this run (`float`).
+            ``"rm_e"``
+                The uncertainty in rm (`float`).
+            ``"phase_ranges"``
+                The range of phases used for this run (`tuple`).
+            ``"plotname"``
+                The name of the output plot. None if no plot (`str`).
+            ``"label"``
+                The label used (`str`).
     filename : `str`
-        The path of the file that was written to. None if not written
+        The path of the file that was written to. None if not written.
     """
     # Make a randomly generated label for temp directory
     randomgen = random.getrandbits(64)

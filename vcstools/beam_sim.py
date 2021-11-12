@@ -24,7 +24,7 @@ def getTileLocations(metafits, flags=[]):
     metafits : `str`
         The metafits file location.
     flags : `list`, optional
-        RTS tile flags (i.e. the first entry in the metafits correspond to "tile 0", irrespective of what the antenna name is). Default: [].
+        RTS tile flags (i.e. the first entry in the metafits correspond to "tile 0", irrespective of what the antenna name is). |br| Default: [].
 
     Returns
     -------

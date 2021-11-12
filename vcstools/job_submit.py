@@ -38,88 +38,69 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
                  gpu_res=None, mem=1024, cpu_threads=1, temp_mem=None,
                  nice=0, shebag='#!/bin/bash -l',
                  module_dir=None, load_vcstools=True):
-    """
-    Making this function to cleanly submit SLURM jobs using a simple template.
+    """Making this function to cleanly submit SLURM jobs using a simple template.
 
     Parameters
     ----------
     name  : `str`
         The base name that is used to create the "`name`.batch" and "`name`.out" files.
-
-    commands : list of strs
-        The actual bash script commands you wnat to run.
-        Expects a list where each element is a single line of the bash script.
-
-    tmpl  : `str`
+    commands : `list`
+        Each item in the list is a line of the bash script commands you want to run.
+    tmpl  : `str`, optional
         A template header string with format place holders: export, outfile,
         cluster, header and script.
         This is used to create the final string to be written to the job script.
         For this function, it is required to be SLURM compliant.
-        Default: `SLURM_TMPL`
-
-    slurm_kwargs : dict [optional]
+        |br| Default: `SLURM_TMPL`
+    slurm_kwargs : `dict`, optional
         A dictionary of SLURM keyword, value pairs to fill in whatever is not
         in the template supplied to `tmpl`.
-        Default: `{}` (empty dictionary, i.e. no additional header parameters)
-
-    module_list : list of str [optional]
+        |br| Default: `{}` (empty dictionary, i.e. no additional header parameters).
+    module_list : `list`, optional
         A list of module names (including versions if applicable) that will
         be included in the header for the batch
         scripts. e.g. ["vcstools/master", "mwa-voltage/master", "presto/master"] would append
-            module load vcstools/master
-            module load mwa-voltage/master
-            module load presto/master
-        to the header of the batch script. This can also invoke "module use ..." commands.
+        |br| module load vcstools/master
+        |br| module load mwa-voltage/master
+        |br| module load presto/master
+        |br| to the header of the batch script. This can also invoke "module use ..." commands.
         NOTE: /group/mwa/software/modulefiles is used and vcstools/master is loaded by default.
-
-    vcstools_version :  str
-        The version of vcstools to load. Default: master.
-
-    batch_dir  : `str` [optional]
-        The LOCAL directory where you want to write the batch scripts
-        (i.e. it will write to `$PWD/batch_dir`).
-        Default: "batch/"
-
-    depend : list or None [optional]
+    vcstools_version : `str`, optional
+        The version of vcstools to load. |br| Default: master.
+    batch_dir : `str`, optional
+        The directory where you want to write the batch scripts
+        |br| Default: "batch/". (i.e. it will write to `$PWD/batch_dir`).
+    depend : `list`, optional
         A list of the SLURM job IDs that your would like this job to depend on.
         If `None` then it is assumed there is no dependency on any other job.
-        Default: `None`
-
-    depend_type  : `str` [optional]
+        |br| Default: `None`.
+    depend_type : `str`, optional
         The type of slurm dependancy required. For example if you wanted the
         job to run after the jobs have been terminated use 'afterany'.
-        Default: "afterok"
-
-    submit  : `boolean` [optional]
+        |br| Default: "afterok".
+    submit : `boolean`, optional
         Whether to write and submit the job scripts (`True`) or only write the scripts (`False`).
-        Default: `True`
-
-    outfile  : `str` [optional]
+        |br| Default: `True`.
+    outfile : `str`, optional
         The output file name if "`name`.out" is not desirable.
-        Default: `None` (i.e. "`batch_dir`/`name`.out")
-
-    queue  : `str` [optional]
+        |br| Default: `None` (i.e. "`batch_dir`/`name`.out")
+    queue  : `str`, optional
         The type of queue you require (cpuq, gpuq or copyq) then the script will
         choose the correct partitions and clusters for the job to run on
         Default: "cpuq"
-
-    export  : `str` [optional]
+    export : `str`, optional
         Switch that lets SLURM use your login environment on the compute
         nodes ("ALL") or not ("NONE").
-        Default: "None"
-
-    gpu_res  : `int` [optional]
+        |br| Default: "None".
+    gpu_res : `int`, optional
         Number of GPUs that the SLURM job will reserve.
-        Default: "None"
-
-    mem  : `int` [optional]
+        |br| Default: "None".
+    mem : `int`, optional
         The MB of ram required for your slurm job.
-        Default: 8192
-
-    cpu_threads  : `int` [optional]
-        The number of cpu threads required for your slurm job.
-        Default: 1
-
+        |br| Default: 8192.
+    cpu_threads : `int`, optional
+        The number of CPU threads required for your slurm job.
+        |br| Default: 1.
 
     Returns
     -------
@@ -151,8 +132,6 @@ def submit_slurm(name, commands, tmpl=SLURM_TMPL, slurm_kwargs=None,
         partition = comp_config['zcpuq_partition']
     else:
         logger.error("No queue found, please use cpuq, gpuq or copyq")
-
-
 
     header = []
 

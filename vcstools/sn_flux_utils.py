@@ -11,9 +11,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-#Astropy
-from astropy.table import Table
-
 #vcstools
 from vcstools import data_load
 from vcstools.catalogue_utils import grab_source_alog
@@ -628,7 +625,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=
 def find_pulsar_w50(pulsar, query=None):
     """Attempts to find a pulsar's W50 from the ATNF catalogue. If unavailable, will estimate
 
-    Paramters:
+    Parameters
     ----------
     pulsar : `str`
         The Jname of the pulsar.
@@ -787,7 +784,7 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
     t_sys_err : `float`
         The system temperature's uncertainty.
     gain : `float`
-        The system gain in K/mJy.
+        The system gain in K/Jy.
     gain_err : `float`
         The gain's uncertainty.
     """
@@ -817,7 +814,6 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
     start_time =  enter-int(obsid)
 
     #Get important info
-    trec_table = Table.read(trcvr,format="csv")
     ntiles = 128 #TODO actually we excluded some tiles during beamforming, so we'll need to account for that here
 
     beam_power = get_beam_power_over_time([obsid, obs_ra, obs_dec, t_int, delays,\
@@ -835,7 +831,7 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
     #TODO can be inaccurate for coherent but is too difficult to simulate
     t_sky = (Tsky_XX + Tsky_YY) / 2.
     # Get T_sys by adding Trec and Tsky (other temperatures are assumed to be negligible
-    t_sys_table = t_sky + get_Trec(trec_table, centrefreq)
+    t_sys_table = t_sky + get_Trec(centrefreq, trcvr_file=trcvr)
     t_sys = np.mean(t_sys_table)
     t_sys_err = t_sys*0.02 #TODO: figure out what t_sys error is
 

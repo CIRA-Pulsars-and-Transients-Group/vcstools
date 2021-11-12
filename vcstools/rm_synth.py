@@ -46,21 +46,35 @@ class PolObservation:
 		obtain Stokes IQU data.
 		If you don't have I, but only QU, just provide ones.
 		Optionally, errors can be provided for I, Q, and U.
+		When initialised, a powerlaw will be fit to Stokes I
+		for possible later use.
 
 		Parameters
 		----------
 		freq : array
-		    Frequencies in Hz
+		    Frequencies in Hz.
 		IQU : array
 		    Stokes IQU values in a 3xN array where
 		    N is the length of freq.
-		IQUerr : array, optional (default None)
-		    Stokes IQU uncertainties in a 3xN array
-		verbose  : `boolean`, optional (default True)
-		    Print some output?
+		IQUerr : array, optional
+		    Stokes IQU uncertainties in a 3xN array. |br| Default: None.
+		verbose  : `boolean`, optional
+		    Print some output? |br| Default: True.
 
-		When initialised, a powerlaw will be fit to Stokes I
-		for possible later use.
+		Methods
+		-------
+		rmsynthesis:
+			Perform RM Synthesis.
+		plot_fdf:
+			Plot the FDF and RMSF.
+		plot_stokesi:
+			Plot Stokes I.
+		get_fdf_peak:
+			Obtain the peak of the FDF and its Faraday depth.
+		rmclean:
+			Perform RMCLEAN.
+		print_rmstats:
+			Print some stats about the results.
 		"""
 		self.freq = freq
 		self.i = IQU[0]
@@ -84,9 +98,7 @@ class PolObservation:
 		self.rmclean_done = False
 
 	def rmsynthesis(self,phi,norm_mod=False,norm_vals=False,double=True,clip=None,pclip=None,weightmode='none',verbose=True):
-		"""
-		Perform RM Synthesis.
-
+		"""Perform RM Synthesis.
 		This function performs RM Synthesis on the provided
 		IQU data and computes the RMSF.
 		It can adopt weights based on the IQU errors if they
@@ -95,29 +107,27 @@ class PolObservation:
 		Parameters
 		----------
 		phi : array
-		   RM values to use (should be contiguous and regularly spaced)
+		    RM values to use (should be contiguous and regularly spaced)
 		norm_mod  : `boolean`, optional (default False)
-		   Normalise QU values with the Stokes I fitted power-law model?
+		    Normalise QU values with the Stokes I fitted power-law model?
 		norm_vals  : `boolean`, optional (default False)
-		   Normalise QU values with the Stokes I data points
-		   per channel?
+		    Normalise QU values with the Stokes I data points
+		    per channel?
 		double  : `boolean`, optional (default True)
-		   Create the RMSF double the length along the RM axis?
-		   This should be kept as True unless you are not planning
-		   to RMCLEAN.
+		    Create the RMSF double the length along the RM axis?
+		    This should be kept as True unless you are not planning
+		    to RMCLEAN.
 		clip  : `float`, optional (default -inf)
-		   Ignore channels with Stokes I S/N ratio < clip
+		    Ignore channels with Stokes I S/N ratio < clip
 		pclip  : `float`, optional (default -inf)
-		   Ignore channels with sqrt(Q**2+U**2) S/N ratio < pclip
+		    Ignore channels with sqrt(Q**2+U**2) S/N ratio < pclip
 		weightmode  : `str`, optional (default 'none')
-		   How to do weighting in the Fourier transform. Options are:
-		     'none'	= no weighting (uniform weights)
-		     'varwt'	= inverse variance weights based on
-				  Stokes I noise
-		   Further options may be added later.
+		    How to do weighting in the Fourier transform. Options are:
+		    |br| 'none'	 = no weighting (uniform weights)
+		    |br| 'varwt' = inverse variance weights based on Stokes I noise
+		    Further options may be added later.
 		verbose  : `boolean`, optional (default True)
 		    Print some output?
-
 		"""
 
 		# Constants
@@ -285,11 +295,10 @@ class PolObservation:
 	def get_fdf_peak(self,verbose=True):
 		"""
 		Obtain the peak of the FDF and its Faraday depth
-
 		This will fit the peak of the FSF and report results
 		if requested.
 		Values that are calculated and reported are:
-			Absolute value at peak, PA at peak, peak RM value
+		|br| Absolute value at peak, PA at peak, peak RM value
 		This is done for the dirty FDF.
 		If RMCLEAN has been performed then this is also done for the
 		deconvolved Faraday spectrum.
@@ -298,7 +307,6 @@ class PolObservation:
 		----------
 		verbose  : `boolean`, optional (default True)
 		    Print some output?
-
 		"""
 		if self.rmsynth_done:
 			x0 = where(abs(self.fdf)==max(abs(self.fdf)))[0][0]

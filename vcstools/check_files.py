@@ -10,10 +10,28 @@ from vcstools.config import load_config_file
 logger = logging.getLogger(__name__)
 
 def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type='raw'):
-    '''
-    Checks that the number of files in directory (default is /astro/mwavcs/vcs/[obsID]/raw/) is the same
+    """Checks that the number of files in directory is the same
     as that found on the archive and also checks that all files have the same size (253440000 for raw, 7864340480 for recombined tarballs by default).
-    '''
+
+    Parameters
+    ----------
+    obsID : `int`
+        The MWA Observation ID.
+    directory : `str`, optional
+        The directory in which to check the files.
+        |br| Default: /astro/mwavcs/vcs/[obsID]/raw/.
+    startsec : `int`
+        The gps time of first file to check.
+    n_sec : `int`
+        The number of seconds from the startsec to check.
+    data_type : `str`
+        The type of data from ['raw', 'tar_ics', 'ics']. |br| Default: raw.
+
+    Returns
+    -------
+    error : `boolean`
+        If `True` there are missing or incorrect files, `False` if all files are correct.
+    """
     comp_config = load_config_file()
     if not data_type in ['raw', 'tar_ics', 'ics']:
         logger.error("Wrong data type given to download check.")
@@ -75,12 +93,34 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
         logger.info("We have all {0} {1} files as expected.".format(files_in_dir, data_type))
     return error
 
-def check_recombine(obsID, directory=None, required_size=327680000, \
-                        required_size_ics=30720000, startsec=None, n_secs=None):
-    '''
-    Checks that the number of files in directory (/astro/mwavcs/vcs/[obsID]/combined/) is ....
-    as that found on the archive and also checks that all files have the same size (327680000 by default).
-    '''
+def check_recombine(obsID, directory=None,
+                    required_size=327680000,
+                    required_size_ics=30720000,
+                    startsec=None, n_secs=None):
+    """Checks that the number of files in the directory as that found on the archive
+    and also checks that all files have the same size (327680000 by default)
+
+    Parameters
+    ----------
+    obsID : `int`
+        The MWA Observation ID.
+    directory : `str`, optional
+        The directory in which to check the files.
+        |br| Default: /astro/mwavcs/vcs/[obsID]/combined/.
+    required_size : `int`
+        The required size of the recombined files in bytes. |br| Default: 327680000.
+    required_size_ics : `int`
+        The required size of the ics files in bytes. |br| Default: 30720000.
+    startsec : `int`
+        The gps time of first file to check.
+    n_sec : `int`
+        The number of seconds from the startsec to check.
+
+    Returns
+    -------
+    error : `boolean`
+        If `True` there are missing or incorrect files, `False` if all files are correct.
+    """
     comp_config = load_config_file()
     if not directory:
         directory = os.path.join(comp_config['base_data_dir'], str(obsID), "combined")
@@ -124,7 +164,28 @@ def check_recombine(obsID, directory=None, required_size=327680000, \
         logger.info("We have all {0} files as expected.".format(files_in_dir))
     return error
 
-def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_size=None, obsID=None):
+def check_recombine_ics(obsID=None, directory=None, startsec=None, n_secs=None, required_size=None):
+    """Checks that the number of recombined ics files in the directory as that found on the archive.
+
+    Parameters
+    ----------
+    obsID : `int`, optional
+        The MWA Observation ID.
+    directory : `str`, optional
+        The directory in which to check the files.
+        |br| Default: /astro/mwavcs/vcs/[obsID]/combined/.
+    startsec : `int`
+        The gps time of first file to check.
+    n_sec : `int`
+        The number of seconds from the startsec to check.
+    required_size : `int`
+        The required size of the ics  files in bytes. |br| Default: None.
+
+    Returns
+    -------
+    error : `boolean`
+        If `True` there are missing or incorrect files, `False` if all files are correct.
+    """
     if not required_size:
         try:
             _, _, required_size = get_files_and_sizes(obsID, 'ics', mintime=startsec, maxtime=startsec + n_secs)
@@ -168,26 +229,27 @@ def check_recombine_ics(directory=None, startsec=None, n_secs=None, required_siz
 
 
 def get_files_and_sizes(obsID, mode, mintime=0, maxtime=2000000000):
-    """
-    Get files and sizes from the MWA metadata server and check that they're all the same size
+    """Get files and sizes from the MWA metadata server and check that they're all the same size
 
     Parameters
     ----------
     obsID : `int`
-        The MWA observation ID
+        The MWA observation ID.
     mode : `str`
         The typ of file from 'raw', 'tar_ics' and 'ics'
     mintime : `int`
-        The minimum GPS time of observations to check (inclusive, >=)  Default: 0
+        The minimum GPS time of observations to check (inclusive, >=). |br| Default: 0
     maxtime : `int`
-        The maximum GPS time of observations to check (exculsive, <)  Default: 2000000000
+        The maximum GPS time of observations to check (exculsive, <). |br| Default: 2000000000
 
     Returns
     -------
-    files_masked, suffix, sizes[0]: list
-        files_masked: list of the files with the input mode/suffix
-        suffix:       '.dat', '.tar' or '_ics.dat' depnding on the input mode
-        sizes[0]:     size of files in bytes
+    files_masked : `list`
+        List of the files with the input mode/suffix.
+    suffix : `str`
+        The file suffix from ['.dat', '.tar', '_ics.dat'] depnding on the input mode.
+    sizes[0] : `int`
+        Size of files in bytes.
     """
     if mode == 'raw':
         suffix = '[0-9].dat' # checks for a digit to make this distinct from ics

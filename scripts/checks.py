@@ -29,10 +29,10 @@ def opt_parser(loglevels):
     parser.add_argument("-o", "--obs", metavar="OBS ID", type=int, dest='obsID',\
                             help="Observation ID you want to process [no default]", default=None)
     parser.add_argument("-b", "--begin", metavar="start", type=int, dest='begin',\
-                            help="gps time of first file to ckeck on [default=%(default)s]",\
+                            help="gps time of first file to check on [default=%(default)s]",\
                             default=None)
     parser.add_argument("-e", "--end", metavar="stop", type=int, dest='end',\
-                            help="gps time of last file to ckeck on [default=%(default)s]",\
+                            help="gps time of last file to check on [default=%(default)s]",\
                             default=None)
     parser.add_argument("-a", "--all", action="store_true", default=False, help="Perform on entire observation span. Use instead of -b & -e. [default=%(default)s]")
     parser.add_argument("-i", "--increment", metavar="time increment", type=int, \

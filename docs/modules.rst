@@ -1,19 +1,17 @@
 .. _modules:
 
-===================
+.. |br| raw:: html
+
+   <br />
+
+================
 vcstools modules
-===================
+================
 
 analyse\_psf
 ------------
 
 .. automodule:: vcstools.analyse_psf
-    :members:
-
-aocal
------
-
-.. automodule:: vcstools.aocal
     :members:
 
 beam\_calc

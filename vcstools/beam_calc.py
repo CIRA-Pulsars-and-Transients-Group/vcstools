@@ -1,10 +1,11 @@
 """
-Functions used to calculate or simulat the MWA tile beam.
+Functions used to calculate or simulate the MWA tile beam.
 """
 
 import os
 import sys
 import numpy as np
+from astropy.table import Table
 
 import logging
 logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 from mwa_pb import primary_beam
 from mwa_pb import config
 
+from vcstools import data_load
 from vcstools.pointing_utils import sex2deg
 from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata, getmeta
 
@@ -28,52 +30,51 @@ def pixel_area(ra_min, ra_max, dec_min, dec_max):
     Parameters
     ----------
     ra_min : `float`
-        The Right Acension minimum in degrees
+        The Right Acension minimum in degrees.
     ra_max : `float`
-        The Right Acension maximum in degrees
+        The Right Acension maximum in degrees.
     dec_min : `float`
-        The Declination minimum in degrees
+        The Declination minimum in degrees.
     dec_max : `float`
-        The Declination maximum in degrees
+        The Declination maximum in degrees.
 
     Returns
     -------
     area : `float`
-        Area of the pixel in square degrees
+        Area of the pixel in square degrees.
     """
     return (ra_max - ra_min) * np.degrees(np.sin(np.radians(dec_max)) - np.sin(np.radians(dec_min)))
 
 
 def field_of_view(obsid,
-                  beam_meta_data=None, dur=None):
+                  common_metadata=None, dur=None):
     """Will find the field-of-view of the observation (including the drift) in square degrees.
 
     Parameters
     ----------
     obsid : `int`
-        The observation ID
-    beam_meta_data: list
-        OPTIONAL - the list of common metadata from vcstools.metadb_utils.get_common_obs_metadata.
-        By default will download the metadata for you
-    dur : `int`
-        OPTIONAL - Duration of observation to calculate for in seconds
-        By default will use the entire observation duration
+        The MWA observation ID.
+    common_metadata : `list`, optional
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`
+    dur : `int`, optional
+        Duration of observation to calculate for in seconds.
+        By default will use the entire observation duration.
 
     Returns
     -------
     area : `float`
-        The field-of-view of the observation in square degrees
+        The field-of-view of the observation in square degrees.
     """
-    if beam_meta_data is None:
-        beam_meta_data = get_common_obs_metadata(obsid)
+    if common_metadata is None:
+        common_metadata = get_common_obs_metadata(obsid)
 
     if dur is None:
         dt = 296
     else:
         dt = 100
         # Change the dur to the inpur dur
-        obsid, ra, dec, _, delays, centrefreq, channels = beam_meta_data
-        beam_meta_data = [obsid, ra, dec, dur, delays, centrefreq, channels]
+        obsid, ra, dec, _, delays, centrefreq, channels = common_metadata
+        common_metadata = [obsid, ra, dec, dur, delays, centrefreq, channels]
 
     # Make a pixel for each degree on the sky
     names_ra_dec = []
@@ -82,7 +83,7 @@ def field_of_view(obsid,
             names_ra_dec.append(["sky_pos", ra+0.5, dec+0.5])
 
     # Get tile beam power for all pixels
-    sky_powers = get_beam_power_over_time(beam_meta_data, names_ra_dec,
+    sky_powers = get_beam_power_over_time(common_metadata, names_ra_dec,
                                           degrees=True, dt=dt)
 
     # Find the maximum power over all time
@@ -106,7 +107,26 @@ def field_of_view(obsid,
     return area_sum
 
 
-def from_power_to_gain(powers, cfreq, n, coh=True):
+def from_power_to_gain(power, cfreq, n, coh=True):
+    """Estimate the gain from the tile beam power.
+    
+    Parameters
+    ----------
+    power : `float`
+        The tile beam power at the source position.
+    cfreq : `float`
+        The centre frequency of the observation in Hz
+    n : `int`
+        The number of non-flagged MWA tiles.
+    coh : `boolean`, optional
+        `True` if the observation is coherent (tied-array beam) or `False` if it's incoherent. |br| Default: `True`.
+
+    Returns
+    -------
+    gain : `float`
+        Gain in K/Jy.
+    """
+
     from astropy.constants import c,k_B
     from np import sqrt
 
@@ -119,10 +139,28 @@ def from_power_to_gain(powers, cfreq, n, coh=True):
     logger.debug("Wavelength {} m".format(obswl))
     logger.debug("Gain coefficient: {}".format(coeff))
     SI_to_Jy = 1e-26
-    return (powers*coeff)*SI_to_Jy
+    return (power*coeff)*SI_to_Jy
 
 
-def get_Trec(tab, obsfreq):
+def get_Trec(obsfreq, trcvr_file=None):
+    """Get receiver temperature from the temperature receiver file.
+    
+    Parameters
+    ----------
+    obsfreq : `float`
+        The observing frequency in MHz.
+    trcvr_file : `str`, optional
+        The Trec file location to read in. If none is supplied, will use the Trec file in the data directory.
+
+    Returns
+    -------
+    Trec : `float`
+        The receiver temperature in K.
+    """
+    if trcvr_file is None:
+        # Use trcvr file from vcstools data location
+        trcvr_file = data_load.TRCVR_FILE
+    tab = Table.read(data_load.TRCVR_FILE, format="csv")
     Trec = 0.0
     for r in range(len(tab)-1):
         if tab[r][0]==obsfreq:
@@ -146,7 +184,7 @@ def beam_enter_exit(powers, duration, dt=296, min_power=0.3):
     dt : `int`, optional
         The time interval of how often powers are calculated. Default: 296.
     min_power : `float`, optional
-        Zenith normalised power cut off. Default: 0.3.
+        Zenith normalised power cut off. |br| Default: 0.3.
 
     Returns
     -------
@@ -199,22 +237,22 @@ def get_beam_power_over_time(common_meta_data, names_ra_dec,
 
     Parameters
     ----------
-    common_meta_data : `list`, [obsid,ra, dec, time, delays,centrefreq, channels]
-        The observation metadata obtained from vcstools.metadb_utils.get_common_obs_metadata.
+    common_meta_data : `list`
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`
     names_ra_dec : `list`
         An array in the format [[source_name, RAJ, DecJ]]
     dt : `int`, optional
-        The time interval of how often powers are calculated. Default: 296.
+        The time interval of how often powers are calculated. |br| Default: 296.
     centeronly : `boolean`, optional
-        Only calculates for the centre frequency. Default: `True`.
+        Only calculates for the centre frequency. |br| Default: `True`.
     verbose : `boolean`, optional
-        If `True` will not supress the output from mwa_pb. Default: `False`.
+        If `True` will not supress the output from mwa_pb. |br| Default: `False`.
     option : `str`, optional
-        The primary beam model to use out of [analytic, advanced, full_EE]. Default: analytic.
+        The primary beam model to use out of [analytic, advanced, full_EE]. |br| Default: analytic.
     degrees : `boolean`, optional
-        If true assumes RAJ and DecJ are in degrees. Default: `False`.
+        If true assumes RAJ and DecJ are in degrees. |br| Default: `False`.
     start_time : `int`, optional
-        The time in seconds from the begining of the observation to start calculating at. Default: 0.
+        The time in seconds from the begining of the observation to start calculating at. |br| Default: 0.
 
     Returns
     -------
@@ -231,8 +269,6 @@ def get_beam_power_over_time(common_meta_data, names_ra_dec,
             logger.error("mwa_hyperbeam not installed so can not use hyperbeam to create a beam model. Exiting")
             sys.exit(1)
         beam = mwa_hyperbeam.FEEBeam(config.h5file)
-
-
 
     starttimes=np.arange(start_time,time+start_time,dt)
     stoptimes=starttimes+dt
@@ -325,33 +361,33 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         An array in the format [[source_name, RAJ, DecJ]]
     obs_for_source : `boolean`, optional
         If `True` creates a text file for each source with each MWA observation that the source is in.
-        If `False` creates text files for each MWA obs ID of each source within it. Default: `False`.
+        If `False` creates text files for each MWA obs ID of each source within it. |br| Default: `False`.
     dt_input : `int`, optional
-        The time interval of how often powers are calculated. Default: 296.
+        The time interval of how often powers are calculated. |br| Default: 296.
     beam : `str`, optional
-        The primary beam model to use out of [analytic, advanced, full_EE]. Default: analytic.
+        The primary beam model to use out of [analytic, advanced, full_EE]. |br| Default: analytic.
     min_power : `float`, optional
-        Zenith normalised power cut off. Default: 0.3.
+        Zenith normalised power cut off. |br| Default: 0.3.
     cal_check : `boolean`, optional
         Checks the MWA pulsar database if there is a calibration suitable for the observation ID.
     all_volt : `boolean`, optional
-        Included observations with missing or incorrect voltage files. Default: `False`.
+        Included observations with missing or incorrect voltage files. |br| Default: `False`.
     degrees_check : `boolean`, optional
-        If true assumes RAJ and DecJ are in degrees. Default: `False`.
+        If true assumes RAJ and DecJ are in degrees. |br| Default: `False`.
     metadata_list : `list`
         List of the outputs of vcstools.metadb_utils.get_common_obs_metadata. 
-        If not provided, will make the metadata calls to find the data. Default: `None`.
+        If not provided, will make the metadata calls to find the data. |br| Default: `None`.
 
     Returns
     -------
     output_data : `dict`
         The format of output_data is dependant on obs_for_source.
-        If obs_for_source is `True`:
-            output_data = {jname:[[obsid, duration, enter, exit, max_power],
-                                    [obsid, duration, enter, exit, max_power]]}
-       If obs_for_source is `False`:
-            ouput_data = {obsid:[[jname, enter, exit, max_power],
-                                    [jname, enter, exit, max_power]]}
+        |br| If obs_for_source is `True` :
+        |br|    output_data = {jname:[[obsid, duration, enter, exit, max_power],
+        |br|                          [obsid, duration, enter, exit, max_power]]}
+        |br| If obs_for_source is `False` :
+        |br|    ouput_data = {obsid:[[jname, enter, exit, max_power],
+        |br|                         [jname, enter, exit, max_power]]}
     obsid_meta : `list`
         A list of the output of get_common_obs_metadata for each obsid
     """

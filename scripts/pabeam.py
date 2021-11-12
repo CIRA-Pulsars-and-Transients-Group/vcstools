@@ -597,10 +597,9 @@ if __name__ == "__main__":
         sum_B_T_sky_freq = np.array_split(sum_B_T_sky_freq, nchunks)
         sum_B_sky_freq   = np.array_split(sum_B_sky_freq,   nchunks)
         t_ant_freq = np.sum(sum_B_T_sky_freq, axis=0) / np.sum(sum_B_sky_freq, axis=0)
-        trec_table = Table.read(data_load.TRCVR_FILE,format="csv")
         t_rec = []
         for freq in args.freq:
-            t_rec.append(np.mean(get_Trec(trec_table, freq)))
+            t_rec.append(np.mean(get_Trec(freq, trcvr_file=data_load.TRCVR_FILE)))
         # TODO once Daniel Ung tells us how to calculate this impliment it
         eta = 0.98 # Radiation Efficiency
         t_0 = get_ambient_temperature(args.obsid) # ambient temperature (K)
