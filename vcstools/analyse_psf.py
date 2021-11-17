@@ -309,7 +309,7 @@ def read_psf_fits(fits_file, centre_size=None):
 
 def plot_imaging_psf(fits_file, output_name="imaging_psf.png",
                      normalise=False, vmin=None, centre_size=None,
-                     fft_abs=False, fft_angle=False):
+                     fft_abs=False, fft_angle=False, centre=False):
     """
     Plots the imaging PSF (from WSCLEAN for example)
 
@@ -331,8 +331,16 @@ def plot_imaging_psf(fits_file, output_name="imaging_psf.png",
         Take the fft of the PSF and plot the phase. Default: False
     """
     rav, decv, fits_data = read_psf_fits(fits_file, centre_size=centre_size)
+    fig, ax = plt.subplots()
     if normalise:
         fits_data = fits_data / np.amax(fits_data)
+    if centre:
+        xcentre = rav.shape[0] // 2
+        ycentre = rav.shape[1] // 2
+        rav  = (rav  - rav[xcentre][ycentre]) * 3600
+        decv = (decv - decv[xcentre][ycentre]) * 3600
+        circle1 = plt.Circle((0, 0), 30, color='r', fill=False)
+        ax.add_patch(circle1)
 
     if fft_abs:
         # Take the fft of the PSF and plot the amplitude
