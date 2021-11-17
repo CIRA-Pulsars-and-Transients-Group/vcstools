@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 #MWA software imports
 from mwa_pulsar_client import client
 
-import vcstools.sn_flux_utils as snfe
+from vcstools.sn_flux_utils import find_t_sys_gain, flux_from_atnf, find_spind, plot_flux_estimation
 from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata, get_ambient_temperature, get_obs_array_phase, calc_ta_fwhm, ensure_metafits
 from vcstools.catalogue_utils import get_psrcat_ra_dec, get_psrcat_dm_period
@@ -559,9 +559,9 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
 
     # Calc SEFD from the T_sys and gain
     if simple_sefd:
-        t_sys, _, gain, u_gain = snfe.find_t_sys_gain(pulsar, obsid,
-                                                      obs_metadata=metadata,
-                                                      beg=beg, end=(t_int + beg - 1))
+        t_sys, _, gain, u_gain = find_t_sys_gain(pulsar, obsid,
+                                                 obs_metadata=metadata,
+                                                 beg=beg, end=(t_int + beg - 1))
         sefd = tsys / gain
     else:
         if sefd_file is None:
@@ -664,7 +664,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
         u_S_mean = float("{0:.2f}".format(u_S_mean))
 
         # Plot flux comparisons for ANTF
-        freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar, query=query)
+        freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar)
         logger.debug("Freqs: {0}".format(freq_all))
         logger.debug("Fluxes: {0}".format(flux_all))
         logger.debug("Flux Errors: {0}".format(flux_err_all))
