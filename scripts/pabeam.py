@@ -32,7 +32,7 @@ gc.enable()
 #from mwapy import ephem_utils,metadata
 from vcstools.metadb_utils import getmeta, get_common_obs_metadata, get_ambient_temperature
 from vcstools.pointing_utils import getTargetAZZA, getTargetRADec
-from vcstools.general_utils import setup_logger
+from vcstools.general_utils import setup_logger, split_remove_remainder
 from vcstools import data_load
 from mwa_pb import primary_beam as pb
 from mwa_pb import config
@@ -424,10 +424,10 @@ if __name__ == "__main__":
         # Split into chunks dependant on the number of cores
         assert size % len(args.freq) == 0, "Frequencies must be a factor of the number of processors available"
         nchunks = size // len(args.freq)
-        azv_chunks = np.array_split(azv, nchunks)
-        zav_chunks = np.array_split(zav, nchunks)
+        azv_chunks = split_remove_remainder(azv, nchunks)
+        zav_chunks = split_remove_remainder(zav, nchunks)
         zav = azv = None # Dereference for garbage collection
-        pixel_area_chunks = np.array_split(pixel_area, nchunks)
+        pixel_area_chunks = split_remove_remainder(pixel_area, nchunks)
 
         npositions = [len(chunk) for chunk in azv_chunks]
 
@@ -640,7 +640,7 @@ if __name__ == "__main__":
         logger.info("** Time **")
         logger.info("GPS : {0}".format(gps_times))
         logger.info("UTC : {0}".format(list(times.iso)))
-        logger.info("MJD : {0}".format(times.mjd))
+        logger.info("MJD : {0}".format(list(times.mjd)))
         logger.info("------------------------------------------")
         logger.info("** Telescope parameters **")
         logger.info("Observation ID       : {0}".format(args.obsid))
@@ -679,7 +679,7 @@ if __name__ == "__main__":
             f.write("#** Time **\n")
             f.write("#GPS : {0}\n".format(gps_times))
             f.write("#UTC : {0}\n".format(list(times.iso)))
-            f.write("#MJD : {0}\n".format(times.mjd))
+            f.write("#MJD : {0}\n".format(list(times.mjd)))
             f.write("#\n")
             f.write("#** Telescope parameters **\n")
             f.write("#Observation ID       : {0}\n".format(args.obsid))
