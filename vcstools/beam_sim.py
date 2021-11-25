@@ -285,13 +285,23 @@ def read_sefd_file(sefd_file, all_data=False):
     input_array = np.loadtxt(sefd_file, dtype=float)
     if all_data:
         freq  = input_array[:,0]
-        sefd  = input_array[:,1]
+        time  = input_array[:,1]
+        sefd  = input_array[:,2]
         t_sys = input_array[:,3]
         t_ant = input_array[:,4]
         gain  = input_array[:,5]
         effective_area = input_array[:,6]
-        return freq, sefd, t_sys, t_ant, gain, effective_area
+        beam_solid_angle = input_array[:,7]
+        return freq, time, sefd, t_sys, t_ant, gain, effective_area, beam_solid_angle
     else:
-        sefd  = input_array[:,1]
-        sefd = np.average(sefd)
-        return sefd
+        time  = input_array[:,1]
+        sefd_freq_time  = np.array(input_array[:,2])
+        # Work out the number of time steps
+        ntime = list(time).count(list(time)[0])
+        # Reshape into [freq][time] array
+        sefd_freq_time = sefd_freq_time.reshape((sefd_freq_time.shape[0]//ntime, ntime))
+        sefd_time = np.average(sefd_freq_time, axis=0)
+        # Calc mean and std
+        sefd_mean = np.mean(sefd_time)
+        sefd_std  = np.std(sefd_time)
+        return sefd_freq_time, sefd_mean, sefd_std

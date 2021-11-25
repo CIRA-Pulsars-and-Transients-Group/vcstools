@@ -398,10 +398,13 @@ def launch_pabeam_sim(obsid, pointing,
     high_freq = common_metadata[6][-1] * 1.28 * 10e5
     sim_freqs = [str(low_freq), str(centre_freq), str(high_freq)]
 
-    # Calculate required pixels
+    # Calculate required pixel res and cores/mem
     array_phase = get_obs_array_phase(obsid)
     fwhm = calc_ta_fwhm(high_freq / 10e5, array_phase=array_phase) #degrees
-    phi_res = theta_res = fwhm / 1.5 #2
+    phi_res = theta_res = fwhm / 3
+    if phi_res < 0.01:
+        # Going any smaller causes memory errors
+        phi_res = theta_res = 0.01
     npixels = 360. // phi_res + 90. // theta_res
     cores_required = npixels * len(sim_freqs) // 800
     nodes_required = cores_required // 24 + 1
@@ -428,8 +431,8 @@ def launch_pabeam_sim(obsid, pointing,
     command = 'srun --export=all -u -n {} pabeam.py'.format(int(nodes_required*24))
     command += ' -o {}'.format(obsid)
     command += ' -b {}'.format(begin)
-    #command += ' -d {}'.format(int(duration))
-    command += ' -d 300' # force it to only do a single time calc until I understand the best way to average it
+    command += ' -d {}'.format(int(duration))
+    command += ' -s {}'.format(int(duration//4-1)) # force 4 time steps to get reasonable std
     command += ' -e {}'.format(efficiency)
     command += ' --metafits {}'.format(metafits_file)
     command += ' -p {}'.format(pointing)
@@ -574,9 +577,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
                               common_metadata=common_metadata)
             sys.exit(0)
         else:
-            sefd = read_sefd_file(sefd_file)
-            # assume 10% for now
-            u_sefd = sefd * 0.1
+            sefd_freq_time, sefd, u_sefd = read_sefd_file(sefd_file)
 
     #estimate S/N
     try:
