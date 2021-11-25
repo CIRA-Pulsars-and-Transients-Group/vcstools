@@ -682,8 +682,11 @@ class gfit:
             x, self._fit_profile, s=0, k=5).derivative().derivative()
         d2y_profile = d2y_spline(x)
         roots = dy_spline.roots()
-        roots = [round(i) for i in roots]
+        logger.debug(roots)
+        roots = [int(round(i)) for i in roots]
+        logger.debug(roots)
         roots = list(set(roots)) # Remove duplicates
+        logger.debug(roots)
 
         # Find which are max, min, and false
         maxima = []
