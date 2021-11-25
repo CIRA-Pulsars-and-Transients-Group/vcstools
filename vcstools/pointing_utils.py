@@ -4,13 +4,21 @@ from astropy.time import Time
 import numpy as np
 
 def sex2deg(ra, dec):
-    """
-    Convert sexagesimal coordinates to degrees.
+    """Convert sexagesimal coordinates to degrees.
 
-    sex2deg( ra, dec)
-    Args:
-        ra: the right ascension in HH:MM:SS
-        dec: the declination in DD:MM:SS
+    Parameters
+    ----------
+    ra : `str`
+        The Right Acension in the format "HH:MM:SS.SS".
+    dec : `str`
+        The Declination in the format "DD:MM:SS.SS".
+
+    Returns
+    -------
+    ra : `float`
+        The Right Acension in degrees.
+    dec : `float`
+        The Declination in degrees.
     """
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.hourangle,u.deg))
 
@@ -19,15 +27,22 @@ def sex2deg(ra, dec):
 
 
 def deg2sex(ra, dec):
-    """
-    Convert decimal coordingates into sexagesimal strings, i.e. hh:mm:ss.ss and dd:mm:ss.ss
+    """Convert decimal coordingates into sexagesimal strings.
 
-    deg2sex( ra, dec)
-    Args:
-        ra: the right ascension in degrees
-        dec: the declination in degrees
-    """
+    Parameters
+    ----------
+    ra : `float`
+        The Right Acension in degrees.
+    dec : `float`
+        The Declination in degrees.
 
+    Returns
+    -------
+    ra : `str`
+        The Right Acension in the format "HH:MM:SS.SS".
+    dec : `str`
+        The Declination in the format "DD:MM:SS.SS".
+    """
     c = SkyCoord( ra, dec, frame='icrs', unit=(u.deg,u.deg))
     #coords = c.to_string('hmsdms')
     #coords = coords.replace('h',':').replace('d',':').replace('m',':').replace('s','')
@@ -39,10 +54,29 @@ def deg2sex(ra, dec):
 
 
 def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
-    """
-    Will format a list of lists containing RAs and Decs to uniform strings.  eg 00:00:00.00 -00:00:00.00. Will not work for numpy arrays so make sure they're list of lists
+    """Will format a list of lists containing RAs and Decs to uniform strings. eg 00:00:00.00 -00:00:00.00.
+    Will not work for numpy arrays so make sure they're list of lists
     An example input:
     format_ra_dec([[name,ra,dec]], ra_col = 1, dec_col = 2)
+
+    Parameters
+    ----------
+    ra_dec_list : `list` of `lists`
+        A list of lists where each row is a different source with an RA and declination.
+    ra_col : `int`, optional
+        The coloumn ID that contains the RA. |br| Default: 0.
+    dec_col : `int`, optional
+        The coloumn ID that contains the Declination. |br| Default: 1.
+
+    Returns
+    -------
+    ra_dec_list : `list` of `lists`
+        The formated ra_dec_list.
+    
+    Examples
+    --------
+    >>> format_ra_dec([["J2351+8533", "23:51:03", "+85:33:20.6"]], ra_col = 1, dec_col = 2)
+    [["J2351+8533", "23:51:03.00", "+85:33:20.60"]]
     """
     for i in range(len(ra_dec_list)):
         #catching errors in old psrcat RAs and Decs
@@ -105,24 +139,35 @@ def format_ra_dec(ra_dec_list, ra_col=0, dec_col=1):
 
 
 def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827, units=(u.hourangle, u.deg)):
-    """
-    Function to get the target position in alt/az at a given EarthLocation and Time.
+    """Function to get the target position in alt/az at a given EarthLocation and Time. The default lat,lon,height is the centre of MWA.
 
-    Default lat,lon,height is the centre of  MWA.
+    Parameters
+    ----------
+    ra : `str`
+        The target right ascension in astropy-readable format.
+    dec : `str`
+        The target declination in astropy-readable format.
+    time : `str`
+        The time of observation in UTC (i.e. a string on form: yyyy-mm-dd hh:mm:ss.ssss)
+    lat : `float`, optional
+        The observatory latitude in degrees. |br| Default: -26.7033.
+    lon : `float`, optional
+        The observatory longitude in degrees. |br| Default: 116.671.
+    height : `float`, optional
+        The observatory height from sea level in meters. |br| Default: 377.827.
+    units : `tuple`, optional
+        The astropy units of the ra and dec. |br| Default: (u.hourangle, u.deg)
 
-    Input:
-      ra - target right ascension in astropy-readable format
-      dec - target declination in astropy-readable format
-      time - time of observation in UTC (i.e. a string on form: yyyy-mm-dd hh:mm:ss.ssss)
-      lat - observatory latitude in degrees
-      lon - observatory longitude in degrees
-
-    Returns:
-      a list containing four elements in the following order:
-        list[0] = target azimuth in radians
-        list[1] = target zenith angle in radians
-        list[2] = target azimuth in degrees
-        list[3] = target zenith angle in degrees
+    Returns
+    -------
+    az : `float`
+        Target azimuth in radians.
+    za : `float`
+        Target zenith angle in radians.
+    azdeg : `float`
+        Target azimuth in degrees.
+    zadeg : `float`
+        Target zenith angle in degrees.
     """
     # Create Earth location for MWA
     location = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=height*u.m)
@@ -143,24 +188,35 @@ def getTargetAZZA(ra, dec, time, lat=-26.7033, lon=116.671, height=377.827, unit
 
 
 def getTargetRADec(az, za, time, lat=-26.7033, lon=116.671, height=377.827, units=(u.deg, u.deg)):
-    """
-    Function to get the target position in ra dec at a given EarthLocation and Time.
+    """Function to get the target position in ra dec at a given EarthLocation and Time. The default lat,lon,height is the centre of MWA.
 
-    Default lat,lon,height is the centre of  MWA.
+    Parameters
+    ----------
+    az : `str`
+        The target azimuth in astropy-readable format.
+    za : `str`
+        The target zenith angle in astropy-readable format.
+    time : `str`
+        The time of observation in UTC (i.e. a string on form: yyyy-mm-dd hh:mm:ss.ssss)
+    lat : `float`, optional
+        The observatory latitude in degrees. |br| Default: -26.7033.
+    lon : `float`, optional
+        The observatory longitude in degrees. |br| Default: 116.671.
+    height : `float`, optional
+        The observatory height from sea level in meters. |br| Default: 377.827.
+    units : `tuple`, optional
+        The astropy units of the ra and dec. |br| Default: (u.deg, u.deg)
 
-    Input:
-      az - target azimuthin astropy-readable format
-      za - target zenith in astropy-readable format
-      time - time of observation in UTC (i.e. a string on form: yyyy-mm-dd hh:mm:ss.ssss)
-      lat - observatory latitude in degrees
-      lon - observatory longitude in degrees
-
-    Returns:
-      a list containing four elements in the following order:
-        list[0] = target right acension in radians
-        list[1] = target declination angle in radians
-        list[2] = target right acension in degrees
-        list[3] = target declination angle in degrees
+    Returns
+    -------
+    ra : `float`
+        Target right ascension in radians.
+    dec : `float`
+        Target declination in radians.
+    radeg : `float`
+        Target right ascension in degrees.
+    decdeg : `float`
+        Target declination in degrees.
     """
     # Create Earth location for MWA
     location = EarthLocation(lat=lat*u.deg, lon=lon*u.deg, height=height*u.m)

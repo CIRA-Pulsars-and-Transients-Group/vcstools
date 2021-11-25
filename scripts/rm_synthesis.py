@@ -50,6 +50,8 @@ if __name__ == '__main__':
     optional.add_argument("-d", "--work_dir", type=str, default="./", help="The directory to work in")
     optional.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbosity level. Default: INFO", choices=loglevels.keys())
 
+    args=parser.parse_args()
+
     # set up the logger for stand-alone execution
     logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 

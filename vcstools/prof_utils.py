@@ -49,18 +49,17 @@ class BadFitError(Exception):
 
 
 def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
-    """
-    Runs the pdv commnand from PSRCHIVE as a python subprocess.
+    """Runs the pdv commnand from PSRCHIVE as a python subprocess.
     NOTE: Requires singularity loaded in environment (module load singularity)
 
     Parameters
     ----------
-    archive: string
+    archive : `str`
         The name of the archive file to run the command on
-    outfile: string
-        OPTIONAL - The name of the text file to write the output to. Default: outfile
-    pdvops: string
-        OPTIONAL - Additional options for the pdv. Default: -FTt
+    outfile : `str`, optional
+        The name of the text file to write the output to. |br| Default: archive.txt.
+    pdvops : `str`, optional
+        Additional options for the pdv. |br| Default: -FTt.
     """
     comp_config = load_config_file()
     with open(outfile, 'w+') as f:
@@ -75,37 +74,39 @@ def subprocess_pdv(archive, outfile="archive.txt", pdvops="-FTt"):
 #---------------------------------------------------------------
 def get_from_bestprof(file_loc,
                       pointing_input=None):
-    """
-    Get info from a bestprof file
+    """Get info from a bestprof file
 
-    Parameters:
-    -----------
-    file_loc: string
-        The path to the bestprof file
+    Parameters
+    ----------
+    file_loc : `str`
+        The path to the bestprof file.
+    pointing_input : `str`
+        If can not find a pointing in the bestprof file, will assume this is the pointing.
+        |br| Default: `None`.
 
-    Returns:
-    --------
-    [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num]: list
-        obsid: int
-            The observation ID
-        pulsar: string
-            The name of the pulsar
-        dm: float
-            The dispersion measure of the pulsar
-        period: float
-            The period of the pulsar
-        period_uncer: float
-            The uncertainty in the period measurement
-        obsstart: int
-            The beginning time of the observation
-        obslength: float
-            The length of the observation in seconds
+    Returns
+    -------
+    [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num] : `list`
+
+        obsid : `int`
+            The observation ID.
+        pulsar : `str`
+            The name of the pulsar.
+        dm : `float`
+            The dispersion measure of the pulsar.
+        period : `float`
+            The period of the pulsar.
+        period_uncer : `float`
+            The uncertainty in the period measurement.
+        obsstart : `int`
+            The beginning time of the observation.
+        obslength : `float`
+            The length of the observation in seconds.
         profile: list
-            A list of floats containing the profile data
-        bin_num: int
-            The number of bins in the profile
+            A list of floats containing the profile data.
+        bin_num : `int`
+            The number of bins in the profile.
     """
-
     with open(file_loc, "r") as bestprof:
         lines = bestprof.readlines()
         # Find the obsid by finding a 10 digit int in the file name
@@ -157,21 +158,19 @@ def get_from_bestprof(file_loc,
 
 
 def get_from_ascii(file_loc):
-    """
-    Retrieves the profile from an ascii file
+    """Retrieves the profile from an ascii file.
 
-    Parameters:
-    -----------
-    file_loc: string
-        The location of the ascii file
+    Parameters
+    ----------
+    file_loc : `str`
+        The location of the ascii file.
 
-    Returns:
-    --------
-    [profile, len(profile)]: list
-        profile: list
-            A list of floats containing the profile data
-        len(profile): int
-            The number of bins in the profile
+    Returns
+    -------
+    profile : `list`
+        A list of floats containing the profile data.
+    len(profile) : `int`
+        The number of bins in the profile.
     """
 
     f = open(file_loc)
@@ -187,27 +186,27 @@ def get_from_ascii(file_loc):
 
 
 def get_stokes_from_ascii(file_loc):
-    """
-    Retrieves the all stokes components from an ascii file
+    """Retrieves the all stokes components from an ascii file.
 
-    Parameters:
-    -----------
-    file_loc: string
-        The location of the ascii file
+    Parameters
+    ----------
+    file_loc : `str`
+        The location of the ascii file.
 
-    Returns:
-    --------
-    [I, Q, U, V, len(profile)]: list
-        I: list
-            Stokes I
-        Q: list
-            Stokes Q
-        U: list
-            Stokes U
-        V: list
-            Stokes V
-        len(profile): int
-            The number of bins in the profile
+    Returns
+    -------
+    [I, Q, U, V, len(profile)] : `list`
+
+        I : `list`
+            Stokes I.
+        Q : `list`
+            Stokes Q.
+        U : `list`
+            Stokes U.
+        V : `list`
+            Stokes V.
+        len(profile) : `int`
+            The number of bins in the profile.
     """
     f = open(file_loc)
     lines = iter(f.readlines())
@@ -228,30 +227,28 @@ def get_stokes_from_ascii(file_loc):
 
 
 def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
-    """
-    Sigma clipping operation:
+    """Sigma clipping operation:
     Compute the data's median, m, and its standard deviation, sigma.
     Keep only the data that falls in the range (m-alpha*sigma,m+alpha*sigma) for some value of alpha, and discard everything else.
-
     This operation is repeated ntrials number of times or until the tolerance level is hit.
 
-    Parameters:
-    -----------
-    data: list
-        A list of floats - the data to clip
-    alpha: float
-        OPTIONAL - Determines the number of sigmas to use to determine the upper and lower limits. Default=3
-    tol: float
-        OPTIONAL - The fractional change in the standard deviation that determines when the tolerance is hit. Default=0.1
-    ntrials: int
-        OPTIONAL - The maximum number of times to apply the operation. Default=10
+    Parameters
+    ----------
+    data : `list`
+        A list of floats - the data to clip.
+    alpha : `float`, optional
+        Determines the number of sigmas to use to determine the upper and lower limits. |br| Default: 3.
+    tol : `float`, optional
+        The fractional change in the standard deviation that determines when the tolerance is hit. |br| Default: 0.1.
+    ntrials : `int`, optional
+        The maximum number of times to apply the operation. |br| Default: 10.
 
-    Returns:
-    --------
-    oldstd: float
-        The std of the clipped data
-    x: list
-        The data list that contains only noise, with nans in place of 'real' data
+    Returns
+    -------
+    oldstd : `float`
+        The std of the clipped data.
+    x : `list`
+        The data list that contains only noise, with nans in place of 'real' data.
     """
     x = np.copy(data)
     oldstd = np.nanstd(x)
@@ -284,26 +281,23 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
 
 
 def est_sn_from_prof(prof_data, alpha=3.):
-    """
-    Estimates the signal to noise ratio from a pulse profile
-    Based on code oringally writted by Nick Swainston.
+    """Estimates the signal to noise ratio from a pulse profile.
 
-    Parameters:
-    -----------
-    prof_data: string
-        A list of floats that contains the pulse profile
-    alpha: float
-        OPTIONAL - The alpha value to be used in sigmaClip(). Default: 3
+    Parameters
+    ----------
+    prof_data : `str`
+        A list of floats that contains the pulse profile.
+    alpha : `float`, optional
+        The alpha value to be used in :py:meth:`vcstools.prof_utils.sigmaClip`. |br| Default: 3.
 
-    Returns:
-    --------
-    [sn, sn_e, scattered]
-    sn: float
-        The estimated signal to noise ratio
-    u_sn: float
-        The uncertainty in sn
-    scattered: boolean
-        When true, the profile is highly scattered
+    Returns
+    -------
+    sn : `float`
+        The estimated signal to noise ratio.
+    u_sn : `float`
+        The uncertainty in sn.
+    scattered : `boolean`
+        When `True`, the profile is highly scattered.
     """
     # Check profile is normalised
     prof_data = prof_data / max(prof_data)
@@ -342,44 +336,43 @@ def est_sn_from_prof(prof_data, alpha=3.):
 
 
 def analyse_pulse_prof(prof_data, period, alpha=3):
-    """
-    Estimates the signal to noise ratio and many other properties from a pulse profile.
-    Based on code oringally writted by Nick Swainston.
+    """Estimates the signal to noise ratio and many other properties from a pulse profile.
     This is the old version of 'est_sn_from_prof' but is useful when we can't fit gaussians
 
-    Parameters:
-    -----------
-    prof_data: list
+    Parameters
+    ----------
+    prof_data : `list`
         A list of floats that contains the pulse profile.
-    period: float
-        The pulsar's period in ms
-    alpha: float
-        OPTIONAL - The alpha value to use when clipping using sigmaClip(). Default: 3
+    period : `float`
+        The pulsar's period in ms.
+    alpha : `float`, optional
+        The alpha value to use when clipping using :py:meth:`vcstools.prof_utils.sigmaClip`. |br| Default: 3.
 
-    Returns:
-    --------
-    prof_dict: dictionary
-        contains keys:
-        sn: float
-            The estimated signal to noise ratio
-        u_sn: float
-            The estimated signal to noise ratio's its uncertainty
-        flags: list
-            A list of flagged data points
-        w_equiv_bins: float
-            The equivalent width of the profile measured in bins
-        u_w_equiv_bins: float
-            The uncertaintiy in w_equiv_bins
-        w_equiv_ms: float
-            The equivalent width of the profile measured in ms
-        u_w_equiv_ms: float
-            The uncertainty in w_equiv_ms
-        scattering: float
-            The scattering width in ms
-        u_scattering: float
-            The uncertainty in the scattering width in ms
-        scattered: boolean
-            When true, the profile is highly scattered
+    Returns
+    -------
+    prof_dict : `dict`
+        The analysed profile's dictionary which contains the following keys:
+
+        ``"sn"``
+            The estimated signal to noise ratio (`float`).
+        ``"sn_e"``
+            The estimated signal to noise ratio's its uncertainty (`float`).
+        ``"flags"``
+            A list of flagged data points (`list`).
+        ``"w_equiv_bins"``
+            The equivalent width of the profile measured in bins (`float`).
+        ``"w_equiv_bins_e"``
+            The uncertaintiy in w_equiv_bins (`float`).
+        ``"w_equiv_ms"``
+            The equivalent width of the profile measured in ms (`float`).
+        ``"w_equiv_ms_e"``
+            The uncertainty in w_equiv_ms (`float`).
+        ``"scattering"``
+            The scattering width in ms (`float`).
+        ``"scattering_e"``
+            The uncertainty in the scattering width in ms (`float`).
+        ``"scattered"``
+            When true, the profile is highly scattered (`boolean`).
     """
     prof_dict = {}
     nbins = len(prof_data)
@@ -476,41 +469,40 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
 
 
 def auto_analyse_pulse_prof(prof_data, period):
-    """
-    Automatically finds the best alpha value to use for analyse_pulse_prof() and returns the best resulting dictionary
+    """Automatically finds the best alpha value to use for analyse_pulse_prof() and returns the best resulting dictionary.
 
-    Parameters:
-    -----------
-    prof_data: list
+    Parameters
+    ----------
+    prof_data : `list`
         A list of floats that contains the pulse profile.
-    preiod: float
-        The period of the pulsar
+    period : `float`
+        The period of the pulsar in ms.
 
-    Returns:
-    --------
-    fit_dict: dictionary
-        contains keys:
-        sn: float
-            The estimated signal to noise ratio
-        u_sn: float
-            The estimated signal to noise ratio's its uncertainty
-        flags: list
-            A list of flagged data points
-        w_equiv_bins: float
-            The equivalent width of the profile measured in bins
-        u_w_equiv_bins: float
-            The uncertaintiy in w_equiv_bins
-        w_equiv_ms: float
-            The equivalent width of the profile measured in ms
-        u_w_equiv_ms: float
-            The uncertainty in w_equiv_ms
-        scattering: float
-            The scattering width in ms
-        u_scattering: float
-            The uncertainty in the scattering width in ms
-        scattered: boolean
-            When true, the profile is highly scattered
+    Returns
+    -------
+    fit_dict : `dict`
+        The analysed profile's dictionary which contains the following keys:
 
+        ``"sn"``
+            The estimated signal to noise ratio (`float`).
+        ``"sn_e"``
+            The estimated signal to noise ratio's its uncertainty (`float`).
+        ``"flags"``
+            A list of flagged data points (`list`).
+        ``"w_equiv_bins"``
+            The equivalent width of the profile measured in bins (`float`).
+        ``"w_equiv_bins_e"``
+            The uncertaintiy in w_equiv_bins (`float`).
+        ``"w_equiv_ms"``
+            The equivalent width of the profile measured in ms (`float`).
+        ``"w_equiv_ms_e"``
+            The uncertainty in w_equiv_ms (`float`).
+        ``"scattering"``
+            The scattering width in ms (`float`).
+        ``"scattering_e"``
+            The uncertainty in the scattering width in ms (`float`).
+        ``"scattered"``
+            When true, the profile is highly scattered (`boolean`).
     """
     if not isinstance(period, float):
         period = float(period)
@@ -572,20 +564,19 @@ def auto_analyse_pulse_prof(prof_data, period):
 
 # SigmaClip isn't perfect. Use these next function to check for bad clips
 def check_clip(prof_to_check, toomuch=0.9, toolittle_frac=0., toolittle_absolute=4):
-    """
-    Determines whether a clipped profile from sigmaClip() has been appropriately clipped by checking the number of nans.
-    Raises a LittleClipError or a LargeClipError if too little or toomuch of the data has been clipped respectively.
+    """Determines whether a clipped profile from :py:meth:`vcstools.prof_utils.sigmaClip` has been appropriately clipped by checking the number of nans.
+    Raises a LittleClipError or a LargeClipError if too little or too much of the data has been clipped respectively.
 
-    Parameters:
-    -----------
-    clipped_prof: list
-        The clipped profile from sigmaClip()
-    toomuch: float
-        OPTIONAL - The fraction of the clipped profile beyond which is considered overclipped. Default: 0.8
-    toolittle: float
-        OPTIONAL - The fraction of the clipped profile below which is considered underclipped. Default: 0.
-    toolittle_absolute: int
-        OPTIONAL - If a profile has this many or less on-pulse bins, it is deemed not sufficient. Default: 4
+    Parameters
+    ----------
+    prof_to_check : `list`
+        The clipped profile from :py:meth:`vcstools.prof_utils.sigmaClip`
+    toomuch : `float`, optional
+        The fraction of the clipped profile beyond which is considered overclipped. |br| Default: 0.9
+    toolittle : `float`, optional
+        The fraction of the clipped profile below which is considered underclipped. |br| Default: 0.
+    toolittle_absolute : `int`, optional
+        If a profile has this many or less on-pulse bins, it is deemed not sufficient. |br| Default: 4
     """
     num_nans = 0
     for i in prof_to_check:
@@ -600,8 +591,17 @@ def check_clip(prof_to_check, toomuch=0.9, toolittle_frac=0., toolittle_absolute
 
 
 def normamlise_prof(x):
-    """ 
-    normalises a profile, x, to minimum 0 and maximum 1
+    """Normalises a profile, x, to minimum 0 and maximum 1.
+
+    Parameters
+    ----------
+    x : `list`
+        A list of pulse profile values.
+
+    Returns
+    -------
+    norm_x : `list`
+        A normalised profile.
     """
     x = np.array(x)
     min_x = min(x)
@@ -611,25 +611,24 @@ def normamlise_prof(x):
 
 
 def error_in_x_pos(x, y, sigma_y, x_pos):
-    """
-    finds error in a position, x_pos, given an error in y
-    derivatives are found numerically
+    """Finds error in a position, x_pos, given an error in y
+    derivatives are found numerically.
 
-    Parameters:
-    -----------
-    x: list
-        A list that covers the x range (ie. np.linspace(0, 1, len(x)))
-    y: list
-        The y components of the x range
-    sigma_y: float
-        The absolute error in y
-    x_pos: int
-        The location in x that we want to find the error for
+    Parameters
+    ----------
+    x : `list`
+        A list that covers the x range (ie. np.linspace(0, 1, len(x))).
+    y : `list`
+        The y components of the x range.
+    sigma_y : `float`
+        The absolute error in y.
+    x_pos : `int`
+        The location in x that we want to find the error for.
 
-    Returns:
-    --------
-    x_er: float
-        The error in the x position
+    Returns
+    -------
+    x_er : `float`
+        The error in the x position.
     """
     # Spline, get derivative and roots
     spline = UnivariateSpline(x, y, s=0, k=4)
@@ -656,38 +655,39 @@ def error_in_x_pos(x, y, sigma_y, x_pos):
 
 # Alternative method to find the location and width of peaks
 def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
-    """ 
-    Works by using stickel with lambda=1e-5 (default) to get a generic profile outline, then uses UnivariateSpline to
+    """ Works by using stickel with lambda=1e-5 (default) to get a generic profile outline, then uses UnivariateSpline to
     find the min/maxima and estimate which of these are real depending on their relative amplitude.
-    NOTE:   The on-pulse estimates are read form LEFT to RIGHT. Meaning onpulse[0] can be a greater index than onpulse[1].
-            This indicates that the on-pulse is wrapped over the end of the phase.
+    NOTE: The on-pulse estimates are read form LEFT to RIGHT. Meaning onpulse[0] can be a greater index than onpulse[1].
+    This indicates that the on-pulse is wrapped over the end of the phase.
 
-    Parameters:
-    -----------
-    profile: list
-        The pulse profile
-    l: float
-        The lambda value to use for Stickel regularisation. Don't touch unless you know what you're doing. Default: 1e-5
-    plot_name: string
-        If supplied, will make a plot of the profile, its splined regularisation, maxima and best estimate of on-pulse
+    Parameters
+    ----------
+    profile : `list`
+        The pulse profile.
+    l : `float`, optional
+        The lambda value to use for Stickel regularisation. Don't touch unless you know what you're doing. |br| Default: 1e-5.
+    plot_name : `str`, optional
+        If supplied, will make a plot of the profile, its splined regularisation, maxima and best estimate of on-pulse.
 
-    Returns:
-    --------
-    dict:
-        maxima: list
-            The maximum points of the splined profile
-        underest_on_pulse: list
-            list of tuples containing the understimated beginning and end of each profile component
-        overest_on_pulse: list
-            list of tuples containing the overestimated beginning and end of each profile component
-        underest_off_pulse: list
-            list of tuples containing the beginning and end of each off-pulse range from the underestimated on pulse
-        overest_off_pulse: list
-            list of tuples containing the beginning and end of each off-pulse range from the overestimated on pulse
-        noise: float
-            The standard deviation of the noise taken as the off-pulse region
-        alpha: float
-            The alpha value def to sigmaClip to attain the initial on-pulse and noise estimate
+    Returns
+    -------
+    comp_est_dict : `dict`
+        Component estimation dictionary with keys:
+
+        ``"maxima"``
+            The maximum points of the splined profile (`list`).
+        ``"underest_on_pulse"``
+            List of tuples containing the understimated beginning and end of each profile component (`list`).
+        ``"overest_on_pulse"``
+            List of tuples containing the overestimated beginning and end of each profile component (`list`).
+        ``"underest_off_pulse"``
+            List of tuples containing the beginning and end of each off-pulse range from the underestimated on pulse (`list`).
+        ``"overest_off_pulse"``
+            List of tuples containing the beginning and end of each off-pulse range from the overestimated on pulse (`list`).
+        ``"noise"``
+            The standard deviation of the noise taken as the off-pulse region (`float`).
+        ``"alpha"``
+            The alpha value def to :py:meth:`vcstools.prof_utils.sigmaClip` to attain the initial on-pulse and noise estimate (`float`).
     """
     x = np.linspace(0, len(profile)-1, len(profile))
     # Normalise profile
@@ -875,19 +875,18 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
 
 
 def get_off_pulse(on_pulse_pairs):
-    """ 
-    Works out the off pulse ranges from the on-pulse
+    """Works out the off pulse ranges from the on-pulse.
 
-    Parameters:
-    -----------
-    on_pulse_pairs: list
-        List of sub-lists/tuples. Each sub-list is a pair of numbers that describes the upper and lower bounds of the 
-        ON PULSE region
+    Parameters
+    ----------
+    on_pulse_pairs : `list`
+        List of sub-lists/tuples. Each sub-list is a pair of numbers that
+        describes the upper and lower bounds of the ON PULSE region.
 
-    Returns:
-    --------
-    off_pulse: list
-        A list of two-lists that decribes the off-pulse region
+    Returns
+    -------
+    off_pulse : `list`
+        A list of two-lists that decribes the off-pulse region.
     """
     off_pulse = []
     # Make cycling generators to deal with wrap-around
@@ -903,20 +902,19 @@ def get_off_pulse(on_pulse_pairs):
 
 
 def profile_region_from_pairs(profile, pairs):
-    """
-    Acquires a list of the region described by a pair of indexes accounting for wrap-around
+    """Acquires a list of the region described by a pair of indexes accounting for wrap-around.
 
-    Parameters:
-    -----------
-    profile: list
-        The profile that we want to get the region of
-    pairs: list/tuple
-        A list of lists/tuples of length two that describes the indexes of the region(s) to grab
+    Parameters
+    ----------
+    profile : `list`
+        The profile that we want to get the region of.
+    pairs : `list`/`tuple`
+        A list of lists/tuples of length two that describes the indexes of the region(s) to grab.
 
-    Return: 
+    Returns
     -------
-    region: list
-        The region of the profile described by the pairs
+    region : `list`
+        The region of the profile described by the pairs.
     """
     profile = list(profile)
     region = []
@@ -930,17 +928,16 @@ def profile_region_from_pairs(profile, pairs):
 
 
 def filled_profile_region_between_pairs(profile, pairs, fill_value=0):
-    """
-    Fills the off-pair region of a profile with the fill value
+    """Fills the off-pair region of a profile with the fill value.
 
-    Parameters:
-    -----------
-    profile: list/numpy array
-        The profile we want to fill
-    pairs: list/tuple
-        A list of lists/tupls of length two that describes the region we DON'T want to fill
-    fill_value: float
-        The value to fill the region with. Default=0.
+    Parameters
+    ----------
+    profile : `list`
+        The profile we want to fill.
+    pairs : `list`/`tuple`
+        A list of lists/tupls of length two that describes the region we DON'T want to fill.
+    fill_value : `float`, optional
+        The value to fill the region with. |br| Default=0.
     """
     filled_prof = np.array(profile)
     # Create two cycling generators to avoid out of bounds errors for the last pair
@@ -960,27 +957,26 @@ def filled_profile_region_between_pairs(profile, pairs, fill_value=0):
 
 
 def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, real_profile, noise_est):
-    """ 
-    Attempts to fill small gaps in the on_pulse_pairs of the smoothed profile provided these
-    gaps resemble real signal
+    """Attempts to fill small gaps in the on_pulse_pairs of the smoothed
+    profile provided these gaps resemble real signal.
 
-    Parameters:
-    -----------
-    on_pulse_pairs: list
-        A list of pairs of indexes that mark the on-pulse regions of the profile
-    smoothed_profile: list
-        The profile that has been smoothed with the stickel regularisation algorithm
-    real_profile: list
-        The profile that stickel was applied to
-    noise_est: float
-        A first order estimate of the profile's noise. This will determine what looks like real signal
+    Parameters
+    ----------
+    on_pulse_pairs : `list`
+        A list of pairs of indexes that mark the on-pulse regions of the profile.
+    smoothed_profile : `list`
+        The profile that has been smoothed with the stickel regularisation algorithm.
+    real_profile : `list`
+        The profile that stickel was applied to.
+    noise_est : `float`
+        A first order estimate of the profile's noise. This will determine what looks like real signal.
 
     Return:
     -------
-    true_on_pulse: list
+    true_on_pulse : `list`
         A list of pairs that represent the index ranges of the ammended on-pulse regions.
         Note that the first or last pairs may have idx[0] > idx[1] which represents that
-        the on-pulse region wraps over the end of the phase
+        the on-pulse region wraps over the end of the phase.
     """
     # Nothing to do if the pairs are of length 1
     if len(on_pulse_pairs) <= 1:
@@ -1030,21 +1026,20 @@ def _fill_on_pulse_region(on_pulse_pairs, smoothed_profile, real_profile, noise_
 
 
 def _profile_noise_initial_estimate(profile):
-    """
-    Attempts to guess the best value for alpha for sigmaClip in order to get a good 
-    estimate of the off-pulse noise level for a profile
+    """Attempts to guess the best value for alpha for :py:meth:`vcstools.prof_utils.sigmaClip`
+    in order to get a good estimate of the off-pulse noise level for a profile.
 
-    Parameters:
-    -----------
-    profile: list
-        The profile to clip
+    Parameters
+    ----------
+    profile : `list`
+        The profile to clip.
 
-    Returns:
-    --------
-    best_alpha: float:
-        The chosen alpha value for sigmaClip
-    best_nois: float:
-        The corresponding standard deviatino of the noise
+    Returns
+    -------
+    best_alpha : `float`
+        The chosen alpha value for :py:meth:`vcstools.prof_utils.sigmaClip`.
+    best_nois : `float`
+        The corresponding standard deviatino of the noise.
     """
     alphas = np.linspace(3.0, 2.0, 5)
     valid_alphas = []

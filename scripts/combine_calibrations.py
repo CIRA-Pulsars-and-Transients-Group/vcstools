@@ -29,7 +29,11 @@ if __name__ == '__main__':
                      INFO=logging.INFO,
                      WARNING=logging.WARNING)
 
-    comp_config = load_config_file()
+    try:
+        comp_config = load_config_file()
+    except Exception:
+        # No computer found so making a default for the argparse help to work
+        comp_config = {'base_data_dir' : "/astro/mwavcs/vcs/"}
     parser = argparse.ArgumentParser(description="If there is no calibration observation with the correct channels, " +\
                                      "use this script to combine the result of two calibration solutions to make a new " +\
                                      "calibration solution with all the required frequency channels.")

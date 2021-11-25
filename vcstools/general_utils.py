@@ -9,7 +9,18 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 def sfreq(freqs):
+    """Sore te coarse frequency channel IDs into the strange MWA format that reverses the order of channels above 128.
 
+    Parameters
+    ----------
+    freqs : `list`
+        List of coarse frequency channel IDs.
+
+    Returns
+    -------
+    freqs : `list`
+        List of coarse frequency channel IDs in the new order.
+    """
     if len(freqs) != 24:
         print("There are not 24 coarse chans defined for this obs. Got: %s" % freqs)
         return
@@ -25,6 +36,18 @@ def sfreq(freqs):
 
 
 def is_number(s):
+    """Simple is check to see if a string can be converted to an interger.
+    
+    Parameters
+    ----------
+    s : `str`
+        String to check.
+
+    Returns
+    -------
+    result : `boolean`
+        Boolean if it can be converted to an int.
+    """
     try:
         int(s)
         return True
@@ -48,14 +71,16 @@ def gps_to_utc(gps):
 
 
 def mdir(path, description, gid=34858):
-    """
-    Simple function to create directories with the correct group permissions
-
-    The default group ID is 'mwavcs' which is 30832 in numerical.
-    Here, we try and make sure all directories created by process_vcs
-    end up belonging to the user and the group 'mwavcs'.
-    We also try to give rwx (read, write, execute) permissions and
-    set the sticky bit for both user and group.
+    """Simple function to create directories with the correct group permissions (771).
+    
+    Parameters
+    ----------
+    path : `str`
+        The path of the directory we want to create.
+    description : `str`
+        The description of the directory to be printed to logger.
+    gid : `int`, optional
+        The group ID to apply to the directory. |br| Default: 34858 which the mwavcs.
     """
     try:
         # TODO: this doesn't carry over permissions correctly to "combined" for some reason...
@@ -74,19 +99,18 @@ def mdir(path, description, gid=34858):
 
 
 def create_link(data_dir, target_dir, product_dir, link):
-    """
-    Creates a symbolic link product_dir/link that points to data_dir/target_dir
+    """Creates a symbolic link product_dir/link that points to data_dir/target_dir.
 
-    Parameters:
-    -----------
-    data_dir: string
+    Parameters
+    ----------
+    data_dir : `str`
         The absolute path to the base directory of the true location of the files.
         For our uses this is often a scratch partition like /astro on Galaxy
-    target_dir: string
+    target_dir : `str`
         The folder you would like to be linked to
-    product_dir: string
+    product_dir : `str`
         The absolute path of the link you would like to create
-    link: string
+    link : `str`
         The name of the link you would like to create. Often the same as target_dir
     """
     data_dir = os.path.abspath(data_dir)
@@ -123,6 +147,20 @@ def create_link(data_dir, target_dir, product_dir, link):
         os.symlink(target_dir, link)
 
 def setup_logger(logger, log_level=logging.INFO):
+    """Setup the logger with the format we prefer and apply it to all import vcstools modules.
+
+    Parameters
+    ----------
+    logger : logger object
+        The logger object to modify.
+    log_level : logging class
+        The logging level to apply. |br| Default: logging.INFO
+    
+    Returns
+    -------
+    logger : logger object
+        The modified logger object.
+    """
     # set up the logger for stand-alone execution
     formatter = logging.Formatter('%(asctime)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
     ch = logging.StreamHandler()

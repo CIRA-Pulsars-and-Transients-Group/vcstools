@@ -337,7 +337,7 @@ if __name__ == "__main__":
 
         # same for obs time, master reads and then distributes
         logger.info("getting times")
-        obs_begin, obs_duration = get_obstime_duration(args.obsid, args.metafits)
+        obs_begin, obs_duration = get_obstime_duration(args.metafits)
         if not args.begin:
             # Use observation begin time from metafits
             args.begin = Time(obs_begin, format='isot', scale='utc').gps
@@ -610,10 +610,9 @@ if __name__ == "__main__":
         t_ant_freq_time = np.sum(sum_B_T_freq_sky_time, axis=1) / np.sum(sum_B_freq_sky_time, axis=1)
         logger.debug("t_ant_freq_time.shape: {}".format(t_ant_freq_time.shape))
 
-        trec_table = Table.read(data_load.TRCVR_FILE,format="csv")
         t_rec = []
         for freq in args.freq:
-            t_rec.append(np.mean(get_Trec(trec_table, freq/1e6)))
+            t_rec.append(np.mean(get_Trec(freq, trcvr_file=data_load.TRCVR_FILE)))
         # TODO once Daniel Ung tells us how to calculate this impliment it
         eta = 0.98 # Radiation Efficiency
         t_0 = get_ambient_temperature(args.obsid) # ambient temperature (K)

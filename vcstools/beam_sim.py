@@ -16,22 +16,25 @@ from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
 import logging
 logger = logging.getLogger(__name__)
 
-def getTileLocations(obsid, flags=[], metafits=None):
+def getTileLocations(metafits, flags=[]):
+    """Function grab the MWA tile locations for a given observation from the metafits file.
+
+    Parameters
+    ----------
+    metafits : `str`
+        The metafits file location.
+    flags : `list`, optional
+        RTS tile flags (i.e. the first entry in the metafits correspond to "tile 0", irrespective of what the antenna name is). |br| Default: [].
+
+    Returns
+    -------
+    list : `list`
+        A list of lists containing the following:
+            list[0] = a list of tile positions East of the array centre
+            list[1] = a list of tile positions North of the array centre
+            list[2] = a list of tile heights about sea-level
+            list[3] = a list of tile cable delays
     """
-    Function grab the MWA tile locations for any given observation ID. Downloads the relevant metafits file from the database, saves it as <obdID>_metafits_ppds.fits.
-
-    Input:
-      obsid - the GPS observation ID
-      flags - RTS tile flags (i.e. the first entry in the metafits correspond to "tile 0", irrespective of what the antenna name is)
-
-    Return:
-      a list of lists containing the following:
-        list[0] = a list of tile positions East of the array centre
-        list[1] = a list of tile positions North of the array centre
-        list[2] = a list of tile heights about sea-level
-        list[3] = a list of tile cable delays
-    """
-
     f = fits.open(metafits)
 
     east = f[1].data['East'][::2]
@@ -58,19 +61,21 @@ def getTileLocations(obsid, flags=[], metafits=None):
     return east, north, height, cable_delays
 
 
-def get_obstime_duration(obsid, metafits):
+def get_obstime_duration(metafits):
+    """Funciton to grab the recorded start-time and duration of the observation
+
+    Parameters
+    ----------
+    metafits : `str`
+        The metafits file location.
+
+    Returns
+    -------
+    obs_begin : `str`
+        Observation starting time in UTC.
+    obs_duration : `int`
+        Observation duration in seconds.
     """
-    Funciton to grab the recorded start-time and duration of the observation
-
-    Input:
-      obsid - the GPS observation ID
-
-    Return:
-      a list containing the folloing two items (in order):
-        list[0] = observation starting time in UTC
-        list[1] = observation duration in seconds
-    """
-
     # metafits file will already have been downloaded
     f = fits.open(metafits)
 
@@ -78,44 +83,43 @@ def get_obstime_duration(obsid, metafits):
 
 
 def calc_pixel_area(za, az_res, za_res):
-    """
-    Calculate the area of a pixel on the sky from their height, width and zenith angle
+    """Calculate the area of a pixel on the sky from their height, width and zenith angle
 
-    Parameters:
-    -----------
-    za: float
-        The zenith angle of the pixel in radians
-    az_res: float
-        The azuimuth resolution of the pixel in degrees
-    za_res: float
-        The zenith   resolution of the pixel in degrees
+    Parameters
+    ----------
+    za : `float`
+        The zenith angle of the pixel in radians.
+    az_res : `float`
+        The azuimuth resolution of the pixel in degrees.
+    za_res : `float`
+        The zenith   resolution of the pixel in degrees.
 
-    Returns:
-    --------
-    area: float
-        Area of the pixel in square radians
+    Returns
+    -------
+    area : `float`
+        Area of the pixel in square radians.
     """
     return np.radians(az_res) * np.radians(za_res) * np.sin(za)
 
 
 def calcWaveNumbers(freq, p, t):
-    """
-    Function to calculate the 3D wavenumbers for a given wavelength and az/za grid. 
+    """Function to calculate the 3D wavenumbers for a given wavelength and az/za grid. 
     This is the part of equation 7 within the square brackets not includeing x_n, y_n and z_n
 
-    Parameters:
-    -----------
-    freq: float
-        Central frequency for the observation in Hz
-    p: float
+    Parameters
+    ----------
+    freq : `float`
+        Central frequency for the observation in Hz.
+    p : `float`
         azimuth/phi (either a scalar or an array)
-        this is assuming that theta,phi are in the convention from Sutinjo et al. 2015
-    t: float
-        zenith angle/theta (either a scalar or an array)
+        this is assuming that theta,phi are in the convention from Sutinjo et al. 2015.
+    t : `float`
+        zenith angle/theta (either a scalar or an array).
 
-    Returns:
-    --------
-      [kx, ky, kz] - the 3D wavenumbers
+    Returns
+    -------
+    kx, ky, kz : `list`
+        The 3D wavenumbers.
     """
     C =  2 * np.pi * freq / c.value
     kx = C * np.multiply(np.sin(t), np.cos(p))
@@ -126,27 +130,26 @@ def calcWaveNumbers(freq, p, t):
 
 
 def calcSkyPhase(xpos, ypos, zpos, kx, ky, kz, coplanar=False):
-    """
-    Completes the calculation of equation 7 to get the phase of the tiles for each position on the sky
+    """Completes the calculation of equation 7 to get the phase of the tiles for each position on the sky
 
-    Parameters:
-    -----------
-    xpos[N]:
+    Parameters
+    ----------
+    xpos : `list` (N)
         A list of tile positions East of the array centre
-    ypos[N]:
+    ypos : `list` (N)
         A list of tile positions North of the array centre
-    zpos[N]:
+    zpos : `list` (N)
         A list of tile heights about sea-level
-    kx[az/za]:
+    kx : `list` (az/za)
         The x 3D wavenumbers for a given wavelength and az/za grid
-    ky[az/za]:
+    ky : `list` (az/za)
         The y 3D wavenumbers for a given wavelength and az/za grid
-    kz[az/za]:
+    kz : `list` (az/za)
         The z 3D wavenumbers for a given wavelength and az/za grid
 
-    Returns:
-    --------
-    ph_tile[N][az/za]:
+    Returns
+    -------
+    ph_tile : `list` (N, az/za)
         A list of the phases for each tile
     """
     #ph_tile = []
@@ -177,8 +180,8 @@ def cal_phase_ord(xpos, ypos, zpos, delays, gx, gy, gz, freq, coplanar=False, no
     """
     Equation 2 and 3 of Ord 2019.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     xpos[N]:
         A list of tile positions East of the array centre
     ypos[N]:
@@ -192,8 +195,8 @@ def cal_phase_ord(xpos, ypos, zpos, delays, gx, gy, gz, freq, coplanar=False, no
     gz[az/za]:
         The z 3D wavenumbers for a given wavelength and az/za grid
 
-    Returns:
-    --------
+    Returns
+    -------
     ph_tile[N][az/za]:
         A list of the phases for each tile
     """
@@ -219,15 +222,15 @@ def calcArrayFactor(ph_tiles, ph_targets):
     """
     Calculates array factor pointed at some target zenith angle (za) and azimuth (az) (equation 11)
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     ph_tiles[N][az/za]:
         List of the sky phases for the tiles
     ph_targets[N]:
         List of the sky phases for the target
 
-    Returns:
-    --------
+    Returns
+    -------
     array_factor[az/za]:
         The array factor for each za and az
     array_factor_power[az/za]:
@@ -274,11 +277,11 @@ def read_sefd_file(sefd_file, all_data=False):
     """
     Read in the output sefd file from a pabeam.py simulation.
 
-    Parameters:
-    -----------
-    sefd_file: str
+    Parameters
+    ----------
+    sefd_file : `str`
         The location of the sefd file to be read in.
-    all_data: boolean
+    all_data : `boolean`
         If True will return the freq, sefd, t_sys, t_ant, gain, effective_area.
         If False will only return the sefd. Default False
     """

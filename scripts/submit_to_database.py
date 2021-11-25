@@ -39,7 +39,6 @@ from vcstools.config import load_config_file
 from vcstools.job_submit import submit_slurm
 from vcstools.general_utils import mdir, setup_logger
 from vcstools.gfit import gfit
-from vcstools.beam_calc import get_Trec
 from vcstools.beam_sim import read_sefd_file
 
 
@@ -71,7 +70,7 @@ def get_subbands(common_metadata):
 
     Returns
     -------
-    subbands: int
+    subbands : `int`
         The number of subbands in the observation
     """
     channels = common_metadata[-1]
@@ -87,11 +86,11 @@ def get_db_auth_addr():
     """
     Checks for MWA database usernames and passwords
 
-    Returns:
-    --------
+    Returns
+    -------
     auth: tuple
         The username and password for the pulsar databse
-    web_address: string
+    web_address : `str`
         The web address of the pulsar database
     """
     web_address = 'https://pulsar-cat.icrar.uwa.edu.au/'
@@ -113,14 +112,14 @@ def check_db_and_create_pulsar(pulsar):
     """
     Checks to see if a pulsar is already on the database. If not, will create a new entry
 
-    Parameters:
-    -----------
-    puslar: str
+    Parameters
+    ----------
+    puslar : `str`
         The name of the pulsar
 
-    Returns:
-    --------
-    new_pulsar: boolean
+    Returns
+    -------
+    new_pulsar : `boolean`
         If True, this is a new pulsar detection
     """
     web_address, auth = get_db_auth_addr()
@@ -150,18 +149,18 @@ def get_filetypes_from_db(obsid, pulsar, filetype):
     """
     Searches the pulsar database and returns the given obsid/pulsar/filetype files
 
-    Parameters:
-    -----------
-    obsid: int
+    Parameters
+    ----------
+    obsid : `int`
         Observation ID
-    pulsar: string
+    pulsar : `str`
         The name of the puslar
-    filetype: int
+    filetype : `int`
         The type of file to search for. Options are:
         1: Archive, 2: Timeseries, 3: Diagnostics, 4: Calibration Solution, 5: Bestprof
 
-    Returns:
-    --------
+    Returns
+    -------
     myfiles: list
         A list of filenames fitting the given parameters
     """
@@ -200,17 +199,17 @@ def upload_cal_files(obsid, cal_id, cal_dir_to_tar, srclist, caltype=2):
     """
     Uploads the calibrator solutions to the MWA pulsar database
 
-    Parameters:
-    -----------
-    obsid: int
+    Parameters
+    ----------
+    obsid : `int`
         The observation ID
-    cal_id: int
+    cal_id : `int`
         The calibrator ID
-    cal_dir_to_tar: string
+    cal_dir_to_tar : `str`
         The location of the calibrator RTS directory
-    srclist: string
+    srclist : `str`
         The path to the sourcelist
-    caltype: int
+    caltype : `int`
         The type of calibrator. Default: 2
     """
     auth, web_address = get_db_auth_addr()
@@ -237,20 +236,20 @@ def filename_prefix(obsid, pulsar, bins=None, cal=None):
     """
     Creates a filename prefix depending on inputs
 
-    Parameters:
-    -----------
-    obsid: int
+    Parameters
+    ----------
+    obsid : `int`
         The observation ID
-    pulsar: str
+    pulsar : `str`
         The name of the puslar
-    bins: int
+    bins : `int`
         The number of bins in the profile
-    cal: int
+    cal : `int`
         The calibrator ID
 
-    Returns:
-    --------
-    pref: str
+    Returns
+    -------
+    pref : `str`
         The filename prefix
     """
     pref = "{0}_{1}".format(obsid, pulsar)
@@ -316,19 +315,19 @@ def upload_file_to_db(obsid, pulsar, filepath, filetype, subbands=None, coh=True
     """
     Uploads a file to the pulsar database
 
-    Parameters:
-    -----------
-    obsid: str
+    Parameters
+    ----------
+    obsid : `str`
         The observation ID
-    pulsar: str
+    pulsar : `str`
         The name of the pulsar
-    filepath: str
+    filepath : `str`
         The file path of the file to upload
-    filetype: int
+    filetype : `int`
         The type of file to upload: 1: Archive, 2: Timeseries, 3: Diagnostics, 4: Calibration Solution, 5: Bestprof
-    subbands: int
+    subbands : `int`
         OPTINOAL - The number of frequency subbands in an observation. If None, will calculate it.
-    coh: boolean
+    coh : `boolean`
         OPTINOAL - Whether this is a coherent detection or not. Default: True
     """
     if not subbands:
@@ -346,17 +345,17 @@ def multi_upload_files(obsid, pulsar, files_dict, subbands=None, coh=True):
     """
     Uploads any number of files to the same obsid/pulsar on the database
 
-    Parameters:
-    -----------
-    obsid: str
+    Parameters
+    ----------
+    obsid : `str`
         The observation ID
-    pulsar: str
+    pulsar : `str`
         The name of the pulsar
     files_dict: dict
         A dictionary with keys 1-5 representing filetpes. Each key holds a list containing the files to be uploaded.
-    subbands: int
+    subbands : `int`
         OPTINOAL - The number of frequency subbands in an observation. If None, will calculate it.
-    coh: boolean
+    coh : `boolean`
         OPTINOAL - Whether this is a coherent detection or not. Default: True
     """
     for filetype in files_dict.keys():
@@ -489,34 +488,34 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     """
     Analyise a pulse profile and calculates its flux density
 
-    Parameters:
-    -----------
-    pulsar: str
+    Parameters
+    ----------
+    pulsar : `str`
         The pulsar's Jname
     bestprof_data: list
         The output list from the function get_from_bestprof
 
     Optional parameters:
-    --------------------
-    flagged_tiles: str
+    -------------------
+    flagged_tiles : `str`
         The location of the flagged_tiles.txt file. If it's in the default location you can just supply the calid.
-    calid: int
+    calid : `int`
         The calibration ID of the detection. This is used to find the flagged_tiles.txt file.
     common_metadata: list
         The output of mwa_metadb_utils.get_common_obs_metadata(). If not supplied it will be downloaded.
-    trcvr: str
+    trcvr : `str`
         The file location of antena temperatures.
-    simple_sefd: boolean
+    simple_sefd : `boolean`
         If True perfom just a simple SEFD calculation instead of simulating the phased array beam response over the sky. Default: False.
-    sefd_file: str
+    sefd_file : `str`
         The location of the pabeam.py's simulation of the phased array beam response over the sky output file. If not supplied will launch a pabeam.py simulation.
-    vcstools_version: str
+    vcstools_version : `str`
         The version of vcstools to use for the pabeam.py simulation. Default: master.
     args: Namespace
         The args from argparse to be used for job resubmission. Default: None.
 
-    Returns:
-    --------
+    Returns
+    -------
     det_kwargs: dict
     det_kwargs["flux"]: The mean flux density of the pulsar in mJy
     det_kwargs["flux_error"]: The flux desnity error in mJy

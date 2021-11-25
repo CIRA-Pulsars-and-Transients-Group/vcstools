@@ -19,34 +19,33 @@ logger = logging.getLogger(__name__)
 # Main class
 class gfit:
     """
-    This class is used to fit multiple Gaussians to a pulse profile
+    This class is used to fit multiple Gaussians to a pulse profile.
 
-    User inputs:
-    ------------
-    raw_profile: list
-        The pulse profile to be fit
-    max_N: int
-        The maximum number of gaussians to attempt to fit
-        Default - 10
-    plot_name: str
-        The name of the output plot. Can be set with gfit.plot_name. If unsupplied, will use a generic name
-        Default - None
-    conponent_plot_name: str
+    Parameters
+    ----------
+    raw_profile : `list`
+        The pulse profile to be fit.
+    max_N : `int`
+        The maximum number of gaussians to attempt to fit.
+        |br| Default: 10.
+    plot_name : `str`
+        The name of the output plot. Can be set with gfit.plot_name. If unsupplied, will use a generic name.
+        |br| Default: None.
+    conponent_plot_name : `str`
         The name of the plot for the component plot that illustrates how profile components are chosen. If 
         unsupplied, will not plot. Only applicable if on_pulse_range unsupplied.
-        Default - None
-    scattering_threshold: float
+        |br| Default: None.
+    scattering_threshold : `float`
         The threshold for which any tau value greater will be deemed scattered. 
-        Default - 40
-    on_pulse_ranges: list
+        |br| Default: 40.
+    on_pulse_ranges : `list`
         A list of two-lists/tuples that describes the on pulse region in phase.
         e.g. [[0.1, 0.2], [0.6, 0.7]]
         If not supplied, will attempt to find on-pulse region
-        Default - None
+        |br| Default: None.
 
-
-    Functions for users:
-    --------------------
+    Methods
+    -------
     auto_fit:
         Runs a gaussian fit evaluation using up to max_N gaussians. The quality of the fit is decided via a chi-square evaluation.
         The best of these is saved and used to determine widths and maxima location. Part of the preprocessing of the profile will
@@ -55,45 +54,45 @@ class gfit:
         Plots the best chosen gaussian fit to a file whose name is gfit.plot_name. This can only be run after the fit_dict
         dictionary has been filled (presumably by auto_gfit).
 
-
-    Products:
-    --------
-    fit_dict: dictionary
+    Returns
+    -------
+    fit_dict : `dict`
         contains the following keys:
-        W10: float
-            The W10 width of the profile measured in phase
-        W10_e: float
-            The uncertainty in the W10
-        W50: float
-            The W50 width of the profile measured in phase
-        W50_e: float
-            The uncertainty in the W50
-        Weq: float
-            The equivalent width of the profile measured in phase
-        Weq_e: float
-            The uncertainty in the equivalent width
-        Wscat: float
-            The scattering width of the profile measured in phaseprofile_region_from_pairs
-            The number of distinguishable profile components
-        on_pulse_estimates: list
-            The output of prof_utils.estimate_components_onpulse(). Will be the rolled on_pulse_range input instead if supplied
-        fit_params: list
-            A list of length 5 + 3*(N-1) there N is num_gauss. Each set of 3 parameters corresponds to the amp, centre and width of a guassian component
-            The first five are baseline, tau, amp, centre and width
-        cov_mat: np.matrix
-            The covariance matrix output from curve_fit
-        profile: list
-            The normalised and rolled input profile
-        fit: list
-            The best fit made into a list form
-        sn: float
-            The estimated signal to noise ratio, obtained from the profile
-        sn_e: float
-            The uncertainty in sn
-        scattering: float
-            The tau value of the profile fit
-        scattered: bool
-            Whether or not the final profile's tau value is greater than the sattering threshold
+
+        W10 : `float`
+            The W10 width of the profile measured in phase.
+        W10_e : `float`
+            The uncertainty in the W10.
+        W50 : `float`
+            The W50 width of the profile measured in phase.
+        W50_e : `float`
+            The uncertainty in the W50.
+        Weq : `float`
+            The equivalent width of the profile measured in phase.
+        Weq_e : `float`
+            The uncertainty in the equivalent width.
+        Wscat : `float`
+            The scattering width of the profile measured in phaseprofile_region_from_pairs.
+            The number of distinguishable profile components.
+        on_pulse_estimates : `list`
+            The output of prof_utils.estimate_components_onpulse(). Will be the rolled on_pulse_range input instead if supplied.
+        fit_params : `list`
+            A list of length 5 + 3*(N-1) there N is num_gauss. Each set of 3 parameters corresponds to the amp, centre and width of a guassian component.
+            The first five are baseline, tau, amp, centre and width.
+        cov_mat : np.matrix
+            The covariance matrix output from curve_fit.
+        profile : `list`
+            The normalised and rolled input profile.
+        fit : `list`
+            The best fit made into a list form.
+        sn : `float`
+            The estimated signal to noise ratio, obtained from the profile.
+        sn_e : `float`
+            The uncertainty in sn.
+        scattering : `float`
+            The tau value of the profile fit.
+        scattered : `boolean`
+            Whether or not the final profile's tau value is greater than the sattering threshold.
     """
 
     def __init__(self, raw_profile, max_N=10, plot_name=None, component_plot_name=None, scattering_threshold=40, on_pulse_ranges=None):
@@ -166,7 +165,11 @@ class gfit:
     # Main function - intended for use by the user
 
     def auto_fit(self):
-        """Fits multiple gaussian profiles and finds the best combination of N_Gaussians and alpha"""
+        """
+        Fits multiple gaussian profiles and finds the best combination of N_Gaussians and alpha.
+
+        Uses
+        """
         if len(self._raw_profile) < 100:
             raise ProfileLengthError("Profile must have length > 100")
 
@@ -289,7 +292,10 @@ class gfit:
     # Plotter for the resulting fit
 
     def plot_fit(self):
-        """Plots the best fit set of Gaussians"""
+        """Plots the best fit set of Gaussians.
+
+        Default output is "Gaussian_fit.png".
+        """
         if not self._plot_name:
             self._plot_name = "Gaussian_fit.png"
         popt = self._fit_dict["fit_params"]
