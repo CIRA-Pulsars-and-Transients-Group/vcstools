@@ -908,7 +908,7 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
 
     #estimate flux
     s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux,\
-                         metadata=common_metadata, query=query)
+                         common_metadata=common_metadata, query=query)
     #fluxes may be Nones. If so, return None
     if s_mean is None and s_mean_err is None:
         return None, None, None, None
