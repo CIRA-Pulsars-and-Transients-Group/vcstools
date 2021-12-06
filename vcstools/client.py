@@ -165,13 +165,18 @@ def upload_obsid(obsid):
             for key in keys:
                 if key not in db.keys():
                     data_dict[key] = ""
+                elif key == 'sky_temp' and db[key] is None:
+                    # If no skytemp in the getmeta make an approximation
+                    data_dict[key] = 240.
                 elif db[key] is not None:
                     # no 'checked_user' keys anywhere
                     data_dict[key] = db[key]
         upload_wrapper(urls['observation_setting'], data_dict)
 
 
-def upload_cand(beam_id, search_type='Blind', search_params_id=1, png_file=None, pfd_file=None):
+def upload_cand(beam_id=None,
+                rad=None, decd=None, obsid=None,
+                search_type='Blind', search_params_id=1, png_file=None, pfd_file=None):
     """
     Upload a candidate to the candidates table of the MWA pulsar database
 
@@ -179,6 +184,14 @@ def upload_cand(beam_id, search_type='Blind', search_params_id=1, png_file=None,
     ----------
     beam_id: int
         The beam ID of the pointing for the candidate
+
+    rad: float
+        The RA of the candidate/beam in degrees
+    decd: float
+        The Dec of the candidate/beam in degrees
+    obsid: int
+        The observation ID of the candidate/beam
+
     search_type: string
         A label of the type of search that produced this candidate. Default Blind
     search_params_id: int
@@ -198,11 +211,22 @@ def upload_cand(beam_id, search_type='Blind', search_params_id=1, png_file=None,
         pfd = open(pfd_file, 'rb')
         files['pfd'] = pfd
 
-    # Set up data to upload
-    data = {'search_beam_id': beam_id,
-            'username': auth[0],
-            'search_type': search_type,
-            'search_params_id': search_params_id}
+    if beam_id:
+        # Set up data to upload
+        data = {'search_beam_id': beam_id,
+                'username': auth[0],
+                'search_type': search_type,
+                'search_params_id': search_params_id}
+    else:
+        # No beam_id supplied so input the beam ra, dec and obsid so the database
+        # cand work out the beam_id
+        data = {'rad': rad,
+                'decd': decd,
+                'obsid': obsid,
+                'username': auth[0],
+                'search_type': search_type,
+                'search_params_id': search_params_id}
+
 
     upload_wrapper(urls['candidates'], data, files=files)
 
