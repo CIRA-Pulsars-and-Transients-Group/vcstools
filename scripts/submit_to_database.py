@@ -604,6 +604,8 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
             scattering = prof_dict["scattering"]*period/num_bins/1000 #convert to seconds
             u_scattering = prof_dict["scattering_e"]*period/num_bins/1000
             scattered = prof_dict["scattered"]
+            noise_std = prof_dict["noise_std"]
+            noise_mean = prof_dict["noise_mean"]
         else:
             logger.warn("Profile could not be analysed using any methods")
             sn = None
@@ -620,6 +622,9 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     else:
         sn = prof_dict["sn"]
         u_sn = prof_dict["sn_e"]
+        profile = prof_dict["profile"]
+        noise_std = prof_dict["noise_std"]
+        noise_mean = prof_dict["noise_mean"]
         w_equiv_phase = prof_dict["Weq"]
         u_w_equiv_phase =  prof_dict["Weq_e"]
         w_equiv_bins = w_equiv_phase * num_bins
@@ -647,21 +652,38 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
         else:
             # final calc of the mean flux density in mJy
             #S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(t_int) * bandwidth)) *\
-            S_mean = sn * sefd / (math.sqrt(2. * float(t_int) * bandwidth)) *\
-                     math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
+            #S_mean = sn * sefd / (math.sqrt(2. * float(t_int) * bandwidth)) *\
+            #         math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
             # constants to make uncertainty calc easier
             #S_mean_cons = t_sys / ( math.sqrt(2. * float(t_int) * bandwidth)) *\
             #        math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
             #u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
             #                    math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
-            u_S_mean = math.sqrt( (u_sn / sn)**2 + (u_sefd / sefd)**2 ) * S_mean
+            #u_S_mean = math.sqrt( (u_sn / sn)**2 + (u_sefd / sefd)**2 ) * S_mean
 
-            logger.info('Smean {0:.2f} +/- {1:.2f} mJy'.format(S_mean, u_S_mean))
+            # Renormalise around the noise mean
+            profile = (profile - noise_mean) / max(profile - noise_mean)
+            print(profile)
+            # Normalise to noise std
+            profile = profile / noise_std
+            print(profile)
+            # Put the profile into flux units with sefd
+            flux_profile = profile * sefd
+            print(flux_profile)
+            # average
+            flux = np.mean(flux_profile)
+            # Convert to flux density (mJy)
+            S_mean = flux / (math.sqrt(2. * float(t_int) * bandwidth)) * 1000.
+            #TODO make this a real calculation
+            u_S_mean = 0.1 * S_mean
+
+
+            logger.info('Smean {0:.3f} +/- {1:.3f} mJy'.format(S_mean, u_S_mean))
 
     if S_mean is not None:
         #prevent TypeError caused by trying to format Nones given to fluxes for highly scattered pulsars
-        S_mean = float("{0:.2f}".format(S_mean))
-        u_S_mean = float("{0:.2f}".format(u_S_mean))
+        S_mean = float("{0:.3f}".format(S_mean))
+        u_S_mean = float("{0:.3f}".format(u_S_mean))
 
         # Plot flux comparisons for ANTF
         freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar)

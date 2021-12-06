@@ -464,6 +464,8 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
     prof_dict["scattering"] = scattering
     prof_dict["scattering_e"] = u_scattering
     prof_dict["scattered"] = scattered
+    prof_dict["noise_std"] = sigma
+    prof_dict["noise_mean"] = np.nanmean(flags) / max(prof_data)
 
     return prof_dict
 

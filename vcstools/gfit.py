@@ -170,8 +170,10 @@ class gfit:
 
         Uses
         """
-        if len(self._raw_profile) < 100:
-            raise ProfileLengthError("Profile must have length > 100")
+        #if len(self._raw_profile) < 100:
+        #    raise ProfileLengthError("Profile must have length > 100")
+        if len(self._raw_profile) < 64:
+            raise ProfileLengthError("Profile must have length > 64")
 
         if self._on_pulse_ranges:  # Use the on-pulse region to get noise estimates
             self._standardise_raw_profile(roll_phase=None)
@@ -406,7 +408,7 @@ class gfit:
                     "maxima":maxima, "maxima_e":maxima_e, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq,
                     "num_gauss":num_gauss, "bic":bic, "gaussian_params":popt, "cov_mat":pcov, "comp_dict":comp_dict,
                     "comp_idx":comp_idx, "alpha":self._alpha, "profile":self._std_profile, "fit":fit, "scattered":scattered,
-                    "sn":sn, "sn_e":sn_e, "sn_simple":sn_simple, "sn_simple_e":sn_simple_e}
+                    "sn":sn, "sn_e":sn_e, "sn_simple":sn_simple, "sn_simple_e":sn_simple_e, "noise_std":self._noise_std}
 
         return fit_dict
 

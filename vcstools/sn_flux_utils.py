@@ -455,6 +455,7 @@ def flux_from_atnf(pulsar, query=None):
     """
     if query is None:
         query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
+    query_id = list(query['PSRJ']).index(pulsar)
 
     flux_queries = ["S40", "S50", "S60", "S80", "S100", "S150", "S200",\
                     "S300", "S400", "S600", "S700", "S800", "S900",\
@@ -465,7 +466,7 @@ def flux_from_atnf(pulsar, query=None):
     flux_err_all=[]
     #Get all available data from dataframe and check for missing values
     for flux_query in flux_queries:
-        flux = query[flux_query][0]
+        flux = query[flux_query][query_id]
         if not np.isnan(flux):
             #sometimes error values don't exist, causing a key error in pandas
             try:
@@ -914,7 +915,7 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
         return None, None, None, None
 
     #find integration time
-    enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=common_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+    enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, common_metadata=common_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
     if t_int<=0.:
         logger.warning("{} not in beam for obs files or specificed beginning and end times"\
                     .format(pulsar))
