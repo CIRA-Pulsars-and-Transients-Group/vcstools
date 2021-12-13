@@ -20,6 +20,8 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install xmllint
+        run: sudo apt-get install -y python3-mpi4py libopenmpi-dev
       - name: Install dependencies
         run: |
           pip install .
