@@ -68,20 +68,23 @@ def robust_cost_function(f_y, y, sigma_y, k=1.345):
 def iminuit_fit_spectral_model(freq, flux, flux_err, model=simple_power_law, plot=False, save_name="fit.png"):
     # Model dependent defaults
     if model == simple_power_law:
+        # a, b
         start_params = (-1.6, 0.003)
-        print(start_params)
         mod_limits = [(None, 0), (0, None)]
     elif model == broken_power_law:
+        # a1, a2, b, vb
         start_params = (-2.6, -2.6, 0.1, 5e8)
         mod_limits = [(None, 0), (None, 0), (0, None), (1e3, 1e9)]
     elif model == log_parabolic_spectrum:
+        # a, b, c
         start_params = (-1.6, 1., 1.)
         mod_limits = [(None, 0), (0, None), (0, None)]
     elif model == high_frequency_cut_off_power_law:
+        # a, b, vc
         start_params = (-1.6, 1., 1.3e9)
         mod_limits = [(None, 0), (0, None), (1e3, 1e12)]
     elif model == low_frequency_turn_over_power_law:
-        # v, a, b, beta, vc)
+        # a, b, beta, vc
         start_params = (-2, 1.e1, 1., 2e8)
         mod_limits = [(None, 0), (0, None) , (0., 2.1), (1e3, 1e10)]
     model_str = str(model).split(" ")[1]
