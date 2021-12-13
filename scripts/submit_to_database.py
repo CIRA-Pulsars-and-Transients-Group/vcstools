@@ -19,7 +19,6 @@ from shutil import copyfile as cp
 import math
 import glob
 import textwrap as _textwrap
-import datetime
 import numpy as np
 from astropy.table import Table
 import csv
@@ -363,119 +362,6 @@ def multi_upload_files(obsid, pulsar, files_dict, subbands=None, coh=True):
             logger.info("Uploading file to databse: {}".format(filename))
             upload_file_to_db(obsid, pulsar, filename, int(filetype), subbands=subbands, coh=coh)
 
-
-def launch_pabeam_sim(obsid, pointing,
-                      begin, duration,
-                      source_name="noname",
-                      metafits_file=None,
-                      flagged_tiles=None,
-                      delays=None,
-                      phi_res=0.1, theta_res=0.05,
-                      efficiency=1,
-                      nodes=3,
-                      vcstools_version='master',
-                      args=None,
-                      common_metadata=None):
-    """
-    Submit a job to run the pabeam code to estimate the system equivelent
-    flux density and returns a job id so a dependent job to resume the
-    submit_to_databse.py code can be launched in a different function.
-    """
-    # Load computer dependant config file
-    comp_config = load_config_file()
-
-    # Ensure metafits file is there
-    data_dir = "{}{}".format(comp_config['base_data_dir'], obsid)
-    ensure_metafits(data_dir, obsid, "{0}_metafits_ppds.fits".format(obsid))
-
-    # Perform metadata calls
-    if common_metadata is None:
-        common_metadata = get_common_obs_metadata(obsid)
-    # Get frequencies
-    centre_freq = common_metadata[5] * 10e5
-    low_freq  = common_metadata[6][0] * 1.28 * 10e5
-    high_freq = common_metadata[6][-1] * 1.28 * 10e5
-    sim_freqs = [str(low_freq), str(centre_freq), str(high_freq)]
-
-    # Calculate required pixel res and cores/mem
-    array_phase = get_obs_array_phase(obsid)
-    fwhm = calc_ta_fwhm(high_freq / 10e5, array_phase=array_phase) #degrees
-    phi_res = theta_res = fwhm / 3
-    if phi_res < 0.01:
-        # Going any smaller causes memory errors
-        phi_res = theta_res = 0.01
-    npixels = 360. // phi_res + 90. // theta_res
-    cores_required = npixels * len(sim_freqs) // 800
-    nodes_required = cores_required // 24 + 1
-
-    # Make directories
-    batch_dir = "{}/batch".format(data_dir)
-    sefd_dir = "{}/sefd_simulations".format(data_dir)
-    if not os.path.exists(batch_dir):
-        mdir(batch_dir, "Batch", gid=comp_config['gid'])
-    if not os.path.exists(sefd_dir):
-        mdir(sefd_dir, "SEFD", gid=comp_config['gid'])
-
-    # Parse defaults
-    if metafits_file is None:
-        metafits_file  = "{0}{1}/{1}_metafits_ppds.fits".format(comp_config['base_data_dir'], obsid)
-
-    # Get delays if none given
-    if delays is None:
-        delays = get_common_obs_metadata(obsid)[4][0]
-        print(delays)
-        print(' '.join(np.array(delays, dtype=str)))
-
-    # Set up pabeam command
-    command = 'srun --export=all -u -n {} pabeam.py'.format(int(nodes_required*24))
-    command += ' -o {}'.format(obsid)
-    command += ' -b {}'.format(begin)
-    command += ' -d {}'.format(int(duration))
-    command += ' -s {}'.format(int(duration//4-1)) # force 4 time steps to get reasonable std
-    command += ' -e {}'.format(efficiency)
-    command += ' --metafits {}'.format(metafits_file)
-    command += ' -p {}'.format(pointing)
-    command += ' --grid_res {:.3f} {:.3f}'.format(theta_res, phi_res)
-    command += ' --delays {}'.format(' '.join(np.array(delays, dtype=str)))
-    command += ' --out_dir {}'.format(sefd_dir)
-    command += ' --out_name {}'.format(source_name)
-    command += ' --freq {}'.format(" ".join(sim_freqs))
-    if flagged_tiles is not None:
-        logger.debug("flagged_tiles: {}".format(flagged_tiles))
-        command += ' --flagged_tiles {}'.format(' '.join(flagged_tiles))
-
-    # Set up and launch job
-    batch_file_name = 'pabeam_{}_{}_{}'.format(obsid, source_name, pointing)
-    job_id = submit_slurm(batch_file_name, [command],
-                          batch_dir=batch_dir,
-                          slurm_kwargs={"time": datetime.timedelta(seconds=10*60*60),
-                                        "nodes":int(nodes_required)},
-                          module_list=['hyperbeam-python'],
-                          queue='cpuq',
-                          cpu_threads=24,
-                          mem=12288,
-                          vcstools_version=vcstools_version)
-
-    # Set up dependant submit_to_database.py job
-    submit_args = vars(args)
-    # Add sefd_file argument
-    submit_args['sefd_file'] = "{}/{}*stats".format(sefd_dir, source_name)
-    command_str = "submit_to_database.py"
-    for key, val in submit_args.items():
-        if val:
-            if val == True:
-                command_str += " --{}".format(key)
-            else:
-                command_str += " --{} {}".format(key, val)
-
-    batch_file_name = 'submit_to_database_{}_{}_{}'.format(obsid, source_name, pointing)
-    job_id_dependant = submit_slurm(batch_file_name, [command_str],
-                                    batch_dir=batch_dir,
-                                    slurm_kwargs={"time": datetime.timedelta(seconds=1*60*60)},
-                                    queue='cpuq',
-                                    vcstools_version=vcstools_version,
-                                    depend=[job_id])
-    return job_id, job_id_dependant
 
 def analyise_and_flux_cal(pulsar, bestprof_data,
                           flagged_tiles=None,
