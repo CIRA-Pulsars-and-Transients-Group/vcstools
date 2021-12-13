@@ -361,7 +361,7 @@ if __name__ == "__main__":
 
         # get the tile locations from the metafits
         logger.info("getting tile locations from metafits file")
-        xpos, ypos, zpos, cable_delays = getTileLocations(args.obsid, flags, metafits=args.metafits)
+        xpos, ypos, zpos, cable_delays = getTileLocations(args.metafits, flags=flags)
         logger.debug("xpos: {}".format(xpos))
         logger.debug("ypos: {}".format(ypos))
         logger.debug("zpos: {}".format(zpos))
