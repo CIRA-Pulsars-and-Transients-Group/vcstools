@@ -147,10 +147,11 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=5000., inclu
         name_ra_dec = get_psrcat_ra_dec(pulsar_list=pulsar_list, max_dm=max_dm, include_dm=include_dm, query=query)
 
     elif source_type == 'FRB':
-        import urllib.request
+        from urllib.request import Request, urlopen
         from io import StringIO
         try:
-            frb_csv = urllib.request.urlopen("https://www.wis-tns.org/search?&include_frb=1&objtype[]=130&num_page=500&format=csv").read().decode('utf-8')
+            req = Request("https://www.wis-tns.org/search?&include_frb=1&objtype[]=130&num_page=500&format=csv", headers={'User-Agent': 'Mozilla/5.0'})
+            frb_csv = urlopen(req).read().decode('utf-8')
         except urllib.error.HTTPError:
             logger.error('frbcat (https://www.wis-tns.org) not available. Returning empty list')
             # putting and FRB at 90 dec which we should never be able to detect
