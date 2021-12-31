@@ -346,6 +346,156 @@ def get_beam_power_over_time(common_meta_data, names_ra_dec,
     return Powers
 
 
+def source_beam_coverage(obs_list, names_ra_dec,
+                         common_metadata_list=None,
+                         dt_input=300, beam='analytic', min_z_power=0.3):
+    """For a list of MWA observations and sources will find if the
+    sources are in the beam and when they enter and exit.
+
+    Parameters
+    ----------
+    obs_list : `list`
+        A list of MWA Observation IDs.
+    names_ra_dec : `list`
+        An array in the format [[source_name, RAJ, DecJ]]
+    common_metadata_list : `list` of `list`, optional
+        A list of lists where each list is the common metadata generated from
+        :py:meth:`vcstools.metadb_utils.get_common_obs_metadata` for each obs in the obs_list.
+    dt_input : `int`, optional
+        The time interval in seconds of how often powers are calculated. |br| Default: 300.
+    beam : `str`, optional
+        The primary beam model to use out of [analytic, advanced, full_EE, hyperbeam]. |br| Default: analytic.
+    min_z_power : `float`, optional
+        Zenith normalised power cut off. |br| Default: 0.3.
+
+    Returns
+    -------
+    beam_coverage : `dict`
+        A dictionary where the first key is the observation ID and the second is the pulsar names like so: |br|
+        beam_coverage[obsid][name] = [dect_beg_norm, dect_end_norm, np.amax(source_ob_power)]
+        dect_beg_norm : `float`
+            Fraction of the observation when the source enters the beam.
+        dect_end_norm : `float`
+            Fraction of the observation when the source enters and exits the beam respectively.
+    """
+    beam_coverage = {}
+    for on, obsid in enumerate(obs_list):
+        beam_coverage[obsid] = {}
+        if common_metadata_list:
+            common_metadata = common_metadata_list[on]
+        else:
+            # No metadata supplied so make the metadata call
+            common_metadata = get_common_obs_metadata(obsid)
+        #common_metadata = obsid,ra_obs,dec_obs,time_obs,delays,centrefreq,channels
+        obs_dur = common_metadata[3]
+
+        if dt_input * 4 >  obs_dur:
+            # If the observation time is very short then a smaller dt time is required
+            # to get enough points to fit a curve
+            dt = int(obs_dur / 4.)
+        else:
+            dt = dt_input
+        logger.debug("obsid: {0}, time_obs {1} s, dt {2} s".format(obsid, obs_dur, dt))
+        logger.debug("names_ra_dec: {}".format(names_ra_dec))
+        powers = get_beam_power_over_time(names_ra_dec,
+                                          common_metadata=common_metadata,
+                                          dt=dt, centeronly=True,
+                                          option=beam)
+        for source_ob_power, name in zip(powers, np.array(names_ra_dec)[:,0]):
+            if max(source_ob_power) > min_z_power:
+                logger.debug("Running beam_enter_exit on obsid: {}".format(obsid))
+                dect_beg_norm, dect_end_norm = beam_enter_exit(source_ob_power, obs_dur,
+                                                                  dt=dt, min_z_power=min_z_power)
+                beam_coverage[obsid][name] = [dect_beg_norm, dect_end_norm, np.amax(source_ob_power)]
+    return beam_coverage
+
+
+
+def source_beam_coverage_and_times(obsid, pulsar,
+                                   p_ra=None, p_dec=None,
+                                   obs_beg=None, obs_end=None,
+                                   files_beg=None, files_end=None,
+                                   min_z_power=0.3, dt_input=100,
+                                   common_metadata=None, query=None,
+                                   beam='analytic'):
+    """Finds the normalised time that a pulsar is in the beam for a given obsid.
+    If pulsar is not in beam, returns None, None
+
+    Parameters
+    ----------
+    obsid : `int`
+        The observation ID
+    pulsar : `str`
+        The pulsar's J name
+    p_ra, p_dec : `str`, optional
+        The target's right ascension and declination in sexidecimals.
+        If not supplied will use the values from the ANTF.
+    obs_beg, obs_end : `int`, optional
+        Beginning and end GPS time of the observation.
+        If not supplied will use :py:meth:`vcstools.metadb_utils.obs_max_min` to find it.
+    files_beg, files_end : `int`, optional
+        Beginning and end GPS time of the (fits of VCS) files.
+        If not supplied will assume the full observation is available.
+    min_z_power : `float`, optional
+        Zenith normalised power cut off. |br| Default: 0.3.
+    common_metadata : `list`, optional
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`
+    query : psrqpy object, optional
+        A previous psrqpy query. Can be supplied to prevent performing a new query.
+    beam : `str`, optional
+        The primary beam model to use out of [analytic, advanced, full_EE]. |br| Default: analytic.
+
+    Returns
+    -------
+    enter_files : `float`
+        A float between 0 and 1 that describes the normalised time that the pulsar enters the beam
+    exit_files : `float`
+        A float between 0 and 1 that describes the normalised time that the pulsar exits the beam
+    """
+    # Perform required metadata calls
+    if query is None:
+        query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC).pandas
+    if p_ra is None or p_dec is None:
+        # Get some basic pulsar and obs info info
+        query_id = list(query['PSRJ']).index(pulsar)
+        p_ra = query["RAJ"][query_id]
+        p_dec = query["DECJ"][query_id]
+    if not common_metadata:
+        common_metadata = get_common_obs_metadata(obsid)
+    if obs_beg is None or obs_end is None:
+        obs_beg, obs_end = obs_max_min(obsid)
+    obs_dur = obs_end - obs_beg + 1
+    if not files_beg:
+        files_beg = obs_beg
+    if not files_end:
+        files_end = obs_end
+    files_dur = files_end = files_beg + 1
+
+    beam_coverage = source_beam_coverage([obsid], [[pulsar, p_ra, p_dec]],
+                            common_metadata_list=[common_metadata],
+                            dt_input=dt_input, beam=beam, min_z_power=min_z_power)
+    dect_beg_norm, dect_end_norm, _ = beam_coverage[obsid][pulsar]
+
+    # GPS times the source enters and exits beam
+    dect_beg = obs_beg + obs_dur * dect_beg_norm - 1
+    dect_end = obs_beg + obs_dur * dect_end_norm  - 1
+
+    # Normalised time the source enters/exits the beam in the files (used for Presto commands)
+    files_beg_norm = (dect_beg - files_beg) / files_dur
+    files_end_norm = (dect_end - files_beg) / files_dur
+
+    if files_beg_norm > 1. or files_end_norm < 0.:
+        logger.debug("source {0} is not in the beam for the files on disk".format(pulsar))
+        files_beg_norm = None
+        files_end_norm = None
+    if files_beg_norm < 0.:
+        files_beg_norm = 0.
+    if files_end_norm > 1.:
+        files_end_norm = 1.
+
+    return dect_beg, dect_end, dect_beg_norm, dect_end_norm, files_beg_norm, files_end_norm, obs_beg, obs_end, obs_dur
+
+
 def find_sources_in_obs(obsid_list, names_ra_dec,
                         obs_for_source=False, dt_input=100, beam='analytic',
                         min_power=0.3, cal_check=False, all_volt=False,
