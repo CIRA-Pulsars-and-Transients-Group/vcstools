@@ -16,6 +16,7 @@ from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
 from vcstools.config import load_config_file
 from vcstools.metadb_utils import get_common_obs_metadata, get_obs_array_phase, calc_ta_fwhm, ensure_metafits
 from vcstools.job_submit import submit_slurm
+from vcstools.general_utils import mdir
 
 import logging
 logger = logging.getLogger(__name__)
@@ -382,11 +383,11 @@ def launch_pabeam_sim(obsid, pointing,
     array_phase = get_obs_array_phase(obsid)
     fwhm = calc_ta_fwhm(high_freq / 10e5, array_phase=array_phase) #degrees
     phi_res = theta_res = fwhm / 3
-    if phi_res < 0.01:
+    if phi_res < 0.015:
         # Going any smaller causes memory errors
-        phi_res = theta_res = 0.01
+        phi_res = theta_res = 0.015
     npixels = 360. // phi_res + 90. // theta_res
-    cores_required = npixels * len(sim_freqs) // 800
+    cores_required = npixels * len(sim_freqs) // 600
     nodes_required = cores_required // 24 + 1
 
     # Make directories
