@@ -25,7 +25,7 @@ import numpy as np
 import csv
 
 from vcstools.pointing_utils import sex2deg, format_ra_dec
-import vcstools.sn_flux_utils as sfe
+from vcstools.radiometer_equation import est_pulsar_sn, est_pulsar_flux, multi_psr_snfe
 from vcstools.metadb_utils import get_obs_array_phase, singles_source_search,\
                                   find_obsids_meta_pages, obs_max_min
 from vcstools.catalogue_utils import grab_source_alog
@@ -138,13 +138,13 @@ def write_output_source_files(output_data,
                     output_file.write('{} {:4d} {:1.3f} {:1.3f} {:1.3f}  {:.3}  {:6.2f} {:6.2f}'.\
                             format(obsid, duration, enter, leave, max_power, oap, freq, band))
                     if SN_est:
-                        pulsar_sn, pulsar_sn_err, _, _ = sfe.est_pulsar_sn(source, obsid, beg, end, plot_flux=plot_est)
+                        pulsar_sn, pulsar_sn_err, _, _ = est_pulsar_sn(source, obsid, beg, end, plot_flux=plot_est)
                         if pulsar_sn is None:
                             output_file.write('   None    None')
                         else:
                             output_file.write(' {:9.2f} {:9.2f}'.format(pulsar_sn, pulsar_sn_err))
                     if flux_est:
-                        pulsar_flux, pulsar_flux_err = sfe.est_pulsar_flux(source, obsid, plot_flux=plot_est)
+                        pulsar_flux, pulsar_flux_err = est_pulsar_flux(source, obsid, plot_flux=plot_est)
                         if pulsar_flux is None:
                             output_file.write('   None    None')
                         else:
@@ -174,8 +174,8 @@ def write_output_obs_files(output_data, obsid_meta,
         if SN_est or flux_est:
             beg, end = obs_max_min(obsid)
             psr_list = [el[0] for el in output_data[obsid]]
-            sn_dict = sfe.multi_psr_snfe(psr_list, obsid, beg, end,\
-                                         min_z_power=min_power, plot_flux=plot_est)
+            sn_dict = multi_psr_snfe(psr_list, obsid, beg, end,
+                                     min_z_power=min_power, plot_flux=plot_est)
 
         oap = get_obs_array_phase(obsid)
         out_name = "{0}_{1}_beam.txt".format(obsid, beam)
@@ -402,7 +402,7 @@ if __name__ == "__main__":
     logger.info("Getting observation metadata and calculating the tile beam")
     output_data, obsid_meta = find_sources_in_obs(obsid_list, names_ra_dec,
                                 obs_for_source=args.obs_for_source, dt_input=dt,
-                                beam=args.beam, min_power=args.min_power,
+                                beam=args.beam, min_z_power=args.min_power,
                                 cal_check=args.cal_check, all_volt=args.all_volt,
                                 degrees_check=degrees_check)
 

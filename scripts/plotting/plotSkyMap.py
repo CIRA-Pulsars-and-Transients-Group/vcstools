@@ -220,7 +220,7 @@ def plotSkyMap(obsfile, targetfile, oname, show_psrcat=False, show_mwa_sky=False
         #print "Creating beam patterns..."
         time_intervals = 600 # seconds
 
-        powout = get_beam_power_over_time(beam_meta_data, names_ra_dec, dt=time_intervals, degrees=True)
+        powout = get_beam_power_over_time(names_ra_dec, common_metadata=beam_meta_data, dt=time_intervals, degrees=True)
         z=[] ; x=[] ; y=[]
         for c in range(len(RA)):
             temppower = 0.

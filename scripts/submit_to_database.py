@@ -448,7 +448,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     # Calc SEFD from the T_sys and gain
     if simple_sefd:
         t_sys, _, gain, u_gain = find_t_sys_gain(pulsar, obsid,
-                                                 obs_metadata=metadata,
+                                                 common_metadata=common_metadata,
                                                  beg=beg, end=(t_int + beg - 1))
         sefd = tsys / gain
     else:
