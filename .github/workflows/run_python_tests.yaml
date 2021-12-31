@@ -21,7 +21,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies that require apt
-        run: sudo apt-get install -y python3-mpi4py libopenmpi-dev
+        run: |
+          sudo apt-get update
+          apt-get install -y python3-mpi4py libopenmpi-dev
+          apt-get upgrade python-pip
+         
       - name: Install python dependencies
         run: |
           pip install --upgrade pip
