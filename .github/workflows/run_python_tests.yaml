@@ -28,10 +28,12 @@ jobs:
          
       - name: Install python dependencies
         run: |
-          pip install --upgrade pip
-          pip install --upgrade setuptools
-          pip install --no-cache-dir -i https://test.pypi.org/simple/ --use-deprecated=legacy-resolver mwa-pb==1.5.0
-          pip install .
+          pip -V
+          python -V
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools
+          python -m pip install --no-cache-dir -i https://test.pypi.org/simple/ --use-deprecated=legacy-resolver mwa-pb==1.5.0
+          python -m pip install .
       - name: Test with pytest
         run: |
           python setup.py test
