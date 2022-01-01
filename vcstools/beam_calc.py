@@ -128,7 +128,7 @@ def from_power_to_gain(power, cfreq, n, coh=True):
     """
 
     from astropy.constants import c,k_B
-    from np import sqrt
+    from numpy import sqrt
 
     obswl = c.value/cfreq
     #for coherent

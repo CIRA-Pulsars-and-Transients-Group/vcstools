@@ -8,8 +8,8 @@ from vcstools.metadb_utils import get_common_obs_metadata
 import psrqpy
 
 from vcstools import data_load
-
-import vcstools.sn_flux_utils as snfe
+from vcstools.sn_flux_utils import pulsar_beam_coverage, find_times, find_t_sys_gain, \
+                                   find_pulsar_w50, est_pulsar_flux, est_pulsar_sn
 
 import logging
 logger = logging.getLogger(__name__)
@@ -38,13 +38,13 @@ def test_pulsar_beam_coverage():
     full_md = md_dict[str(obsid)][1]
 
     for beg, end, exp_enter, exp_exit in test_cases:
-        out_enter, out_exit = snfe.pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=md, full_meta=full_md)
+        out_enter, out_exit = pulsar_beam_coverage(obsid, pulsar, beg, end, common_metadata=md, full_meta=full_md)
         assert_almost_equal(exp_enter, out_enter, decimal=4)
         assert_almost_equal(exp_exit, out_exit, decimal=4)
 
     #seperately test the none tests because assert_almost_equal doesn't handle Nones
     for beg, end, exp_enter, exp_exit in test_none_cases:
-        out_enter, out_exit = snfe.pulsar_beam_coverage(obsid, pulsar, beg, end, metadata=md, full_meta=full_md)
+        out_enter, out_exit = pulsar_beam_coverage(obsid, pulsar, beg, end, common_metadata=md, full_meta=full_md)
         if out_enter is not None or out_exit is not None:
             raise AssertionError()
 
@@ -63,7 +63,7 @@ def test_find_times():
     full_md = md_dict[str(obsid)][1]
 
     for beg, end, exp_beg, exp_end, exp_int in test_cases:
-        out_beg, out_end, out_int = snfe.find_times(obsid, pulsar, beg, end, metadata=md, full_meta=full_md)
+        out_beg, out_end, out_int = find_times(obsid, pulsar, beg, end, common_metadata=md, full_meta=full_md)
         assert_almost_equal(exp_beg, out_beg, decimal=4)
         assert_almost_equal(exp_end, out_end, decimal=4)
         assert_almost_equal(exp_int, out_int, decimal=4)
@@ -90,8 +90,8 @@ def test_find_t_sys_gain():
 
     for pulsar, obsid, beg, end, query, metadata, full_meta,\
         exp_t_sys, exp_t_sys_err, exp_gain, exp_gain_err in test_cases:
-        t_sys, t_sys_err, gain, gain_err = snfe.find_t_sys_gain(pulsar, obsid, beg, end,\
-                query=query, obs_metadata=metadata, full_meta=full_meta)
+        t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid, beg, end,\
+                query=query, common_metadata=metadata, full_meta=full_meta)
         assert_almost_equal(exp_t_sys, t_sys, decimal=4)
         assert_almost_equal(exp_t_sys_err, t_sys_err, decimal=4)
         assert_almost_equal(exp_gain, gain, decimal=4)
@@ -106,7 +106,7 @@ def test_find_pulsar_w50():
     test_cases.append(("J1614-2230", 2.3581508027839326e-06, 1.9651256689866104e-06))
 
     for psr, exp_w50, exp_w50_err in test_cases:
-        w50, w50_err = snfe.find_pulsar_w50(psr)
+        w50, w50_err = find_pulsar_w50(psr)
         assert_almost_equal(exp_w50, w50, decimal=4)
         assert_almost_equal(exp_w50_err, w50_err, decimal=4)
 
@@ -118,10 +118,12 @@ def test_est_pulsar_flux():
     print("est_pulsar_flux")
 
     test_cases = []
-    test_cases.append(("J2330-2005", 1226062160, 0.13693009478998122, 0.02425180108093204))
+    # below was true with ATNF catalogue version 1.63
+    #test_cases.append(("J2330-2005", 1226062160, 0.13693009478998122, 0.02425180108093204))
+    test_cases.append(("J2330-2005", 1226062160, 0.009962702746579746, 0.005116883227058447))
 
     for psr, obsid, exp_flux, exp_flux_err in test_cases:
-        flux, flux_err = snfe.est_pulsar_flux(psr, obsid)
+        flux, flux_err = est_pulsar_flux(psr, obsid)
         assert_almost_equal(exp_flux, flux, decimal=4)
         assert_almost_equal(exp_flux_err, flux_err, decimal=4)
 
@@ -146,23 +148,26 @@ def test_est_pulsar_sn():
     obsid=1225713560
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
-    test_cases.append(("J2241-5236", obsid, 1225713567, 1225714167, None, None, md, full_md,\
-                    175.5310369703948, 63.791707034461005, 0.2845788591631629, 0.03456583343266214))
+    # Below is true for ATNF version 1.62
+    #test_cases.append(("J2241-5236", obsid, 1225713567, 1225714167, None, None, md, full_md,
+    #                   175.5310369703948, 63.791707034461005, 0.2845788591631629, 0.03456583343266214))
+    test_cases.append(("J2241-5236", obsid, 1225713567, 1225714167, None, None, md, full_md,
+                       186.12211901780782, 86.67293475725982, 0.30174959768407295, 0.0951990486619534))
     #Has 6 fluxes on database
     obsid=1226062160
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
-    test_cases.append(("J2330-2005", obsid, 1226062167, 1226062767, "23:00:00", "-20:00:00", md, full_md,\
-                    130.65746201950958, 40.836517282777486, 0.13693009479003349, 0.02425180108094393))
+    test_cases.append(("J2330-2005", obsid, 1226062167, 1226062767, "23:00:00", "-20:00:00", md, full_md,
+                       9.50632129444582, 5.461842743279823, 0.009962702746579746, 0.005116883227058447))
     #adding a test that gave a none type error for alpha_bound, c_bound
     obsid=1117643248
     md = md_dict[str(obsid)][0]
     full_md = md_dict[str(obsid)][1]
-    test_cases.append(("J1623-2631", obsid, 1117643268, 1117645615, None, None, md, full_md,\
-                    49.80408018806575, 12.304100665602133, 0.2519753115659939, 0.03880844540477619))
+    test_cases.append(("J1623-2631", obsid, 1117643268, 1117645615, None, None, md, full_md,
+                       61.340272710790124, float("nan"), 0.31034072368052884, float("nan")))
 
     for psr, obsid, beg, end, ra, dec, md, full_md, exp_sn, exp_sn_err, exp_flux, exp_flux_err in test_cases:
-        sn, sn_err, flux, flux_err = snfe.est_pulsar_sn(psr, obsid, beg, end, p_ra=ra, p_dec=dec, obs_metadata=md, full_meta=full_md)
+        sn, sn_err, flux, flux_err = est_pulsar_sn(psr, obsid, beg, end, p_ra=ra, p_dec=dec, common_metadata=md, full_meta=full_md)
         assert_almost_equal(exp_sn, sn, decimal=2)
         assert_almost_equal(exp_sn_err, sn_err, decimal=2)
         assert_almost_equal(exp_flux, flux, decimal=2)

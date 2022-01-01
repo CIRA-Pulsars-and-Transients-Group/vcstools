@@ -809,7 +809,7 @@ def find_t_sys_gain(pulsar, obsid, beg, end, p_ra=None, p_dec=None, enter=None, 
     #get enter time
     if not enter or not t_int:
         logger.debug("Calculating beginning time for pulsar coverage")
-        enter, _, t_int = find_times(obsid, pulsar, beg, end, metadata=common_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+        enter, _, t_int = find_times(obsid, pulsar, beg, end, common_metadata=common_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
 
     start_time =  enter-int(obsid)
 
@@ -907,14 +907,16 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
     df = 30.72e6 #(24*1.28e6)
 
     #estimate flux
-    s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux,\
-                         metadata=common_metadata, query=query)
+    s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux,
+                                         common_metadata=common_metadata, query=query)
     #fluxes may be Nones. If so, return None
     if s_mean is None and s_mean_err is None:
         return None, None, None, None
 
     #find integration time
-    enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end, metadata=common_metadata, full_meta=full_meta, min_z_power=min_z_power, query=query)
+    enter, _, t_int = find_times(obsid, pulsar, beg=beg, end=end,
+                                 common_metadata=common_metadata, full_meta=full_meta,
+                                 min_z_power=min_z_power, query=query)
     if t_int<=0.:
         logger.warning("{} not in beam for obs files or specificed beginning and end times"\
                     .format(pulsar))
@@ -922,7 +924,7 @@ def est_pulsar_sn(pulsar, obsid, beg, end,
 
     #find system temp and gain
     t_sys, t_sys_err, gain, gain_err = find_t_sys_gain(pulsar, obsid, enter=enter, t_int=t_int,
-                                beg=beg, end=end, p_ra=p_ra, p_dec=p_dec, query=query,\
+                                beg=beg, end=end, p_ra=p_ra, p_dec=p_dec, query=query,
                                 common_metadata=common_metadata, full_meta=full_meta, trcvr=trcvr, min_z_power=min_z_power)
 
     #Find W_50
