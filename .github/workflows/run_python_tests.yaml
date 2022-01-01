@@ -28,12 +28,11 @@ jobs:
          
       - name: Install python dependencies
         run: |
-          pip -V
-          python -V
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools
-          python -m pip install --no-cache-dir -i https://test.pypi.org/simple/ --use-deprecated=legacy-resolver mwa-pb==1.5.0
-          python -m pip install .
+          git clone https://github.com/MWATelescope/mwa_pb.git
+          cd mwa_pb
+          python setup.py install
+          cd ..
+          pip install .
       - name: Test with pytest
         run: |
           python setup.py test
