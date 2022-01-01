@@ -31,7 +31,7 @@ jobs:
           pip install cython
           git clone https://github.com/MWATelescope/mwa_pb.git
           cd mwa_pb
-          python setup.py install
+          pip install .
           cd ..
           pip install .
       - name: Test with pytest
