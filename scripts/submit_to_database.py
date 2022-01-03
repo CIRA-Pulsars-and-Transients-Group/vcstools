@@ -38,7 +38,7 @@ from vcstools.config import load_config_file
 from vcstools.job_submit import submit_slurm
 from vcstools.general_utils import mdir, setup_logger
 from vcstools.gfit import gfit
-from vcstools.beam_sim import read_sefd_file
+from vcstools.beam_sim import read_sefd_file, launch_pabeam_sim
 
 
 
