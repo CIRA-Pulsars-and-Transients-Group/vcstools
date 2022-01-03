@@ -15,9 +15,10 @@ from vcstools.beam_calc import get_beam_power_over_time, get_Trec,\
 from vcstools.metadb_utils import get_common_obs_metadata, obs_max_min,\
                                   mwa_alt_az_za
 from vcstools.progress_bar import progress_bar
-from vcstools.pulsar_spectra import flux_from_atnf, plot_flux_estimation,\
-                                    flux_from_plaw, flux_from_spind,\
-                                    find_spind
+from vcstools.pulsar_spectra import flux_from_plaw, flux_from_spind,\
+                                    find_spind, plot_flux_estimation
+
+from pulsar_spectra.catalogues import flux_from_atnf
 
 from mwa_pb import primarybeammap_tant as pbtant
 
@@ -48,13 +49,24 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=
     flux_err : `float`
         The estimated flux's uncertainty in Jy.
     """
-
+    if query is None:
+        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
+    query_id = list(query['PSRJ']).index(pulsar)
     if common_metadata is None:
         logger.debug("Obtaining mean freq from obs metadata")
         common_metadata = get_common_obs_metadata(obsid)
     f_mean = common_metadata[5]*1e6
 
-    freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar, query=query)
+    #freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar, query=query)
+    freq_all, flux_all, flux_err_all, ref_all = flux_from_atnf(pulsar, query=query)
+    # convert to Hz
+    freq_all     = [f*1e6 for f in freq_all]
+    # convert to Jy
+    flux_all     = [f*1e-3 for f in flux_all]
+    flux_err_all = [f*1e-3 for f in flux_err_all]
+
+    spind = query["SPINDX"][query_id]
+    spind_err = query["SPINDX_ERR"][query_id]
 
     logger.debug("Freqs: {0}".format(freq_all))
     logger.debug("Fluxes: {0}".format(flux_all))
@@ -313,10 +325,10 @@ def est_pulsar_sn(pulsar, obsid,
     # other uncertainties are considered negligible
     if query is None:
         query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC).pandas
+    query_id = list(query['PSRJ']).index(pulsar)
 
     if p_ra is None or p_dec is None:
         # Get some basic pulsar and obs info info
-        query_id = list(query['PSRJ']).index(pulsar)
         p_ra = query["RAJ"][query_id]
         p_dec = query["DECJ"][query_id]
 
