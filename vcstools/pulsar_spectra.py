@@ -343,7 +343,7 @@ def flux_from_atnf(pulsar, query=None):
         if not np.isnan(flux):
             #sometimes error values don't exist, causing a key error in pandas
             try:
-                flux_err = query[flux_query+"_ERR"][0]
+                flux_err = query[flux_query+"_ERR"][query_id]
                 if flux_err == 0.0:
                     logger.debug("{0} flux error for query: {1}, is zero. Assuming 20% uncertainty"\
                             .format(pulsar, flux_query))
@@ -363,8 +363,8 @@ def flux_from_atnf(pulsar, query=None):
             flux_err_all.append(flux_err*1e-3) #convert to Jy
 
     #Also get spectral index if it exists
-    spind = query["SPINDX"][0]
-    spind_err = query["SPINDX_ERR"][0]
+    spind = query["SPINDX"][query_id]
+    spind_err = query["SPINDX_ERR"][query_id]
 
     return freq_all, flux_all, flux_err_all, spind, spind_err
 
