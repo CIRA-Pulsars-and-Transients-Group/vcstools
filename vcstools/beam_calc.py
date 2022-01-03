@@ -6,9 +6,7 @@ import os
 import sys
 import numpy as np
 from astropy.table import Table
-
-import logging
-logger = logging.getLogger(__name__)
+import psrqpy
 
 #MWA scripts
 from mwa_pb import primary_beam
@@ -16,13 +14,17 @@ from mwa_pb import config
 
 from vcstools import data_load
 from vcstools.pointing_utils import sex2deg
-from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata, getmeta
+from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata,\
+                                  getmeta, obs_max_min
 
 try:
     import mwa_hyperbeam
 except ImportError:
     logger.warning('Could not import mwa_hyperbeam; using pure Python implementation')
 
+
+import logging
+logger = logging.getLogger(__name__)
 
 def pixel_area(ra_min, ra_max, dec_min, dec_max):
     """Calculate the area of a pixel on the sky from the pixel borders
@@ -475,7 +477,7 @@ def source_beam_coverage_and_times(obsid, pulsar,
         files_beg = obs_beg
     if not files_end:
         files_end = obs_end
-    files_dur = files_end = files_beg + 1
+    files_dur = files_end - files_beg + 1
 
     beam_coverage = source_beam_coverage([obsid], [[pulsar, p_ra, p_dec]],
                             common_metadata_list=[common_metadata],
@@ -483,8 +485,8 @@ def source_beam_coverage_and_times(obsid, pulsar,
     dect_beg_norm, dect_end_norm, _ = beam_coverage[obsid][pulsar]
 
     # GPS times the source enters and exits beam
-    dect_beg = obs_beg + obs_dur * dect_beg_norm - 1
-    dect_end = obs_beg + obs_dur * dect_end_norm  - 1
+    dect_beg = obs_beg + obs_dur * dect_beg_norm
+    dect_end = obs_beg + obs_dur * dect_end_norm
 
     # Normalised time the source enters/exits the beam in the files (used for Presto commands)
     files_beg_norm = (dect_beg - files_beg) / files_dur
