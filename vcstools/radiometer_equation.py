@@ -25,6 +25,254 @@ from mwa_pb import primarybeammap_tant as pbtant
 logger = logging.getLogger(__name__)
 
 
+
+def analyise_and_flux_cal(pulsar, bestprof_data,
+                          flagged_tiles=None,
+                          calid=None,
+                          common_metadata=None,
+                          trcvr=data_load.TRCVR_FILE,
+                          simple_sefd=False, sefd_file=None,
+                          vcstools_version='master',
+                          args=None):
+    """
+    Analyise a pulse profile and calculates its flux density
+
+    Parameters
+    ----------
+    pulsar : `str`
+        The pulsar's Jname
+    bestprof_data: list
+        The output list from the function get_from_bestprof
+
+    Optional parameters:
+    -------------------
+    flagged_tiles : `str`
+        The location of the flagged_tiles.txt file. If it's in the default location you can just supply the calid.
+    calid : `int`
+        The calibration ID of the detection. This is used to find the flagged_tiles.txt file.
+    common_metadata: list
+        The output of mwa_metadb_utils.get_common_obs_metadata(). If not supplied it will be downloaded.
+    trcvr : `str`
+        The file location of antena temperatures.
+    simple_sefd : `boolean`
+        If True perfom just a simple SEFD calculation instead of simulating the phased array beam response over the sky. Default: False.
+    sefd_file : `str`
+        The location of the pabeam.py's simulation of the phased array beam response over the sky output file. If not supplied will launch a pabeam.py simulation.
+    vcstools_version : `str`
+        The version of vcstools to use for the pabeam.py simulation. Default: master.
+    args: Namespace
+        The args from argparse to be used for job resubmission. Default: None.
+
+    Returns
+    -------
+    det_kwargs: dict
+    det_kwargs["flux"]: The mean flux density of the pulsar in mJy
+    det_kwargs["flux_error"]: The flux desnity error in mJy
+    det_kwargs["width"]: The equivalent width of the pulsar in ms
+    det_kwargs["width_error"]: The error of the equivalent width in ms
+    det_kwargs["scattering"]: The scattering width in s
+    det_kwargs["scattering_error"]: The error of the scattering in s
+    """
+    # Load computer dependant config file
+    comp_config = load_config_file()
+
+    #unpack the bestprof_data
+    obsid, prof_psr, _, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
+    period=float(period)
+    num_bins=int(num_bins)
+
+    # Perform metadata calls
+    if common_metadata is None:
+        common_metadata = get_common_obs_metadata(obsid)
+    obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels = common_metadata
+
+    # Find pulsar ra and dec
+    _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])[0]
+
+    # Work out flagged tiles from calbration directory
+    if not flagged_tiles:
+        if calid:
+            flagged_file = os.path.join(comp_config['base_data_dir'], obsid, "cal", calid, "rts", "flagged_tiles.txt")
+            if os.path.exists(flagged_file):
+                with open(flagged_file, "r") as ftf:
+                    flagged_tiles = []
+                    reader = csv.reader(ftf)
+                    for row in reader:
+                        flagged_tiles.append(row)
+                    flagged_tiles = np.array(flagged_tiles).flatten()
+            else:
+                logger.warn("No flagged_tiles.txt file found so assuming no tiles have been flagged")
+                flagged_tiles = []
+        else:
+            logger.warn("No flagged_tiles or calid provided so assuming no tiles have been flagged")
+            flagged_tiles = []
+
+
+    # Calc SEFD from the T_sys and gain
+    if simple_sefd:
+        t_sys, _, gain, u_gain = find_t_sys_gain(pulsar, obsid,
+                                                 common_metadata=common_metadata,
+                                                 beg=beg, end=(t_int + beg - 1))
+        sefd = tsys / gain
+    else:
+        if sefd_file is None:
+            launch_pabeam_sim(obsid, pointing, beg, t_int,
+                              source_name=pulsar,
+                              vcstools_version=vcstools_version,
+                              flagged_tiles=flagged_tiles,
+                              delays=xdelays,
+                              args=args,
+                              common_metadata=common_metadata)
+            sys.exit(0)
+        else:
+            sefd_freq_time, sefd, u_sefd = read_sefd_file(sefd_file)
+
+    #estimate S/N
+    try:
+        g_fitter = gfit(profile)
+        g_fitter.plot_name = f"{obsid}_{pulsar}_{num_bins}_bins_gaussian_fit.png"
+        g_fitter.component_plot_name = f"{obsid}_{pulsar}_{num_bins}_bins_gaussian_components.png"
+        g_fitter.auto_fit()
+        g_fitter.plot_fit()
+        prof_dict = g_fitter.fit_dict
+    except (prof_utils.ProfileLengthError, prof_utils.NoFitError):
+        prof_dict=None
+
+    if not prof_dict:
+        logger.info("Profile couldn't be fit. Using old style of profile analysis")
+        prof_dict = prof_utils.auto_analyse_pulse_prof(profile, period)
+        if prof_dict:
+            sn = prof_dict["sn"]
+            u_sn = prof_dict["sn_e"]
+            w_equiv_bins = prof_dict["w_equiv_bins"]
+            u_w_equiv_bins =  prof_dict["w_equiv_bins_e"]
+            w_equiv_phase = w_equiv_bins / num_bins
+            u_w_equiv_phase =  u_w_equiv_bins / num_bins
+            w_equiv_ms = period/num_bins * w_equiv_bins
+            u_w_equiv_ms = period/num_bins * u_w_equiv_bins
+            scattering = prof_dict["scattering"]*period/num_bins/1000 #convert to seconds
+            u_scattering = prof_dict["scattering_e"]*period/num_bins/1000
+            scattered = prof_dict["scattered"]
+            noise_std = prof_dict["noise_std"]
+            noise_mean = prof_dict["noise_mean"]
+        else:
+            logger.warn("Profile could not be analysed using any methods")
+            sn = None
+            u_sn = None
+            w_equiv_bins = None
+            u_w_equiv_bins =  None
+            w_equiv_ms = None
+            u_w_equiv_ms = None
+            scattering = None
+            u_scattering = None
+            scattered = None
+            S_mean = None
+            u_S_mean = None
+    else:
+        sn = prof_dict["sn"]
+        u_sn = prof_dict["sn_e"]
+        profile = prof_dict["profile"]
+        noise_std = prof_dict["noise_std"]
+        noise_mean = prof_dict["noise_mean"]
+        w_equiv_phase = prof_dict["Weq"]
+        u_w_equiv_phase =  prof_dict["Weq_e"]
+        w_equiv_bins = w_equiv_phase * num_bins
+        u_w_equiv_bins = w_equiv_phase * num_bins
+        w_equiv_ms = period * w_equiv_phase
+        u_w_equiv_ms = period * u_w_equiv_phase
+        scattering = prof_dict["Wscat"]*period/1000 #convert to seconds
+        u_scattering = prof_dict["Wscat_e"]*period/1000
+        scattered = prof_dict["scattered"]
+
+    if prof_dict:
+        logger.info("Profile scattered? {0}".format(scattered))
+        logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
+        #logger.debug("Gain {0} K/Jy".format(gain))
+        logger.debug("Equivalent width in ms: {0}".format(w_equiv_ms))
+        #logger.debug("T_sys: {0} K".format(t_sys))
+        logger.debug("Bandwidth: {0}".format(bandwidth))
+        logger.debug("Detection time: {0}".format(t_int))
+        logger.debug("Number of bins: {0}".format(num_bins))
+
+        if scattered:
+            logger.info("Profile is scattered. Flux cannot be estimated")
+            S_mean = None
+            u_S_mean = None
+        else:
+            # final calc of the mean flux density in mJy
+            #S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(t_int) * bandwidth)) *\
+            #S_mean = sn * sefd / (math.sqrt(2. * float(t_int) * bandwidth)) *\
+            #         math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
+            # constants to make uncertainty calc easier
+            #S_mean_cons = t_sys / ( math.sqrt(2. * float(t_int) * bandwidth)) *\
+            #        math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
+            #u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
+            #                    math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
+            #u_S_mean = math.sqrt( (u_sn / sn)**2 + (u_sefd / sefd)**2 ) * S_mean
+
+            # Renormalise around the noise mean
+            profile = (profile - noise_mean) / max(profile - noise_mean)
+            print(profile)
+            # Normalise to noise std
+            profile = profile / noise_std
+            print(profile)
+            # Put the profile into flux units with sefd
+            flux_profile = profile * sefd / (math.sqrt(2. * float(t_int) * bandwidth))
+            print(flux_profile)
+            # Sum over profile to get flux density (mJy)
+            S_mean = 0
+            for fp in flux_profile:
+                S_mean += fp * (period / 1000 / num_bins)
+            #TODO make this a real calculation
+            u_S_mean = 0.1 * S_mean
+
+
+            logger.info('Smean {0:.3f} +/- {1:.3f} mJy'.format(S_mean, u_S_mean))
+
+    if S_mean is not None:
+        #prevent TypeError caused by trying to format Nones given to fluxes for highly scattered pulsars
+        S_mean = float("{0:.3f}".format(S_mean))
+        u_S_mean = float("{0:.3f}".format(u_S_mean))
+
+        # Plot flux comparisons for ANTF
+        freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar)
+        logger.debug("Freqs: {0}".format(freq_all))
+        logger.debug("Fluxes: {0}".format(flux_all))
+        logger.debug("Flux Errors: {0}".format(flux_err_all))
+        logger.debug("{0} there are {1} flux values available on the ATNF database"\
+                    .format(pulsar, len(flux_all)))
+
+        # Check if there is enough data to estimate the flux
+        if len(flux_all) == 0:
+            logger.debug("{} no flux values on archive. Cannot estimate flux.".format(pulsar))
+        #elif ( len(flux_all) == 1 ) and ( ( not spind ) or ( not spind_err ) ):
+        #    logger.debug("{} has only a single flux value and no spectral index. Cannot estimate flux. Will return Nones".format(pulsar))
+        else:
+            spind, spind_err, K, covar_mat = find_spind(pulsar, freq_all, flux_all, flux_err_all)
+            plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
+                                 my_nu=centrefreq, my_S=S_mean, my_S_e=u_S_mean, obsid=obsid,
+                                 a_err=spind_err,  K=K, covar_mat=covar_mat)
+
+    #format data for uploading
+    if w_equiv_ms:
+        w_equiv_ms = float("{0:.2f}".format(w_equiv_ms))
+    if u_w_equiv_ms:
+        u_w_equiv_ms = float("{0:.2f}".format(u_w_equiv_ms))
+    if scattering:
+        scattering = float("{0:.5f}".format(scattering))
+    if u_scattering:
+        u_scattering = float("{0:.5f}".format(u_scattering))
+
+    det_kwargs = {}
+    det_kwargs["flux"]              = S_mean
+    det_kwargs["flux_error"]        = u_S_mean
+    det_kwargs["width"]             = w_equiv_ms
+    det_kwargs["width_error"]       = u_w_equiv_ms
+    det_kwargs["scattering"]        = scattering
+    det_kwargs["scattering_error"]  = u_scattering
+    return det_kwargs, sn, u_sn
+
+
 def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=None):
     """
     Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency

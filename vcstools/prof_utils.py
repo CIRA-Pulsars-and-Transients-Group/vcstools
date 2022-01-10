@@ -95,7 +95,7 @@ def get_from_bestprof(file_loc,
         dm : `float`
             The dispersion measure of the pulsar.
         period : `float`
-            The period of the pulsar.
+            The period of the pulsar in ms.
         period_uncer : `float`
             The uncertainty in the period measurement.
         obsstart : `int`
