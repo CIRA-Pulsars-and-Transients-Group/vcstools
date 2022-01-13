@@ -282,64 +282,66 @@ def sigmaClip(data, alpha=3., tol=0.1, ntrials=10):
         oldstd = newstd
 
 
-def est_sn_from_prof(prof_data, alpha=3.):
-    """Estimates the signal to noise ratio from a pulse profile.
+def sn_calc(profile, on_pulse_bool, noise_std, w_equiv_bins, sn_method="eqn_7.1"):
+    """Calculates the flux desnity using the siganl to noise (The maximum/peak
+    signal divided by the STD of the noise) and the radiometer equation (see eqn
+    A 1.21 of the pulsar handbook)
 
     Parameters
     ----------
-    prof_data : `str`
-        A list of floats that contains the pulse profile.
-    alpha : `float`, optional
-        The alpha value to be used in :py:meth:`vcstools.prof_utils.sigmaClip`. |br| Default: 3.
+    profile : `list`
+        The normalised profile of the pulsar.
+    on_pulse_bool : `list`
+        A list of booleans that are `True` if the profile is currently on the on
+        pulse and `False` if the porifle is currently on the off pulse.
+    noise_std : `float`
+        The standard deviation of the noise in the normalised profile.
+    w_equiv_bins : `int`
+        The equivalent width (in bins) of a top-hat pulse with the same are and
+        peak height as the observed profile.
+    sn_method : `str`, optional
+        The method of calculating the signal to noise ratio out of ["eqn_7.1", "simple"]. Default "eqn_7.1".
+
+        "Simple" uses 1/noise_std.
+
+        "eqn_7.1" uses equation 7.1 of the pulsar handbook.
 
     Returns
     -------
     sn : `float`
-        The estimated signal to noise ratio.
+        The signal to noise ratio of the profile.
     u_sn : `float`
-        The uncertainty in sn.
-    scattered : `boolean`
-        When `True`, the profile is highly scattered.
+        The uncertainty of the signal to noise ratio.
     """
-    # Check profile is normalised
-    prof_data = prof_data / max(prof_data)
+    proflen = len(profile)
+    n_on_pulse = np.count_nonzero(on_pulse_bool)
+    n_off_pulse = proflen - n_on_pulse
 
-    # centre the profile around the max
-    shift = -int(np.argmax(prof_data))+int(len(prof_data))//2
-    prof_data = np.roll(prof_data, shift)
+    u_noise_std = noise_std / np.sqrt(2 * n_off_pulse -2)
 
-    # find std and check if profile is scattered
-    sigma, flags = sigmaClip(prof_data, tol=0.01, ntrials=100, alpha=alpha)
-    check_clip(flags)
-    bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
-    scattered = False
-    if (np.nanmin(flags) > bot_prof_min) or (not np.isnan(flags).any()):
-        logger.warning(
-            "The profile is highly scattered. S/N estimate cannot be calculated")
-        scattered = True
-        sn = sn_e = None
+    # Estimate SN
+    if sn_method == "eqn_7.1":
+        # Estimate SN using Equation 7.1 in the handbook of pulsar astronomy
+        sn = np.sum(profile) / (noise_std * np.sqrt(w_equiv_bins))
+        # Standard uncertainty propigation
+        # uncertainty of each point in the profile is the noise std
+        u_sum = np.sqrt(proflen * noise_std**2)
+        # assume w_equiv_bins uncertainty is 1 bin
+        u_sn = np.sqrt( (u_sum / np.sum(profile))**2 + (u_noise_std/noise_std)**2 + (1/w_equiv_bins)**2 ) * sn
+    elif sn_method == "simple":
+        sn = 1 / noise_std
+        # Standard uncertainty propigation
+        u_sn = sn**2 * u_noise_std
     else:
-        # prof_e = 500. #this is when it's not normalised
-        prof_e = 0.0005  # this is an approximation
-        non_pulse_bins = 0
-        # work out the above parameters
-        for i, _ in enumerate(prof_data):
-            if not np.isnan(flags[i]):
-                non_pulse_bins += 1
-        sigma_e = sigma / np.sqrt(2 * non_pulse_bins - 2)
-        # now calc S/N
-        sn = max(prof_data)/sigma
-        sn_e = sn * np.sqrt(prof_e/max(prof_data)**2 + (sigma_e/sigma)**2)
-        logger.debug(f"max prof: {max(prof_data)} +/- {prof_e} ")
-        logger.debug(f"sigma   : {sigma} +/- {sigma_e} ")
-        logger.debug(f"sn      : {sn} +/- {sn_e} ")
+        logger.error(f"sn_method {sn_method} not found. Exiting")
+        sys.exit(1)
+    logger.debug(f"sn: {sn} +/- {u_sn}")
 
-    return [sn, sn_e, scattered]
+    return sn, u_sn
 
 
-def analyse_pulse_prof(prof_data, period, alpha=3):
+def analyse_pulse_prof(prof_data, period, alpha=3, scattering_threshold=0.7):
     """Estimates the signal to noise ratio and many other properties from a pulse profile.
-    This is the old version of 'est_sn_from_prof' but is useful when we can't fit gaussians
 
     Parameters
     ----------
@@ -359,8 +361,15 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
             The estimated signal to noise ratio (`float`).
         ``"sn_e"``
             The estimated signal to noise ratio's its uncertainty (`float`).
-        ``"flags"``
-            A list of flagged data points (`list`).
+        ``"profile"``
+            A list containting the noramlised pulse profile (`list`).
+        ``"on_pulse_bool"``
+            A list of booleans that are `True` if the profile is currently on the on
+            pulse and `False` if the porifle is currently on the off pulse (`list`).
+        ``"Weq"``
+            The equivalent width of the profile measured in phase (`float`).
+        ``"Weq_e"``
+            The uncertaintiy in Weq_e (`float`).
         ``"w_equiv_bins"``
             The equivalent width of the profile measured in bins (`float`).
         ``"w_equiv_bins_e"``
@@ -370,81 +379,64 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
         ``"w_equiv_ms_e"``
             The uncertainty in w_equiv_ms (`float`).
         ``"scattering"``
-            The scattering width in ms (`float`).
+            The scattering width in phase (`float`).
         ``"scattering_e"``
-            The uncertainty in the scattering width in ms (`float`).
+            The uncertainty in the scattering width in phase (`float`).
         ``"scattered"``
             When true, the profile is highly scattered (`boolean`).
+        ``"flags"``
+            A list of flagged data points (`list`).
     """
     prof_dict = {}
     nbins = len(prof_data)
-    # centre the profile around the max
+    # centre the profile around the max and normalise
     shift = -int(np.argmax(prof_data))+int(nbins)//2
     prof_data = np.roll(prof_data, shift)
+    prof_data = normamlise_prof(prof_data)
 
     # find sigma and check if profile is scattered
     sigma, flags = sigmaClip(prof_data, alpha=alpha, tol=0.01, ntrials=100)
     check_clip(flags)
 
-    bot_prof_min = (max(prof_data) - min(prof_data)) * .1 + min(prof_data)
-    scattered = False
-    if (np.nanmin(flags) > bot_prof_min) or (not np.isnan(flags).any()):
-        logger.info(
-            "The profile is highly scattered. S/N estimate cannot be calculated")
-        scattered = True
-        # making a new profile with the only bin being the lowest point
-        prof_min_i = np.argmin(prof_data)
-        flags = []
-        for fi, _ in enumerate(prof_data):
-            if fi == prof_min_i:
-                flags.append(prof_data[fi])
-            else:
-                flags.append(np.nan)
+    # Make a boolean list of if the part of the profile is on
+    on_pulse_bool = []
+    for opp in flags:
+        if np.isnan(opp):
+            on_pulse_bool.append(True)
+        else:
+            on_pulse_bool.append(False)
 
-        flags = np.array(flags)
-        prof_data -= min(prof_data)
-        # Assuming width is equal to pulsar period because of the scattering
-        w_equiv_ms = period
-        u_w_equiv_ms = period/nbins
+    pulse_width_bins = sum(on_pulse_bool)
+    non_pulse_bins = pulse_width_bins - nbins
+
+    # Check if scattered and calc SN
+    if pulse_width_bins / nbins > scattering_threshold:
+        logger.info("The profile is highly scattered. S/N estimate cannot be calculated")
+        scattered = True
         sn = None
         u_sn = None
     else:
-        u_prof = 500.  # this is an approximation
-        pulse_width_bins = 0
-        non_pulse_bins = 0
-        p_total = 0.
-        u_p = 0.
-        # work out the above parameters
-        for i, data in enumerate(prof_data):
-            if np.isnan(flags[i]):
-                pulse_width_bins += 1
-                p_total += data
-                u_p = np.sqrt(u_p**2 + u_prof**2)
-            else:
-                non_pulse_bins += 1
-        u_simga = sigma / np.sqrt(2 * non_pulse_bins - 2)
+        scattered = False
+        sn, u_sn = sn_calc(prof_data, on_pulse_bool, pulse_width_bins, sigma)
 
-        # now calc S/N
-        sn = max(prof_data)/sigma
-        u_sn = sn * np.sqrt(u_prof/max(prof_data)**2 + (u_simga/sigma)**2)
+    # Centre profile on noise mean and renormalise
+    prof_data -= np.nanmean(flags)
+    prof_data /= max(prof_data)
 
-    if not scattered:
-        off_pulse_mean = np.nanmean(flags)
-        prof_data -= off_pulse_mean
-        flags -= off_pulse_mean
-
-        prof_max = max(prof_data)
-        w_equiv_bins = p_total / prof_max
-        w_equiv_ms = w_equiv_bins / nbins * period  # in ms
-        u_w_equiv_bins = np.sqrt(p_total / prof_max)**2 +\
-            (p_total * u_prof / (prof_max)**2)**2
-        u_w_equiv_ms = u_w_equiv_bins / nbins * period  # in ms
-
-    else:
-        w_equiv_ms = period
-        u_w_equiv_ms = period/nbins
-        w_equiv_bins = w_equiv_ms/period*nbins
-        u_w_equiv_bins = (u_w_equiv_ms/w_equiv_ms)*w_equiv_bins
+    # Calculate equivelent widths
+    # sum over entire profile to get are under pulse
+    p_total = sum(prof_data)
+    # uncertainty of each point in the profile is the noise std
+    u_p_total = np.sqrt(nbins * sigma**2)
+    # width equivelent is area/height
+    w_equiv_bins = p_total # / 1
+    u_w_equiv_bins = u_p_total
+    # convert to phase
+    w_equiv_phase = w_equiv_bins / nbins
+    u_w_equiv_phase = u_w_equiv_bins / nbins
+    # convert to ms
+    w_equiv_ms = w_equiv_phase * period
+    u_w_equiv_ms = u_w_equiv_phase * period
 
     # calc scattering
     scat_height = max(prof_data) / 2.71828
@@ -452,22 +444,27 @@ def analyse_pulse_prof(prof_data, period, alpha=3):
     for p in prof_data:
         if p > scat_height:
             scat_bins = scat_bins + 1
-    scattering = float(scat_bins + 1) * float(period) / 1000.  # in s
-    u_scattering = 1. * float(period) / \
-        1000.  # assumes the uncertainty is one bin
+    scattering = float(scat_bins + 1)  / nbins
+    # assumes the uncertainty is one bin
+    u_scattering = 1. / nbins
 
     prof_dict["sn"] = sn
     prof_dict["sn_e"] = u_sn
-    prof_dict["flags"] = flags
+    prof_dict["profile"] = prof_data
+    prof_dict["on_pulse_bool"] = on_pulse_bool
+    prof_dict["noise_std"] = sigma
+    prof_dict["noise_mean"] = np.nanmean(flags) / max(prof_data)
+
+    prof_dict["Weq"] = w_equiv_phase
+    prof_dict["Weq_e"] = u_w_equiv_phase
     prof_dict["w_equiv_bins"] = w_equiv_bins
     prof_dict["w_equiv_bins_e"] = u_w_equiv_bins
     prof_dict["w_equiv_ms"] = w_equiv_ms
     prof_dict["w_equiv_ms_e"] = u_w_equiv_ms
-    prof_dict["scattering"] = scattering
-    prof_dict["scattering_e"] = u_scattering
+    prof_dict["Wscat"] = scattering
+    prof_dict["Wscat_e"] = u_scattering
     prof_dict["scattered"] = scattered
-    prof_dict["noise_std"] = sigma
-    prof_dict["noise_mean"] = np.nanmean(flags) / max(prof_data)
+    prof_dict["flags"] = flags
 
     return prof_dict
 
@@ -729,7 +726,7 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
 
     # Profile with spline applied
     splined_profile = spline(x)
-    
+
     # Find which dy roots resemble real signal
     noise_trials = (2.0, 1.5, 1.0, 0.5, 0.25, 0.0)
     for i in noise_trials: # This represents how generous we are with what is real signal
@@ -778,7 +775,7 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
             else:  # Right side
                 underestimate = [round(dy2_roots[i-1]), round(dy2_roots[0])]
         underest_on_pulse.append(underestimate)
-        
+
         # Overestimated on-pulse
         false_max = np.append(false_max, root)
         false_max = sorted(false_max)
@@ -801,7 +798,7 @@ def estimate_components_onpulse(profile, l=1e-5, plot_name=None):
             overest_on_pulse[0][0] = overestimate[0]
         else:
             overest_on_pulse.append(overestimate)
-    
+
     # Remove any duplicate items because somehow this happens sometimes
     overest_on_pulse.sort()
     overest_on_pulse = list(k for k, _ in itertools.groupby(overest_on_pulse))
