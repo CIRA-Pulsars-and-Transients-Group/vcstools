@@ -86,26 +86,26 @@ def get_from_bestprof(file_loc,
 
     Returns
     -------
-    [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num] : `list`
-
-        obsid : `int`
-            The observation ID.
-        pulsar : `str`
-            The name of the pulsar.
-        dm : `float`
-            The dispersion measure of the pulsar.
-        period : `float`
-            The period of the pulsar in ms.
-        period_uncer : `float`
-            The uncertainty in the period measurement.
-        obsstart : `int`
-            The beginning time of the observation.
-        obslength : `float`
-            The length of the observation in seconds.
-        profile: list
-            A list of floats containing the profile data.
-        bin_num : `int`
-            The number of bins in the profile.
+    obsid : `int`
+        The observation ID.
+    pulsar : `str`
+        The name of the pulsar.
+    dm : `float`
+        The dispersion measure of the pulsar.
+    period : `float`
+        The period of the pulsar in ms.
+    period_uncer : `float`
+        The uncertainty in the period measurement.
+    sigma : `float`
+        The sigma (similar to signal to noise ratio).
+    obsstart : `int`
+        The beginning time of the observation.
+    obslength : `float`
+        The length of the observation in seconds.
+    profile: list
+        A list of floats containing the profile data.
+    bin_num : `int`
+        The number of bins in the profile.
     """
     with open(file_loc, "r") as bestprof:
         lines = bestprof.readlines()
@@ -135,6 +135,8 @@ def get_from_bestprof(file_loc,
         period = lines[15][22:-1]
         period, period_uncer = period.split('  +/- ')
 
+        sigma = float(lines[13].split("~")[-1].split(" sigma")[0])
+
         mjdstart = Time(float(lines[3][22:-1]), format='mjd', scale='utc')
         # Convert to gps time
         obsstart = int(mjdstart.gps)
@@ -154,7 +156,7 @@ def get_from_bestprof(file_loc,
         for p, _ in enumerate(orig_profile):
             profile[p] = orig_profile[p] - min_prof
 
-    return [obsid, pulsar, dm, period, period_uncer, obsstart, obslength, profile, bin_num, pointing]
+    return [obsid, pulsar, dm, period, period_uncer, sigma, obsstart, obslength, profile, bin_num, pointing]
 
 
 def get_from_ascii(file_loc):
