@@ -16,7 +16,6 @@ import argparse
 import subprocess
 import sys
 from shutil import copyfile as cp
-import math
 import glob
 import textwrap as _textwrap
 import numpy as np
@@ -34,11 +33,9 @@ from vcstools import data_load
 from vcstools.metadb_utils import get_common_obs_metadata, get_ambient_temperature, get_obs_array_phase, calc_ta_fwhm, ensure_metafits
 from vcstools.catalogue_utils import get_psrcat_ra_dec, get_psrcat_dm_period
 from vcstools import prof_utils
-from vcstools.config import load_config_file
 from vcstools.job_submit import submit_slurm
 from vcstools.general_utils import mdir, setup_logger
-from vcstools.gfit import gfit
-from vcstools.beam_sim import read_sefd_file, launch_pabeam_sim
+from vcstools.radiometer_equation import analyise_and_flux_cal
 
 
 
@@ -189,7 +186,7 @@ def get_filetypes_from_db(obsid, pulsar, filetype):
 
     return myfiles
 
-def upload_cal_files(obsid, cal_id, cal_dir_to_tar, srclist, caltype=2):
+def upload_cal_files(obsid, calid, cal_dir_to_tar, srclist, caltype=2):
     """
     Uploads the calibrator solutions to the MWA pulsar database
 
@@ -197,7 +194,7 @@ def upload_cal_files(obsid, cal_id, cal_dir_to_tar, srclist, caltype=2):
     ----------
     obsid : `int`
         The observation ID
-    cal_id : `int`
+    calid : `int`
         The calibrator ID
     cal_dir_to_tar : `str`
         The location of the calibrator RTS directory
@@ -207,21 +204,21 @@ def upload_cal_files(obsid, cal_id, cal_dir_to_tar, srclist, caltype=2):
         The type of calibrator. Default: 2
     """
     auth, web_address = get_db_auth_addr()
-    client_files_dict = client.calibration_file_by_observation_id(web_address, auth, obsid=cal_id)
+    client_files_dict = client.calibration_file_by_observation_id(web_address, auth, obsid=calid)
     if client_files_dict:
         logger.info("This calibrator already has solutions on the database. Not uploading")
     else:
-        zip_loc = zip_calibration_files(cal_dir_to_tar, cal_id, srclist)
+        zip_loc = zip_calibration_files(cal_dir_to_tar, calid, srclist)
 
         # Check if calibrator has to be made
         cal_list = client.calibrator_list(web_address, auth)
-        if not cal_id in [c['observationid'] for c in cal_list]:
-            client.calibrator_create(web_address, auth, observationid=str(cal_id))
+        if not calid in [c['observationid'] for c in cal_list]:
+            client.calibrator_create(web_address, auth, observationid=str(calid))
 
         # Upload Calibration file
         try:
-            client.calibrator_file_upload(web_address, auth, observationid=str(cal_id), filepath=str(zip_loc), caltype=2)
-            logger.info("Uploaded calibrator solutions from {} to the database".format(cal_id))
+            client.calibrator_file_upload(web_address, auth, observationid=str(calid), filepath=str(zip_loc), caltype=2)
+            logger.info("Uploaded calibrator solutions from {} to the database".format(calid))
         except:
             logger.warn("Failed to upload calibration files")
         os.remove(zip_loc)
@@ -363,19 +360,19 @@ Test set:
 Run these from the vcstools/database directory
 
 Scattered detection (crab):
-python submit_to_database.py -o 1127939368 --cal_id 1127939368 -p J0534+2200 --bestprof tests/test_files/1127939368_J05342200.bestprof -L DEBUG
+python submit_to_database.py -o 1127939368 --calid 1127939368 -p J0534+2200 --bestprof tests/test_files/1127939368_J05342200.bestprof -L DEBUG
 Expected flux: 7500
 
 Weak detection (it's a 10 min detection):
-python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J0034-0721 --bestprof ../tests/test_files/1222697776_PSR_J0034-0721.pfd.bestprof
+python submit_to_database.py -o 1222697776 --calid 1222695592 -p J0034-0721 --bestprof ../tests/test_files/1222697776_PSR_J0034-0721.pfd.bestprof
 Expected flux: 640
 
 Medium detection:
-python submit_to_database.py -o 1222697776 --cal_id 1222695592 -p J2330-2005 --bestprof tests/test_files/1222697776_PSR_J2330-2005.pfd.bestprof
+python submit_to_database.py -o 1222697776 --calid 1222695592 -p J2330-2005 --bestprof tests/test_files/1222697776_PSR_J2330-2005.pfd.bestprof
 Expected flux: ~180
 
 Strong detection:
-python submit_to_database.py -o 1226062160 --cal_id 1226054696 -p J2330-2005 --bestprof tests/test_files/1226062160_J2330-2005.bestprof -L DEBUG
+python submit_to_database.py -o 1226062160 --calid 1226054696 -p J2330-2005 --bestprof tests/test_files/1226062160_J2330-2005.bestprof -L DEBUG
 S/N: 51.51 +/- 1.16
 Flux: 156.04 +/- 34.13 mJy
 """
@@ -400,7 +397,7 @@ if __name__ == "__main__":
     """))
     parser.add_argument('-o', '--obsid', type=str,
             help='The observation ID (eg. 1221399680).')
-    parser.add_argument('-O', '--cal_id', type=str,
+    parser.add_argument('-O', '--calid', type=str,
             help='The observation ID of the calibrator.')
     parser.add_argument('-p','--pulsar', type=str,
             help='The pulsar J name.')
@@ -504,7 +501,7 @@ if __name__ == "__main__":
     if args.bestprof or args.ascii:
         logger.info("Performing profile analaysis and flux density calculation")
         det_kwargs, sn, u_sn = analyise_and_flux_cal(args.pulsar,
-                bestprof_data, args.cal_id,
+                bestprof_data, args.calid,
                 common_metadata=common_metadata,
                 trcvr=args.trcvr,
                 simple_sefd=args.simple_sefd, sefd_file=args.sefd_file,
@@ -523,7 +520,7 @@ if __name__ == "__main__":
 
     if args.dont_upload:
         # Just output a results file instead of uploading to database
-        file_name = "{}_{}_{}_flux_results.csv".format(args.pulsar, args.obsid, args.cal_id)
+        file_name = "{}_{}_{}_flux_results.csv".format(args.pulsar, args.obsid, args.calid)
         w = csv.writer(open(file_name, "w"))
         # loop over dictionary keys and values
         for key, val in det_kwargs.items():
@@ -548,8 +545,8 @@ if __name__ == "__main__":
         cal_db_id = None
     else:
         coh = True
-        if not args.cal_id:
-            logger.error("Please include --cal_id for coherent observations")
+        if not args.calid:
+            logger.error("Please include --calid for coherent observations")
             sys.exit(1)
         if args.andre:
             calibrator_type = 1
@@ -560,12 +557,12 @@ if __name__ == "__main__":
         cal_list = client.calibrator_list(web_address, auth)
         cal_already_created = False
         for c in cal_list:
-            if ( c[u'observationid'] == int(args.cal_id) ) and ( c[u'caltype'] == calibrator_type ):
+            if ( c[u'observationid'] == int(args.calid) ) and ( c[u'caltype'] == calibrator_type ):
                 cal_already_created = True
                 cal_db_id = c[u'id']
         if not cal_already_created:
             cal_db_id = client.calibrator_create(web_address, auth,
-                                                 observationid = str(args.cal_id),
+                                                 observationid = str(args.calid),
                                                  caltype = calibrator_type)[u'id']
     det_kwargs["coherent"] = coh
     det_kwargs["calibrator"] = cal_db_id
@@ -586,7 +583,7 @@ if __name__ == "__main__":
        args.ppps or args.ippd or args.waterfall:
         # Create filname prefix
         bins = bestprof_data[8]
-        fname_pref = filename_prefix(args.obsid, args.pulsar, bins=bins, cal=args.cal_id)
+        fname_pref = filename_prefix(args.obsid, args.pulsar, bins=bins, cal=args.calid)
         upfiles_dict={"1":[], "2":[], "3":[], "4":[], "5":[]}
         remove_list=[]
 
@@ -633,15 +630,15 @@ if __name__ == "__main__":
             logger.error("You must use --srclist to define the srclist file location. Exiting")
             sys.exit(0)
         # Zip up the calibration files and return the directory of the zipped file
-        args.calibration = zip_calibration_files(args.cal_dir_to_tar, args.cal_id, args.srclist)
+        args.calibration = zip_calibration_files(args.cal_dir_to_tar, args.calid, args.srclist)
     if args.calibration:
         logger.info("Uploading calibration solution to database")
         if args.andre:
-            cp(str(args.calibration),str(args.cal_id) + "_andre_calibrator.bin")
-            cal_file_loc = str(args.cal_id) + "_andre_calibrator.bin"
+            cp(str(args.calibration),str(args.calid) + "_andre_calibrator.bin")
+            cal_file_loc = str(args.calid) + "_andre_calibrator.bin"
         else:
-            cp(str(args.calibration),str(args.cal_id) + "_rts_calibrator.tar")
-            cal_file_loc = str(args.cal_id) + "_rts_calibrator.tar"
+            cp(str(args.calibration),str(args.calid) + "_rts_calibrator.tar")
+            cal_file_loc = str(args.calid) + "_rts_calibrator.tar"
 
-        upload_cal_files(str(args.obsid), str(args.cal_id), cal_file_loc, args.srclist, caltype=calibrator_type)
+        upload_cal_files(str(args.obsid), str(args.calid), cal_file_loc, args.srclist, caltype=calibrator_type)
         os.remove(cal_file_loc)
