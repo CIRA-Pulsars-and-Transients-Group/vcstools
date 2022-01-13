@@ -29,10 +29,6 @@ jobs:
           cd mwa_pb
           pip install .
           cd ..
-          git clone https://github.com/NickSwainston/pulsar_spectra.git
-          cd pulsar_spectra
-          pip install .
-          cd ..
           pip install .
       - name: Test with pytest
         run: |
