@@ -4,6 +4,7 @@ import logging
 from astropy.time import Time
 from time import strptime, strftime
 from astropy.utils import iers
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def is_number(s):
 def gps_to_utc(gps):
     # GPS time as is done in timeconvert.py
     iers.IERS_A_URL = 'https://datacenter.iers.org/data/9/finals2000A.all'
-    logger.info(iers.IERS_A_URL)
+    #logger.debug(iers.IERS_A_URL)
     utctime = Time(gps, format='gps', scale='utc').fits
     # remove (UTC) that some astropy versions leave on the end
     if utctime.endswith('(UTC)'):
@@ -175,3 +176,27 @@ def setup_logger(logger, log_level=logging.INFO):
             logging.getLogger(imported_module).addHandler(ch)
             logging.getLogger(imported_module).propagate = False
     return logger
+
+def split_remove_remainder(array, nchunks):
+    """Split an array into nchunks and remove any remaining elements.
+
+    Parameters
+    ----------
+    array : np.array, (N)
+        A single dimension array.
+    nchunks :`int`
+        The number of sub arrays to split array into.
+
+    Returns
+    -------
+    array_chunks : `list`
+        A list containing `nhcunks` arrays of equal size.
+    """
+    # Work out size of the sub arrays
+    size = len(array) // nchunks
+    array_chunks = np.split(array, np.arange(size,len(array),size))
+    if len(array) % nchunks != 0:
+        # Remove remainder
+        logger.debug("Removing {} size array from end of array_chunks.".format(len(array_chunks[-1])))
+        array_chunks = array_chunks[:-1]
+    return array_chunks

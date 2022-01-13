@@ -36,8 +36,8 @@ class gfit:
         unsupplied, will not plot. Only applicable if on_pulse_range unsupplied.
         |br| Default: None.
     scattering_threshold : `float`
-        The threshold for which any tau value greater will be deemed scattered. 
-        |br| Default: 40.
+        The threshold for which any tau (scattering pulse width) value greater will be deemed scattered (in phase).
+        |br| Default: 0.7.
     on_pulse_ranges : `list`
         A list of two-lists/tuples that describes the on pulse region in phase.
         e.g. [[0.1, 0.2], [0.6, 0.7]]
@@ -95,7 +95,7 @@ class gfit:
             Whether or not the final profile's tau value is greater than the sattering threshold.
     """
 
-    def __init__(self, raw_profile, max_N=10, plot_name=None, component_plot_name=None, scattering_threshold=40, on_pulse_ranges=None):
+    def __init__(self, raw_profile, max_N=10, plot_name=None, component_plot_name=None, scattering_threshold=0.7, on_pulse_ranges=None):
         # Initialise inputs
         self._raw_profile = raw_profile
         self._max_N = max_N
@@ -144,11 +144,11 @@ class gfit:
 
     @property
     def component_plot_name(self):
-        return self.component_plot_name
+        return self._component_plot_name
 
     @component_plot_name.setter
     def component_plot_name(self, val):
-        self.component_plot_name = val
+        self._component_plot_name = val
 
     @property
     def max_N(self):
@@ -170,8 +170,10 @@ class gfit:
 
         Uses
         """
-        if len(self._raw_profile) < 100:
-            raise ProfileLengthError("Profile must have length > 100")
+        #if len(self._raw_profile) < 100:
+        #    raise ProfileLengthError("Profile must have length > 100")
+        if len(self._raw_profile) < 64:
+            raise ProfileLengthError("Profile must have length > 64")
 
         if self._on_pulse_ranges:  # Use the on-pulse region to get noise estimates
             self._standardise_raw_profile(roll_phase=None)
@@ -224,6 +226,13 @@ class gfit:
         self._on_pulse_prof = filled_profile_region_between_pairs(
             self._std_profile, self._on_pulse_ranges, fill_value=self._noise_mean)
 
+        self._on_pulse_bool = []
+        for opp in self._on_pulse_prof:
+            if opp == self._noise_mean:
+                self._on_pulse_bool.append(True)
+            else:
+                self._on_pulse_bool.append(False)
+
         # Attempt to fit gaussians to the profile
         self._fit_gaussian()  # Initial fit
         self._est_noise_sn()  # Initial Estimate SN estimate from the fit
@@ -231,13 +240,14 @@ class gfit:
         no_scat = True if self._scattered and self._popt[1] <= self._scattering_threshold else False
         # Redo the fit with updated scattering and noise information
         self._fit_gaussian(force_no_scattering=no_scat)
-        # Update scattering information
-        self._scattered = True if self._popt[1] >= self._scattering_threshold else False
 
         # Do all the fancy things with the fit
         self._find_widths()  # Find widths + error
         self._find_minima_maxima_gauss()  # Find turning points
         self._est_noise_sn()  # Estimate SN
+
+        # Update scattering information
+        self._scattered = True if self._Wscat >= self._scattering_threshold else False
 
         # Dump to dictionary
         self._fit_dict = {}
@@ -258,6 +268,7 @@ class gfit:
         self._fit_dict["fit_params"] = self._popt
         self._fit_dict["cov_mat"] = self._pcov
         self._fit_dict["profile"] = self._std_profile
+        self._fit_dict["on_pulse_bool"] = self._on_pulse_bool
         self._fit_dict["fit"] = self._fit_profile
         self._fit_dict["sn"] = self._sn
         self._fit_dict["sn_e"] = self._sn_e
@@ -361,54 +372,6 @@ class gfit:
         plt.savefig(self._plot_name, bbox_inches="tight")
         plt.close()
 
-
-    def _prof_eval_gfit(self):
-        """Fits multiple gaussians to a profile and subsequently finds W10, W50, Weq and maxima"""
-        # Normalize, find the std
-        self._standardise_raw_profile()
-
-        # Fit gaussian
-        fit, chisq, bic, popt, pcov, comp_dict, comp_idx = self._fit_gaussian()
-        fit = np.array(fit)
-        n_rows, _ = np.shape(pcov)
-        num_gauss = n_rows/3
-
-        # Find widths + error
-        W10, W50, Weq, Wscat, W10_e, W50_e, Weq_e, Wscat_e = self._find_widths(popt, pcov)
-
-        # Convert from bins to phase
-        proflen = len(self._std_profile)
-        W10 = W10/proflen
-        W50 = W50/proflen
-        Weq = Weq/proflen
-        Wscat = Wscat/proflen
-        W10_e = W10_e/proflen
-        W50_e = W50_e/proflen
-        Weq_e = Weq_e/proflen
-        Wscat_e = Wscat_e/proflen
-        minima, maxima, minima_e, maxima_e = self._find_minima_maxima_gauss(popt, pcov, len(fit))
-
-        # Check if scattered
-        _, _, scattered = est_sn_from_prof(self._std_profile, self._alpha)
-
-        # Estimate SN
-        sn_simple = 1/self._noise_std
-        sn_simple_e = 1/(self._noise_std * np.sqrt(2 * self._n_off_pulse -2)) #TODO: make this estimate better
-        # Equation 7.1 in the handbook of pulsar astronomy
-        sn = np.sum(self._std_profile) / (self._noise_std * np.sqrt(Weq * proflen))
-        # Equation 7.2 in the handbook of pulsar astronomy. This is probablity of finding a SN by chance
-        #sn_e =  1/2*(1 + erf(sn/np.sqrt(2)))
-        # not sure how to convert this to an uncertainty so using simple uncertainty
-        sn_e = sn_simple_e
-
-        # Dump to dictionary
-        fit_dict = {"W10":W10, "W10_e":W10_e, "W50":W50, "W50_e":W50_e, "Wscat":Wscat, "Wscat_e":Wscat_e, "Weq":Weq, "Weq_e":Weq_e,
-                    "maxima":maxima, "maxima_e":maxima_e, "maxima":maxima, "maxima_e":maxima_e, "redchisq":chisq,
-                    "num_gauss":num_gauss, "bic":bic, "gaussian_params":popt, "cov_mat":pcov, "comp_dict":comp_dict,
-                    "comp_idx":comp_idx, "alpha":self._alpha, "profile":self._std_profile, "fit":fit, "scattered":scattered,
-                    "sn":sn, "sn_e":sn_e, "sn_simple":sn_simple, "sn_simple_e":sn_simple_e}
-
-        return fit_dict
 
     def _standardise_raw_profile(self, roll_phase=0.25):
         """Normalises and rolls the raw profile to 0.25 in phase"""
@@ -688,8 +651,11 @@ class gfit:
             x, self._fit_profile, s=0, k=5).derivative().derivative()
         d2y_profile = d2y_spline(x)
         roots = dy_spline.roots()
-        roots = [round(i) for i in roots]
+        logger.debug(roots)
+        roots = [int(round(i)) for i in roots]
+        logger.debug(roots)
         roots = list(set(roots)) # Remove duplicates
+        logger.debug(roots)
 
         # Find which are max, min, and false
         maxima = []

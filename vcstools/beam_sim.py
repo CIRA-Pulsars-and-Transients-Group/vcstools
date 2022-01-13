@@ -6,12 +6,17 @@ import numpy as np
 import sys
 import os
 from itertools import chain
+import datetime
 
 from astropy.constants import c
 from astropy.io import fits
 
 #from mwapy import ephem_utils,metadata
 from mwa_pb.primarybeammap_tant import get_Haslam, map_sky
+from vcstools.config import load_config_file
+from vcstools.metadb_utils import get_common_obs_metadata, get_obs_array_phase, calc_ta_fwhm, ensure_metafits
+from vcstools.job_submit import submit_slurm
+from vcstools.general_utils import mdir
 
 import logging
 logger = logging.getLogger(__name__)
@@ -288,13 +293,172 @@ def read_sefd_file(sefd_file, all_data=False):
     input_array = np.loadtxt(sefd_file, dtype=float)
     if all_data:
         freq  = input_array[:,0]
-        sefd  = input_array[:,1]
+        time  = input_array[:,1]
+        sefd  = input_array[:,2]
         t_sys = input_array[:,3]
         t_ant = input_array[:,4]
         gain  = input_array[:,5]
         effective_area = input_array[:,6]
-        return freq, sefd, t_sys, t_ant, gain, effective_area
+        beam_solid_angle = input_array[:,7]
+        return freq, time, sefd, t_sys, t_ant, gain, effective_area, beam_solid_angle
     else:
-        sefd  = input_array[:,1]
-        sefd = np.average(sefd)
-        return sefd
+        time  = input_array[:,1]
+        sefd_freq_time  = np.array(input_array[:,2])
+        # Work out the number of time steps
+        ntime = list(time).count(list(time)[0])
+        # Reshape into [freq][time] array
+        sefd_freq_time = sefd_freq_time.reshape((sefd_freq_time.shape[0]//ntime, ntime))
+        sefd_time = np.average(sefd_freq_time, axis=0)
+        # Calc mean and std
+        sefd_mean = np.mean(sefd_time)
+        sefd_std  = np.std(sefd_time)
+        return sefd_freq_time, sefd_mean, sefd_std
+
+
+def launch_pabeam_sim(obsid, pointing,
+                      begin, duration,
+                      source_name="noname",
+                      metafits_file=None,
+                      flagged_tiles=None,
+                      delays=None,
+                      efficiency=1,
+                      vcstools_version='master',
+                      args=None,
+                      common_metadata=None,
+                      output_dir=None):
+    """Submit a job to run the pabeam code to estimate the system equivelent
+    flux density and a dependent job to resume the submit_to_databse.py code if `args` is given.
+
+    Parameters
+    ----------
+    obsid : `int`
+        The MWA observation ID.
+    pointing : `str`
+        The pointing of the simulation in the format HH:MM:SS.SS_DD:MM:SS.SS.
+    begin : `int`
+        The begining of the simulation in GPS time.
+    duration : `int`
+        The duration of the simulation in seconds (used to calculate the end of the simulation).
+    source_name : `str`, optional
+        The name of the source to be used to label output files. |br| Default: "noname".
+    metafits_file : `str`, optional
+        The location of the metafits file. If none given will assume the default location.
+    flagged_tiles : `list`, optional
+        A list of the flagged tiles. If none given will assume no tiles were flagged.
+    efficiency : `float`, optional
+        Frequency and pointing dependent array efficiency. |br| Default: 1.
+    vcstools_version : `str`, optional
+        VCSTools version to load in the job.
+    args : `dict`, optional
+        The argument parse dictionary from submit_to_database.py. 
+        If supplied will launch a dependedn job with submit_to_databse.py to complete the script.
+    common_metadata : `list`, optional
+        The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`.
+    output_dir : `str`
+        The output directory of the simulation results. By default will put it in the VCS directory under <obsid>/sefd_simulations.
+    
+    Examples
+    --------
+    A simple example:
+
+    >>>launch_pabeam_sim(1206977296, "12:49:12_+27:12:00", 1206977300, 600, source_name="SEFD_test", output_dir=".")
+    """
+    # Load computer dependant config file
+    comp_config = load_config_file()
+
+    # Ensure metafits file is there
+    data_dir = "{}{}".format(comp_config['base_data_dir'], obsid)
+    ensure_metafits(data_dir, obsid, "{0}_metafits_ppds.fits".format(obsid))
+
+    # Perform metadata calls
+    if common_metadata is None:
+        common_metadata = get_common_obs_metadata(obsid)
+    # Get frequencies
+    centre_freq = common_metadata[5] * 10e5
+    low_freq  = common_metadata[6][0] * 1.28 * 10e5
+    high_freq = common_metadata[6][-1] * 1.28 * 10e5
+    sim_freqs = [str(low_freq), str(centre_freq), str(high_freq)]
+
+    # Calculate required pixel res and cores/mem
+    array_phase = get_obs_array_phase(obsid)
+    fwhm = calc_ta_fwhm(high_freq / 10e5, array_phase=array_phase) #degrees
+    phi_res = theta_res = fwhm / 3
+    if phi_res < 0.015:
+        # Going any smaller causes memory errors
+        phi_res = theta_res = 0.015
+    npixels = 360. // phi_res + 90. // theta_res
+    cores_required = npixels * len(sim_freqs) // 600
+    nodes_required = cores_required // 24 + 1
+
+    # Make directories
+    batch_dir = "{}/batch".format(data_dir)
+    if output_dir is None:
+        sefd_dir = "{}/sefd_simulations".format(data_dir)
+    else:
+        sefd_dir = output_dir
+    if not os.path.exists(batch_dir):
+        mdir(batch_dir, "Batch", gid=comp_config['gid'])
+    if not os.path.exists(sefd_dir):
+        mdir(sefd_dir, "SEFD", gid=comp_config['gid'])
+
+    # Parse defaults
+    if metafits_file is None:
+        metafits_file  = "{0}{1}/{1}_metafits_ppds.fits".format(comp_config['base_data_dir'], obsid)
+
+    # Get delays if none given
+    if delays is None:
+        delays = get_common_obs_metadata(obsid)[4][0]
+        print(delays)
+        print(' '.join(np.array(delays, dtype=str)))
+
+    # Set up pabeam command
+    command = 'srun --export=all -u -n {} pabeam.py'.format(int(nodes_required*24))
+    command += ' -o {}'.format(obsid)
+    command += ' -b {}'.format(begin)
+    command += ' -d {}'.format(int(duration))
+    command += ' -s {}'.format(int(duration//4-1)) # force 4 time steps to get reasonable std
+    command += ' -e {}'.format(efficiency)
+    command += ' --metafits {}'.format(metafits_file)
+    command += ' -p {}'.format(pointing)
+    command += ' --grid_res {:.3f} {:.3f}'.format(theta_res, phi_res)
+    command += ' --delays {}'.format(' '.join(np.array(delays, dtype=str)))
+    command += ' --out_dir {}'.format(sefd_dir)
+    command += ' --out_name {}'.format(source_name)
+    command += ' --freq {}'.format(" ".join(sim_freqs))
+    if flagged_tiles is not None:
+        logger.debug("flagged_tiles: {}".format(flagged_tiles))
+        command += ' --flagged_tiles {}'.format(' '.join(flagged_tiles))
+
+    # Set up and launch job
+    batch_file_name = 'pabeam_{}_{}_{}'.format(obsid, source_name, pointing)
+    job_id = submit_slurm(batch_file_name, [command],
+                          batch_dir=batch_dir,
+                          slurm_kwargs={"time": datetime.timedelta(seconds=10*60*60),
+                                        "nodes":int(nodes_required)},
+                          module_list=['hyperbeam-python'],
+                          queue='cpuq',
+                          cpu_threads=24,
+                          mem=12288,
+                          vcstools_version=vcstools_version)
+
+    if args:
+        # Set up dependant submit_to_database.py job
+        submit_args = vars(args)
+        # Add sefd_file argument
+        submit_args['sefd_file'] = "{}/{}*stats".format(sefd_dir, source_name)
+        command_str = "submit_to_database.py"
+        for key, val in submit_args.items():
+            if val:
+                if val == True:
+                    command_str += " --{}".format(key)
+                else:
+                    command_str += " --{} {}".format(key, val)
+
+        batch_file_name = 'submit_to_database_{}_{}_{}'.format(obsid, source_name, pointing)
+        job_id_dependant = submit_slurm(batch_file_name, [command_str],
+                                        batch_dir=batch_dir,
+                                        slurm_kwargs={"time": datetime.timedelta(seconds=1*60*60)},
+                                        queue='cpuq',
+                                        vcstools_version=vcstools_version,
+                                        depend=[job_id])
+        return job_id, job_id_dependant

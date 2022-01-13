@@ -42,7 +42,7 @@ if __name__ == '__main__':
     logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.bestprof:
-        _, _, _, _, _, _, _, profile, _, _  = get_from_bestprof(args.bestprof)
+        _, _, _, _, _, _, _, _, profile, _, _  = get_from_bestprof(args.bestprof)
     elif args.ascii:
         profile = get_from_ascii(args.ascii)[0]
     elif args.archive:
