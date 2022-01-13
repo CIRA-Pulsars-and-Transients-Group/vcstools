@@ -9,6 +9,7 @@ import psrqpy
 
 #vcstools
 from vcstools import data_load
+from vcstools.config import load_config_file
 from vcstools.beam_calc import get_beam_power_over_time, get_Trec,\
                                from_power_to_gain, source_beam_coverage,\
                                source_beam_coverage_and_times
@@ -17,6 +18,10 @@ from vcstools.metadb_utils import get_common_obs_metadata, obs_max_min,\
 from vcstools.progress_bar import progress_bar
 from vcstools.pulsar_spectra import flux_from_plaw, flux_from_spind,\
                                     find_spind, plot_flux_estimation
+from vcstools.catalogue_utils import get_psrcat_ra_dec
+from vcstools.gfit import gfit
+from vcstools.beam_sim import read_sefd_file, launch_pabeam_sim
+from vcstools.prof_utils import sn_calc
 
 from pulsar_spectra.catalogues import flux_from_atnf
 
@@ -25,6 +30,104 @@ from mwa_pb import primarybeammap_tant as pbtant
 logger = logging.getLogger(__name__)
 
 
+# The two flux calculation methods
+
+def flux_calc_radiometer_equation(profile, on_pulse_bool,
+                                  noise_std, w_equiv_bins,
+                                  sefd, u_sefd, t_int,
+                                  bandwidth=30.72e6,
+                                  sn_method="eqn_7.1"):
+    """Calculates the flux desnity using the siganl to noise (The maximum/peak
+    signal divided by the STD of the noise) and the radiometer equation (see eqn
+    A 1.21 of the pulsar handbook)
+
+    Parameters
+    ----------
+    profile : `list`
+        The normalised profile of the pulsar.
+    on_pulse_bool : `list`
+        A list of booleans that are `True` if the profile is currently on the on
+        pulse and `False` if the porifle is currently on the off pulse.
+    noise_std : `float`
+        The standard deviation of the noise in the normalised profile.
+    w_equiv_bins : `int`
+        The equivalent width (in bins) of a top-hat pulse with the same are and
+        peak height as the observed profile.
+    sefd : `float`
+        The System Equivalent Flux Density in Jy. Equivilent to system temperature divided by gain.
+    u_sefd : `float`
+        The uncertainty of the sefd.
+    t_int : `float`
+        The total observing time of the detection in seconds.
+    bandwidth : `float`, optional
+        The bandwidth of the observation in Hz. |br| Default: 30.72e6.
+    sn_method : `str`, optional
+        The method of calculating the signal to noise ratio out of ["eqn_7.1", "simple"]. Default "eqn_7.1".
+
+        "Simple" uses 1/noise_std.
+
+        "eqn_7.1" uses equation 7.1 of the pulsar handbook.
+
+    Returns
+    -------
+    S_mean : `float`
+        The mean flux density of the pulsar in mJy.
+    u_S_mean : `float`
+        The mean flux density uncertainty of the pulsar in mJy.
+    """
+    sn, u_sn = sn_calc(profile, on_pulse_bool, noise_std, w_equiv_bins, sn_method=sn_method)
+
+    # Calculate S_mean
+    S_mean = sn * sefd / (np.sqrt(2. * float(t_int) * bandwidth)) *\
+             np.sqrt( w_equiv_bins / (len(profile) - w_equiv_bins)) * 1000.
+    u_S_mean = np.sqrt( (u_sn / sn)**2 + (u_sefd / sefd)**2 ) * S_mean
+    return S_mean, u_S_mean
+
+def flux_calc_flux_profile(profile, noise_std,
+                           sefd, u_sefd, t_int,
+                           bandwidth=30.72e6):
+    """Calculates the flux desnity using the siganl to noise (The maximum/peak
+    signal divided by the STD of the noise) and the radiometer equation (see eqn
+    A 1.21 of the pulsar handbook)
+
+    Parameters
+    ----------
+    profile : `list`
+        The normalised profile of the pulsar.
+    noise_std : `float`
+        The standard deviation of the noise in the normalised profile.
+    sefd : `float`
+        The System Equivalent Flux Density in Jy. Equivilent to system temperature divided by gain.
+    u_sefd : `float`
+        The uncertainty of the sefd.
+    t_int : `float`
+        The total observing time of the detection in seconds.
+    bandwidth : `float`, optional
+        The bandwidth of the observation in Hz. |br| Default: 30.72e6.
+
+    Returns
+    -------
+    S_mean : `float`
+        The mean flux density of the pulsar in mJy.
+    u_S_mean : `float`
+        The mean flux density uncertainty of the pulsar in mJy.
+    """
+    num_bins = len(profile)
+    # Normalise to noise std
+    profile = profile / noise_std
+    # Work out how much observing time each bin represents (in sec)
+    bin_time = t_int / num_bins
+
+    # Put the profile into flux units with sefd
+    flux_profile = profile * sefd / (np.sqrt(2. * bin_time * bandwidth))
+    # Make an array of profile uncertainties. Profile uncertainty is assumed to be the std (1)
+    u_flux_profile = np.sqrt( (1/profile)**2 + (u_sefd/sefd)**2 ) * profile
+
+    # Since we already took time into account we can just average and convert to mJy
+    S_mean = np.mean(flux_profile) * 1000
+    u_S_mean = np.sqrt(np.sum(u_flux_profile**2)) * 1000 /num_bins
+
+    return S_mean, u_S_mean
 
 def analyise_and_flux_cal(pulsar, bestprof_data,
                           flagged_tiles=None,
@@ -33,16 +136,16 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
                           trcvr=data_load.TRCVR_FILE,
                           simple_sefd=False, sefd_file=None,
                           vcstools_version='master',
-                          args=None):
-    """
-    Analyise a pulse profile and calculates its flux density
+                          args=None,
+                          flux_method="flux_profile"):
+    """Analyise a pulse profile and calculates its flux density
 
     Parameters
     ----------
     pulsar : `str`
         The pulsar's Jname
     bestprof_data: list
-        The output list from the function get_from_bestprof
+        The output list from the function :py:meth:`vcstools.prof_utils.get_from_bestprof`
 
     Optional parameters:
     -------------------
@@ -77,7 +180,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     comp_config = load_config_file()
 
     #unpack the bestprof_data
-    obsid, prof_psr, _, period, _, beg, t_int, profile, num_bins, pointing = bestprof_data
+    obsid, prof_psr, _, period, _, sigma, beg, t_int, profile, num_bins, pointing = bestprof_data
     period=float(period)
     num_bins=int(num_bins)
 
@@ -85,6 +188,8 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     if common_metadata is None:
         common_metadata = get_common_obs_metadata(obsid)
     obsid, ra, dec, dura, [xdelays, ydelays], centrefreq, channels = common_metadata
+    # assume full bandwidth of 30.72 MHz
+    bandwidth = 30.72e6
 
     # Find pulsar ra and dec
     _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])[0]
@@ -136,132 +241,91 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
         g_fitter.plot_fit()
         prof_dict = g_fitter.fit_dict
     except (prof_utils.ProfileLengthError, prof_utils.NoFitError):
-        prof_dict=None
-
-    if not prof_dict:
         logger.info("Profile couldn't be fit. Using old style of profile analysis")
         prof_dict = prof_utils.auto_analyse_pulse_prof(profile, period)
-        if prof_dict:
-            sn = prof_dict["sn"]
-            u_sn = prof_dict["sn_e"]
-            w_equiv_bins = prof_dict["w_equiv_bins"]
-            u_w_equiv_bins =  prof_dict["w_equiv_bins_e"]
-            w_equiv_phase = w_equiv_bins / num_bins
-            u_w_equiv_phase =  u_w_equiv_bins / num_bins
-            w_equiv_ms = period/num_bins * w_equiv_bins
-            u_w_equiv_ms = period/num_bins * u_w_equiv_bins
-            scattering = prof_dict["scattering"]*period/num_bins/1000 #convert to seconds
-            u_scattering = prof_dict["scattering_e"]*period/num_bins/1000
-            scattered = prof_dict["scattered"]
-            noise_std = prof_dict["noise_std"]
-            noise_mean = prof_dict["noise_mean"]
-        else:
-            logger.warn("Profile could not be analysed using any methods")
-            sn = None
-            u_sn = None
-            w_equiv_bins = None
-            u_w_equiv_bins =  None
-            w_equiv_ms = None
-            u_w_equiv_ms = None
-            scattering = None
-            u_scattering = None
-            scattered = None
-            S_mean = None
-            u_S_mean = None
-    else:
-        sn = prof_dict["sn"]
-        u_sn = prof_dict["sn_e"]
-        profile = prof_dict["profile"]
-        noise_std = prof_dict["noise_std"]
-        noise_mean = prof_dict["noise_mean"]
-        w_equiv_phase = prof_dict["Weq"]
-        u_w_equiv_phase =  prof_dict["Weq_e"]
-        w_equiv_bins = w_equiv_phase * num_bins
-        u_w_equiv_bins = w_equiv_phase * num_bins
-        w_equiv_ms = period * w_equiv_phase
-        u_w_equiv_ms = period * u_w_equiv_phase
-        scattering = prof_dict["Wscat"]*period/1000 #convert to seconds
-        u_scattering = prof_dict["Wscat_e"]*period/1000
-        scattered = prof_dict["scattered"]
 
-    if prof_dict:
-        logger.info("Profile scattered? {0}".format(scattered))
-        logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
-        #logger.debug("Gain {0} K/Jy".format(gain))
-        logger.debug("Equivalent width in ms: {0}".format(w_equiv_ms))
-        #logger.debug("T_sys: {0} K".format(t_sys))
-        logger.debug("Bandwidth: {0}".format(bandwidth))
-        logger.debug("Detection time: {0}".format(t_int))
-        logger.debug("Number of bins: {0}".format(num_bins))
+    if not prof_dict:
+        logger.warn("Profile could not be analysed using any methods")
+        det_kwargs = {}
+        det_kwargs["flux"]              = None
+        det_kwargs["flux_error"]        = None
+        det_kwargs["width"]             = None
+        det_kwargs["width_error"]       = None
+        det_kwargs["scattering"]        = None
+        det_kwargs["scattering_error"]  = None
+        return det_kwargs, None, None
 
-        if scattered:
-            logger.info("Profile is scattered. Flux cannot be estimated")
-            S_mean = None
-            u_S_mean = None
-        else:
-            # final calc of the mean flux density in mJy
-            #S_mean = sn * t_sys / ( gain * math.sqrt(2. * float(t_int) * bandwidth)) *\
-            #S_mean = sn * sefd / (math.sqrt(2. * float(t_int) * bandwidth)) *\
-            #         math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
-            # constants to make uncertainty calc easier
-            #S_mean_cons = t_sys / ( math.sqrt(2. * float(t_int) * bandwidth)) *\
-            #        math.sqrt( w_equiv_bins / (num_bins - w_equiv_bins)) * 1000.
-            #u_S_mean = math.sqrt( math.pow(S_mean_cons * u_sn / gain , 2)  +\
-            #                    math.pow(sn * S_mean_cons * u_gain / math.pow(gain,2) , 2) )
-            #u_S_mean = math.sqrt( (u_sn / sn)**2 + (u_sefd / sefd)**2 ) * S_mean
+    # Unpack dictionary
+    sn = prof_dict["sn"]
+    u_sn = prof_dict["sn_e"]
+    profile = prof_dict["profile"]
+    on_pulse_bool = prof_dict["on_pulse_bool"]
+    noise_std = prof_dict["noise_std"]
+    noise_mean = prof_dict["noise_mean"]
+    w_equiv_phase = prof_dict["Weq"]
+    u_w_equiv_phase =  prof_dict["Weq_e"]
+    w_equiv_bins = w_equiv_phase * num_bins
+    u_w_equiv_bins = w_equiv_phase * num_bins
+    w_equiv_ms = period * w_equiv_phase
+    u_w_equiv_ms = period * u_w_equiv_phase
+    scattering = prof_dict["Wscat"]*period/1000 #convert to seconds
+    u_scattering = prof_dict["Wscat_e"]*period/1000
+    scattered = prof_dict["scattered"]
 
-            # Renormalise around the noise mean
-            profile = (profile - noise_mean) / max(profile - noise_mean)
-            print(profile)
-            # Normalise to noise std
-            profile = profile / noise_std
-            print(profile)
-            # Put the profile into flux units with sefd
-            flux_profile = profile * sefd / (math.sqrt(2. * float(t_int) * bandwidth))
-            print(flux_profile)
-            # Sum over profile to get flux density (mJy)
-            S_mean = 0
-            for fp in flux_profile:
-                S_mean += fp * (period / 1000 / num_bins)
-            #TODO make this a real calculation
-            u_S_mean = 0.1 * S_mean
+    logger.info("Profile scattered? {0}".format(scattered))
+    logger.info("S/N: {0} +/- {1}".format(sn, u_sn))
+    #logger.debug("Gain {0} K/Jy".format(gain))
+    logger.debug("Equivalent width in ms: {0}".format(w_equiv_ms))
+    #logger.debug("T_sys: {0} K".format(t_sys))
+    logger.debug("Detection time: {0}".format(t_int))
+    logger.debug("Number of bins: {0}".format(num_bins))
 
 
-            logger.info('Smean {0:.3f} +/- {1:.3f} mJy'.format(S_mean, u_S_mean))
+    # Renormalise around the noise mean
+    profile = (profile - noise_mean) / max(profile - noise_mean)
+    logger.debug(list(profile))
+    logger.debug(on_pulse_bool)
+    logger.debug(noise_std, w_equiv_bins, sefd, u_sefd, t_int)
 
-    if S_mean is not None:
-        #prevent TypeError caused by trying to format Nones given to fluxes for highly scattered pulsars
-        S_mean = float("{0:.3f}".format(S_mean))
-        u_S_mean = float("{0:.3f}".format(u_S_mean))
+    # Final calc of the mean flux density in mJy
+    if flux_method == "radiometer":
+        S_mean, u_S_mean = flux_calc_radiometer_equation(profile, on_pulse_bool,
+                            noise_std, w_equiv_bins,
+                            sefd, u_sefd, t_int, bandwidth=bandwidth)
+    elif flux_method == "flux_profile":
+        flux_calc_flux_profile()
 
-        # Plot flux comparisons for ANTF
-        freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar)
-        logger.debug("Freqs: {0}".format(freq_all))
-        logger.debug("Fluxes: {0}".format(flux_all))
-        logger.debug("Flux Errors: {0}".format(flux_err_all))
-        logger.debug("{0} there are {1} flux values available on the ATNF database"\
-                    .format(pulsar, len(flux_all)))
 
-        # Check if there is enough data to estimate the flux
-        if len(flux_all) == 0:
-            logger.debug("{} no flux values on archive. Cannot estimate flux.".format(pulsar))
-        #elif ( len(flux_all) == 1 ) and ( ( not spind ) or ( not spind_err ) ):
-        #    logger.debug("{} has only a single flux value and no spectral index. Cannot estimate flux. Will return Nones".format(pulsar))
-        else:
-            spind, spind_err, K, covar_mat = find_spind(pulsar, freq_all, flux_all, flux_err_all)
-            plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
-                                 my_nu=centrefreq, my_S=S_mean, my_S_e=u_S_mean, obsid=obsid,
-                                 a_err=spind_err,  K=K, covar_mat=covar_mat)
+    logger.info('Smean {0:.3f} +/- {1:.3f} mJy'.format(S_mean, u_S_mean))
+
+    #prevent TypeError caused by trying to format Nones given to fluxes for highly scattered pulsars
+    S_mean = float("{0:.3f}".format(S_mean))
+    u_S_mean = float("{0:.3f}".format(u_S_mean))
+
+    # Plot flux comparisons for ANTF
+    freq_all, flux_all, flux_err_all, _ = flux_from_atnf(pulsar)
+    logger.debug("Freqs: {0}".format(freq_all))
+    logger.debug("Fluxes: {0}".format(flux_all))
+    logger.debug("Flux Errors: {0}".format(flux_err_all))
+    logger.debug("{0} there are {1} flux values available on the ATNF database"\
+                .format(pulsar, len(flux_all)))
+
+    # Check if there is enough data to estimate the flux
+    #if len(flux_all) == 0:
+    #    logger.debug("{} no flux values on archive. Cannot estimate flux.".format(pulsar))
+    #elif ( len(flux_all) == 1 ) and ( ( not spind ) or ( not spind_err ) ):
+    #    logger.debug("{} has only a single flux value and no spectral index. Cannot estimate flux. Will return Nones".format(pulsar))
+    #else:
+    #    spind, spind_err, K, covar_mat = find_spind(pulsar, freq_all, flux_all, flux_err_all)
+    #    plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
+    #                            my_nu=centrefreq, my_S=S_mean, my_S_e=u_S_mean, obsid=obsid,
+    #                            a_err=spind_err,  K=K, covar_mat=covar_mat)
 
     #format data for uploading
-    if w_equiv_ms:
-        w_equiv_ms = float("{0:.2f}".format(w_equiv_ms))
-    if u_w_equiv_ms:
-        u_w_equiv_ms = float("{0:.2f}".format(u_w_equiv_ms))
-    if scattering:
-        scattering = float("{0:.5f}".format(scattering))
-    if u_scattering:
-        u_scattering = float("{0:.5f}".format(u_scattering))
+    w_equiv_ms   = float("{0:.2f}".format(w_equiv_ms))
+    u_w_equiv_ms = float("{0:.2f}".format(u_w_equiv_ms))
+    scattering   = float("{0:.5f}".format(scattering))
+    u_scattering = float("{0:.5f}".format(u_scattering))
 
     det_kwargs = {}
     det_kwargs["flux"]              = S_mean
@@ -274,8 +338,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
 
 
 def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=None):
-    """
-    Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency
+    """Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency
 
     Parameters
     ----------
