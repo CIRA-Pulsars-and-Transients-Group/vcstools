@@ -36,8 +36,8 @@ class gfit:
         unsupplied, will not plot. Only applicable if on_pulse_range unsupplied.
         |br| Default: None.
     scattering_threshold : `float`
-        The threshold for which any tau value greater will be deemed scattered. 
-        |br| Default: 40.
+        The threshold for which any tau (scattering pulse width) value greater will be deemed scattered (in phase).
+        |br| Default: 0.7.
     on_pulse_ranges : `list`
         A list of two-lists/tuples that describes the on pulse region in phase.
         e.g. [[0.1, 0.2], [0.6, 0.7]]
@@ -95,7 +95,7 @@ class gfit:
             Whether or not the final profile's tau value is greater than the sattering threshold.
     """
 
-    def __init__(self, raw_profile, max_N=10, plot_name=None, component_plot_name=None, scattering_threshold=40, on_pulse_ranges=None):
+    def __init__(self, raw_profile, max_N=10, plot_name=None, component_plot_name=None, scattering_threshold=0.7, on_pulse_ranges=None):
         # Initialise inputs
         self._raw_profile = raw_profile
         self._max_N = max_N
@@ -233,13 +233,14 @@ class gfit:
         no_scat = True if self._scattered and self._popt[1] <= self._scattering_threshold else False
         # Redo the fit with updated scattering and noise information
         self._fit_gaussian(force_no_scattering=no_scat)
-        # Update scattering information
-        self._scattered = True if self._popt[1] >= self._scattering_threshold else False
 
         # Do all the fancy things with the fit
         self._find_widths()  # Find widths + error
         self._find_minima_maxima_gauss()  # Find turning points
         self._est_noise_sn()  # Estimate SN
+
+        # Update scattering information
+        self._scattered = True if self._Wscat >= self._scattering_threshold else False
 
         # Dump to dictionary
         self._fit_dict = {}
