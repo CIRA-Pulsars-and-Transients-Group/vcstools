@@ -121,11 +121,11 @@ def flux_calc_flux_profile(profile, noise_std,
     # Put the profile into flux units with sefd
     flux_profile = profile * sefd / (np.sqrt(2. * bin_time * bandwidth))
     # Make an array of profile uncertainties. Profile uncertainty is assumed to be the std (1)
-    u_flux_profile = np.sqrt( (1/profile)**2 + (u_sefd/sefd)**2 ) * profile
+    u_flux_profile = np.sqrt( (1/profile)**2 + (u_sefd/sefd)**2 ) * flux_profile
 
     # Since we already took time into account we can just average and convert to mJy
     S_mean = np.mean(flux_profile) * 1000
-    u_S_mean = np.sqrt(np.sum(u_flux_profile**2)) * 1000 /num_bins
+    u_S_mean = np.sqrt(np.sum(u_flux_profile**2)) * 1000 / num_bins
 
     return S_mean, u_S_mean
 
@@ -137,7 +137,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
                           simple_sefd=False, sefd_file=None,
                           vcstools_version='master',
                           args=None,
-                          flux_method="flux_profile"):
+                          flux_method="radiometer"):
     """Analyise a pulse profile and calculates its flux density
 
     Parameters
@@ -293,7 +293,9 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
                             noise_std, w_equiv_bins,
                             sefd, u_sefd, t_int, bandwidth=bandwidth)
     elif flux_method == "flux_profile":
-        flux_calc_flux_profile()
+        S_mean, u_S_mean = flux_calc_flux_profile(profile,
+                            noise_std,
+                            sefd, u_sefd, t_int, bandwidth=bandwidth)
 
 
     logger.info('Smean {0:.3f} +/- {1:.3f} mJy'.format(S_mean, u_S_mean))
