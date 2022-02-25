@@ -19,6 +19,8 @@ Option are:\n
 \t -b \t gpstime of first tarball\n
 \t -e \t gpstime of last tarball (by default all tarballs in ${workdir} will be untarred.)\n
 \t -k \t if supplied: tarballs will be kept, else deleted after unpacking\n
+\t -d \t if supplied: will output to different directory\n
+\t\t (default: /astro/mwavcs/vcs/\${obsID}/combined)\n
 "
 while getopts ":j:w:b:e:o:k" flag;do
     case $flag in
@@ -44,6 +46,9 @@ while getopts ":j:w:b:e:o:k" flag;do
 	k)
 	    keep=1
 	    ;;
+	d)
+	    outdir=$OPTARG
+	    ;;
     esac
 done
 
@@ -56,6 +61,9 @@ if [[ -z $maxjobs ]];then
 fi
 if [[ -z $workdir ]];then
     workdir=/astro/mwavcs/vcs/${obsid}/combined/
+fi
+if [[ -z $outdir ]];then
+    outdir=/astro/mwavcs/vcs/${obsid}/combined
 fi
 if [ ! -d "${workdir}" ];then
     echo "working directory ${workdir} does not exist."
@@ -102,10 +110,10 @@ for gpstime in $(seq "$start" "$stop");do
 	continue
     fi
     if [[ $keep -eq 0 ]];then
-        (tar xvf "${file}" && rm -rfv "${file}") &
+        (tar xvf "${file}" --directory "${outdir}" && rm -rfv "${file}") &
         pwait $maxjobs
     else
-        tar xvf "$file" &
+        tar xvf "$file" --directory "${outdir}" &
         pwait $maxjobs
     fi
 done
