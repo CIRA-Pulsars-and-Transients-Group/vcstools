@@ -482,6 +482,9 @@ def source_beam_coverage_and_times(obsid, pulsar,
     beam_coverage = source_beam_coverage([obsid], [[pulsar, p_ra, p_dec]],
                             common_metadata_list=[common_metadata],
                             dt_input=dt_input, beam=beam, min_z_power=min_z_power)
+    if pulsar not in beam_coverage[obsid].keys():
+        # Not in beam exiting
+        return None, None, None, None, None, None, None, None, None
     dect_beg_norm, dect_end_norm, _ = beam_coverage[obsid][pulsar]
 
     # GPS times the source enters and exits beam

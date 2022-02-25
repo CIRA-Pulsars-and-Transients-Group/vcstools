@@ -327,7 +327,7 @@ def sn_calc(profile, on_pulse_bool, noise_std, w_equiv_bins, sn_method="eqn_7.1"
         # uncertainty of each point in the profile is the noise std
         u_sum = np.sqrt(proflen * noise_std**2)
         # assume w_equiv_bins uncertainty is 1 bin
-        u_sn = np.sqrt( (u_sum / np.sum(profile))**2 + (u_noise_std/noise_std)**2 + (1/w_equiv_bins)**2 ) * sn
+        u_sn = np.sqrt( (u_sum / np.sum(profile))**2 + (u_noise_std/noise_std)**2 + (1/(2 * np.sqrt(w_equiv_bins)))**2 ) * sn
     elif sn_method == "simple":
         sn = 1 / noise_std
         # Standard uncertainty propigation
@@ -420,8 +420,8 @@ def analyse_pulse_prof(prof_data, period, alpha=3, scattering_threshold=0.7):
         sn, u_sn = sn_calc(prof_data, on_pulse_bool, pulse_width_bins, sigma)
 
     # Centre profile on noise mean and renormalise
-    prof_data -= np.nanmean(flags)
-    prof_data /= max(prof_data)
+    #prof_data -= np.nanmean(flags)
+    #prof_data /= max(prof_data)
 
     # Calculate equivelent widths
     # sum over entire profile to get are under pulse
@@ -453,7 +453,7 @@ def analyse_pulse_prof(prof_data, period, alpha=3, scattering_threshold=0.7):
     prof_dict["profile"] = prof_data
     prof_dict["on_pulse_bool"] = on_pulse_bool
     prof_dict["noise_std"] = sigma
-    prof_dict["noise_mean"] = np.nanmean(flags) / max(prof_data)
+    prof_dict["noise_mean"] = np.nanmean(flags)
 
     prof_dict["Weq"] = w_equiv_phase
     prof_dict["Weq_e"] = u_w_equiv_phase
