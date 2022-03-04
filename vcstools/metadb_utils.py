@@ -22,7 +22,7 @@ def ensure_metafits(data_dir, obsid, metafits_file):
     """
     # TODO: To get the actual ppds file should do this with obsdownload -o <obsID> -m
 
-    if not os.path.exists(metafits_file):
+    if not os.path.exists(os.path.join(data_dir, metafits_file)):
         logger.warning("{0} does not exists".format(metafits_file))
         logger.warning("Will download it from the archive. This can take a "
                       "while so please do not ctrl-C.")
@@ -253,7 +253,7 @@ def get_common_obs_metadata(obsid, return_all=False, full_metadata=None):
         centrefreq : `float`
             The centre observing frequency in MHz.
         channels : `list`
-            The list of observing frequency coarse channel IDs. 
+            The list of observing frequency coarse channel IDs.
     """
     if full_metadata is None:
         logger.info("Obtaining metadata from http://ws.mwatelescope.org/metadata/ for OBS ID: " + str(obsid))
@@ -286,18 +286,18 @@ def getmeta(servicetype='metadata', service='obs', params=None, retries=3, retry
     service : `str`
         The meta data service from (Defaul: obs):
 
-        obs: 
+        obs:
             Returns details about a single observation as explained in
             https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Getobservation/scheduledataforanobservation
 
-        find: 
+        find:
             Search the database for observations that satisfy given criteria as explained in
             https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Findobservations
 
-        con: 
+        con:
             Finds the configuration information for an observation as explained in
             https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Gettelescopeconfigurationforagivenobservation
-        
+
     params : `dict`
         A dictionary of the options to use in the metadata call which is dependent on the `service`. Examples can be found
         https://wiki.mwatelescope.org/display/MP/Web+Services#WebServices-Usingthegetmeta()function
@@ -353,6 +353,7 @@ def getmeta(servicetype='metadata', service='obs', params=None, retries=3, retry
 
 def get_ambient_temperature(obsid, full_metadata=None):
     """Queries the metadata to find the ambient temperature of the MWA tiles in K.
+    If none recorded then assume 22.4 C.
 
     Parameters
     ----------
@@ -377,6 +378,9 @@ def get_ambient_temperature(obsid, full_metadata=None):
     # Remove Nones
     temperature_list = [i for i in temperature_list_raw if i]
     logger.debug("temperature_list: {}".format(temperature_list))
+    if len(temperature_list) == 0:
+        logger.warning("No ambient temperature recorded so assuming the yearly average of 22.4 C.")
+        temperature_list = [22.4]
     return np.mean(temperature_list) + 273.15
 
 

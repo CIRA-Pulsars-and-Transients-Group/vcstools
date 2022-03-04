@@ -28,13 +28,11 @@ logger = logging.getLogger(__name__)
 #MWA software imports
 from mwa_pulsar_client import client
 
-from vcstools.sn_flux_utils import find_t_sys_gain, flux_from_atnf, find_spind, plot_flux_estimation
 from vcstools import data_load
-from vcstools.metadb_utils import get_common_obs_metadata, get_ambient_temperature, get_obs_array_phase, calc_ta_fwhm, ensure_metafits
+from vcstools.metadb_utils import get_common_obs_metadata
 from vcstools.catalogue_utils import get_psrcat_ra_dec, get_psrcat_dm_period
 from vcstools import prof_utils
-from vcstools.job_submit import submit_slurm
-from vcstools.general_utils import mdir, setup_logger
+from vcstools.general_utils import setup_logger
 from vcstools.radiometer_equation import analyise_and_flux_cal
 
 

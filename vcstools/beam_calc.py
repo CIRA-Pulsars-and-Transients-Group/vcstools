@@ -112,7 +112,7 @@ def field_of_view(obsid,
 
 def from_power_to_gain(power, cfreq, n, coh=True):
     """Estimate the gain from the tile beam power.
-    
+
     Parameters
     ----------
     power : `float`
@@ -147,7 +147,7 @@ def from_power_to_gain(power, cfreq, n, coh=True):
 
 def get_Trec(obsfreq, trcvr_file=None):
     """Get receiver temperature from the temperature receiver file.
-    
+
     Parameters
     ----------
     obsfreq : `float`
@@ -263,7 +263,7 @@ def get_beam_power_over_time(names_ra_dec,
     Powers : `numpy.array`, (len(names_ra_dec), ntimes, nfreqs)
         The zenith normalised power for each source over time.
     """
-    if not common_metadata:
+    if common_metadata is None:
         common_metadata = get_common_obs_metadata(obsid)
     obsid, _, _, time, delays, centrefreq, channels = common_metadata
     names_ra_dec = np.array(names_ra_dec)
@@ -482,6 +482,9 @@ def source_beam_coverage_and_times(obsid, pulsar,
     beam_coverage = source_beam_coverage([obsid], [[pulsar, p_ra, p_dec]],
                             common_metadata_list=[common_metadata],
                             dt_input=dt_input, beam=beam, min_z_power=min_z_power)
+    if pulsar not in beam_coverage[obsid].keys():
+        # Not in beam exiting
+        return None, None, None, None, None, None, None, None, None
     dect_beg_norm, dect_end_norm, _ = beam_coverage[obsid][pulsar]
 
     # GPS times the source enters and exits beam
@@ -496,10 +499,11 @@ def source_beam_coverage_and_times(obsid, pulsar,
         logger.debug("source {0} is not in the beam for the files on disk".format(pulsar))
         files_beg_norm = None
         files_end_norm = None
-    if files_beg_norm < 0.:
-        files_beg_norm = 0.
-    if files_end_norm > 1.:
-        files_end_norm = 1.
+    else:
+        if files_beg_norm < 0.:
+            files_beg_norm = 0.
+        if files_end_norm > 1.:
+            files_end_norm = 1.
 
     return dect_beg, dect_end, dect_beg_norm, dect_end_norm, files_beg_norm, files_end_norm, obs_beg, obs_end, obs_dur
 
@@ -533,7 +537,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
     degrees_check : `boolean`, optional
         If true assumes RAJ and DecJ are in degrees. |br| Default: `False`.
     metadata_list : `list`
-        List of the outputs of vcstools.metadb_utils.get_common_obs_metadata. 
+        List of the outputs of vcstools.metadb_utils.get_common_obs_metadata.
         If not provided, will make the metadata calls to find the data. |br| Default: `None`.
 
     Returns

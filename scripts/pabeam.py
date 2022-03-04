@@ -612,10 +612,12 @@ if __name__ == "__main__":
 
         t_rec = []
         for freq in args.freq:
-            t_rec.append(np.mean(get_Trec(freq, trcvr_file=data_load.TRCVR_FILE)))
+            t_rec.append(np.mean(get_Trec(freq/1e6, trcvr_file=data_load.TRCVR_FILE)))
         # TODO once Daniel Ung tells us how to calculate this impliment it
         eta = 0.98 # Radiation Efficiency
         t_0 = get_ambient_temperature(args.obsid) # ambient temperature (K)
+        logger.info("t_0 : {0}".format(t_0))
+        logger.info("trec : {0}".format(t_rec))
         t_sys_freq_time = eta * t_ant_freq_time + ( 1 - eta ) * t_0 + np.array(t_rec).reshape(len(args.freq),1)
         logger.debug("t_sys_freq_time.shape: {}".format(t_sys_freq_time.shape))
         sefd_freq_time = t_sys_freq_time / gain_freq_time

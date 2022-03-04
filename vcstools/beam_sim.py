@@ -311,8 +311,8 @@ def read_sefd_file(sefd_file, all_data=False):
         sefd_time = np.average(sefd_freq_time, axis=0)
         # Calc mean and std
         sefd_mean = np.mean(sefd_time)
-        sefd_std  = np.std(sefd_time)
-        return sefd_freq_time, sefd_mean, sefd_std
+        u_sefd_mean  = np.std(sefd_time) / np.sqrt(len(sefd_time))
+        return sefd_freq_time, sefd_mean, u_sefd_mean
 
 
 def launch_pabeam_sim(obsid, pointing,

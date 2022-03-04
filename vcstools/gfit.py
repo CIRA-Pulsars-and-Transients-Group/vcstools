@@ -32,7 +32,7 @@ class gfit:
         The name of the output plot. Can be set with gfit.plot_name. If unsupplied, will use a generic name.
         |br| Default: None.
     conponent_plot_name : `str`
-        The name of the plot for the component plot that illustrates how profile components are chosen. If 
+        The name of the plot for the component plot that illustrates how profile components are chosen. If
         unsupplied, will not plot. Only applicable if on_pulse_range unsupplied.
         |br| Default: None.
     scattering_threshold : `float`
@@ -229,9 +229,9 @@ class gfit:
         self._on_pulse_bool = []
         for opp in self._on_pulse_prof:
             if opp == self._noise_mean:
-                self._on_pulse_bool.append(True)
-            else:
                 self._on_pulse_bool.append(False)
+            else:
+                self._on_pulse_bool.append(True)
 
         # Attempt to fit gaussians to the profile
         self._fit_gaussian()  # Initial fit
@@ -526,7 +526,7 @@ class gfit:
     def _fit_loop(self, profile, amp_gen, width_gen, loc_gen, components_gen, reduce_chi_threshold=0.05):
         """
         A loop that attempts to fit multiple gaussians, some with exponential tails, to a profile.
-        If scattered=True, 
+        If scattered=True,
         """
         # Initiate x - we will be working in 1D circular coordinates
         x = np.linspace(-np.pi, np.pi,
@@ -816,7 +816,7 @@ class gfit:
     def _multi_gauss_exp_with_base(self, x, base, tau, *params):
         """
         Where x is a sequenetial numpy array of floats from -pi to pi of any length
-        This function will employ a vonmises distribution where kappa is small and 
+        This function will employ a vonmises distribution where kappa is small and
         convolve the first gaussian/vonmises with an exponential tail described by tau.
         base is the baseline noise
         The parameters are passed as a list of len%3 = 0 with values:
