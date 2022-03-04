@@ -16,7 +16,7 @@ import vcstools.metadb_utils as meta
 from vcstools.general_utils import mdir, gps_to_utc, create_link
 from vcstools.pointing_utils import format_ra_dec
 from vcstools.config import load_config_file
-from vcstools.general_utils import sfreq
+from vcstools.general_utils import sfreq, setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +172,8 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
         body.append("{0} {1}".format(voltdownload, voltdownload_command))
         submit_slurm(voltdownload_batch, body, batch_dir=batch_dir,
                         module_list=module_list,
-                        slurm_kwargs={"time": str(volt_secs_to_run),
-                                    "nice" : nice},
+                        slurm_kwargs={"time" : str(volt_secs_to_run),
+                                      "nice" : nice},
                         vcstools_version=vcstools_version,
                         outfile=batch_dir+voltdownload_batch+"_1.out",
                         queue="copyq", export="NONE", mem=5120,
@@ -691,13 +691,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     logger.info("Using vcstools/{0}".format(args.vcstools_version))
     if args.version:

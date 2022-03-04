@@ -80,8 +80,8 @@ OZSTAR_CONFIG = {'base_data_dir' : '/fred/oz125/vcs/',
                  'ssd_dir' : '$JOBFS',
                  'gid' : 10169} # oz125
 
-ARM_CONFIG =   {'base_data_dir' : '/ibo9000/Pulsar/vcs/',
-                'base_product_dir' : '/ibo9000/Pulsar/vcs/',
+ARM_CONFIG =   {'base_data_dir' : '/o9000/Pulsar/vcs/',
+                'base_product_dir' : '/o9000/Pulsar/vcs/',
                 'group_account' : {'cpuq':  '',
                                    'gpuq':  '',
                                    'copyq': '',
@@ -114,6 +114,8 @@ import socket
 import argparse
 import sys
 
+from vcstools.general_utils import setup_logger
+
 logger = logging.getLogger(__name__)
 
 def load_config_file():
@@ -133,7 +135,8 @@ def load_config_file():
         comp_config = ARM_CONFIG
     else:
         logger.error('Unknown computer {}. Exiting'.format(hostname))
-        sys.exit(1)
+        raise Exception
+        #sys.exit(1)
 
     return comp_config
 
@@ -154,6 +157,9 @@ if __name__ == '__main__':
     parser.add_argument("-V", "--version", action='store_true', help="Print version and quit")
     args = parser.parse_args()
 
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
+
     if args.version:
         try:
             import version
@@ -163,16 +169,6 @@ if __name__ == '__main__':
             print("Couldn't import version.py - have you installed vcstools?")
             print("ImportError: {0}".format(ie))
             sys.exit(0)
-
-    # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
-
 
     #print config file
     config = load_config_file()

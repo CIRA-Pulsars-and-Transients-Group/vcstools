@@ -1,6 +1,7 @@
 import os
 import math
 import csv
+import psrqpy
 
 from vcstools import data_load
 from vcstools.pointing_utils import deg2sex
@@ -9,67 +10,131 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_psrcat_ra_dec(pulsar_list=None, max_dm=250., include_dm=False, query=None):
-    """
-    Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
+def get_psrcat_ra_dec(pulsar_list=None, max_dm=5000., include_dm=False, query=None):
+    """Uses PSRCAT to return a list of pulsar names, ras and decs. Not corrected for proper motion.
     Removes pulsars without any RA or DEC recorded
-    If no pulsar_list given then returns all pulsar on the catalogue
-    If include_dm is True then also ouput DM
 
-    get_psrcat_ra_dec(pulsar_list = None)
-    Args:
-        pulsar_list: A space list of pulsar names eg: [J0534+2200, J0538+2817].
-               (default: uses all pulsars)
-    return [[Jname, RAJ, DecJ]]
+    Parameters
+    ----------
+    pulsar_list : `list`, optional
+        List of the pulsar Jnames to search the catalogue for.
+        If no pulsar_list is given then returns all pulsar on the catalogue.
+        |br| Default: None.
+    max_dm : `float`, optional
+        The maximum dispersion measure of pulsars to include in the output.
+        |br| Default: 250.
+    include_dm : `boolean`, optional
+        If True will also return the pulsars' dispersion measure. |br| Default: `False`,
+    query : psrqpy object, optional
+        A previous psrqpy.QueryATNF query. Can be supplied to prevent performing a new query.
+
+    Returns
+    -------
+    pulsar_ra_dec : `list`
+        [[Jname, RAJ, DecJ]]
+
+        Jname : `str`
+            The Jname of the pulsar.
+        RAJ : `str`
+            The Right Acension in the format "HH:MM:SS.SS".
+        DecJ : `str`
+            The Declination in the format "DD:MM:SS.SS".
     """
-    import psrqpy
-
-    #params = ['JNAME', 'RAJ', 'DECJ', 'DM']
     if query is None:
-        query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'DM'], psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
-
+        query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'RAJD', 'DECJD', 'DM'], psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
     pulsar_ra_dec = []
     for i, _ in enumerate(query["PSRJ"]):
         # Only record if under the max_dm
         dm = query["DM"][i]
         if not math.isnan(dm):
+            if math.isnan(query["RAJD"][i]) or math.isnan(query["DECJD"][i]):
+                if query["RAJ"][i] == '' or query["DECJ"][i] == '':
+                    # there is an error error in the database that will skip pulsars with no values
+                    continue
+                # ANTF raj and decj can be glitchy so only use them if the degree values aren't on ATNF
+                raj = query["RAJ"][i]
+                decj = query["DECJ"][i]
+            else:
+                # convert from dec to raj decj
+                raj, decj = deg2sex(query["RAJD"][i], query["DECJD"][i])
+
             if float(dm) < max_dm:
                 if include_dm:
-                    pulsar_ra_dec.append([query["PSRJ"][i], query["RAJ"][i], query["DECJ"][i], dm])
+                    pulsar_ra_dec.append([query["PSRJ"][i], raj, decj, dm])
                 else:
-                    pulsar_ra_dec.append([query["PSRJ"][i], query["RAJ"][i], query["DECJ"][i]])
-
+                    pulsar_ra_dec.append([query["PSRJ"][i], raj, decj])
 
     return pulsar_ra_dec
 
 
-def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., include_dm=False, query=None):
-    """
-    Will search different source catalogues and extract all the source names, RAs, Decs and, if requested, DMs
+def get_psrcat_dm_period(pulsar_list=None, query=None):
+    """Uses PSRCAT to return a list of pulsar names, periods and dispersion measures.
 
     Parameters
     ----------
-    source_type: string
-        The type of source you would like to get the catalogue for.
-        Your choices are: ['Pulsar', 'FRB', 'rFRB', 'POI' 'RRATs', 'Fermi']
-        Default: 'Pulsar'
-    pulsar_list: list
-        List of sources you would like to extract data for.
-        If None is given then it will search for all available sources
-        Default: None
-    max_dm: float
-        If the source_type is 'Pulsar' then you can set a maximum dm and the function will only
-        return pulsars under that value.
-        Default: 1000.
-    include_dm: Bool
-        If True the function will also return the DM if it is available at the end of the list
-        Default: False
+    pulsar_list : `list`, optional
+        List of the pulsar Jnames to search the catalogue for.
+        If no pulsar_list is given then returns all pulsar on the catalogue.
+        |br| Default: `None`.
+    query : psrqpy object, optional
+        A previous psrqpy.QueryATNF query. Can be supplied to prevent performing a new query.
 
     Returns
     -------
-    result: list list
-        A list for each source which contains a [source_name, RA, Dec (, DM)]
-        where RA and Dec are in the format HH:MM:SS
+    pulsar_dm_p: list
+        [[Jname, DM, period]]
+
+        Jname : `str`
+            The Jname of the pulsar.
+        DM : `float`
+            The Dispersion Measure of the pulsar.
+        period : `float`
+            The period of the puslsar in seconds.
+    """
+    if query is None:
+        query = psrqpy.QueryATNF(params = ['PSRJ', 'DM', 'P0'], psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
+
+    pulsar_dm_p = []
+    for i, _ in enumerate(query["PSRJ"]):
+        pulsar_dm_p.append([query["PSRJ"][i], query["DM"][i], query["P0"][i], dm])
+
+    return pulsar_dm_p
+
+
+def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=5000., include_dm=False, query=None):
+    """Will search different source catalogues and extract all the source names, RAs, Decs and, if requested, DMs
+
+    Parameters
+    ----------
+    source_type : `str`
+        The type of source you would like to get the catalogue for.
+        Your choices are: ['Pulsar', 'FRB', 'rFRB', 'POI' 'RRATs', 'Fermi']
+        |br| Default: 'Pulsar'
+    pulsar_list: list
+        List of sources you would like to extract data for.
+        If None is given then it will search for all available sources
+        |br| Default: None
+    max_dm : `float`
+        If the source_type is 'Pulsar' then you can set a maximum dm and the function will only
+        return pulsars under that value.
+        |br| Default: 1000.
+    include_dm: Bool
+        If True the function will also return the DM if it is available at the end of the list
+        |br| Default: False
+
+    Returns
+    -------
+    name_ra_dec : `list`
+        [[name, RAJ, DecJ, (DM)]]
+
+        name : `str`
+            The name of the source.
+        RAJ : `str`
+            The Right Acension in the format "HH:MM:SS.SS".
+        DecJ : `str`
+            The Declination in the format "DD:MM:SS.SS".
+        DM : `float`
+            The Dispersion Measure of the pulsar. Only included if `include_dm` is `True`.
     """
     modes = ['Pulsar', 'FRB', 'rFRB', 'POI', 'RRATs', 'Fermi']
     if source_type not in modes:
@@ -82,10 +147,11 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
         name_ra_dec = get_psrcat_ra_dec(pulsar_list=pulsar_list, max_dm=max_dm, include_dm=include_dm, query=query)
 
     elif source_type == 'FRB':
-        import urllib.request
+        from urllib.request import Request, urlopen
         from io import StringIO
         try:
-            frb_csv = urllib.request.urlopen("https://www.wis-tns.org/search?&include_frb=1&objtype[]=130&num_page=500&format=csv").read().decode('utf-8')
+            req = Request("https://www.wis-tns.org/search?&include_frb=1&objtype[]=130&num_page=500&format=csv", headers={'User-Agent': 'Mozilla/5.0'})
+            frb_csv = urlopen(req).read().decode('utf-8')
         except urllib.error.HTTPError:
             logger.error('frbcat (https://www.wis-tns.org) not available. Returning empty list')
             # putting and FRB at 90 dec which we should never be able to detect
@@ -186,13 +252,28 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=1000., inclu
 def get_rFRB_info(name=None):
     """
     Gets repeating FRB info from the csv file we maintain.
-    Input:
-        name: a list of repeating FRB names to get info for. The default is None
-              which gets all rFRBs in the catalogue.
-    Output:
-        [[name, ra, dec, dm, dm error]]
-        A list of all the FRBs which each have a list contining name, ra, dec,
-        dm and dm error
+
+    Parameters
+    ----------
+    name : `list`, optional
+        A list of repeating FRB names to get info for. The default is `None`
+        which gets all rFRBs in the catalogue.
+
+    Returns
+    -------
+    output : `list`
+        [[name, RAJ, DecJ, dm, dm_error]]
+
+        name : `str`
+            The name of the source.
+        RAJ : `str`
+            The Right Acension in the format "HH:MM:SS.SS".
+        DecJ : `str`
+            The Declination in the format "DD:MM:SS.SS".
+        dm : `float`
+            The Dispersion Measure of the pulsar.
+        dm_error : `float`
+            The uncertainty of the Dispersion Measure of the pulsar.
     """
     output = []
     db = open(data_load.KNOWN_RFRB_CSV, "r")

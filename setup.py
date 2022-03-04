@@ -27,7 +27,7 @@ def get_git_version():
     git_version = check_output('git describe --tags --long --dirty --always'.split()).decode('utf-8').strip()
     return format_version(version=git_version)
 
-def download_ANTF_pulsar_database_file(datadir):
+def download_ANTF_pulsar_database_file(datadir, version="v1.65"):
     # Hard code the path of the ATNF psrcat database file
     ATNF_LOC = os.path.join(datadir, 'psrcat.db')
     # Check if the file exists, if not download the latest zersion
@@ -39,10 +39,10 @@ def download_ANTF_pulsar_database_file(datadir):
         import tarfile
         print("The ANTF psrcat database file does not exist. Downloading it from www.atnf.csiro.au")
         # Download the file
-        psrcat_zip_dir = urllib.request.urlretrieve('https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/psrcat_pkg.tar.gz')[0]
+        psrcat_zip_dir = urllib.request.urlretrieve('https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/psrcat_pkg.{}.tar.gz'.format(version))[0]
         # Unzip it
         with gzip.open(psrcat_zip_dir,  'rb') as f_in:
-            with open('psrcat_pkg.tar', 'wb') as f_out:
+            with open('psrcat_pkg.{}.tar'.format(version), 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
         # Untar the file we require
         psrcat_tar = tarfile.open(psrcat_zip_dir)
@@ -52,23 +52,28 @@ def download_ANTF_pulsar_database_file(datadir):
         member.name = os.path.basename(member.name)
         psrcat_tar.extract(member, path=datadir)
         print("Download complete")
-        os.remove("psrcat_pkg.tar")
+        os.remove('psrcat_pkg.{}.tar'.format(version))
 
 reqs = ['astropy>=3.2.1',
         'argparse>=1.4.0',
         'numpy>=1.13.3',
         'matplotlib>=2.1.0',
         'psrqpy>=1.0.5',
+        'mpi4py',
         #mwa software
         'mwa-voltage',
-        'mwa_pb']
+        'mwa_pb',
+        'mwa-hyperbeam',
+        'pulsar_spectra',
+       ]
 
 # Download the ANTF_pulsar_database_file file if it doesn't exist
 datadir = os.path.join(os.path.dirname(__file__), 'vcstools', 'data')
 download_ANTF_pulsar_database_file(datadir)
 
 
-vcstools_version = get_git_version()
+#vcstools_version = get_git_version()
+vcstools_version = "2.7"
 #make a temporary version file to be installed then delete it
 with open('version.py', 'a') as the_file:
     the_file.write('__version__ = "{}"\n'.format(vcstools_version))
@@ -92,6 +97,7 @@ setup(name="mwa_vcstools",
                'scripts/reorder_chans.py', 'scripts/rts2ao.py', 'scripts/splice_wrapper.py',
                'scripts/cleanup.py', 'scripts/create_ics_psrfits.py', 'scripts/rm_synthesis.py',
                'scripts/zapchan.py', 'scripts/sn_flux_est.py', 'scripts/prof_estimate.py',
+               'scripts/pabeam.py',
                # plotting scripts
                'scripts/plotting/plotPolarTileBeam.py', 'scripts/plotting/plotFlatTileBeam.py',
                'scripts/plotting/plotTiedArrayBeam.py', 'scripts/plotting/plotSkyMap.py',

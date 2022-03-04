@@ -7,6 +7,7 @@ import argparse
 
 from vcstools.prof_utils import get_from_bestprof, get_from_ascii, subprocess_pdv
 from vcstools.gfit import gfit
+from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -37,18 +38,11 @@ if __name__ == '__main__':
     other_inputs.add_argument("-L", "--loglvl", type=str, default="INFO", help="Logger verbostity level")
     args = parser.parse_args()
 
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    log_format = '%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s'
-    formatter = logging.Formatter(log_format)
-    ch.setFormatter(formatter)
-    logging.basicConfig(level=loglevels[args.loglvl], format=log_format, handlers=[ch])
-    logger.addHandler(ch)
-    logger.propagate=True
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.bestprof:
-        _, _, _, _, _, _, _, profile, _  = get_from_bestprof(args.bestprof)
+        _, _, _, _, _, _, _, _, profile, _, _  = get_from_bestprof(args.bestprof)
     elif args.ascii:
         profile = get_from_ascii(args.ascii)[0]
     elif args.archive:

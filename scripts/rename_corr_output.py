@@ -4,6 +4,8 @@ from datetime import datetime
 import argparse
 import os
 
+from vcstools.general_utils import setup_logger
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -61,13 +63,8 @@ def opt_parser():
 if __name__ == '__main__':
     args = opt_parser()
 
-    logger.setLevel(logging.INFO)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.version:
         import sys

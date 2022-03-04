@@ -4,7 +4,7 @@ import argparse
 import sys
 
 from vcstools.sn_flux_utils import est_pulsar_sn, ATNF_spectral_data_plot
-
+from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +53,8 @@ if __name__ == "__main__":
                                                 'ATNF' = Plot the spectral energy distribution for any number of pulsars using data from ATNF.""")
     args = parser.parse_args()
 
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    # set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
+
     kwargs=vars(args)
     snfe_main(kwargs)
