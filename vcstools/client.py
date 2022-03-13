@@ -3,59 +3,164 @@
 import os
 import sys
 import requests
+from requests.exceptions import HTTPError
 import json
 import socket
+from pathlib import Path
+from urllib.parse import urljoin
+import concurrent.futures
+import time
+import numpy as np
 
 from vcstools.pointing_utils import sex2deg
 from vcstools.metadb_utils import getmeta
 
+from pfd_extractor.extract_wrapper import get_common_pfd_data
+
 import logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
-auth=('admin', 'testing123')
-base_url = 'http://localhost:8000'
-urls = {'search_parameters': base_url+'/search_parameters_create/',
-        'ml_parameters': base_url + '/ml_parameters_create/',
-        'ml_candidates': base_url + '/ml_candidates_create/',
-        'candidates': base_url + '/candidates_create/',
-        'ratings': base_url + '/ratings_create/',
-        'beams': base_url + '/beams_create/',
-        'pulsar': base_url + '/pulsar_create/',
-        'supercomputers': base_url + '/supercomputers_create/',
-        'users': base_url + '/users_create/',
-        'observation_setting': base_url + '/observation_setting_create/',
-        'followups': base_url + '/followups_create/',
-        'calibrator': base_url + '/calibrator_create/',
-        'detection': base_url + '/detection_create/',
-        'detection_file':base_url + '/detection_file_create/'}
+TABLE_TO_PATH = {
+    'search_parameters': './search_parameters_create/',
+    'ml_parameters': './ml_parameters_create/',
+    'ml_candidates': './ml_candidates_create/',
+    'candidates': './candidates_create/',
+    'ratings': './ratings_create/',
+    'beams': './beams_create/',
+    'pulsar': './pulsar_create/',
+    'supercomputers': './supercomputers_create/',
+    'users': './users_create/',
+    'observation_setting': './observation_setting_create/',
+    'followups': './followups_create/',
+    'calibrator': './calibrator_create/',
+    'detection': './detection_create/',
+    'detection_file': './detection_file_create/'
+}
+MAX_THREADS = 8
+DEFAULT_TARGET = 'https://apps.datacentral.org.au/smart/'
+TOKEN_ENV_VAR_NAME = "SMART_TOKEN"
+BASE_URL_ENV_VAR_NAME = "SMART_BASE_URL"
 
 
-def upload_wrapper(url, data, files=None):
+class TokenAuth(requests.auth.AuthBase):
+    def __init__(self, token):
+        self.token = token
+
+    def __call__(self, r):
+        r.headers['Authorization'] = "Token {}".format(self.token)
+        return r
+
+
+class RowUploader:
+    def __init__(self, *, session, table, directory, base_url):
+        """
+        parameters:
+        -----------
+        session : `requests.session`
+            A connection session
+        table : str
+            The name of the table that we are uploading to
+        directory : str
+            The base directory that we prepend to all filenames
+        """
+        self.session = session
+        self.table = table
+        self.directory = Path(directory)
+        self.url = urljoin(base_url, TABLE_TO_PATH[table])
+
+    def __call__(self, row):
+        """
+        parameters:
+        -----------
+        row : dict
+            The data that is being uploaded
+        """
+        data = {}
+        for key, val in row.items():
+            if isinstance(val, str):
+                val = val.strip()
+            data[key.lower().strip()] = val
+
+        if self.table == 'candidates':
+            # fidget the data/files to include the files for upload
+            files = {}
+            if 'pfd_path' in data:
+                pfd =  open(self.directory.joinpath(data['pfd_path']), 'rb')
+                files['pfd'] = pfd
+                del data['pfd_path']
+            if 'png_path' in data:
+                png = open(self.directory.joinpath(data['png_path']), 'rb')
+                files['png'] = png
+                del data['png_path']
+            r = self.session.post(self.url, data=data, files=files)
+            if 'pfd' in files:
+                pfd.close()
+            if 'png' in files:
+                png.close()
+        elif self.table == 'calibrator':
+            # fidget the data/files to include the files for upload
+            with open(self.directory.joinpath(data['cal_file']), 'rb') as cal:
+                files = {'cal_file': cal}
+                del data['cal_file']
+                r = self.session.post(self.url, data=data, files=files)
+        elif self.table == 'detection_file':
+            # fidget the data/files to include the files for upload
+            with open(self.directory.joinpath(data['path']), 'rb') as df:
+                files = {'path': df}
+                del data['path']
+                r = self.session.post(self.url, data=data, files=files)
+        else:
+            r = self.session.post(self.url, data=data)
+        logger.debug("Response: %s", r.text)
+        try:
+            r.raise_for_status()
+        except HTTPError:
+            logger.warning(r.text())
+            # wait a few second and try again
+            time.sleep(2)
+            r = self.session.post(self.url, data=data)
+            r.raise_for_status()
+        return "{0} : {1}".format(data, r.status_code)
+
+
+def upload_wrapper(
+        data_list,
+        table,
+        directory='.',
+        base_url=DEFAULT_TARGET,
+        max_threads=MAX_THREADS,
+    ):
     """
     Wrapper for the upload to the MWA pulsar database
 
     Parameters
     ----------
-    url: string
-        Website url for the relivent table
-    data: dict
-        Data dict in the format for the table
-    files: dict
+    data_list : `list` of `dict`
+        A list of each data dict to upload in the format for the table
+    table : `str``
+        Destination table name
+    files : `dict`
         Files dict in the format for files in the table. Default None
     """
+    token = os.environ.get(TOKEN_ENV_VAR_NAME)
+    if token is None:
+        logger.error("Token not found, set {}".format(TOKEN_ENV_VAR_NAME))
+
     # set up a session with the given auth
     session = requests.session()
-    session.auth = auth
+    session.auth = TokenAuth(token)
+    row_uploader = RowUploader(
+        session=session, table=table, directory=directory, base_url=base_url,
+    )
 
-    #logger.debug(data)
-    #print(data)
-    if files is None:
-        r = session.post(url, data=data)
-    else:
-        r = session.post(url, data=data, files=files)
-    if r.status_code > 201:
-        logger.error("Error uploading. Status code: {}".format(r.status_code))
-        #sys.exit(r.status_code)
+    logger.info("Sending rows to {} using {} threads".format(table, max_threads))
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max_threads
+    ) as executor:
+        for result in executor.map(row_uploader, data_list):
+            logger.info(result)
+    logger.info("Completed")
     session.close()
 
 
@@ -74,34 +179,37 @@ def find_supercomputer_id():
         logger.error('Unknown computer {}. Exiting'.format(hostname))
         sys.exit(1)
 
-def upload_beam(name_obs_pos, begin, end,
-                vcstools_version=None, mwa_search_version=None,
-                mwa_search_command=None, supercomputer_id=None):
+
+def upload_beam(
+        pointing_list,
+        obsid,
+        begin,
+        end,
+        vcstools_version=None,
+        mwa_search_version=None,
+        mwa_search_command=None,
+        supercomputer_id=None
+    ):
     """
     Upload the a pointing to the beams table of the MWA pulsar database
 
     Parameters
     ----------
-    name_obs_pos: string
-        String used to sort data in search pipeline in the format name_obsid_raj_decj
-    begin: int
+    pointing_list : `list`
+        A list of pointings in the format "HH:MM:SS.SS_+DD:MM:SS.SS".
+    begin : `int`
         Begin time of the beam in GPS format
-    end: int
+    end : `int`
         End time of the beam in GPS format
-    vcstools_version: string
+    vcstools_version : `str`, optional
         The vcstools version. By default it will use vcstools.version.__version__
-    mwa_search_version: string
+    mwa_search_version : `str`, optional
         The mwa_search version. By default it will use mwa_search.version.__version__
-    mwa_search_command: string
+    mwa_search_command : `str`, optional
         The mwa_search_pipeline.nf command
-    supercompter_id: int
+    supercompter_id : `int`, optional
         The ID of the supercomputer. By default will use the supercomputer you're currently on
     """
-
-    # Get info from input name
-    name, obsid, raj, decj = name_obs_pos.split("_")
-    rad, decd = sex2deg(raj, decj)
-
     # Get versions
     if vcstools_version is None:
         import vcstools.version
@@ -109,23 +217,26 @@ def upload_beam(name_obs_pos, begin, end,
     if mwa_search_version is None:
         import mwa_search.version
         mwa_search_version = mwa_search.version.__version__
-
     if supercomputer_id is None:
         supercomputer_id = find_supercomputer_id()
 
     # Set up data to upload
-    data = {'ra_degrees': rad,
-            'dec_degrees': decd,
-            'begin_gps_seconds': begin,
-            'end_gps_seconds': end,
-            'username': auth[0],
-            'supercomputer_id': supercomputer_id,
-            'vcstools_version': vcstools_version,
-            'mwa_search_version': mwa_search_version,
-            'mwa_search_command': mwa_search_command,
-            'observation_id': obsid}
+    data_list = []
+    for point in pointing_list:
+        raj, decj = point.split("_")
+        rad, decd = sex2deg(raj, decj)
+        data = {'ra_degrees': rad,
+                'dec_degrees': decd,
+                'begin_gps_seconds': begin,
+                'end_gps_seconds': end,
+                'supercomputer_id': supercomputer_id,
+                'vcstools_version': vcstools_version,
+                'mwa_search_version': mwa_search_version,
+                'mwa_search_command': mwa_search_command,
+                'observation_id': obsid}
+        data_list.append(data)
 
-    upload_wrapper(urls['beams'], data)
+    upload_wrapper(data_list, 'beams')
 
 
 def upload_obsid(obsid):
@@ -156,9 +267,9 @@ def upload_obsid(obsid):
                      'gain_control_type', 'gain_control_value', 'dipole_exclusion']
     all_keys = base_keys + metadata_keys + rfstreams_keys
 
-
+    data_list = []
     for obs in obsids:
-        data_dict = {'observation_id':int(obs)}
+        data_dict = {'observation_id':str(obs)}
         data = getmeta(params={'obsid':obs})
         for keys, db in zip((base_keys, metadata_keys, rfstreams_keys),
                             (data, data['metadata'],data['rfstreams']['0'])):
@@ -171,67 +282,129 @@ def upload_obsid(obsid):
                 elif db[key] is not None:
                     # no 'checked_user' keys anywhere
                     data_dict[key] = db[key]
-        upload_wrapper(urls['observation_setting'], data_dict)
+        data_list.append(data_dict)
+
+    upload_wrapper(data_list, 'observation_setting')
 
 
-def upload_cand(beam_id=None,
-                rad=None, decd=None, obsid=None,
-                search_type='Blind', search_params_id=1, png_file=None, pfd_file=None):
+def upload_cand(
+        pfd_file_list,
+        obsid,
+        search_type='Blind',
+        search_params_id=1,
+    ):
     """
     Upload a candidate to the candidates table of the MWA pulsar database
 
     Parameters
     ----------
-    beam_id: int
-        The beam ID of the pointing for the candidate
-
-    rad: float
-        The RA of the candidate/beam in degrees
-    decd: float
-        The Dec of the candidate/beam in degrees
+    pfd_file_list : `list`
+        List of pfd file locations to upload.
     obsid: int
         The observation ID of the candidate/beam
-
-    search_type: string
-        A label of the type of search that produced this candidate. Default Blind
-    search_params_id: int
+    search_type: `string`
+        A label of the type of search that produced this candidate. Default 'Blind'.
+    search_params_id: `int`
         The search params ID. This links to the search_paramaters table which
-        lists the search parameters such as DM range
-    png_file: string
-        Path to the png file of the candidate
-    pfd_file: string
-        Path to the pfd file of the candidate
+        lists the search parameters such as DM range. Default: 1.
     """
-    # Open files
-    files = {'png': None, 'pfd': None}
-    if png_file is not None:
-        png = open(png_file, 'rb')
-        files['png'] = png
-    if pfd_file is not None:
-        pfd = open(pfd_file, 'rb')
-        files['pfd'] = pfd
+    # Get data from pfd
+    pfd_data = get_common_pfd_data(pfd_file_list)
+    data_list = []
+    for pfd_path, common_pfd_data in zip(pfd_file_list, pfd_data):
+        candidate_name, period, dm, sn, raj, decj, begin, end = common_pfd_data
+        rad, decd = sex2deg(raj, decj)
+        data = {
+            'rad': rad,
+            'decd': decd,
+            'obsid': obsid,
+            'pfd_path': pfd_path,
+            'period':period,
+            'dm':dm,
+            'sigma':sn,
+            'search_type': search_type,
+            'search_params_id': search_params_id,
+        }
 
-    if beam_id:
-        # Set up data to upload
-        data = {'search_beam_id': beam_id,
-                'username': auth[0],
-                'search_type': search_type,
-                'search_params_id': search_params_id}
-    else:
-        # No beam_id supplied so input the beam ra, dec and obsid so the database
-        # cand work out the beam_id
-        data = {'rad': rad,
-                'decd': decd,
-                'obsid': obsid,
-                'username': auth[0],
-                'search_type': search_type,
-                'search_params_id': search_params_id}
+        # Check for png file in same location
+        if os.path.isfile(pfd_path+".png"):
+            data['png_path'] = pfd_path+".png"
+        data_list.append(data)
+
+    upload_wrapper(data_list, 'candidates')
 
 
-    upload_wrapper(urls['candidates'], data, files=files)
+def upload_supercomputer(supercomputers, id_list=None):
+    """Upload new supercomputers to the supercomputer table of the MWA pulsar database.
 
-    # Close files
-    if png_file is not None:
-        png.close()
-    if pfd_file is not None:
-        pfd.close()
+    Parameters
+    ----------
+    supercomputers : `list`
+        List of supercomputer strings.
+    """
+    data_list = []
+    for si, sc in enumerate(supercomputers):
+        data = {'Name': sc}
+        if id_list is None:
+            data['id'] = si
+        data_list.append(data)
+
+    upload_wrapper(data_list, 'supercomputers')
+
+
+def upload_defaults():
+    """Upload the defaults to the MWA pulsar database for ml_parameters, supercomputers.
+    """
+    # ml_parameters
+    data_list = [
+                 {'ID':1,
+                  'Name':'LOTAAS_periodic_classifier',
+                  'ML_version':'v1.0',
+                  'Training_set_version':'v1.0',
+                  'Command':'LOTAASClassifier.jar',
+                  'Commnents':"LOTAAS's original version for periodic canidates"},
+                 {'ID':2,
+                  'Name':'LOTAAS_single_pulse_classifier',
+                  'ML_version':'v1.0',
+                  'Training_set_version':'v1.0',
+                  'Command':'single_pulse_searcher.py',
+                  'Commnents':"LOTAAS's original version for single pulse canidates"},
+                ]
+    upload_wrapper(data_list, 'ml_parameters')
+
+    # search_parameters
+    data_list = [{'ID':1,
+                  'DM_min':1,
+                  'DM_max':250,
+                  'DM_min_step':0.01,
+                  'Acceleration_search_max':0.0,
+                  'Accelsearch_sigma_cutoff':10.}]
+    upload_wrapper(data_list, 'search_parameters')
+
+    # supercomputers
+    upload_supercomputer(['Ozstar', 'Garrawarla (Pawsey)', 'SHAO'])
+
+def upload_pulsars():
+    """Upload pulsar parameters using the ATNF pulsar catalogue.
+    """
+    data_list = []
+    import psrqpy
+    query = psrqpy.QueryATNF().pandas
+    for qid in range(len(query["PSRJ"])):
+        RA, Dec = sex2deg(query["RAJ"][qid], query["DECJ"][qid])
+        dm = query["DM"][qid]
+        # Turn dm and period nans into Nones
+        if np.isnan(dm):
+            dm = None
+        period = query["P0"][qid]
+        if np.isnan(period):
+            period = None
+        data_list.append({"id":qid,
+                          "name":query["PSRJ"][qid],
+                          "ra":RA,
+                          "dec":Dec,
+                          "period":period,
+                          "dm":dm,
+                          "new":False,
+                         })
+    upload_wrapper(data_list, 'pulsar')
