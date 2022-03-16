@@ -629,10 +629,11 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         for source_name in np.array(names_ra_dec)[:,0]:
             source_data = []
             for on, obsid in enumerate(obsid_list):
-                if source_name in beam_coverage[obsid].keys:
+                if source_name in beam_coverage[obsid].keys():
                     # Source was in the beam so include it
                     _, _, _, duration, _, centre_freq, channels = common_metadata_list[on]
                     enter_beam_norm, exit_beam_norm, max_power = beam_coverage[obsid][source_name]
+                    bandwidth = 1.28 * (channels[-1] - channels[0] + 1) # MHz
                     source_data.append([obsid, duration,
                                         enter_beam_norm, exit_beam_norm,
                                         max_power, centre_freq, bandwidth])
