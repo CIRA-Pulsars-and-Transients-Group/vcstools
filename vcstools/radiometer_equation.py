@@ -25,7 +25,7 @@ from vcstools.beam_sim import read_sefd_file, launch_pabeam_sim
 from vcstools.prof_utils import sn_calc
 from vcstools import prof_utils
 
-from pulsar_spectra.catalogues import flux_from_atnf
+from pulsar_spectra.catalogue import flux_from_atnf
 
 from mwa_pb import primarybeammap_tant as pbtant
 
