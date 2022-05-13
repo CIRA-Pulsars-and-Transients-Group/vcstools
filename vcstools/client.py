@@ -116,7 +116,7 @@ class RowUploader:
         try:
             r.raise_for_status()
         except HTTPError:
-            logger.warning(r.text())
+            logger.warning(r.text)
             # wait a few second and try again
             time.sleep(2)
             r = self.session.post(self.url, data=data)
