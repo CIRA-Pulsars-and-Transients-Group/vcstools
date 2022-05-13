@@ -5,6 +5,7 @@ import glob
 import concurrent.futures
 import sys
 import numpy as np
+import requests
 
 from vcstools.client import upload_beam, upload_obsid, upload_cand
 from vcstools.progress_bar import progress_bar
@@ -30,7 +31,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print("Uploading obsid")
-    upload_obsid(args.obsid)
+    try:
+        upload_obsid(args.obsid)
+    except requests.exceptions.HTTPError:
+        print("Obsid already uploaded")
 
     if args.file:
         print("Uploading beams")
