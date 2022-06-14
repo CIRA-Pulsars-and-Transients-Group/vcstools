@@ -197,7 +197,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])[0]
 
     # Work out flagged tiles from calbration directory
-    if not flagged_tiles:
+    if flagged_tiles is not None:
         if calid:
             flagged_file = os.path.join(comp_config['base_data_dir'], obsid, "cal", calid, "rts", "flagged_tiles.txt")
             if os.path.exists(flagged_file):
@@ -220,7 +220,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
         t_sys, _, gain, u_gain = find_t_sys_gain(pulsar, obsid,
                                                  common_metadata=common_metadata,
                                                  beg=beg, end=(t_int + beg - 1))
-        sefd = tsys / gain
+        sefd = t_sys / gain
     else:
         if sefd_file is None:
             launch_pabeam_sim(obsid, pointing, beg, t_int,
