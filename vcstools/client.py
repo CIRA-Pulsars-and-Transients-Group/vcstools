@@ -236,7 +236,7 @@ def upload_beam(
                 'observation_id': obsid}
         data_list.append(data)
 
-    upload_wrapper(data_list, 'beams')
+    #upload_wrapper(data_list, 'beams')
 
 
 def upload_obsid(obsid):
@@ -284,7 +284,7 @@ def upload_obsid(obsid):
                     data_dict[key] = db[key]
         data_list.append(data_dict)
 
-    upload_wrapper(data_list, 'observation_setting')
+    #upload_wrapper(data_list, 'observation_setting')
 
 
 def upload_cand(
@@ -309,16 +309,15 @@ def upload_cand(
         lists the search parameters such as DM range. Default: 1.
     """
     # Get data from pfd
-    pfd_data = get_common_pfd_data(pfd_file_list)
     data_list = []
-    for pfd_path, common_pfd_data in zip(pfd_file_list, pfd_data):
-        candidate_name, period, dm, sn, raj, decj, begin, end = common_pfd_data
+    for pfd_file in pfd_file_list:
+        candidate_name, period, dm, sn, raj, decj, begin, end = get_common_pfd_data(pfd_file)
         rad, decd = sex2deg(raj, decj)
         data = {
             'rad': rad,
             'decd': decd,
             'obsid': obsid,
-            'pfd_path': pfd_path,
+            'pfd_path': pfd_file,
             'period':period,
             'dm':dm,
             'sigma':sn,
@@ -327,11 +326,12 @@ def upload_cand(
         }
 
         # Check for png file in same location
-        if os.path.isfile(pfd_path+".png"):
-            data['png_path'] = pfd_path+".png"
+        if os.path.isfile(pfd_file+".png"):
+            data['png_path'] = pfd_file+".png"
         data_list.append(data)
+        print(data)
 
-    upload_wrapper(data_list, 'candidates')
+    #upload_wrapper(data_list, 'candidates')
 
 
 def upload_supercomputer(supercomputers, id_list=None):
@@ -349,7 +349,7 @@ def upload_supercomputer(supercomputers, id_list=None):
             data['id'] = si
         data_list.append(data)
 
-    upload_wrapper(data_list, 'supercomputers')
+    #upload_wrapper(data_list, 'supercomputers')
 
 
 def upload_defaults():
@@ -370,7 +370,7 @@ def upload_defaults():
                   'Command':'single_pulse_searcher.py',
                   'Commnents':"LOTAAS's original version for single pulse canidates"},
                 ]
-    upload_wrapper(data_list, 'ml_parameters')
+    #upload_wrapper(data_list, 'ml_parameters')
 
     # search_parameters
     data_list = [{'ID':1,
@@ -379,7 +379,7 @@ def upload_defaults():
                   'DM_min_step':0.01,
                   'Acceleration_search_max':0.0,
                   'Accelsearch_sigma_cutoff':10.}]
-    upload_wrapper(data_list, 'search_parameters')
+    #upload_wrapper(data_list, 'search_parameters')
 
     # supercomputers
     upload_supercomputer(['Ozstar', 'Garrawarla (Pawsey)', 'SHAO'])
@@ -407,4 +407,4 @@ def upload_pulsars():
                           "dm":dm,
                           "new":False,
                          })
-    upload_wrapper(data_list, 'pulsar')
+    #upload_wrapper(data_list, 'pulsar')

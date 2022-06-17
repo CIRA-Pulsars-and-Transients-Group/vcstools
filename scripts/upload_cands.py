@@ -30,11 +30,11 @@ if __name__ == "__main__":
             help="Super computer ID. Ozstar: 1. Garrawarla: 2. SHAO: 3. Galaxy: 4. Magnus: 5. Default 1.")
     args = parser.parse_args()
 
-    print("Uploading obsid")
-    try:
-        upload_obsid(args.obsid)
-    except requests.exceptions.HTTPError:
-        print("Obsid already uploaded")
+    #print("Uploading obsid")
+    #try:
+    #    upload_obsid(args.obsid)
+    #except requests.exceptions.HTTPError:
+    #    print("Obsid already uploaded")
 
     if args.file:
         print("Uploading beams")
@@ -45,7 +45,7 @@ if __name__ == "__main__":
         print("WARNING: Not uploading beams")
 
     print("Uploading cands")
-    pfd_files = glob.glob('B*pfd')
+    pfd_files = glob.glob('*pfd')
     upload_cand(pfd_files, obsid=args.obsid,
                 search_type='SMART_10min', search_params_id=1)
 
