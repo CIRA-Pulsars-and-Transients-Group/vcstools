@@ -40,6 +40,7 @@ if __name__ == "__main__":
         upload_obsid(args.obsid)
     except requests.exceptions.HTTPError:
         print("Obsid already uploaded")
+    '''
 
     if args.file:
         print("Uploading beams")
@@ -50,8 +51,6 @@ if __name__ == "__main__":
                     mwa_search_command=args.command, mwa_search_version='v3.0', supercomputer_id=args.super_computer_id)
     else:
         print("WARNING: Not uploading beams")
-        pointing_list = None
-    '''
 
     if args.pfd_file is None and args.all == False:
         raise RuntimeError("Either -p or -a must be supplied")

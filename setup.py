@@ -92,7 +92,7 @@ setup(name="mwa_vcstools",
                'scripts/reorder_chans.py', 'scripts/rts2ao.py', 'scripts/splice_wrapper.py',
                'scripts/cleanup.py', 'scripts/create_ics_psrfits.py', 'scripts/rm_synthesis.py',
                'scripts/zapchan.py', 'scripts/sn_flux_est.py', 'scripts/prof_estimate.py',
-               'scripts/upload_cands.py',
+               'scripts/upload_cands.py', 'scripts/upload_obsid.py', 'scripts/upload_beams.py',
                # plotting scripts
                'scripts/plotting/plotPolarTileBeam.py', 'scripts/plotting/plotFlatTileBeam.py',
                'scripts/plotting/plotTiedArrayBeam.py', 'scripts/plotting/plotSkyMap.py',

@@ -112,6 +112,8 @@ class RowUploader:
                 r = self.session.post(self.url, data=data, files=files)
         else:
             r = self.session.post(self.url, data=data)
+
+        print("Response: %s", r.text) # Because I cannot get logger to output anything
         logger.debug("Response: %s", r.text)
         try:
             r.raise_for_status()
@@ -121,6 +123,7 @@ class RowUploader:
             time.sleep(2)
             r = self.session.post(self.url, data=data)
             r.raise_for_status()
+
         return "{0} : {1}".format(data, r.status_code)
 
 
@@ -235,7 +238,7 @@ def upload_beam(
                 'mwa_search_command': mwa_search_command,
                 'observation_id': obsid}
         data_list.append(data)
-        print("Adding beam (RA {:.3f}, Dec {:.3f})".format(data['ra_degrees'], data['dec_degrees']))
+        print("Adding beam (RA {}, Dec {})".format(data['ra_degrees'], data['dec_degrees']))
 
     upload_wrapper(data_list, 'beams')
 
@@ -332,7 +335,7 @@ def upload_cand(
         if os.path.isfile(pfd_file+".png"):
             data['png_path'] = pfd_file+".png"
         data_list.append(data)
-        print("Adding candidate (RA {:.3f}, Dec {:.3f})".format(data['rad'], data['decd']))
+        print("Adding candidate (RA {}, Dec {})".format(raj, decj))
 
     upload_wrapper(data_list, 'candidates')
 
