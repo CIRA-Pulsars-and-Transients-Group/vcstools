@@ -235,9 +235,9 @@ def upload_beam(
                 'mwa_search_command': mwa_search_command,
                 'observation_id': obsid}
         data_list.append(data)
-        print(data)
+        print("Adding beam (RA {:.3f}, Dec {:.3f})".format(data['ra_degrees'], data['dec_degrees']))
 
-    #upload_wrapper(data_list, 'beams')
+    upload_wrapper(data_list, 'beams')
 
 
 def upload_obsid(obsid):
@@ -332,9 +332,9 @@ def upload_cand(
         if os.path.isfile(pfd_file+".png"):
             data['png_path'] = pfd_file+".png"
         data_list.append(data)
-        print(data)
+        print("Adding candidate (RA {:.3f}, Dec {:.3f})".format(data['rad'], data['decd']))
 
-    #upload_wrapper(data_list, 'candidates')
+    upload_wrapper(data_list, 'candidates')
 
 
 def upload_supercomputer(supercomputers, id_list=None):
