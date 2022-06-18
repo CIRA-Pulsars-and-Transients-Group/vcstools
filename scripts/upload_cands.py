@@ -30,19 +30,23 @@ if __name__ == "__main__":
             help="Super computer ID. Ozstar: 1. Garrawarla: 2. SHAO: 3. Galaxy: 4. Magnus: 5. Default 1.")
     args = parser.parse_args()
 
-    #print("Uploading obsid")
-    #try:
-    #    upload_obsid(args.obsid)
-    #except requests.exceptions.HTTPError:
-    #    print("Obsid already uploaded")
+    '''
+    print("Uploading obsid")
+    try:
+        upload_obsid(args.obsid)
+    except requests.exceptions.HTTPError:
+        print("Obsid already uploaded")
 
     if args.file:
         print("Uploading beams")
         pointing_list = np.loadtxt(args.file, dtype=str)
+        if pointing_list.ndim == 0:
+            pointing_list.shape = (1,)
         upload_beam(pointing_list, args.obsid, args.begin, args.end,
                     mwa_search_command=args.command, mwa_search_version='v3.0', supercomputer_id=args.super_computer_id)
     else:
         print("WARNING: Not uploading beams")
+    '''
 
     print("Uploading cands")
     pfd_files = glob.glob('*pfd')

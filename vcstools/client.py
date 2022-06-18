@@ -15,7 +15,7 @@ import numpy as np
 from vcstools.pointing_utils import sex2deg
 from vcstools.metadb_utils import getmeta
 
-from pfd_extractor.extract_wrapper import get_common_pfd_data
+from presto.prepfold import pfd
 
 import logging
 logger = logging.getLogger(__name__)
@@ -235,6 +235,7 @@ def upload_beam(
                 'mwa_search_command': mwa_search_command,
                 'observation_id': obsid}
         data_list.append(data)
+        print(data)
 
     #upload_wrapper(data_list, 'beams')
 
@@ -284,7 +285,7 @@ def upload_obsid(obsid):
                     data_dict[key] = db[key]
         data_list.append(data_dict)
 
-    #upload_wrapper(data_list, 'observation_setting')
+    upload_wrapper(data_list, 'observation_setting')
 
 
 def upload_cand(
@@ -311,16 +312,18 @@ def upload_cand(
     # Get data from pfd
     data_list = []
     for pfd_file in pfd_file_list:
-        candidate_name, period, dm, sn, raj, decj, begin, end = get_common_pfd_data(pfd_file)
+        PFDObject = pfd(pfd_file)
+        raj = PFDObject.rastr.decode("utf-8")
+        decj = PFDObject.decstr.decode("utf-8")
         rad, decd = sex2deg(raj, decj)
         data = {
             'rad': rad,
             'decd': decd,
             'obsid': obsid,
             'pfd_path': pfd_file,
-            'period':period,
-            'dm':dm,
-            'sigma':sn,
+            'period':PFDObject.bary_p1,
+            'dm':PFDObject.bestdm,
+            'sigma':PFDObject.calc_sigma(),
             'search_type': search_type,
             'search_params_id': search_params_id,
         }
@@ -349,7 +352,7 @@ def upload_supercomputer(supercomputers, id_list=None):
             data['id'] = si
         data_list.append(data)
 
-    #upload_wrapper(data_list, 'supercomputers')
+    upload_wrapper(data_list, 'supercomputers')
 
 
 def upload_defaults():
@@ -370,7 +373,7 @@ def upload_defaults():
                   'Command':'single_pulse_searcher.py',
                   'Commnents':"LOTAAS's original version for single pulse canidates"},
                 ]
-    #upload_wrapper(data_list, 'ml_parameters')
+    upload_wrapper(data_list, 'ml_parameters')
 
     # search_parameters
     data_list = [{'ID':1,
@@ -379,7 +382,7 @@ def upload_defaults():
                   'DM_min_step':0.01,
                   'Acceleration_search_max':0.0,
                   'Accelsearch_sigma_cutoff':10.}]
-    #upload_wrapper(data_list, 'search_parameters')
+    upload_wrapper(data_list, 'search_parameters')
 
     # supercomputers
     upload_supercomputer(['Ozstar', 'Garrawarla (Pawsey)', 'SHAO'])
@@ -407,4 +410,4 @@ def upload_pulsars():
                           "dm":dm,
                           "new":False,
                          })
-    #upload_wrapper(data_list, 'pulsar')
+    upload_wrapper(data_list, 'pulsar')
