@@ -88,6 +88,7 @@ class RowUploader:
             if 'pfd_path' in data:
                 pfd =  open(self.directory.joinpath(data['pfd_path']), 'rb')
                 files['pfd'] = pfd
+                files['pdf'] = pfd # <-- Just a temporary hack until webapp bug gets fixed!
                 del data['pfd_path']
             if 'png_path' in data:
                 png = open(self.directory.joinpath(data['png_path']), 'rb')
@@ -113,8 +114,9 @@ class RowUploader:
         else:
             r = self.session.post(self.url, data=data)
 
-        print("Response: %s", r.text) # Because I cannot get logger to output anything
-        logger.debug("Response: %s", r.text)
+        print("Adding row:", data)
+        print("Response:", r.text) # Because I cannot get logger to output anything
+        logger.debug("Response:", r.text)
         try:
             r.raise_for_status()
         except HTTPError:
@@ -238,7 +240,7 @@ def upload_beam(
                 'mwa_search_command': mwa_search_command,
                 'observation_id': obsid}
         data_list.append(data)
-        print("Adding beam (RA {}, Dec {})".format(data['ra_degrees'], data['dec_degrees']))
+        print("Staging beam (RA {}, Dec {})".format(data['ra_degrees'], data['dec_degrees']))
 
     upload_wrapper(data_list, 'beams')
 
@@ -335,7 +337,7 @@ def upload_cand(
         if os.path.isfile(pfd_file+".png"):
             data['png_path'] = pfd_file+".png"
         data_list.append(data)
-        print("Adding candidate (RA {}, Dec {})".format(raj, decj))
+        print("Staging candidate (RA {}, Dec {})".format(raj, decj))
 
     upload_wrapper(data_list, 'candidates')
 
