@@ -88,7 +88,6 @@ class RowUploader:
             if 'pfd_path' in data:
                 pfd =  open(self.directory.joinpath(data['pfd_path']), 'rb')
                 files['pfd'] = pfd
-                files['pdf'] = pfd # <-- Just a temporary hack until webapp bug gets fixed!
                 del data['pfd_path']
             if 'png_path' in data:
                 png = open(self.directory.joinpath(data['png_path']), 'rb')
