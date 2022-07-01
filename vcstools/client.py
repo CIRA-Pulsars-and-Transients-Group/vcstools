@@ -15,7 +15,7 @@ import numpy as np
 from vcstools.pointing_utils import sex2deg
 from vcstools.metadb_utils import getmeta
 
-from presto.prepfold import pfd
+#from presto.prepfold import pfd
 
 import logging
 logger = logging.getLogger(__name__)
@@ -114,7 +114,6 @@ class RowUploader:
             r = self.session.post(self.url, data=data)
 
         print("Adding row:", data)
-        print("Adding files:", files)
         print("Response:", r.text) # Because I cannot get logger to output anything
         logger.debug("Response:", r.text)
         try:
