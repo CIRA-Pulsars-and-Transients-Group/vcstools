@@ -38,7 +38,7 @@ TABLE_TO_PATH = {
     'detection_file': './detection_file_create/'
 }
 MAX_THREADS = 8
-DEFAULT_TARGET = 'https://apps.datacentral.org.au/smart/'
+DEFAULT_TARGET = 'http://localhost:8000'
 TOKEN_ENV_VAR_NAME = "SMART_TOKEN"
 BASE_URL_ENV_VAR_NAME = "SMART_BASE_URL"
 
@@ -133,7 +133,6 @@ def upload_wrapper(
         data_list,
         table,
         directory='.',
-        base_url=DEFAULT_TARGET,
         max_threads=MAX_THREADS,
     ):
     """
@@ -155,6 +154,7 @@ def upload_wrapper(
     # set up a session with the given auth
     session = requests.session()
     session.auth = TokenAuth(token)
+    base_url = os.environ.get(BASE_URL_ENV_VAR_NAME) or DEFAULT_TARGET
     row_uploader = RowUploader(
         session=session, table=table, directory=directory, base_url=base_url,
     )
