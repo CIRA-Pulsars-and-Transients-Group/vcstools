@@ -15,7 +15,7 @@ import numpy as np
 from vcstools.pointing_utils import sex2deg
 from vcstools.metadb_utils import getmeta
 
-rom presto.prepfold import pfd
+from presto.prepfold import pfd
 
 import logging
 logger = logging.getLogger(__name__)
