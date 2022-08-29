@@ -123,7 +123,8 @@ def test_find_pulsar_w50():
     """
     print("\nfind_pulsar_w50")
     test_cases=[]
-    test_cases.append(("J1614-2230", 2.3581508027839326e-06, 1.9651256689866104e-06))
+    test_cases.append(("J1614-2230", 0.0003, 1.9651256689866104e-06))
+    test_cases.append(("J0002+6216", 0.0005224464198943024, 0.00021768600828929265))
 
     for psr, exp_w50, exp_w50_err in test_cases:
         w50, w50_err = find_pulsar_w50(psr, query=query)

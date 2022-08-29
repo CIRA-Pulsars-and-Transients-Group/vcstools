@@ -12,13 +12,10 @@ from matplotlib import pyplot as plt
 from vcstools import data_load
 from vcstools.config import load_config_file
 from vcstools.beam_calc import get_beam_power_over_time, get_Trec,\
-                               from_power_to_gain, source_beam_coverage,\
-                               source_beam_coverage_and_times
+                               from_power_to_gain, source_beam_coverage_and_times
 from vcstools.metadb_utils import get_common_obs_metadata, obs_max_min,\
                                   mwa_alt_az_za
 from vcstools.progress_bar import progress_bar
-from vcstools.pulsar_spectra import flux_from_plaw, flux_from_spind,\
-                                    find_spind, plot_flux_estimation
 from vcstools.catalogue_utils import get_psrcat_ra_dec
 from vcstools.gfit import gfit
 from vcstools.beam_sim import read_sefd_file, launch_pabeam_sim
