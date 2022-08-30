@@ -12,20 +12,18 @@ from matplotlib import pyplot as plt
 from vcstools import data_load
 from vcstools.config import load_config_file
 from vcstools.beam_calc import get_beam_power_over_time, get_Trec,\
-                               from_power_to_gain, source_beam_coverage,\
-                               source_beam_coverage_and_times
+                               from_power_to_gain, source_beam_coverage_and_times
 from vcstools.metadb_utils import get_common_obs_metadata, obs_max_min,\
                                   mwa_alt_az_za
 from vcstools.progress_bar import progress_bar
-from vcstools.pulsar_spectra import flux_from_plaw, flux_from_spind,\
-                                    find_spind, plot_flux_estimation
 from vcstools.catalogue_utils import get_psrcat_ra_dec
 from vcstools.gfit import gfit
 from vcstools.beam_sim import read_sefd_file, launch_pabeam_sim
 from vcstools.prof_utils import sn_calc
 from vcstools import prof_utils
 
-from pulsar_spectra.catalogue import flux_from_atnf
+from pulsar_spectra.spectral_fit import find_best_spectral_fit, estimate_flux_density
+from pulsar_spectra.catalogue import collect_catalogue_fluxes
 
 from mwa_pb import primarybeammap_tant as pbtant
 
@@ -197,7 +195,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])[0]
 
     # Work out flagged tiles from calbration directory
-    if not flagged_tiles:
+    if flagged_tiles is not None:
         if calid:
             flagged_file = os.path.join(comp_config['base_data_dir'], obsid, "cal", calid, "rts", "flagged_tiles.txt")
             if os.path.exists(flagged_file):
@@ -220,7 +218,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
         t_sys, _, gain, u_gain = find_t_sys_gain(pulsar, obsid,
                                                  common_metadata=common_metadata,
                                                  beg=beg, end=(t_int + beg - 1))
-        sefd = tsys / gain
+        sefd = t_sys / gain
     else:
         if sefd_file is None:
             launch_pabeam_sim(obsid, pointing, beg, t_int,
@@ -322,25 +320,6 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     S_mean = float("{0:.3f}".format(S_mean))
     u_S_mean = float("{0:.3f}".format(u_S_mean))
 
-    # Plot flux comparisons for ANTF
-    freq_all, flux_all, flux_err_all, _ = flux_from_atnf(pulsar)
-    logger.debug("Freqs: {0}".format(freq_all))
-    logger.debug("Fluxes: {0}".format(flux_all))
-    logger.debug("Flux Errors: {0}".format(flux_err_all))
-    logger.debug("{0} there are {1} flux values available on the ATNF database"\
-                .format(pulsar, len(flux_all)))
-
-    # Check if there is enough data to estimate the flux
-    #if len(flux_all) == 0:
-    #    logger.debug("{} no flux values on archive. Cannot estimate flux.".format(pulsar))
-    #elif ( len(flux_all) == 1 ) and ( ( not spind ) or ( not spind_err ) ):
-    #    logger.debug("{} has only a single flux value and no spectral index. Cannot estimate flux. Will return Nones".format(pulsar))
-    #else:
-    #    spind, spind_err, K, covar_mat = find_spind(pulsar, freq_all, flux_all, flux_err_all)
-    #    plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
-    #                            my_nu=centrefreq, my_S=S_mean, my_S_e=u_S_mean, obsid=obsid,
-    #                            a_err=spind_err,  K=K, covar_mat=covar_mat)
-
     #format data for uploading
     w_equiv_ms   = float("{0:.2f}".format(w_equiv_ms))
     u_w_equiv_ms = float("{0:.2f}".format(u_w_equiv_ms))
@@ -357,7 +336,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     return det_kwargs, sn, u_sn
 
 
-def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=None):
+def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=None, cat_dict=None):
     """Estimates a pulsar's flux from archival data by assuming a power law relation between flux and frequency
 
     Parameters
@@ -386,54 +365,20 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=
     if common_metadata is None:
         logger.debug("Obtaining mean freq from obs metadata")
         common_metadata = get_common_obs_metadata(obsid)
-    f_mean = common_metadata[5]*1e6
+    f_mean = common_metadata[5]
+    if cat_dict is None:
+        cat_dict = collect_catalogue_fluxes()
 
-    #freq_all, flux_all, flux_err_all, spind, spind_err = flux_from_atnf(pulsar, query=query)
-    freq_all, flux_all, flux_err_all, ref_all = flux_from_atnf(pulsar, query=query)
-    # convert to Hz
-    freq_all     = [f*1e6 for f in freq_all]
-    # convert to Jy
-    flux_all     = [f*1e-3 for f in flux_all]
-    flux_err_all = [f*1e-3 for f in flux_err_all]
-
-    spind = query["SPINDX"][query_id]
-    spind_err = query["SPINDX_ERR"][query_id]
-
-    logger.debug("Freqs: {0}".format(freq_all))
-    logger.debug("Fluxes: {0}".format(flux_all))
-    logger.debug("Flux Errors: {0}".format(flux_err_all))
-    logger.debug("{0} there are {1} flux values available on the ATNF database"\
-                .format(pulsar, len(flux_all)))
-
-    # Check if there is enough data to estimate the flux
-    if len(flux_all) == 0:
-        logger.debug("{} no flux values on archive. Cannot estimate flux. Will return Nones".format(pulsar))
+    freqs, fluxs, flux_errs, refs = cat_dict[pulsar]
+    if len(freqs) < 2:
         return None, None
-    elif ( len(flux_all) == 1 ) and ( ( not spind ) or ( not spind_err ) ):
-        logger.debug("{} has only a single flux value and no spectral index. Cannot estimate flux. Will return Nones".format(pulsar))
+    model, m, _, _, _ = find_best_spectral_fit(pulsar, freqs, fluxs, flux_errs, refs, plot_best=plot_flux)
+    if model is None:
         return None, None
-
-    if ( not spind ) or ( not spind_err ):
-        # If no spind on ATNF fit our own
-        spind, spind_err, K, covar_mat = find_spind(pulsar, freq_all, flux_all, flux_err_all)
     else:
-        K = covar_mat = None
+        fitted_flux, fitted_flux_err = estimate_flux_density(f_mean, model, m)
 
-    if K and covar_mat is not None:
-        # Use the spind power law we fit
-        flux_est, flux_est_err = flux_from_plaw(f_mean, K, spind, covar_mat)
-    elif spind and spind_err and flux_all:
-        # Use ATNF spind
-        flux_est, flux_est_err = flux_from_spind(f_mean, freq_all[0], flux_all[0], flux_err_all[0],\
-                                                 spind, spind_err)
-    logger.debug("Finished estimating flux")
-
-    if plot_flux == True:
-        plot_flux_estimation(pulsar, freq_all, flux_all, flux_err_all, spind,
-                             my_nu=f_mean, my_S=flux_est, my_S_e=flux_est_err, obsid=obsid,
-                             a_err=spind_err,  K=K, covar_mat=covar_mat)
-
-    return flux_est, flux_est_err
+    return fitted_flux, fitted_flux_err
 
 
 def find_pulsar_w50(pulsar, query=None):
@@ -610,7 +555,8 @@ def est_pulsar_sn(pulsar, obsid,
                   dect_beg=None, dect_end=None,
                   obs_beg=None, obs_end=None,
                   common_metadata=None, full_metadata=None,
-                  query=None, plot_flux=False,
+                  query=None, cat_dict=None,
+                  plot_flux=False,
                   min_z_power=0.3, trcvr=data_load.TRCVR_FILE):
     """Estimates the signal to noise ratio for a pulsar in a given observation using the radiometer equation
 
@@ -657,6 +603,8 @@ def est_pulsar_sn(pulsar, obsid,
     if query is None:
         query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC).pandas
     query_id = list(query['PSRJ']).index(pulsar)
+    if cat_dict is None:
+        cat_dict = collect_catalogue_fluxes()
 
     if p_ra is None or p_dec is None:
         # Get some basic pulsar and obs info info
@@ -673,9 +621,10 @@ def est_pulsar_sn(pulsar, obsid,
 
     # Estimate flux
     s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux,
-                                         common_metadata=common_metadata, query=query)
+                                         common_metadata=common_metadata,
+                                         query=query, cat_dict=cat_dict)
     # Fluxes may be Nones. If so, return None
-    if s_mean is None and s_mean_err is None:
+    if s_mean is None or s_mean_err is None:
         return None, None, None, None
 
     if not dect_beg or not dect_end:
@@ -705,15 +654,17 @@ def est_pulsar_sn(pulsar, obsid,
 
     # Calculate SN
     period = float(query["P0"][query_id])
-    SN = ((s_mean * gain)/t_sys) * np.sqrt(n_p * t_int * df * (period - W_50)/W_50)
+    s_mean_jy = s_mean / 1e3
+    s_mean_err_jy = s_mean_err / 1e3
+    SN = ((s_mean_jy * gain)/t_sys) * np.sqrt(n_p * t_int * df * (period - W_50)/W_50)
 
     #Calculate SN uncertainty using variance formula. Assuming error from period, df and t_int is zero
     dc_expr    = np.sqrt((period-W_50)/W_50)
     var_s_mean = (gain * np.sqrt(n_p * t_int * df)) * dc_expr / t_sys
-    var_gain   = s_mean * np.sqrt(n_p * t_int * df) * dc_expr / t_sys
-    var_W_50   = s_mean * gain * np.sqrt(n_p * t_int * df)/t_sys * (period/(-2.*W_50**2.)) * dc_expr**-1
-    var_t_sys  = -s_mean * gain * np.sqrt(n_p * t_int * df) * dc_expr / t_sys**2.
-    var_s_mean = var_s_mean**2. * s_mean_err**2.
+    var_gain   = s_mean_jy * np.sqrt(n_p * t_int * df) * dc_expr / t_sys
+    var_W_50   = s_mean_jy * gain * np.sqrt(n_p * t_int * df)/t_sys * (period/(-2.*W_50**2.)) * dc_expr**-1
+    var_t_sys  = -s_mean_jy * gain * np.sqrt(n_p * t_int * df) * dc_expr / t_sys**2.
+    var_s_mean = var_s_mean**2. * s_mean_err_jy**2.
     var_gain   = var_gain**2.   * gain_err**2.
     var_W_50   = var_W_50**2.   * W_50_err**2.
     var_t_sys  = var_t_sys**2.  * t_sys_err**2.
@@ -785,6 +736,7 @@ def multi_psr_snfe(pulsar_list, obsid, obs_beg, obs_end,
         obs_beg, obs_end = obs_max_min(obsid)
 
     mega_query = psrqpy.QueryATNF(psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
+    cat_dict = collect_catalogue_fluxes()
     sn_dict = {}
     for i, pulsar in enumerate(progress_bar(mega_query["PSRJ"], "Calculating pulsar SN: ")):
         psr_query = {}
@@ -794,7 +746,7 @@ def multi_psr_snfe(pulsar_list, obsid, obs_beg, obs_end,
         sn, sn_e, s, s_e = est_pulsar_sn(pulsar, obsid,
                                          obs_beg=obs_beg, obs_end=obs_end,
                                          common_metadata=common_metadata, full_metadata=full_metadata,
-                                         plot_flux=plot_flux, query=psr_query,
+                                         plot_flux=plot_flux, query=psr_query, cat_dict=cat_dict,
                                          min_z_power=min_z_power, trcvr=trcvr)
 
         sn_dict[pulsar]=[sn, sn_e, s, s_e]

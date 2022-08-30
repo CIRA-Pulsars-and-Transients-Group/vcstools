@@ -562,11 +562,9 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
 
     # Loop over observations to check if there are VCS files
     for i, obsid in enumerate(obsid_list):
-        # Perform the file meta data call over 10 only 10 seconds as that is suffient test
+        # Perform the file meta data call to ensure data is available, just ask for the first 10
         try:
-            files_meta_data = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1,
-                                                                    'mintime':int(obsid) + 10,
-                                                                    'maxtime':int(obsid) + 20})
+            files_meta_data = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1, 'maxfiles':10})
         except urllib.error.HTTPError as err:
             files_meta_data = None
         if files_meta_data is None:

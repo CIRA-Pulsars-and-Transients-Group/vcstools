@@ -27,7 +27,16 @@ def get_git_version():
     git_version = check_output('git describe --tags --long --dirty --always'.split()).decode('utf-8').strip()
     return format_version(version=git_version)
 
-def download_ANTF_pulsar_database_file(datadir, version="v1.65"):
+def download_ANTF_pulsar_database_file(datadir, version=None):
+    """Download and untar the ATNF psrcat database file and put it in a directory
+
+    Parameters
+    ----------
+    datadir : `str`
+        The directory where you wish to put the database file.
+    version : `str`, optional
+        The version of the database you would like to download e.g. v1.65. Default: None (download latest version)
+    """
     # Hard code the path of the ATNF psrcat database file
     ATNF_LOC = os.path.join(datadir, 'psrcat.db')
     # Check if the file exists, if not download the latest zersion
@@ -38,11 +47,16 @@ def download_ANTF_pulsar_database_file(datadir, version="v1.65"):
         import shutil
         import tarfile
         print("The ANTF psrcat database file does not exist. Downloading it from www.atnf.csiro.au")
+        if version is None:
+            # Grab latest file
+            tar_name = 'psrcat_pkg.tar.gz'
+        else:
+            tar_name = 'psrcat_pkg.{}.tar.gz'.format(version)
         # Download the file
-        psrcat_zip_dir = urllib.request.urlretrieve('https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/psrcat_pkg.{}.tar.gz'.format(version))[0]
+        psrcat_zip_dir = urllib.request.urlretrieve('https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/{}'.format(tar_name))[0]
         # Unzip it
         with gzip.open(psrcat_zip_dir,  'rb') as f_in:
-            with open('psrcat_pkg.{}.tar'.format(version), 'wb') as f_out:
+            with open(tar_name, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
         # Untar the file we require
         psrcat_tar = tarfile.open(psrcat_zip_dir)
@@ -52,7 +66,7 @@ def download_ANTF_pulsar_database_file(datadir, version="v1.65"):
         member.name = os.path.basename(member.name)
         psrcat_tar.extract(member, path=datadir)
         print("Download complete")
-        os.remove('psrcat_pkg.{}.tar'.format(version))
+        os.remove(tar_name)
 
 reqs = ['astropy>=3.2.1',
         'argparse>=1.4.0',
@@ -89,7 +103,7 @@ setup(name="mwa_vcstools",
       install_requires=reqs,
       scripts=[# bash
                'scripts/untar.sh', 'scripts/create_psrfits.sh', 'scripts/splice.sh',
-               'scripts/check_disk_usage.sh', 'scripts/check_quota.sh', 'scripts/auto_plot.bash',
+               'scripts/check_disk_usage.sh', 'scripts/auto_plot.bash',
                # python
                'scripts/checks.py', 'scripts/calibrate_vcs.py', 'scripts/submit_to_database.py',
                'scripts/find_pulsar_in_obs.py', 'scripts/RVM_fit.py', 'scripts/mwa_metadb_utils.py',

@@ -13,6 +13,7 @@ import itertools
 
 from vcstools.config import load_config_file
 from vcstools.stickel import Stickel
+from vcstools.catalogue_utils import get_psrcat_ra_dec
 
 logger = logging.getLogger(__name__)
 
@@ -116,19 +117,34 @@ def get_from_bestprof(file_loc,
         except ValueError:
             obsid = None
 
-        # Get a pointing from the input fits file name
-        ra, dec = lines[0].split("_ch")[0].split("_")[-2:]
-        pointing = "{}_{}".format(ra, dec)
-        if ":" not in pointing:
-            if pointing_input is None:
-                logger.error("No pointing found, please input one. Exiting.")
-                sys.exit(0)
-            else:
-                pointing = pointing_input
-
         pulsar = str(lines[1].split("_")[-1][:-1])
         if not (pulsar.startswith('J') or pulsar.startswith('B')):
             pulsar = 'J{0}'.format(pulsar)
+
+        # Get a pointing from the input fits file name
+        get_pos_from_psrqpy = False
+        if "_ch" in lines[0]:
+            ra_dec_pair = lines[0].split("_ch")[0].split("_")
+            if len(ra_dec_pair) > 2:
+                ra, dec = ra_dec_pair[-2:]
+                pointing = "{}_{}".format(ra, dec)
+                if ":" not in pointing:
+                    get_pos_from_psrqpy = True
+            else:
+                get_pos_from_psrqpy = True
+        else:
+            get_pos_from_psrqpy = True
+
+
+        if pointing_input is None:
+            if get_pos_from_psrqpy:
+                ra, dec = get_psrcat_ra_dec(pulsar_list=[pulsar])[0][-2:]
+                pointing = "{}_{}".format(ra, dec)
+            else:
+                logger.error("No pointing found, please input one. Exiting.")
+                sys.exit(0)
+        else:
+            pointing = pointing_input
 
         dm = lines[14][22:-1]
 
