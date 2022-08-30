@@ -54,6 +54,7 @@ def download_ANTF_pulsar_database_file(datadir, version=None):
             tar_name = 'psrcat_pkg.{}.tar.gz'.format(version)
         # Download the file
         psrcat_zip_dir = urllib.request.urlretrieve(f"https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/{tar_name}")[0]
+
         # Unzip it
         with gzip.open(psrcat_zip_dir,  'rb') as f_in:
             with open(tar_name, 'wb') as f_out:
