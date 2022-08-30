@@ -7,7 +7,6 @@
 # easy to handle themselves, thus we recommend users become familiar
 # with them, as they are handy to know for all Lustre Filesystems.
 
-ssssssssssssssssssssssssssss
 # If the user wants to provide a specific partition, then allow it,
 # otherwise default to checking the /astro mount.
 partition=${1:-/astro}
