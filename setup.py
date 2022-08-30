@@ -53,7 +53,8 @@ def download_ANTF_pulsar_database_file(datadir, version=None):
         else:
             tar_name = 'psrcat_pkg.{}.tar.gz'.format(version)
         # Download the file
-        psrcat_zip_dir = urllib.request.urlretrieve('https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/{}'.format(tar_name))[0]
+        psrcat_zip_dir = urllib.request.urlretrieve(f"https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/{tar_name}")[0]
+
         # Unzip it
         with gzip.open(psrcat_zip_dir,  'rb') as f_in:
             with open(tar_name, 'wb') as f_out:
@@ -87,10 +88,10 @@ download_ANTF_pulsar_database_file(datadir)
 
 
 #vcstools_version = get_git_version()
-vcstools_version = "2.7"
+vcstools_version = "2.7.1"
 #make a temporary version file to be installed then delete it
 with open('version.py', 'a') as the_file:
-    the_file.write('__version__ = "{}"\n'.format(vcstools_version))
+    the_file.write(f'__version__ = "{vcstools_version}"\n')
 
 setup(name="mwa_vcstools",
       version=vcstools_version,
@@ -99,7 +100,7 @@ setup(name="mwa_vcstools",
       #long_description=read('README.md'),
       packages=['vcstools'],
       package_data={'vcstools':['data/*.csv', 'data/*.db']},
-      python_requires='>=3.6',
+      python_requires='>=3.7',
       install_requires=reqs,
       scripts=[# bash
                'scripts/untar.sh', 'scripts/create_psrfits.sh', 'scripts/splice.sh',
