@@ -103,7 +103,7 @@ setup(name="mwa_vcstools",
       install_requires=reqs,
       scripts=[# bash
                'scripts/untar.sh', 'scripts/create_psrfits.sh', 'scripts/splice.sh',
-               'scripts/check_disk_usage.sh', 'scripts/check_quota.sh', 'scripts/auto_plot.bash',
+               'scripts/check_disk_usage.sh', 'scripts/auto_plot.bash',
                # python
                'scripts/checks.py', 'scripts/calibrate_vcs.py', 'scripts/submit_to_database.py',
                'scripts/find_pulsar_in_obs.py', 'scripts/RVM_fit.py', 'scripts/mwa_metadb_utils.py',
