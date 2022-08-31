@@ -43,7 +43,6 @@ reqs = ['astropy>=3.2.1',
 
 # Download the ANTF_pulsar_database_file file if it doesn't exist
 datadir = os.path.join(os.path.dirname(__file__), 'vcstools', 'data')
-download_ANTF_pulsar_database_file(datadir)
 
 
 #vcstools_version = get_git_version()
