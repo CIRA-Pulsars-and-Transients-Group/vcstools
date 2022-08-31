@@ -462,7 +462,7 @@ def source_beam_coverage_and_times(obsid, pulsar,
     """
     # Perform required metadata calls
     if query is None:
-        query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=pulsar).pandas
     if p_ra is None or p_dec is None:
         # Get some basic pulsar and obs info info
         query_id = list(query['PSRJ']).index(pulsar)
@@ -562,11 +562,9 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
 
     # Loop over observations to check if there are VCS files
     for i, obsid in enumerate(obsid_list):
-        # Perform the file meta data call over 10 only 10 seconds as that is suffient test
+        # Perform the file meta data call to ensure data is available, just ask for the first 10
         try:
-            files_meta_data = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1,
-                                                                    'mintime':int(obsid) + 10,
-                                                                    'maxtime':int(obsid) + 20})
+            files_meta_data = getmeta(service='data_files', params={'obs_id':obsid, 'nocache':1, 'maxfiles':10})
         except urllib.error.HTTPError as err:
             files_meta_data = None
         if files_meta_data is None:
@@ -629,10 +627,11 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
         for source_name in np.array(names_ra_dec)[:,0]:
             source_data = []
             for on, obsid in enumerate(obsid_list):
-                if source_name in beam_coverage[obsid].keys:
+                if source_name in beam_coverage[obsid].keys():
                     # Source was in the beam so include it
                     _, _, _, duration, _, centre_freq, channels = common_metadata_list[on]
                     enter_beam_norm, exit_beam_norm, max_power = beam_coverage[obsid][source_name]
+                    bandwidth = 1.28 * (channels[-1] - channels[0] + 1) # MHz
                     source_data.append([obsid, duration,
                                         enter_beam_norm, exit_beam_norm,
                                         max_power, centre_freq, bandwidth])

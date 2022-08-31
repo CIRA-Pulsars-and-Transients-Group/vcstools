@@ -1,5 +1,5 @@
 """
-The functions required to simulate the tied-array beam response of the MWA. 
+The functions required to simulate the tied-array beam response of the MWA.
 All equations can be found in https://ui.adsabs.harvard.edu/abs/2018IAUS..337..378M/abstract
 """
 import numpy as np
@@ -21,7 +21,7 @@ from vcstools.general_utils import mdir
 import logging
 logger = logging.getLogger(__name__)
 
-def getTileLocations(metafits, flags=[]):
+def getTileLocations(metafits, flags=None):
     """Function grab the MWA tile locations for a given observation from the metafits file.
 
     Parameters
@@ -58,10 +58,13 @@ def getTileLocations(metafits, flags=[]):
     height = height - mwacentre_h
 
     # flag the tiles from the x,y,z positions
-    east = np.delete(east,flags)
-    north = np.delete(north,flags)
-    height = np.delete(height,flags)
-    cable_delays = np.delete(cable_delays,flags)
+    print(east)
+    print(flags)
+    if flags is not None:
+        east = np.delete(east,flags)
+        north = np.delete(north,flags)
+        height = np.delete(height,flags)
+        cable_delays = np.delete(cable_delays,flags)
 
     return east, north, height, cable_delays
 
@@ -108,7 +111,7 @@ def calc_pixel_area(za, az_res, za_res):
 
 
 def calcWaveNumbers(freq, p, t):
-    """Function to calculate the 3D wavenumbers for a given wavelength and az/za grid. 
+    """Function to calculate the 3D wavenumbers for a given wavelength and az/za grid.
     This is the part of equation 7 within the square brackets not includeing x_n, y_n and z_n
 
     Parameters
@@ -350,13 +353,13 @@ def launch_pabeam_sim(obsid, pointing,
     vcstools_version : `str`, optional
         VCSTools version to load in the job.
     args : `dict`, optional
-        The argument parse dictionary from submit_to_database.py. 
+        The argument parse dictionary from submit_to_database.py.
         If supplied will launch a dependedn job with submit_to_databse.py to complete the script.
     common_metadata : `list`, optional
         The list of common metadata generated from :py:meth:`vcstools.metadb_utils.get_common_obs_metadata`.
     output_dir : `str`
         The output directory of the simulation results. By default will put it in the VCS directory under <obsid>/sefd_simulations.
-    
+
     Examples
     --------
     A simple example:
@@ -426,8 +429,9 @@ def launch_pabeam_sim(obsid, pointing,
     command += ' --out_name {}'.format(source_name)
     command += ' --freq {}'.format(" ".join(sim_freqs))
     if flagged_tiles is not None:
-        logger.debug("flagged_tiles: {}".format(flagged_tiles))
-        command += ' --flagged_tiles {}'.format(' '.join(flagged_tiles))
+        if len(flagged_tiles) > 0:
+            logger.debug("flagged_tiles: {}".format(flagged_tiles))
+            command += ' --flagged_tiles {}'.format(' '.join(flagged_tiles))
 
     # Set up and launch job
     batch_file_name = 'pabeam_{}_{}_{}'.format(obsid, source_name, pointing)

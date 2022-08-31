@@ -67,7 +67,7 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
     comb_del_check = meta.combined_deleted_check(obsid, begin=start_time, end=stop_time)
     data_format = obsinfo['dataquality']
     if data_format == 1 or (comb_del_check and data_format == 6):
-        # either only the raw data is available (data_format == 1) 
+        # either only the raw data is available (data_format == 1)
         # or there was combined files but they were deleted (comb_del_check and data_format == 6)
         target_dir = link = '/raw'
         if ics:
@@ -776,7 +776,7 @@ if __name__ == '__main__':
     mdir(data_dir, "Data", gid=comp_config['gid'])
     mdir(product_dir, "Products", gid=comp_config['gid'])
     mdir(batch_dir, "Batch", gid=comp_config['gid'])
-    metafits_file = "{0}/{1}_metafits_ppds.fits".format(data_dir, args.obs)
+    metafits_file = "{0}_metafits_ppds.fits".format(args.obs)
     # TODO: modify metafits downloader to not just do a trivial wget
 
     logger.info("Processing Obs ID {0} from GPS times {1} till {2}".\
