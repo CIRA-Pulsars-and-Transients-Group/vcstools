@@ -13,17 +13,7 @@ from vcstools.general_utils import setup_logger
 
 import logging
 logger = logging.getLogger(__name__)
-#logger = setup_logger(logger, log_level="DEBUG")
 
-"""
-#Global obsid information to speed things up
-md_dict={}
-obsid_list = [1222697776, 1226062160, 1225713560, 1117643248]
-for obs in obsid_list:
-    md_dict[str(obs)] = get_common_obs_metadata(obs, return_all=True)
-
-query = psrqpy.QueryATNF(loadfromdb=data_load.ATNF_LOC).pandas
-"""
 # The three tests of the flux calculation methods. They should be close to imaging results:
 test_pulsars = []
 # J1820-0427 298.5 sigma. A bright pulsar with two components and a scattering tail that is about 50% of the profile

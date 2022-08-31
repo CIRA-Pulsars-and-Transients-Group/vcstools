@@ -27,47 +27,6 @@ def get_git_version():
     git_version = check_output('git describe --tags --long --dirty --always'.split()).decode('utf-8').strip()
     return format_version(version=git_version)
 
-def download_ANTF_pulsar_database_file(datadir, version=None):
-    """Download and untar the ATNF psrcat database file and put it in a directory
-
-    Parameters
-    ----------
-    datadir : `str`
-        The directory where you wish to put the database file.
-    version : `str`, optional
-        The version of the database you would like to download e.g. v1.65. Default: None (download latest version)
-    """
-    # Hard code the path of the ATNF psrcat database file
-    ATNF_LOC = os.path.join(datadir, 'psrcat.db')
-    # Check if the file exists, if not download the latest zersion
-    if not os.path.exists(ATNF_LOC):
-        # Importing download functions here to avoid unnessiary imports when the file is available
-        import urllib.request
-        import gzip
-        import shutil
-        import tarfile
-        print("The ANTF psrcat database file does not exist. Downloading it from www.atnf.csiro.au")
-        if version is None:
-            # Grab latest file
-            tar_name = 'psrcat_pkg.tar.gz'
-        else:
-            tar_name = 'psrcat_pkg.{}.tar.gz'.format(version)
-        # Download the file. Comment at line-end to disable linter secuirty check.
-        psrcat_zip_dir = urllib.request.urlretrieve(f"https://www.atnf.csiro.au/research/pulsar/psrcat/downloads/{tar_name}")[0]  # nosec
-
-        # Unzip it
-        with gzip.open(psrcat_zip_dir,  'rb') as f_in:
-            with open(tar_name, 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        # Untar the file we require
-        psrcat_tar = tarfile.open(psrcat_zip_dir)
-        # Do some python magic to no download the file within it's subdirectory from
-        # https://stackoverflow.com/questions/8405843/python-extract-using-tarfile-but-ignoring-directories
-        member = psrcat_tar.getmember('psrcat_tar/psrcat.db')
-        member.name = os.path.basename(member.name)
-        psrcat_tar.extract(member, path=datadir)
-        print("Download complete")
-        os.remove(tar_name)
 
 reqs = ['astropy>=3.2.1',
         'argparse>=1.4.0',
@@ -84,7 +43,6 @@ reqs = ['astropy>=3.2.1',
 
 # Download the ANTF_pulsar_database_file file if it doesn't exist
 datadir = os.path.join(os.path.dirname(__file__), 'vcstools', 'data')
-download_ANTF_pulsar_database_file(datadir)
 
 
 #vcstools_version = get_git_version()

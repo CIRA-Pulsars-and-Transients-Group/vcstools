@@ -360,7 +360,7 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=
         The estimated flux's uncertainty in Jy.
     """
     if query is None:
-        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=[pulsar]).pandas
     query_id = list(query['PSRJ']).index(pulsar)
     if common_metadata is None:
         logger.debug("Obtaining mean freq from obs metadata")
@@ -401,7 +401,7 @@ def find_pulsar_w50(pulsar, query=None):
     if query is None:
         #returns W_50 and error for a pulsar from the ATNF archive IN SECONDS
         logger.debug("Accessing ATNF database")
-        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=[pulsar]).pandas
     query_id = list(query['PSRJ']).index(pulsar)
 
     W_50     = query["W50"][query_id]
@@ -494,7 +494,7 @@ def find_t_sys_gain(pulsar, obsid,
     # get ra and dec if not supplied
     if query is None:
         logger.debug("Obtaining pulsar RA and Dec from ATNF")
-        query = psrqpy.QueryATNF(psrs=[pulsar], loadfromdb=data_load.ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=[pulsar]).pandas
     query_id = list(query['PSRJ']).index(pulsar)
     if not p_ra or not p_dec:
         p_ra = query["RAJ"][query_id]
@@ -601,7 +601,7 @@ def est_pulsar_sn(pulsar, obsid,
     # We will attain uncertainties for s_mean, gain, t_sys and W_50.
     # other uncertainties are considered negligible
     if query is None:
-        query = psrqpy.QueryATNF(psrs=pulsar, loadfromdb=data_load.ATNF_LOC).pandas
+        query = psrqpy.QueryATNF(psrs=pulsar).pandas
     query_id = list(query['PSRJ']).index(pulsar)
     if cat_dict is None:
         cat_dict = collect_catalogue_fluxes()
@@ -735,7 +735,7 @@ def multi_psr_snfe(pulsar_list, obsid, obs_beg, obs_end,
     if obs_beg is None or obs_end is None:
         obs_beg, obs_end = obs_max_min(obsid)
 
-    mega_query = psrqpy.QueryATNF(psrs=pulsar_list, loadfromdb=data_load.ATNF_LOC).pandas
+    mega_query = psrqpy.QueryATNF(psrs=pulsar_list).pandas
     cat_dict = collect_catalogue_fluxes()
     sn_dict = {}
     for i, pulsar in enumerate(progress_bar(mega_query["PSRJ"], "Calculating pulsar SN: ")):
