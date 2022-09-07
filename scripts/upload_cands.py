@@ -2,14 +2,7 @@
 
 import argparse
 import glob
-import concurrent.futures
-import sys
-import numpy as np
-import requests
-
-from vcstools.client import upload_beam, upload_obsid, upload_cand
-from vcstools.progress_bar import progress_bar
-from vcstools.pointing_utils import sex2deg
+from vcstools.client import upload_cand
 
 
 if __name__ == "__main__":

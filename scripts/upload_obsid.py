@@ -1,16 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
-import glob
-import concurrent.futures
-import sys
-import numpy as np
 import requests
-
 from vcstools.client import upload_obsid
-from vcstools.progress_bar import progress_bar
-from vcstools.pointing_utils import sex2deg
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="""Upload the candidates on prometheus""")

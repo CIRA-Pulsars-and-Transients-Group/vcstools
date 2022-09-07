@@ -4,7 +4,6 @@ import os
 import sys
 import requests
 from requests.exceptions import HTTPError
-import json
 import socket
 from pathlib import Path
 from urllib.parse import urljoin
@@ -39,8 +38,8 @@ TABLE_TO_PATH = {
 }
 MAX_THREADS = 8
 DEFAULT_TARGET = 'http://localhost:8000'
-TOKEN_ENV_VAR_NAME = "SMART_TOKEN"
-BASE_URL_ENV_VAR_NAME = "SMART_BASE_URL"
+TOKEN_ENV_VAR_NAME = "SMART_TOKEN" # nosec
+BASE_URL_ENV_VAR_NAME = "SMART_BASE_URL" # nosec
 
 
 class TokenAuth(requests.auth.AuthBase):
@@ -113,9 +112,8 @@ class RowUploader:
         else:
             r = self.session.post(self.url, data=data)
 
-        print("Adding row:", data)
-        print("Response:", r.text) # Because I cannot get logger to output anything
-        logger.debug("Response:", r.text)
+        logger.info(f"Adding row: {data}")
+        logger.info(f"Response: {r.text}")
         try:
             r.raise_for_status()
         except HTTPError:
@@ -270,7 +268,6 @@ def upload_obsid(obsid):
     rfstreams_keys = ['azimuth', 'elevation', 'ra', 'dec',
                      'frequencies', 'frequency_type', 'walsh_mode',
                      'gain_control_type', 'gain_control_value', 'dipole_exclusion']
-    all_keys = base_keys + metadata_keys + rfstreams_keys
 
     data_list = []
     for obs in obsids:
