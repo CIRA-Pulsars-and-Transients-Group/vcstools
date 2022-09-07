@@ -13,6 +13,8 @@ import logging
 import numpy as np
 from itertools import groupby, count
 
+from vcstools.general_utils import setup_logger
+
 logger = logging.getLogger(__name__)
 
 
@@ -211,13 +213,7 @@ if __name__ == '__main__':
         print_version()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     # check to make sure that the channels variable is formatted correctly,
     # no matter the input (should be a tuple/iterable)

@@ -16,7 +16,7 @@ import vcstools.metadb_utils as meta
 from vcstools.general_utils import mdir, gps_to_utc, create_link
 from vcstools.pointing_utils import format_ra_dec
 from vcstools.config import load_config_file
-from vcstools.general_utils import sfreq
+from vcstools.general_utils import sfreq, setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
     comb_del_check = meta.combined_deleted_check(obsid, begin=start_time, end=stop_time)
     data_format = obsinfo['dataquality']
     if data_format == 1 or (comb_del_check and data_format == 6):
-        # either only the raw data is available (data_format == 1) 
+        # either only the raw data is available (data_format == 1)
         # or there was combined files but they were deleted (comb_del_check and data_format == 6)
         target_dir = link = '/raw'
         if ics:
@@ -172,8 +172,8 @@ def vcs_download(obsid, start_time, stop_time, increment, data_dir,
         body.append("{0} {1}".format(voltdownload, voltdownload_command))
         submit_slurm(voltdownload_batch, body, batch_dir=batch_dir,
                         module_list=module_list,
-                        slurm_kwargs={"time": str(volt_secs_to_run),
-                                    "nice" : nice},
+                        slurm_kwargs={"time" : str(volt_secs_to_run),
+                                      "nice" : nice},
                         vcstools_version=vcstools_version,
                         outfile=batch_dir+voltdownload_batch+"_1.out",
                         queue="copyq", export="NONE", mem=5120,
@@ -454,6 +454,7 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
 
     P_dir = os.path.join(product_dir, "pointings")
     mdir(P_dir, "Pointings", gid=comp_config['gid'])
+    mdir(os.path.join(product_dir, "incoh"), "Incoh", gid=comp_config['gid'])
     # startjobs = True
 
     # Set up supercomputer dependant parameters
@@ -601,6 +602,10 @@ def coherent_beam(obs_id, start, stop, data_dir, product_dir, batch_dir,
                         commands.append("cp {0}/{1}/{2}_{3}_{1}_ch{4}_00*.fits "
                                         "{5}/{1}/".format(comp_config['ssd_dir'], pointing,
                                         project_id, obs_id, coarse_chan, P_dir))
+                    if 'i' in bf_formats:
+                        commands.append("cp {0}/{1}/{2}_{3}_{1}_ch{4}_00*.fits "
+                                        "{5}/{1}/".format(comp_config['ssd_dir'], "incoh",
+                                        project_id, obs_id, coarse_chan, product_dir))
                 commands.append("")
 
                 job_id = submit_slurm(make_beam_small_batch, commands,
@@ -686,13 +691,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     logger.info("Using vcstools/{0}".format(args.vcstools_version))
     if args.version:
@@ -771,7 +770,7 @@ if __name__ == '__main__':
     mdir(data_dir, "Data", gid=comp_config['gid'])
     mdir(product_dir, "Products", gid=comp_config['gid'])
     mdir(batch_dir, "Batch", gid=comp_config['gid'])
-    metafits_file = "{0}/{1}_metafits_ppds.fits".format(data_dir, args.obs)
+    metafits_file = "{0}_metafits_ppds.fits".format(args.obs)
     # TODO: modify metafits downloader to not just do a trivial wget
 
     logger.info("Processing Obs ID {0} from GPS times {1} till {2}".\

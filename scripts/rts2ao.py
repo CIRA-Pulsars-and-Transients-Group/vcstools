@@ -8,7 +8,7 @@ import logging
 import sys
 
 from vcstools.aocal import AOCal
-from vcstools.general_utils import sfreq
+from vcstools.general_utils import sfreq, setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -146,13 +146,7 @@ if __name__ == "__main__":
         print_version()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if not args.metafits:
         logging.error("Metafits file required. [-m]")

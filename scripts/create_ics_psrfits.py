@@ -14,6 +14,7 @@ from astropy import units as u
 
 from vcstools.metadb_utils import get_common_obs_metadata, mwa_alt_az_za
 from vcstools.config import load_config_file
+from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +40,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.version:
         from vcstools.general_utils import print_version

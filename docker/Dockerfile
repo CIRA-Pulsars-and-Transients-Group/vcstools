@@ -17,10 +17,12 @@ RUN apt-get update && \
          libhdf5-dev \
          libtool \
          wget \
-         python3 \
+         python3.8 \
+         python3.8-dev \
          python3-pip \
          python3-setuptools \
-         curl && \
+         curl \
+         software-properties-common && \
     apt-get clean all && \
     rm -r /var/lib/apt/lists/*
 
@@ -53,13 +55,22 @@ ENV HDF5_INCLUDE_PATH = "/usr/include/hdf5/serial/"
 RUN curl https://sh.rustup.rs -sSf |  bash -s -- -y
 
 
+### Install lastest CMake
+RUN apt purge --auto-remove -y cmake && \
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ bionic main' && \
+    apt update -y && \
+    apt install -y cmake
+
+
 ### Install hyperbeam
 ENV LD_LIBRARY_PATH="/code/hyperbeam/mwa_hyperbeam/include:/code/hyperbeam/mwa_hyperbeam/lib:${LD_LIBRARY_PATH}"
 ENV HYPERBEAM_ROOT="/code/hyperbeam/mwa_hyperbeam/"
 ENV HYPERBEAM_INCLUDE_DIR="/code/hyperbeam/mwa_hyperbeam/include"
 ENV HYPERBEAM_LIB="/code/hyperbeam/mwa_hyperbeam/lib"
+ENV RUST_BACKTRACE=1
 WORKDIR /code/hyperbeam
-RUN git clone https://github.com/MWATelescope/mwa_hyperbeam.git && \
+RUN git clone --depth 1 --branch v0.3.3 https://github.com/MWATelescope/mwa_hyperbeam.git && \
     cd mwa_hyperbeam && \
     wget http://ws.mwatelescope.org/static/mwa_full_embedded_element_pattern.h5 && \
     cargo test && \
@@ -95,7 +106,9 @@ RUN wget https://github.com/Starlink/pal/releases/download/v0.9.8/pal-0.9.8.tar.
 ### Install vcstools ###
 WORKDIR /code/vcstools-build
 COPY . /code/vcstools-build
-RUN pip3 install . && \
+RUN python3.8 -m pip install --upgrade pip && \
+    python3.8 -m pip -V && \
+    python3.8 -m pip install . && \
     mkdir -p build && \
     cd build && \
     cmake -DCMAKE_INSTALL_PREFIX=/usr \

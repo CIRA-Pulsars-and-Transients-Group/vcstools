@@ -9,6 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from vcstools.config import load_config_file
+from vcstools.general_utils import setup_logger
 
 def opt_parser():
     # Dictionary for choosing log-levels
@@ -96,17 +97,17 @@ def remove_beamformed(obs, pointing=None):
 if __name__ == '__main__':
     args, loglevels = opt_parser()
     if args.version:
-        from vcstools.general_utils import print_version
-        print_version()
-    
-    # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+        try:
+            import version
+            logger.info(version.__version__)
+            sys.exit(0)
+        except ImportError as ie:
+            logger.error("Couldn't import version.py - have you installed vcstools?")
+            logger.error("ImportError: {0}".format(ie))
+            sys.exit(0)
+
+# set up the logger for stand-alone execution
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.raw:
         remove_raw(args.obs)

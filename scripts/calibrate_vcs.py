@@ -28,7 +28,7 @@ from astropy.coordinates import EarthLocation
 from astropy.io import fits
 
 from vcstools.job_submit import submit_slurm
-from vcstools.general_utils import mdir
+from vcstools.general_utils import mdir, setup_logger
 from vcstools.metadb_utils import getmeta
 from vcstools.config import load_config_file
 
@@ -44,82 +44,82 @@ class BaseRTSconfig(object):
 
     Parameters
     ----------
-    obsid : int
+    obsid  : `int`
         The target observation ID.
-    cal_obsid : int
+    cal_obsid  : `int`
         The calibrator observation ID.
-    metafits : str
+    metafits  : `str`
         Path to the metafits file for the calibrator observation.
-    srclist : str
+    srclist  : `str`
         Path to the source list created for this calibrator observation (using srclist_by_beam.py).
-    datadir : str
+    datadir  : `str`
         Path to visibility data to be used to produce a calibration solution.
-    outdir : str, optional
+    outdir  : `str`, optional
         Path to write RTS configuration and relevant flagging information.
-    offline : str, optional
+    offline  : `str`, optional
         Whether the visibility data were produced with the offline correlator. Default is False.
-    beam_model: str, optional
+    beam_model : `str`, optional
         Which beam model to use for calibrating. Can be either 'FEE2016' (default) or 'ANALYTIC'
-    vcstools_version: str, optional
+    vcstools_version : `str`, optional
         Which version of vcstools to load - only used when correlating offline. Default is 'master'
 
 
     Attributes
     ----------
-    obsid : int
+    obsid  : `int`
         The target observation ID
-    cal_obsid : int
+    cal_obsid  : `int`
         The calibrator observation ID
     offline : bool
         Whether the calibrator data was produced by the offline correlator.
-    utctime : str
+    utctime  : `str`
         The start UTC time (as YYYY-MM-DDThh:mm:ss.ss)
-    nfine_chan : int
+    nfine_chan  : `int`
         The number of fine channels per coarse channel
     channels : list of ints
         The list of coarse channels recorded within a subband. Can range from length of 1-24.
-    fine_cbw : float
+    fine_cbw  : `float`
         The fine channel bandwidth in MHz
-    max_frequnecy : float
+    max_frequnecy  : `float`
         The maximum frequency in the provided data, used by the RTS to calcualte the decorrelation across the band
-    corr_dump_time : float
+    corr_dump_time  : `float`
         The time scale on which the correlator dumped the visibilities (i.e. the integration time).
-    n_corr_dumps_to_average : int
+    n_corr_dumps_to_average  : `int`
         The number of correlator dumps to use.
         Must be such that `corr_dump_time * n_corr_dumps_to_average` is <= than the total amount of data
         available for the calibrator observation.
-    n_integration_bins : int
+    n_integration_bins  : `int`
         The number of visbility groups to construct (and then integrate over). 5 seems to be ok - but this will change with configuration.
-    PB_HA : float
+    PB_HA  : `float`
         The primary beam Hour Angle (in degrees)
-    PB_DEC : float
+    PB_DEC  : `float`
         The primary beam Declination (in degrees)
     freq_base :  float
         The starting frequency from which to count the subband IDs (coarse channels)
-    JD : float
+    JD  : `float`
         Julian day conversion of `utctime`
-    metafits_RTSform : str
+    metafits_RTSform  : `str`
         A modified string of the user-define metafits file location. Truncates "_metafits_pdds.fits".
-    ArrayPositionLat : float
+    ArrayPositionLat  : `float`
         The MWA's latitude (in degrees)
-    ArrayPositionLong : float
+    ArrayPositionLong  : `float`
         The MWA's longitude (in degrees)
-    base_str : str
+    base_str  : `str`
         The basic RTS configuration skeleton script with some relevant information (built in BaseRTSconfig)
-    data_dir : str
+    data_dir  : `str`
         Path to look for visibilities to use for calibration.
-    output_dir : str
+    output_dir  : `str`
         Path to write RTS configuration and relevant flagging information.
-    batch_dir : str
+    batch_dir  : `str`
         Path to where the SLURM scripts and their output are to be written.
-    metafits : str
+    metafits  : `str`
         Path to the original metafits file for the calibrator observation.
-    source_list: str
+    source_list : `str`
         Path to the source list created for this calibrator observation (using srclist_by_beam.py).
-    useCorrInput : int
+    useCorrInput  : `int`
         Option value for RTS configuration regarding interpreting correlator streamed data.
         For offline-correlated data, `useCorrInput=1` and `readDirect=0`.
-    readDirect : int
+    readDirect  : `int`
         Option value for RTS configuration regarding reading data files from disk.
         For online-correlated data, `readDirect=1` and `useCorrInput=0`.
 
@@ -327,7 +327,7 @@ class BaseRTSconfig(object):
 
         Returns
         -------
-        file_str : str
+        file_str  : `str`
             The base string to be written to an RTS configuration srcipt after manipulation.
 
         Raises
@@ -511,9 +511,9 @@ class RTScal(object):
 
     Attributes
     ----------
-    obsid : int
+    obsid  : `int`
         The target observation ID
-    cal_obsid : int
+    cal_obsid  : `int`
         The calibrator observation ID
     channels : list of ints
         The list of coarse channels recorded within a subband. Can range from length of 1-24.
@@ -524,11 +524,11 @@ class RTScal(object):
         The coarse channel numbers < 129
     picketfence : bool
         True is the observation is picket fence (i.e. one or more subbands are not adjacent).
-    rts_out_dir : str
+    rts_out_dir  : `str`
         Path to where to write the relevant files to disk (i.e. RTS configuration files and flagging information)
-    batch_dir : str
+    batch_dir  : `str`
         Path to where the SLURM scripts and their output are to be written.
-    base_str : str
+    base_str  : `str`
         The basic RTS configuration skeleton script with some relevant information (built in BaseRTSconfig)
     script_body : list of strs
         Each element is a line to be written into the SBATCH script which will run the job on the compute nodes.
@@ -543,7 +543,7 @@ class RTScal(object):
         ---------
         rts_base : BaseRTSconfig
             An instance of BaseRTSconfig which has been initialised to contain the basic observation information.
-        submit : boolean
+        submit  : `boolean`
             Whether to submit the created scripts to the SLURM queue. True = submit, False = don't submit.
         """
         # initilaise class attributes with user-specified options
@@ -670,12 +670,10 @@ class RTScal(object):
         jobids = []
         nnodes = 25  # number of required GPU nodes - 1 per coarse channels + 1 master node
         rts_batch = "RTS_{0}".format(self.cal_obsid)
-        slurm_kwargs = {"partition": "gpuq",
-                        "chdir": "{0}".format(self.rts_out_dir),
+        slurm_kwargs = {"chdir": "{0}".format(self.rts_out_dir),
                         "time": "2:00:00",
                         "nodes": "{0}".format(nnodes),
-                        "gres": "gpu:1",
-                        "ntasks-per-node": "1"}
+                        "cpus-per-gpu": "1"}
         module_list = ["RTS/master"]
         commands = list(self.script_body)  # make a copy of body to then extend
         commands.append("export UCX_MEMTYPE_CACHE=n")
@@ -709,11 +707,11 @@ class RTScal(object):
         ----------
         chan_groups : list of lists of ints, or list of ints
             The list of coarse channels to be used when creating the RTS configuration information.
-        basepath : str
+        basepath  : `str`
             Path to where the script will eventually be written.
-        chan_type : str
+        chan_type  : `str`
             "low" is coarse channels are <129, "high" if coarse channels are >=129
-        count : int
+        count  : `int`
             Counter variable that keeps track of re-ordering of channels.
 
         Returns
@@ -722,7 +720,7 @@ class RTScal(object):
             Dictionary containing the number of nodes required for each subband and the appropriate filename.
             Key = filename, value = number of nodes required.
 
-        count : int
+        count  : `int`
             Counter variable that keeps track of re-ordering of channels.
 
         Raises
@@ -868,12 +866,10 @@ class RTScal(object):
             nnodes = v + 1
             chans = k.split('_')[-1].split(".")[0]
             rts_batch = "RTS_{0}_{1}".format(self.cal_obsid, chans)
-            slurm_kwargs = {"partition": "gpuq",
-                            "chdir": "{0}".format(self.rts_out_dir),
+            slurm_kwargs = {"chdir": "{0}".format(self.rts_out_dir),
                             "time": "2:00:00",
                             "nodes": "{0}".format(nnodes),
-                            "gres": "gpu:1",
-                            "ntasks-per-node": "1"}
+                            "cpus-per-gpu": "1"}
             module_list= ["RTS/master"]
             commands = list(self.script_body)  # make a copy of body to then extend
             commands.append("export UCX_MEMTYPE_CACHE=n")
@@ -978,13 +974,7 @@ if __name__ == '__main__':
         print_version()
 
     # set up the logger for stand-alone execution
-    logger.setLevel(loglevels[args.loglvl])
-    ch = logging.StreamHandler()
-    ch.setLevel(loglevels[args.loglvl])
-    formatter = logging.Formatter('%(asctime)s  %(filename)s  %(name)s  %(lineno)-4d  %(levelname)-9s :: %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.propagate = False
+    logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     logger.info("Creating BaseRTSconfig instance - compiling basic RTS configuration script")
     try:

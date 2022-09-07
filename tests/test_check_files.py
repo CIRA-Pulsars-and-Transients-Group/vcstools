@@ -9,9 +9,9 @@ from numpy.testing import assert_almost_equal
 def test_get_files_and_sizes():
     """Test the get_files_and_sizes function."""
     #obsid, mode, file_loc, suffix, number
-    tests = [[1118463408, 'raw',    'tests/test_files/checks_get_files_1118463408_raw.txt', '.dat', 253440000],
-             [1221832280, 'tar_ics','tests/test_files/checks_get_files_1221832280_tar_ics.txt','.tar', 7865368576],
-             [1221832280, 'ics',    'tests/test_files/checks_get_files_1221832280_ics.txt', '_ics.dat', 30720000]]
+    tests = [[1118463408, 'raw',    'tests/test_files/checks_get_files_1118463408_raw.txt',    '[0-9].dat',     253440000],
+             [1221832280, 'tar_ics','tests/test_files/checks_get_files_1221832280_tar_ics.txt','.tar',     7865368576],
+             [1221832280, 'ics',    'tests/test_files/checks_get_files_1221832280_ics.txt',    '_ics.dat', 30720000]]
     for test in tests:
         obsid, mode, file_loc, suffix, number = test
         # Read in file list that was too long to store in this function
@@ -21,6 +21,7 @@ def test_get_files_and_sizes():
         expected_ans = (sorted(file_list), suffix, number)
         ans = get_files_and_sizes(obsid, mode)
         ans = (sorted(ans[0]), ans[1], ans[2])
+        print(ans[1], ans[2], expected_ans[1], expected_ans[2])
         if ans != expected_ans:
             raise AssertionError()
 
