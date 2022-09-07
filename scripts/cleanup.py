@@ -106,7 +106,7 @@ if __name__ == '__main__':
             logger.error("ImportError: {0}".format(ie))
             sys.exit(0)
 
-    # set up the logger for stand-alone execution
+# set up the logger for stand-alone execution
     logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.raw:

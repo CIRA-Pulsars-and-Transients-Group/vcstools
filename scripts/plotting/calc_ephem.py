@@ -228,14 +228,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.version:
-        try:
-            import version
-            logger.debug(version.__version__)
-            sys.exit(0)
-        except ImportError as ie:
-            logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(ie))
-            sys.exit(0)
+        from vcstools.general_utils import print_version
+        print_version()
 
     # set up the logger for stand-alone execution
     logger = setup_logger(logger, log_level=loglevels[args.loglvl])
