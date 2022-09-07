@@ -1,5 +1,10 @@
 VCStools software tools
 ======
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/6a8dcd83c6ab42e5b03ef43d8302dd0a)](https://app.codacy.com/gh/CIRA-Pulsars-and-Transients-Group/vcstools?utm_source=github.com&utm_medium=referral&utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&utm_campaign=Badge_Grade_Settings)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/77cdb25072364ee48dd2f1e3ca078af5)](https://www.codacy.com/gh/CIRA-Pulsars-and-Transients-Group/vcstools/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&amp;utm_campaign=Badge_Grade)
+[![Codacy Badge](https://app.codacy.com/project/badge/Coverage/77cdb25072364ee48dd2f1e3ca078af5)](https://www.codacy.com/gh/CIRA-Pulsars-and-Transients-Group/vcstools/dashboard?utm_source=github.com&utm_medium=referral&utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&utm_campaign=Badge_Coverage)
+[![Build Status](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools.svg?branch=master)](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools)
+[![Documentation Status](https://readthedocs.org/projects/mwa-vcstools/badge/?version=latest)](https://mwa-vcstools.readthedocs.io/en/latest/?badge=latest)
 
 Installation
 ------
@@ -15,8 +20,6 @@ or
 ```bash
 python3 setup.py install --prefix="<install_dir>" --single-version-externally-managed --record=record.txt
 ```
-If you'd like to specify the install directory
-Note we have not put all functions into the vcstools package so you may need to add your bin (the directory `which find_pulsar_in_obs.py`) to the PYTHONPATH
 
 The second step is to compile the beamformer which is much more difficult. All of the beamformer's dependancies must be taken into account as seen in this example cmake command:
 ```bash
@@ -26,19 +29,18 @@ cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_CUDA_COMPILER=$CU
     -DCFITSIO_ROOT_DIR=${MAALI_CFITSIO_HOME} \
     -DFFTW3_ROOT_DIR=${FFTW3_ROOT_DIR} \
     -DFFTW3_INCLUDE_DIR=${FFTW_INCLUDE_DIR} \
-    -DSLALIB_ROOT_DIR=${LIBSLA_LIB} \
+    -DPAL_ROOT_DIR=${PAL_ROOT} \
     -DPSRFITS_UTILS_ROOT_DIR=${PSRFITS_UTILS_ROOT} \
-    -DXGPU_ROOT_DIR=${XGPU_ROOT} \
     ..
 ```
 
 For this reason, we have created a docker image which is much easier to install and can be found [here](https://cloud.docker.com/u/cirapulsarsandtransients/repository/docker/cirapulsarsandtransients/vcstools)
 
-You will have to make your own entry in config.py for your supercomputer which we are happy to help with.
+You will have to make your own entry in vcstools/config.py for your supercomputer which we are happy to help with.
 
 Help
 ------
-Documentation on how to process MWA VCS data can be found [here](https://wiki.mwatelescope.org/display/MP/Documentation)
+Documentation on how to process MWA VCS data can be found [here](https://wiki.mwatelescope.org/display/MP/Documentation) and the developer documentation can be found [here](https://mwa-vcstools.readthedocs.io)
 
 Credit
 ------
@@ -53,9 +55,3 @@ If you used polarimetry, please give credit by citing:
 
 If you used the inverse PFB, please give credit by citing:
 [McSweeney et al. (2020)](http://dx.doi.org/10.1017/pasa.2020.24)
-
-Status
-------
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/c5935a38ea9d4ec7a5c78fe107766cda)](https://www.codacy.com/manual/CIRA-Pulsars-and-Transients-Group/vcstools?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&amp;utm_campaign=Badge_Grade)
-[![Codacy Badge](https://api.codacy.com/project/badge/Coverage/c5935a38ea9d4ec7a5c78fe107766cda)](https://www.codacy.com/manual/CIRA-Pulsars-and-Transients-Group/vcstools?utm_source=github.com&utm_medium=referral&utm_content=CIRA-Pulsars-and-Transients-Group/vcstools&utm_campaign=Badge_Coverage)
-[![Build Status](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools.svg?branch=master)](https://travis-ci.org/CIRA-Pulsars-and-Transients-Group/vcstools)
