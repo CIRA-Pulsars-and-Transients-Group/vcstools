@@ -23,7 +23,7 @@ if __name__ == '__main__':
     if args.mfits:
         metafits = args.mfits
     else:
-        metafits = '/astro/mwavcs/' + os.environ(['USER']) + '/' + str(args.obsid) + '/' + str(args.obsid) + '_metafits_ppds.fits'
+        metafits = '/astro/mwavcs/' + os.environ['USER'] + '/' + str(args.obsid) + '/' + str(args.obsid) + '_metafits_ppds.fits'
 
     hdulist    = pyfits.open(metafits)
     freq_str   = hdulist[0].header['CHANNELS']
