@@ -462,7 +462,7 @@ def source_beam_coverage_and_times(obsid, pulsar,
     """
     # Perform required metadata calls
     if query is None:
-        query = psrqpy.QueryATNF(psrs=pulsar).pandas
+        query = psrqpy.QueryATNF(version="1.65", psrs=pulsar).pandas
     if p_ra is None or p_dec is None:
         # Get some basic pulsar and obs info info
         query_id = list(query['PSRJ']).index(pulsar)
