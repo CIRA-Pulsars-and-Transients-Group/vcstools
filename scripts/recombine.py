@@ -24,7 +24,7 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--start", type=int, help="First GPS second of data to recombine.", required=True)
     parser.add_argument("-d", "--duration", type=int, help="Seconds of data to recomine", required=True)
     parser.add_argument("-w", "--data_dir", type=str, help="Directory containing the raw data")
-    parser.add_argument("-p", "--output_base_dir", type=str, help="The base directory to put the recombined data. Eg /astro/mwavcs/vcs/<obsid>.")
+    parser.add_argument("-p", "--output_base_dir", type=str, help="The base directory to put the recombined data. Eg /astro/mwavcs/<USER>/<obsid>.")
     parser.add_argument("-e", "--recombine_command", type=str, help="the filename of the recombine function. Default: recombine", default="recombine")
     parser.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO", help="Logger verbosity level. Default: INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
