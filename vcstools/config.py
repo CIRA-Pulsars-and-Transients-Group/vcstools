@@ -161,14 +161,8 @@ if __name__ == '__main__':
     logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.version:
-        try:
-            import version
-            print(version.__version__)
-            sys.exit(0)
-        except ImportError as ie:
-            print("Couldn't import version.py - have you installed vcstools?")
-            print("ImportError: {0}".format(ie))
-            sys.exit(0)
+        from vcstools.general_utils import print_version
+        print_version()
 
     #print config file
     config = load_config_file()

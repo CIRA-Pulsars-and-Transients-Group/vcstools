@@ -67,15 +67,8 @@ if __name__ == '__main__':
     logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.version:
-        import sys
-        try:
-            import version
-            logger.info(version.__version__)
-            sys.exit(0)
-        except ImportError as ie:
-            logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(ie))
-            sys.exit(0)
+        from vcstools.general_utils import print_version
+        print_version()
 
     if args.end:
         n_secs = get_nsecs(args.begin, args.end)
