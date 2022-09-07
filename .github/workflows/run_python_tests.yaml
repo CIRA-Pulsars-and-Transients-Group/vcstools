@@ -30,6 +30,10 @@ jobs:
           pip install .
           cd ..
           pip install .
-      - name: Test with pytest
+      - name: Tests and coverage
         run: |
-          python setup.py test
+          pip install coverage
+          coverage run setup.py test
+          coverage xml
+          export CODACY_PROJECT_TOKEN=${{ secrets.CODACY_PROJECT_TOKEN }}
+          bash <(curl -Ls https://coverage.codacy.com/get.sh) report -r coverage.xml
