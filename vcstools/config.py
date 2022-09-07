@@ -2,15 +2,23 @@
 Functions to handle parsing the config file for multiple super computers
 """
 
+import logging
+import socket
+import argparse
+import sys
+import os
+
+from vcstools.general_utils import setup_logger
+
 #config data
 
-GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
-                 'base_product_dir' : '/group/mwavcs/vcs/',
+GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/{}/'.format(os.environ(['USER'])),
+                 'base_product_dir' : '/astro/mwavcs/{}/'.format(os.environ(['USER'])),
                  'group_account' : {'cpuq':  '#SBATCH --account=pawsey0348',
                                     'gpuq':  '#SBATCH --account=mwavcs',
                                     'copyq': '#SBATCH --account=mwavcs',
                                     'zcpuq': '#SBATCH --account=mwavcs'},
-                 'module_dir' : '/group/mwa/software/modulefiles',
+                 'module_dir' : '/pawsey/mwa/software/python3/modulefiles',
                  'presto_module' : 'presto/master',
                  'psrcat_module' : 'psrcat/1.59',
                  'cpuq_cluster' : 'magnus',
@@ -28,8 +36,8 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
                  'ssd_dir' : None,
                  'gid' : 34858} # mwavcs
 
-GARRAWARLA_CONFIG = {'base_data_dir' : '/astro/mwavcs/vcs/',
-                 'base_product_dir' : '/group/mwavcs/vcs/',
+GARRAWARLA_CONFIG = {'base_data_dir' : '/astro/mwavcs/{}/'.format(os.environ(['USER'])),
+                 'base_product_dir' : '/astro/mwavcs/{}/'.format(os.environ(['USER'])),
                  'group_account' : {'cpuq':  '#SBATCH --account=mwavcs',
                                     'gpuq':  '#SBATCH --account=mwavcs',
                                     'copyq': '#SBATCH --account=mwavcs',
@@ -108,13 +116,6 @@ ARM_CONFIG =   {'base_data_dir' : '/o9000/Pulsar/vcs/',
 
 
 
-
-import logging
-import socket
-import argparse
-import sys
-
-from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
 

@@ -6,12 +6,13 @@ any of the channels are above 128.
 """
 from astropy.io import fits as pyfits
 import argparse
+import os
 from vcstools.general_utils import sfreq
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Print the coarse channel sequence as in gpubox/subband order. Make sure you have *_metafits_ppds.fits")
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None, required=True)
-    parser.add_argument("-m", "--mfits", type=str, help="Please provide the path of the *_metafits_ppds.fits if it is not /astro/mwavcs/vcs/[OBID]/*_metafits_ppds.fits")
+    parser.add_argument("-m", "--mfits", type=str, help="Please provide the path of the *_metafits_ppds.fits if it is not /astro/mwavcs/$USER/[OBSID]/*_metafits_ppds.fits")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     args = parser.parse_args()
 
@@ -22,7 +23,7 @@ if __name__ == '__main__':
     if args.mfits:
         metafits = args.mfits
     else:
-        metafits = '/astro/mwavcs/vcs/' + str(args.obsid) + '/' + str(args.obsid) + '_metafits_ppds.fits'
+        metafits = '/astro/mwavcs/' + os.environ(['USER']) + '/' + str(args.obsid) + '/' + str(args.obsid) + '_metafits_ppds.fits'
 
     hdulist    = pyfits.open(metafits)
     freq_str   = hdulist[0].header['CHANNELS']
