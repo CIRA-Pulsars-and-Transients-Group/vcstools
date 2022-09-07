@@ -82,6 +82,6 @@ setup(name="mwa_vcstools",
 )
 
 # remove files
-os.remove('vcstools/version.py')
+os.remove('version.py')
 if os.path.isfile('record.txt'):
     os.remove('record.txt')
