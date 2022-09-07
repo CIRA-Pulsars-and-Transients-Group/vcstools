@@ -25,7 +25,7 @@ obsid_list = [1222697776, 1226062160, 1225713560, 1117643248]
 for obs in obsid_list:
     md_dict[str(obs)] = get_common_obs_metadata(obs, return_all=True)
 
-query = psrqpy.QueryATNF().pandas
+query = psrqpy.QueryATNF(version="1.65", ).pandas
 
 # The five pulsars from 1276619416 that were also detected in imaging.
 pulsars_to_test = []
@@ -122,8 +122,7 @@ def test_find_pulsar_w50():
     """
     print("\nfind_pulsar_w50")
     test_cases=[]
-    test_cases.append(("J1614-2230", 0.0003, 1.9651256689866104e-06))
-    test_cases.append(("J0002+6216", 0.0005224464198943024, 0.00021768600828929265))
+    test_cases.append(("J1939+2134", 0.0382e-3, 0.0001e-3))
 
     for psr, exp_w50, exp_w50_err in test_cases:
         w50, w50_err = find_pulsar_w50(psr, query=query)
