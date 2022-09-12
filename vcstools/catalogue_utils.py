@@ -41,7 +41,7 @@ def get_psrcat_ra_dec(pulsar_list=None, max_dm=5000., include_dm=False, query=No
             The Declination in the format "DD:MM:SS.SS".
     """
     if query is None:
-        query = psrqpy.QueryATNF(version="1.65", params = ['PSRJ', 'RAJ', 'DECJ', 'RAJD', 'DECJD', 'DM'], psrs=pulsar_list).pandas
+        query = psrqpy.QueryATNF(params = ['PSRJ', 'RAJ', 'DECJ', 'RAJD', 'DECJD', 'DM'], psrs=pulsar_list).pandas
     pulsar_ra_dec = []
     for i, _ in enumerate(query["PSRJ"]):
         # Only record if under the max_dm
@@ -92,7 +92,7 @@ def get_psrcat_dm_period(pulsar_list=None, query=None):
             The period of the puslsar in seconds.
     """
     if query is None:
-        query = psrqpy.QueryATNF(version="1.65", params = ['PSRJ', 'DM', 'P0'], psrs=pulsar_list).pandas
+        query = psrqpy.QueryATNF(params = ['PSRJ', 'DM', 'P0'], psrs=pulsar_list).pandas
 
     pulsar_dm_p = []
     for i, _ in enumerate(query["PSRJ"]):

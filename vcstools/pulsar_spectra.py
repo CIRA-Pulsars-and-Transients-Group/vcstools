@@ -327,7 +327,7 @@ def flux_from_atnf(pulsar, query=None):
         The ucnertainty in spind from ATNF, will be None if not available.
     """
     if query is None:
-        query = psrqpy.QueryATNF(version="1.65", psrs=[pulsar]).pandas
+        query = psrqpy.QueryATNF(psrs=[pulsar]).pandas
     query_id = list(query['PSRJ']).index(pulsar)
 
     flux_queries = ["S40", "S50", "S60", "S80", "S100", "S150", "S200",\
