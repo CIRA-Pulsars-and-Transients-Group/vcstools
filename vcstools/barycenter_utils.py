@@ -57,10 +57,6 @@ def get_barycentric_correction(
     -------
     float
         Barycentric velocity correction as a fraction of the speed of light.
-
-    NOTES: This code produces values in the opposite sense to PRESTO
-           (e.g., this barycentric value is the negative of what should
-           be provided to PRESTO's utilities).
     """
     coord = SkyCoord(ra, dec, frame="icrs", unit=(u.hourangle, u.deg))
     t = Time(mjd, format="mjd", scale="utc")
@@ -99,7 +95,7 @@ def get_barycentric_correction(
 
     if for_presto:
         logger.debug(
-            f"Negating computed value for PRESTO use (sign-convention differences)"
+            "Negating computed value for PRESTO use (sign-convention differences)"
         )
         return -vb.value / c.value
     else:
@@ -142,11 +138,7 @@ def get_mean_barycentric_correction(
     -------
     float
         The mean Barycentric velocity correction as a fraction of the speed of
-        light
-
-    NOTES: This code produces values in the opposite sense to PRESTO
-           (e.g., this barycentric value is the negative of what should
-           be provided to PRESTO's utilities).
+        light.
     """
     mjds = np.linspace(start_mjd, start_mjd + duration / SEC_PER_DAY, nsteps)
     coord = SkyCoord(ra, dec, frame="icrs", unit=(u.hourangle, u.deg))
@@ -156,45 +148,20 @@ def get_mean_barycentric_correction(
     logger.info(f"Dec (J2000) : {coord.dec.to_string(u.degree)}")
     logger.info(f"Topocentric MJD range : {np.min(mjds)} - {np.max(mjds)}")
 
-    vb_corr = []
+    beta_corr = []
     for t in times:
-        vb_optical = coord.radial_velocity_correction(
-            kind="barycentric", obstime=t, location=TEL_LOCATION
+        beta = get_barycentric_correction(
+            ra,
+            dec,
+            t.mjd,
+            convention=convention,
+            for_presto=for_presto,
         )
+        beta_corr.append(beta)
 
-        if convention == "optical":
-            vb = vb_optical
-        elif convention == "radio":
-            vb = vb_optical.to(u.Hz, u.doppler_optical(1 * u.Hz)).to(
-                vb_optical.unit, u.doppler_radio(1 * u.Hz)
-            )
-        elif convention == "relativistic":
-            vb = vb_optical.to(u.Hz, u.doppler_optical(1 * u.Hz)).to(
-                vb_optical.unit, u.doppler_relativistic(1 * u.Hz)
-            )
-        else:
-            logger.warning(
-                "convention not recognised, must be one of: optical, radio, "
-                "relativistic"
-            )
-            logger.warning("Defaulting to RADIO convention")
-            vb = vb_optical.to(u.Hz, u.doppler_optical(1 * u.Hz)).to(
-                vb_optical.unit, u.doppler_radio(1 * u.Hz)
-            )
+    mean_beta = np.mean(beta_corr)
 
-        vb_corr.append(vb.value)
-
-    mean_vb = np.mean(vb_corr)
-
-    logger.info(
-        "mean barycentric velocity (fraction of speed of light) = "
-        "{0}".format(mean_vb / c.value)
-    )
-
-    if for_presto:
-        logger.debug(
-            f"Negating computed value for PRESTO use (sign-convention differences)"
-        )
-        return -mean_vb / c.value
-    else:
-        return mean_vb / c.value
+    logger.info(f"mean barycentric velocity (fraction of speed of light) = {mean_beta}")
+    # Don't need to negate here, as it will already be done
+    # in the instantaneous function call
+    return mean_beta
