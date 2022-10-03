@@ -39,6 +39,7 @@ reqs = ['astropy>=3.2.1',
         'mwa_pb',
         'mwa-hyperbeam',
         'pulsar_spectra',
+        'jplephem'
        ]
 
 # Download the ANTF_pulsar_database_file file if it doesn't exist
