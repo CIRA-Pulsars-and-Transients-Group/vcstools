@@ -61,9 +61,9 @@ def get_barycentric_correction(
     coord = SkyCoord(ra, dec, frame="icrs", unit=(u.hourangle, u.deg))
     t = Time(mjd, format="mjd", scale="utc")
 
-    logger.info(f"RA (J2000) : {coord.ra.to_string(u.hour)}")
-    logger.info(f"Dec (J2000) : {coord.dec.to_string(u.degree)}")
-    logger.info(f"Topocentric MJD : {t.mjd}")
+    logger.debug(f"RA (J2000) : {coord.ra.to_string(u.hour)}")
+    logger.debug(f"Dec (J2000) : {coord.dec.to_string(u.degree)}")
+    logger.debug(f"Topocentric MJD : {t.mjd}")
 
     vb_optical = coord.radial_velocity_correction(
         kind="barycentric", obstime=t, location=TEL_LOCATION
@@ -88,18 +88,16 @@ def get_barycentric_correction(
             vb_optical.unit, u.doppler_radio(1 * u.Hz)
         )
 
-    logger.info(
-        "barycentric velocity (fraction of speed of light) = "
-        "{0}".format(vb.value / c.value)
-    )
+    beta = vb.value / c.value
+    logger.info(f"barycentric velocity (fraction of speed of light) = {beta}")
 
     if for_presto:
         logger.debug(
             "Negating computed value for PRESTO use (sign-convention differences)"
         )
-        return -vb.value / c.value
+        return -beta
     else:
-        return vb.value / c.value
+        return beta
 
 
 def get_mean_barycentric_correction(
@@ -144,9 +142,9 @@ def get_mean_barycentric_correction(
     coord = SkyCoord(ra, dec, frame="icrs", unit=(u.hourangle, u.deg))
     times = Time(mjds, format="mjd", scale="utc")
 
-    logger.info(f"RA (J2000) : {coord.ra.to_string(u.hour)}")
-    logger.info(f"Dec (J2000) : {coord.dec.to_string(u.degree)}")
-    logger.info(f"Topocentric MJD range : {np.min(mjds)} - {np.max(mjds)}")
+    logger.debug(f"RA (J2000) : {coord.ra.to_string(u.hour)}")
+    logger.debug(f"Dec (J2000) : {coord.dec.to_string(u.degree)}")
+    logger.debug(f"Topocentric MJD range : {np.min(mjds)} - {np.max(mjds)}")
 
     beta_corr = []
     for t in times:
