@@ -18,7 +18,7 @@ def opt_parser(loglevels):
         comp_config = load_config_file()
     except Exception:
         # No computer found so making a default for the argparse help to work
-        comp_config = {'base_data_dir' : "/astro/mwavcs/vcs/"}
+        comp_config = {'base_data_dir' : f"/astro/mwavcs/{os.environ['USER']}/"}
     parser = argparse.ArgumentParser(description="scripts to check sanity of downloads and recombine.")
     parser.add_argument("-m", "--mode", type=str, choices=['download','recombine'],\
                           help="Mode you want to run: download, recombine", dest='mode', default=None)
@@ -70,14 +70,8 @@ if __name__ == '__main__':
     logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.version:
-        try:
-            import version
-            logger.info(version.__version__)
-            sys.exit(0)
-        except ImportError as ie:
-            logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(ie))
-            sys.exit(0)
+        from vcstools.general_utils import print_version
+        print_version()
 
     if (args.mode is None) or (args.obsID is None):
         logger.error("You must specify BOTH a mode and observation ID")

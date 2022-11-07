@@ -193,8 +193,8 @@ def download_cal(obs_id, cal_obs_id, data_dir, product_dir,
     mdir(vis_dir, 'Calibrator vis', gid=comp_config['gid'])
     mdir(product_dir, 'Calibrator product', gid=comp_config['gid'])
     mdir(batch_dir, 'Batch', gid=comp_config['gid'])
-    # Downloads the visablities to  /astro/mwavcs/vcs/[cal_obs_id]/vis
-    # but creates a link to it here /astro/mwavcs/vcs/[obs_id]/cal/[cal_obs_id]
+    # Downloads the visablities to  /astro/mwavcs/[USER]/[cal_obs_id]/vis
+    # but creates a link to it here /astro/mwavcs/[USER]/[obs_id]/cal/[cal_obs_id]
     csvfile = os.path.join(batch_dir, "{0}_dl.csv".format(cal_obs_id))
     create_link(data_dir, 'vis', product_dir, 'vis')
     obsdownload_batch = "caldownload_{0}".format(cal_obs_id)
@@ -677,7 +677,7 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--increment", type=int, default=64, help="Increment in seconds (how much we process at once) ")
     parser.add_argument("-s", action="store_true", default=False, help="Single step (only process one increment and this is it (False == do them all) ")
     parser.add_argument("-w", "--work_dir", metavar="DIR", default=None, help="Base directory you want run things in. USE WITH CAUTION! Per default "
-                          "raw data will will be downloaded into /astro/mwavcs/vcs/[obsID] and data products will be in /group/mwavcs/vcs/[obsID]."
+                          "raw data will will be downloaded into /astro/mwavcs/$USER/[obsID] and data products will be in /astro/mwavcs/$USER/[obsID]."
                           " If set, this will create a folder for the Obs. ID if it doesn't exist ")
     parser.add_argument("-c", "--ncoarse_chan", type=int, default=24, help="Coarse channel count (how many to process) ")
     parser.add_argument("-n", "--nfine_chan", type=int, default=128, help="Number of fine channels per coarse channel ")
@@ -695,14 +695,8 @@ if __name__ == '__main__':
 
     logger.info("Using vcstools/{0}".format(args.vcstools_version))
     if args.version:
-        try:
-            import version
-            logger.info(version.__version__)
-            sys.exit(0)
-        except ImportError as IE:
-            logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(IE))
-            sys.exit(0)
+        from vcstools.general_utils import print_version
+        print_version()
 
     #Option parsing
     if not args.obs:
