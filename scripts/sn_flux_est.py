@@ -3,7 +3,7 @@ import logging
 import argparse
 import sys
 
-from vcstools.sn_flux_utils import est_pulsar_sn, ATNF_spectral_data_plot
+from vcstools.radiometer_equation import est_pulsar_sn, ATNF_spectral_data_plot
 from vcstools.general_utils import setup_logger
 
 logger = logging.getLogger(__name__)
