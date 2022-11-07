@@ -369,10 +369,10 @@ def est_pulsar_flux(pulsar, obsid, plot_flux=False, common_metadata=None, query=
     if cat_dict is None:
         cat_dict = collect_catalogue_fluxes()
 
-    freqs, fluxs, flux_errs, refs = cat_dict[pulsar]
+    freqs, bands, fluxs, flux_errs, refs = cat_dict[pulsar]
     if len(freqs) < 2:
         return None, None
-    model, m, _, _, _ = find_best_spectral_fit(pulsar, freqs, fluxs, flux_errs, refs, plot_best=plot_flux)
+    model, m, _, _, _ = find_best_spectral_fit(pulsar, freqs, bands, fluxs, flux_errs, refs, plot_best=plot_flux)
     if model is None:
         return None, None
     else:
@@ -623,6 +623,8 @@ def est_pulsar_sn(pulsar, obsid,
     s_mean, s_mean_err = est_pulsar_flux(pulsar, obsid, plot_flux=plot_flux,
                                          common_metadata=common_metadata,
                                          query=query, cat_dict=cat_dict)
+    logger.debug(f"s_mean: {s_mean}")
+    logger.debug(f"s_mean_err: {s_mean_err}")
     # Fluxes may be Nones. If so, return None
     if s_mean is None or s_mean_err is None:
         return None, None, None, None
