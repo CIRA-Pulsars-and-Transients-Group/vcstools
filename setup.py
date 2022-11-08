@@ -38,7 +38,7 @@ reqs = ['astropy>=3.2.1',
         'mwa-voltage',
         'mwa_pb',
         'mwa-hyperbeam',
-        'pulsar_spectra',
+        'pulsar_spectra>=2.0.0',
         'jplephem'
        ]
 
