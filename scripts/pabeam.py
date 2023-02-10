@@ -45,6 +45,23 @@ from vcstools.beam_sim import getTileLocations, get_obstime_duration, partial_co
 
 logger = logging.getLogger(__name__)
 
+def makeUnpolInstrumentalResponse(j1, j2):
+    """
+    Form the visibility matrix in instrumental response from two Jones
+    matrices assuming unpolarised sources (hence the brightness matrix is
+    the identity matrix)
+    Input: j1,j2: Jones matrices of dimension[za][az][2][2]
+    Returns: [za][az][[xx,xy],[yx,yy]] where "X" and "Y" are defined by the receptors
+    of the Dipole object used in the ApertureArray. Hence to get "XX", you want
+    result[za][az][0][0] and for "YY" you want result[za][az][1][1]
+    """
+    result = numpy.empty_like(j1)
+    result[:, :, 0, 0] = j1[:, :, 0, 0] * j2[:, :, 0, 0].conjugate() + j1[:, :, 0, 1] * j2[:, :, 0, 1].conjugate()
+    result[:, :, 1, 1] = j1[:, :, 1, 0] * j2[:, :, 1, 0].conjugate() + j1[:, :, 1, 1] * j2[:, :, 1, 1].conjugate()
+    result[:, :, 0, 1] = j1[:, :, 0, 0] * j2[:, :, 1, 0].conjugate() + j1[:, :, 0, 1] * j2[:, :, 1, 1].conjugate()
+    result[:, :, 1, 0] = j1[:, :, 1, 0] * j2[:, :, 0, 0].conjugate() + j1[:, :, 1, 1] * j2[:, :, 0, 1].conjugate()
+    return result
+
 
 def createArrayFactor(za, az, pixel_area, data):
     """
@@ -122,27 +139,17 @@ def createArrayFactor(za, az, pixel_area, data):
     # calculate the tile beam at the given Az,ZA pixel
     logger.info( "rank {:3d} Calculating tile beam".format(rank))
     if beam_model == 'hyperbeam':
-        amps = [1.0] * 16
-        norm_to_zenith = True
         # This method is no longer needed as mwa_pb uses hyperbeam
-        jones = beam.calc_jones_array(az.flatten(), za.flatten(), obsfreq, delays, amps, norm_to_zenith)
-        #jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
-        #jones = jones.reshape(za.shape[0], 1, 2, 2)
-        sky = np.matrix([[1, 0], [0, 1]])
-        tile_pattern = []
-        for ji in range(az.size * za.size):
-            jmat = np.matrix(jones[ji].reshape((2, 2)))
-            response = jmat @ sky @ jmat.H
-            tile_pattern.append(np.trace(response).real)
-        #vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
-        #jones = None # Dereference for garbage collection
-        #tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
-        #vis = None # Dereference for garbage collection
+        jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
+        jones = jones.reshape(za.shape[0], 1, 2, 2)
+        vis = makeUnpolInstrumentalResponse(jones, jones)
+        jones = None # Dereference for garbage collection
+        tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
+        vis = None # Dereference for garbage collection
     else:
         raise NotImplementedError("Legacy mwa_pb methods are now deprecated - use hyperbeam")
     #logger.info("rank {:3d} Combining tile pattern".format(rank))
-    #tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0)
-    tile_pattern = np.array(tile_pattern).flatten()
+    tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0).flatten()
     logger.debug("max(tile_pattern) {}".format(max(tile_pattern)))
 
 
