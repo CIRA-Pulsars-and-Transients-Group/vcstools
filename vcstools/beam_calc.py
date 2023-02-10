@@ -30,7 +30,7 @@ def makeUnpolInstrumentalResponse(j1, j2):
     of the Dipole object used in the ApertureArray. Hence to get "XX", you want
     result[za][az][0][0] and for "YY" you want result[za][az][1][1]
     """
-    result = numpy.empty_like(j1)
+    result = np.empty_like(j1)
     result[:, :, 0, 0] = j1[:, :, 0, 0] * j2[:, :, 0, 0].conjugate() + j1[:, :, 0, 1] * j2[:, :, 0, 1].conjugate()
     result[:, :, 1, 1] = j1[:, :, 1, 0] * j2[:, :, 1, 0].conjugate() + j1[:, :, 1, 1] * j2[:, :, 1, 1].conjugate()
     result[:, :, 0, 1] = j1[:, :, 0, 0] * j2[:, :, 1, 0].conjugate() + j1[:, :, 0, 1] * j2[:, :, 1, 1].conjugate()
