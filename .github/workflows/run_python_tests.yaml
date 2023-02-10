@@ -27,6 +27,10 @@ jobs:
           pip install cython
           pip install git+https://github.com/MWATelescope/mwa_pb.git
           pip install .
+      - name: Data download and env setup
+        run: |
+          wget http://ws.mwatelescope.org/static/mwa_full_embedded_element_pattern.h5
+          echo "MWA_BEAM_FILE=$(pwd)/mwa_full_embedded_element_pattern.h5" >> $GITHUB_ENV
       - name: Tests and coverage
         run: |
           pip install coverage
