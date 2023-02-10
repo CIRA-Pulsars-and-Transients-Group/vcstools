@@ -285,7 +285,12 @@ def get_beam_power_over_time(names_ra_dec,
         if "mwa_hyperbeam" not in sys.modules:
             logger.error("mwa_hyperbeam not installed so can not use hyperbeam to create a beam model. Exiting")
             sys.exit(1)
-        beam = mwa_hyperbeam.FEEBeam(config.h5file)
+        if os.environ.get("MWA_BEAM_FILE"):
+            beam = mwa_hyperbeam.FEEBeam()
+        else:
+            logger.error("MWA_BEAM_FILE environment variable not set! Please set to location of 'mwa_full_embedded_element_pattern.h5' file")
+            sys.exit(1)
+
 
     # Work out time steps to calculate over
     starttimes = np.arange(start_time, time + start_time, dt)
