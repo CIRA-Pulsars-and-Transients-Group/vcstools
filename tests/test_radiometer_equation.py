@@ -7,7 +7,7 @@ import numpy as np
 from numpy.testing import assert_almost_equal
 from vcstools.metadb_utils import get_common_obs_metadata
 import psrqpy
-
+import pytest
 from vcstools import data_load
 from vcstools.general_utils import setup_logger
 from vcstools.radiometer_equation import find_t_sys_gain, find_pulsar_w50,\
