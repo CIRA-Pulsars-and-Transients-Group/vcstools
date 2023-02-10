@@ -25,10 +25,7 @@ jobs:
       - name: Install python dependencies
         run: |
           pip install cython
-          git clone https://github.com/MWATelescope/mwa_pb.git
-          cd mwa_pb
-          pip install .
-          cd ..
+          pip install git+https://github.com/MWATelescope/mwa_pb.git
           pip install .
       - name: Tests and coverage
         run: |
