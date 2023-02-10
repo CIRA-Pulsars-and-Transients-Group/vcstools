@@ -34,8 +34,8 @@ from vcstools.metadb_utils import getmeta, get_common_obs_metadata, get_ambient_
 from vcstools.pointing_utils import getTargetAZZA, getTargetRADec
 from vcstools.general_utils import setup_logger, split_remove_remainder
 from vcstools import data_load
-from mwa_pb import primary_beam as pb
-from mwa_pb import config
+#from mwa_pb import primary_beam as pb
+#from mwa_pb import config
 import mwa_hyperbeam
 beam = mwa_hyperbeam.FEEBeam(config.h5file)
 from vcstools.beam_calc import get_Trec
@@ -122,32 +122,27 @@ def createArrayFactor(za, az, pixel_area, data):
     # calculate the tile beam at the given Az,ZA pixel
     logger.info( "rank {:3d} Calculating tile beam".format(rank))
     if beam_model == 'hyperbeam':
+        amps = [1.0] * 16
+        norm_to_zenith = True
         # This method is no longer needed as mwa_pb uses hyperbeam
-        jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
-        jones = jones.reshape(za.shape[0], 1, 2, 2)
-        vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
-        jones = None # Dereference for garbage collection
-        tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
-        vis = None # Dereference for garbage collection
-    elif beam_model == 'analytic':
-        tile_xpol, tile_ypol = pb.MWA_Tile_analytic(za, az,
-                                                freq=obsfreq, delays=[delays, delays],
-                                                zenithnorm=True,
-                                                power=True)
-    elif beam_model == 'advanced':
-        tile_xpol, tile_ypol = pb.MWA_Tile_advanced(za, az,
-                                                freq=obsfreq, delays=[delays, delays],
-                                                zenithnorm=True,
-                                                power=True)
-    elif beam_model == 'full_EE':
-        tile_xpol, tile_ypol = pb.MWA_Tile_full_EE(za, az,
-                                                freq=obsfreq, delays=np.array([delays, delays]),
-                                                zenithnorm=True,
-                                                power=True,
-                                                interp=False)
+        jones = beam.calc_jones_array(az.flatten(), za.flatten(), obsfreq, delays, amps, norm_to_zenith)
+        #jones = beam.calc_jones_array(az, za, obsfreq, delays, [1.0] * 16, True)
+        #jones = jones.reshape(za.shape[0], 1, 2, 2)
+        sky = np.matrix([[1, 0], [0, 1]])
+        tile_pattern = []
+        for ji in range(az.size * za.size):
+            jmat = np.matrix(jones[ji].reshape((2, 2)))
+            response = jmat @ sky @ jmat.H
+            tile_pattern.append(np.trace(response).real)
+        #vis = pb.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
+        #jones = None # Dereference for garbage collection
+        #tile_xpol, tile_ypol = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
+        #vis = None # Dereference for garbage collection
+    else:
+        raise NotImplementedError("Legacy mwa_pb methods are now deprecated - use hyperbeam")
     #logger.info("rank {:3d} Combining tile pattern".format(rank))
-    tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0)
-    tile_pattern = tile_pattern.flatten()
+    #tile_pattern = np.divide(np.add(tile_xpol, tile_ypol), 2.0)
+    tile_pattern = np.array(tile_pattern).flatten()
     logger.debug("max(tile_pattern) {}".format(max(tile_pattern)))
 
 
