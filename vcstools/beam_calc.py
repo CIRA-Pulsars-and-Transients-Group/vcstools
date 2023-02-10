@@ -9,18 +9,19 @@ from astropy.table import Table
 import psrqpy
 
 #MWA scripts
-from mwa_pb import primary_beam
-from mwa_pb import config
+#from mwa_pb import primary_beam
+#from mwa_pb import config
+import mwa_hyperbeam
 
 from vcstools import data_load
 from vcstools.pointing_utils import sex2deg
 from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata,\
                                   getmeta, obs_max_min
 
-try:
-    import mwa_hyperbeam
-except ImportError:
-    logger.warning('Could not import mwa_hyperbeam; using pure Python implementation')
+#try:
+#    import mwa_hyperbeam
+#except ImportError:
+#    logger.warning('Could not import mwa_hyperbeam; using pure Python implementation')
 
 
 import logging
