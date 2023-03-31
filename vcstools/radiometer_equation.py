@@ -192,7 +192,7 @@ def analyise_and_flux_cal(pulsar, bestprof_data,
     bandwidth = 30.72e6
 
     # Find pulsar ra and dec
-    _, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])[0]
+    #_, pul_ra, pul_dec = get_psrcat_ra_dec(pulsar_list=[pulsar])[0]
 
     # Work out flagged tiles from calbration directory
     if flagged_tiles is not None:
