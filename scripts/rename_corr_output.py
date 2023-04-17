@@ -5,6 +5,7 @@ import argparse
 import os
 
 from vcstools.general_utils import setup_logger
+from vcstools.config import load_config_file
 
 import logging
 logger = logging.getLogger(__name__)
@@ -33,7 +34,8 @@ def get_nsecs(startsec, endsec):
 
 def rename(obsID, times, workdir=None):
     if not workdir:
-        workdir='/astro/mwavcs/{0}/{1}/vis'.format(os.environ['USER'], obsID)
+        config = load_config_file()
+        workdir='{0}/{1}/vis'.format(config["base_data_dir"], obsID)
     n_secs = len(times.split())
     cmd="cd {0};k=1;times=({1});for time in \"${{times[@]}}\";do for box in {2}_${{time}}_gpubox*_00.fits; do mv ${{box}} ${{box%00.fits}}$(printf %02d $k).fits;done;let k=$k+1;if [[ $k -gt {3} ]];then break;fi;done".format(workdir, times, obsID, n_secs)
     return os.system(cmd)

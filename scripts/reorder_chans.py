@@ -8,6 +8,7 @@ from astropy.io import fits as pyfits
 import argparse
 import os
 from vcstools.general_utils import sfreq
+from vcstools.config import load_config_file
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Print the coarse channel sequence as in gpubox/subband order. Make sure you have *_metafits_ppds.fits")
@@ -23,7 +24,8 @@ if __name__ == '__main__':
     if args.mfits:
         metafits = args.mfits
     else:
-        metafits = '/astro/mwavcs/' + os.environ['USER'] + '/' + str(args.obsid) + '/' + str(args.obsid) + '_metafits_ppds.fits'
+        config = load_config_file()
+        metafits = config["base_data_dir"] + '/' + str(args.obsid) + '/' + str(args.obsid) + '_metafits_ppds.fits'
 
     hdulist    = pyfits.open(metafits)
     freq_str   = hdulist[0].header['CHANNELS']
