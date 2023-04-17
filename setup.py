@@ -30,7 +30,7 @@ def get_git_version():
 
 reqs = ['astropy>=3.2.1',
         'argparse>=1.4.0',
-        'numpy>=1.15,<1.20',
+        'numpy>=1.21',
         'matplotlib>=2.1.0',
         'psrqpy>=1.0.5',
         'mpi4py',
