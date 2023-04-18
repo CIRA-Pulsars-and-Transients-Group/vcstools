@@ -147,11 +147,11 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=5000., inclu
         name_ra_dec = get_psrcat_ra_dec(pulsar_list=pulsar_list, max_dm=max_dm, include_dm=include_dm, query=query)
 
     elif source_type == 'FRB':
-        from urllib.request import Request, urlopen
+        import urllib
         from io import StringIO
         try:
-            req = Request("https://www.wis-tns.org/search?&include_frb=1&objtype[]=130&num_page=500&format=csv", headers={'User-Agent': 'Mozilla/5.0'})
-            frb_csv = urlopen(req).read().decode('utf-8')
+            req = urllib.request.Request("https://www.wis-tns.org/search?&include_frb=1&objtype[]=130&num_page=500&format=csv", headers={'User-Agent': 'Mozilla/5.0'})
+            frb_csv = urllib.request.urlopen(req).read().decode('utf-8')
         except urllib.error.HTTPError:
             logger.error('frbcat (https://www.wis-tns.org) not available. Returning empty list')
             # putting and FRB at 90 dec which we should never be able to detect
@@ -189,7 +189,7 @@ def grab_source_alog(source_type='Pulsar', pulsar_list=None, max_dm=5000., inclu
                 name_ra_dec.append([line[0], line[1], line[2]])
 
     elif source_type == 'RRATs':
-        import urllib.request
+        import urllib
         try:
             rrats_data = urllib.request.urlopen('http://astro.phys.wvu.edu/rratalog/rratalog.txt').read().decode()
         except urllib.error.URLError:
