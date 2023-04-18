@@ -40,7 +40,7 @@ reqs = ['astropy>=3.2.1',
         'mwa-hyperbeam',
         'pulsar_spectra>=2.0.0',
         'jplephem',
-        'iminuit<=2.20.0'  # required to ensure numpy versioning works with mwa_pb
+        'iminuit==2.11.1'  # required to ensure numpy versioning works with mwa_pb
        ]
 
 # Download the ANTF_pulsar_database_file file if it doesn't exist
