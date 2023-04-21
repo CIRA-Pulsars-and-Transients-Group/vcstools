@@ -24,7 +24,7 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--start", type=int, help="First GPS second of data to recombine.", required=True)
     parser.add_argument("-d", "--duration", type=int, help="Seconds of data to recomine", required=True)
     parser.add_argument("-w", "--data_dir", type=str, help="Directory containing the raw data")
-    parser.add_argument("-p", "--output_base_dir", type=str, help="The base directory to put the recombined data. Eg /astro/mwavcs/vcs/<obsid>.")
+    parser.add_argument("-p", "--output_base_dir", type=str, help="The base directory to put the recombined data. Eg /astro/mwavcs/<USER>/<obsid>.")
     parser.add_argument("-e", "--recombine_command", type=str, help="the filename of the recombine function. Default: recombine", default="recombine")
     parser.add_argument("-L", "--loglvl", type=str, choices=loglevels.keys(), default="INFO", help="Logger verbosity level. Default: INFO")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
@@ -34,14 +34,8 @@ if __name__ == '__main__':
     logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     if args.version:
-        try:
-            import version
-            logger.info(version.__version__)
-            sys.exit(0)
-        except ImportError as ie:
-            logger.error("Couldn't import version.py - have you installed vcstools?")
-            logger.error("ImportError: {0}".format(ie))
-            sys.exit(0)
+        from vcstools.general_utils import print_version
+        print_version()
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()

@@ -30,7 +30,7 @@ def get_git_version():
 
 reqs = ['astropy>=3.2.1',
         'argparse>=1.4.0',
-        'numpy>=1.13.3',
+        'numpy>=1.15,<1.20',
         'matplotlib>=2.1.0',
         'psrqpy>=1.0.5',
         'mpi4py',
@@ -38,7 +38,9 @@ reqs = ['astropy>=3.2.1',
         'mwa-voltage',
         'mwa_pb',
         'mwa-hyperbeam',
-        'pulsar_spectra',
+        'pulsar_spectra>=2.0.0',
+        'jplephem',
+        'iminuit==2.11.1'  # required to ensure numpy versioning works with mwa_pb
        ]
 
 # Download the ANTF_pulsar_database_file file if it doesn't exist
@@ -70,13 +72,13 @@ setup(name="mwa_vcstools",
                'scripts/reorder_chans.py', 'scripts/rts2ao.py', 'scripts/splice_wrapper.py',
                'scripts/cleanup.py', 'scripts/create_ics_psrfits.py', 'scripts/rm_synthesis.py',
                'scripts/zapchan.py', 'scripts/sn_flux_est.py', 'scripts/prof_estimate.py',
-               'scripts/pabeam.py',
+               'scripts/upload_cands.py', 'scripts/upload_obsid.py', 'scripts/upload_beams.py',
                # plotting scripts
                'scripts/plotting/plotPolarTileBeam.py', 'scripts/plotting/plotFlatTileBeam.py',
                'scripts/plotting/plotTiedArrayBeam.py', 'scripts/plotting/plotSkyMap.py',
-               'scripts/plotting/plot_BPcal_128T.py', 'scripts/plotting/calc_ephem.py',
+               'scripts/plotting/plot_BPcal_128T.py', 'scripts/plotting/calc_ephem.py'],
                # temporary automatically generated version file
-               'version.py'],
+               #'vcstools/version.py'],
       setup_requires=['pytest-runner'],
       tests_require=['pytest']
 )

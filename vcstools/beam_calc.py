@@ -9,22 +9,33 @@ from astropy.table import Table
 import psrqpy
 
 #MWA scripts
-from mwa_pb import primary_beam
-from mwa_pb import config
+import mwa_hyperbeam
 
 from vcstools import data_load
 from vcstools.pointing_utils import sex2deg
 from vcstools.metadb_utils import mwa_alt_az_za, get_common_obs_metadata,\
                                   getmeta, obs_max_min
 
-try:
-    import mwa_hyperbeam
-except ImportError:
-    logger.warning('Could not import mwa_hyperbeam; using pure Python implementation')
-
 
 import logging
 logger = logging.getLogger(__name__)
+
+def makeUnpolInstrumentalResponse(j1, j2):
+    """
+    Form the visibility matrix in instrumental response from two Jones
+    matrices assuming unpolarised sources (hence the brightness matrix is
+    the identity matrix)
+    Input: j1,j2: Jones matrices of dimension[za][az][2][2]
+    Returns: [za][az][[xx,xy],[yx,yy]] where "X" and "Y" are defined by the receptors
+    of the Dipole object used in the ApertureArray. Hence to get "XX", you want
+    result[za][az][0][0] and for "YY" you want result[za][az][1][1]
+    """
+    result = np.empty_like(j1)
+    result[:, :, 0, 0] = j1[:, :, 0, 0] * j2[:, :, 0, 0].conjugate() + j1[:, :, 0, 1] * j2[:, :, 0, 1].conjugate()
+    result[:, :, 1, 1] = j1[:, :, 1, 0] * j2[:, :, 1, 0].conjugate() + j1[:, :, 1, 1] * j2[:, :, 1, 1].conjugate()
+    result[:, :, 0, 1] = j1[:, :, 0, 0] * j2[:, :, 1, 0].conjugate() + j1[:, :, 0, 1] * j2[:, :, 1, 1].conjugate()
+    result[:, :, 1, 0] = j1[:, :, 1, 0] * j2[:, :, 0, 0].conjugate() + j1[:, :, 1, 1] * j2[:, :, 0, 1].conjugate()
+    return result
 
 def pixel_area(ra_min, ra_max, dec_min, dec_max):
     """Calculate the area of a pixel on the sky from the pixel borders
@@ -235,7 +246,7 @@ def beam_enter_exit(powers, duration, dt=296, min_z_power=0.3):
 def get_beam_power_over_time(names_ra_dec,
                              common_metadata=None,
                              dt=296, centeronly=True, verbose=False,
-                             option='analytic', degrees=False,
+                             option='hyperbeam', degrees=False,
                              start_time=0):
     """Calculates the zenith normalised power for each source over time.
 
@@ -250,9 +261,9 @@ def get_beam_power_over_time(names_ra_dec,
     centeronly : `boolean`, optional
         Only calculates for the centre frequency. |br| Default: `True`.
     verbose : `boolean`, optional
-        If `True` will not supress the output from mwa_pb. |br| Default: `False`.
+        If `True` will not supress the output. |br| Default: `False`.
     option : `str`, optional
-        The primary beam model to use out of [analytic, advanced, full_EE, hyperbeam]. |br| Default: analytic.
+        The primary beam model to use out of [hyperbeam]. |br| Default: hyperbeam.
     degrees : `boolean`, optional
         If true assumes RAJ and DecJ are in degrees. |br| Default: `False`.
     start_time : `int`, optional
@@ -274,7 +285,12 @@ def get_beam_power_over_time(names_ra_dec,
         if "mwa_hyperbeam" not in sys.modules:
             logger.error("mwa_hyperbeam not installed so can not use hyperbeam to create a beam model. Exiting")
             sys.exit(1)
-        beam = mwa_hyperbeam.FEEBeam(config.h5file)
+        if os.environ.get("MWA_BEAM_FILE"):
+            beam = mwa_hyperbeam.FEEBeam()
+        else:
+            logger.error("MWA_BEAM_FILE environment variable not set! Please set to location of 'mwa_full_embedded_element_pattern.h5' file")
+            sys.exit(1)
+
 
     # Work out time steps to calculate over
     starttimes = np.arange(start_time, time + start_time, dt)
@@ -329,23 +345,13 @@ def get_beam_power_over_time(names_ra_dec,
         phi   = np.radians(Azs)
         for ifreq in range(nfreqs):
             #Decide on beam model
-            if option == 'analytic':
-                rX, rY = primary_beam.MWA_Tile_analytic(theta, phi,
-                                                        freq=frequencies[ifreq], delays=delays,
-                                                        zenithnorm=True, power=True)
-            elif option == 'advanced':
-                rX, rY = primary_beam.MWA_Tile_advanced(theta, phi,
-                                                        freq=frequencies[ifreq], delays=delays,
-                                                        zenithnorm=True, power=True)
-            elif option == 'full_EE':
-                rX, rY = primary_beam.MWA_Tile_full_EE(theta, phi,
-                                                       freq=frequencies[ifreq], delays=delays,
-                                                       zenithnorm=True, power=True)
-            elif option == 'hyperbeam':
+            if option == 'hyperbeam':
                 jones = beam.calc_jones_array(phi, theta, int(frequencies[ifreq]), delays[0], amps, True)
                 jones = jones.reshape(1, len(phi), 2, 2)
-                vis = primary_beam.mwa_tile.makeUnpolInstrumentalResponse(jones, jones)
+                vis = makeUnpolInstrumentalResponse(jones, jones)
                 rX, rY = (vis[:, :, 0, 0].real, vis[:, :, 1, 1].real)
+            else:
+                raise NotImplementedError("Legacy mwa_pb methods are now deprecated - use hyperbeam") 
         PowersX[:,itime,ifreq] = rX
         PowersY[:,itime,ifreq] = rY
     if verbose is False:
@@ -356,7 +362,7 @@ def get_beam_power_over_time(names_ra_dec,
 
 def source_beam_coverage(obs_list, names_ra_dec,
                          common_metadata_list=None,
-                         dt_input=300, beam='analytic', min_z_power=0.3):
+                         dt_input=300, beam='hyperbeam', min_z_power=0.3):
     """For a list of MWA observations and sources will find if the
     sources are in the beam and when they enter and exit.
 
@@ -372,7 +378,7 @@ def source_beam_coverage(obs_list, names_ra_dec,
     dt_input : `int`, optional
         The time interval in seconds of how often powers are calculated. |br| Default: 300.
     beam : `str`, optional
-        The primary beam model to use out of [analytic, advanced, full_EE, hyperbeam]. |br| Default: analytic.
+        The primary beam model to use out of [hyperbeam]. |br| Default: hyperbeam.
     min_z_power : `float`, optional
         Zenith normalised power cut off. |br| Default: 0.3.
 
@@ -425,7 +431,7 @@ def source_beam_coverage_and_times(obsid, pulsar,
                                    files_beg=None, files_end=None,
                                    min_z_power=0.3, dt_input=100,
                                    common_metadata=None, query=None,
-                                   beam='analytic'):
+                                   beam='hyperbeam'):
     """Finds the normalised time that a pulsar is in the beam for a given obsid.
     If pulsar is not in beam, returns None, None
 
@@ -451,7 +457,7 @@ def source_beam_coverage_and_times(obsid, pulsar,
     query : psrqpy object, optional
         A previous psrqpy query. Can be supplied to prevent performing a new query.
     beam : `str`, optional
-        The primary beam model to use out of [analytic, advanced, full_EE]. |br| Default: analytic.
+        The primary beam model to use out of [hyperbeam]. |br| Default: hyperbeam.
 
     Returns
     -------
@@ -509,7 +515,7 @@ def source_beam_coverage_and_times(obsid, pulsar,
 
 
 def find_sources_in_obs(obsid_list, names_ra_dec,
-                        obs_for_source=False, dt_input=300, beam='analytic',
+                        obs_for_source=False, dt_input=300, beam='hyperbeam',
                         min_z_power=0.3, cal_check=False, all_volt=False,
                         degrees_check=False, metadata_list=None):
     """Either creates text files for each MWA obs ID of each source within it or a text
@@ -527,7 +533,7 @@ def find_sources_in_obs(obsid_list, names_ra_dec,
     dt_input : `int`, optional
         The time interval in seconds of how often powers are calculated. |br| Default: 300.
     beam : `str`, optional
-        The primary beam model to use out of [analytic, advanced, full_EE]. |br| Default: analytic.
+        The primary beam model to use out of [hyperbeam]. |br| Default: hyperbeam.
     min_z_power : `float`, optional
         Zenith normalised power cut off. |br| Default: 0.3.
     cal_check : `boolean`, optional
