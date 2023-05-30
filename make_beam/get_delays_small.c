@@ -501,7 +501,7 @@ void get_delays(
                         
                         if (errInt != 0)
                         {             
-                            printf("Error encountered when computing beam Jones matrix via hyperbeam (line: %d, code: %d)\n" % (errInt, 495));
+                            printf("Error encountered when computing beam Jones matrix via hyperbeam (line: %d, code: %d)\n", errInt, 496);
                             exit(EXIT_FAILURE);
                         }
                     }
