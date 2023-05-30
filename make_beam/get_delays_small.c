@@ -493,11 +493,19 @@ void get_delays(
                         
                         // **NOTE** For newer versions of hyperbeam (i.e., >v0.2 or so) we need to provide additional 
                         // arguments including the buffer for the Jones matrix data to be stored
-                        errInt = calc_jones( beam, az, PAL__DPIBY2-el, frequency + mi->chan_width/2,
-                                (unsigned int*)mi->delays[row], mi->amps[row], zenith_norm,
+                        errInt = calc_jones(
+                                beam,
+                                az, // azimuth (rad)
+                                PAL__DPIBY2 - el, // zenith angle (rad)
+                                frequency + mi->chan_width/2, // channel central frequency (Hz)
+                                (unsigned int*)mi->delays[row], // delays for each dipole
+                                mi->amps[row], // amplitude for each dipole
+                                16, // number of amplitudes (16 or 32, 16 if both X and Y polns are to be given the same amps)
+                                zenith_norm, // normalise beam power to zenith
                                 NULL, // stand-in for array latitude
                                 0, // use IAU ordering (0 = don't)
-                                (double*)jones[config_idx] );
+                                (double*)jones[config_idx]
+                        );
                         
                         if (errInt != 0)
                         {             
