@@ -35,7 +35,7 @@ from vcstools.pointing_utils import getTargetAZZA, getTargetRADec
 from vcstools.general_utils import setup_logger, split_remove_remainder
 from vcstools import data_load
 #from mwa_pb import primary_beam as pb
-#from mwa_pb import config
+from mwa_pb import config
 import mwa_hyperbeam
 beam = mwa_hyperbeam.FEEBeam(config.h5file)
 from vcstools.beam_calc import get_Trec
@@ -55,7 +55,7 @@ def makeUnpolInstrumentalResponse(j1, j2):
     of the Dipole object used in the ApertureArray. Hence to get "XX", you want
     result[za][az][0][0] and for "YY" you want result[za][az][1][1]
     """
-    result = numpy.empty_like(j1)
+    result = np.empty_like(j1)
     result[:, :, 0, 0] = j1[:, :, 0, 0] * j2[:, :, 0, 0].conjugate() + j1[:, :, 0, 1] * j2[:, :, 0, 1].conjugate()
     result[:, :, 1, 1] = j1[:, :, 1, 0] * j2[:, :, 1, 0].conjugate() + j1[:, :, 1, 1] * j2[:, :, 1, 1].conjugate()
     result[:, :, 0, 1] = j1[:, :, 0, 0] * j2[:, :, 1, 0].conjugate() + j1[:, :, 0, 1] * j2[:, :, 1, 1].conjugate()
@@ -357,7 +357,7 @@ if __name__ == "__main__":
 
         if args.freq is None:
             # By default use the all coarse channel centre frequencies
-            args.freq = np.array(get_common_obs_metadata(1275751816)[-1])*1.28*1e6
+            args.freq = np.array(get_common_obs_metadata(args.obsid)[-1])*1.28*1e6
         else:
             args.freq = np.array(args.freq)
 
