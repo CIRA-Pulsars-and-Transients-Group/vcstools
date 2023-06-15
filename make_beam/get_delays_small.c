@@ -407,11 +407,6 @@ void get_delays(
 
     for ( int p = 0; p < npointing; p++ )
     {
-
-        // Reset the Jones matrices (for the FEE beam)
-        for (n = 0; n < nconfigs; n++)
-            jones[n] = NULL; // i.e. no Jones matrices have been calculated for any configurations so far
-
         dec_degs = parse_dec( pointing_array[p][1] );
         ra_hours = parse_ra( pointing_array[p][0] );
 

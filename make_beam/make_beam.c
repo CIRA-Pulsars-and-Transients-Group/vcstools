@@ -210,7 +210,7 @@ int main(int argc, char **argv)
     fprintf( stderr, "[%f]  Reading in beam model from %s\n", NOW-begintime, HYPERBEAM_HDF5 );
     FEEBeam *beam = NULL;
     if (opts.beam_model == BEAM_FEE2016) {
-        new_fee_beam( HYPERBEAM_HDF5, beam );
+        new_fee_beam( HYPERBEAM_HDF5, &beam );
     }
 
     // Read in info from metafits file
