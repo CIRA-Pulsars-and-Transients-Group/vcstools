@@ -615,17 +615,15 @@ void get_delays(
             delay_vals[p].intmjd   = intmjd;
 
         }
-
-        // Free Jones matrices from hyperbeam -- in prep for reclaculating the next pointing
-        for (n = 0; n < nconfigs; n++)
-        {
-            if (jones[n] != NULL)
-                free( jones[n] );
-        }
     } // end loop through pointings (p)
 
-    // Free up dynamically allocated memory
+    // Free Jones matrices from hyperbeam
+    for (n = 0; n < nconfigs; n++) {
+        if (jones[n] != NULL)
+            free(jones[n]);
+    }
 
+    // Free up dynamically allocated memory
     for (ant = 0; ant < NANT; ant++) {
         for (ch = 0; ch < cal->nchan; ch++)
             free(Jf[ant][ch]);
