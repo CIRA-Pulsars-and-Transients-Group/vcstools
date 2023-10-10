@@ -42,7 +42,6 @@ from vcstools.beam_calc import find_sources_in_obs
 from vcstools.general_utils import setup_logger
 
 import logging
-logger = logging.getLogger(__name__)
 
 
 class NoSourcesError(Exception):
@@ -276,25 +275,25 @@ def parse_input():
     funcargs = parser.add_argument_group('Functionality options',
         'The different options to control how the code operates and what ' + \
         'will be output to the user.')
-    parser.add_argument('--obs_for_source', action='store_true',
+    funcargs.add_argument('--obs_for_source', action='store_true',
         help='Instead of listing all the sources in each observation it will ' + \
         'list all of the observations for each source. For increased efficiency ' + \
         'it will only search OBSIDs within the primary beam.')
-    parser.add_argument('-b', '--beam', type=str, default = 'analytic',
+    funcargs.add_argument('-b', '--beam', type=str, default = 'analytic',
         help='Decides the beam approximation that will be used. Options: ' + \
         '"analytic" the analytic beam model (2012 model, fast and reasonably accurate), ' + \
         '"advanced" the advanced beam model (2014 model, fast and slighty more accurate) or ' + \
         '"full_EE" the full EE model (2016 model, slow but accurate). [default: %(default)s]')
-    parser.add_argument('-m', '--min_power', type=float, default=0.3,
+    funcargs.add_argument('-m', '--min_power', type=float, default=0.3,
         help='The minimum fraction of the zenith normalised power that a source ' + \
         'needs to have to be recorded. [default: %(default)s]')
-    parser.add_argument('--sn_est', action='store_true',
+    funcargs.add_argument('--sn_est', action='store_true',
         help='Make a expected signal to noise calculation using the flux densities ' + \
         'from the ANTF pulsar catalogue and include them in the output file.')
-    parser.add_argument('--flux_est', action='store_true',
+    funcargs.add_argument('--flux_est', action='store_true',
         help='Make a expected flux density calculation using the flux densities ' + \
         'from the ANTF pulsar catalogue and include them in the output file.')
-    parser.add_argument('--plot_est', action='store_true',
+    funcargs.add_argument('--plot_est', action='store_true',
         help='If used, will output flux estimation plots while sn_est arg is true.')    
 
     # Source options
@@ -324,19 +323,19 @@ def parse_input():
         'The different options to control which observation IDs are used. ' + \
         'Default is all observation IDs with voltages.')
     # TODO: rename to VCS dir and make default /astro/$USER/vcs
-    obargs.add_argument('--FITS_dir', type=str, default = '/astro/mwavcs/vcs',
+    obargs.add_argument('--FITS_dir', type=str, default = None,
         help='Instead of searching all OBS IDs, only searchs for the obsids in ' + \
         'the given directory. Does not check if the .fits files are within the ' + \
         'directory. [default: %(default)s]')
     obargs.add_argument('-o','--obsid', type=int, nargs='*',
         help='Input several OBS IDs in the format " -o 1099414416 1095506112". ' + \
         'If this option is not input all OBS IDs that have voltages will be used')
-    parser.add_argument('--min_time', type=float, default=0,
+    obargs.add_argument('--min_time', type=float, default=0,
         help='The minimum observation duration to include in output files. ' + \
         '[default: %(default)s]')
-    parser.add_argument('--freq_chan', type=int,
+    obargs.add_argument('--freq_chan', type=int,
         help='Only use observations that include this frequency channel.')
-    parser.add_argument('--contig', action='store_true',
+    obargs.add_argument('--contig', action='store_true',
         help='Only use observations that have contiguous frequency channels.')
     obargs.add_argument('--all_volt', action='store_true',
         help='Includes observation IDs even if there are no raw voltages in the ' + \
@@ -354,6 +353,7 @@ def parse_input():
         print_version()
 
     # Set up the logger for stand-alone execution
+    logger = logging.getLogger(__name__)
     logger = setup_logger(logger, log_level=loglevels[args.loglvl])
 
     # Check inputs are valid
