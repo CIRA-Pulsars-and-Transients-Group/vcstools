@@ -12,6 +12,7 @@ import sys
 import logging
 import argparse
 
+import numpy as np
 import psrqpy
 
 
@@ -24,6 +25,10 @@ class UnknownPulsarError(Exception):
     """Raise when a pulsar is not found in a catalogue."""
     pass
 
+class FileReadError(Exception):
+    """Raise when a file cannot be read."""
+    pass
+
 
 def parse_source_list(sources):
     pointings = []
@@ -33,20 +38,29 @@ def parse_source_list(sources):
             query_flag = True
             break
     if query_flag:
+        logging.debug('Querying the pulsar catalogue...')
         query = psrqpy.QueryATNF(params=['PSRJ', 'PSRB', 'RAJ', 'DECJ'])
         logging.info(f'Using ATNF pulsar catalogue version {query.get_version}')
     for source in sources:
         if source.startswith(('J', 'B')):
-            logging.debug(f'"{source}" is a pulsar')
+            logging.debug(f'Treating "{source}" as a pulsar')
             raj, decj = get_pulsar_coords(source, query)
         elif '_' in source:
-            logging.debug(f'"{source}" are coordinates')
+            logging.debug(f'Treating "{source}" as coordinates')
             raj, decj = interpret_coords(source)
         else:
             raise InvalidSourceError(f'Source not recognised: {source}')
         pointing = dict(Name=source, RAJ=raj, DECJ=decj)
         pointings.append(pointing)
     return pointings
+
+
+def read_sources_file(sources_file):
+    try:
+        sources = np.loadtxt(sources_file, dtype=str, unpack=True)
+    except FileReadError:
+        print('The file provided cannot be interpreted.')
+    return list(sources)
 
 
 def get_pulsar_coords(pulsar, query):
@@ -62,6 +76,53 @@ def get_pulsar_coords(pulsar, query):
     raj = psrs[pulsar].RAJ
     decj = psrs[pulsar].DECJ
     return raj, decj
+
+
+def get_all_pulsars():
+    logging.debug('Querying the pulsar catalogue...')
+    query = psrqpy.QueryATNF(params=['PSRJ', 'RAJ', 'DECJ'])
+    logging.info(f'Using ATNF pulsar catalogue version {query.get_version}')
+    psrjs = list(query.table['PSRJ'])
+    decjs = list(query.table['DECJ'])
+    rajs = list(query.table['RAJ'])
+    pointings = []
+    for psrj, raj, decj in zip(psrjs, rajs, decjs):
+        raj = format_sexigesimal(raj)
+        decj = format_sexigesimal(decj, add_sign=True)
+        pointing = dict(Name=psrj, RAJ=raj, DECJ=decj)
+        pointings.append(pointing)
+    return pointings
+
+
+def format_sexigesimal(coord, add_sign=False):
+    if coord.startswith(('-', '–')):
+        sign = '-'
+        coord = coord[1:]
+    elif coord.startswith('+'):
+        sign = '+'
+        coord = coord[1:]
+    else:
+        sign = '+'
+    parts = coord.split(':')
+    if len(parts) == 3:
+        deg = int(parts[0])
+        minute = int(parts[1])
+        second = float(parts[2])
+    elif len(parts) == 2:
+        deg = int(parts[0])
+        minute = int(float(parts[1]))
+        second = 0.
+    elif len(parts) == 1:
+        deg = int(float(parts[0]))
+        minute = 0
+        second = 0.
+    else:
+        raise ValueError(f'Cannot interpret coordinate: {coord}.')
+    if add_sign:
+        formatted_coord = f'{sign}{int(deg):02d}:{int(minute):02d}:{second:05.2f}'
+    else:
+        formatted_coord = f'{int(deg):02d}:{int(minute):02d}:{second:05.2f}'
+    return formatted_coord
 
 
 def interpret_coords(coords):
@@ -104,7 +165,7 @@ def is_int(string):
 
 
 def is_sexigesimal(coord, mode):
-    logging.debug(f'Checking if {coord} is sexigesimal')
+    logging.debug(f'Checking if {coord} is valid sexigesimal')
     if mode == 'RA':
         hours, minutes, seconds = coord.split(':')
         logging.debug(f'{hours=}')
@@ -186,6 +247,9 @@ def get_input_args():
         'or equatorial coordinates separated by an underscore. Coordinates can be ' + \
         'in either decimal or sexigesimal format. For example, the following ' + \
         'arguments are all valid: "B1451-68" "J1456-6843" "14:55:59.92_-68:43:39.50".')
+    source_args.add_argument('-f', '--sources_file', type=str, default = None,
+        help='A file containing a list of sources to find. Each source should be ' + \
+        'listed on a new line. The source format is the same as the -s option.')
     # Parse arguments
     args = parser.parse_args()
     # Set the logging level
@@ -196,12 +260,21 @@ def get_input_args():
 def main():
     args = get_input_args()
 
-    if args.sources:
-        pointings = parse_source_list(args.sources)
+    if args.sources or args.sources_file:
+        logging.info('Parsing the provided source list...')
+        sources = args.sources
+        if args.sources_file:
+            sources_from_file = read_sources_file(args.sources_file)
+            if sources:
+                sources += sources_from_file
+            else:
+                sources = sources_from_file
+        pointings = parse_source_list(sources)
         for pointing in pointings:
             logging.info(f"Source: {pointing['Name']:30} RAJ: {pointing['RAJ']:14} DECJ: {pointing['DECJ']:15}")
     else:
-        logging.debug('Find all pulsars')
+        pointings = get_all_pulsars()
+        logging.debug(f'{len(pointings)} pulsars parsed from the catalogue')
     
 
 if __name__ == "__main__":
