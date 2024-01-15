@@ -36,8 +36,8 @@ GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/{}/'.format(os.environ['USER']
                  'ssd_dir' : None,
                  'gid' : 34858} # mwavcs
 
-GARRAWARLA_CONFIG = {'base_data_dir' : '/astro/mwavcs/{}/'.format(os.environ['USER']),
-                 'base_product_dir' : '/astro/mwavcs/{}/'.format(os.environ['USER']),
+GARRAWARLA_CONFIG = {'base_data_dir' : '/scratch/mwavcs/{}/'.format(os.environ['USER']),
+                 'base_product_dir' : '/scratch/mwavcs/{}/'.format(os.environ['USER']),
                  'group_account' : {'cpuq':  '#SBATCH --account=mwavcs',
                                     'gpuq':  '#SBATCH --account=mwavcs',
                                     'copyq': '#SBATCH --account=mwavcs',
