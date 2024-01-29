@@ -15,12 +15,12 @@ Option are:\n
 \t\t if run outside mpirun/aprun should at least be 2 to make sure \n
 \t\t script works (script itself counts as job outside mpirun/aprun)\n
 \t -w \t working directory that contains the tarballs \n
-\t\t (default: /astro/mwavcs/\$USER/\${obsID}/combined)\n
+\t\t (default: /scratch/mwavcs/\$USER/\${obsID}/combined)\n
 \t -b \t gpstime of first tarball\n
 \t -e \t gpstime of last tarball (by default all tarballs in ${workdir} will be untarred.)\n
 \t -k \t if supplied: tarballs will be kept, else deleted after unpacking\n
 \t -d \t if supplied: will output to different directory\n
-\t\t (default: /astro/mwavcs/\$USER/\${obsID}/combined)\n
+\t\t (default: /scratch/mwavcs/\$USER/\${obsID}/combined)\n
 "
 while getopts ":j:w:b:e:o:k" flag;do
     case $flag in
@@ -60,10 +60,10 @@ if [[ -z $maxjobs ]];then
     maxjobs=1
 fi
 if [[ -z $workdir ]];then
-    workdir=/astro/mwavcs/${USER}/${obsid}/combined/
+    workdir=/scratch/mwavcs/${USER}/${obsid}/combined/
 fi
 if [[ -z $outdir ]];then
-    outdir=/astro/mwavcs/${USER}/${obsid}/combined
+    outdir=/scratch/mwavcs/${USER}/${obsid}/combined
 fi
 if [ ! -d "${workdir}" ];then
     echo "working directory ${workdir} does not exist."

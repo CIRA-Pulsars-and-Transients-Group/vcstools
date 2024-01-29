@@ -8,14 +8,14 @@
 # with them, as they are handy to know for all Lustre Filesystems.
 
 # If the user wants to provide a specific partition, then allow it,
-# otherwise default to checking the /astro mount.
-partition=${1:-/astro}
+# otherwise default to checking the /scratch mount.
+partition=${1:-/scratch}
 
-# Disk space used on /group and /astro by $USER, in human-readable formats
-echo "==== Disk usage for user: ${USER} on /astro ===="
+# Disk space used on /scratch by $USER, in human-readable formats
+echo "==== Disk usage for user: ${USER} on /scratch ===="
 lfs quota -h -u "$USER" "$partition" | head -n3 | tail -n+2
 echo
 
-echo "==== Disk usage for group: mwavcs on /astro ===="
+echo "==== Disk usage for group: mwavcs on /scratch ===="
 lfs quota -h -g mwavcs "$partition" | head -n3 | tail -n+2
 echo

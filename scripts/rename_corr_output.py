@@ -58,7 +58,7 @@ def opt_parser():
                             required=False)
     parser.add_argument('-w', '--workdir', type=str, dest='workdir',\
                             help="Directory " + \
-                            "that contains the output files of the offline Correlator. Default is /astro/mwavcs/<USER>/<obsID>/vis.")
+                            "that contains the output files of the offline Correlator. Default is /scratch/mwavcs/<USER>/<obsID>/vis.")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     return parser.parse_args()
 

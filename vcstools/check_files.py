@@ -19,7 +19,7 @@ def check_download(obsID, directory=None, startsec=None, n_secs=None, data_type=
         The MWA Observation ID.
     directory : `str`, optional
         The directory in which to check the files.
-        |br| Default: /astro/mwavcs/$USER/[obsID]/raw/.
+        |br| Default: /scratch/mwavcs/$USER/[obsID]/raw/.
     startsec : `int`
         The gps time of first file to check.
     n_sec : `int`
@@ -106,7 +106,7 @@ def check_recombine(obsID, directory=None,
         The MWA Observation ID.
     directory : `str`, optional
         The directory in which to check the files.
-        |br| Default: /astro/mwavcs/$USER/[obsID]/combined/.
+        |br| Default: /scratch/mwavcs/$USER/[obsID]/combined/.
     required_size : `int`
         The required size of the recombined files in bytes. |br| Default: 327680000.
     required_size_ics : `int`
@@ -173,7 +173,7 @@ def check_recombine_ics(obsID=None, directory=None, startsec=None, n_secs=None, 
         The MWA Observation ID.
     directory : `str`, optional
         The directory in which to check the files.
-        |br| Default: /astro/mwavcs/$USER/[obsID]/combined/.
+        |br| Default: /scratch/mwavcs/$USER/[obsID]/combined/.
     startsec : `int`
         The gps time of first file to check.
     n_sec : `int`
