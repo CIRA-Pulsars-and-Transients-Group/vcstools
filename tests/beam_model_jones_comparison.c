@@ -260,7 +260,7 @@ int main(int argc, char **argv)
 
         // Load the FEE2016 beam, if requested
         if (opts.beam_model == BEAM_FEE2016) {
-            beam = new_fee_beam( HYPERBEAM_HDF5 );
+            new_fee_beam( HYPERBEAM_HDF5, &beam );
         }
         FILE *f = fopen(comp_fname, "w");
         for (file_no = 0; file_no < nfiles; file_no++)

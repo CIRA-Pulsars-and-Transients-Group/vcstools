@@ -347,7 +347,12 @@ void get_delays(
 
     int nconfigs = 138;
     int config_idx;
+    int errInt; // error code tracking for hyperbeam
     double *jones[nconfigs]; // (see hash_dipole_configs() for explanation of this array)
+    // Allocate the memory here since hyperbeam expects a "buffer" as input
+    for (n = 0; n < nconfigs; n++) {
+        jones[n] = malloc(8*sizeof(double));
+    }
 
     double Fnorm;
     // Read in the Jones matrices for this (coarse) channel, if requested
@@ -402,11 +407,6 @@ void get_delays(
 
     for ( int p = 0; p < npointing; p++ )
     {
-
-        // Reset the Jones matrices (for the FEE beam)
-        for (n = 0; n < nconfigs; n++)
-            jones[n] = NULL; // i.e. no Jones matrices have been calculated for any configurations so far
-
         dec_degs = parse_dec( pointing_array[p][1] );
         ra_hours = parse_ra( pointing_array[p][0] );
 
@@ -485,8 +485,28 @@ void get_delays(
                         // Strictly speaking, the condition (ch == 0) above is redundant, as the dipole configuration
                         // array takes care of that implicitly, but I'll leave it here so that the above argument
                         // is "explicit" in the code.
-                        jones[config_idx] = calc_jones( beam, az, PAL__DPIBY2-el, frequency + mi->chan_width/2,
-                                (unsigned int*)mi->delays[row], mi->amps[row], zenith_norm );
+                        
+                        // **NOTE** For newer versions of hyperbeam (i.e., >v0.2 or so) we need to provide additional 
+                        // arguments including the buffer for the Jones matrix data to be stored
+                        errInt = calc_jones(
+                                beam,
+                                az, // azimuth (rad)
+                                PAL__DPIBY2 - el, // zenith angle (rad)
+                                frequency + mi->chan_width/2, // channel central frequency (Hz)
+                                (unsigned int*)mi->delays[row], // delays for each dipole
+                                mi->amps[row], // amplitude for each dipole
+                                16, // number of amplitudes (16 or 32, 16 if both X and Y polns are to be given the same amps)
+                                zenith_norm, // normalise beam power to zenith
+                                NULL, // stand-in for array latitude
+                                0, // use IAU ordering (0 = don't)
+                                (double*)jones[config_idx]
+                        );
+                        
+                        if (errInt != 0)
+                        {             
+                            printf("Error encountered when computing beam Jones matrix via hyperbeam (line: %d, code: %d)\n", errInt, 496);
+                            exit(EXIT_FAILURE);
+                        }
                     }
 
                     // "Convert" the real jones[8] output array into out complex E[4] matrix

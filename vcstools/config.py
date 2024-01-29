@@ -7,7 +7,6 @@ import socket
 import argparse
 import sys
 import os
-
 from vcstools.general_utils import setup_logger
 
 #config data
