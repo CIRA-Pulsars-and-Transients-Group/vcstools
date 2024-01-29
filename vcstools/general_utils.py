@@ -105,7 +105,7 @@ def create_link(data_dir, target_dir, product_dir, link):
     ----------
     data_dir : `str`
         The absolute path to the base directory of the true location of the files.
-        For our uses this is often a scratch partition like /astro on Galaxy
+        For our uses this is often a scratch partition like /scratch on Garrawarla
     target_dir : `str`
         The folder you would like to be linked to
     product_dir : `str`

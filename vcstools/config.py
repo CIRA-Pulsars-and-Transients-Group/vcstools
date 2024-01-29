@@ -12,30 +12,6 @@ from vcstools.general_utils import setup_logger
 
 #config data
 
-GALAXY_CONFIG = {'base_data_dir' : '/astro/mwavcs/{}/'.format(os.environ['USER']),
-                 'base_product_dir' : '/astro/mwavcs/{}/'.format(os.environ['USER']),
-                 'group_account' : {'cpuq':  '#SBATCH --account=pawsey0348',
-                                    'gpuq':  '#SBATCH --account=mwavcs',
-                                    'copyq': '#SBATCH --account=mwavcs',
-                                    'zcpuq': '#SBATCH --account=mwavcs'},
-                 'module_dir' : '/pawsey/mwa/software/python3/modulefiles',
-                 'presto_module' : 'presto/master',
-                 'psrcat_module' : 'psrcat/1.59',
-                 'cpuq_cluster' : 'magnus',
-                 'cpuq_partition' : 'workq',
-                 'gpuq_cluster' : 'galaxy',
-                 'gpuq_partition' : 'gpuq',
-                 'gpu_beamform_mem' : '1024',
-                 'zcpuq_cluster' : 'zeus',
-                 'zcpuq_partition' : 'workq',
-                 'copyq_cluster' : 'zeus',
-                 'copyq_partition' : 'copyq',
-                 'container_module' : '',
-                 'container_command' : '',
-                 'prschive_container' : '/pawsey/mwa/singularity/dspsr/dspsr.sif',
-                 'ssd_dir' : None,
-                 'gid' : 34858} # mwavcs
-
 GARRAWARLA_CONFIG = {'base_data_dir' : '/scratch/mwavcs/{}/'.format(os.environ['USER']),
                  'base_product_dir' : '/scratch/mwavcs/{}/'.format(os.environ['USER']),
                  'group_account' : {'cpuq':  '#SBATCH --account=mwavcs',

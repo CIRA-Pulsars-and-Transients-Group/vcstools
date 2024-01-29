@@ -13,7 +13,7 @@ from vcstools.config import load_config_file
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Print the coarse channel sequence as in gpubox/subband order. Make sure you have *_metafits_ppds.fits")
     parser.add_argument("-o", "--obsid", type=int, help="Observation ID of target", default=None, required=True)
-    parser.add_argument("-m", "--mfits", type=str, help="Please provide the path of the *_metafits_ppds.fits if it is not /astro/mwavcs/$USER/[OBSID]/*_metafits_ppds.fits")
+    parser.add_argument("-m", "--mfits", type=str, help="Please provide the path of the *_metafits_ppds.fits if it is not /scratch/mwavcs/$USER/[OBSID]/*_metafits_ppds.fits")
     parser.add_argument("-V", "--version", action="store_true", help="Print version and quit")
     args = parser.parse_args()
 

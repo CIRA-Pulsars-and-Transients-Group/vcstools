@@ -41,7 +41,7 @@ def ensure_metafits(data_dir, obsid, metafits_file):
         #os.remove('obscrt.crt')
         #os.remove('obskey.key')
     # make a copy of the file in the product_dir if that directory exists
-    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /astro)
+    # if it doesn't we might have downloaded the metafits file of a calibrator (obs_id only exists on /scratch)
     # in case --work_dir was specified in process_vcs call product_dir and data_dir
     # are the same and thus we will not perform the copy
     #data_dir = data_dir.replace(comp_config['base_data_dir'], comp_config['base_product_dir']) # being pedantic
