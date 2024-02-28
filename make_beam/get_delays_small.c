@@ -476,7 +476,7 @@ void get_delays(
                     // The point of this is to save recalculating the jones matrix, which is
                     // computationally expensive.
                     config_idx = hash_dipole_config( mi->amps[row] );
-                    if ((config_idx == -1 || jones[config_idx] == NULL) && ch == 0)
+                    if (!(config_idx == -1 || jones[config_idx] == NULL) && ch == 0)
                     {
                         // The Jones matrix for this configuration has not yet been calculated, so do it now.
                         // The FEE beam only needs to be calculated once per coarse channel, because it will
@@ -615,14 +615,14 @@ void get_delays(
             delay_vals[p].intmjd   = intmjd;
 
         }
-
-        // Free Jones matrices from hyperbeam -- in prep for reclaculating the next pointing
-        for (n = 0; n < nconfigs; n++)
-        {
-            if (jones[n] != NULL)
-                free( jones[n] );
-        }
     } // end loop through pointings (p)
+
+    // Free Jones matrices from hyperbeam
+    for (n = 0; n < nconfigs; n++)
+    {
+        if (jones[n] != NULL)
+            free( jones[n] );
+    }
 
     // Free up dynamically allocated memory
 
